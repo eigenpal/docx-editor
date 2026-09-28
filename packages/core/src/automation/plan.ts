@@ -1,3 +1,7 @@
+import { settingsPartOf } from '../store/package/note-properties.ts';
+import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
+import { createContextualRunFormatting } from '../layout/complex-script-formatting.ts';
+
 import {
   TextEditLedger,
   isPlainTextTarget,
@@ -41,12 +45,7 @@ import { planListAuthoring } from './plan-list-authoring.ts';
 //
 import type { OoxmlProperty, TreeDocOp } from '../store/store/tree-ops.ts';
 import { isSearchableQuery } from '../store/store/text-match.ts';
-import {
-  directParagraphProperties,
-  mergedParagraphMarkProperties,
-  mergedProperties,
-  runPropertyEdits,
-} from '../store/store/direct-properties.ts';
+import { directParagraphProperties, mergedProperties } from '../store/store/direct-properties.ts';
 import type { FormattingDisplayMode } from '../store/store/formattable-runs.ts';
 import {
   fontProperties,
@@ -236,6 +235,12 @@ interface StoryPlan {
 }
 
 export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
+  const { runPropertyEdits, mergedParagraphMarkProperties } = createContextualRunFormatting(
+    () => (host.reads.package ? (stylesPartOf(host.reads.package)?.root ?? null) : null),
+    () => (host.reads.package ? (settingsPartOf(host.reads.package)?.root ?? null) : null),
+    () => host.displayMode ?? 'proposed'
+  );
+
   const { handles, capabilities } = host;
   const packageReads = host.reads;
 

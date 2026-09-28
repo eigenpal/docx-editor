@@ -372,10 +372,11 @@ export function tableEndsKept(block: FlowBlock, at: TableKeepFlow): boolean {
 interface OpeningMemo {
   readonly at: TableKeepFlow;
   readonly pageHeight: number;
-  readonly deps: TableFlowDeps;
   readonly value: TableKeepOpening | null;
 }
-const openings = new WeakMap<OoxmlElement, OpeningMemo>();
+// A body pass owns its measurement inputs. A table node can survive numbering, field,
+// and drawing changes, so table identity alone cannot preserve an opening across passes.
+const openingsByPass = new WeakMap<TableFlowDeps, WeakMap<OoxmlElement, OpeningMemo>>();
 
 /**
  * What a `w:keepNext` paragraph before `table` needs beside it: the header rows, planned as
@@ -395,12 +396,13 @@ export function tableKeepOpening(
 ): TableKeepOpening | null {
   const table = block?.kind === 'table' ? block.table : undefined;
   if (!table) return null;
-  const memo = openings.get(table);
+  // These callbacks can change their geometry during one pass as the cursor advances.
+  const stable = !deps.pageExclusionZones && !deps.inlineDrawingLayout && !deps.hostedStory;
+  let openings = stable ? openingsByPass.get(deps) : undefined;
+  const memo = openings?.get(table);
   if (
     memo &&
     memo.pageHeight === pageHeight &&
-    memo.deps.measurer === deps.measurer &&
-    memo.deps.producer === deps.producer &&
     memo.at.width === at.width &&
     memo.at.styleCascade === at.styleCascade &&
     memo.at.displayMode === at.displayMode &&
@@ -410,7 +412,13 @@ export function tableKeepOpening(
     return memo.value;
   }
   const value = measureTableKeepOpening(table, at, pageHeight, deps);
-  openings.set(table, { at, pageHeight, deps, value });
+  if (stable) {
+    if (!openings) {
+      openings = new WeakMap();
+      openingsByPass.set(deps, openings);
+    }
+    openings.set(table, { at, pageHeight, value });
+  }
   return value;
 }
 

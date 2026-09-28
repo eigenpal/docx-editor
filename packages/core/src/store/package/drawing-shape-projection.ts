@@ -1,3 +1,4 @@
+import { identityGroupThemeEffect } from './drawing-group-theme-effects.ts';
 // Renderable projections of `wps:wsp` graphics: solid-geometry vector shapes and textbox
 // stories. Split from drawing-projection.ts, which owns the drawing walk, MC selection, and
 // the assembled DrawingProjection; this module is pure direct-child reads with no walk state.
@@ -10,6 +11,7 @@ import {
   isGroupPropertyChild,
   MAX_GROUP_SHAPE_CHILDREN,
   readDrawingGroupFrame,
+  supportedGroupVisuals,
   schemaAngleIsZero,
   schemaFlagIsSet,
   schemaFlagIsUnset,
@@ -671,6 +673,12 @@ export function projectVectorShape(
       if (child.id === groupPictureNodeId) continue;
       // One group level is the enforced nesting cap. Do not paint a partial nested group.
       if (child.namespaceUri !== WPS_NAMESPACE_URI || child.localName !== 'wsp') return null;
+      const properties = findDirectChild(child.children, {
+        namespaceUri: WPS_NAMESPACE_URI,
+        localName: 'spPr',
+      });
+      if (!properties || !supportedGroupVisuals(child, properties, false)) return null;
+      if (!identityGroupThemeEffect(child, resolveStyleMatrixReference)) return null;
       const transform = childTransform(child);
       if (!transform) return null;
       const component = projectWspComponent(

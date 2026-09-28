@@ -33,6 +33,8 @@ await runtime.run(async (context) => {
 
 Assignments on one `Font` proxy coalesce within a sync. Different proxies that address overlapping content can still conflict. The runtime rejects formatting writes while tracking changes. Never switch tracking off automatically to bypass that refusal.
 
+Font writes use effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults. Bold, italic, size, and font-name writes update the complex-script properties when those properties control the text. Direct false values override inherited direction.
+
 ## Read authored font values
 
 Load only the properties you need:

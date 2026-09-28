@@ -775,31 +775,57 @@ export function keepNextFlowKeys(
   skipBlock?: (index: number) => boolean,
   tableAt?: (index: number) => boolean
 ): string[] {
+  // Mark only suffixes that a kept head reads. Ordinary paragraphs need no digest.
+  // Bits 1/2 select the plain/through-table lanes; skipped frames forward either lane.
+  const needed = new Uint8Array(keys.length + 1);
+  const flags = new Uint8Array(keys.length);
+  const heads: number[] = [];
+  for (let index = 0; index < keys.length; index += 1) {
+    const keep = keepsNext(index);
+    if (!keep && !needed[index]) continue;
+    const skip = skipBlock?.(index) === true;
+    const table = tableAt?.(index) === true;
+    flags[index] = (keep ? 1 : 0) | (table ? 2 : 0) | (skip ? 4 : 0);
+    if (index + 1 === keys.length) continue;
+    if (skip) needed[index + 1]! |= needed[index]!;
+    else if (keep) {
+      heads.push(index);
+      needed[index + 1]! |= table ? 1 : 2;
+      if (!table) needed[index + 1]! |= needed[index]!;
+    }
+  }
+  if (heads.length === 0) return keys;
   const encoder = new TextEncoder();
   const digest = (value: string) =>
     value.length <= 256 ? value : `\0h${sha256FontBytes(encoder.encode(value))}`;
   const plain: string[] = new Array(keys.length + 1);
   const through: string[] = new Array(keys.length + 1);
   plain[keys.length] = through[keys.length] = '.';
-  let flow = keys;
   for (let index = keys.length - 1; index >= 0; index -= 1) {
-    const skip = skipBlock?.(index);
-    const table = tableAt?.(index);
-    const keep = keepsNext(index);
+    if (!needed[index]) continue;
+    const skip = (flags[index]! & 4) !== 0;
+    const table = (flags[index]! & 2) !== 0;
+    const keep = (flags[index]! & 1) !== 0;
     const terminal = index + 1 === keys.length ? '.' : '';
-    const own = `${keys[index]!.length}:${keys[index]}`;
-    plain[index] = digest(
-      skip ? `-${plain[index + 1]}` : own + (keep && !table ? plain[index + 1] : terminal)
-    );
-    through[index] = digest(
-      skip
-        ? `-${through[index + 1]}`
-        : own + (keep ? (table ? `>${plain[index + 1]}` : through[index + 1]) : terminal)
-    );
-    if (skip || !keep || index + 1 === keys.length) continue;
-    if (flow === keys) flow = [...keys];
-    flow[index] = `${keys[index]}~kn~${table ? plain[index + 1] : through[index + 1]}`;
+    const own = skip ? '-' : `${keys[index]!.length}:${keys[index]}`;
+    const plainValue = own + (skip || (keep && !table) ? plain[index + 1] : terminal);
+    const throughValue =
+      own +
+      (skip
+        ? through[index + 1]
+        : keep
+          ? table
+            ? `>${plain[index + 1]}`
+            : through[index + 1]
+          : terminal);
+    if (needed[index]! & 1) plain[index] = digest(plainValue);
+    if (needed[index]! & 2)
+      through[index] =
+        needed[index]! & 1 && plainValue === throughValue ? plain[index]! : digest(throughValue);
   }
+  const flow = [...keys];
+  for (const index of heads)
+    flow[index] = `${keys[index]}~kn~${flags[index]! & 2 ? plain[index + 1] : through[index + 1]}`;
   return flow;
 }
 

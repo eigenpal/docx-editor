@@ -71,3 +71,32 @@ describe('complex-script companions', () => {
     ]);
   });
 });
+
+for (const [revision, tag, proposed, original] of [
+  ['del', 'delText', true, false],
+  ['ins', 't', false, true],
+] as const) {
+  test(`caret lane follows the visible owner around ${revision}`, () => {
+    const result = readOoxmlPart(
+      `<w:document xmlns:w="${W}"><w:body><w:p><w:${revision} w:id="1" w:author="Author">` +
+        `<w:r><w:${tag}>old</w:${tag}></w:r></w:${revision}>` +
+        '<w:r><w:rPr><w:rtl/></w:rPr><w:t>abc</w:t></w:r></w:p></w:body></w:document>',
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!result.ok) throw new Error(result.reason);
+    expect(complexScriptAt(result.part, PARAGRAPH, 3, undefined, 'proposed')).toBe(proposed);
+    expect(complexScriptAt(result.part, PARAGRAPH, 3, undefined, 'original')).toBe(original);
+    expect(complexScriptAt(result.part, PARAGRAPH, 3, undefined, 'all-markup')).toBe(false);
+    const hiddenAuthors = new Set(['Author']);
+    expect(
+      complexScriptAt(result.part, PARAGRAPH, 3, undefined, 'all-markup', { hiddenAuthors })
+    ).toBe(proposed);
+    expect(
+      complexScriptAt(result.part, PARAGRAPH, 3, undefined, 'all-markup', {
+        hiddenAuthors: new Set(),
+        includesNode: () => false,
+        excludedNodeMode: () => 'original',
+      })
+    ).toBe(original);
+  });
+}

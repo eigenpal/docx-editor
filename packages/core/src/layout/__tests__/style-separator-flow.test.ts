@@ -1,3 +1,4 @@
+import { mergedFlowBlocks, storyBlocks } from '../story-roots.ts';
 import { caretAt } from '../semantic-interaction.ts';
 import {
   DEFAULT_FOOTNOTE_PROPERTIES,
@@ -487,4 +488,96 @@ test('a numbered hidden heading joins a compatible empty successor and keeps its
   expect(markers).toEqual(['1.']);
   expect(result.pages).toEqual(layoutSemanticDocument(part, 1, options).pages);
   expect(layoutSemanticDocument(part, 1, { ...options, session }).pages[0]).toBe(result.pages[0]);
+});
+
+test('separator exclusions stay lazy when every mark is visible', () => {
+  const part = loadBody(paragraph('First') + paragraph('Second', '<w:specVanish/>'));
+  const body = part.root.children.find((node) => node.kind === 'body');
+  if (!body) throw new Error('Missing body');
+  let calls = 0;
+  const result = mergedFlowBlocks(
+    body.children,
+    'proposed',
+    undefined,
+    styles(),
+    true,
+    undefined,
+    () => {
+      calls++;
+      return new Set();
+    }
+  );
+  expect(calls).toBe(0);
+  expect(result).toHaveLength(2);
+});
+
+for (const mark of [both, '<w:vanish/>']) {
+  test(`hidden marks resolve exclusions once and preserve the boundary: ${mark}`, () => {
+    const part = loadBody(paragraph('First', mark) + paragraph('Second'));
+    const body = part.root.children.find((node) => node.kind === 'body');
+    if (!body) throw new Error('Missing body');
+    const first = body.children.find((node) => node.kind === 'paragraph')!;
+    let calls = 0;
+    const result = mergedFlowBlocks(
+      body.children,
+      'proposed',
+      undefined,
+      styles(),
+      true,
+      undefined,
+      () => {
+        calls++;
+        return new Set([first.id]);
+      }
+    );
+    expect(calls).toBe(1);
+    expect(result).toHaveLength(2);
+    expect(
+      mergedFlowBlocks(
+        body.children,
+        'proposed',
+        undefined,
+        styles(),
+        true,
+        undefined,
+        () => new Set()
+      )
+    ).toHaveLength(1);
+  });
+
+  test(`TOC boundaries remain separate with lazy exclusions: ${mark}`, () => {
+    const part = loadBody(
+      `<w:p><w:pPr><w:rPr>${mark}</w:rPr></w:pPr>` +
+        '<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> TOC </w:instrText></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+        run('Contents') +
+        '</w:p>' +
+        paragraph('Entry') +
+        '<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r>' +
+        run('Trailer') +
+        '</w:p>'
+    );
+    expect(storyBlocks(part, 'proposed', undefined, styles())).toHaveLength(3);
+  });
+}
+
+test('inherited hidden marks resolve separator exclusions', () => {
+  const part = loadBody(paragraph('First', '', 'Lead') + paragraph('Second'));
+  const body = part.root.children.find((node) => node.kind === 'body');
+  if (!body) throw new Error('Missing body');
+  let calls = 0;
+  const result = mergedFlowBlocks(
+    body.children,
+    'proposed',
+    undefined,
+    styles(true),
+    true,
+    undefined,
+    () => {
+      calls++;
+      return new Set();
+    }
+  );
+  expect(calls).toBe(1);
+  expect(result).toHaveLength(1);
 });

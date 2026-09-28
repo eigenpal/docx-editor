@@ -409,6 +409,22 @@
   ],
   "divergences": [
     {
+      "uid": "Word.Font#bold",
+      "note": "Reads report authored values or null without resolving inherited formatting. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults."
+    },
+    {
+      "uid": "Word.Font#italic",
+      "note": "Reads report authored values or null without resolving inherited formatting. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults."
+    },
+    {
+      "uid": "Word.Font#name",
+      "note": "Reads report authored values or null without resolving inherited formatting. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults."
+    },
+    {
+      "uid": "Word.Font#size",
+      "note": "Reads report authored values or null without resolving inherited formatting. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults."
+    },
+    {
       "uid": "Word.Document#changeTrackingMode",
       "note": "Server and collaborative hosts support Off and TrackMineOnly. Load changeTrackingMode explicitly before reading; Document.load() retains its empty default property set on every host. The setting is queued, atomic with edits, and retained per host across runs; it is not a persisted document-wide policy. TrackMineOnly uses the configured runtime author and does not change peers. TrackAll and browser-host mode control refuse with NotSupported. Tracked inline text operations support one paragraph and refuse touching pending revisions. Tracked deletion and replacement refuse simple fields whose cached results contain anything other than direct runs. Structural and formatting mutations while tracking refuse; comments and revision decisions remain available."
     },

@@ -4,6 +4,8 @@
 // the group picture projection: which groups it accepts, where the picture lands inside the
 // drawing extent, and every group it still refuses.
 
+import { createPackageShapeThemeResolvers } from '../package/theme-color-resolution.ts';
+import type { OoxmlPackage } from '../package/ooxml-package.ts';
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, WML_NAMESPACE_URI, type OoxmlPart } from '../index.ts';
 import {
@@ -197,6 +199,150 @@ describe('group picture projection', () => {
         .replace('name="Picture"', 'name="Picture" hidden="false"')
         .replace('</pic:spPr>', '<a:ln><a:noFill/></a:ln><a:effectLst/></pic:spPr>');
       expect(projectionsOf(groupDrawing(member))[0]!.groupPicture).not.toBeNull();
+    }
+  });
+
+  for (const [kind, members] of [
+    ['picture', pictureMember()],
+    ['vector', barMember(2100)],
+    ['mixed', pictureMember() + barMember(2100)],
+  ]) {
+    for (const [name, property] of [
+      ['shadow', '<a:effectLst><a:outerShdw><a:srgbClr val="000000"/></a:outerShdw></a:effectLst>'],
+      ['effect graph', '<a:effectDag/>'],
+      ['scene', '<a:scene3d/>'],
+      ['3D shape', '<a:sp3d/>'],
+      ['group fill', '<a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>'],
+    ]) {
+      test(`${kind} group refuses unsupported ${name} without partial rendering`, () => {
+        const drawing = groupDrawing(members!).replace(
+          '</wpg:grpSpPr>',
+          `${property}</wpg:grpSpPr>`
+        );
+        expect(projectionsOf(mcWrapped(drawing))).toHaveLength(0);
+        const [bare] = projectionsOf(drawing);
+        expect(bare!.groupPicture).toBeNull();
+        expect(bare!.vectorShape).toBeNull();
+        expect(bare!.picture).toBeNull();
+        expect(bare!.diagnostics.map((item) => item.code)).toContain('unsupported-graphic');
+      });
+    }
+    for (const hidden of ['1', 'true', ' true ', 'invalid']) {
+      test(`${kind} group refuses hidden=${hidden}`, () => {
+        const drawing = groupDrawing(members!).replace(
+          '<wpg:cNvGrpSpPr/>',
+          `<wpg:cNvPr id="99" name="Group" hidden="${hidden}"/><wpg:cNvGrpSpPr/>`
+        );
+        expect(projectionsOf(mcWrapped(drawing))).toHaveLength(0);
+        expect(projectionsOf(drawing)[0]!.vectorShape).toBeNull();
+        expect(projectionsOf(drawing)[0]!.groupPicture).toBeNull();
+      });
+    }
+    test(`${kind} group preserves default visual properties`, () => {
+      const drawing = groupDrawing(members!)
+        .replace(
+          '<wpg:cNvGrpSpPr/>',
+          '<wpg:cNvPr id="99" name="Group" hidden=" false "/><wpg:cNvGrpSpPr/>'
+        )
+        .replace('<wpg:grpSpPr>', '<wpg:grpSpPr bwMode="auto">')
+        .replace('</wpg:grpSpPr>', '<a:noFill/><a:effectLst/><a:extLst/></wpg:grpSpPr>');
+      expect(projectionsOf(mcWrapped(drawing))).toHaveLength(1);
+    });
+    test(`${kind} group refuses nonidentity color mode and nested groups`, () => {
+      const drawing = groupDrawing(members!).replace(
+        '<wpg:grpSpPr>',
+        '<wpg:grpSpPr bwMode="gray">'
+      );
+      expect(projectionsOf(mcWrapped(drawing))).toHaveLength(0);
+      expect(projectionsOf(mcWrapped(groupDrawing(members! + '<wpg:grpSp/>')))).toHaveLength(0);
+    });
+  }
+
+  for (const members of [barMember(2100), pictureMember() + barMember(2100)]) {
+    for (const property of [
+      '<a:effectLst><a:glow rad="12700"/></a:effectLst>',
+      '<a:scene3d/>',
+      '<a:sp3d/>',
+    ]) {
+      test(`a group refuses a vector member with ${property}`, () => {
+        const drawing = groupDrawing(members.replace('</wps:spPr>', `${property}</wps:spPr>`));
+        expect(projectionsOf(mcWrapped(drawing))).toHaveLength(0);
+        expect(projectionsOf(drawing)[0]!.groupPicture).toBeNull();
+        expect(projectionsOf(drawing)[0]!.vectorShape).toBeNull();
+      });
+    }
+    test('a group refuses a hidden vector member', () => {
+      const drawing = groupDrawing(members.replace('name="Bar"', 'name="Bar" hidden="1"'));
+      expect(projectionsOf(mcWrapped(drawing))).toHaveLength(0);
+      expect(projectionsOf(drawing)[0]!.groupPicture).toBeNull();
+    });
+  }
+
+  test('a picture member refuses an unsupported color mode', () => {
+    const drawing = groupDrawing(pictureMember().replace('<pic:spPr>', '<pic:spPr bwMode="gray">'));
+    expect(projectionsOf(mcWrapped(drawing))).toHaveLength(0);
+    expect(projectionsOf(drawing)[0]!.groupPicture).toBeNull();
+  });
+
+  test('theme effects refuse the whole group while empty theme defaults remain supported', () => {
+    const themeFor = (effect: string) => {
+      const theme = readOoxmlPart(
+        `<a:theme xmlns:a="${A}"><a:themeElements><a:fmtScheme name="Anonymous">` +
+          `<a:effectStyleLst><a:effectStyle>${effect}</a:effectStyle></a:effectStyleLst>` +
+          '</a:fmtScheme></a:themeElements></a:theme>',
+        { name: '/word/theme/theme1.xml', contentType: 'application/xml' }
+      );
+      if (!theme.ok) throw new Error(theme.reason);
+      return createPackageShapeThemeResolvers({
+        parts: new Map([['/word/theme/theme1.xml', theme.part]]),
+        partBytes: new Map(),
+        relationships: new Map(),
+        externalTargets: [],
+        contentTypes: {},
+        mainDocumentPart: '/word/document.xml',
+      } as unknown as OoxmlPackage);
+    };
+    const empty = themeFor('<a:effectLst/>');
+    const shadow = themeFor(
+      '<a:effectLst><a:outerShdw blurRad="40000" dist="200000" dir="0"><a:srgbClr val="000000"/></a:outerShdw></a:effectLst>'
+    );
+    const scene = themeFor('<a:effectLst/><a:scene3d/>');
+    for (const [index, theme, admitted] of [
+      ['0', shadow, true],
+      [' +00 ', shadow, true],
+      ['1', empty, true],
+      ['1', shadow, false],
+      ['1', scene, false],
+      ['2', empty, false],
+      ['1', undefined, false],
+      ['invalid', empty, false],
+      ['4294967295', empty, false],
+    ] as const) {
+      const vector = barMember(2100).replace(
+        '<wps:bodyPr/>',
+        `<wps:style><a:effectRef idx="${index}"><a:srgbClr val="000000"/></a:effectRef></wps:style><wps:bodyPr/>`
+      );
+      const picture = pictureMember().replace(
+        '</pic:pic>',
+        `<pic:style><a:effectRef idx="${index}"/></pic:style></pic:pic>`
+      );
+      for (const members of [vector, pictureMember() + vector, picture]) {
+        const drawing = groupDrawing(members);
+        const project = (xml: string) =>
+          projectDrawingsInPart(parsePart(`<w:p><w:r>${xml}</w:r></w:p>`), theme);
+        expect(project(mcWrapped(drawing)).length > 0).toBe(admitted);
+        const cleared = drawing
+          .replace('</wps:spPr>', '<a:effectLst/></wps:spPr>')
+          .replace('</pic:spPr>', '<a:effectLst/></pic:spPr>');
+        expect(project(mcWrapped(cleared)).length > 0).toBe(
+          admitted || (theme === shadow && index === '1')
+        );
+        if (!admitted) {
+          const [bare] = project(drawing);
+          expect(bare!.vectorShape).toBeNull();
+          expect(bare!.groupPicture).toBeNull();
+        }
+      }
     }
   });
 

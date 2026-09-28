@@ -25,6 +25,8 @@ export function identityPictureStretch(stretch: OoxmlElement | null): boolean {
 
 /** Preserve identity properties, but refuse paint that the group picture cannot represent. */
 export function supportedPictureProperties(properties: OoxmlElement): boolean {
+  const mode = schemaAttributeValue(properties.attributes, 'bwMode');
+  if (mode !== undefined && !['auto', 'clr'].includes(collapseSchemaWhitespace(mode))) return false;
   for (const child of properties.children) {
     if (!isElement(child)) continue;
     if (child.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI) return false;

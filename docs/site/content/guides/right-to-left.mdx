@@ -34,7 +34,7 @@ A run with `w:rtl` or `w:cs` uses complex-script properties for every character.
 
 `w:sz`, `w:b`, and `w:i` have no effect on such a run. A run without `w:rtl` or `w:cs` uses the Latin properties, even for Arabic or Hebrew characters.
 
-For runs with their own `w:rtl` or `w:cs`, formatting commands write both property variants. For example, **Bold** writes `<w:b/><w:bCs/>` on such a run. It writes `<w:b/>` on a left-to-right (LTR) run. A run that takes `w:rtl` only from a character style receives only the Latin property.
+Formatting commands use the effective `w:rtl` and `w:cs` values, including character styles, paragraph styles, table styles, and document defaults. Direct false values override inherited values. For complex-script runs, commands write both property variants. For example, **Bold** writes `<w:b/><w:bCs/>`. It writes `<w:b/>` on a left-to-right (LTR) run. Selection formatting, caret typing, paragraph marks, format painter, and automation font writes follow this rule.
 
 ## Change paragraph direction
 

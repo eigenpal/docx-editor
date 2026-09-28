@@ -30,6 +30,14 @@ interface GroupMemo {
 }
 const groupMemos = new WeakMap<OoxmlElement, GroupMemo[]>();
 const boundaryMemo = new WeakMap<OoxmlNode, boolean>();
+interface MarkMemo {
+  readonly hidden: boolean;
+  readonly special: boolean;
+}
+// Note discovery and body layout can read the same paragraph with different cascades.
+// Keep their immutable contexts separate so alternating passes do not evict each other.
+const markMemos = new WeakMap<StyleCascadeTable, WeakMap<OoxmlElement, MarkMemo>>();
+const unstyledMarkMemos = new WeakMap<OoxmlElement, MarkMemo>();
 interface Entry {
   readonly block: OoxmlElement;
   readonly parentKey: string;
@@ -51,6 +59,10 @@ export function hiddenStyleSeparatorMark(
   styles?: StyleCascadeTable,
   requireSpecial = true
 ): boolean {
+  let cache = styles ? markMemos.get(styles) : unstyledMarkMemos;
+  if (!cache) markMemos.set(styles!, (cache = new WeakMap()));
+  const memo = cache.get(paragraph);
+  if (memo) return memo.hidden && (!requireSpecial || memo.special);
   let value = false;
   let hidden = false;
   for (const property of formatting(paragraph, styles).markRunProperties) {
@@ -59,6 +71,7 @@ export function hiddenStyleSeparatorMark(
     if (property.localName === 'specVanish')
       value = !['0', 'false', 'off'].includes(property.attributes?.val ?? 'true');
   }
+  cache.set(paragraph, { hidden, special: value });
   return hidden && (!requireSpecial || value);
 }
 function containsBoundary(node: OoxmlNode): boolean {
@@ -263,11 +276,20 @@ export function withStyleSeparatorParagraphs(
   entries: readonly Entry[],
   styles: StyleCascadeTable | undefined,
   numberingIndex: NumberingIndex | undefined,
-  excludedParagraphs: ReadonlySet<string> | undefined,
+  exclusions: ReadonlySet<string> | (() => ReadonlySet<string>) | undefined,
   addressable: (paragraph: OoxmlElement) => boolean,
   alreadyMerged: (paragraph: OoxmlElement) => boolean,
   register: (merged: OoxmlElement, members: readonly OoxmlElement[]) => void
 ): readonly Entry[] {
+  // Without a hidden mark no separator group can form. Avoid constructing TOC field
+  // ranges and a second flow array for this common path, including tracked text edits.
+  if (
+    !entries.some(
+      ({ block }) => block.kind === 'paragraph' && hiddenStyleSeparatorMark(block, styles, false)
+    )
+  )
+    return entries;
+  const excludedParagraphs = typeof exclusions === 'function' ? exclusions() : exclusions;
   const special = (paragraph: OoxmlElement) => hiddenStyleSeparatorMark(paragraph, styles);
   const baseline = groupParagraphs(
     entries,

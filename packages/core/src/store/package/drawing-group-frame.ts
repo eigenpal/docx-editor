@@ -4,7 +4,7 @@
 // agree on which groups they accept and where each member lands.
 
 import { findDirectChild, parseEmu, readSize } from './drawing-shape-readers.ts';
-import { findDirectKind } from './drawing-projection-walk.ts';
+import { isElement, findDirectKind } from './drawing-projection-walk.ts';
 import {
   collapseSchemaWhitespace,
   parseSchemaBoolean,
@@ -81,6 +81,33 @@ export function findGraphicData(anchor: OoxmlElement): OoxmlElement | null {
   return data;
 }
 
+/** Refuse visibility and visual effects that grouped members cannot represent. */
+export function supportedGroupVisuals(
+  owner: OoxmlElement,
+  properties: OoxmlElement,
+  group: boolean
+): boolean {
+  const nonVisual = findDirectChild(owner.children, {
+    namespaceUri: owner.namespaceUri,
+    localName: 'cNvPr',
+  });
+  if (nonVisual && !schemaFlagIsUnset(schemaAttributeValue(nonVisual.attributes, 'hidden')))
+    return false;
+  const mode = schemaAttributeValue(properties.attributes, 'bwMode');
+  if (mode !== undefined && !['auto', 'clr'].includes(collapseSchemaWhitespace(mode))) return false;
+  for (const child of properties.children) {
+    if (!isElement(child)) continue;
+    if (child.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI) return false;
+    if (child.localName === 'effectLst') {
+      if (child.children.some(isElement)) return false;
+      continue;
+    }
+    if (['effectDag', 'scene3d', 'sp3d'].includes(child.localName)) return false;
+    if (group && !['xfrm', 'extLst', 'noFill'].includes(child.localName)) return false;
+  }
+  return true;
+}
+
 /** A group payload and the child coordinate space its members are authored in. */
 export interface DrawingGroupFrame {
   readonly group: OoxmlElement;
@@ -121,7 +148,8 @@ export function readDrawingGroupFrame(anchor: OoxmlElement): DrawingGroupFrame |
         localName: 'chExt',
       })
     : null;
-  if (!group || !childExtent) return null;
+  if (!group || !groupProperties || !childExtent) return null;
+  if (!supportedGroupVisuals(group, groupProperties, true)) return null;
   if (xfrm) {
     if (!schemaAngleIsZero(schemaAttributeValue(xfrm.attributes, 'rot'))) return null;
     if (!schemaFlagIsUnset(schemaAttributeValue(xfrm.attributes, 'flipH'))) return null;

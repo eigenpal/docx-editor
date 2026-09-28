@@ -205,7 +205,7 @@ export function mergedFlowBlocks(
   styles?: StyleCascadeTable,
   styleSeparators = false,
   numberingIndex?: NumberingIndex,
-  excludedParagraphs?: ReadonlySet<string>
+  excludedParagraphs?: ReadonlySet<string> | (() => ReadonlySet<string>)
 ): OoxmlElement[] {
   const blocks = flowBlocksWithParent(children).map((entry) => ({
     ...entry,
@@ -455,11 +455,12 @@ export function storyBlocks(
         styles,
         root.kind === 'body',
         numberingIndex,
-        new Set([
-          ...tocCodeRanges(part).keys(),
-          ...tocFieldChromeParagraphIds(part),
-          ...emptyTocSuppressedResultParagraphIds(part),
-        ])
+        () =>
+          new Set([
+            ...tocCodeRanges(part).keys(),
+            ...tocFieldChromeParagraphIds(part),
+            ...emptyTocSuppressedResultParagraphIds(part),
+          ])
       )
     : [];
   if (perMode) cacheProjection(perMode, key, blocks);

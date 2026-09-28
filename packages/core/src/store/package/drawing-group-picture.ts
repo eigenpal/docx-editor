@@ -1,3 +1,4 @@
+import { identityGroupThemeEffect } from './drawing-group-theme-effects.ts';
 import {
   identityPictureStretch,
   supportedPictureProperties,
@@ -18,7 +19,10 @@ import {
 } from './drawing-group-frame.ts';
 import { isElement } from './drawing-projection-walk.ts';
 import { findDirectChild, parseCropPercent, parseEmu } from './drawing-shape-readers.ts';
-import type { VectorShapeProjection } from './drawing-shape-projection.ts';
+import type {
+  ShapeStyleMatrixResolver,
+  VectorShapeProjection,
+} from './drawing-shape-projection.ts';
 import { schemaAttributeValue } from './ooxml-drawing-rules.ts';
 import {
   DRAWINGML_MAIN_NAMESPACE_URI,
@@ -132,7 +136,8 @@ function drawingMl(parent: OoxmlElement, localName: string): OoxmlElement | null
  */
 export function readGroupPicture(
   anchor: OoxmlElement,
-  extent: Readonly<{ cx: number; cy: number }>
+  extent: Readonly<{ cx: number; cy: number }>,
+  resolveStyleMatrixReference?: ShapeStyleMatrixResolver
 ): GroupPictureRead | null {
   if (extent.cx <= 0 || extent.cy <= 0) return null;
   const frame = readDrawingGroupFrame(anchor);
@@ -152,7 +157,7 @@ export function readGroupPicture(
       hasOtherMembers = true;
     }
   }
-  if (!picture) return null;
+  if (!picture || !identityGroupThemeEffect(picture, resolveStyleMatrixReference)) return null;
   const nonVisual = findDirectChild(picture.children, {
     namespaceUri: PIC_NAMESPACE_URI,
     localName: 'nvPicPr',

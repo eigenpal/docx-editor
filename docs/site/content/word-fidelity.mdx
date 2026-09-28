@@ -164,6 +164,8 @@ The matrix defines support status. Check these limits when a document contains d
 | Drawing shapes | Renders solid rectangles, ellipses, lines, bounded polygons, and groups, with outlines drawn at full width. A group can include one unrotated picture below its shapes. Other shapes use a placeholder. Unsupported shapes in alternative content are hidden, and floating ones keep their wrap area. | No | Preserved |
 | WMF and EMF | Rasterizes supported files. Other files keep their extent with a placeholder. | No | Full |
 
+Drawing groups require visible members and supported group properties. Groups with unsupported effects or 3D properties retain their unsupported drawing behavior. The editor does not render only the supported members of such a group.
+
 The editor renders opaque solid Word 2010 text outlines with explicit RGB colors. Other text effects remain preserved; the text-effects matrix lists the rendering limits. PDF export does not paint these outlines.
 
 ## Layout and document settings
@@ -203,6 +205,8 @@ Bottom-to-top cell text does not make its row taller. The text wraps at the fina
 A table row starts below other content only when the remaining space holds its minimum height. If it does not, the row moves to the next page, also when its content is taller than a page. A keep-with-next paragraph before the table moves with the row. If a fresh page cannot hold that minimum below repeated headers, the row splits where it stands. Rows of positioned tables keep their existing placement.
 
 Keep-with-next table groups include closed vertical merges. Their merged content contributes its height once across the covered rows. Table decisions measure at most 256 kept rows and the next row. Longer groups use that measured prefix as a lower bound. Paragraph keep lookahead remains unchanged.
+
+Changes to numbering and document properties update field text and table pagination during editing.
 
 Merges that enter or leave the measured group retain ordinary row placement. Active floating content also uses ordinary row placement when it changes the available width.
 

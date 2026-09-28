@@ -1,0 +1,16 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Formatting writes checked only direct complex-script run properties.",
+  "after": "Formatting writes use effective inherited complex-script properties. First insertion preserves paragraph-mark direction flags and caret formatting follows visible text.",
+  "reason": "Writes use existing w:bCs, w:iCs, w:szCs, and w:rFonts attributes. Released readers preserve these ordinary properties. Shared schema, primitive operations, and canonical repair rules do not change.",
+  "tests": [
+    "packages/core/src/store/__tests__/canonical-primitive-journal-coverage.test.ts",
+    "packages/core/src/editor/__tests__/inherited-complex-script-formatting.test.ts",
+    "packages/editor-api/src/model/__tests__/model-inherited-complex-font.test.ts",
+    "packages/core/src/store/__tests__/empty-paragraph-mark-style-insert.test.ts",
+    "packages/core/src/store/__tests__/complex-script-companions.test.ts"
+  ],
+  "changeset": "inherited-complex-formatting",
+  "migration": null
+}

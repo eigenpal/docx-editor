@@ -132,3 +132,26 @@ describe('an empty paragraph gives its first run the mark character style', () =
     if (!result.ok) expect(result.reason).toBe('unsupported-property');
   });
 });
+
+for (const tracked of [false, true]) {
+  for (const flag of ['rtl', 'cs']) {
+    for (const value of ['0', '1']) {
+      test(`first insertion preserves mark ${flag}=${value}, tracked=${tracked}`, () => {
+        const mark = `<w:pPr><w:rPr><w:${flag} w:val="${value}"/></w:rPr></w:pPr>`;
+        const part = load(`<w:p>${mark}<w:r><w:rPr><w:i/></w:rPr></w:r></w:p>`);
+        const result = typed(
+          part,
+          0,
+          tracked
+            ? ({
+                revision: { author: 'Author', date: '2026-01-01T00:00:00Z' },
+              } as Partial<TreeDocOp>)
+            : {}
+        );
+        expect(serializeOoxmlPart(result)).toContain(
+          `<w:r><w:rPr><w:${flag} w:val="${value}"/></w:rPr><w:t>typed</w:t></w:r>`
+        );
+      });
+    }
+  }
+}

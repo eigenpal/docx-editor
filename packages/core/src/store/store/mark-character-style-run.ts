@@ -6,11 +6,12 @@
 // count: a paragraph whose runs hold nothing is still empty.
 //
 // The mark's DIRECT properties reach the typed text through the editor's caret format, because
-// they are in the accepted run vocabulary. `w:rStyle` is not: it is preserved, not accepted
-// (`tree-op-types.ts`), so no property write can carry it. The insertion copies it itself,
+// they are in the accepted run vocabulary. `w:rStyle`, `w:rtl`, and `w:cs` are preserved, not accepted
+// (`tree-op-types.ts`), so property writes cannot carry them. Insertion copies them itself,
 // when it mints the run. The value is the paragraph's own authored reference, never a caller's,
 // so the vocabulary an op may write stays as it was.
 
+import { withFreshIds } from '../package/hf-lifecycle-shell.ts';
 import { WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import type { OoxmlNode, OoxmlParagraphNode } from '../package/ooxml-tree.ts';
 import { propertyContainer } from './direct-properties.ts';
@@ -67,14 +68,33 @@ export function emptyParagraphMarkStyle(paragraph: OoxmlParagraphNode): string |
 
 /**
  * The `w:rPr` of the run minted for the first content of an empty paragraph, or `[]` when its
- * mark names no character style. Spread into the minted run ahead of its content.
+ * mark names no character style or complex-script flag. Place it ahead of the content.
  */
 export function emptyParagraphRunProperties(
   paragraph: OoxmlParagraphNode,
   nextId: () => string
 ): OoxmlNode[] {
+  if (segmentsOf(paragraph).length > 0) return [];
   const styleId = emptyParagraphMarkStyle(paragraph);
-  if (styleId === undefined) return [];
+  const children: OoxmlNode[] =
+    styleId === undefined ? [] : [characterStyleElement(nextId, styleId)];
+  const mark = propertyContainer(
+    propertyContainer(paragraph, 'paragraphProperties', 'pPr'),
+    'runProperties',
+    'rPr'
+  );
+  if (mark && mark.kind !== 'textValue') {
+    for (const child of mark.children) {
+      if (
+        child.kind !== 'textValue' &&
+        child.namespaceUri === WML_NAMESPACE_URI &&
+        (child.localName === 'rtl' || child.localName === 'cs')
+      ) {
+        children.push(withFreshIds(child, nextId));
+      }
+    }
+  }
+  if (children.length === 0) return [];
   return [
     {
       id: nextId(),
@@ -84,7 +104,7 @@ export function emptyParagraphRunProperties(
       prefix: 'w',
       namespaceBindings: [],
       attributes: [],
-      children: [characterStyleElement(nextId, styleId)],
+      children,
     } as unknown as OoxmlNode,
   ];
 }

@@ -1516,7 +1516,9 @@ export function projectDrawingWithState(
           allowOverlap: anchorFlag('allowOverlap') ?? true,
         })
       : null;
-  const groupRead = pictureResult.picture ? null : readGroupPicture(anchor, extent);
+  const groupRead = pictureResult.picture
+    ? null
+    : readGroupPicture(anchor, extent, ctx.resolveStyleMatrixReference);
   const vectorMembers = pictureResult.picture
     ? null
     : projectVectorShape(

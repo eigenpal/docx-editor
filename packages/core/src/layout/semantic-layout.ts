@@ -182,7 +182,8 @@ import {
   layoutSemanticDocumentWithNotes,
   notesReserveContextKey,
 } from './note-pagination.ts';
-import { passProducerOf, producerWithControlContext } from './pass-producer.ts';
+import { passProducerOf } from './pass-producer.ts';
+import { documentProjectionProducer } from './document-property-context.ts';
 
 import { noteExclusionLayoutPass } from './exclusion-pass-observer.ts';
 export { observeExclusionLayoutPassesForTest } from './exclusion-pass-observer.ts';
@@ -301,13 +302,7 @@ export function layoutSemanticDocument(
     fieldCodeRanges: options.showFieldCodes ? tocCodeRanges(part) : undefined,
     tocLinkStyleRanges: linkStyleRanges,
     displayMode,
-    producer: producerWithControlContext(
-      producerWithControlContext(
-        options.showFieldCodes ? `${options.producer ?? ''}|field-codes` : options.producer,
-        controlToken
-      ),
-      tocLinkStyleToken(linkStyleRanges)
-    ),
+    producer: documentProjectionProducer(options, controlToken, tocLinkStyleToken(linkStyleRanges)),
     tocFieldChromeParagraphIds:
       options.tocFieldChromeParagraphIds ?? tocFieldChromeParagraphIds(part),
     emptyTocPlaceholderParagraphIds:

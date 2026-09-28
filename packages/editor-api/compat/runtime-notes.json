@@ -25,11 +25,11 @@
   },
   "Word.Font#bold": {
     "status": "different",
-    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a boolean."
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a boolean. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults."
   },
   "Word.Font#italic": {
     "status": "different",
-    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a boolean."
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a boolean. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults."
   },
   "Word.Font#color": {
     "status": "different",
@@ -37,11 +37,11 @@
   },
   "Word.Font#name": {
     "status": "different",
-    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a string."
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a string. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults."
   },
   "Word.Font#size": {
     "status": "different",
-    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a number."
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a number. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults."
   },
   "Word.Range#insertComment": {
     "status": "partial",

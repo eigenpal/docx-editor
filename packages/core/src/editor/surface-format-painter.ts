@@ -1,3 +1,5 @@
+import { createContextualRunFormatting } from '../layout/complex-script-formatting.ts';
+
 // Word's Format Painter over the selection (paginated-surface seam).
 //
 // Two halves that never meet in the document: a CAPTURE, which reads and writes nothing,
@@ -15,11 +17,7 @@ import type {
   StoryScope,
   TreeDocOp,
 } from '@docx-editor.dev/core/store';
-import {
-  directParagraphProperties,
-  mergedParagraphMarkProperties,
-  runPropertyEdits,
-} from '@docx-editor.dev/core/store';
+import { directParagraphProperties } from '@docx-editor.dev/core/store';
 import {
   paragraphsInCells,
   type ResolvedRunStyle,
@@ -205,6 +203,13 @@ export type SurfaceFormatPainter = FormatPainterOps & {
 };
 
 export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): SurfaceFormatPainter {
+  const { runPropertyEdits, mergedParagraphMarkProperties } = createContextualRunFormatting(
+    () => deps.session.stylesRoot(),
+    () => deps.session.settingsRoot(),
+    () => deps.displayMode(),
+    () => deps.authorFilter()
+  );
+
   const session = deps.session;
   const storyPart = () => session.partFor(deps.storyScope()) ?? session.part();
 

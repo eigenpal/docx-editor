@@ -273,6 +273,16 @@ export function mergedMultiSettingProperty(
   return { localName: 'u', attributes: { ...existing, ...(incoming.attributes ?? {}) } };
 }
 
+/** Internal style context; direct formatting remains the only write base. */
+export type ComplexScriptContext = (
+  paragraph: OoxmlNode,
+  container: OoxmlNode | undefined,
+  mark: boolean,
+  part: OoxmlPart,
+  displayMode?: FormattingDisplayMode,
+  authorFilter?: FormattingRevisionAuthorFilter
+) => boolean;
+
 /**
  * A paragraph MARK's own properties with one write merged in, per attribute where it counts.
  *
@@ -281,14 +291,29 @@ export function mergedMultiSettingProperty(
  * Asian face while the text beside it kept one. Lives here because BOTH lanes write the mark:
  * the editor's toolbar and the automation object model.
  */
+
 export function mergedParagraphMarkProperties(
   part: OoxmlPart,
   paragraphId: string,
   incoming: OoxmlProperty | readonly OoxmlProperty[]
 ): OoxmlProperty[] {
+  return mergedParagraphMarkPropertiesWithContext(part, paragraphId, incoming);
+}
+
+export function mergedParagraphMarkPropertiesWithContext(
+  part: OoxmlPart,
+  paragraphId: string,
+  incoming: OoxmlProperty | readonly OoxmlProperty[],
+  context?: ComplexScriptContext
+): OoxmlProperty[] {
   const authored = directParagraphMarkProperties(part, paragraphId);
   const pPr = propertyContainer(findNode(part, paragraphId), 'paragraphProperties', 'pPr');
-  const complex = containerIsComplexScript(propertyContainer(pPr, 'runProperties', 'rPr'));
+  const paragraph = findNode(part, paragraphId);
+  const container = propertyContainer(pPr, 'runProperties', 'rPr');
+  const complex =
+    context && paragraph
+      ? context(paragraph, container, true, part)
+      : containerIsComplexScript(container);
   return mergedProperties(authored, withMultiSettingsKept(authored, incoming, complex));
 }
 
@@ -311,18 +336,17 @@ export function mergedRunWrite(
  * at the caret, else the one starting there, else the paragraph mark — the same owner
  * `authoredRunPropertiesAt` reads the typing format from.
  */
-export function complexScriptAt(part: OoxmlPart, paragraphId: string, offset: number): boolean {
+export function complexScriptAt(
+  part: OoxmlPart,
+  paragraphId: string,
+  offset: number,
+  context?: ComplexScriptContext,
+  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE,
+  authorFilter?: FormattingRevisionAuthorFilter
+): boolean {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return false;
-  let left: OoxmlNode | null = null;
-  let right: OoxmlNode | null = null;
-  for (const [runId, range] of runAddressRanges(paragraph)) {
-    if (range.end <= range.start) continue;
-    if (range.start < offset && offset <= range.end) left = findNode(part, runId) ?? left;
-    if (!right && range.start <= offset && offset < range.end)
-      right = findNode(part, runId) ?? null;
-  }
-  const owner = left ?? right;
+  const owner = formattingRunAt(paragraph, offset, displayMode, authorFilter);
   const container = owner
     ? propertyContainer(owner, 'runProperties', 'rPr')
     : propertyContainer(
@@ -330,7 +354,29 @@ export function complexScriptAt(part: OoxmlPart, paragraphId: string, offset: nu
         'runProperties',
         'rPr'
       );
-  return containerIsComplexScript(container);
+  return context
+    ? context(paragraph, container, false, part, displayMode, authorFilter)
+    : containerIsComplexScript(container);
+}
+
+/** Internal shared caret owner for authored properties and effective formatting lanes. */
+export function formattingRunAt(
+  paragraph: OoxmlNode,
+  offset: number,
+  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE,
+  authorFilter?: FormattingRevisionAuthorFilter
+): OoxmlNode | null {
+  if (paragraph.kind !== 'paragraph') return null;
+  const ranges = runAddressRanges(paragraph);
+  let left: OoxmlNode | null = null;
+  let right: OoxmlNode | null = null;
+  for (const run of formattableRunsOfParagraph(paragraph, displayMode, authorFilter)) {
+    const range = ranges.get(run.id);
+    if (!range || range.end <= range.start) continue;
+    if (range.start < offset && offset <= range.end) left = run;
+    if (!right && range.start <= offset && offset < range.end) right = run;
+  }
+  return left ?? right;
 }
 
 function withMultiSettingsKept(
@@ -365,6 +411,27 @@ export function runPropertyEdits(
   displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE,
   authorFilter?: FormattingRevisionAuthorFilter
 ): readonly RunPropertyEdit[] {
+  return runPropertyEditsWithContext(
+    part,
+    paragraphId,
+    start,
+    end,
+    incoming,
+    displayMode,
+    authorFilter
+  );
+}
+
+export function runPropertyEditsWithContext(
+  part: OoxmlPart,
+  paragraphId: string,
+  start: number,
+  end: number,
+  incoming: OoxmlProperty | readonly OoxmlProperty[],
+  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE,
+  authorFilter?: FormattingRevisionAuthorFilter,
+  context?: ComplexScriptContext
+): readonly RunPropertyEdit[] {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return [];
   const edits: RunPropertyEdit[] = [];
@@ -384,7 +451,9 @@ export function runPropertyEdits(
   )) {
     const container = propertyContainer(covered.run, 'runProperties', 'rPr');
     const authored = authoredProperties(container, AUTHORABLE_RUN_PROPERTIES);
-    const complex = containerIsComplexScript(container);
+    const complex = context
+      ? context(paragraph, container, false, part, displayMode, authorFilter)
+      : containerIsComplexScript(container);
     edits.push({
       start: covered.start,
       end: covered.end,
