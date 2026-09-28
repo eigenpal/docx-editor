@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { json, sha } from './common.mjs';
+import { verifyTarball } from './publication-tarball.mjs';
 import { registry, PUBLICATION_TIMEOUT_MS } from './registry.mjs';
 
 export function readPublicationCandidate(directory) {
@@ -25,6 +26,7 @@ export async function verifyPublication(
   manifest,
   {
     lookup = registry,
+    verifyArchive = verifyTarball,
     now = Date.now,
     log = console.log,
     deadline = now() + PUBLICATION_TIMEOUT_MS,
@@ -47,6 +49,7 @@ export async function verifyPublication(
           throw new Error(
             `Published artifact differs from tested candidate: ${name}@${expected.version}`
           );
+        await verifyArchive(published, { deadline, signal: controller.signal });
         log(`Verified ${name}@${expected.version}`);
       })
     );
