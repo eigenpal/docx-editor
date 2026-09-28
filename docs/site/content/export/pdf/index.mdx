@@ -17,7 +17,7 @@ Use Node.js `^20.16.0 || >=22.3.0`. Install the converter and its required engin
 npm install @docx-editor.dev/docx-to-pdf @docx-editor.dev/core
 ```
 
-To convert Chinese, Japanese, or Korean text, also install `@docx-editor.dev/fonts-cjk`. The converter finds it without configuration. For more information, see [Configure PDF fonts](/docs/2.x/export/pdf/fonts).
+For Chinese, Japanese, or Korean text, supply suitable fonts or install the optional `@docx-editor.dev/fonts-cjk` package. The converter finds the package without configuration. For more information, see [Configure PDF fonts](/docs/2.x/export/pdf/fonts).
 
 ## Convert a document
 
@@ -70,7 +70,11 @@ Page diagnostics include one-based `pageNumber`, consistent with Markdown warnin
 
 ## Supported content
 
-The exporter supports searchable multilingual text, tables, images, notes, textboxes, structured equations, links, and comments. Charts, rotated table-cell text, and advanced image effects produce diagnostics.
+The exporter supports searchable multilingual text, tables, images, notes, textboxes, structured equations, links, and comments. Arabic joining continues across formatting runs. The PDF text layer preserves logical word order for Arabic, Persian, and Hebrew text extraction.
+
+Supported vector shapes include horizontal and vertical lines, including lines within groups. Shape outlines retain their full width. The converter reads PNG and JPEG images even when DOCX metadata declares another supported raster format. Supported declarations include PNG, JPEG, GIF, BMP, and WebP.
+
+Charts, rotated table-cell text, and advanced image effects produce diagnostics. For detailed coverage and limits, see [Word feature support](/docs/2.x/word-fidelity).
 
 ## Try the demo
 

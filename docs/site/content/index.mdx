@@ -38,7 +38,7 @@ It parses Office Open XML (OOXML), renders paginated pages, and saves the edited
 | [`@docx-editor.dev/pro`](/docs/2.x/pro) | Tracked changes, comments, and custom nodes | EigenPal Pro License |
 | [`@docx-editor.dev/i18n`](/docs/2.x/i18n) | Shared interface translations | Apache 2.0 |
 | [`@docx-editor.dev/fonts`](/docs/2.x/guides/fonts) | Open-licensed substitutes for common Word fonts | Apache-2.0 AND OFL-1.1 AND LicenseRef-GUST-Font-License |
-| [`@docx-editor.dev/fonts-cjk`](/docs/2.x/export/pdf/fonts) | Chinese, Japanese, and Korean fallback font for PDF conversion | Apache-2.0 AND OFL-1.1 |
+| [`@docx-editor.dev/fonts-cjk`](/docs/2.x/export/pdf/fonts#add-chinese-japanese-and-korean-text) | Optional Chinese, Japanese, and Korean fallback font for PDF conversion | Apache-2.0 AND OFL-1.1 |
 
 Compare EigenPal Pro License and support options on the [pricing page](https://www.docx-editor.dev/pricing).
 
@@ -75,6 +75,18 @@ For Vue, replace `@docx-editor.dev/react` with `@docx-editor.dev/vue`.
 | Review      | Tracked changes and comments with `@docx-editor.dev/pro`                |
 
 Support differs by feature and operation. See [Word fidelity](/docs/2.x/word-fidelity) for editing, rendering, and round-trip status. Use the [live demo](https://docx-editor.dev/editor) to test a document.
+
+## Find a guide for your task
+
+| Task | Guide |
+| --- | --- |
+| Check pagination, table layout, and drawing limits | [Word fidelity](/docs/2.x/word-fidelity) |
+| Set paragraph direction for Arabic or Hebrew text | [Right-to-left text](/docs/2.x/guides/right-to-left) |
+| Scroll to and highlight an external paragraph reference | [Navigate a document](/docs/2.x/guides/navigation) |
+| Configure PDF fonts, including Chinese, Japanese, and Korean fallback | [PDF fonts](/docs/2.x/export/pdf/fonts) |
+| Configure interface translations, including Spanish | [`@docx-editor.dev/i18n`](/docs/2.x/i18n) |
+
+Document direction, interface language, and font selection have separate settings. Use the corresponding guide to configure each setting.
 
 ## Round-trip behavior
 

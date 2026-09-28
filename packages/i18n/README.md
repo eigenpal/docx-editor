@@ -28,10 +28,12 @@ Pass a locale to the editor. This example requires the React adapter and its eng
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
-import { de } from '@docx-editor.dev/i18n';
+import { es } from '@docx-editor.dev/i18n';
 
-<DocxEditor document={bytes} i18n={de} />;
+<DocxEditor document={bytes} i18n={es} locale="es-ES" />;
 ```
+
+The `i18n` prop translates controls. Set `locale` separately for regional date input and generated document labels. It defaults to `en-US`.
 
 To share a locale across editors and custom controls, use `LocaleProvider`:
 
@@ -44,7 +46,7 @@ import { de } from '@docx-editor.dev/i18n';
 </LocaleProvider>;
 ```
 
-Chrome you write yourself reads the same catalog through `useTranslation()`.
+Custom controls read the same catalog through `useTranslation()`.
 
 Mix a community locale with custom overrides:
 
@@ -57,7 +59,7 @@ const myLocale = {
 };
 ```
 
-Keys set to `null` in any locale fall back to English.
+Missing or `null` keys keep the inherited catalog value. Without an outer `LocaleProvider`, they fall back to English.
 
 ## Available locales
 

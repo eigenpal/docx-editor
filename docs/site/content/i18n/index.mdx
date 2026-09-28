@@ -7,7 +7,7 @@ order: 60
 
 <PackageStats name="@docx-editor.dev/i18n" />
 
-Locale data for the editor UI. Both adapters consume it through the `i18n` prop.
+Use locale catalogs to translate editor controls in React and Vue. Both adapters accept the catalog through the `i18n` prop.
 
 ```bash
 npm install @docx-editor.dev/i18n
@@ -48,10 +48,10 @@ In Vue, use `locale="pl-PL"` and `:i18n="pl"` on `<DocxEditor>`. For composed ed
 | `tr`    | Turkish              | `tr`         |
 | `zh-CN` | Chinese (Simplified) | `zhCN`       |
 
-Two import shapes are supported:
+Choose an import style:
 
-- **Named exports off the root** (`import { pl } from '@docx-editor.dev/i18n'`). Use this when you ship a small static list of locales. Hyphenated codes (`pt-BR`, `zh-CN`) become camelCase exports (`ptBR`, `zhCN`).
-- **Per-locale subpath imports** (`import pl from '@docx-editor.dev/i18n/pl'`). Use this when you dynamically load locales; the per-locale subpath code-splits so users only download the language they need.
+- Use named exports for a fixed set of locales: `import { es } from '@docx-editor.dev/i18n'`. Hyphenated codes (`pt-BR`, `zh-CN`) use camelCase exports (`ptBR`, `zhCN`).
+- Use a dynamic subpath import to load a locale on demand: `(await import('@docx-editor.dev/i18n/es')).default`. A static subpath import includes that locale in your bundle.
 
 Verify what your installed version ships:
 
@@ -59,18 +59,18 @@ Verify what your installed version ships:
 ls node_modules/@docx-editor.dev/i18n/
 ```
 
-## Wiring into the editor
+## Set the editor language
 
-Pass the catalog to `i18n`. These examples change UI language only; date input keeps the default `en-US` conventions.
+Pass the catalog to `i18n`. These examples use Spanish controls and Spanish regional date input:
 
 <FrameworkTabs>
 <Framework value="react">
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
-import { pl } from '@docx-editor.dev/i18n';
+import { es } from '@docx-editor.dev/i18n';
 
-<DocxEditor document={bytes} i18n={pl} />;
+<DocxEditor document={bytes} i18n={es} locale="es-ES" />;
 ```
 
 </Framework>
@@ -79,27 +79,27 @@ import { pl } from '@docx-editor.dev/i18n';
 ```vue
 <script setup lang="ts">
 import { DocxEditor } from '@docx-editor.dev/vue';
-import { pl } from '@docx-editor.dev/i18n';
+import { es } from '@docx-editor.dev/i18n';
 </script>
 
 <template>
-  <DocxEditor :document="bytes" :i18n="pl" />
+  <DocxEditor :document="bytes" :i18n="es" locale="es-ES" />
 </template>
 ```
 
 </Framework>
 </FrameworkTabs>
 
-For several editors, or for chrome parts you compose yourself, put the catalog in context once instead:
+To share a catalog across editors, use `LocaleProvider`:
 
 <FrameworkTabs>
 <Framework value="react">
 
 ```tsx
 import { DocxEditor, LocaleProvider } from '@docx-editor.dev/react';
+import { pl } from '@docx-editor.dev/i18n';
 
 <LocaleProvider i18n={pl}>
-  <DocxEditor.Toolbar />
   <DocxEditor document={bytes} />
 </LocaleProvider>;
 ```
@@ -109,13 +109,12 @@ import { DocxEditor, LocaleProvider } from '@docx-editor.dev/react';
 
 ```vue
 <script setup lang="ts">
-import { DocxEditor, DocxEditorToolbar, LocaleProvider } from '@docx-editor.dev/vue';
+import { DocxEditor, LocaleProvider } from '@docx-editor.dev/vue';
 import { pl } from '@docx-editor.dev/i18n';
 </script>
 
 <template>
   <LocaleProvider :i18n="pl">
-    <DocxEditorToolbar />
     <DocxEditor :document="bytes" />
   </LocaleProvider>
 </template>
@@ -124,7 +123,9 @@ import { pl } from '@docx-editor.dev/i18n';
 </Framework>
 </FrameworkTabs>
 
-In both cases, the catalog merges over English, so a locale that has not translated every key falls back per key rather than per language. Providers nest: an inner one, or an `i18n` prop under an outer provider, overrides only the keys it names. Chrome you write from scratch reads the same catalog through `useTranslation()`:
+Each catalog overrides the inherited catalog one key at a time. Without an outer provider, missing or `null` values fall back to English. Nested providers keep inherited values for keys they omit or set to `null`.
+
+Custom controls read the same catalog through `useTranslation()`:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -132,8 +133,10 @@ In both cases, the catalog merges over English, so a locale that has not transla
 ```tsx
 import { useTranslation } from '@docx-editor.dev/react';
 
-const { t } = useTranslation();
-<button>{t('formattingBar.bold')}</button>;
+function BoldLabel() {
+  const { t } = useTranslation();
+  return <span>{t('formattingBar.bold')}</span>;
+}
 ```
 
 </Framework>
@@ -147,7 +150,7 @@ const { t } = useTranslation();
 </script>
 
 <template>
-  <button type="button">{{ t('formattingBar.bold') }}</button>
+  <span>{{ t('formattingBar.bold') }}</span>
 </template>
 ```
 
