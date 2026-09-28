@@ -26,8 +26,14 @@ const MODERN_GRID_WIDTH_TYPES: readonly PreferredWidthType[] = ['dxa', 'auto'];
  * Both sides still have to agree when both are present; a cell whose two edges differ in
  * width is not the shared-line shape this describes.
  */
-function sharesSideRuleGridLine(cell: SemanticTableCell): boolean {
+function sharesSideRuleGridLine(cell: SemanticTableCell, simpleSidesOnly = false): boolean {
   const { left, right } = cell.contentBorders ?? cell.borders;
+  // Modern admission does not extend the simple-rule controls to an opposite compound rule.
+  if (
+    simpleSidesOnly &&
+    [left, right].some((edge) => edge.state === 'edge' && !SIMPLE_SIDE_STYLES.includes(edge.style))
+  )
+    return false;
   const leftRule = left.state === 'edge' && SIMPLE_SIDE_STYLES.includes(left.style);
   const rightRule = right.state === 'edge' && SIMPLE_SIDE_STYLES.includes(right.style);
   if (!leftRule && !rightRule) return false;
@@ -37,11 +43,14 @@ function sharesSideRuleGridLine(cell: SemanticTableCell): boolean {
 
 function mapCells(
   rows: readonly SemanticTableRow[],
-  extend: (cell: SemanticTableCell) => SemanticTableCell
+  extend: (cell: SemanticTableCell) => SemanticTableCell,
+  simpleSidesOnly = false
 ): readonly SemanticTableRow[] {
   return rows.map((row) => ({
     ...row,
-    cells: row.cells.map((cell) => (sharesSideRuleGridLine(cell) ? extend(cell) : cell)),
+    cells: row.cells.map((cell) =>
+      sharesSideRuleGridLine(cell, simpleSidesOnly) ? extend(cell) : cell
+    ),
   }));
 }
 
@@ -56,16 +65,18 @@ function mapCells(
  * measured against. Mode 15 gives `auto` the whole `dxa` geometry instead.
  */
 export function withCentredSideRulePaint(
-  rows: readonly SemanticTableRow[]
+  rows: readonly SemanticTableRow[],
+  simpleSidesOnly = false
 ): readonly SemanticTableRow[] {
-  return mapCells(rows, (cell) => ({ ...cell, centeredSidePaint: true as const }));
+  return mapCells(rows, (cell) => ({ ...cell, centeredSidePaint: true as const }), simpleSidesOnly);
 }
 
 /** Legacy simple side rules share the grid line with padding, rather than adding to it. */
 export function withLegacyTableSideRules(
-  rows: readonly SemanticTableRow[]
+  rows: readonly SemanticTableRow[],
+  simpleSidesOnly = false
 ): readonly SemanticTableRow[] {
-  return mapCells(rows, (cell) => ({ ...cell, centeredSideRules: true as const }));
+  return mapCells(rows, (cell) => ({ ...cell, centeredSideRules: true as const }), simpleSidesOnly);
 }
 
 /** The table-level facts that decide whether its side rules share the grid line. */
@@ -182,8 +193,10 @@ export function withSharedGridLineSideRules(
   const modernCentred = modernGridWidth && table.alignment === 'center';
   const outerRuleOffsetPt = legacyMode ? undefined : modernEdgeAlignedOffsetPt(rows, table);
   if (!legacyMode && !modernCentred && outerRuleOffsetPt === undefined) return { rows };
-  const painted = withCentredSideRulePaint(rows);
+  const painted = withCentredSideRulePaint(rows, !legacyMode);
   const shared =
-    table.widthType === 'dxa' || modernGridWidth ? withLegacyTableSideRules(painted) : painted;
+    table.widthType === 'dxa' || modernGridWidth
+      ? withLegacyTableSideRules(painted, !legacyMode)
+      : painted;
   return outerRuleOffsetPt === undefined ? { rows: shared } : { rows: shared, outerRuleOffsetPt };
 }

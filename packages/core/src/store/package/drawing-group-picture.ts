@@ -1,3 +1,8 @@
+import {
+  identityPictureStretch,
+  supportedPictureProperties,
+  visiblePictureMember,
+} from './drawing-group-picture-admission.ts';
 // The picture member of a `wpg:wgp` drawing group. A group can hold a raster picture beside
 // its vector members, for example a scanned page with ruled lines drawn over it. The vector
 // projection paints `wps:wsp` members only, so without this read the whole group painted
@@ -148,6 +153,14 @@ export function readGroupPicture(
     }
   }
   if (!picture) return null;
+  const nonVisual = findDirectChild(picture.children, {
+    namespaceUri: PIC_NAMESPACE_URI,
+    localName: 'nvPicPr',
+  });
+  const pictureInfo = nonVisual
+    ? findDirectChild(nonVisual.children, { namespaceUri: PIC_NAMESPACE_URI, localName: 'cNvPr' })
+    : null;
+  if (!visiblePictureMember(pictureInfo)) return null;
 
   const blipFill = findDirectChild(picture.children, {
     namespaceUri: PIC_NAMESPACE_URI,
@@ -155,6 +168,7 @@ export function readGroupPicture(
   });
   const blip = blipFill ? drawingMl(blipFill, 'blip') : null;
   if (!blipFill || !blip || drawingMl(blipFill, 'tile')) return null;
+  if (!identityPictureStretch(drawingMl(blipFill, 'stretch'))) return null;
   const blipEffect = blip.children.some(
     (child) =>
       isElement(child) &&
@@ -170,7 +184,7 @@ export function readGroupPicture(
     localName: 'spPr',
   });
   const xfrm = shapeProperties ? drawingMl(shapeProperties, 'xfrm') : null;
-  if (!shapeProperties || !xfrm) return null;
+  if (!shapeProperties || !xfrm || !supportedPictureProperties(shapeProperties)) return null;
   if (!schemaAngleIsZero(schemaAttributeValue(xfrm.attributes, 'rot'))) return null;
   if (!schemaFlagIsUnset(schemaAttributeValue(xfrm.attributes, 'flipH'))) return null;
   if (!schemaFlagIsUnset(schemaAttributeValue(xfrm.attributes, 'flipV'))) return null;

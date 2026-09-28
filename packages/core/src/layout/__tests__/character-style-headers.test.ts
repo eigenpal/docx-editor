@@ -8,6 +8,7 @@ import {
   characterHeaderPageToken,
 } from '../character-header-pages.ts';
 import { expect, test } from 'bun:test';
+import { applyTreeOp } from '@docx-editor.dev/core/store';
 import { readOoxmlPart, serializeOoxmlPart } from '../../store/package/ooxml-tree.ts';
 import { createFixedMeasurer } from '../fixed-measurer.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
@@ -564,3 +565,122 @@ test('an ignored tall header does not enlarge a following shared-page inset', ()
   );
   expect(positiveInset).toBe(15);
 });
+
+for (const mark of ['<w:vanish/>', '<w:vanish/><w:specVanish/>']) {
+  test(`joined source members supply first and last character values ${mark}`, () => {
+    const lead = (value: string, style = '') =>
+      `<w:p><w:pPr><w:rPr>${mark}</w:rPr></w:pPr>${run(value, style)}</w:p>`;
+    expect(text(fixture(lead('Prefix ') + p('Joined title', 'Base')).laid)).toEqual([
+      'Joined title',
+    ]);
+    expect(
+      text(
+        fixture(
+          lead('Alpha', 'Base') + p('Omega', 'Base'),
+          field('Header Source') + run('/') + field('Header Source', '\\l')
+        ).laid
+      )
+    ).toEqual(['Alpha/Omega']);
+  });
+}
+
+test('a wrapped joined member supplies its complete occurrence on every occupied page', () => {
+  const title = 'Title '.repeat(30).trim();
+  const main = part(
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:rPr><w:vanish/></w:rPr></w:pPr>${run('Prefix ')}</w:p>${p(title, 'Base')}</w:body></w:document>`,
+    '/word/document.xml'
+  );
+  const options = {
+    measurer,
+    styleCascade: styles,
+    geometry: {
+      width: 80,
+      height: 60,
+      margin: { top: 0, bottom: 0, left: 0, right: 0 },
+    },
+  };
+  const laid = layoutSemanticDocument(main, 1, options);
+  expect(laid.pages.length).toBeGreaterThan(1);
+  const query = parseCharacterStyleField('STYLEREF "Header Source"')!;
+  const values = characterStylePageValues(characterStyleIndex(main, options)!, laid, [query]);
+  expect(values.map((value) => value.get(query.key))).toEqual(laid.pages.map(() => title));
+});
+
+test('editing a joined later member refreshes its header in a retained session', () => {
+  const f = fixture(
+    '<w:p><w:pPr><w:rPr><w:vanish/></w:rPr></w:pPr>' +
+      run('Prefix ') +
+      '</w:p>' +
+      p('Title', 'Base')
+  );
+  const body = f.main.root.children.find((node) => node.kind === 'body')!;
+  if (body.kind === 'textValue') throw Error('body');
+  const member = body.children[1]!;
+  const edit = applyTreeOp(f.main, {
+    op: 'insertText',
+    paragraphId: member.id,
+    offset: 5,
+    text: ' edited',
+  });
+  expect(edit.ok).toBe(true);
+  if (!edit.ok) return;
+  const warm = layoutSemanticDocument(edit.part, 2, { ...f.options, session: f.session });
+  const cold = layoutSemanticDocument(edit.part, 2, f.options);
+  expect(text(warm)).toEqual(['Title edited']);
+  expect(warm.pages).toEqual(cold.pages);
+});
+
+test('joined RTL members keep canonical first and last occurrence order', () => {
+  const lead =
+    '<w:p><w:pPr><w:bidi/><w:rPr><w:vanish/></w:rPr></w:pPr>' + run('Alpha', 'Base') + '</w:p>';
+  const tail = '<w:p><w:pPr><w:bidi/></w:pPr>' + run('Omega', 'Base') + '</w:p>';
+  expect(
+    text(
+      fixture(lead + tail, field('Header Source') + run('/') + field('Header Source', '\\l')).laid
+    )
+  ).toEqual(['Alpha/Omega']);
+});
+
+for (const longFirst of [true, false]) {
+  test(`parallel cell occurrences expire before fallback (${longFirst})`, () => {
+    const long = 'Alpha '.repeat(20).trim();
+    const titles = longFirst ? [long, 'Beta'] : ['Beta', long];
+    const cells = titles
+      .map(
+        (title) =>
+          '<w:tc><w:tcPr><w:tcW w:type="dxa" w:w="1200"/></w:tcPr>' + p(title, 'Base') + '</w:tc>'
+      )
+      .join('');
+    const table =
+      '<w:tbl><w:tblPr><w:tblW w:type="dxa" w:w="2400"/><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="1200"/><w:gridCol w:w="1200"/></w:tblGrid><w:tr>' +
+      cells +
+      '</w:tr></w:tbl>';
+    const main = part(
+      `<w:document xmlns:w="${W}"><w:body>${table}${p('After', '', true)}</w:body></w:document>`,
+      '/word/document.xml'
+    );
+    const options = {
+      measurer,
+      styleCascade: styles,
+      geometry: { width: 120, height: 60, margin: { top: 0, bottom: 0, left: 0, right: 0 } },
+    };
+    const before = serializeOoxmlPart(main);
+    const laid = layoutSemanticDocument(main, 1, options);
+    expect(laid.pages.length).toBeGreaterThan(2);
+    const first = parseCharacterStyleField('STYLEREF "Header Source"')!;
+    const last = parseCharacterStyleField('STYLEREF "Header Source" \\l')!;
+    const values = characterStylePageValues(characterStyleIndex(main, options)!, laid, [
+      first,
+      last,
+    ]);
+    expect(values[0]!.get(first.key)).toBe(titles[0]);
+    expect(values[0]!.get(last.key)).toBe(titles[1]);
+    for (const value of values.slice(1, -1)) {
+      expect(value.get(first.key)).toBe(long);
+      expect(value.get(last.key)).toBe(long);
+    }
+    expect(values.at(-1)!.get(first.key)).toBe(titles[1]);
+    expect(values.at(-1)!.get(last.key)).toBe(titles[1]);
+    expect(serializeOoxmlPart(main)).toBe(before);
+  });
+}

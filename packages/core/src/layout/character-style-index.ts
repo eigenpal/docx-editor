@@ -9,6 +9,7 @@ import {
 } from './style-cascade.ts';
 import { styleIdFromProps } from './style-chain.ts';
 import { paragraphFragmentsOf } from './semantic-record-queries.ts';
+import { lineSegments } from './line-segments.ts';
 import type { SemanticLayout } from './semantic-records.ts';
 import type { SemanticLayoutOptions } from './semantic-layout-options.ts';
 import type { CharacterStyleField } from './field-character-style.ts';
@@ -131,12 +132,25 @@ export function characterStylePageValues(
   for (const [page, record] of layout.pages.entries()) {
     for (const fragment of paragraphFragmentsOf(record)) {
       if (fragment.positionedFrame || fragment.outOfFlow) continue;
-      for (const occurrence of index.byParagraph.get(fragment.paragraphId) ?? []) {
-        if (occurrence.end <= fragment.range.start || occurrence.start >= fragment.range.end)
-          continue;
-        const previous = locations.get(occurrence);
-        if (previous) previous.last = page;
-        else locations.set(occurrence, { first: page, last: page });
+      // Joined display fragments retain several source paragraphs. Aggregate their
+      // page-local ranges before testing occurrences, so wrapping adds no repeated scan.
+      const ranges = new Map<string, { start: number; end: number }>();
+      for (const line of fragment.lines) {
+        for (const segment of lineSegments(line)) {
+          const range = ranges.get(segment.paragraphId);
+          if (range) {
+            range.start = Math.min(range.start, segment.start);
+            range.end = Math.max(range.end, segment.end);
+          } else ranges.set(segment.paragraphId, { start: segment.start, end: segment.end });
+        }
+      }
+      for (const [paragraphId, range] of ranges) {
+        for (const occurrence of index.byParagraph.get(paragraphId) ?? []) {
+          if (occurrence.end <= range.start || occurrence.start >= range.end) continue;
+          const previous = locations.get(occurrence);
+          if (previous) previous.last = page;
+          else locations.set(occurrence, { first: page, last: page });
+        }
       }
     }
   }
@@ -146,30 +160,67 @@ export function characterStylePageValues(
       (s) => s.type === 'character' && s.name?.toLowerCase() === query.name
     );
     if (!style) continue;
-    const occurrences = [...locations]
-      .filter(([o]) => o.style === style.styleId)
-      .sort((a, b) => a[1].first - b[1].first);
-    let cursor = 0;
-    let previous: Occurrence | undefined;
+    // Equal-page occurrences follow canonical source order, not visual bidi order.
+    const occurrences: [Occurrence, { first: number; last: number }][] = [];
+    for (const paragraph of index.byParagraph.values()) {
+      for (const occurrence of paragraph) {
+        const location = locations.get(occurrence);
+        if (location && occurrence.style === style.styleId)
+          occurrences.push([occurrence, location]);
+      }
+    }
+    const starts = occurrences
+      .map((_, order) => order)
+      .sort((a, b) => occurrences[a]![1].first - occurrences[b]![1].first || a - b);
+    const ends = starts
+      .slice()
+      .sort((a, b) => occurrences[a]![1].last - occurrences[b]![1].last || a - b);
+    const active: number[] = [];
+    const before = query.last ? (a: number, b: number) => a > b : (a: number, b: number) => a < b;
+    let start = 0,
+      end = 0,
+      previous = -1;
     for (let page = 0; page < result.length; page += 1) {
-      while (cursor < occurrences.length && occurrences[cursor]![1].last < page) {
-        previous = occurrences[cursor]![0];
-        cursor += 1;
-      }
-      let selected = occurrences[cursor];
-      if (selected && selected[1].first <= page) {
-        if (query.last) {
-          let last = cursor;
-          while (last + 1 < occurrences.length && occurrences[last + 1]![1].first <= page)
-            last += 1;
-          selected = occurrences[last];
-        }
-        if (selected![0].text !== null) result[page]!.set(query.key, selected![0].text);
-      } else {
-        const fallback = previous ?? selected?.[0];
-        if (fallback?.text != null) result[page]!.set(query.key, fallback.text);
-      }
+      while (start < starts.length && occurrences[starts[start]!]![1].first <= page)
+        pushOccurrence(active, starts[start++]!, before);
+      while (end < ends.length && occurrences[ends[end]!]![1].last < page)
+        previous = Math.max(previous, ends[end++]!);
+      while (active.length && occurrences[active[0]!]![1].last < page)
+        popOccurrence(active, before);
+      const selected = active[0] ?? (previous >= 0 ? previous : starts[start]);
+      const text = selected === undefined ? undefined : occurrences[selected]![0].text;
+      if (text != null) result[page]!.set(query.key, text);
     }
   }
   return result;
+}
+
+/** Source-order priority with lazy expiry keeps page lookup bounded by occurrence count. */
+function pushOccurrence(
+  heap: number[],
+  value: number,
+  before: (a: number, b: number) => boolean
+): void {
+  let at = heap.length;
+  heap.push(value);
+  while (at > 0) {
+    const parent = Math.floor((at - 1) / 2);
+    if (!before(value, heap[parent]!)) break;
+    heap[at] = heap[parent]!;
+    at = parent;
+  }
+  heap[at] = value;
+}
+function popOccurrence(heap: number[], before: (a: number, b: number) => boolean): void {
+  const last = heap.pop()!;
+  if (!heap.length) return;
+  let at = 0;
+  while (at * 2 + 1 < heap.length) {
+    let child = at * 2 + 1;
+    if (child + 1 < heap.length && before(heap[child + 1]!, heap[child]!)) child++;
+    if (!before(heap[child]!, last)) break;
+    heap[at] = heap[child]!;
+    at = child;
+  }
+  heap[at] = last;
 }

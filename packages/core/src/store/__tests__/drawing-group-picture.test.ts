@@ -188,7 +188,53 @@ describe('group picture projection', () => {
     expect(atoms[0]!.groupPicture?.embeddedRelationshipId).toBe('rIdImg');
   });
 
+  test('identity fill rectangles and explicit no-outline properties remain supported', () => {
+    for (const fill of [
+      '<a:stretch/>',
+      '<a:stretch><a:fillRect l="0" t="+0" r="-0" b="000"/></a:stretch>',
+    ]) {
+      const member = pictureMember({ fill })
+        .replace('name="Picture"', 'name="Picture" hidden="false"')
+        .replace('</pic:spPr>', '<a:ln><a:noFill/></a:ln><a:effectLst/></pic:spPr>');
+      expect(projectionsOf(groupDrawing(member))[0]!.groupPicture).not.toBeNull();
+    }
+  });
+
   const refused: readonly (readonly [string, string])[] = [
+    [
+      'a displaced fill rectangle',
+      groupDrawing(pictureMember({ fill: '<a:stretch><a:fillRect l="50000"/></a:stretch>' })),
+    ],
+    [
+      'a malformed fill rectangle',
+      groupDrawing(pictureMember({ fill: '<a:stretch><a:fillRect l="unknown"/></a:stretch>' })),
+    ],
+    [
+      'a picture outline',
+      groupDrawing(
+        pictureMember().replace(
+          '</pic:spPr>',
+          '<a:ln w="127000"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:ln></pic:spPr>'
+        )
+      ),
+    ],
+    [
+      'a picture shadow',
+      groupDrawing(
+        pictureMember().replace(
+          '</pic:spPr>',
+          '<a:effectLst><a:outerShdw blurRad="12700" dist="12700" dir="0"><a:srgbClr val="000000"/></a:outerShdw></a:effectLst></pic:spPr>'
+        )
+      ),
+    ],
+    [
+      'a picture 3D transform',
+      groupDrawing(pictureMember().replace('</pic:spPr>', '<a:sp3d z="12700"/></pic:spPr>')),
+    ],
+    [
+      'a hidden picture member',
+      groupDrawing(pictureMember().replace('name="Picture"', 'name="Picture" hidden="1"')),
+    ],
     ['two picture members', groupDrawing(pictureMember() + pictureMember({ y: 1500 }))],
     ['a picture above a vector member', groupDrawing(barMember(2100) + pictureMember())],
     ['a rotated picture', groupDrawing(pictureMember({ xfrmAttributes: ' rot="5400000"' }))],

@@ -8,8 +8,15 @@ import {
 import { readTableStructure } from '../semantic-table.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-function source(margin = 0, extra = '', rightWidth = 4, style = 'single', widthType = 'dxa') {
-  const xml = `<w:tbl><w:tblPr><w:tblW w:w="2880" w:type="${widthType}"/>${extra}<w:tblBorders><w:left w:val="${style}" w:sz="4"/><w:right w:val="${style}" w:sz="${rightWidth}"/></w:tblBorders><w:tblCellMar><w:left w:type="dxa" w:w="${margin * 20}"/><w:right w:type="dxa" w:w="${margin * 20}"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="2880"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>Left</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`;
+function source(
+  margin = 0,
+  extra = '',
+  rightWidth = 4,
+  style = 'single',
+  widthType = 'dxa',
+  rightStyle = style
+) {
+  const xml = `<w:tbl><w:tblPr><w:tblW w:w="2880" w:type="${widthType}"/>${extra}<w:tblBorders><w:left w:val="${style}" w:sz="4"/><w:right w:val="${rightStyle}" w:sz="${rightWidth}"/></w:tblBorders><w:tblCellMar><w:left w:type="dxa" w:w="${margin * 20}"/><w:right w:type="dxa" w:w="${margin * 20}"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="2880"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>Left</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`;
   const parsed = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${xml}</w:body></w:document>`, {
     name: '/word/document.xml',
     contentType: 'app/xml',
@@ -189,4 +196,39 @@ test('a retained session relays a centred table when the mode changes', () => {
   for (const mode of [16, 15, 16, 15])
     expect(layout(part, mode, session).pages).toEqual(layout(part, mode).pages);
   expect(layout(part, 15).pages).not.toEqual(layout(part, 16).pages);
+});
+
+// A compound opposite edge stays outside the modern simple-side-rule subset.
+test('mode 15 mixed compound side rules preserve full-stroke layout and paint', () => {
+  for (const widthType of ['dxa', 'auto']) {
+    for (const styles of [
+      ['single', 'double'],
+      ['double', 'single'],
+    ]) {
+      const original = source(0, CENTRED, 24, styles[0], widthType, styles[1]);
+      const xml = serializeOoxmlPart(original.part)
+        .replace('Left', 'AAAAAAAAAAAAAAAAAAAAAAAAA')
+        .replace('w:sz="4"', 'w:sz="24"');
+      const parsed = readOoxmlPart(xml, { name: '/word/document.xml', contentType: 'app/xml' });
+      if (!parsed.ok) throw new Error(parsed.reason);
+      const cell = read(original.table, 15).rows[0]!.cells[0]!;
+      expect(cell.centeredSideRules).toBeUndefined();
+      expect(cell.centeredSidePaint).toBeUndefined();
+      const session = createLayoutSession();
+      if (widthType === 'dxa') {
+        const placed = layout(parsed.part, 15).pages[0]!.fragments[0]!;
+        if (placed.kind !== 'table') throw new Error('Expected table');
+        const paragraph = placed.rows[0]!.cells[0]!.blocks[0]!;
+        if (paragraph.kind !== 'paragraph') throw new Error('Expected paragraph');
+        expect(paragraph.lines).toHaveLength(2);
+      }
+      expect(layout(parsed.part, 15, session).pages).toEqual(layout(parsed.part, 16).pages);
+      expect(layout(parsed.part, 15, session).pages).toEqual(layout(parsed.part, 15).pages);
+      // Keep the earlier compatibility policy outside this modern admission correction.
+      for (const mode of [undefined, 11, 12, 14])
+        expect(read(original.table, mode).rows[0]!.cells[0]!.centeredSideRules).toBe(
+          widthType === 'dxa' ? true : undefined
+        );
+    }
+  }
 });

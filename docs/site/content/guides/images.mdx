@@ -189,7 +189,8 @@ The picture renders only if all of these conditions are true:
 
 - The group holds exactly one picture, and the picture comes before every shape member.
 - The picture is not rotated or flipped, it has a rectangle geometry, and its fill is not tiled.
-- The picture has no image effects, such as grayscale or transparency.
+- The picture is visible and has no image effects, visible outline, shape effects, or 3D properties.
+- Its fill rectangle has no offsets. An omitted fill rectangle uses the full picture frame.
 - The picture frame overlaps the group's area and extends no more than one group width or height past it.
 - Every other member of the group is a supported solid shape.
 
