@@ -84,6 +84,12 @@ await runtime.run(async (context) => {
 
 Justified paragraphs in compatibility mode 15 or later can compress ordinary spaces to fit a word. Latin words retain their complete-word fit across formatting runs, including separate terminal punctuation.
 
+### Right-to-left paragraphs
+
+`Paragraph.alignment` reads and writes the stored `w:jc` value. In a right-to-left paragraph, `Left` selects the leading edge at the right margin. `Right` selects the trailing edge at the left margin. Alignment does not change paragraph direction.
+
+The document automation API does not expose a paragraph direction property. For browser editor commands, see [Right-to-left text](/docs/2.x/guides/right-to-left).
+
 ## Apply an existing style
 
 `Body.style`, `Paragraph.style`, and `Range.style` address paragraph styles by display name. The name must already exist in the document's styles part. The runtime rejects unknown style names. Assigning a name does not create a style. A body assignment applies to its paragraphs. A range assignment applies to its addressed paragraphs. Load `style` before reading it; mixed or unspecified authored styles can return `null` at runtime.

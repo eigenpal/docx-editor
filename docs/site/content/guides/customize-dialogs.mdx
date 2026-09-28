@@ -263,6 +263,8 @@ Named children replace default parts. Use `hidden` to remove a part or `preset={
 
 Page Setup's `pageSize` part is its size selector. Paragraph's `tabStops` part contains the collection control; `specialBy` appears when relevant.
 
+Paragraph's `direction` field selects left-to-right or right-to-left paragraph direction. Include it when you build a custom paragraph dialog. For direction behavior and limits, see [Right-to-left text](/docs/2.x/guides/right-to-left).
+
 Call `usePageSetupDialog()`, `useParagraphDialog()`, or `useTextFormFieldDialog()` inside a child of the matching dialog. Each supplies `values`, `setValue(name, value)`, `errors`, `isEnabled`, `apply()`, and `cancel()`. Vue exposes state as refs. Use these draft APIs to keep the editor's form session.
 
 A `Field` represents the labeled row; `asChild` does not adapt input value events. Page Setup dimensions use twips: 1,440 per inch. Paragraph also exposes mixed-selection state. See [React hooks](/docs/2.x/react/hooks#dialog-draft-contexts) or [Vue composables](/docs/2.x/vue/composables#dialog-draft-contexts) for types.
