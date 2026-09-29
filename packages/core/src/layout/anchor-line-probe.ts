@@ -35,6 +35,8 @@ export function anchorLineStartsByModelOffset(input: {
   readonly firstLineOffset: number;
   readonly anchorStarts: readonly number[];
   readonly equationLayoutOf: (piece: FieldAwarePiece) => EquationSpanRecord | null;
+  /** A table cell: placement keeps a page break on its line, so the probe does too. */
+  readonly pageBreaksIgnored?: boolean;
 }): Map<number, number> {
   const { pieces, measurer, available, firstLineOffset, anchorStarts, equationLayoutOf } = input;
   const out = new Map<number, number>();
@@ -77,6 +79,7 @@ export function anchorLineStartsByModelOffset(input: {
       probeWordStartWidth = -1;
       continue;
     }
+    if (piece.text === PAGE_BREAK_CHAR && input.pageBreaksIgnored) continue;
     if (piece.text === '\n' || piece.text === PAGE_BREAK_CHAR) {
       closeProbeLine(piece.end);
       continue;

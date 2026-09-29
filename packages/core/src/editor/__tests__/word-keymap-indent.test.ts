@@ -468,12 +468,12 @@ describe('a list definition that declares only level 0', () => {
     // stopped being a list item. Word never greys Increase Indent out here: it defines
     // the level with its stock bullet for that depth, and so does this.
     const surface = mount(shallow('alpha', '2'), true);
-    expect(markerOf(surface)).toMatchObject({ text: '§', level: 0 });
+    expect(markerOf(surface)).toMatchObject({ text: '▪', level: 0 });
     expect(surface.adjustIndent('increase')).toBe(true);
     expect(markerOf(surface)).toMatchObject({ text: 'o', level: 1 });
     // And back: the item's own level 0 still resolves to its authored glyph.
     expect(surface.adjustIndent('decrease')).toBe(true);
-    expect(markerOf(surface)).toMatchObject({ text: '§', level: 0 });
+    expect(markerOf(surface)).toMatchObject({ text: '▪', level: 0 });
   });
 
   test("a numbered list gains Word's default format for the depth", () => {
@@ -624,14 +624,14 @@ describe('a w:numStyleLink definition', () => {
 
 describe('list kind is read from w:numFmt, not the marker glyph', () => {
   test('a bullet level using a letter-shaped glyph is still a bullet', () => {
-    // Word's own default list uses Courier `o` and Wingdings `§` at levels 2 and 3.
-    // Sniffing the glyph reported those as numbered and lit the wrong toolbar button.
-    const surface = mount(
-      '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr></w:pPr>' +
-        '<w:r><w:t>alpha</w:t></w:r></w:p>',
-      true
-    );
-    expect(markerOf(surface)?.text).toBe('§');
+    const numberingXml =
+      '<w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0">' +
+      '<w:numFmt w:val="bullet"/><w:lvlText w:val="o"/>' +
+      '<w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/></w:rPr>' +
+      '</w:lvl></w:abstractNum>' +
+      '<w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>';
+    const surface = mount(shallow('alpha', '2'), true, { numberingXml });
+    expect(markerOf(surface)?.text).toBe('o');
     expect(surface.isListActive('bullet')).toBe(true);
     expect(surface.isListActive('ordered')).toBe(false);
   });
@@ -660,7 +660,7 @@ describe('turning a list off and on again', () => {
         .flatMap((fragment) =>
           fragment.kind === 'paragraph' && fragment.marker ? [fragment.marker.text] : []
         );
-    expect(markers()).toEqual(['§', '§', '§']);
+    expect(markers()).toEqual(['▪', '▪', '▪']);
 
     // Put the caret in the middle item, toggle its bullet off and back on.
     const middle = surface.session.paragraphIds()[1]!;
@@ -669,10 +669,10 @@ describe('turning a list off and on again', () => {
       head: { paragraphId: middle, offset: 0 },
     });
     surface.toggleList('bullet');
-    expect(markers()).toEqual(['§', '§']);
+    expect(markers()).toEqual(['▪', '▪']);
     surface.toggleList('bullet');
     // The restored item takes its NEIGHBOURS' bullet, not a freshly minted one.
-    expect(markers()).toEqual(['§', '§', '§']);
+    expect(markers()).toEqual(['▪', '▪', '▪']);
   });
 });
 

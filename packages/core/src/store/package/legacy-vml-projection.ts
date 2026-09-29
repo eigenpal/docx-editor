@@ -1,5 +1,6 @@
 import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from './ooxml-tree.ts';
 import { isStandardVmlTemplate } from './legacy-vml-templates.ts';
+import { embeddedObjectPreview } from './legacy-vml-object.ts';
 import type {
   DrawingProjection,
   DrawingHorizontalReferenceFrame,
@@ -7,10 +8,14 @@ import type {
   DrawingWrapProjection,
 } from './drawing-projection.ts';
 import {
+  legacyPictureBorder,
   legacyShapeFragment,
   type LegacyBox,
   type LegacyGraphicFragment,
+  type LegacyPictureBorder,
 } from './legacy-vml-shapes.ts';
+import type { VectorShapeProjection } from './drawing-shape-projection.ts';
+import { freezeVectorShapeComponent } from './drawing-vector-freeze.ts';
 import {
   attribute as a,
   boundedVml,
@@ -25,6 +30,7 @@ import {
   styleOf,
   VML,
   WORD_VML,
+  wrapDistancePoints,
 } from './legacy-vml-values.ts';
 export type { LegacyGraphicProjection } from './legacy-vml-shapes.ts';
 
@@ -145,9 +151,50 @@ function groupLayers(
   return true;
 }
 
-function readProjection(node: OoxmlElement): DrawingProjection | null {
-  if (!boundedVml(node)) return null;
-  const roots = children(node).filter((child) => !named(child, VML, 'shapetype'));
+/** The outline stroke centred in the border band, which the picture sits inside. */
+function pictureOutline(
+  border: LegacyPictureBorder,
+  cx: number,
+  cy: number
+): VectorShapeProjection {
+  const weight = Math.round(border.weight * 12700),
+    half = weight / 2,
+    hex = border.color.slice(1).toUpperCase();
+  const component = freezeVectorShapeComponent({
+    subpathsEmu: [
+      [
+        { x: half, y: half },
+        { x: cx - half, y: half },
+        { x: cx - half, y: cy - half },
+        { x: half, y: cy - half },
+      ],
+    ],
+    subpathsClosed: [true],
+    fillHex: null,
+    fillAlpha: 1,
+    strokeHex: hex,
+    strokeAlpha: 1,
+    strokeWidthEmu: weight,
+  });
+  return Object.freeze({
+    extentEmu: Object.freeze({ cx, cy }),
+    subpathsEmu: component.subpathsEmu,
+    fillHex: null,
+    fillAlpha: 1,
+    strokeHex: hex,
+    strokeAlpha: 1,
+    strokeWidthEmu: weight,
+    components: Object.freeze([component]),
+  });
+}
+
+/**
+ * `preview` is the validated cached-preview shape of a `w:object`. Its projection is a static
+ * read-only graphic: no picture member, so picture edits never reach the embedded object.
+ */
+function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProjection | null {
+  if (!boundedVml(preview ?? node)) return null;
+  const roots = preview ? [preview] : children(node).filter((c) => !named(c, VML, 'shapetype'));
   if (roots.length !== 1) return null;
   // Built-in templates are metadata, not a second drawing. Unknown custom
   // templates may redefine geometry and are outside this bounded subset.
@@ -166,13 +213,26 @@ function readProjection(node: OoxmlElement): DrawingProjection | null {
   const width = points(style.get('width')),
     height = points(style.get('height'));
   if (![width, height].every((n) => Number.isFinite(n) && n > 0 && n <= 10_000)) return null;
+  // A picture outline widens the drawing by its full weight on every side; the picture keeps
+  // its authored size inside it.
+  const border = root.localName === 'shape' ? legacyPictureBorder(root) : undefined;
+  if (border === null || (preview && border)) return null;
+  const inset = border?.weight ?? 0,
+    outerWidth = width + 2 * inset,
+    outerHeight = height + 2 * inset;
   const fragments: LegacyGraphicFragment[] = [];
   const box = { x: 0, y: 0, width, height };
   if (root.localName === 'group') {
     if (!groupLayers(root, box, fragments, 0) || !fragments.length) return null;
   } else {
-    const fragment = legacyShapeFragment(root, box);
+    const fragment = legacyShapeFragment(
+      root,
+      { x: inset, y: inset, width, height },
+      { x: 0, y: 0, width: outerWidth, height: outerHeight },
+      !!border
+    );
     if (fragment === null) return null;
+    if ((border || preview) && (typeof fragment === 'string' || !fragment.nativeCrop)) return null;
     fragments.push(fragment);
   }
   const wrapNodes = children(root).filter((n) => named(n, WORD_VML, 'wrap'));
@@ -188,6 +248,7 @@ function readProjection(node: OoxmlElement): DrawingProjection | null {
     style.has('mso-position-vertical-relative') ||
     !!anchorX ||
     !!anchorY;
+  if ((border || preview) && floating) return null;
   const horizontal = new Map<string, DrawingHorizontalReferenceFrame>([
     ['text', 'column'],
     ['char', 'character'],
@@ -244,17 +305,20 @@ function readProjection(node: OoxmlElement): DrawingProjection | null {
   }
   const distances: Record<'top' | 'right' | 'bottom' | 'left', number> = { ...emptyEdges };
   for (const side of ['top', 'right', 'bottom', 'left'] as const) {
-    const value = points(style.get('mso-wrap-distance-' + side) ?? '0');
-    if (!Number.isFinite(value) || value < 0 || value > 1000) return null;
+    const value = wrapDistancePoints(style.get('mso-wrap-distance-' + side) ?? '0');
+    if (!Number.isFinite(value) || value > 1000) return null;
     distances[side] = Math.round(value * 12700);
   }
   const photo =
+    !preview &&
     root.localName !== 'group' &&
     fragments.length === 1 &&
     typeof fragments[0] !== 'string' &&
     fragments[0]?.nativeCrop
       ? fragments[0]
       : undefined;
+  const outerCx = Math.round(outerWidth * 12700),
+    outerCy = Math.round(outerHeight * 12700);
   return Object.freeze({
     drawingNodeId: node.id,
     ownerPartName: '',
@@ -266,7 +330,7 @@ function readProjection(node: OoxmlElement): DrawingProjection | null {
     description: a(root, 'alt') ?? '',
     hyperlinkHref: null,
     hidden: style.get('visibility') === 'hidden',
-    extentEmu: Object.freeze({ cx: Math.round(width * 12700), cy: Math.round(height * 12700) }),
+    extentEmu: Object.freeze({ cx: outerCx, cy: outerCy }),
     effectExtentEmu: emptyEdges,
     inlineDistancesEmu: emptyEdges,
     wrap: floating
@@ -318,26 +382,43 @@ function readProjection(node: OoxmlElement): DrawingProjection | null {
           allowOverlap: true,
         })
       : null,
-    picture: photo
-      ? Object.freeze({
-          embeddedRelationshipId: photo.relationshipId,
-          linkedRelationshipId: null,
-          crop: photo.nativeCrop!,
-          fillMode: 'stretch' as const,
-          presetGeometry: null,
-          transform: Object.freeze({
-            rotationDegrees: 0,
-            flipHorizontal: false,
-            flipVertical: false,
-            offsetEmu: Object.freeze({ x: 0, y: 0 }),
-            extentEmu: Object.freeze({
+    picture:
+      photo && !border
+        ? Object.freeze({
+            embeddedRelationshipId: photo.relationshipId,
+            linkedRelationshipId: null,
+            crop: photo.nativeCrop!,
+            fillMode: 'stretch' as const,
+            presetGeometry: null,
+            transform: Object.freeze({
+              rotationDegrees: 0,
+              flipHorizontal: false,
+              flipVertical: false,
+              offsetEmu: Object.freeze({ x: 0, y: 0 }),
+              extentEmu: Object.freeze({
+                cx: Math.round(width * 12700),
+                cy: Math.round(height * 12700),
+              }),
+            }),
+          })
+        : null,
+    vectorShape: border ? pictureOutline(border, outerCx, outerCy) : null,
+    groupPicture:
+      photo && border
+        ? Object.freeze({
+            embeddedRelationshipId: photo.relationshipId,
+            linkedRelationshipId: null,
+            crop: photo.nativeCrop!,
+            frameEmu: Object.freeze({
+              x: Math.round(inset * 12700),
+              y: Math.round(inset * 12700),
               cx: Math.round(width * 12700),
               cy: Math.round(height * 12700),
             }),
-          }),
-        })
-      : null,
-    vectorShape: null,
+            memberNodeId: children(root).find((n) => named(n, VML, 'imagedata'))!.id,
+            alternateContent: false,
+          })
+        : null,
     textboxStory: null,
     ...(!photo
       ? { legacyGraphic: Object.freeze({ width, height, fragments: Object.freeze(fragments) }) }
@@ -349,10 +430,18 @@ function readProjection(node: OoxmlElement): DrawingProjection | null {
   });
 }
 
-/** Supported standalone w:pict is one read-only drawing atom. Dead MC fallbacks are not visited. */
+/**
+ * Supported standalone w:pict, or the cached preview of a w:object, is one read-only drawing
+ * atom. Dead MC fallbacks are not visited.
+ */
 export function isLegacyVmlAtom(node: OoxmlNode): boolean {
-  if (!named(node, WML_NAMESPACE_URI, 'pict') || !element(node)) return false;
-  if (!memo.has(node)) memo.set(node, readProjection(node));
+  if (!element(node)) return false;
+  const object = named(node, WML_NAMESPACE_URI, 'object');
+  if (!object && !named(node, WML_NAMESPACE_URI, 'pict')) return false;
+  if (!memo.has(node)) {
+    const preview = object ? embeddedObjectPreview(node) : undefined;
+    memo.set(node, preview === null ? null : readProjection(node, preview));
+  }
   return memo.get(node) !== null;
 }
 export function projectLegacyVml(node: OoxmlNode, ownerPartName: string): DrawingProjection | null {

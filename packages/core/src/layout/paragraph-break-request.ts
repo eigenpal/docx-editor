@@ -68,6 +68,10 @@ export function prepareParagraphBreakInputs(
       ...inputs.inheritedRunProperties,
       ...inputs.markRunProperties,
       { localName: 'tabStops', attributes: { token } },
+      // The line grid comes from the SECTION, not the paragraph, so its props cannot name it.
+      ...(inputs.lineSpacing.gridPitch !== undefined
+        ? [{ localName: 'lineGrid', attributes: { pitch: String(inputs.lineSpacing.gridPitch) } }]
+        : []),
       ...(dependencies.listToken !== undefined
         ? [{ localName: 'list', attributes: { token: dependencies.listToken } }]
         : []),
@@ -102,6 +106,10 @@ export function bodyParagraphBreakKey(
     readonly exclusionToken: string;
     readonly paragraphStartY: number;
     readonly anchorParagraphStartY?: number;
+    /** Spacing above the first line; a topAndBottom band inside it moves the line. */
+    readonly paragraphSpaceBefore?: number;
+    /** The paragraph anchors its own topAndBottom band, which the spacing moves. */
+    readonly anchorsTopAndBottom?: boolean;
     readonly columnIndex: number;
     readonly startOffset: number;
   }
@@ -112,6 +120,9 @@ export function bodyParagraphBreakKey(
   );
   let key = baseKey;
   if (positioned) key += `\0excl:${placement.columnIndex}|${positioned}`;
+  const spaceBefore = placement.paragraphSpaceBefore ?? 0;
+  if ((positioned || placement.anchorsTopAndBottom) && spaceBefore > 0)
+    key += `\0before:${spaceBefore.toFixed(3)}`;
   if (
     placement.anchorParagraphStartY !== undefined &&
     placement.anchorParagraphStartY !== placement.paragraphStartY

@@ -18,14 +18,13 @@
 //   typing                 the first text typed into an empty paragraph takes the style,
 //                          and the toolbar shows that face first (`mark-character-style-run.ts`)
 //
-// ONE PLACE IS DELIBERATELY LEFT OUT: sizing a line that has content in it. A 12pt text line
-// with a 24pt mark does not grow in the reference, by direct size or by style, in body text or
-// in a table cell, and a line holding only an inline picture does not either. Layout already
-// grows such lines for a DIRECT mark (the last-line mark height, the fallback band of a
-// drawing-only line and the line-start estimate in `paragraph-flow.ts`, the end-mark floor in
-// `table-cell-end-mark.ts`), and that rule has its own fixtures. Letting the style reach them
-// would add the same growth for every styled mark, so those readers take the mark WITHOUT its
-// character style from {@link markRunPropertiesWithoutCharacterStyle}.
+// ONE PLACE IS DELIBERATELY LEFT OUT: sizing a line that has content in it. Under a 24pt mark,
+// by direct size or by style, in body text or in a table cell, a 12pt text line does not grow
+// in the reference, and neither do superscript, subscript, inline-picture and equation lines.
+// `paragraph-mark-metrics.ts` keeps the mark's size off a line with content. The readers of a
+// DIRECT mark next to content (the floor of a script line in `paragraph-flow.ts`, which takes
+// the size of the content, and the end-mark row floor in `table-cell-end-mark.ts`) take the
+// mark WITHOUT its character style from {@link markRunPropertiesWithoutCharacterStyle}.
 
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
@@ -86,7 +85,7 @@ export function paragraphMarkRunProperties(
 }
 
 /**
- * The mark without its character style, for the readers that grow a line with content in it.
+ * The mark without its character style, for the readers that measure it next to content.
  *
  * Returns `mark` itself when it names no character style, or when it did not come from
  * {@link paragraphMarkRunProperties}, so the identity comparisons of those readers still hold.

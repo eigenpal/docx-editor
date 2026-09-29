@@ -105,3 +105,18 @@ describe('VML comment offsets share the drawing atom model', () => {
     ).toBe(false);
   });
 });
+
+test('a framed object keeps one comment offset through transparent run wrappers', () => {
+  const object =
+    '<w:object xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><v:shape type="#_x0000_t75" style="width:10pt;height:56pt"><v:imagedata r:id="preview"/></v:shape></w:object>';
+  const { part, paragraph } = parse(
+    '<w:pPr><w:framePr w:y="-854"/></w:pPr>' +
+      `<w:hyperlink><w:r>${object}</w:r></w:hyperlink>${START}<w:r><w:t>A😀B</w:t></w:r>${END}`
+  );
+  const span = collectOwnerCommentSpans(part.root, createCommentScanBudget()).spans.get('1')!;
+  expect({ start: span.startOffset, end: span.endOffset }).toEqual({ start: 1, end: 5 });
+  const text = paragraphOffsetIndex(paragraph).segments.find(
+    (segment) => segment.node.kind === 'textValue'
+  )!;
+  expect({ start: text.start, end: text.end }).toEqual({ start: 1, end: 5 });
+});

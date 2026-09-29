@@ -29,7 +29,7 @@ function layout(rowProperties = '', header = false, extraCell = '') {
 for (const properties of [
   '',
   '<w:cantSplit w:val="0"/>',
-  '<w:trHeight w:val="1000" w:hRule="atLeast"/>',
+  '<w:trHeight w:val="800" w:hRule="atLeast"/>',
 ]) {
   test(`splittable rows use the remaining page band (${properties || 'default'})`, () => {
     const result = layout(properties);
@@ -52,8 +52,13 @@ for (const properties of [
   });
 }
 
-for (const properties of ['<w:cantSplit/>', '<w:trHeight w:val="1000" w:hRule="exact"/>']) {
-  test(`atomic rows still move whole (${properties})`, () => {
+for (const properties of [
+  '<w:cantSplit/>',
+  '<w:trHeight w:val="1000" w:hRule="exact"/>',
+  // A minimum must fit the remaining band before the row starts.
+  '<w:trHeight w:val="1000" w:hRule="atLeast"/>',
+]) {
+  test(`atomic rows and rows whose minimum does not fit move (${properties})`, () => {
     const result = layout(properties);
     expect(result.pages).toHaveLength(2);
     expect(result.pages[0]!.fragments.some((f) => f.kind === 'table')).toBe(false);

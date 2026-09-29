@@ -776,9 +776,10 @@ function mimeClassesMismatch(
   sniffed: RenderableImageMime | PreservedImageMime | 'unknown'
 ): boolean {
   if (claimed === 'unknown' || sniffed === 'unknown') return false;
-  // A declared type that disagrees with the signature is a spoof, whether it crosses
-  // classes (TIFF claimed, SVG on the wire) or stays inside one (PNG claimed, GIF).
+  // Class changes can select a different processing path.
   if (imageMimeClass(claimed) !== imageMimeClass(sniffed)) return true;
+  // Raster signatures control validation, decoding, and the published MIME type.
+  if (imageMimeClass(sniffed) === 'raster') return false;
   return claimed !== sniffed;
 }
 
@@ -1379,12 +1380,13 @@ function createImageResourceCacheInternal(
   ): Promise<ImageResourceState> => {
     ensureActive();
     if (projection.legacyGraphic) return resolveLegacyGraphic(projection);
-    if (!projection.picture) {
+    const picture = projection.picture ?? projection.groupPicture;
+    if (!picture) {
       return unrenderable(null, 'unknown', 'non-picture-graphic');
     }
-    const linked = projection.picture.linkedRelationshipId;
+    const linked = picture.linkedRelationshipId;
     if (linked) return resolveLinked(projection.ownerPartName, linked);
-    const embedded = projection.picture.embeddedRelationshipId;
+    const embedded = picture.embeddedRelationshipId;
     if (!embedded) return unrenderable(null, 'unknown', 'unsupported-format');
     return resolveEmbedded(projection.ownerPartName, embedded);
   };

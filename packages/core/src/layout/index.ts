@@ -231,6 +231,7 @@ export { vectorShapeInkClip } from './vector-shape-ink.ts';
 export type {
   AnchoredDrawingLayoutFallback,
   AnchoredDrawingRecord,
+  DrawingGroupPictureRecord,
   InlineDrawingRecord,
 } from './drawing-layout.ts';
 export type { TextboxStoryLayout } from './textbox-story-layout.ts';

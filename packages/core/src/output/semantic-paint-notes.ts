@@ -67,33 +67,34 @@ function paintNoteArea(
   areaEl.style.width = `${area.box.width * options.scale}px`;
   areaEl.style.height = `${area.box.height * options.scale}px`;
 
-  if (area.separator) {
+  for (const separator of [area.separator, area.continuationNotice]) {
+    if (!separator) continue;
     const sep = document.createElement('div');
     sep.className = 'docx-note-separator';
-    sep.dataset.docxNoteSeparator = area.separator.kind;
+    sep.dataset.docxNoteSeparator = separator.kind;
     sep.setAttribute('contenteditable', 'false');
     sep.setAttribute('aria-hidden', 'true');
     sep.style.position = 'absolute';
-    sep.style.left = `${(area.separator.box.x - area.box.x) * options.scale}px`;
-    sep.style.top = `${(area.separator.box.y - area.box.y) * options.scale}px`;
-    sep.style.width = `${area.separator.box.width * options.scale}px`;
-    sep.style.height = `${area.separator.box.height * options.scale}px`;
-    const ruleStyle = area.separator.ruleStyle;
-    if (ruleStyle || area.separator.synthetic) {
+    sep.style.left = `${(separator.box.x - area.box.x) * options.scale}px`;
+    sep.style.top = `${(separator.box.y - area.box.y) * options.scale}px`;
+    sep.style.width = `${separator.box.width * options.scale}px`;
+    sep.style.height = `${separator.box.height * options.scale}px`;
+    const ruleStyle = separator.ruleStyle;
+    if (ruleStyle || separator.synthetic) {
       paintSeparatorRule(
         sep,
         document,
         ruleStyle ?? 'single',
         options.scale,
-        area.separator.box.height,
-        area.separator.ruleColor
+        separator.box.height,
+        separator.ruleColor
       );
     } else {
       const separatorOptions = {
         ...options,
-        tabLeaderOriginXPt: area.separator.box.x - page.box.x,
+        tabLeaderOriginXPt: separator.box.x - page.box.x,
       };
-      for (const fragment of area.separator.fragments) {
+      for (const fragment of separator.fragments) {
         sep.append(
           fragment.kind === 'table'
             ? paintTableFragment(document, fragment, separatorOptions)

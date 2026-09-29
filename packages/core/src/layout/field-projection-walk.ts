@@ -1,4 +1,5 @@
 import { tocLinkCascader } from './toc-link-formatting.ts';
+import { fieldResultIsDirectionOnly } from './field-result-style.ts';
 import { displayFieldCodes } from './field-code-display.ts';
 // Project allowlisted field instructions into layout; never execute authored instructions.
 // Computed fields occupy one model unit. FORMTEXT preserves literal offsets; malformed fields demote.
@@ -98,7 +99,7 @@ import {
 } from '../store/package/content-control-walk.ts';
 
 /** Internal view projection; the public field-reader signature stays unchanged. @internal */
-export function piecesOfParagraphForDisplay(
+export function unmergedPiecesOfParagraphForDisplay(
   paragraph: OoxmlNode,
   inheritedRunProperties: readonly OoxmlProperty[] = [],
   pageContext?: FieldPageContext,
@@ -449,23 +450,20 @@ export function piecesOfParagraphForDisplay(
       run.children.find((child) => child.kind === 'runProperties')
     );
 
-    /**
-     * Donate the run's style and attribution to the pending atom's flush, first-wins.
-     *
-     * The first result content that survives to be displayed donates both, because by flush
-     * time the walk has left any wrapper and the live stack is empty again. Locked by their
-     * own flags, not by the stack being non-empty: an UNTRACKED first run leaves the stack
-     * empty, and testing emptiness let a later tracked run donate its revision to the whole
-     * atom — `Section <w:del>3</w:del>` painted "Section 3" struck through entire. Shared by
-     * ordinary result text and a result `w:sym`, so a symbol-only result carries a style and
-     * an attribution too.
-     */
-    const donateResultCapture = (): void => {
+    // Direction-only text supplies a fallback style until visible result text arrives.
+    // Revision attribution stays with the first displayed run, including an untracked run.
+    // A separate flag prevents later tracked text from changing the whole atom's attribution.
+    const donateResultCapture = (resultText?: string): void => {
       if (!pending) return;
-      if (!pending.capturedResultStyle) {
+      const directionOnly = resultText !== undefined && fieldResultIsDirectionOnly(resultText);
+      if (
+        !pending.capturedResultStyle ||
+        (pending.capturedResultStyleIsDirectional && !directionOnly)
+      ) {
         pending.props = props;
         pending.style = style;
         pending.capturedResultStyle = true;
+        pending.capturedResultStyleIsDirectional = directionOnly;
       }
       if (!pending.capturedResultRevisions) {
         pending.resultRevisions = revisions;
@@ -493,6 +491,7 @@ export function piecesOfParagraphForDisplay(
       if (grand.kind === 'runProperties') continue;
 
       if (isFldChar(grand, 'begin')) {
+        if (pending?.atomic) pending.hasNestedField = true;
         const atomic = atomBeginIds.has(grand.id);
         onFldCharBegin(field);
         if (field.nesting === 1) {
@@ -747,11 +746,11 @@ export function piecesOfParagraphForDisplay(
             // live value that replaces them must paint attributed and linked the same way.
             nestedPage.noteResult(!style.hidden);
             if (style.hidden) continue;
-            donateResultCapture();
+            donateResultCapture(text);
             continue;
           }
           if (style.hidden) continue;
-          donateResultCapture();
+          donateResultCapture(text);
           pending.cachedText += text;
           continue;
         }
@@ -852,6 +851,7 @@ export function piecesOfParagraphForDisplay(
    * still inside it here, unlike a complex field's deferred flush.
    */
   const projectSimpleField = (simple: OoxmlNode, depth: number): void => {
+    if (pending?.atomic) pending.hasNestedField = true;
     const start = offset;
     offset += 1;
     if (simple.kind === 'textValue') return;
@@ -996,3 +996,5 @@ export function piecesOfParagraphForDisplay(
     themeFonts
   );
 }
+
+export { piecesOfParagraphForDisplay } from './field-projection-display.ts';

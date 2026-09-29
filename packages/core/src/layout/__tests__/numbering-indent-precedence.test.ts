@@ -9,7 +9,7 @@ import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlElement, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { buildNumberingIndex } from '../numbering-index.ts';
 import { resolveStoryListItems } from '../list-resolve.ts';
-import { buildStyleCascadeTable } from '../style-cascade.ts';
+import { buildStyleCascadeTable, resolveParagraphLayoutInputs } from '../style-cascade.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -90,5 +90,62 @@ describe('list indent precedence (style → level → direct)', () => {
     const item = listItem('', '<w:ind w:left="1512"/>');
     expect(item.indent.left).toBe(1512 / 20);
     expect(item.indent.hanging).toBe(624 / 20);
+  });
+});
+
+/** A body style that carries the numbering itself and states only a leading indent. */
+const NUMBERED_STYLES = `<w:styles xmlns:w="${W}">
+  <w:docDefaults><w:pPrDefault><w:pPr><w:ind w:left="100" w:right="200"/></w:pPr></w:pPrDefault></w:docDefaults>
+  <w:style w:type="paragraph" w:styleId="NumberedBody">
+    <w:name w:val="Numbered Body"/>
+    <w:pPr><w:numPr><w:numId w:val="1"/></w:numPr><w:ind w:left="567"/></w:pPr>
+  </w:style>
+</w:styles>`;
+
+function styleNumberedItem(directPPr: string, levelInd: string) {
+  const document = part(
+    '/word/document.xml',
+    `<w:document xmlns:w="${W}"><w:body>
+      <w:p><w:pPr><w:pStyle w:val="NumberedBody"/>${directPPr}</w:pPr>
+        <w:r><w:t>item</w:t></w:r></w:p>
+    </w:body></w:document>`
+  );
+  const body = document.root.children.find(
+    (child) => (child as OoxmlElement).localName === 'body'
+  ) as OoxmlElement;
+  const blocks = body.children.filter((child) => child.kind === 'paragraph') as OoxmlElement[];
+  const cascade = buildStyleCascadeTable(part('/word/styles.xml', NUMBERED_STYLES).root);
+  const items = resolveStoryListItems(blocks, numbering(levelInd), cascade);
+  const item = [...items.values()][0]!;
+  return { item, inputs: resolveParagraphLayoutInputs(blocks[0]!, 500, cascade, item) };
+}
+
+describe('list indent precedence when the style carries the numbering', () => {
+  const LEVEL = '<w:ind w:left="6237" w:right="300" w:hanging="567"/>';
+
+  test("the style's stated left beats the level's; the level fills what the style omits", () => {
+    const { item, inputs } = styleNumberedItem('', LEVEL);
+    expect(item.indent.left).toBe(567 / 20);
+    expect(item.indent.hanging).toBe(567 / 20);
+    expect(item.indent.right).toBe(300 / 20);
+    expect(inputs.indent.left).toBe(567 / 20);
+  });
+
+  test('document defaults stay below the level', () => {
+    const { item } = styleNumberedItem('', '<w:ind w:left="6237" w:hanging="567"/>');
+    expect(item.indent.right).toBe(200 / 20);
+    expect(styleNumberedItem('', LEVEL).item.indent.right).toBe(300 / 20);
+  });
+
+  test("the paragraph's own indent still wins", () => {
+    const { item } = styleNumberedItem('<w:ind w:left="900" w:firstLine="0"/>', LEVEL);
+    expect(item.indent).toEqual({ left: 45, right: 15, hanging: 0, firstLine: 0 });
+  });
+
+  test('a directly applied numPr puts the level back above the style', () => {
+    const direct = '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>';
+    const { item, inputs } = styleNumberedItem(direct, LEVEL);
+    expect(item.indent.left).toBe(6237 / 20);
+    expect(inputs.indent.left).toBe(6237 / 20);
   });
 });

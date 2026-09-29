@@ -63,7 +63,7 @@ export function withoutHiddenCellMark(
     lines.length === 1 && listItem?.markerText && !listItem.markerStyle.hidden
       ? measurer.lineMetrics(listItem.markerStyle)
       : { height: 0, baseline: 0 };
-  const spaced =
+  const spaced: { height: number; baseline: number; trailing?: number } =
     marker.height > 0 ? applyLineSpacing(spacing, marker.height, marker.baseline) : marker;
   // Copy only for placement: the break cache also serves ordinary paragraphs and visible marks.
   return [
@@ -73,7 +73,10 @@ export function withoutHiddenCellMark(
       height: spaced.height,
       baseline: spaced.baseline,
       leading: Math.max(0, spaced.baseline - marker.baseline),
-      trailingSpacing: spacing.rule === 'exact' ? 0 : Math.max(0, spaced.height - marker.height),
+      trailingSpacing:
+        spacing.rule === 'exact'
+          ? 0
+          : Math.max(0, spaced.trailing ?? spaced.height - marker.height),
     },
   ];
 }

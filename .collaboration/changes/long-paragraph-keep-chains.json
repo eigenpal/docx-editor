@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Paragraph keep groups stopped after eight blocks.",
+  "after": "Paragraph keep groups include all consecutive members and invalidate layout after later member edits.",
+  "reason": "This change affects pagination only. Shared document state, operations, and synchronization remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/long-keep-chains.test.ts",
+    "packages/core/src/layout/__tests__/keep-next-flow-window.test.ts"
+  ],
+  "changeset": "long-paragraph-keep-chains",
+  "migration": null
+}

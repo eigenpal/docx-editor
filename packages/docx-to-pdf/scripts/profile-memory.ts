@@ -14,6 +14,7 @@ import {
 import { HARD_MAX_FONT_BYTES } from '@docx-editor.dev/core/layout';
 import { FONT_ASSET_ROOT, packagedFonts } from '@docx-editor.dev/fonts';
 import {
+  cjkFonts,
   installedWordFonts,
   supplementalFonts,
   PDF_GLYPH_FALLBACKS,
@@ -64,7 +65,7 @@ const opened = await openFontBackedDocumentForExport(bytes, {
   displayMode: 'proposed',
   reuseAcrossRevisions: false,
   glyphFallbacks: PDF_GLYPH_FALLBACKS,
-  fonts: [installedWordFonts, fonts, supplementalFonts],
+  fonts: [installedWordFonts, fonts, supplementalFonts, cjkFonts],
 });
 if (!opened.ok) throw new Error(opened.reason);
 record('opened');

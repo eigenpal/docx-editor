@@ -122,15 +122,16 @@ test('row minimum adds the largest top and bottom clearance even from different 
 });
 
 test('a continued row does not reserve the authored minimum again on its final fragment', () => {
-  const content = Array.from({ length: 5 }, (_, i) => paragraph(`Cell ${i}`)).join('');
+  // The padded 30pt minimum fits the 30pt left below the prefix, so the row starts there.
+  const content = Array.from({ length: 3 }, (_, i) => paragraph(`Cell ${i}`)).join('');
   const result = layout(
-    paragraph('Prefix 1') + paragraph('Prefix 2') + table(row(cell(content), 40), 0, 3),
+    paragraph('Prefix 1') + paragraph('Prefix 2') + table(row(cell(content), 24), 0, 3),
     undefined,
     50
   );
   const placed = rowsOf(result);
   expect(result.pages).toHaveLength(2);
-  expect(placed.map((entry) => entry.box.height)).toEqual([26, 36]);
+  expect(placed.map((entry) => entry.box.height)).toEqual([26, 16]);
   expect(placed[1]!.isContinuation).toBe(true);
   expect(linesOf(result).map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
     'Prefix 1',
@@ -138,8 +139,6 @@ test('a continued row does not reserve the authored minimum again on its final f
     'Cell 0',
     'Cell 1',
     'Cell 2',
-    'Cell 3',
-    'Cell 4',
   ]);
 });
 

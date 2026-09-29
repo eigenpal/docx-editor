@@ -1,3 +1,5 @@
+import { selectionContainsClipboardObject } from './clipboard-object-selection.ts';
+import { partOfNodeId } from './surface-scope.ts';
 // Copy, cut and paste for the paginated surface (paginated-surface seam).
 //
 // Thin glue, on purpose. The flavour payload lives in `clipboard-copy-payload.ts`, the
@@ -20,12 +22,13 @@ import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core
 import type { StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
 import {
   cellSelectionText,
+  paragraphsInCells,
   type CellSelection,
   type SemanticLayout,
   type SemanticPosition,
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
-import { buildCopyFlavours } from './clipboard-copy-payload.ts';
+import { buildCopyFlavours, type CopyFlavours } from './clipboard-copy-payload.ts';
 import { routePaste } from './clipboard-paste-router.ts';
 import { insertableText } from './clipboard-plain-text.ts';
 import { clampTextFormPaste } from './text-form-field-paste.ts';
@@ -91,7 +94,7 @@ export interface SurfaceClipboardOps {
   /** Insert text, turning newlines into real paragraph splits rather than literal characters. */
   insertPlainText(text: string): void;
   /** Every clipboard flavour for the current selection — see clipboard-copy-payload.ts. */
-  copyFlavoursNow(): { text: string; html: string | null };
+  copyFlavoursNow(): CopyFlavours;
   /** The paste router entry — fidelity order with continuous degrade to plain. */
   pasteRichNow(text: string, html: string | null): boolean;
   /** Arm Cmd+Shift+V: the next paste inside the deadline routes plain. */
@@ -205,9 +208,41 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
   }
 
   /** Every clipboard flavour for the current selection — see clipboard-copy-payload.ts. */
-  function copyFlavoursNow(): { text: string; html: string | null } {
+  function copyFlavoursNow(): CopyFlavours {
     deps.flushPendingInputAndLayout();
     const rectangle = deps.cellSelection();
+    const range = deps.orderedRange();
+    const order = deps.paragraphOrder();
+    const selected = rectangle
+      ? paragraphsInCells(deps.layout(), rectangle.cellIds)
+      : order.slice(order.indexOf(range.from.paragraphId), order.indexOf(range.to.paragraphId) + 1);
+    const ranges = new Map(
+      selected.map((id) => [
+        id,
+        {
+          start: !rectangle && id === range.from.paragraphId ? range.from.offset : 0,
+          end: !rectangle && id === range.to.paragraphId ? range.to.offset : Infinity,
+        },
+      ])
+    );
+    const copyScope = deps.storyScope();
+    // Clipboard preflight reads the selected part without retaining a story-store slot.
+    const copyPart =
+      copyScope.kind === 'body'
+        ? session.part()
+        : partOfNodeId(session, selected[0] ?? range.from.paragraphId);
+    if (copyPart && selectionContainsClipboardObject(copyPart, ranges)) {
+      deps.commit(
+        () =>
+          ({
+            committed: false,
+            rejected: true,
+            opCount: 0,
+            reason: 'unsupported-content',
+          }) as TreeApplyResult
+      );
+      return { text: '', html: null, reason: 'unsupported-content' };
+    }
     if (rectangle) {
       return buildCopyFlavours({
         text: cellSelectionText(deps.layout(), rectangle),
@@ -222,7 +257,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     const collapsed = from.paragraphId === to.paragraphId && from.offset === to.offset;
     if (collapsed || scope.kind !== 'body') return { text, html: null };
     // A copy is a pure READ: `session.part()` is the body part, and the body-only guard
-    // above is what keeps this off `partFor`, which would retain a story-store slot.
+    // above keeps body extraction on the package reader. Non-body preflight uses its active story.
     const part = session.part();
     const coverage = fragmentCoverageOf(deps.layout(), part, from, to, deps.paragraphOrder());
     return buildCopyFlavours({
@@ -236,9 +271,12 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
   /**
    * Land a fragment package at the selection, ONE commit: the selection-clearing ops plus
    * the resource merge plus `insertFragment`, promoted to a package undo unit in the
-   * session. False on any refusal — the paste router degrades to the next flavour.
+   * session. Unsupported content stops routing; other refusals permit the next flavour.
    */
-  function pasteFragmentBytes(bytes: Uint8Array, lastMarkCovered: boolean): boolean {
+  function pasteFragmentBytes(
+    bytes: Uint8Array,
+    lastMarkCovered: boolean
+  ): boolean | 'unsupported-content' {
     if (deps.editingMode() !== 'edit') return false;
     if (deps.storyScope().kind !== 'body') return false;
     if (deps.cellSelection()) return false;
@@ -246,6 +284,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     const plan = deps.deleteSelectionPlan();
     const target = plan.replaceAt ?? plan.collapseTo;
     let landed = false;
+    let unsupported = false;
     deps.commit(
       () => {
         // The readiness gate the typing lane asks. A fragment paste reaches the store
@@ -274,6 +313,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
           }
         );
         landed = result.ok;
+        unsupported = !result.ok && result.detail === 'fragment-merge:unsupported-content';
         return {
           committed: result.ok,
           rejected: !result.ok,
@@ -283,7 +323,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
       },
       () => collapsedAt(target)
     );
-    return landed;
+    return unsupported ? 'unsupported-content' : landed;
   }
 
   /** The paste router entry — fidelity order with continuous degrade to plain. */
@@ -304,6 +344,18 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
       },
       { html, text, forcePlain }
     );
+    if (lane === 'unsupported-content') {
+      deps.commit(
+        () =>
+          ({
+            committed: false,
+            rejected: true,
+            opCount: 0,
+            reason: 'unsupported-content',
+          }) as TreeApplyResult
+      );
+      return false;
+    }
     return lane !== 'none';
   }
 

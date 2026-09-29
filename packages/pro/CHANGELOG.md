@@ -1,5 +1,111 @@
 # @docx-editor.dev/pro
 
+## 2.23.0
+
+### Patch Changes
+
+- 30bd2a8: Preserve existing consecutive-tab placement when wrapping table-cell text.
+- 30bd2a8: Preserve grouped header text frame positions, borders, and body spacing.
+- 1bd31d4: Apply font formatting to text with inherited complex-script properties.
+- 1bd31d4: Reduce typing delays, refresh table pagination after field or numbering changes, and refuse unsupported grouped drawing effects.
+- 30bd2a8: Correct content alignment and cell padding in supported fixed legacy tables.
+- 1bd31d4: Keep long consecutive paragraph groups together across page breaks.
+- 30bd2a8: Keep longer table row groups and closed vertical merges together during pagination.
+- 30bd2a8: Preserve wrapped left-tab advances in table cells.
+- Updated dependencies [30bd2a8]
+- Updated dependencies [e608e2d]
+- Updated dependencies [e608e2d]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [b981ea6]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [0e42c85]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [d04902a]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [e608e2d]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [a2951cf]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [ab460dc]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [e633def]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [4fafb7c]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [cee5764]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [390c177]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [ae1afe0]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [bf776f2]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [d6c75d2]
+- Updated dependencies [2eea4de]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [e040ff8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [aab4053]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [e608e2d]
+- Updated dependencies [e608e2d]
+- Updated dependencies [e608e2d]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [9afb832]
+- Updated dependencies [6794f4d]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+- Updated dependencies [30bd2a8]
+  - @docx-editor.dev/core@2.23.0
+  - @docx-editor.dev/react@2.23.0
+  - @docx-editor.dev/vue@2.23.0
+
 ## 2.22.0
 
 ### Patch Changes

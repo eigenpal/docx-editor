@@ -1,0 +1,12 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Terminal note citations stop justified complete-word fitting.",
+  "after": "Stable body citations participate in complete-word fitting with unchanged model ranges.",
+  "reason": "Only derived line layout changes; canonical nodes, operations, and shared state remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/justified-terminal-notes.test.ts"
+  ],
+  "changeset": null,
+  "migration": null
+}

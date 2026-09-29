@@ -33,7 +33,8 @@
       "@docx-editor.dev/core/layout": ["../core/src/layout/index.ts"],
       "@docx-editor.dev/core/output": ["../core/src/output/index.ts"],
       "@docx-editor.dev/core/store": ["../core/src/store/index.ts"],
-      "@docx-editor.dev/fonts": ["../fonts/src/index.ts"]
+      "@docx-editor.dev/fonts": ["../fonts/src/index.ts"],
+      "@docx-editor.dev/fonts-cjk": ["../fonts-cjk/src/index.ts"]
     }
   },
   "include": ["src", "test"],

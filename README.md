@@ -46,6 +46,7 @@ For Node.js, use `^20.16.0 || >=22.3.0`. Browser applications can use the packag
 | [`@docx-editor.dev/fonts`](https://www.npmjs.com/package/@docx-editor.dev/fonts) | Open-licensed substitutes for Word fonts. | [Fonts and measurement](https://www.docx-editor.dev/docs/2.x/guides/fonts) |
 | [`@docx-editor.dev/docx-to-markdown`](https://www.npmjs.com/package/@docx-editor.dev/docx-to-markdown) | Convert DOCX to Markdown with page and image output. | [Markdown export](https://www.docx-editor.dev/docs/2.x/export/markdown) |
 | [`@docx-editor.dev/docx-to-pdf`](https://www.npmjs.com/package/@docx-editor.dev/docx-to-pdf) | Convert DOCX to PDF on Node.js. | [PDF export](https://www.docx-editor.dev/docs/2.x/export/pdf) |
+| [`@docx-editor.dev/fonts-cjk`](https://www.npmjs.com/package/@docx-editor.dev/fonts-cjk) | Optional Chinese, Japanese, and Korean font for PDF export. | [CJK font setup](https://www.docx-editor.dev/docs/2.x/export/pdf/fonts#add-chinese-japanese-and-korean-text) |
 | [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro) | Tracked changes, comments, collaboration, and custom nodes. | [Review and collaboration](https://www.docx-editor.dev/docs/2.x/pro) |
 | [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | A supported subset of Word Office.js for browser and server editing. | [Document automation](https://www.docx-editor.dev/docs/2.x/editor-api) |
 
@@ -123,9 +124,19 @@ Compare [toolbar designs](https://www.docx-editor.dev/docs/2.x/guides/toolbar#co
 
 Use the [document refresh API](https://www.docx-editor.dev/docs/2.x/guides/document-refresh) to display DOCX results from your server. Preserve scroll, highlight changes, and provide change navigation. The controller refuses results after local edits. Accepted files reset selection and undo history.
 
+Use [paragraph navigation](https://www.docx-editor.dev/docs/2.x/guides/navigation) to scroll to and highlight an external paragraph reference. Configure highlight colors, borders, duration, and motion through the editor instance.
+
+See [Right-to-left text](https://www.docx-editor.dev/docs/2.x/guides/right-to-left) to set paragraph direction from controls, keyboard shortcuts, or code.
+
+## Document fidelity
+
+Check the [feature matrix](https://www.docx-editor.dev/docs/2.x/word-fidelity) for rendering, editing, and save support. Each feature lists its limits separately.
+
+The guide explains pagination, table layout, footnotes, headers, footers, and drawings. Review those limits with your document's fonts and content before choosing an integration.
+
 ## Font measurement
 
-Pass usable font bytes for Word-accurate line and page breaks. Without them, the editor uses fallback measurement that does not guarantee Word-compatible layout.
+Pass usable font bytes to measure text for line and page breaks. Fallback measurement can change wrapping and pagination.
 
 Use `packagedFonts()` from `@docx-editor.dev/fonts` for packaged substitutes. Use `customFonts()` from `@docx-editor.dev/core/editor` for your own font files. Add `googleFonts()` when your application accepts third-party font requests.
 

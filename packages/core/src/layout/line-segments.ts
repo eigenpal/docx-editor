@@ -9,6 +9,7 @@ import { paragraphFragmentsOf } from './semantic-records.ts';
 import { paragraphFragmentsOnPage } from './story-fragments.ts';
 import type {
   LineRecord,
+  ListMarkerRecord,
   ParagraphFragmentRecord,
   SemanticLayout,
   StyleSpanRecord,
@@ -278,6 +279,30 @@ export function fragmentHolding(
   for (const page of layout.pages) {
     for (const fragment of paragraphFragmentsOnPage(page)) {
       if (fragmentParagraphs(fragment).includes(paragraphId)) return fragment;
+    }
+  }
+  return null;
+}
+
+/**
+ * The list marker a paragraph publishes, or null.
+ *
+ * It is on the fragment {@link fragmentHolding} finds, except when page breaks open the
+ * paragraph: layout then publishes it with the first line after them, on a later fragment.
+ */
+export function markerHolding(
+  layout: SemanticLayout,
+  paragraphId: string
+): ListMarkerRecord | null {
+  const first = fragmentHolding(layout, paragraphId);
+  if (!first || first.marker) return first?.marker ?? null;
+  const opensWithBreak = first.lines.every((line) =>
+    line.spans.every((span) => !/[^\f]/.test(span.text))
+  );
+  if (!opensWithBreak || first.paragraphId !== paragraphId) return null;
+  for (const page of layout.pages) {
+    for (const fragment of paragraphFragmentsOnPage(page)) {
+      if (fragment.paragraphId === paragraphId && fragment.marker) return fragment.marker;
     }
   }
   return null;

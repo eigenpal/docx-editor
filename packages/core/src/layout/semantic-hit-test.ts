@@ -50,6 +50,7 @@ import { clipParagraphBox } from './paragraph-frame-clip.ts';
 import { blockDistance, isCollapsedSectionMark, weightedDistance } from './hit-test-blocks.ts';
 import { paragraphContentBounds } from './paragraph-content-bounds.ts';
 import { bottomToTopCaretInLayout, pointInBottomToTopCell } from './table-cell-text-direction.ts';
+import { hitIndex, type MergedCellOrigin } from './semantic-hit-index.ts';
 
 /** A point in the coordinate space named by the function taking it. */
 export interface HitPoint {
@@ -145,111 +146,6 @@ function bottomToTopHit(layout: SemanticLayout, hit: SemanticHit | null): Semant
 }
 
 // ---------------------------------------------------------------------------------------
-// Per-layout index
-// ---------------------------------------------------------------------------------------
-
-interface LayoutHitIndex {
-  /** Sheet-space top of each page, ascending — binary searched by `pageAtY`. */
-  readonly pageTops: readonly number[];
-  /** Row ordinal within its own table, by `w:tr` node id. */
-  readonly rowIndexById: ReadonlyMap<string, number>;
-  /** The id of the LAST line each paragraph occupies, for the soft-wrap end rule. */
-  readonly lastLineIdOfParagraph: ReadonlyMap<string, string>;
-  /**
-   * The cell a vertical-merge continuation continues, for every continuation in the layout.
-   *
-   * Built across ALL pages, because a merged run routinely starts on one page and continues
-   * on the next: a fragment-local walk finds nothing there and the click resolves into
-   * whatever cell happens to be nearest — a different column.
-   */
-  readonly mergeOriginOf: ReadonlyMap<TableCellFragmentRecord, MergedCellOrigin>;
-}
-
-interface MergedCellOrigin {
-  readonly row: TableRowFragmentRecord;
-  readonly cell: TableCellFragmentRecord;
-}
-
-/**
- * Built once per layout, not once per hit test.
- *
- * A published layout is immutable — a new revision is a new object — so a `WeakMap` keyed on
- * it is sound and collects with it. This matters because hit testing runs on every pointer
- * move of a drag: anything O(document) per call would make dragging through a long document
- * quadratic in its length.
- */
-const hitIndexCache = new WeakMap<SemanticLayout, LayoutHitIndex>();
-
-function hitIndex(layout: SemanticLayout): LayoutHitIndex {
-  const cached = hitIndexCache.get(layout);
-  if (cached) return cached;
-
-  const pageTops: number[] = [];
-  const rowIndexById = new Map<string, number>();
-  const lastLineIdOfParagraph = new Map<string, string>();
-  const rowsSeenPerTable = new Map<string, number>();
-  const mergeOriginOf = new Map<TableCellFragmentRecord, MergedCellOrigin>();
-  /** The most recent non-continuation cell per table column, in document order. */
-  const openMerge = new Map<string, MergedCellOrigin>();
-
-  const visitBlocks = (blocks: readonly BlockFragmentRecord[], inHeaderRepeat: boolean): void => {
-    for (const block of blocks) {
-      if (block.kind === 'paragraph') {
-        // A repeated header row re-emits the SAME paragraph ids with DIFFERENT line ids, so
-        // letting it write here leaves every earlier page's copy looking like it soft-wrapped
-        // — and the end of that line becomes unreachable.
-        if (!inHeaderRepeat) {
-          for (const line of block.lines) {
-            lastLineIdOfParagraph.set(line.range.paragraphId, line.id);
-          }
-        }
-        continue;
-      }
-      for (const row of block.rows) {
-        // A header row re-emitted on a continuation page is the SAME row: it must not consume
-        // an ordinal, or every row below it would be numbered one too high.
-        if (!row.isHeaderRepeat && !rowIndexById.has(row.id)) {
-          const next = rowsSeenPerTable.get(block.tableId) ?? 0;
-          rowIndexById.set(row.id, next);
-          rowsSeenPerTable.set(block.tableId, next + 1);
-        }
-        for (const cell of row.cells) {
-          // Repeats are copies, so they neither open a merge nor continue one.
-          if (!row.isHeaderRepeat && !inHeaderRepeat) {
-            const column = `${block.tableId}|${cell.gridColumn}`;
-            // Keyed on what matters — this cell paints nothing — rather than on any one of
-            // the flags layout uses to say so. A merge re-opened on a continuation page
-            // reports `vMergeContinue: false` and still holds no blocks, so testing the flag
-            // alone left exactly the cells that need an origin without one.
-            if (cell.blocks.length === 0) {
-              const origin = openMerge.get(column);
-              if (origin) mergeOriginOf.set(cell, origin);
-            } else {
-              openMerge.set(column, { row, cell });
-            }
-          }
-          visitBlocks(cell.blocks, inHeaderRepeat || row.isHeaderRepeat);
-        }
-      }
-    }
-  };
-
-  for (const page of layout.pages) {
-    pageTops.push(page.box.y);
-    visitBlocks(page.fragments, false);
-  }
-
-  const index: LayoutHitIndex = {
-    pageTops,
-    rowIndexById,
-    lastLineIdOfParagraph,
-    mergeOriginOf,
-  };
-  hitIndexCache.set(layout, index);
-  return index;
-}
-
-// ---------------------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------------------
 
@@ -290,7 +186,7 @@ export function isFurniturePoint(layout: SemanticLayout, point: HitPoint): boole
   return false;
 }
 
-function hitAnchoredDrawingAtPoint(
+export function hitAnchoredDrawingAtPoint(
   drawings: readonly AnchoredDrawingRecord[] | undefined,
   point: HitPoint,
   pageIndex: number,
@@ -715,6 +611,7 @@ function hitBoundsContainDrawing(
   drawing: InlineDrawingRecord | AnchoredDrawingRecord,
   point: HitPoint
 ): boolean {
+  if (drawing.accessibility.hidden) return false;
   const box = drawing.hitBounds;
   if (
     point.x < box.x ||
@@ -1058,7 +955,7 @@ export function caretBoxOnLine(
     // draws a double-spaced empty line a caret twice the height of the text it would type.
     //
     // Both numbers are READ, never recovered from the box: `leading` is the `exact`-rule
-    // space above the band and `trailingSpacing` is the `auto`/`atLeast` depth below it.
+    // space above the band and `trailingSpacing` is the `auto` depth below it.
     // Subtracting `leading` alone was right only while every rule put its extra above — the
     // rules that put it below leave `leading` at zero, so the whole spaced box read as text.
     const leading = line.leading ?? 0;
@@ -1100,8 +997,10 @@ export function caretBoxOnLine(
         break;
       }
       // Trailing edge of a tab/field: downstream affinity — same model offset as the next
-      // span's start, but the visual insertion point belongs with the following text.
-      if (next && next.range.start === offset && usesPublishedAdvance(span)) {
+      // span's start, but the visual insertion point belongs with the following text. So too
+      // after a page break with text beside it, which only a table cell (that ignores it) has.
+      const ignoredBreak = span.text === PAGE_BREAK_CHAR && span.box.width === 0;
+      if (next && next.range.start === offset && (usesPublishedAdvance(span) || ignoredBreak)) {
         chosen = next;
         break;
       }
@@ -1338,7 +1237,7 @@ function overlayFrameOf(
   record: InlineDrawingRecord | AnchoredDrawingRecord
 ): DrawingOverlayFrame | null {
   const bounds = record.paintBounds;
-  if (bounds.width <= 0 || bounds.height <= 0) return null;
+  if (bounds.width <= 0 || bounds.height <= 0 || record.accessibility.hidden) return null;
   return Object.freeze({
     pageIndex,
     x: bounds.x,
@@ -1414,7 +1313,7 @@ export function findDrawingOverlayFrameInLayout(
       for (const drawing of story.anchoredDrawings ?? []) {
         if (drawing.drawingNodeId !== drawingNodeId) continue;
         const bounds = drawing.paintBounds;
-        if (bounds.width <= 0 || bounds.height <= 0) return null;
+        if (bounds.width <= 0 || bounds.height <= 0 || drawing.accessibility.hidden) return null;
         return Object.freeze({
           pageIndex: page.index,
           x: story.box.x + bounds.x - page.contentBox.x,

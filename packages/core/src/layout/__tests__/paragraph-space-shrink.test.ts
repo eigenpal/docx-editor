@@ -179,21 +179,16 @@ test('an East Asian language paragraph compresses Latin spaces the same way', ()
   ]);
 });
 
-test('a following run that continues the word, or ends the paragraph, gets no shrink', () => {
-  for (const [runs, expected] of [
-    [
-      ['aa bb cc', 'x dd'],
-      ['aa bb', 'ccx dd'],
-    ],
-    [
-      ['aa bb cc', ' '],
-      ['aa bb', 'cc'],
-    ],
-  ] as const) {
-    expect(
-      content(layoutSemanticDocument(seamSource(runs), 1, { measurer, compatibilityMode: 15 }))
-    ).toEqual(expected);
-  }
+// The paragraph's last word borrows space too: `paragraph-space-shrink-terminal.test.ts`.
+test('a following run that continues the word gets no shrink', () => {
+  expect(
+    content(
+      layoutSemanticDocument(seamSource(['aa bb cc', 'x dd']), 1, {
+        measurer,
+        compatibilityMode: 15,
+      })
+    )
+  ).toEqual(['aa bb', 'ccx dd']);
 });
 
 // A double space split across runs: the word keeps its own space and the next run's

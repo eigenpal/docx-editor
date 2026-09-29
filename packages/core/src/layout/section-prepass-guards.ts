@@ -44,6 +44,7 @@ export const SECTION_PREPASS_GUARDS = {
   // blocks, list map and TOC shape are all identity-unchanged; this clause is what sees it.
   refToken: 'validity-checked',
   prepared: 'derived-covered',
+  positioned: 'derived-covered',
   keys: 'derived-covered',
   paragraphDocumentOrder: 'derived-covered',
   keepsNext: 'derived-covered',

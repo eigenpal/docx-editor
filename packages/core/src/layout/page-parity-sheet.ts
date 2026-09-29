@@ -15,6 +15,7 @@
 // The sheet is empty: no body, header, footer, drawing, or page border. It is not a page of
 // either section, so SECTIONPAGES does not count it. NUMPAGES counts it like every sheet.
 
+import { verticalMarginInsets } from './page-body-margins.ts';
 import type { DocumentSection } from './section-properties.ts';
 import type { PageGeometry, PageRecord, SemanticLayout } from './semantic-records.ts';
 
@@ -53,6 +54,7 @@ export function paritySheetAt(
   geometry: PageGeometry,
   previous: PageRecord | undefined
 ): PageRecord {
+  const margins = verticalMarginInsets(geometry);
   if (
     previous &&
     previous.index === index &&
@@ -60,9 +62,9 @@ export function paritySheetAt(
     previous.box.width === geometry.width &&
     previous.box.height === geometry.height &&
     previous.contentBox.x === geometry.margin.left &&
-    previous.contentBox.y === sheetY + geometry.margin.top &&
+    previous.contentBox.y === sheetY + margins.top &&
     previous.contentBox.width === geometry.width - geometry.margin.left - geometry.margin.right &&
-    previous.contentBox.height === geometry.height - geometry.margin.top - geometry.margin.bottom
+    previous.contentBox.height === geometry.height - margins.top - margins.bottom
   ) {
     return previous;
   }
@@ -72,9 +74,9 @@ export function paritySheetAt(
     box: { x: 0, y: sheetY, width: geometry.width, height: geometry.height },
     contentBox: {
       x: geometry.margin.left,
-      y: sheetY + geometry.margin.top,
+      y: sheetY + margins.top,
       width: geometry.width - geometry.margin.left - geometry.margin.right,
-      height: geometry.height - geometry.margin.top - geometry.margin.bottom,
+      height: geometry.height - margins.top - margins.bottom,
     },
     fragments: [],
     hasBodyPageFields: false,

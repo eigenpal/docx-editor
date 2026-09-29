@@ -1,3 +1,4 @@
+import { formattingRunAt } from '../store/store/direct-properties.ts';
 // Formatting queries over the published layout (paginated-surface seam).
 //
 // This module owns what a toolbar reads and what a formatting command merges against:
@@ -33,15 +34,11 @@ import {
   runAddressRanges,
   type FormattingDisplayMode,
   type FormattingRevisionAuthorFilter,
-  type OoxmlNode,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
 // By path, not through the store's public entry: the walk and its clip are the engine's own
 // answer to "which runs does this range cover", not surface a consumer builds on.
-import {
-  clippedFormattableRuns,
-  formattableRunsOfParagraph,
-} from '../store/store/formattable-runs.ts';
+import { clippedFormattableRuns } from '../store/store/formattable-runs.ts';
 import type { SurfaceFormatting } from './paginated-surface-contract.ts';
 import { lineSegments } from '../layout/line-segments.ts';
 import { paragraphAlignment } from '../layout/paragraph-flow.ts';
@@ -383,20 +380,8 @@ export function authoredRunPropertiesAt(
 ): readonly SurfaceProperty[] {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return [];
-  const runRanges = runAddressRanges(paragraph);
-  let left: OoxmlNode | null = null;
-  let right: OoxmlNode | null = null;
-  // Only runs this view RENDERS. In the resolved result a hidden tracked deletion ending at
-  // the caret used to win as `left`, so the toolbar face and the next typed character took
-  // their formatting from text nobody could look at. In All Markup that same run is on the
-  // page, struck through, and taking its face is what a reader would expect.
-  for (const run of formattableRunsOfParagraph(paragraph, displayMode, authorFilter)) {
-    const range = runRanges.get(run.id);
-    if (!range || range.end <= range.start) continue;
-    if (range.start < offset && offset <= range.end) left = run;
-    if (right === null && range.start <= offset && offset < range.end) right = run;
-  }
-  const owner = left ?? right;
+  // Share the revision-filtered caret owner with complex-script lane selection.
+  const owner = formattingRunAt(paragraph, offset, displayMode, authorFilter);
   if (owner) {
     return authoredProperties(
       propertyContainer(owner, 'runProperties', 'rPr'),

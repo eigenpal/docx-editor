@@ -37,9 +37,34 @@ try {
           `Packed PDF package omits docs/${guide}.md`
         );
       }
+      // The CJK face ships in its own package, not in this one.
+      assert.ok(
+        !packed.files.some((file) => /cjk/i.test(file.path)),
+        'Packed PDF package carries a CJK asset'
+      );
     }
     return path.join(packs, packed.filename);
   });
+  // Packed now, installed only after the conversions without it.
+  const [cjkPacked] = JSON.parse(
+    run('npm', [
+      'pack',
+      path.join(root, 'packages/fonts-cjk'),
+      '--json',
+      '--pack-destination',
+      packs,
+    ])
+  );
+  for (const file of [
+    'assets/NotoSansCJKjp-Regular.otf',
+    'licenses/NotoSansCJK-OFL.txt',
+    'LICENSE',
+    'README.md',
+  ])
+    assert.ok(
+      cjkPacked.files.some((entry) => entry.path === file),
+      `Packed CJK font package omits ${file}`
+    );
   writeFileSync(
     path.join(consumer, 'package.json'),
     JSON.stringify({ private: true, type: 'module' })
@@ -63,6 +88,18 @@ try {
   writeFileSync(
     path.join(consumer, 'document.docx'),
     zipSync(Object.fromEntries(Object.entries(files).map(([name, xml]) => [name, strToU8(xml)])))
+  );
+  writeFileSync(
+    path.join(consumer, 'cjk.docx'),
+    zipSync(
+      Object.fromEntries(
+        Object.entries({
+          ...files,
+          'word/document.xml':
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:rPr><w:rFonts w:ascii="MS Mincho" w:eastAsia="MS Mincho"/></w:rPr><w:t>日本語 中文 한국어</w:t></w:r></w:p></w:body></w:document>',
+        }).map(([name, xml]) => [name, strToU8(xml)])
+      )
+    )
   );
   const program = `
 import assert from 'node:assert/strict';
@@ -136,6 +173,46 @@ void main().catch((error: unknown) => { console.error(error); process.exitCode =
       `tsconfig.${extension}.json`,
     ]);
     process.stdout.write(run('node', [`out/convert.${extension === 'mts' ? 'mjs' : 'cjs'}`]));
+  }
+  // CJK text, from both module systems: without the optional font package, then with it.
+  const cjk = (installed) => `
+const assert = require('node:assert/strict');
+const { readFileSync } = require('node:fs');
+async function main(pdf) {
+  const source = readFileSync('cjk.docx');
+  const options = { useSystemFonts: false };
+  if (${installed}) {
+    const result = await pdf.exportPdf(source, options);
+    assert.deepEqual(result.diagnostics, []);
+    const mincho = result.fontResolution.families.find((family) => family.family === 'MS Mincho');
+    assert.equal(mincho.faces[0].sourceFamily, 'Noto Sans CJK JP');
+  } else {
+    const result = await pdf.exportPdf(source, { ...options, fidelityPolicy: 'best-effort' });
+    const missing = result.diagnostics.filter((d) => d.code === 'missing-glyph');
+    assert.ok(missing.length > 0, JSON.stringify(result.diagnostics));
+    for (const d of missing) assert.match(d.message, /install @docx-editor\\.dev\\/fonts-cjk/);
+    await assert.rejects(pdf.exportPdf(source, options), pdf.PdfFidelityError);
+  }
+}
+`;
+  for (const installed of [false, true]) {
+    if (installed)
+      run('npm', [
+        'install',
+        '--ignore-scripts',
+        '--no-audit',
+        '--no-fund',
+        path.join(packs, cjkPacked.filename),
+      ]);
+    writeFileSync(
+      path.join(consumer, 'cjk.cjs'),
+      `${cjk(installed)}main(require('@docx-editor.dev/docx-to-pdf')).then(() => console.log('Packed PDF CJK (cjs, installed: ${installed}) passed'));`
+    );
+    writeFileSync(
+      path.join(consumer, 'cjk.mjs'),
+      `import { createRequire } from 'node:module';\nconst require = createRequire(import.meta.url);\n${cjk(installed)}await main(await import('@docx-editor.dev/docx-to-pdf'));\nconsole.log('Packed PDF CJK (esm, installed: ${installed}) passed');`
+    );
+    for (const script of ['cjk.cjs', 'cjk.mjs']) process.stdout.write(run('node', [script]));
   }
 } finally {
   rmSync(temporary, { recursive: true, force: true });

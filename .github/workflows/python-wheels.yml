@@ -32,9 +32,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-24.04
+          - os: blacksmith-4vcpu-ubuntu-2404
             tag: linux-x64
-          - os: ubuntu-24.04-arm
+          - os: blacksmith-4vcpu-ubuntu-2404-arm
             tag: linux-arm64
           - os: macos-15
             tag: macos-arm64
@@ -158,7 +158,7 @@ jobs:
     # Nothing reached PyPI: no wheel built, or the upload itself failed.
     if: always() && github.event_name == 'workflow_dispatch' && inputs.publish && needs.publish.result == 'failure'
     needs: [wheel, publish]
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     permissions: {}
     steps:
       - name: Notify Slack

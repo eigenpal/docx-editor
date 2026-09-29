@@ -3177,6 +3177,35 @@ a.docx-hyperlink:focus-visible {
   margin-bottom: 4px;
 }
 
+/* A closed band over body lines (negative vertical page margin) never takes the pointer, so
+ * body links, note citations, pictures and form fields under it get their own events. The
+ * pointer geometry opens the story. `!important` and the universal child selector beat the
+ * explicit `auto` on drawings and equations, which would otherwise make the band hoverable.
+ * The hover target is `.docx-hf-hover`, over the margin part only and painted under the ink,
+ * so the tint never covers body text. */
+.docx-pages .docx-hf[data-docx-hf-over-body]:not([data-docx-hf-active]),
+.docx-pages .docx-hf[data-docx-hf-over-body]:not([data-docx-hf-active]) * {
+  pointer-events: none !important;
+}
+
+.docx-pages .docx-hf-hover {
+  cursor: text;
+}
+
+.docx-pages .docx-hf-hover:hover {
+  background: var(--doc-primary-light);
+  border-radius: 4px;
+}
+
+.docx-pages
+  .docx-hf-hover[data-docx-hf-hover='header']:hover
+  ~ .docx-hf-edit-hint[data-docx-hf-hint='header'],
+.docx-pages
+  .docx-hf-hover[data-docx-hf-hover='footer']:hover
+  ~ .docx-hf-edit-hint[data-docx-hf-hint='footer'] {
+  opacity: 1;
+}
+
 /* No affordance while another furniture scope is open, in view mode, or in print.
  * Each selector MIRRORS the qualifiers of the rule it cancels: the existing-band tint
  * carries two `:not()`s and the footer hint carries an attribute selector, so a plainer
@@ -3185,7 +3214,9 @@ a.docx-hyperlink:focus-visible {
 .docx-paginated-surface--viewing .docx-hf--placeholder:hover,
 .docx-pages--hf-editing .docx-hf:not([data-docx-hf-active]):not(.docx-hf--placeholder):hover,
 .docx-paginated-surface--viewing
-  .docx-hf:not([data-docx-hf-active]):not(.docx-hf--placeholder):hover {
+  .docx-hf:not([data-docx-hf-active]):not(.docx-hf--placeholder):hover,
+.docx-pages--hf-editing .docx-hf-hover:hover,
+.docx-paginated-surface--viewing .docx-hf-hover:hover {
   background: none;
 }
 
@@ -3205,12 +3236,15 @@ a.docx-hyperlink:focus-visible {
 /* The last half of the affordance: an I-beam over a band nobody can enter reads as "put a
  * caret here", which viewing refuses. Furniture text never maps to a model position anyway
  * — see `dom-selection` — so the arrow is the honest cursor here. */
-.docx-paginated-surface--viewing .docx-hf:not([data-docx-hf-active]) {
+.docx-paginated-surface--viewing .docx-hf:not([data-docx-hf-active]),
+.docx-pages--hf-editing .docx-hf-hover,
+.docx-paginated-surface--viewing .docx-hf-hover {
   cursor: default;
 }
 
 @media print {
   .docx-hf--placeholder,
+  .docx-hf-hover,
   .docx-hf-edit-hint {
     display: none !important;
   }
@@ -3519,6 +3553,7 @@ a.docx-hyperlink:focus-visible {
 .docx-pages[data-format-painter] .docx-page,
 .docx-pages[data-format-painter] .docx-drawing-textbox,
 .docx-pages[data-format-painter] .docx-hf,
+.docx-pages[data-format-painter] .docx-hf-hover,
 .docx-pages[data-format-painter] .docx-hyperlink {
   cursor: copy;
 }

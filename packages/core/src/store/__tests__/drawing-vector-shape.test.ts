@@ -789,7 +789,10 @@ describe('wps vector shape projection', () => {
     const atoms = indexInlineDrawingProjectionsInPart(part, {
       resolveSchemeColor: () => '4472C4',
     });
-    expect(atoms.size).toBe(0);
+    // Nothing paints; layout keeps only the anchor's wrap footprint.
+    expect([...atoms.values()].map((atom) => [atom.footprintOnly, atom.vectorShape])).toEqual([
+      [true, null],
+    ]);
   });
 
   test('an MC wpg group projects each child with its own geometry and colour', () => {
@@ -951,7 +954,10 @@ describe('wps vector shape projection', () => {
     );
     const part = parsePart(`<w:p><w:r>${mcWrapped(bezier)}</w:r></w:p>`);
     const atoms = indexInlineDrawingProjectionsInPart(part);
-    expect(atoms.size).toBe(0);
+    // Nothing paints; layout keeps only the anchor's wrap footprint.
+    expect([...atoms.values()].map((atom) => [atom.footprintOnly, atom.vectorShape])).toEqual([
+      [true, null],
+    ]);
   });
 
   test('limits are respected', () => {

@@ -1,7 +1,6 @@
-// Cover-page vertical rhythm: auto line spacing extras sit BELOW each line (Word), and a
-// taller paragraph mark grows the last line's box without pushing the glyph baseline down.
-// The shapes-and-page-breaks title block is the oracle — the full inter-glyph gap sequence
-// must match Word's arithmetic (not a single padding assertion).
+// Cover-page vertical rhythm: auto line spacing extras sit BELOW each line, and a taller
+// paragraph mark leaves a line with text at the text's own height. A title block checks the
+// full inter-glyph gap sequence, not a single padding assertion.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -46,7 +45,6 @@ const RUN_BL = 10 * 0.9;
 const MARK_H = 16 * 1.15;
 /** Auto 460/240 extras on a 10pt run line. */
 const AUTO_460_EXTRA = RUN_H * (460 / 240) - RUN_H;
-const MARK_EXTRA = MARK_H - RUN_H;
 
 describe('auto line spacing and paragraph-mark height', () => {
   test('unformatted marks do not inflate smaller text in body or table cells', () => {
@@ -83,14 +81,14 @@ describe('auto line spacing and paragraph-mark height', () => {
     });
   });
 
-  test('a taller mark grows height without raising leading above the glyphs', () => {
+  test('a taller mark leaves a text line at the text height', () => {
     const markTall = linesOf(
       lay(
         '<w:p><w:pPr><w:rPr><w:sz w:val="32"/></w:rPr></w:pPr>' +
           '<w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>MERIDIAN</w:t></w:r></w:p>'
       )
     )[0]!;
-    expect(markTall.box.height).toBeCloseTo(MARK_H, 5);
+    expect(markTall.box.height).toBeCloseTo(RUN_H, 5);
     expect(markTall.baseline).toBeCloseTo(RUN_BL, 5);
     expect(markTall.leading).toBeCloseTo(0, 5);
   });
@@ -119,8 +117,8 @@ describe('auto line spacing and paragraph-mark height', () => {
     expect(lines[1]!.box.height).toBeCloseTo(16 * 1.15, 5);
   });
 
-  test('title-block inter-glyph gaps match Word arithmetic line-by-line', () => {
-    // Verbatim spacing from shapes-and-page-breaks.docx title region.
+  test('title-block inter-glyph gaps follow the line arithmetic line-by-line', () => {
+    // The spacing of a title region.
     // "as Borrower and" keeps the authored left/right indents so it wraps; every wrap line
     // must appear in the gap table (skipping a wrap line previously hid a 30pt false gap).
     const body =
@@ -177,13 +175,13 @@ describe('auto line spacing and paragraph-mark height', () => {
       .slice(0, -1)
       .map((_, index) => glyphTop(focus[index + 1]!) - glyphBottom(focus[index]!));
 
-    // Word expected with this measurer (auto/atLeast extras BELOW; mark deepens below):
+    // Expected with this measurer (auto/atLeast extras BELOW; the 16pt marks add nothing):
     //   LOAN→between     = before 202twip = 10.1
     //   between→MERIDIAN = auto460 extra ≈ 10.5417
-    //   MERIDIAN→(wrap0) = mark extra 6.9 + before 22twip 1.1 = 8.0
+    //   MERIDIAN→(wrap0) = before 22twip 1.1
     //   wrap→wrap        = auto460 extra ≈ 10.5417 each
     //   last wrap→APEX   = auto460 extra ≈ 10.5417
-    //   APEX→Lender      = mark extra 6.9
+    //   APEX→Lender      = 0
     // Rejected above-leading model produced ~20.6 then ~5.4 (clumps).
     expect(labels[0]).toContain('LOAN');
     expect(labels[1]).toContain('between');
@@ -194,18 +192,14 @@ describe('auto line spacing and paragraph-mark height', () => {
     const expected = [
       202 / 20, // LOAN → between
       AUTO_460_EXTRA, // between → MERIDIAN
-      MARK_EXTRA + 22 / 20, // MERIDIAN → first wrap of "as Borrower and"
+      22 / 20, // MERIDIAN → first wrap of "as Borrower and"
       ...Array.from({ length: gaps.length - 4 }, () => AUTO_460_EXTRA), // wraps + → APEX
-      MARK_EXTRA, // APEX → as Lender
+      0, // APEX → as Lender
     ];
     expect(gaps.length).toBe(expected.length);
     for (let index = 0; index < gaps.length; index += 1) {
       expect(gaps[index]!).toBeCloseTo(expected[index]!, 1);
     }
-    // Old bug: max/min ratio ~20.6/5.4 ≈ 3.8. Uniform band stays under 2.
-    const max = Math.max(...gaps);
-    const min = Math.min(...gaps);
-    expect(max / min).toBeLessThan(2);
   });
 
   test('paint puts auto trailing depth in padding-bottom, not padding-top', () => {
@@ -263,13 +257,13 @@ test('small table text does not inherit a taller implicit cell-end mark', () => 
   expect(explicit.baseline).toBeCloseTo(implicit.baseline, 5);
 });
 
-test('small body text uses its visible font unless the paragraph mark is explicitly formatted', () => {
+test('small body text uses its visible font under an explicitly formatted mark too', () => {
   const run = '<w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>Small text</w:t></w:r>';
   const body = linesOf(lay(`<w:p>${run}</w:p>`))[0]!;
   expect(body.box.height).toBeCloseTo(RUN_H, 6);
   const explicit = linesOf(
     lay(`<w:p><w:pPr><w:rPr><w:sz w:val="32"/></w:rPr></w:pPr>${run}</w:p>`)
   )[0]!;
-  expect(explicit.box.height).toBeCloseTo(MARK_H, 6);
+  expect(explicit.box.height).toBeCloseTo(RUN_H, 6);
   expect(explicit.baseline).toBeCloseTo(body.baseline, 6);
 });

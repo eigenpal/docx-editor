@@ -226,7 +226,8 @@ function paragraphOccurrences(
   // traversal covers body, furniture, notes, separators, tables, and nested textboxes uniformly.
   forEachSemanticDrawing(layout, (visit) => {
     const partName = visit.drawing.ownerPartName;
-    if (!boundsByPart.has(partName)) return;
+    // A hidden record (an MC wrap footprint) reserves space but shows no atom.
+    if (visit.drawing.accessibility.hidden || !boundsByPart.has(partName)) return;
     addInterval(
       partName,
       visit.root,

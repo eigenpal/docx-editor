@@ -12,6 +12,7 @@ import type {
   SelectedImageState,
 } from '../contracts/editor.ts';
 import { geometryOfSection, lineAtPosition } from '../layout/index.ts';
+import { verticalMarginInsets } from '../layout/page-body-margins.ts';
 import { lineAtIndexedPosition } from '../layout/paragraph-lines.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import { findDrawingOverlayFrameInLayout } from '../layout/semantic-hit-test.ts';
@@ -77,10 +78,12 @@ export type ImageMutationPreconditions = Readonly<{
  * caller can never address the rest.
  */
 function drawingAnswersTo(
-  drawing: { readonly drawingNodeId: string; readonly start: number },
+  drawing: Pick<InlineDrawingRecord, 'drawingNodeId' | 'start' | 'accessibility'>,
   offset: number,
   wanted: string | null
 ): boolean {
+  // A hidden record (an MC wrap footprint) holds layout space only; nothing can select it.
+  if (drawing.accessibility.hidden) return false;
   if (wanted !== null && drawing.drawingNodeId !== wanted) return false;
   return drawing.start === offset || drawing.start + 1 === offset;
 }
@@ -931,7 +934,8 @@ function fitInsertExtent(
 ): { readonly widthPoints: number; readonly heightPoints: number } {
   const geometry = geometryOfSection(surface.sectionPropertiesAt(paragraphId));
   const contentWidth = geometry.width - geometry.margin.left - geometry.margin.right;
-  const contentHeight = geometry.height - geometry.margin.top - geometry.margin.bottom;
+  const margins = verticalMarginInsets(geometry);
+  const contentHeight = geometry.height - margins.top - margins.bottom;
   const line = lineAtIndexedPosition(surface.layout(), paragraphId, offset);
   const flowWidth =
     line && line.box.width > 0 ? Math.min(line.box.width, contentWidth) : contentWidth;

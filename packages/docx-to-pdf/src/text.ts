@@ -25,6 +25,7 @@ import { EmbeddedFace } from './fonts.ts';
 import { colorGlyph, glyphOutline, type ColorGlyphLayer } from './color-glyphs.ts';
 import { color, flateStream, number as n, pageHeight, rect, Work } from './context.ts';
 import { outlineOperators, type OutlinePlacement } from './outline-placement.ts';
+import { missingGlyphHint } from './font-provisioning.ts';
 
 /** Grid the reference puts painted baselines on. Paint only; layout never sees it. */
 const PDF_PAINT_GRID_PT = 0.24;
@@ -294,7 +295,10 @@ export class TextWriter {
         `Core could not provide exact shaping for a visible span in ${family}`
       );
     if (shaped.run.glyphs.some((g) => g.id === 0))
-      return report('missing-glyph', `A visible span in ${family} contains missing glyphs`);
+      return report(
+        'missing-glyph',
+        `A visible span in ${family} contains missing glyphs${missingGlyphHint(span.text)}`
+      );
     const face = this.embeddedFace(shaped.font, visit, page);
     if (!face) return '';
     const style = styleForFontSlot(span.style, span.fontSlot);

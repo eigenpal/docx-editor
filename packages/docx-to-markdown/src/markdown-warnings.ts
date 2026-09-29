@@ -35,7 +35,8 @@ export function markdownWarnings(
   const warned = new Set<string>();
   forEachSemanticStory(layout, ({ host, page }) => {
     const warn = (drawing: InlineDrawingRecord | AnchoredDrawingRecord): void => {
-      if (media?.represented.has(drawingKey(drawing))) return;
+      // A hidden record (an MC wrap footprint) has no content to omit.
+      if (drawing.accessibility.hidden || media?.represented.has(drawingKey(drawing))) return;
       const textbox = drawing.kind === 'anchoredDrawing' && drawing.textboxStory !== undefined;
       const code = textbox ? 'omitted-textbox' : 'omitted-drawing';
       const key = `${page.index}:${code}`;

@@ -5,11 +5,11 @@ category: 'Guides'
 seoTitle: 'Headers, footers, and watermarks'
 ---
 
-Headers and footers render in their Word page positions. Double-click the header or footer area to edit it in place.
+The editor renders headers and footers at their authored page positions. Double-click the header or footer area to edit it in place.
 
 ## Editing
 
-Double-click inside the header or footer band to enter edit mode. From there, editing follows the same model as the document body: click to place the caret, drag to select, double- and triple-click for word and paragraph selection, right-click menus, hyperlinks, image selection, and table row, column, and edge resize all work identically. Undo and redo cover header and footer edits.
+Double-click inside the header or footer area to enter edit mode. Place the caret, select text, and use formatting commands as you do in the document body. You can also follow hyperlinks, select pictures, and resize tables. Undo and redo cover header and footer edits.
 
 While editing, a separator bar labels the region (**Header** or **Footer**) and shows an **Options** menu:
 
@@ -26,7 +26,12 @@ Press Escape or click the close action to save and leave header/footer editing.
 
 `PAGE` shows the displayed page number. It honors the section start and format in `w:pgNumType`. `NUMPAGES` shows the document page count. `SECTIONPAGES` shows the page count for the current section.
 
-A "Page X of Y" footer is the two inserts with literal text between them: type the text "Page ", insert the page number, type " of " with the surrounding spaces, insert the total page count.
+To create a "Page X of Y" footer:
+
+1. Type `Page `, including the trailing space.
+2. Select **Insert current page number**.
+3. Type `of`, including both spaces.
+4. Select **Insert total page count**.
 
 A page-number field can carry a numeric picture switch. For example, `PAGE \# 0#` pads page 2 to `02`.
 
@@ -34,23 +39,35 @@ The editor applies the picture to the computed header or footer value. A saved r
 
 Other fields use separate evaluation rules. See [Fields and cross-references](/docs/2.x/guides/fields).
 
-Legacy footers can store a centered `PAGE` field in an auto-sized `w:framePr` over an empty paragraph of the same style or a centered middle-dot decoration. Both paragraphs render in one footer band. Page values are re-centered per page, and the source structure survives save.
+### Page numbers in legacy frames
+
+Legacy footers can store a centered `PAGE` field in an auto-sized `w:framePr`. Supported anchors include an empty paragraph of the same style or a centered middle-dot decoration. Both paragraphs render in one footer band. The editor centers each page's value and preserves the source structure when you save.
 
 A supported fixed-width frame uses a page-relative X position and text-relative vertical centering over an empty anchor or a second `PAGE` paragraph. A leading tab can place its value outside the frame. The editor clips that value but retains all fields, paragraphs, and source ranges. Selections and pointer hits use the same clip rectangle.
 
-This support covers a simple, single-line `PAGE` frame and a single-line empty or `PAGE` anchor. Values must fit completely inside the frame or lie completely beyond it. Partial wrapping, other positions, paragraph spacing, and additional content keep the ordinary flow behavior.
+A right-aligned `PAGE` frame can also sit over the footer text line. The frame uses `w:wrap="none"`, `w:hAnchor="margin"`, and `w:xAlign="right"`, and the next paragraph holds plain text in the same style. The page value ends at the right margin, one line band with the text. The frame adds no footer height unless its own line is taller. The text paragraph keeps its indents and its style's spacing. If the text reaches under the page value, the footer keeps the ordinary flow behavior.
+
+A right-aligned `PAGE` frame with `w:wrap="around"` can sit over an empty paragraph of the same style. The frame can contain plain text around a simple or complex `PAGE` field. The empty paragraph sets the footer flow height. The frame keeps its own spacing, including direct spacing. With `w:doNotUseHTMLParagraphAutoSpacing`, the frame text aligns with the anchor text without adding its before spacing again. Both paragraphs keep their source positions for editing and save.
+
+This support covers a simple, single-line `PAGE` frame and a single-line empty, `PAGE`, or text anchor. Values must fit completely inside the frame or lie completely beyond it. Partial wrapping, other positions, direct paragraph spacing outside the empty right-aligned frame case, and additional content keep the ordinary flow behavior.
 
 ## Per-section headers and footers
 
-The OOXML model attaches header and footer references to sections, and the editor implements that model:
+Each section can use its own headers and footers:
 
-- Each section can reference `default`, `first`, and `even` header and footer parts (`w:headerReference` / `w:footerReference`).
-- **Different first page** (`w:titlePg`) shows the `first` variant on a section's first page. Typical use: no header on a title page.
-- **Different odd and even pages** (`w:evenAndOddHeaders`) alternates `default` and `even` variants, as in book-style layouts. If a section restarts its page numbering and the next sheet has the other parity, an empty sheet with no header or footer comes first.
-- Sections without their own references inherit from earlier sections, matching Word's "link to previous" behavior.
-- A page whose variant has no reference shows no header or footer, and its body starts at the page margin. A title page in a section that references only a `default` header is the common case.
+- A section can reference `default`, `first`, and `even` parts through `w:headerReference` and `w:footerReference`.
+- **Different first page** (`w:titlePg`) selects the `first` variant on a section's first page.
+- **Different odd and even pages** (`w:evenAndOddHeaders`) alternates `default` and `even` variants across the document.
+- Sections without their own references inherit references from earlier sections.
+- A page without a reference for its selected variant shows no header or footer. Its body starts at the page margin.
 
-Documents using any of these render and round-trip correctly; editing a header edits the specific part the page displays.
+Editing a header or footer changes the part that the page displays. Other pages that use that part also show the change.
+
+### Section breaks and blank pages
+
+A continuous section can start on the same page even when its header height, footer height, or first-page setting differs. The shared page keeps the preceding section's header, footer, and body area. Text from the continued section wraps around pictures in that page's header or footer. Later pages use the continued section's headers and footers. A page-size change still starts a separate page.
+
+Odd-page and even-page section breaks can add a blank page to reach the required page position. Page-number restarts can also require a blank page when odd and even headers are enabled. These blank pages have no header or footer.
 
 ## Watermarks
 

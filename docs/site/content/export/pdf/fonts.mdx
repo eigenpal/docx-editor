@@ -22,7 +22,7 @@ Sources resolve in this order:
 2. Installed fonts, unless `useSystemFonts` is `false`.
 3. Packaged substitutes.
 4. Your `fallbackFonts` sources.
-5. Supplemental packaged faces.
+5. Supplemental packaged faces, including `@docx-editor.dev/fonts-cjk` when it is installed.
 6. Document-embedded fonts.
 7. Your `lastResortFonts` sources.
 8. Generic substitutes for unresolved families.
@@ -32,6 +32,61 @@ Earlier sources take priority. Each option accepts one source or an ordered arra
 Use `defineFontResolver` to read the document's requested families. The `PdfFontOrigin` and `PdfFontsSource` types describe font inputs.
 
 The default sources need no network access. A resolver that you supply can make network requests.
+
+## Add Chinese, Japanese, and Korean text
+
+The converter package does not include a Chinese, Japanese, or Korean (CJK) font. If your server has no suitable font, install the optional package:
+
+```sh
+npm install @docx-editor.dev/fonts-cjk
+```
+
+The converter declares this package as an optional peer dependency. Install a version that satisfies its peer dependency range. The converter finds the package at runtime and needs no configuration. Its Noto Sans CJK JP font supplies CJK characters that earlier sources do not cover. It also substitutes for unavailable families such as SimSun, MS Mincho, and Malgun Gothic.
+
+If you previously relied on bundled CJK coverage, add this package to your production dependencies. Keep the package external to your server bundle. Retain its `dist/` and `assets/` directories in their package locations. Include its license files when distributing the package.
+
+You can omit the package when installed fonts or your supplied fonts cover every required character. An installed package with missing or unreadable assets reports `font-origin-failed`. Inspect `result.fontResolution.originFailures` for the cause.
+
+When `useSystemFonts` is `true`, suitable installed fonts take priority. Setting `useSystemFonts: false` still permits the optional package and fonts that you supply.
+
+If no source covers a CJK character, export reports `missing-glyph`, and strict export fails. When the optional package is absent, the diagnostic names it. An unavailable CJK family uses a generic substitute and reports `font-substitution`.
+
+### CJK package API
+
+`@docx-editor.dev/fonts-cjk` runs on Node.js `^20.16.0 || >=22.3.0`. It exports the font family and its local file URL:
+
+| Export | Type | Value |
+| --- | --- | --- |
+| `NOTO_SANS_CJK_JP_FAMILY` | String literal | `'Noto Sans CJK JP'` |
+| `NOTO_SANS_CJK_JP_URL` | `URL` | A `file:` URL for `assets/NotoSansCJKjp-Regular.otf`. |
+
+Use the URL to read the font directly:
+
+```ts
+import { readFile } from 'node:fs/promises';
+import { NOTO_SANS_CJK_JP_FAMILY, NOTO_SANS_CJK_JP_URL } from '@docx-editor.dev/fonts-cjk';
+
+const fontBytes = new Uint8Array(await readFile(NOTO_SANS_CJK_JP_URL));
+console.log(NOTO_SANS_CJK_JP_FAMILY, fontBytes.byteLength);
+```
+
+Automatic PDF fallback needs no direct import. If you supply `glyphFallbacks`, your list replaces the defaults. For this fallback, add an entry with `family: NOTO_SANS_CJK_JP_FAMILY`, `weight: 400`, and `style: 'normal'`.
+
+### CJK font coverage and licensing
+
+The package supplies Noto Sans CJK JP Regular as an OpenType font with CFF outlines. It contains one weight (`400`) and one style (`'normal'`). PDF export can synthesize bold and italic from the regular face.
+
+The package contains the Japanese regional face, without separate Chinese or Korean regional faces. Substitution can change glyph forms, line breaks, and page counts. Supply your own font through `fonts` when you need a specific regional face or designed style.
+
+The package reads its font from disk without network access. It does not bundle the font into JavaScript or install a browser font.
+
+The package code uses the Apache License 2.0. The font uses the SIL Open Font License, Version 1.1. The PDF converter uses the separate EigenPal Pro License.
+
+## Export Arabic and Hebrew text
+
+Default fallback fonts cover Arabic and Hebrew. Arabic fallback selection requires a font with Arabic shaping support. Arabic joining continues across formatting runs, including changes in text color. The PDF text layer preserves logical word order for Arabic, Persian, and Hebrew text extraction.
+
+When a selected face lacks bold or italic variants, the writer can draw synthetic styles. It preserves text extraction and glyph positions. To use your own designed variants, supply separate regular, bold, italic, and bold-italic font files.
 
 ## Supply a font file
 
@@ -98,7 +153,7 @@ Each `font-origin-failed` diagnostic provides the source index, optional source 
 | `font-substitution` diagnostic | Supply the requested family through `fonts` or review best-effort output. |
 | Strict font policy rejects conversion | Inspect the callback report for failed sources and missing face variants. |
 | Missing font assets after bundling | Keep converter packages external and copy their assets with deployment output. |
-| Missing glyphs | Supply a face that contains the requested characters. |
+| Missing glyphs | Supply a face that contains the requested characters. For CJK text, install `@docx-editor.dev/fonts-cjk`. |
 
 ## Next steps
 

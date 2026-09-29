@@ -533,6 +533,7 @@ export function authorSlotsOf(layout: SemanticLayout): ReadonlyMap<string, numbe
       if (!area) continue;
       // The separator is an authored story too, and `paintPageNoteAreas` paints it.
       if (area.separator) fold(area.separator.fragments);
+      if (area.continuationNotice) fold(area.continuationNotice.fragments);
       for (const note of area.notes) fold(note.fragments);
     }
     // Text boxes: anchored on the page, and on the furniture stories that carry their own.
@@ -543,6 +544,8 @@ export function authorSlotsOf(layout: SemanticLayout): ReadonlyMap<string, numbe
     ]) {
       if (!anchored) continue;
       for (const drawing of anchored) {
+        // A hidden record (an MC wrap footprint) paints no revision cue, so it names no author.
+        if (drawing.accessibility.hidden) continue;
         // The anchored drawing's own tracked change, then any story inside it.
         const revisions = drawing.revisions;
         if (revisions !== undefined) {

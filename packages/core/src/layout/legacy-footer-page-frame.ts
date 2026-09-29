@@ -7,6 +7,8 @@ import {
 import { shiftParagraphFragment } from './note-fragment-geometry.ts';
 import { readLegacyPageField } from './legacy-footer-page-field.ts';
 import { positionFixedFooterPageFrame } from './legacy-footer-fixed-frame.ts';
+import { positionEmptyFooterPageFrame } from './legacy-footer-empty-frame.ts';
+import { positionRightFooterPageFrame } from './legacy-footer-right-frame.ts';
 import type { BlockFragmentRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 
 const isElement = (node: OoxmlNode): node is OoxmlElement => node.kind !== 'textValue';
@@ -139,11 +141,19 @@ export function positionLegacyFooterPageFrame<
   part: OoxmlPart,
   flow: T,
   contentWidth: number,
-  pageGeometry?: { readonly marginLeft: number; readonly pageWidth: number }
+  pageGeometry?: { readonly marginLeft: number; readonly pageWidth: number },
+  fixedParagraphSpacing = false
 ): T {
   if (!isW(part.root, 'ftr') || !bounded(part)) return flow;
   const pair = framePair(part);
-  if (!pair) return positionFixedFooterPageFrame(part, flow, pageGeometry);
+  if (!pair) {
+    const fixed = positionFixedFooterPageFrame(part, flow, pageGeometry);
+    if (fixed !== flow) return fixed;
+    const right = positionRightFooterPageFrame(part, flow, contentWidth);
+    return right === flow
+      ? positionEmptyFooterPageFrame(part, flow, contentWidth, fixedParagraphSpacing)
+      : right;
+  }
   if (flow.blocks.length !== 2) return flow;
   const [first, empty] = flow.blocks;
   if (

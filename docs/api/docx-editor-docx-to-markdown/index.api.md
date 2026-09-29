@@ -61,7 +61,6 @@ export class DocumentOpenError extends Error {
 export interface DrawingAccessibility {
     // (undocumented)
     readonly decorative: boolean;
-    // (undocumented)
     readonly hidden: boolean;
     // (undocumented)
     readonly label: string | null;
@@ -84,6 +83,11 @@ export interface DrawingGeometry {
     readonly paintBounds: LayoutBox;
     // (undocumented)
     readonly transformedCorners: readonly DrawingPoint[];
+}
+
+// @public
+export interface DrawingGroupPictureRecord {
+    readonly alternateContent: boolean;
 }
 
 // @public (undocumented)
@@ -112,7 +116,7 @@ export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'l
 
 // @public
 export interface ExportContentWarning {
-    readonly code: 'legacy-textbox' | 'legacy-drawing' | 'scan-limit';
+    readonly code: 'legacy-textbox' | 'legacy-drawing' | 'scan-limit' | 'unsupported-style-separator';
     readonly partName: string;
 }
 
@@ -381,6 +385,7 @@ export interface InlineDrawingRecord {
     readonly effects: DrawingImageEffects;
     // (undocumented)
     readonly geometry: DrawingGeometry;
+    readonly groupPicture?: DrawingGroupPictureRecord;
     // (undocumented)
     readonly height: number;
     // (undocumented)

@@ -55,6 +55,12 @@ export interface StoryPageFieldNeeds {
   readonly hasPage: boolean;
   readonly hasNumPages: boolean;
   readonly hasSectionPages: boolean;
+  /**
+   * The story places something by the physical sheet's parity: a header frame aligned
+   * `inside` or `outside`. Set by the header/footer layout, never by field detection. The
+   * story then lays out once per sheet parity, with or without a page field.
+   */
+  readonly hasPageParity?: boolean;
 }
 
 export const NO_STORY_PAGE_FIELDS: StoryPageFieldNeeds = Object.freeze({

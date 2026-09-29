@@ -1,10 +1,15 @@
 // Floating tables use the same scanline geometry and convergence keys as anchored drawings.
-import type { OoxmlElement } from '@docx-editor.dev/core/store';
+import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
+import { hardBreakKind } from '../store/package/hard-break.ts';
+import { paragraphBreaksBefore } from './paragraph-style.ts';
+import type { PreparedBlock } from './section-prepass-types.ts';
+import { framedTokenJoin } from './layout-cache.ts';
 import type { ExclusionZone, ExclusionColumnLayout } from './drawing-exclusion.ts';
 import type { BlockFragmentRecord, PageRecord, TableFragmentRecord } from './semantic-records.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
 import {
   positionedTablesByAnchor,
+  positionedTableAnchors,
   tableFloatOriginY,
   type PositionedTableAnchor,
   type TableVerticalAnchorFrames,
@@ -13,8 +18,10 @@ import {
   createTableBorderOwnershipBudget,
   createTableVMergeResolveBudget,
   layoutTableFragment,
+  measureRowHeight,
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
+import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
 import {
   readTableStructure,
@@ -201,6 +208,155 @@ export function floatingTableBand(table: OoxmlElement, width: number, deps: Tabl
     (structure.float.distances?.bottom ?? 0);
   widths?.set(width, band);
   return band;
+}
+
+/** Keep anchor page breaks, authored gaps, and shared anchors on the whole-table path. */
+export function anchorBreakPolicy(
+  anchors: readonly PositionedTableAnchor[],
+  blocks: readonly PreparedBlock[]
+): ReadonlyMap<string, boolean> {
+  const policy = new Map(anchors.map(({ table }) => [table.id, false]));
+  if (!anchors.length) return policy;
+  const byParagraph = positionedTablesByAnchor(anchors);
+  for (const block of blocks) {
+    if (block.kind !== 'paragraph') continue;
+    const tables = byParagraph.get(block.paragraph.id);
+    if (tables?.length !== 1 || paragraphBreaksBefore(block.props) || block.spacing.before > 0)
+      continue;
+    if (paragraphHasPageOrColumnBreak(block.paragraph)) continue;
+    policy.set(tables[0]!.table.id, true);
+  }
+  return policy;
+}
+
+function paragraphHasPageOrColumnBreak(paragraph: OoxmlElement): boolean {
+  const pending: OoxmlNode[] = [paragraph];
+  while (pending.length) {
+    const node = pending.pop()!;
+    if (node.kind === 'hardBreak' && ['page', 'column'].includes(hardBreakKind(node))) return true;
+    if ('children' in node) for (const child of node.children) pending.push(child);
+  }
+  return false;
+}
+
+export interface PositionedTableFlowPolicy {
+  readonly positionedTables: readonly PositionedTableAnchor[];
+  readonly positionedTablePolicy: ReadonlyMap<string, boolean>;
+}
+
+/** Anchor admission is a forward dependency of the earlier table's flow checkpoint. */
+export function anchorFlow(
+  prepared: readonly PreparedBlock[],
+  width: number,
+  styles: StyleCascadeTable | undefined,
+  mode: RevisionDisplayMode,
+  authors: RevisionAuthorFilter | undefined,
+  compatibilityMode?: number
+): PositionedTableFlowPolicy {
+  const positionedTables = positionedTableAnchors(
+    prepared,
+    width,
+    styles,
+    mode,
+    authors,
+    compatibilityMode
+  );
+  const positionedTablePolicy = anchorBreakPolicy(positionedTables, prepared);
+  return { positionedTables, positionedTablePolicy };
+}
+
+/** Run before cross-block folds so keep-next chains carry anchor admission changes. */
+export function anchorFlowKeys(keys: string[], state: PositionedTableFlowPolicy): string[] {
+  if (!state.positionedTables.length) return keys;
+  const flowKeys = [...keys];
+  for (const anchor of state.positionedTables) {
+    flowKeys[anchor.sourceIndex] = framedTokenJoin([
+      keys[anchor.sourceIndex]!,
+      anchor.anchorId,
+      state.positionedTablePolicy.get(anchor.table.id) ? 'split' : 'whole',
+    ]);
+  }
+  return flowKeys;
+}
+
+/** Where the body flow stands when it reaches a positioned table. */
+export interface FloatAdmissionFlow {
+  readonly allowBreak: boolean | undefined;
+  readonly zones: ReadonlyMap<number, readonly ExclusionZone[]> | undefined;
+  readonly page: number;
+  /** The narrowest column. The table must fit whichever column its anchor reaches. */
+  readonly width: number;
+  readonly frames: TableAnchorFrames;
+  readonly top: number;
+  readonly bottom: number;
+}
+
+/**
+ * True when a positioned table waits for its anchor paragraph and is placed there whole.
+ *
+ * Row pagination places the table instead when earlier objects wrap its cells, or when its
+ * band is taller than a page. It also places a text-relative table that spans its column
+ * and does not fit the room left, when its opening rows do fit there. That table breaks at
+ * the page bottom, and its remaining rows continue at the top of the next page. No text can
+ * stand beside it, so the flow resumes below its last row. When the opening rows do not fit,
+ * the table still moves whole with its anchor.
+ */
+export function admitsAtAnchor(
+  table: OoxmlElement,
+  deps: TableFlowDeps,
+  flow: FloatAdmissionFlow
+): boolean {
+  if (hasEarlierCellExclusions(table, flow.zones, deps, flow.page)) return false;
+  const band = floatingTableBand(table, flow.width, deps);
+  if (band > flow.bottom) return false;
+  if (deps.styleCascade?.doNotBreakWrappedTables) return true;
+  return (
+    band <= flow.bottom - flow.top || !flow.allowBreak || !breaksAtPageBottom(table, deps, flow)
+  );
+}
+
+function breaksAtPageBottom(
+  table: OoxmlElement,
+  deps: TableFlowDeps,
+  flow: FloatAdmissionFlow
+): boolean {
+  const structure = readTableStructure(
+    table,
+    flow.width,
+    0,
+    deps.styleCascade,
+    deps.displayMode,
+    deps.revisionAuthorFilter,
+    deps.compatibilityMode
+  );
+  const float = structure?.float;
+  // A negative offset collides with earlier text. Only anchor placement displaces it.
+  if (!structure || float?.vertAnchor !== 'text' || float.ySpec || float.yPt < 0) return false;
+  const distances = float.distances ?? { top: 0, right: 0, bottom: 0, left: 0 };
+  if (distances.top > 0 || distances.bottom > 0) return false;
+  const left = positionedTableOriginX(structure, flow.frames, deps.compatibilityMode);
+  const width = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
+  const column = flow.frames.text;
+  if (
+    left - distances.left > column.left ||
+    left + width + distances.right < column.left + column.width
+  )
+    return false;
+  // The opening rows are the header prefix, which moves as one group, and the first body row.
+  let top = flow.top + float.yPt;
+  for (const [index, row] of structure.rows.entries()) {
+    top += measureRowHeight(
+      row,
+      structure.columnWidthsPt,
+      left,
+      0,
+      index === 0 ? firstRowContentDeps(structure, row, deps) : deps,
+      structure.cellSpacingPt
+    );
+    if (top > flow.bottom + 0.001) return false;
+    if (!row.isHeader) return true;
+  }
+  return false;
 }
 
 function probeTableHeight(

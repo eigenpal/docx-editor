@@ -41,6 +41,7 @@ import {
   type SemanticRootStoryKind,
 } from '../layout/semantic-record-queries.ts';
 import { headerFooterAnchoredDrawingOrigin } from '../layout/header-footer-drawing-origin.ts';
+import { isCarriedHeadRow } from '../layout/table-carried-head-row.ts';
 
 export const CHANGE_BARS_CLASS = 'docx-change-bars';
 const CHANGE_BAR_CLASS = 'docx-change-bar';
@@ -203,9 +204,13 @@ function collectTable(fragment: TableFragmentRecord, frame: StoryFrame, runs: Ba
     // Markup reads the row's own attribution; Simple Markup the site the resolved view kept.
     const rowSites = frame.mode === 'simple-markup' ? row.changeSites : undefined;
     if ((frame.mode === 'all-markup' && row.revisionKind) || (rowSites && rowSites.length > 0)) {
+      // A carried head row has no height of its own; its merged text spans the row below.
+      const rowBottom = isCarriedHeadRow(row)
+        ? Math.max(row.box.y, ...row.cells.map((cell) => cell.box.y + cell.box.height))
+        : row.box.y + row.box.height;
       const run: BarRun = {
         top: row.box.y + frame.dy,
-        bottom: Math.min(row.box.y + row.box.height + frame.dy, frame.limit),
+        bottom: Math.min(rowBottom + frame.dy, frame.limit),
         story: frame.story,
         insertion: row.revisionKind === 'insert',
         deletion: row.revisionKind === 'delete',

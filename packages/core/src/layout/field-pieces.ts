@@ -366,6 +366,8 @@ export interface PieceEmitExtras {
  * `piecesOfParagraph`.
  */
 export interface PendingFieldProjection {
+  hasNestedField?: boolean;
+  characterStyleSpec?: import('./field-character-style.ts').CharacterStyleField | null;
   /** Allowlisted kind when live-projecting; null paints inert cached text at the atom. */
   kind: AllowlistedPageField | null;
   /**
@@ -458,6 +460,8 @@ export interface PendingFieldProjection {
   props: readonly OoxmlProperty[];
   style: ResolvedRunStyle;
   capturedResultStyle: boolean;
+  /** Direction-only style remains a fallback until visible result text arrives. */
+  capturedResultStyleIsDirectional?: boolean;
   /** Cached result text (for inert display or demotion flush). */
   cachedText: string;
   /**

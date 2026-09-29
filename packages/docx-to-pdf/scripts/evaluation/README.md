@@ -34,12 +34,11 @@ Use the evaluator's locked Python environment, which supplies PyMuPDF and Pillow
 
 Exports use proposed content, no comments, packaged fonts, and best-effort rendering. Diagnostics remain part of the export response. Approximate output is never reported as strict success.
 
+Exports, traces, and fast summaries use the same explicit glyph fallback list, in this order: `Noto Sans Symbols 2`, `Noto Sans Math`, `Noto Sans Arabic`, `Times New Roman`, `Noto Sans CJK JP`, `Twemoji Mozilla`, and `Noto Emoji`. This list replaces the renderer's default list. Without system fonts, `Times New Roman` resolves to the packaged Liberation Serif. It supplies Hebrew for right-to-left runs whose complex-script face has no Hebrew. Keep the list identical in `export.ts`, `trace.ts`, and `layout-summary.ts`; `export.test.ts` compares the settings on text that reaches every face.
+
 Measurements include word positions, page dimensions, color signatures, and drawing metadata. Comparisons reuse the text movement algorithm in `pdf-visual-diff.py`. Object counts alone never establish missing visible content. Visual screening uses a 144 by 192 RGB signature with local regions. Older 48 by 64 grayscale measurements remain readable. Detailed evidence uses 144 DPI and processes at most three pages. `firstDivergence` identifies a measured location with explicit confidence and coordinate space. Text excerpts are bounded and untrusted.
 
-The `page` operation renders one page at 144 DPI into `page.png`.
-Its `report.json` contains page dimensions in points and the PDF rotation matrix.
-Apply that matrix to measured coordinates before drawing highlights over a rotated page.
-Missing page numbers fail explicitly. The evaluator owns preview caching and navigation.
+The `page` operation renders one page at 144 DPI into `page.png`. Its `report.json` contains page dimensions in points and the PDF rotation matrix. Apply that matrix to measured coordinates before drawing highlights over a rotated page. Missing page numbers fail explicitly. The evaluator owns preview caching and navigation.
 
 Headless probes check package preservation, deterministic insertion, undo, and save/reopen. They compare modeled structure, semantic hashes, relationships, and unchanged binary hashes. The retained-layout check uses fixed metrics and body content. It excludes production font resolution, styles-part cascades, headers, footers, and actual browser input. Unsupported checks remain explicit.
 
@@ -48,3 +47,28 @@ Layout traces return up to three nearby records, including source node IDs and r
 The browser recipe checks pointer placement, keyboard insertion, undo/redo, saved body content, and fresh layout. It uses a local demo server and blocks external browser requests. Batch mode reuses the static server and starts a fresh browser process for each document. The parent caches results using browser, recipe, font, and engine identities. It does not cover drag selection, formatting, or review operations. See [Browser eval probe](../../../../e2e/evaluation-browser.md).
 
 The evaluator owns caching, application reference capture, feature grouping, and run acceptance. It binds cached results to these source files and their runtime versions. A comparison change must invalidate comparison evidence independently of candidate exports.
+
+## Layout and text checks
+
+`layout-summary.ts input.docx output.json` records page counts, logical text, and source locations. It uses the export session without creating a PDF. Use the TypeScript configuration shown for `export.ts`. `layout-worker.ts` accepts the same paths in newline-delimited JSON requests. The caller must enforce process time and memory limits.
+
+`quick_text.py pdf input.pdf index.json.gz` creates a text index. Use `measurement` instead of `pdf` to read an existing compressed measurement. Indexes and comparisons have separate version identities.
+
+These checks report pagination and text differences. Logical text and PDF extraction can differ. Repeated words make occurrence locations ambiguous. Layout positions precede paint transforms. Use PDF evidence for visual validation. Failed or missing inputs never count as passes.
+
+Run synthetic checks with:
+
+```sh
+python -m unittest discover -s packages/docx-to-pdf/scripts/evaluation -p 'test_quick_text.py'
+bun test packages/docx-to-pdf/scripts/evaluation/layout-summary.test.ts packages/docx-to-pdf/scripts/evaluation/layout-worker.test.ts
+```
+
+For Node 24.2 or later, load source aliases before starting the worker:
+
+```sh
+node --experimental-transform-types \
+  --import ./packages/docx-to-pdf/scripts/evaluation/runtime-loader.mjs \
+  packages/docx-to-pdf/scripts/evaluation/layout-worker.ts
+```
+
+This development command uses the checkout's TypeScript dependency and source configuration.

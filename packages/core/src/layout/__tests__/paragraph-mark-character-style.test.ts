@@ -6,8 +6,8 @@
 // a numbering marker, and gives text typed into an empty paragraph its face. It does NOT size a
 // line that has content in it: in the anonymous probes behind this file, a 24pt mark under
 // 12pt text grows neither a body line nor a table cell, whether the mark states the size
-// directly or by style, and a line holding only an inline picture keeps its height too. The
-// direct-size growth has its own fixtures and is kept as it was.
+// directly or by style, and a line holding only an inline picture keeps its height too
+// (`paragraph-mark-direct-size.test.ts` covers the direct size).
 
 import { describe, expect, test } from 'bun:test';
 import {
@@ -235,7 +235,7 @@ describe('a numbering marker takes the mark character style', () => {
 });
 
 describe('a line with content does not grow from the mark character style', () => {
-  test('body text keeps its line; a direct mark keeps its existing growth', () => {
+  test('body text keeps its line under a styled or a direct mark', () => {
     const [styled, direct, none] = lineHeights(
       text('styled', '<w:rStyle w:val="Big"/>') +
         text('direct', '<w:sz w:val="48"/>') +
@@ -243,7 +243,7 @@ describe('a line with content does not grow from the mark character style', () =
     );
     expect(styled).toBeCloseTo(line(12), 5);
     expect(none).toBeCloseTo(line(12), 5);
-    expect(direct).toBeCloseTo(line(24), 5);
+    expect(direct).toBeCloseTo(line(12), 5);
   });
 
   test('a table cell with text keeps its height; an empty cell grows', () => {

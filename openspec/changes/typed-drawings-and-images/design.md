@@ -90,6 +90,14 @@ Rotation is read in 60000ths of a degree. `a:xfrm/a:ext` is unrotated source geo
 
 This change owns DrawingML image watermark rendering (`a:lum`, `a:grayscl`, behind-text layering, transforms, crop, image paint) and fills `Editor.getWatermark()` for supported DrawingML image watermarks. VML watermarks (`w:pict`) are owned by the named follow-up `typed-vml-watermarks`.
 
+### I16: Raster signatures select the decoder
+
+Some DOCX generators declare one raster content type for several raster formats. Word and LibreOffice decode these parts from their signatures.
+
+The engine does the same for supported raster formats. The sniffed signature controls header validation, decoding, and the published MIME type.
+
+The engine still refuses unknown signatures and mismatches between raster, vector, and preserved formats. This rule prevents a declared raster part from activating SVG or another processing path.
+
 ## Resolved questions
 
 1. **Overflow behaviour for an image wider than the content box.** Word clips; the engine retains authored extent, clips at the content box and page paint boundary, and never implicitly scales. Task 3.4 implements against Word comparison fixtures.

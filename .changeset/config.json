@@ -11,6 +11,7 @@
       "@docx-editor.dev/i18n",
       "@docx-editor.dev/pro",
       "@docx-editor.dev/fonts",
+      "@docx-editor.dev/fonts-cjk",
       "@docx-editor.dev/docx-to-markdown",
       "@docx-editor.dev/docx-to-pdf"
     ]

@@ -1,3 +1,4 @@
+import { containsClipboardObject } from './clipboard-object-policy.ts';
 // Clipboard fragment merge: a read-back fragment package lands in a target package
 // (rich-clipboard-fidelity tasks 2.2-2.4).
 //
@@ -60,6 +61,7 @@ import {
 } from './clipboard-fragment-identifiers.ts';
 import {
   canonicalNoteId,
+  relationshipIdsIn,
   noteReferenceClosure,
   withoutDanglingNoteReferences,
 } from './clipboard-fragment-closure.ts';
@@ -73,7 +75,11 @@ const STYLES_REL = `${R_NS}/styles`;
 const NUMBERING_CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml';
 const STYLES_CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml';
 
-export type FragmentMergeRejection = 'no-fragment-document' | 'no-target-part' | 'merge-refused';
+export type FragmentMergeRejection =
+  | 'no-fragment-document'
+  | 'no-target-part'
+  | 'merge-refused'
+  | 'unsupported-content';
 
 export type FragmentMergeResult =
   | {
@@ -134,20 +140,6 @@ function appendToPart(
   return withPart(pkg, inserted.part);
 }
 
-/** Collect every `r:*` relationship id referenced under the nodes. */
-function relationshipIdsIn(nodes: readonly OoxmlNode[]): Set<string> {
-  const ids = new Set<string>();
-  walkAll(nodes, (node) => {
-    if (node.kind === 'textValue') return;
-    for (const attribute of node.attributes) {
-      if (attribute.namespaceUri === R_NS && attribute.value.length > 0) {
-        ids.add(attribute.value);
-      }
-    }
-  });
-  return ids;
-}
-
 /**
  * Resolve references to relationships that could not merge: a drawing whose media rel was
  * dropped is removed; a `w:hyperlink` whose `r:id` was dropped (a refused `javascript:`
@@ -161,7 +153,7 @@ function withoutDanglingDrawings(
   if (dropRelIds.size === 0) return [...nodes];
   const rewrite = (node: OoxmlNode): OoxmlNode | OoxmlNode[] | null => {
     if (node.kind === 'textValue') return node;
-    if (node.kind === 'drawing' || isWml(node, 'pict')) {
+    if (node.kind === 'drawing' || isWml(node, 'pict') || isWml(node, 'object')) {
       let dangling = false;
       walkAll([node], (inner) => {
         if (inner.kind === 'textValue') return;
@@ -248,6 +240,9 @@ export function mergeFragmentIntoPackage(
   fragment: OoxmlPackage,
   ownerPartName: string
 ): FragmentMergeResult {
+  for (const part of fragment.parts.values()) {
+    if (containsClipboardObject([part.root])) return { ok: false, reason: 'unsupported-content' };
+  }
   const fragmentDoc = fragment.parts.get(fragment.mainDocumentPart);
   if (!fragmentDoc) return { ok: false, reason: 'no-fragment-document' };
   if (!target.parts.has(ownerPartName)) return { ok: false, reason: 'no-target-part' };

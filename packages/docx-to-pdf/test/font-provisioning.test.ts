@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   canonicalFamily,
+  cjkFonts,
   genericSubstituteFor,
   installedWordFontResolver,
   isGenericSubstitution,
@@ -215,8 +216,11 @@ test('packaged Latin substitutes stand in for Helvetica and for a styled Word fa
   );
   // Bold is in the name, so every weight of the request is the bold face.
   expect(styled.substitutions.map((s) => s.to.weight)).toEqual([700, 700, 700, 700]);
-  const cjk = await supplementalFonts({ families: ['宋体'], defaultFamily: 'Arial' });
+  const cjk = await cjkFonts({ families: ['宋体'], defaultFamily: 'Arial' });
   expect(cjk.sources.map((source) => source.request.family)).toEqual(['Noto Sans CJK JP']);
+  // The CJK face and its substitutions come from their own origin.
+  const latin = await supplementalFonts({ families: ['宋体'], defaultFamily: 'Arial' });
+  expect(latin).toEqual({ sources: [], substitutions: [] });
 });
 
 test('a hostile family name of a million spaces resolves in constant time', () => {

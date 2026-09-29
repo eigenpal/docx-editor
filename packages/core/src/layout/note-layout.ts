@@ -68,6 +68,7 @@ export type NoteLayoutFallbackReason =
   | 'note-height-cap'
   /** Authored separator/continuationSeparator taller than the content column. */
   | 'note-separator-height-cap'
+  | 'note-continuation-notice-height-cap'
   | 'missing-note-body'
   | 'dangling-note-reference';
 

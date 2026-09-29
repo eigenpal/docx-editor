@@ -61,16 +61,21 @@ The canonical tree SHALL type `w:drawing` and its two children, `wp:inline` (`CT
 
 ### Requirement: Embedded media is resolved, validated, and bounded
 
-Media SHALL be resolved from the package part named by `r:embed` through the existing safe-target relationship rules. The decoded bytes SHALL be validated against the part's declared content type, and dimension and byte-size limits SHALL be enforced **before** any allocation sized by a file-supplied number.
+Media SHALL be resolved from the package part named by `r:embed` through the existing safe-target relationship rules. When the declared type and signature name different supported raster formats, the signature SHALL select header validation, decoding, and the published MIME type. Unknown signatures and mismatches between raster, vector, and preserved formats SHALL be refused. Dimension and byte-size limits SHALL be enforced **before** any allocation sized by a file-supplied number.
 
 #### Scenario: Embedded PNG resolves
 
 - **WHEN** a drawing's `r:embed` names a PNG part in the package
 - **THEN** the bytes are read from that part and painted
 
-#### Scenario: Content type mismatch
+#### Scenario: Raster content type mismatch
 
-- **WHEN** a part declared as PNG does not decode as one
+- **WHEN** a part declared as PNG contains valid JPEG bytes
+- **THEN** the JPEG signature selects the decoder and the drawing paints normally
+
+#### Scenario: Unknown signature
+
+- **WHEN** a raster part has no recognized image signature
 - **THEN** the drawing reserves its extent and paints a placeholder, and the document still loads
 
 #### Scenario: Oversized media is refused before allocation

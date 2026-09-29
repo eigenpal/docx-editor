@@ -241,3 +241,33 @@ test('source diagnostics skip inactive legacy fallbacks and report scan limits',
   expect(warnings).toEqual([{ code: 'scan-limit', partName: '/word/document.xml' }]);
   expect(Object.isFrozen(warnings)).toBe(true);
 });
+
+test('source diagnostics report a framed object whose preview cannot be placed', () => {
+  const body =
+    '<w:p><w:pPr><w:framePr w:y="-854" w:vAnchor="text"/></w:pPr><w:r><w:t>Before</w:t>' +
+    '<w:object xmlns:v="urn:schemas-microsoft-com:vml"><v:shape type="#_x0000_t75" style="width:52.5pt;height:56.25pt"><v:imagedata r:id="preview"/></v:shape></w:object>' +
+    '<w:t>After</w:t></w:r></w:p>';
+  const opened = openHeadlessDocument(docxBytes(body, false));
+  if (!opened.ok) throw new Error(opened.reason);
+  expect(collectExportContentWarnings(opened.view)).toEqual([
+    { code: 'legacy-drawing', partName: '/word/document.xml' },
+  ]);
+});
+
+test('source diagnostics identify hidden paragraph joins outside the supported subset', () => {
+  const p = (mark: string, align = 'left') =>
+    `<w:p><w:pPr><w:jc w:val="${align}"/><w:rPr>${mark}</w:rPr></w:pPr><w:r><w:t>Text</w:t></w:r></w:p>`;
+  for (const [body, unsupported] of [
+    [p('<w:vanish/><w:specVanish/>') + p(''), false],
+    [p('<w:vanish/><w:specVanish/>') + p('', 'right'), true],
+    [p('<w:vanish/>') + p(''), false],
+    [p('<w:vanish/>') + p('', 'right'), true],
+    [p('<w:specVanish/>') + p(''), false],
+  ] as const) {
+    const opened = openHeadlessDocument(docxBytes(body, false));
+    if (!opened.ok) throw new Error(opened.reason);
+    expect(collectExportContentWarnings(opened.view)).toEqual(
+      unsupported ? [{ code: 'unsupported-style-separator', partName: '/word/document.xml' }] : []
+    );
+  }
+});

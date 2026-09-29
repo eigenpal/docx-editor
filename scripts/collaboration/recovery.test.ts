@@ -26,6 +26,7 @@ function client(reply: (url: string, time: number) => Response | Promise<Respons
   });
   return {
     lookup,
+    verifyArchive: async () => {},
     now: () => time,
     log: (message: string) => messages.push(message),
     messages,
@@ -137,7 +138,22 @@ test('a superseded release cancels the other pending latest-tag request', async 
     log: () => {},
   });
   await expect(
-    verifyRecoveryPublication(manifest, version, { lookup, log: () => {} })
+    verifyRecoveryPublication(manifest, version, {
+      lookup,
+      verifyArchive: async () => {},
+      log: () => {},
+    })
   ).rejects.toThrow('superseded');
   expect(cancelled).toBe(true);
+});
+
+test('archive failure prevents latest-tag checks', async () => {
+  const c = client(() => response(published));
+  c.verifyArchive = async () => {
+    throw new Error('archive unavailable');
+  };
+  await expect(verifyRecoveryPublication(manifest, version, c)).rejects.toThrow(
+    'archive unavailable'
+  );
+  expect(c.requests).toHaveLength(1);
 });

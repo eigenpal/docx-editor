@@ -27,7 +27,13 @@ import type { EditorScope, ViewScope } from '../contracts/editor.ts';
 import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
 import type { OoxmlPart, StoryScope } from '@docx-editor.dev/core/store';
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import { hitTestFragments, pageAtY, type SemanticHit } from '../layout/semantic-hit-test.ts';
+import {
+  hitAnchoredDrawingAtPoint,
+  hitTestFragments,
+  hitTestPage,
+  pageAtY,
+  type SemanticHit,
+} from '../layout/semantic-hit-test.ts';
 import { parseNoteScopeId } from '../store/package/note-nodes.ts';
 import { logicalLineSegments } from '../layout/line-segments.ts';
 
@@ -558,6 +564,48 @@ export function findStoryAtSheetPoint(
     }
   }
   return null;
+}
+
+/**
+ * Whether a {@link findStoryAtSheetPoint} hit inside the page's content box belongs to the body.
+ *
+ * A negative `w:top` or `w:bottom` measures the body from the page edge, so a tall header or
+ * footer paints over body lines. The activation band stays the margin region above or below
+ * the content box. Inside the content box, a closed story takes the press only on its own
+ * glyphs or anchored drawings with no body glyph under the point. The open story also keeps
+ * its whitespace, so a press beside its text still places the caret there. A body anchored
+ * drawing counts as body content, a behind-text one included. Footnote and endnote text in
+ * the page's note area counts as body content too, so an open footer over a note gives the
+ * press to the note.
+ */
+export function storyHitYieldsToBody(
+  layout: SemanticLayout,
+  storyHit: NonNullable<ReturnType<typeof findStoryAtSheetPoint>>,
+  sheet: { readonly x: number; readonly y: number },
+  pageOffsetX: (pageIndex: number) => number,
+  storyIsActive: boolean,
+  measurer?: TextMeasurer
+): boolean {
+  const page = layout.pages[storyHit.pageIndex];
+  if (!page) return false;
+  const box = page.contentBox;
+  const x = sheet.x - pageOffsetX(page.index) - box.x;
+  const y = sheet.y - box.y;
+  if (x < 0 || x >= box.width || y < 0 || y >= box.height) return false;
+  const options = measurer ? { measurer } : {};
+  const { story, local } = storyHit;
+  const onStory =
+    hitAnchoredDrawingAtPoint(story.anchoredDrawings, local, page.index) !== null ||
+    hitTestFragments(layout, page.index, story.fragments, local, options)?.onGlyphs === true;
+  if (storyIsActive && onStory) return false;
+  // The page walk answers a text-free page from a neighbour's geometry; that is not on glyphs here.
+  const bodyHit = hitTestPage(layout, page.index, { x, y }, options);
+  const note = findNoteAtSheetPoint(layout, sheet, pageOffsetX);
+  const onBody =
+    (bodyHit?.onGlyphs === true && bodyHit.pageIndex === page.index) ||
+    (note?.pageIndex === page.index &&
+      hitTestFragments(layout, page.index, note.fragments, note.local, options)?.onGlyphs === true);
+  return storyIsActive ? onBody : onBody || !onStory;
 }
 
 /**

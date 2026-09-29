@@ -1,3 +1,4 @@
+import { containsClipboardObject } from './clipboard-object-policy.ts';
 // Clipboard fragment extraction: a semantic range becomes a minimal, valid
 // WordprocessingML package (rich-clipboard-fidelity tasks 1.2-1.6).
 //
@@ -88,7 +89,8 @@ export type FragmentExtractRejection =
   | 'unknown-part'
   | 'empty-range'
   | 'trim-refused'
-  | 'resource-limit';
+  | 'resource-limit'
+  | 'unsupported-content';
 
 export type FragmentExtractResult =
   | {
@@ -553,6 +555,10 @@ export function extractFragmentPackage(
   const endnotes = includedNotes(endnotesPart, 'endnote', endnoteIds);
   const noteBodies: OoxmlNode[] = [...footnotes, ...endnotes];
 
+  if (containsClipboardObject(blocks) || containsClipboardObject(noteBodies)) {
+    return { ok: false, reason: 'unsupported-content' };
+  }
+
   // Closure inputs: blocks plus note bodies.
   const closureNodes: OoxmlNode[] = [...blocks, ...noteBodies];
   const styleIds = new Set<string>();
@@ -652,9 +658,11 @@ export function extractFragmentPackage(
     droppable: ReadonlySet<string>
   ): OoxmlNode | null => {
     if (node.kind === 'textValue') return node;
+    // An embedded object's part never travels, so the object drops as a whole.
     if (
       node.kind === 'drawing' ||
-      (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'pict')
+      (node.namespaceUri === WML_NAMESPACE_URI &&
+        (node.localName === 'pict' || node.localName === 'object'))
     ) {
       const ids = new Set<string>();
       collectRelationshipIds([node], ids);

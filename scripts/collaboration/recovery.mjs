@@ -43,10 +43,10 @@ export function validateRecoveryPackages(manifest, packages, version) {
 export async function verifyRecoveryPublication(
   manifest,
   version,
-  { lookup = registry, now = Date.now, log = console.log } = {}
+  { lookup = registry, verifyArchive, now = Date.now, log = console.log } = {}
 ) {
   const deadline = now() + PUBLICATION_TIMEOUT_MS;
-  await verifyPublication(manifest, { lookup, now, log, deadline });
+  await verifyPublication(manifest, { lookup, verifyArchive, now, log, deadline });
   // Exact version metadata and dist-tags can propagate independently. Use the
   // remaining verification budget, not another timeout or a one-shot tag read.
   const controller = new AbortController();

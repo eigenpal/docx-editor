@@ -8,6 +8,7 @@ import { styleForFontSlot } from './script-itemization.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
+import { isSpaceShrinkWordPiece } from './space-shrink-piece.ts';
 
 function capacity(span: StyleSpanRecord, measurer: TextMeasurer): number {
   if (
@@ -27,7 +28,8 @@ function capacity(span: StyleSpanRecord, measurer: TextMeasurer): number {
 }
 
 /**
- * Only an ordinary word followed by a space can borrow existing inter-word space.
+ * Only an ordinary word followed by a space, or the paragraph's last word, can borrow
+ * existing inter-word space.
  *
  * A word that straddles a source-run seam — a quoted bold term, a semicolon left in
  * the next run — overflows on a later piece than the one that opened it. The kept
@@ -36,10 +38,13 @@ function capacity(span: StyleSpanRecord, measurer: TextMeasurer): number {
  * alternative. Their defaults are the values the caller already holds when the
  * overflowing candidate opens the word, so that path measures exactly as before.
  *
- * `spaceFollows` says the next character is a space, in this run or at the start of
- * the next one. A candidate without its own space is then a complete word: a space in
- * its own run, or one split off by East Asian break rules, hangs at the line end
- * exactly as a space inside the candidate would.
+ * `wordEnds` says the next character is a space, in this run or at the start of the
+ * next one, or that only hanging spaces remain in the paragraph. A candidate without its
+ * own space is then a complete word: a space in its own run, or one split off by East
+ * Asian break rules, hangs at the line end exactly as a space inside the candidate would,
+ * and the paragraph's last word borrows space as any other word does.
+ * `followingWidth` measures the remainder of that same word in later plain-text pieces.
+ * It lets an overflowing opening fragment use the complete word's fit decision.
  */
 export function fitsWithSpaceShrink(
   spans: readonly StyleSpanRecord[],
@@ -50,11 +55,12 @@ export function fitsWithSpaceShrink(
   available: number,
   wordStart: number = spans.length,
   wordStartWidth: number = lineWidth,
-  spaceFollows = false
+  wordEnds = false,
+  followingWidth = 0
 ): boolean {
   const ownSpace = /^[^\s]+ $/u.test(candidate);
   if (
-    !(ownSpace || (spaceFollows && /^[^\s]+$/u.test(candidate))) ||
+    !(ownSpace || (wordEnds && /^[^\s]+$/u.test(candidate))) ||
     spans.some((s) => s.text.includes('\t') || s.wrapAdvanceBefore || s.equation)
   )
     return false;
@@ -63,7 +69,7 @@ export function fitsWithSpaceShrink(
     style,
     measurer
   );
-  const needed = lineWidth + visible - available;
+  const needed = lineWidth + visible + followingWidth - available;
   const budget = spans.reduce((sum, span) => sum + capacity(span, measurer), 0);
   if (needed <= 0 || needed > budget + 0.001) return false;
   const spaceWidth = budget * 4;
@@ -77,6 +83,39 @@ export function fitsWithSpaceShrink(
   const expansion = 1 + Math.max(0, available - wordStartWidth + terminalSpace) / existingSpaces;
   const compression = spaceWidth / (spaceWidth - needed);
   return expansion > 1.5 || 1 + (expansion - 1) / 1.7 >= compression;
+}
+
+/**
+ * Whether the candidate ending at `boundary` of `pieces[pieceIndex]` is the paragraph's
+ * last word: only plain U+0020 spaces follow it, and they hang at the line end.
+ *
+ * One backward scan finds where that closing run of spaces begins. Any other piece (a
+ * field result, positional tab, drawing, equation, reserved note mark or anchor) ends the scan
+ * after itself, so no word before it is last. A tab, hard break or page break in plain
+ * text is not a space either, and ends the scan the same way. Stable body citations
+ * can complete the last word while retaining their atomic model ranges.
+ */
+export function paragraphEndAt(
+  pieces: readonly FieldAwarePiece[]
+): (pieceIndex: number, boundary: number) => boolean {
+  let tailPiece = 0;
+  let tailOffset = 0;
+  for (let index = pieces.length - 1; index >= 0; index -= 1) {
+    const piece = pieces[index]!;
+    if (!isSpaceShrinkWordPiece(piece)) {
+      tailPiece = index + 1;
+      break;
+    }
+    let offset = piece.text.length;
+    while (offset > 0 && piece.text[offset - 1] === ' ') offset -= 1;
+    if (offset > 0) {
+      tailPiece = index;
+      tailOffset = offset;
+      break;
+    }
+  }
+  return (pieceIndex, boundary) =>
+    pieceIndex > tailPiece || (pieceIndex === tailPiece && boundary >= tailOffset);
 }
 
 /**

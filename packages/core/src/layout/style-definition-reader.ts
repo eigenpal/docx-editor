@@ -12,6 +12,7 @@ const MAX_CONDITIONAL_TABLE_FORMATS = 32;
 
 export interface StyleDefinition {
   readonly styleId: string;
+  readonly name?: string;
   readonly type: string;
   readonly basedOn: string | null;
   /** `w:next` — the authoring style for a following paragraph. */
@@ -109,6 +110,8 @@ export function readStyleDefinition(
   const styleId = attributeValue(node, 'styleId');
   if (!isValidStyleId(styleId)) return null;
   const type = attributeValue(node, 'type') ?? '';
+  const nameNode = childNamed(node, 'name');
+  const name = nameNode ? attributeValue(nameNode, 'val') : undefined;
   const basedOnNode = childNamed(node, 'basedOn');
   const basedOnRaw = basedOnNode ? attributeValue(basedOnNode, 'val') : undefined;
   const basedOn = isValidStyleId(basedOnRaw) ? basedOnRaw : null;
@@ -130,6 +133,7 @@ export function readStyleDefinition(
   }
   return {
     styleId,
+    name: name && name.length <= 128 ? name : undefined,
     type,
     basedOn,
     next,

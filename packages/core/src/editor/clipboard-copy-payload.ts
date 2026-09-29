@@ -30,6 +30,7 @@ export interface CopyFlavourInput {
 }
 
 export interface CopyFlavours {
+  readonly reason?: 'unsupported-content';
   readonly text: string;
   /** The `text/html` flavour, or null when only plain text should be written. */
   readonly html: string | null;
@@ -64,7 +65,12 @@ export function buildCopyFlavours(input: CopyFlavourInput): CopyFlavours {
   if (!input.coverage || !input.pkg) return { text: input.text, html: null };
 
   const full = extractFragmentPackage(input.pkg, input.coverage);
-  if (!full.ok) return { text: input.text, html: null };
+  if (!full.ok)
+    return {
+      text: input.text,
+      html: null,
+      ...(full.reason === 'unsupported-content' ? { reason: full.reason } : {}),
+    };
 
   const budget = input.maxFragmentBytes ?? MAX_COPY_FRAGMENT_BYTES;
   let fragmentBytes: Uint8Array | null = full.bytes;

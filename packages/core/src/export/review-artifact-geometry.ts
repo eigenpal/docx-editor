@@ -142,7 +142,14 @@ function occurrencePageContentOffset(
     }
     case 'note-separator': {
       const area = occurrence.noteAreaKind === 'endnotes' ? page.endnotes : page.footnotes;
-      return area?.separator ? storyBoxContentOffset(page, area.separator.box) : { x: 0, y: 0 };
+      let box = area?.separator?.box;
+      if (area?.continuationNotice) {
+        forEachStoryParagraphFragment(area.continuationNotice, (paragraph) => {
+          if (paragraph.paragraphId === occurrence.source.start.paragraphId)
+            box = area.continuationNotice!.box;
+        });
+      }
+      return box ? storyBoxContentOffset(page, box) : { x: 0, y: 0 };
     }
     default:
       return { x: 0, y: 0 };

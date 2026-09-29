@@ -162,6 +162,44 @@ export function preferredLengthPt(
   return Math.min(width.value, limit);
 }
 
+/**
+ * `w:tblInd` (17.4.50) read to SIGNED points, clamped to `[-limit, limit]`; `undefined` when
+ * the element states no usable indent, so the style cascade supplies one.
+ *
+ * An indent is a signed offset: a negative value pulls the table into the leading margin.
+ * Only this reader accepts the sign. Widths, margins and cell spacing keep the unsigned
+ * `readPreferredWidth` path, where zero or a negative value is no width at all. Here a
+ * stated zero IS a value, so it overrides a style's indent.
+ *
+ * The type rules follow `readPreferredWidth`: an absent type is `dxa`, a bare number under
+ * `pct` or any other type states no indent, and a universal measure carries its own unit
+ * whatever the type says. A percentage states no indent. Only the bare twips form carries a
+ * sign: a captured control places `-0.5in` half an inch INTO the column, so a universal
+ * measure reads as its magnitude.
+ */
+export function readTableIndentPt(
+  node: OoxmlElement | undefined,
+  limit: number
+): number | undefined {
+  if (!node) return undefined;
+  const type = attributeValue(node, 'type');
+  if (type !== undefined && type !== 'dxa' && type !== 'pct') return undefined;
+  const raw = attributeValue(node, 'w');
+  if (raw === undefined) return undefined;
+  let pt: number;
+  if (/^[-+]?\d{1,9}$/.test(raw)) {
+    if (type === 'pct') return undefined;
+    pt = Number(raw) / 20;
+  } else {
+    const universal = /^([-+]?\d{1,9}(?:\.\d{1,4})?)(mm|cm|in|pt|pc|pi)$/.exec(raw);
+    if (!universal) return undefined;
+    pt = Math.abs(Number(universal[1])) * MEASURE_UNIT_PT[universal[2]!]!;
+  }
+  if (!Number.isFinite(pt)) return undefined;
+  // `+ 0` turns a stated `-0` into zero.
+  return Math.max(-limit, Math.min(pt, limit)) + 0;
+}
+
 /** Declared `w:gridCol` elements, bounded before anything is allocated from them. */
 export function gridColumnElements(table: OoxmlElement): readonly OoxmlElement[] {
   const grid = childNamed(table, 'tblGrid');

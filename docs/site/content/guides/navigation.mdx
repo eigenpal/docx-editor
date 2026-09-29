@@ -39,7 +39,11 @@ import { useDocxEditor } from '@docx-editor.dev/react';
 function GoToEndButton() {
   const editor = useDocxEditor();
   return (
-    <button disabled={!editor} onClick={() => editor?.scrollToPage(editor.getTotalPages())}>
+    <button
+      disabled={!editor}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={() => editor?.scrollToPage(editor.getTotalPages())}
+    >
       Go to the last page
     </button>
   );
@@ -61,14 +65,14 @@ function goToEnd() {
 </script>
 
 <template>
-  <button :disabled="!editor" @click="goToEnd">Go to the last page</button>
+  <button :disabled="!editor" @mousedown.prevent @click="goToEnd">Go to the last page</button>
 </template>
 ```
 
 </Framework>
 </FrameworkTabs>
 
-If you use the core package directly, call these methods on the instance that `createDocxEditor()` returns.
+If you use the core package directly, call these methods on the instance that `createDocxEditor()` returns. Prevent the default `mousedown` action on navigation buttons to keep the editor's caret during pointer interaction.
 
 ## Go to a page
 
@@ -95,6 +99,7 @@ for (const heading of editor.getOutline()) {
   const item = document.createElement('button');
   item.textContent = heading.text;
   item.style.paddingInlineStart = `${(heading.level - 1) * 12}px`;
+  item.addEventListener('mousedown', (event) => event.preventDefault());
   item.addEventListener('click', () => editor.scrollToBlock(heading.blockId));
   outline.append(item);
 }
@@ -192,7 +197,7 @@ function showReference(editor: Editor, anchor: DocAnchor): boolean {
 }
 ```
 
-The highlight marks the whole paragraph without moving text or scrolling. It accepts the same `DocAnchor` and matching rules as `scrollToAnchor`, including `search`. Each call replaces the previous highlight. A call for the same paragraph restarts the timeout without repeating the fade-in animation.
+The highlight marks the whole paragraph without moving text or scrolling. It accepts the same `DocAnchor` and matching rules as `scrollToAnchor`, including `search`. The `search` field validates the reference; it does not limit the highlight to the matching phrase. Each call replaces the previous highlight. A call for the same paragraph restarts the timeout without repeating the fade-in animation.
 
 | Result | Meaning |
 | --- | --- |
@@ -200,7 +205,7 @@ The highlight marks the whole paragraph without moving text or scrolling. It acc
 | `false` | The anchor is invalid, missing, ambiguous, unsupported, or has no layout position. |
 | `false` | The editor has no mounted document, or a document refresh is replacing it. |
 
-A `false` result leaves the current highlight unchanged. Body paragraphs, table cells, and block content controls support highlights. Headers, footers, footnotes, endnotes, and text boxes return `false`.
+A `false` result leaves the current highlight unchanged. Body paragraphs, table cells, and block content controls support highlights. Headers, footers, footnotes, endnotes, and text boxes return `false`. A successful `scrollToAnchor()` call does not guarantee that `highlightAnchor()` supports the same target.
 
 ### Customize the highlight
 

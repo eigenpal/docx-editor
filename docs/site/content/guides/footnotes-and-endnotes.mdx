@@ -39,9 +39,54 @@ The Editing API can enumerate, read, navigate, and delete notes. Use `document.f
 
 The editor supports Word note positions such as page bottom, beneath text, section end, and document end.
 
-A footnote stays with its reference line when both fit on one page. The editor moves that line when the note cannot fit below it.
+### References in body paragraphs
 
-A note splits only when it is taller than the available note column. Split note pages keep separate rectangles for painting and pointer input.
+A footnote starts with its reference line when enough note text fits below it. The note can continue on the next page even when it fits whole on a fresh page. Note paragraphs respect keep-lines (`w:keepLines`) and widow-control (`w:widowControl`) settings. Without widow control, one note line can start below the reference.
+
+This behavior applies to full-width body paragraphs in single-column sections. The document must use compatibility mode 14 or 15, or omit the mode. Other modes require room for the whole note before it starts. Notes containing tables or keep-with-next groups also require room for the whole note.
+
+The note area can use trailing space from the last body line's `auto` or `atLeast` line spacing. Each line whose footnote starts on the same page keeps its full height above the note area. This rule applies in every column.
+
+### References in tables
+
+A reference inside a table keeps its footnote with the row that holds it. Later rows move to the next page to make room.
+
+If the whole note fits below its row, both stay on that page. A longer note can start there when at least two note lines fit. The row stays, and the remaining note text continues on the next page. Otherwise, the row moves with the note.
+
+A row can split below the reference if every cell has a suitable break. The note starts below that break, and the remaining row content continues on the next page.
+
+These settings restrict row splitting:
+
+- A row with `w:cantSplit` or an exact height stays whole when it fits on a page.
+- In compatibility mode 15 and later, cell paragraphs also respect `w:keepLines` and widow control.
+- A row taller than a full page still splits. Its note starts below the reference line.
+
+Some table references reserve note space below the whole table:
+
+- References in header rows.
+- References in vertically merged cells.
+- References in positioned tables.
+- References in rows that keep with the next row.
+
+### Space before a reference
+
+When a reference moves to the next page, preceding paragraphs can return to the current page if they fit. Paragraphs that keep with the reference paragraph move with it. Multi-column sections retain the reserved space instead.
+
+Widow control can also retain this space when the reference occupies the paragraph's second line. This applies when the note cannot start on the current page. If both opening lines already fit, they can remain while the whole note starts on the next page.
+
+When a split paragraph returns to the previous page, its earlier fragment counts toward the space above each reference. If the reference leaves no note space, the editor keeps the previous split.
+
+A reference paragraph that keeps with the next paragraph also reserves notes from that paragraph's required opening. Later references outside that opening do not block its return. An opening without a reference adds no note reserve. In supported single-column modes, a continuation can return when its required opening and complete attached notes fit. Paragraph keep settings still apply.
+
+### Continued notes
+
+A note that exceeds a full note column continues across pages. You can select and edit its text on each page.
+
+Footnotes that continue onto another page reserve the document's continuation notice below their text. Empty notice paragraphs reserve their measured height. These notices are read-only.
+
+A notice that exceeds the available page height reports `note-continuation-notice-height-cap`. The note text still continues. Section-end and document-end notice placement remains unsupported.
+
+When a live header changes the body area, the editor recalculates footnote placement using the available space.
 
 ## Limits
 

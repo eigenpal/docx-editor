@@ -19,6 +19,7 @@
 import { borderStrokeWidthPt } from './border-metrics.ts';
 import type { ParagraphBorderEdge } from './paragraph-style.ts';
 import type { SectionPageBorders } from './page-borders.ts';
+import { verticalMarginInsets } from './page-body-margins.ts';
 import type {
   PageBorderFrameRecord,
   PageBorderStrokeRecord,
@@ -80,10 +81,11 @@ export function pageBorderFrame(
   const bottomStroke = strokeOf(borders.bottom);
   const rightStroke = strokeOf(borders.right);
 
-  const top = insetOf(borders.offsetFrom, borders.top, geometry.margin.top);
+  // `offsetFrom="text"` measures from the text extents, which a signed margin gives by size.
+  const margins = verticalMarginInsets(geometry);
+  const top = insetOf(borders.offsetFrom, borders.top, margins.top);
   const left = insetOf(borders.offsetFrom, borders.left, geometry.margin.left);
-  const bottom =
-    geometry.height - insetOf(borders.offsetFrom, borders.bottom, geometry.margin.bottom);
+  const bottom = geometry.height - insetOf(borders.offsetFrom, borders.bottom, margins.bottom);
   const right = geometry.width - insetOf(borders.offsetFrom, borders.right, geometry.margin.right);
 
   const width = right - left;

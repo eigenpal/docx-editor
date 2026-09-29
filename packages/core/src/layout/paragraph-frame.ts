@@ -211,7 +211,7 @@ export function frameOrigins(
     },
     margin: {
       x: 0,
-      y: geometry.margin.top - inset,
+      y: Math.abs(geometry.margin.top) - inset,
       width: geometry.width - geometry.margin.left - geometry.margin.right,
       height: geometry.height - geometry.margin.top - geometry.margin.bottom,
     },
@@ -260,10 +260,18 @@ export function positionParagraphFrame(
   frameSize: Readonly<{ width: number; height: number }>
 ): ParagraphFragmentRecord {
   const { x: dx, y: dy } = paragraphFrameOrigin(frame, origins, frameSize);
+  return { ...translateParagraphFragment(fragment, dx, dy), outOfFlow: true };
+}
+
+/** Move every box a paragraph fragment publishes, including its marker and inline drawings. */
+export function translateParagraphFragment(
+  fragment: ParagraphFragmentRecord,
+  dx: number,
+  dy: number
+): ParagraphFragmentRecord {
   const move = (box: LayoutBox): LayoutBox => ({ ...box, x: box.x + dx, y: box.y + dy });
   return {
     ...fragment,
-    outOfFlow: true,
     box: move(fragment.box),
     ...(fragment.shadingBox ? { shadingBox: move(fragment.shadingBox) } : {}),
     ...(fragment.bottomBorder

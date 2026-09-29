@@ -490,7 +490,12 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       const right = op.marginRightTwips ?? current.rightTwips;
       const bottom = op.marginBottomTwips ?? current.bottomTwips;
       const left = op.marginLeftTwips ?? current.leftTwips;
-      if (widthTwips - left - current.gutterTwips - right <= 0 || heightTwips - top - bottom <= 0) {
+      // A kept authored negative top/bottom is an exact inset of its size, as the read side
+      // resolves it, so the vertical test reads the magnitudes.
+      if (
+        widthTwips - left - current.gutterTwips - right <= 0 ||
+        heightTwips - Math.abs(top) - Math.abs(bottom) <= 0
+      ) {
         return 'invalid-property-value';
       }
     }

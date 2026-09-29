@@ -1,3 +1,5 @@
+import { createContextualRunFormatting } from '../layout/complex-script-formatting.ts';
+
 // Run and paragraph property edits at the selection (paginated-surface seam).
 //
 // The formatting lane: toggling a run property, setting one outright, and setting a
@@ -24,7 +26,6 @@ import {
   paragraphPropertiesOf,
   paragraphsInRange,
   pendingPropertyState,
-  runPropertyEdits,
   withPendingFormatting,
   type SurfaceProperty,
 } from './surface-formatting.ts';
@@ -35,7 +36,6 @@ import type {
   TreeDocOp,
 } from '@docx-editor.dev/core/store';
 import { paragraphsInCells } from '@docx-editor.dev/core/layout';
-import { mergedParagraphMarkProperties } from '@docx-editor.dev/core/store';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { directionalParagraphEntry } from './paragraph-direction-writes.ts';
 
@@ -109,6 +109,13 @@ type FormatMethods = Pick<
 >;
 
 export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
+  const { runPropertyEdits, mergedParagraphMarkProperties } = createContextualRunFormatting(
+    () => deps.session.stylesRoot(),
+    () => deps.session.settingsRoot(),
+    () => deps.displayMode(),
+    () => deps.authorFilter()
+  );
+
   const { session, commit, orderedRange, selectionMark, textOf } = deps;
   const displayMode = (): FormattingDisplayMode => deps.displayMode();
   const authorFilter = (): FormattingRevisionAuthorFilter | undefined => deps.authorFilter();

@@ -1,5 +1,105 @@
 # @docx-editor.dev/core
 
+## 2.23.0
+
+### Minor Changes
+
+- 30bd2a8: Show cached previews for inline embedded objects outside paragraph frames, and refuse clipboard transfers that cannot preserve objects.
+- 30bd2a8: Allow eligible text-anchored floating tables to split across pages while preserving anchor constraints.
+- d04902a: Draw vertical and horizontal lines, and draw shape outlines at their full width, inside the shape where the outline is set to sit inside it, and at the width the document theme gives them. Fixes #972
+- 30bd2a8: Support bounded body style-separator display flow and report unsupported joins through export content warnings.
+- a2951cf: Add customizable paragraph highlights with `editor.highlightAnchor()` and `editor.clearAnchorHighlight()`. Add alignment, motion, and offset settings to `editor.scrollToAnchor()`.
+- 30bd2a8: Keep footnote references with legal note openings and reserve authored continuation notices.
+- 30bd2a8: In documents that use Word 2013 layout, left-aligned and right-aligned tables with an absolute width now place their outer side rule on the aligned edge and measure cell margins from the rule center, so their cells wrap text at the correct width.
+- bf776f2: Numbered paragraphs now start their first line at a tab stop between the number and the text indent, so the line wraps with the width it has. Documents that set `w:doNotUseIndentAsNumberingTabStop` use the first tab stop past the number instead of the text indent.
+- 30bd2a8: Resolve character-style header references from visible page text and adjust header height for each page.
+- e608e2d: Right-to-left runs now render with their complex-script font, size, bold, and italic, and alignment, paste, and copy follow each paragraph's direction. A new `setParagraphDirection` command with `direction.ltr` and `direction.rtl` toolbar controls switches paragraph direction. Fixes #864
+- 30bd2a8: Paragraph lines follow active section line grids. Paragraph overrides and table compatibility settings control snapping.
+- 6794f4d: Odd-page and even-page sections, and sections that restart page numbering when odd and even pages differ, now start on a page of the correct parity, with one empty sheet inserted when needed and marked by `PageRecord.parityBlank`. Sheets after section-end note sheets or a continuous section now continue the running page number, and `w:evenAndOddHeaders` with the value `off` now turns different odd and even pages off.
+- 30bd2a8: Render supported picture members in shape groups in the editor and PDF exports.
+- 30bd2a8: Table row layout records report `placesWhole` for rows with `w:cantSplit` or an exact height, and `hasContinuation` for a row that continues on the next page.
+
+### Patch Changes
+
+- 30bd2a8: Documents with `doNotUseHTMLParagraphAutoSpacing` add adjacent paragraph gaps. Automatic spacing uses 5pt before and 10pt after.
+- e608e2d: Arabic and other joining scripts now join across a formatting change inside a word, such as a color change, in layout and in PDF export.
+- e608e2d: PDF export now joins Arabic letters when the run's font has no Arabic glyphs, and the exported text extracts as whole words in logical order.
+- 30bd2a8: A line with at-least line spacing no longer extends past the bottom margin, so it moves to the next page when its full height does not fit.
+- b981ea6: Wrap text around floating drawings that use `behindDoc` with `wrapSquare`, `wrapTight`, or another wrapping mode. These drawings still paint behind the text, while `wrapNone` watermarks remain unchanged.
+- 30bd2a8: A bordered or shaded paragraph that starts with a manual page break no longer adds a blank page after a full page. The borders and the space before of a paragraph that starts with a manual page break go with the text after the break.
+- 30bd2a8: Bottom-to-top table cell text wraps within the final row or merged cell height.
+- 30bd2a8: Prevent manual page breaks inside table cells from adding empty lines or changing tab alignment, justification, and text wrap.
+- 30bd2a8: Preserve visible field result formatting after leading direction marks.
+- 30bd2a8: Fix footnote pagination after live headers change the available body space.
+- 30bd2a8: A manual page break at the start of a table cell paragraph no longer adds an empty line before a word or picture that does not fit, and no longer moves the caret or line beside a floating picture.
+- 30bd2a8: Manual page breaks inside table cells no longer reorder right-to-left text and numbers or move decimal tab alignment. Layout measures Arabic letters on both sides of such a break as one joined word when the font has Arabic glyphs.
+- 30bd2a8: A manual page break inside a table cell no longer increases the height of a line that also holds an inline picture or equation with automatic line spacing.
+- 30bd2a8: A manual page break inside a table cell no longer increases line height when the word that holds it wraps to the next line.
+- 0e42c85: A continuous section with a different header or footer height, or with a different first page, now continues on the sheet where the previous section ended instead of starting a new sheet.
+- 30bd2a8: Correct body pagination and placement for right-aligned footer page fields above empty anchor paragraphs.
+- 30bd2a8: Fix blank space before returning paragraph continuations when their footnotes fit.
+- 30bd2a8: Paragraphs ahead of a footnote reference that moves to the next page now stay on the earlier page when they fit, instead of leaving blank space above the footnotes.
+- 30bd2a8: A footnote cited on the second line of a paragraph no longer moves to a later page without its first lines when the paragraphs ahead of the reference change pages.
+- 30bd2a8: Fix footnote spacing when paragraph continuations and kept paragraph openings return to an earlier page.
+- 30bd2a8: Footnotes referenced from table rows now stay on the page of their row. A long footnote continues on the next page when at least two of its lines fit below the row, or below the reference line where the row splits; otherwise the row moves to the next page with the footnote.
+- 30bd2a8: Footnotes that fit below the text of the last line on a page no longer split or move to a later page.
+- 30bd2a8: Place floating tables in headers and footers at their anchor positions, and stop spaces and tabs from making lines taller. Text below a top-and-bottom object now keeps its paragraph spacing before.
+- 30bd2a8: A page number frame at the start of a header shares the first line of the header text instead of adding a line, so the body starts one line higher. Frames aligned inside or outside alternate margins by physical page, also after a page numbering restart.
+- 30bd2a8: A vertically merged cell inside table header rows now sizes each header row by its own content, on the first page and on every repeated header.
+- e608e2d: In exported PDFs, Hebrew lines drawn in a fallback font now take that font's line height, so they no longer take the extra height of the run's own font.
+- 30bd2a8: Reserve wrapping space for unsupported floating drawing groups while their content stays hidden.
+- 30bd2a8: Preserve host callback failures when checking whether hidden header or footer drawings require a layout retry.
+- 30bd2a8: Justified paragraphs in documents that use modern compatibility settings can now fit their last word on the line by compressing the spaces between words.
+- 30bd2a8: Preserve justified word wrapping and compressed spacing across formatting runs.
+- 30bd2a8: A keep-with-next paragraph that does not fit in the space left on a page now splits there when its keep-lines and widow-control settings allow it, instead of moving whole to the next page. In documents that use Word 2013 or later layout, a paragraph in a keep-with-next chain that fits but leaves no room for the next paragraph also splits, and its last lines move to the next page.
+- ab460dc: Keep headings with following paragraphs when widow control or keep-lines moves those paragraphs to the next page.
+- 30bd2a8: Render known single-byte Symbol and Wingdings bullets when their font is unavailable.
+- e633def: A plain paragraph that starts with a manual page break and has text after the break no longer adds a blank page when it follows a full page.
+- 30bd2a8: Prevent blank lines before long words that follow leading tabs.
+- 30bd2a8: Legacy checkbox form fields take their line height from the run font, so lines and table rows that hold them no longer grow taller.
+- 30bd2a8: Render uniform single-line borders around inline legacy VML pictures and reserve their full size.
+- 30bd2a8: A table row that continues a vertical merge in any column ignores "Page break before" and keeps its placement.
+- cee5764: A paragraph that contains a line break outside a run now renders and stays editable, and the misplaced break is saved unchanged.
+- 30bd2a8: Correct cell widths for automatic-width tables with simple borders in documents that use Word 2013 layout.
+- 30bd2a8: In documents that use Word 2013 layout, centered tables with an absolute width no longer inset cell text by an extra half border width, so their cells wrap text at the correct width.
+- 30bd2a8: A word that wraps to a line or float passage where only the word itself fits now keeps its trailing space at the end of that line, instead of starting the next line with the space or adding a line that holds only the space.
+- 30bd2a8: A negative top or bottom page margin places the text at that exact distance from the page edge, and a taller header or footer overlaps the text instead of pushing it. In that overlap, text, links, note references, pictures, and form fields take the pointer, and a closed header or footer highlights only its part in the page margin.
+- 390c177: A field nested inside another field's instruction no longer adds its saved result, including line breaks, to the displayed text, Find, or text reads.
+- 30bd2a8: A vertically merged cell that contains another vertical merge in a different column now sizes each covered row by its own content instead of adding the merged height to its first row.
+- ae1afe0: Preserve no-break space behavior across formatting runs and keep figure spaces attached to adjacent East Asian text.
+- 30bd2a8: Numbered and bulleted paragraphs keep their markers with their text after a leading manual page break.
+- 30bd2a8: A paragraph whose own top-and-bottom picture leaves no room for its text on a page no longer adds blank pages. The paragraph and its picture move to the next page once.
+- d6c75d2: A manual page break followed by an empty section-break paragraph no longer adds a blank page before a section that starts on a new page.
+- 2eea4de: A character style on a paragraph mark now sets the height of an empty paragraph and formats the paragraph's list number, so headers and footers with styled empty paragraphs leave the correct space for body text. Text typed into such a paragraph takes the same character style.
+- 30bd2a8: A larger paragraph mark no longer makes the last line of its paragraph taller when that line holds text, superscript or subscript text, an inline picture, or an equation; a line with only inline pictures takes the text height of the runs that hold them, and a larger paragraph style size no longer makes a superscript or subscript last line taller. Empty paragraphs and empty last lines still take the mark's height.
+- e040ff8: Runs, paragraphs, tables, and pictures written with indented XML under `xml:space="preserve"` now open as editable content, so their no-break spaces, tabs, and text appear in the layout instead of disappearing.
+- 30bd2a8: Account for raised and lowered text when sizing automatic paragraph lines.
+- aab4053: Render embedded rasters when their byte signature differs from the declared raster format. Format-class mismatches remain refused.
+- 30bd2a8: Correct character-style header selection and preserve supported picture and table border boundaries.
+- 30bd2a8: Right-aligned page numbers can share the following footer text line without adding footer height or reducing body space.
+- e608e2d: Right-to-left paragraphs now take `w:left` indents from the right margin, place list markers on the right in right-to-left order, and number `hebrew1`, `hebrew2`, `arabicAlpha`, `arabicAbjad`, and `hindiNumbers` lists in their own scripts. For these paragraphs, `formatting.indent` reports the `w:left` value as `left` and sets `rtl`, and the ruler mirrors its indent handles.
+- e608e2d: Tabs in right-to-left paragraphs now keep the text segments in reading order and measure tab stops from the right margin.
+- 9afb832: An empty section-break paragraph with a page break before it no longer adds a blank page after the content of its section, also when the paragraph holds only bookmarks, proofing marks, permission or comment range markers, or empty text.
+- 30bd2a8: Vertically merged cells that start and end in the same rows now share those rows, so the first row no longer grows to hold a merged cell's full content.
+- 30bd2a8: Table indents now move left-aligned and right-to-left tables by the full stated amount, including negative indents and tables wider than the text column, and a zero indent on a table overrides the indent of its table style.
+- 30bd2a8: A word that spans more than one run now wraps to the same place as the same word in one run when it fits the line or float passage it moves to, so it no longer splits around a floating picture, sits under it, or loses the height of an inline picture on the line it leaves.
+- 30bd2a8: In a paragraph numbered through its style, the numbered style's own indents, spacing, alignment, and tab stops override the list level, and the level overrides that style's base styles.
+- 30bd2a8: Table text in the default paragraph style keeps the font size of that style when the table style states no font size.
+- 30bd2a8: A table row whose first cell starts with a keep-with-next paragraph now moves to the next page with the row or paragraph that follows it, and a keep-with-next paragraph before a table now moves with the rows it keeps with instead of staying alone at the bottom of a page.
+- 30bd2a8: Move a table row to the next page when the remaining space cannot hold its minimum height. Keep preceding captions with the row.
+- 30bd2a8: Start a table row on a new page when the first paragraph of its first cell has "Page break before" set, including through its paragraph or table style.
+- 30bd2a8: Place tables below wrapping pictures when their rows would overlap the pictures, including header pictures on continuation pages.
+- 30bd2a8: Keep terminal note citations with words that fit through justified space compression.
+- 30bd2a8: Fix clipboard checks in headers, footers, and notes so they do not retain editing resources.
+- 30bd2a8: A floating picture that may not overlap other objects no longer moves to a later page, or adds blank pages, when it reaches past the bottom margin without touching another object.
+- 30bd2a8: PDF export no longer fails on a centered bottom-to-top cell that spans merged rows.
+- 30bd2a8: Support visible hidden-mark paragraph joins with compatible paragraph geometry.
+- 30bd2a8: Carry merged text to the next row when a two-row vertical merge breaks before its text can start.
+- 30bd2a8: Floating drawings handle negative wrap distances without excess gaps. Changing a drawing's wrap mode preserves inherited anchor distances.
+- Updated dependencies [5981e48]
+- Updated dependencies [3b95523]
+  - @docx-editor.dev/i18n@2.23.0
+
 ## 2.22.0
 
 ### Minor Changes

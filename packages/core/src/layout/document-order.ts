@@ -133,6 +133,7 @@ export function everyStoryOrder(layout: SemanticLayout): string[] {
     for (const area of [page.footnotes, page.endnotes]) {
       if (!area) continue;
       if (area.separator) take(area.separator.fragments);
+      if (area.continuationNotice) take(area.continuationNotice.fragments);
       for (const note of area.notes) take(note.fragments);
     }
   }

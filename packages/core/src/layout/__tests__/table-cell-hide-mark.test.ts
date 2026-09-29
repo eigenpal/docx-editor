@@ -80,7 +80,8 @@ test('an excluded empty cell marker keeps its source position without a phantom 
 
 test('only the terminal marker disappears; earlier empty paragraph marks still occupy space', () => {
   expect(height(table(row(cell(paragraph() + paragraph()))))).toBe(20);
-  expect(height(table(row(cell(paragraph(text) + paragraph()))))).toBe(20);
+  // An earlier line with text keeps its own 5pt height under the 20pt mark.
+  expect(height(table(row(cell(paragraph(text) + paragraph()))))).toBe(5);
 });
 
 test('empty-cell margins, paragraph borders, and paragraph spacing still reserve their own space', () => {

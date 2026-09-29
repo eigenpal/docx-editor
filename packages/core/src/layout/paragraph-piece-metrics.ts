@@ -6,7 +6,7 @@
 import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { FieldAwarePiece, PositionalTab } from './field-projection.ts';
 import type { TabLeader } from './paragraph-tabs.ts';
-import { displayText, type ResolvedRunStyle } from './run-style.ts';
+import { displayText, runStylesEqual, type ResolvedRunStyle } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import * as lineEndSpaces from './line-end-whitespace.ts';
 import type { TextMeasurer } from './semantic-records.ts';
@@ -54,9 +54,13 @@ export interface Piece {
  * as wrappable opened a new line per tab: the header grew by several lines, and because a
  * header's flow height sets the body's effective top margin, the body was pushed down the
  * page. Stops at a hard break, which ends the line anyway, and skips further tabs and
- * spaces, which are themselves trimmed at the line end.
+ * spaces, which are themselves trimmed at the line end. When `pageBreaksIgnored` (a table
+ * cell), a page break ends nothing and is skipped too.
  */
-export function placeableContentSuffixes(pieces: readonly Piece[]): readonly Uint8Array[] {
+export function placeableContentSuffixes(
+  pieces: readonly Piece[],
+  pageBreaksIgnored = false
+): readonly Uint8Array[] {
   const suffixes = new Array<Uint8Array>(pieces.length);
   let follows = false;
   for (let pieceIndex = pieces.length - 1; pieceIndex >= 0; pieceIndex -= 1) {
@@ -68,7 +72,8 @@ export function placeableContentSuffixes(pieces: readonly Piece[]): readonly Uin
     } else {
       for (let cursor = piece.text.length - 1; cursor >= 0; cursor -= 1) {
         const ch = piece.text[cursor]!;
-        if (ch === '\n' || ch === PAGE_BREAK_CHAR) suffix[cursor] = 0;
+        if (ch === PAGE_BREAK_CHAR && pageBreaksIgnored) suffix[cursor] = suffix[cursor + 1]!;
+        else if (ch === '\n' || ch === PAGE_BREAK_CHAR) suffix[cursor] = 0;
         else if (ch !== '\t' && !lineEndSpaces.isCollapsibleLineEndWhitespace(ch))
           suffix[cursor] = 1;
         else suffix[cursor] = suffix[cursor + 1]!;
@@ -85,7 +90,7 @@ const RIGHT_TO_LEFT_LETTER = /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufeff]/u;
 
 /**
  * The text after a tab, up to the next tab or break: its width, and where a decimal stop
- * aligns it.
+ * aligns it. An ignored page break adds no width and does not end the segment.
  *
  * `decimalOffset` is the advance before the first `.`, or the whole width when there is none.
  * `rtlDecimalOffset` is the same point measured from the segment's LEADING (right) edge, for a
@@ -97,12 +102,16 @@ export function measureFollowingTabSegment(
   pieces: readonly Piece[],
   pieceIndex: number,
   offsetInPiece: number,
-  measurer: TextMeasurer
+  measurer: TextMeasurer,
+  pageBreaksIgnored = false
 ): { width: number; decimalOffset: number; rtlDecimalOffset: number } {
   let width = 0;
   let decimalOffset = 0;
   let sawDecimal = false;
   let afterRightToLeftLetter = false;
+  // The last visible character, while only ignored page breaks follow it; `broken` once one
+  // has. Without a break between them, a piece boundary ends the lookback as before.
+  let carried: { piece: Piece; char: string; end: number; broken: boolean } | undefined;
   const result = () => ({
     width,
     decimalOffset: sawDecimal ? decimalOffset : width,
@@ -120,19 +129,28 @@ export function measureFollowingTabSegment(
     let to = from;
     while (to < piece.text.length) {
       const ch = piece.text[to]!;
-      if (ch === '\t' || ch === '\n' || ch === PAGE_BREAK_CHAR) break;
+      if (ch === '\t' || ch === '\n' || (ch === PAGE_BREAK_CHAR && !pageBreaksIgnored)) break;
       to += 1;
     }
     // Measure each piece's slice whole, so a joining script (Arabic) measures as shaped
     // and not as a sum of isolated letters.
+    const visibleSlice = (end: number) => {
+      const slice = piece.text.slice(from, end);
+      return pageBreaksIgnored ? slice.replaceAll(PAGE_BREAK_CHAR, '') : slice;
+    };
     const measure = (end: number) =>
-      end > from ? measurer.measure(displayText(piece.text.slice(from, end), style), style) : 0;
+      end > from ? measurer.measure(displayText(visibleSlice(end), style), style) : 0;
     const segmentWidth = measure(to);
     if (!sawDecimal) {
       const dot = piece.text.indexOf('.', from);
       if (dot !== -1 && dot < to) {
         sawDecimal = true;
-        afterRightToLeftLetter = dot > from && RIGHT_TO_LEFT_LETTER.test(piece.text[dot - 1]!);
+        const preceding =
+          visibleSlice(dot).at(-1) ??
+          (carried?.broken && carried.end === piece.start && oneShapedItem(carried.piece, piece)
+            ? carried.char
+            : undefined);
+        afterRightToLeftLetter = preceding !== undefined && RIGHT_TO_LEFT_LETTER.test(preceding);
         // Decimal point itself sits ON the stop — offset is the advance before it.
         decimalOffset += measure(dot);
       } else {
@@ -141,8 +159,29 @@ export function measureFollowingTabSegment(
     }
     width += segmentWidth;
     if (to < piece.text.length) return result();
+    const tail = visibleSlice(to).at(-1);
+    if (tail !== undefined) carried = { piece, char: tail, end: piece.end, broken: false };
+    else if (carried?.end === piece.start && pageBreaksIgnored && piece.text === PAGE_BREAK_CHAR)
+      carried = { ...carried, end: piece.end, broken: true };
+    else carried = undefined;
   }
   return result();
+}
+
+/**
+ * Whether two pieces are the halves of one shaped item that an ignored page break split.
+ *
+ * The decimal rule reads the character before the point within its item. Bidi resolution
+ * itemizes a cell's text as though its page breaks were absent, then splits an item at each
+ * break into halves with one style, apart from the joining context each half reads. Pieces
+ * that differ in anything else (a formatting change, a bidi level) were separate items
+ * without the break too.
+ */
+function oneShapedItem(before: Piece, after: Piece): boolean {
+  const shaping = after.style.shaping;
+  if (!shaping || !before.style.shaping) return false;
+  const { context } = before.style.shaping;
+  return runStylesEqual(before.style, { ...after.style, shaping: { ...shaping, context } });
 }
 
 /**

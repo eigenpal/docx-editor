@@ -1,3 +1,5 @@
+import { fragmentContainsClipboardObject } from './clipboard-object-selection.ts';
+import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
 import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
 // Command dispatch for `createDocxEditor` (editor seam).
 //
@@ -494,6 +496,7 @@ export function execEditorCommand(
     case 'copy': {
       // The gate already refused a collapsed selection, so this read is non-empty.
       const flavours = mounted.copyFlavours();
+      if (flavours.reason) return { ok: false, code: 'unsupported', reason: flavours.reason };
       writeClipboardRich(flavours.text, flavours.html);
       return { ok: true, changed: false };
     }
@@ -501,17 +504,24 @@ export function execEditorCommand(
       // Read BEFORE the delete: `copyFlavours` answers from the selection, and the delete
       // is what removes it.
       const flavours = mounted.copyFlavours();
+      if (flavours.reason) return { ok: false, code: 'unsupported', reason: flavours.reason };
       writeClipboardRich(flavours.text, flavours.html);
       mounted.deleteSelection();
       break;
     }
-    case 'paste':
+    case 'paste': {
       // Same fidelity routing as the paste event; a text-only call is the plain lane.
       // A payload that lands on no lane (empty text, unusable HTML) changed nothing.
-      if (!mounted.pasteRich(command.text, command.html ?? null)) {
+      const fragment = command.html ? fragmentFromHtml(command.html) : null;
+      if (fragment && fragmentContainsClipboardObject(fragment.bytes)) {
+        return { ok: false, code: 'unsupported', reason: 'unsupported-content' };
+      }
+      const result = mounted.pasteRich(command.text, command.html ?? null);
+      if (!result) {
         return { ok: true, changed: false };
       }
       break;
+    }
     case 'pasteWithoutFormatting':
       mounted.insertPlainText(command.text);
       break;

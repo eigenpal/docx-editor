@@ -29,7 +29,7 @@ This lane also carries the most security surface of the five. An image is a rela
 
 **Media, resources, and security**
 
-- Embedded media is decoded from the package part named by `r:embed`, validated against its declared content type, and bounded by size and dimension limits before allocation.
+- Embedded media is decoded from the package part named by `r:embed`. Raster signatures select the decoder when the declared type names another raster format. Class-crossing mismatches are refused. Size and dimension limits apply before allocation.
 - `r:link` and any `TargetMode="External"` image relationship SHALL NOT be fetched. The relationship is preserved, the drawing reserves its extent, and a placeholder is painted with the reason. Loading a document performs no network request.
 - Formats that browsers cannot decode natively — TIFF, EMF, WMF — reserve their extent and paint a placeholder rather than a broken image, until a converter lands in its own change.
 - `a:hlinkClick` on a drawing is preserved and sanitized. Activation requires an explicit user gesture and an allowlisted scheme.

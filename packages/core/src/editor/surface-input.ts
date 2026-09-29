@@ -434,7 +434,11 @@ export function createClipboardHandlers(surface: PaginatedSurface): {
 } {
   const writeFlavours = (event: ClipboardEvent): boolean => {
     const flavours = surface.copyFlavours();
-    if (!flavours.text) return false;
+    if (flavours.reason) {
+      event.preventDefault();
+      return false;
+    }
+    if (!flavours.text || !event.clipboardData) return false;
     event.clipboardData?.setData('text/plain', flavours.text);
     if (flavours.html) event.clipboardData?.setData('text/html', flavours.html);
     return true;

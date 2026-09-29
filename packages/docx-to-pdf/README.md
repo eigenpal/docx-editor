@@ -14,6 +14,10 @@ Use Node.js 20.16.0 or later in the 20.x release line, or Node.js 22.3.0 or late
 npm install @docx-editor.dev/docx-to-pdf @docx-editor.dev/core
 ```
 
+For Chinese, Japanese, or Korean text, supply suitable fonts or install the optional `@docx-editor.dev/fonts-cjk` package. The converter finds the package without configuration.
+
+If you previously relied on bundled CJK coverage, add the optional package to your production dependencies. For installation and deployment details, see [Configure PDF fonts](docs/fonts.md).
+
 ## Convert a document
 
 ```ts
@@ -54,7 +58,7 @@ The result includes `bytes`, `pageCount`, `layoutRevision`, `displayMode`, `font
 
 Use `fonts` to provide font sources before the installed and packaged sources. Use `fallbackFonts` to add sources after the packaged fonts. The exporter also reads embedded fonts before using a generic substitute for an unresolved family. Use `lastResortFonts` after embedded fonts and before generic substitutes.
 
-`glyphFallbacks` specifies an ordered list of fonts for missing glyphs. The defaults cover symbols, Arabic, CJK, mathematics, and color emoji. Emoji from a COLR font retain their palette colors and extractable text.
+`glyphFallbacks` specifies an ordered list of fonts for missing glyphs. The defaults cover symbols, Arabic, Hebrew, mathematics, and color emoji. They also cover CJK text when `@docx-editor.dev/fonts-cjk` is installed. Emoji from a COLR font retain their palette colors and extractable text.
 
 Core's `fontPolicy` controls failed font sources and incomplete face coverage. Generic substitutions can change line breaks and page count, so strict export rejects them with a `font-substitution` diagnostic. Best-effort export uses the substitute and reports it. Inspect `result.fontResolution` for the selected fonts.
 
@@ -69,13 +73,18 @@ Editing PDF annotations does not update the DOCX.
 ## Supported content
 
 - Searchable multilingual text, small caps, text decorations, and tab leaders.
+- Arabic joining across formatting runs and logical word order for Arabic, Persian, and Hebrew text extraction.
+- Synthetic bold and italic when selected font faces lack those variants.
 - Static TrueType and CFF fonts, including selected faces from font collections.
 - Page sizes, page frames, headers, footers, footnotes, and endnotes.
 - Text and image list markers, paragraph fills, and paragraph borders.
 - Table text, shading, and resolved borders.
 - Textboxes and structured equations.
+- Supported vector shapes, horizontal and vertical lines, and outlines that retain their full width.
 - PNG and JPEG images with cropping, transforms, alpha transparency, and fixed opacity.
 - Links, destinations, document metadata, and comments.
+
+The converter reads PNG and JPEG images even when DOCX metadata declares another supported raster format. Supported declarations include PNG, JPEG, GIF, BMP, and WebP.
 
 ## Limitations
 

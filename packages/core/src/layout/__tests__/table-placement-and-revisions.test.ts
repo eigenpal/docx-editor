@@ -118,11 +118,15 @@ describe('w:tblInd and w:jc place the table in the text column', () => {
     expect(tableOriginX(structure, CONTENT_WIDTH_PT)).toBe((CONTENT_WIDTH_PT - 720) / 2);
   });
 
-  test('an indent wider than the slack cannot push the table off the column', () => {
+  test('an indent wider than the slack applies in full, within its bound', () => {
     const structure = structureOf(
       `<w:tbl><w:tblPr><w:tblInd w:w="20000" w:type="dxa"/></w:tblPr>${narrow}</w:tbl>`
     );
-    expect(tableOriginX(structure, CONTENT_WIDTH_PT)).toBeLessThanOrEqual(468 - 144);
+    expect(tableOriginX(structure, CONTENT_WIDTH_PT)).toBe(1000);
+    const hostile = structureOf(
+      `<w:tbl><w:tblPr><w:tblInd w:w="999999999" w:type="dxa"/></w:tblPr>${narrow}</w:tbl>`
+    );
+    expect(tableOriginX(hostile, CONTENT_WIDTH_PT)).toBe(1584);
   });
 
   test('placement reaches the laid-out cells and the fragment box together', () => {

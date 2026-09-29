@@ -1,3 +1,8 @@
+import {
+  headerStoryForPage,
+  characterHeaderPageToken,
+  characterHeaderReserveHeight,
+} from './character-header-pages.ts';
 // Per-page content-box insets, derived from the header and footer variant THAT page shows.
 //
 // Word resolves the variant page by page (`w:titlePg` 17.6.55, `w:evenAndOddHeaders` 17.10.1)
@@ -17,6 +22,7 @@ import type {
   SemanticLayout,
 } from './semantic-records.ts';
 import { headerFooterVariantCanPaint } from '../store/package/hf-references.ts';
+import { marginIgnoresFurniture, marginInset } from './page-body-margins.ts';
 
 /** Which header/footer variant a page shows (ECMA-376 §17.10.5). */
 export type HeaderFooterVariantName = 'default' | 'first' | 'even';
@@ -52,7 +58,9 @@ export interface PageContentInsets {
 export interface PageContentInsetInputs {
   readonly furniture?: PageFurniture;
   readonly pageHeight: number;
+  /** Signed `w:pgMar/@w:top` in points; negative is exact (see `page-body-margins.ts`). */
   readonly marginTop: number;
+  /** Signed `w:pgMar/@w:bottom` in points; negative is exact. */
   readonly marginBottom: number;
   /** `w:pgMar/@w:header` in points. */
   readonly headerDistance: number;
@@ -112,25 +120,45 @@ export function createPageContentInsets(
 ): (index: number) => PageContentInsets {
   const { furniture, pageHeight, marginTop, marginBottom } = inputs;
   const cap = pageHeight * FURNITURE_INSET_FRACTION;
-  const memo = new Map<HeaderFooterVariantName, PageContentInsets>();
-  const edge = (distance: number, story: HeaderFooterStoryLayout | undefined, margin: number) =>
-    // An absent variant reserves nothing: the page has no furniture on that edge at all, so
-    // the authored margin is the whole inset.
-    Math.min(cap, Math.max(margin, story ? distance + story.flowHeight : 0));
+  const memo = new Map<string, PageContentInsets>();
+  const edge = (
+    distance: number,
+    story: HeaderFooterStoryLayout | undefined,
+    margin: number,
+    reserveHeight = 0
+  ) =>
+    // A negative margin is exact (§17.6.11): the header or footer overlaps the body instead of
+    // pushing it. An absent variant reserves nothing: the page has no furniture on that edge
+    // at all, so the authored margin is the whole inset. The cap bounds both cases.
+    Math.min(
+      cap,
+      marginIgnoresFurniture(margin)
+        ? marginInset(margin)
+        : Math.max(margin, story ? distance + Math.max(story.flowHeight, reserveHeight) : 0)
+    );
   return (index: number): PageContentInsets => {
     // Local page 0 of a continued section is the host's sheet, not this section's first page.
     if (index === 0 && inputs.continuedPageInsets) return inputs.continuedPageInsets;
     const variant = headerFooterVariantFor(furniture, inputs.pageIndexStart, index);
-    const cached = memo.get(variant);
+    const key = furniture && characterHeaderPageToken(furniture) ? `${variant}:${index}` : variant;
+    const cached = memo.get(key);
     if (cached) return cached;
-    const top = edge(inputs.headerDistance, furniture?.headers.get(variant), marginTop);
+    const header = headerStoryForPage(furniture, variant, inputs.pageIndexStart + index);
+    const top = edge(
+      inputs.headerDistance,
+      header,
+      marginTop,
+      header && !marginIgnoresFurniture(marginTop)
+        ? characterHeaderReserveHeight(furniture, inputs.pageIndexStart + index)
+        : 0
+    );
     const bottom = edge(inputs.footerDistance, furniture?.footers.get(variant), marginBottom);
     const insets: PageContentInsets = Object.freeze({
       top,
       bottom,
       height: pageHeight - top - bottom,
     });
-    memo.set(variant, insets);
+    memo.set(key, insets);
     return insets;
   };
 }

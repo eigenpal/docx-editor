@@ -84,6 +84,11 @@ function setup(source = xml()) {
   return {
     reader,
     bundle,
+    setPart(part: OoxmlPart) {
+      pkg = Object.freeze({ ...pkg, parts: new Map(pkg.parts).set(part.name, part) });
+      revision++;
+      bundle.sync(reader);
+    },
     replace(source: string) {
       // Model-only change: preserve resource substrate identity, as a tree edit does.
       pkg = Object.freeze({
@@ -311,6 +316,147 @@ test('model-only WordArt text and geometry edits invalidate the drawing cache an
       inlineDrawingLayout: bundle.bodyContext,
     });
     expect(linesOf(result)[0]!.drawings![0]!.width).toBe(240);
+  } finally {
+    bundle.dispose();
+  }
+});
+
+test('an outlined VML picture reserves its picture size plus the outline on each side', () => {
+  const O = 'urn:schemas-microsoft-com:office:office';
+  const W10 = 'urn:schemas-microsoft-com:office:word';
+  const shape = (sides: readonly string[]) =>
+    `<w:document xmlns:w="${W}" xmlns:v="${V}" xmlns:o="${O}" xmlns:w10="${W10}" xmlns:r="${R}"><w:body><w:p><w:r><w:t>A</w:t><w:pict><v:shape type="#_x0000_t75" style="width:100pt;height:80pt"${sides.map((side) => ` o:border${side}color="black"`).join('')}><v:imagedata r:id="rPhoto" o:title=""/>${sides.map((side) => `<w10:border${side} type="single" width="8"/>`).join('')}</v:shape></w:pict><w:t>Z</w:t></w:r></w:p></w:body></w:document>`;
+  const outlined = setup(shape(['top', 'left', 'bottom', 'right']));
+  try {
+    const result = layoutSemanticDocument(outlined.reader.part(), 1, {
+      measurer: createFixedMeasurer(6, 14),
+      inlineDrawingLayout: outlined.bundle.bodyContext,
+    });
+    const drawing = linesOf(result)[0]!.drawings![0]!;
+    expect(drawing).toMatchObject({ start: 1, width: 102, height: 82 });
+    expect(drawing.groupPicture).toBeDefined();
+    expect(drawing.vectorShape?.components[0]?.strokeWidthEmu).toBe(12700);
+  } finally {
+    outlined.bundle.dispose();
+  }
+  // One side is not a supported outline: the drawing stays refused, not drawn without it.
+  const partial = setup(shape(['top']));
+  try {
+    expect(drawingAtomIdentities(partial.reader.part())?.size ?? 0).toBe(0);
+  } finally {
+    partial.bundle.dispose();
+  }
+});
+
+test('an embedded object reserves its cached preview height, as the same w:pict does', () => {
+  const O = 'urn:schemas-microsoft-com:office:office';
+  const picture =
+    '<v:shape id="_x0000_i1025" type="#_x0000_t75" style="width:100pt;height:28.5pt" o:ole=""><v:imagedata r:id="rPreview" o:title=""/></v:shape>';
+  const ole = (type: string) =>
+    `<o:OLEObject Type="${type}" ProgID="Package" ShapeID="_x0000_i1025" DrawAspect="Content" ObjectID="_1" r:id="rOle"/>`;
+  const source = (wrapped: string) =>
+    `<w:document xmlns:w="${W}" xmlns:v="${V}" xmlns:o="${O}" xmlns:r="${R}"><w:body><w:p><w:r><w:t>Before</w:t></w:r></w:p><w:p><w:r>${wrapped}</w:r></w:p><w:p><w:r><w:t>After</w:t></w:r></w:p></w:body></w:document>`;
+  const lineTops = (wrapped: string) => {
+    const { reader, bundle } = setup(source(wrapped));
+    try {
+      const result = layoutSemanticDocument(reader.part(), 1, {
+        measurer: createFixedMeasurer(6, 14),
+        inlineDrawingLayout: bundle.bodyContext,
+      });
+      const lines = linesOf(result);
+      return {
+        tops: lines.map((line) => line.box.y),
+        drawings: lines.flatMap((line) => line.drawings ?? []),
+      };
+    } finally {
+      bundle.dispose();
+    }
+  };
+  const embedded = lineTops(
+    `<w:object w:dxaOrig="2000" w:dyaOrig="570">${picture}${ole('Embed')}</w:object>`
+  );
+  const standalone = lineTops(`<w:pict>${picture.replace(' o:ole=""', '')}</w:pict>`);
+  expect(embedded.drawings).toHaveLength(1);
+  expect(embedded.drawings[0]).toMatchObject({ start: 0, width: 100, height: 28.5 });
+  expect(embedded.tops).toEqual(standalone.tops);
+  expect(embedded.tops[2]! - embedded.tops[1]!).toBeGreaterThanOrEqual(28.5);
+  // A linked object stays opaque: its paragraph is one empty text line and paints nothing.
+  const linked = lineTops(
+    `<w:object w:dxaOrig="2000" w:dyaOrig="570">${picture}${ole('Link')}</w:object>`
+  );
+  expect(linked.drawings).toHaveLength(0);
+  expect(linked.tops[2]! - linked.tops[1]!).toBe(linked.tops[1]! - linked.tops[0]!);
+});
+
+test('framed object previews keep atom offsets without adding ordinary flow height', async () => {
+  const object =
+    '<w:object><v:shape type="#_x0000_t75" style="width:52.5pt;height:56.25pt"><v:imagedata r:id="preview"/></v:shape></w:object>';
+  const content = `<w:r><w:t>A</w:t>${object}<w:t>Z</w:t></w:r>`;
+  const source = (framed: boolean) =>
+    `<w:document xmlns:w="${W}" xmlns:v="${V}" xmlns:r="${R}"><w:body><w:p>${framed ? '<w:pPr><w:framePr w:vAnchor="text" w:y="-854"/></w:pPr>' : ''}${content}</w:p></w:body></w:document>`;
+  const { reader, bundle, setPart } = setup(source(false));
+  const { replaceNode, createNodeIdAllocator } = await import('../../store/package/ooxml-edit.ts');
+  const { cloneWithNewIds } = await import('../../store/store/tree-op-nodes.ts');
+  try {
+    const paragraph = paragraphOf(reader.part());
+    expect(paragraphTextOf(reader.part(), paragraph.id)).toBe('A\uFFFCZ');
+    const atoms = drawingAtomIdentities(reader.part())!;
+    const framedParagraph = paragraphOf(partOf(source(true)));
+    const next = replaceNode(reader.part(), paragraph.id, {
+      ...paragraph,
+      children: [
+        cloneWithNewIds(framedParagraph.children[0]!, createNodeIdAllocator(reader.part())),
+        ...paragraph.children,
+      ],
+    } as OoxmlParagraphNode);
+    if (!next.ok) throw new Error(JSON.stringify(next.issues));
+    setPart(next.part);
+    for (const [id, node] of atoms)
+      expect(drawingAtomIdentities(reader.part())!.get(id)).toBe(node);
+    const context = bundle.contextForPart(reader.part().name)!;
+    const current = paragraphOf(reader.part());
+    const layout = layoutSemanticDocument(reader.part(), 1, {
+      measurer: createFixedMeasurer(6, 12),
+      inlineDrawingLayout: context,
+    });
+    expect(paragraphTextOf(reader.part(), current.id)).toBe('A\uFFFCZ');
+    expect(linesOf(layout)[0]!.box.height).toBeLessThan(56.25);
+    expect(linesOf(layout)[0]!.drawings ?? []).toHaveLength(0);
+  } finally {
+    bundle.dispose();
+  }
+});
+
+test('inherited frame changes invalidate preview geometry without changing atom identity', () => {
+  const source = `<w:document xmlns:w="${W}" xmlns:v="${V}" xmlns:r="${R}"><w:body><w:p><w:pPr><w:pStyle w:val="Child"/></w:pPr><w:r><w:t>A</w:t><w:object><v:shape type="#_x0000_t75" style="width:52.5pt;height:56.25pt"><v:imagedata r:id="preview"/></v:shape></w:object><w:t>Z</w:t></w:r></w:p></w:body></w:document>`;
+  const { reader, bundle, setPart } = setup(source);
+  const part = reader.part();
+  const paragraph = paragraphOf(part);
+  const atoms = drawingAtomIdentities(part)!;
+  const draw = () =>
+    linesOf(
+      layoutSemanticDocument(reader.part(), 1, {
+        measurer: createFixedMeasurer(6, 12),
+        inlineDrawingLayout: bundle.bodyContext,
+      })
+    )[0]!;
+  try {
+    expect(draw().box.height).toBeGreaterThan(56.25);
+    for (const frame of [true, false, true]) {
+      const read = readOoxmlPart(
+        `<w:styles xmlns:w="${W}"><w:style w:type="paragraph" w:styleId="Child"><w:basedOn w:val="Base"/></w:style><w:style w:type="paragraph" w:styleId="Base"><w:pPr>${frame ? '<w:framePr w:y="-854" w:vAnchor="text"/>' : ''}</w:pPr></w:style></w:styles>`,
+        {
+          name: '/word/styles.xml',
+          contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml',
+        }
+      );
+      if (!read.ok) throw new Error(read.reason);
+      setPart(read.part);
+      expect(reader.part()).toBe(part);
+      expect(drawingAtomIdentities(part)).toBe(atoms);
+      expect(paragraphTextOf(part, paragraph.id)).toBe('A\uFFFCZ');
+      expect(draw().box.height > 56.25).toBe(!frame);
+    }
   } finally {
     bundle.dispose();
   }

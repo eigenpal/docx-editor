@@ -9,6 +9,7 @@ import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { firstLineShift, listMarkerBox, listMarkerWidth } from './list-marker-geometry.ts';
 import { rtlListMarkerPieces } from './list-marker-bidi.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
+import { holdsOnlyPageBreak, type PendingLine } from './pending-line.ts';
 
 /**
  * What a picture-bullet marker needs from the package, resolved by the host.
@@ -106,35 +107,47 @@ export interface ListFirstLineEntry {
 }
 
 /**
- * The two list-dependent first-line facts one story walk needs, over its current item map.
+ * The list-dependent first-line flow options one story walk needs, over its current item map.
  *
- * Current-pass map first, so marker ordinals stay fresh when the memo reuses inputs; both
- * facts have to read the SAME item, which is why they are minted together.
+ * Current-pass map first, so marker ordinals stay fresh when the memo reuses inputs; the
+ * offset and the floors have to read the SAME item, which is why they are minted together.
+ * A list item's slot passes over page breaks that open it, to the line that gets its marker
+ * ({@link markerLineStart}). Other paragraphs keep their first-line indent on the break line.
  */
 export function createListFirstLineMetrics(
   listItems: ReadonlyMap<string, ResolvedListItem> | undefined,
   measurer: TextMeasurer
-): {
-  readonly firstLineOffsetOf: (entry: ListFirstLineEntry) => number;
-  readonly firstLineFloorOf: (entry: ListFirstLineEntry) => {
-    readonly firstLineMinimumBaseline?: number;
-    readonly firstLineMarkerAscent?: number;
-  };
+): (entry: ListFirstLineEntry) => {
+  readonly firstLineOffset: number;
+  readonly firstLineMinimumBaseline?: number;
+  readonly firstLineMarkerAscent?: number;
+  readonly firstLineAfterLeadingBreaks?: true;
 } {
-  const itemOf = (entry: ListFirstLineEntry): ResolvedListItem | undefined =>
-    listItems?.get(entry.paragraph.id) ?? entry.listItem;
-  return {
-    firstLineOffsetOf: (entry) =>
-      directionalListFirstLineShift(
-        itemOf(entry),
+  return (entry) => {
+    const item = listItems?.get(entry.paragraph.id) ?? entry.listItem;
+    return {
+      firstLineOffset: directionalListFirstLineShift(
+        item,
         entry.indent,
         measurer,
         entry.tabStops,
         entry.available,
         paragraphIsRtl(entry.props)
       ),
-    firstLineFloorOf: (entry) => listMarkerFirstLineMetrics(itemOf(entry), measurer),
+      ...listMarkerFirstLineMetrics(item, measurer),
+      ...(item ? { firstLineAfterLeadingBreaks: true as const } : {}),
+    };
   };
+}
+
+/**
+ * Where a paragraph's list marker sits when page breaks open it: the start of the first line
+ * after them, which the breaker gives the first-line slot. Undefined when the marker sits on
+ * the paragraph's first line, which is every other case.
+ */
+export function markerLineStart(lines: readonly PendingLine[]): number | undefined {
+  if (lines.length < 2 || !holdsOnlyPageBreak(lines[0]!)) return undefined;
+  return lines.find((line) => !holdsOnlyPageBreak(line))?.start;
 }
 
 /**

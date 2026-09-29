@@ -1,3 +1,4 @@
+import { characterHeaderPageToken } from './character-header-pages.ts';
 // Per-section incremental layout for multi-section documents.
 //
 // A single LayoutSession cannot resume across section boundaries: each section has its own
@@ -25,6 +26,7 @@ import {
   DEFAULT_SECTION_PROPERTIES,
   geometryOfSection,
   type DocumentSection,
+  sectionLineGridPt,
   type SectionColumns,
 } from './section-properties.ts';
 import { pageBordersFingerprint } from './page-borders.ts';
@@ -121,7 +123,7 @@ function furnitureStoryEntries(
  */
 function furnitureGeometryFingerprint(furniture: PageFurniture | undefined): string {
   if (!furniture) return '';
-  return `hf:${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};h:${furnitureStoryEntries(furniture.headers, false, 'h')};f:${furnitureStoryEntries(furniture.footers, false, 'f')}`;
+  return `hf:${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};h:${furnitureStoryEntries(furniture.headers, false, 'h')};f:${furnitureStoryEntries(furniture.footers, false, 'f')};cs:${characterHeaderPageToken(furniture)}`;
 }
 
 /**
@@ -131,7 +133,7 @@ function furnitureGeometryFingerprint(furniture: PageFurniture | undefined): str
  */
 export function furnitureFingerprint(furniture: PageFurniture | undefined): string {
   if (!furniture) return '';
-  return `hf:${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};h:${furnitureStoryEntries(furniture.headers, true, 'h')};f:${furnitureStoryEntries(furniture.footers, true, 'f')}`;
+  return `hf:${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};h:${furnitureStoryEntries(furniture.headers, true, 'h')};f:${furnitureStoryEntries(furniture.footers, true, 'f')};cs:${characterHeaderPageToken(furniture)}`;
 }
 
 export function furnitureForSection(
@@ -557,7 +559,7 @@ export function layoutMultiSectionDocument(
       geometry,
       furniture,
       sectionColumns: section.properties.columns,
-      paragraphLineUnitPt: (section.properties.gridLinePitchTwips ?? 240) / 20,
+      paragraphLineUnitPt: sectionLineGridPt(section.properties),
       ...(section.properties.pageBorders
         ? { sectionPageBorders: section.properties.pageBorders }
         : {}),
@@ -733,7 +735,7 @@ export function layoutMultiSectionDocument(
       ...rest,
       retainKeys,
       geometry,
-      paragraphLineUnitPt: (sections[0]?.properties.gridLinePitchTwips ?? 240) / 20,
+      paragraphLineUnitPt: sectionLineGridPt(sections[0]?.properties),
       sectionColumns: sections[0]?.properties.columns ?? DEFAULT_SECTION_PROPERTIES.columns,
       ...(sections[0]?.properties.pageBorders
         ? { sectionPageBorders: sections[0].properties.pageBorders }

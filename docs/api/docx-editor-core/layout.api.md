@@ -59,6 +59,7 @@ export function appliedSpaceBefore(before: number, previousAfter: number, atTopO
 export function applyLineSpacing(spacing: ParagraphLineSpacing, naturalHeight: number, naturalBaseline: number): {
     baseline: number;
     height: number;
+    trailing?: number;
 };
 
 // @public
@@ -770,7 +771,6 @@ export interface DocumentStyleDependencies {
 export interface DrawingAccessibility {
     // (undocumented)
     readonly decorative: boolean;
-    // (undocumented)
     readonly hidden: boolean;
     // (undocumented)
     readonly label: string | null;
@@ -796,6 +796,11 @@ export interface DrawingGeometry {
     readonly paintBounds: LayoutBox;
     // (undocumented)
     readonly transformedCorners: readonly DrawingPoint[];
+}
+
+// @public
+export interface DrawingGroupPictureRecord {
+    readonly alternateContent: boolean;
 }
 
 // @public (undocumented)
@@ -1500,6 +1505,7 @@ export interface InlineDrawingRecord {
     readonly effects: DrawingImageEffects;
     // (undocumented)
     readonly geometry: DrawingGeometry;
+    readonly groupPicture?: DrawingGroupPictureRecord;
     // (undocumented)
     readonly height: number;
     // (undocumented)
@@ -2032,6 +2038,7 @@ export function normalNotesOf(part: OoxmlPart | null | undefined): readonly Ooxm
 export interface NoteAreaRecord {
     // (undocumented)
     readonly box: LayoutBox;
+    readonly continuationNotice?: NonNullable<NoteAreaRecord['separator']>;
     // (undocumented)
     readonly fallbackReason?: string;
     // (undocumented)
@@ -2043,7 +2050,7 @@ export interface NoteAreaRecord {
     readonly separator?: {
         readonly box: LayoutBox;
         readonly fragments: readonly BlockFragmentRecord[];
-        readonly kind: 'separator' | 'continuationSeparator';
+        readonly kind: 'separator' | 'continuationSeparator' | 'continuationNotice';
         readonly ruleColor?: string | null;
         readonly ruleStyle?: 'single' | 'double';
         readonly synthetic: boolean;
@@ -2064,7 +2071,7 @@ export function noteDisplayMarkMap(marks: readonly NoteDisplayMark[]): ReadonlyM
 // @public
 export type NoteLayoutFallbackReason = 'note-count-limit' | 'note-fragment-limit' | 'note-reflow-exhausted' | 'note-height-cap'
 /** Authored separator/continuationSeparator taller than the content column. */
-| 'note-separator-height-cap' | 'missing-note-body' | 'dangling-note-reference';
+| 'note-separator-height-cap' | 'note-continuation-notice-height-cap' | 'missing-note-body' | 'dangling-note-reference';
 
 // @public
 export function noteLineIdPrefix(noteKind: NoteKind, noteId: number): string;
@@ -2439,6 +2446,7 @@ export const PARAGRAPH_BORDER_SIDES: readonly ["top", "left", "bottom", "right",
 
 // @public
 export interface ParagraphAutoSpacingContext {
+    readonly fixedAutoSpacing?: boolean;
     readonly inList?: boolean;
     readonly inTableCell?: boolean;
     readonly lineUnitPt?: number;
@@ -2650,6 +2658,7 @@ export function paragraphLayoutKey(inputs: ParagraphKeyInputs): ParagraphLayoutK
 
 // @public
 export interface ParagraphLineSpacing {
+    readonly gridPitch?: number;
     readonly preserveExactBaseline?: true;
     // (undocumented)
     readonly rule: LineSpacingRule;
@@ -3824,6 +3833,7 @@ export interface SemanticTableStructure {
     readonly indentPt: number;
     readonly layoutFixed: boolean;
     readonly legacyContentAlignment?: true;
+    readonly outerRuleOffsetPt?: number;
     // (undocumented)
     readonly rows: readonly SemanticTableRow[];
     readonly tableBorders: TableBorderBox;
@@ -4136,7 +4146,7 @@ export function spansInSelection(layout: SemanticLayout, selection: SemanticSele
 order: readonly string[]): StyleSpanRecord[];
 
 // @public
-export function storyBlocks(part: OoxmlPart, displayMode?: RevisionDisplayMode, authorFilter?: RevisionAuthorFilter): OoxmlElement[];
+export function storyBlocks(part: OoxmlPart, displayMode?: RevisionDisplayMode, authorFilter?: RevisionAuthorFilter, styles?: StyleCascadeTable, numberingIndex?: NumberingIndex): OoxmlElement[];
 
 // @public
 export interface StoryDrawingContext extends StoryParagraphFragmentContext {
@@ -4178,6 +4188,7 @@ export interface StrikeoutStrokePt {
 
 // @public
 export interface StyleCascadeTable {
+    readonly adjustLineHeightInTable?: true;
     readonly cacheToken: string;
     readonly defaultCharacterStyleId: string | null;
     readonly defaultParagraphStyleId: string | null;
@@ -4189,6 +4200,8 @@ export interface StyleCascadeTable {
     readonly docDefaultsParagraphNode: OoxmlElement | undefined;
     // (undocumented)
     readonly docDefaultsRun: readonly OoxmlProperty[];
+    readonly doNotBreakWrappedTables?: true;
+    readonly fixedParagraphSpacing?: true;
     readonly ignoreIndentAsNumberingTabStop?: true;
     readonly preserveExactLineBaseline?: true;
     readonly strictTableStyleHierarchy?: boolean;
@@ -4205,6 +4218,8 @@ export interface StyleDefinition {
     readonly basedOn: string | null;
     // (undocumented)
     readonly conditionalTableFormats: ReadonlyMap<string, OoxmlElement>;
+    // (undocumented)
+    readonly name?: string;
     readonly next: string | null;
     // (undocumented)
     readonly outlineLevel: number | null;
@@ -4443,10 +4458,12 @@ export interface TableRowFragmentRecord {
     // (undocumented)
     readonly cells: readonly TableCellFragmentRecord[];
     readonly changeSites?: readonly RevisionAttribution[];
+    readonly hasContinuation?: boolean;
     readonly id: string;
     readonly isContinuation?: boolean;
     readonly isHeaderRepeat: boolean;
     readonly isHeaderRow: boolean;
+    readonly placesWhole?: boolean;
     // (undocumented)
     readonly revisionAuthor?: string;
     // (undocumented)

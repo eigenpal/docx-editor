@@ -5,7 +5,7 @@ category: 'Guides'
 seoTitle: 'Images and floating pictures'
 ---
 
-DrawingML pictures (`w:drawing` with `pic:pic`) lay out, paint, and round-trip through the engine. Both adapters provide insert, wrap, properties, alt text, and selection-overlay authoring.
+The editor displays inline and floating DrawingML pictures (`w:drawing` with `pic:pic`). React and Vue provide controls to insert pictures, change wrapping, resize pictures, and edit alternative text. Saving preserves the picture markup and media.
 
 ## Supported formats
 
@@ -18,6 +18,10 @@ DrawingML pictures (`w:drawing` with `pic:pic`) lay out, paint, and round-trip t
 | External `r:link` / `TargetMode="External"` | No auto-load | Placeholder + preserved rel | Preserved; explicit user gesture to embed |
 
 Insert accepts PNG/JPEG/GIF only. Other payloads stay in the package and affect pagination through their authored extent.
+
+The editor identifies PNG, JPEG, GIF, BMP, and WebP images from their bytes. These images can render even when the document declares another format from this list. For example, JPEG bytes declared as PNG still display. Image validation and size limits still apply. Saving preserves the original bytes and content-type declaration.
+
+This recovery does not cover declarations that confuse these formats with SVG, TIFF, EMF, or WMF. Those mismatches show a placeholder.
 
 JPEG validation accepts large EXIF and ICC metadata segments before the frame header. Intrinsic dimensions account for EXIF orientation, matching the browser's decoded image. The original photo bytes and the authored drawing extent remain unchanged.
 
@@ -73,6 +77,8 @@ editor.snapshot().image; // reference-stable until selection or image fields mov
 | `topAndBottom` | Keeps text above and below                      | `wrapTopAndBottom`           |
 | `behind`       | Places the picture behind document content      | `wrapNone`, `@behindDoc="1"` |
 | `inFront`      | Places the picture in front of document content | `wrapNone`, `@behindDoc="0"` |
+
+The wrap element controls text flow. The `@behindDoc` attribute controls paint order. A picture with `@behindDoc="1"` paints behind text. If its wrap element differs from `wrapNone`, text still wraps around it. `SelectedImageState.wrap` reports that wrap mode.
 
 Images in front of or behind text can paint beyond their anchor cells. Their cell-relative position is preserved, but the cell does not crop these overlays. Page-relative images are clipped to the physical sheet, including its margins.
 
@@ -168,7 +174,8 @@ The editor renders brightness, contrast, grayscale, and bilevel black-and-white 
 | Drawing content | Status |
 | --- | --- |
 | Solid shapes and bounded shape groups | Render geometry with sRGB or theme colors |
-| Charts, SmartArt, unsupported groups, and canvases | Preserve the extent and show a labeled placeholder |
+| One picture in a shape group, below the group's shapes | Render in its own frame, as described in [Pictures in shape groups](#pictures-in-shape-groups) |
+| Charts, SmartArt, unsupported groups, and canvases | Preserve the extent and show a labeled placeholder. In alternative content (`mc:AlternateContent`), charts, SmartArt, and unsupported groups are not shown, and a floating one with a wrapping mode still reserves its wrap area. A canvas in alternative content uses the fallback content instead |
 | Anchored text boxes | Render the story read-only and clip it to the extent |
 | Page fields in anchored header or footer text boxes | Evaluate per page |
 | Inline text boxes, linked chains, autofit, and rotation | Show a placeholder |
@@ -177,6 +184,29 @@ The editor renders brightness, contrast, grayscale, and bilevel black-and-white 
 | Tracked image insertion and deletion | Record the change in suggesting mode |
 | Tracked image property edits | Stay unavailable in suggesting mode |
 | Artistic effects (`a:effectLst`) | Do not render; authored markup round-trips |
+
+## Pictures in shape groups
+
+A DrawingML shape group (`wpg:wgp`) can hold one picture member beside its shape members. For example, a scanned letterhead page can sit behind the text with ruled lines drawn over it. The editor and PDF export render the picture in its own frame inside the group, then render the group's shapes over it.
+
+The picture renders only if all of these conditions are true:
+
+- The group holds exactly one picture, and the picture comes before every shape member.
+- The picture is not rotated or flipped, it has a rectangle geometry, and its fill is not tiled.
+- The picture is visible and has no image effects, visible outline, shape effects, or 3D properties.
+- Its fill rectangle has no offsets. An omitted fill rectangle uses the full picture frame.
+- The picture frame overlaps the group's area and extends no more than one group width or height past it.
+- Every other member of the group is a supported solid shape.
+
+If a condition is false, the group is an unsupported group. Word stores most groups in alternative content (`mc:AlternateContent`). An unsupported group in alternative content is not shown. Other unsupported groups show a labeled placeholder. Text boxes inside a group do not render, so a group with a text box member is an unsupported group.
+
+An unsupported group in alternative content still takes part in layout if it floats with square, tight, through, or top-and-bottom wrapping. Text flows around its wrap area as it would around the group if it were shown. The hidden group paints nothing and cannot be selected, and exports do not include it. A group with no wrapping (`wp:wrapNone`) takes no space.
+
+A group renders completely or not at all. While the picture loads, the editor renders the group's shapes alone. If the picture cannot load, the editor and PDF export treat the group as an unsupported group. For example, the picture is missing, linked, damaged, or over a decode limit. PDF export embeds PNG and JPEG pictures only. If a group in alternative content holds a picture in another format, PDF export leaves the group out and reports an `information` diagnostic. PDF export reports other groups that it cannot render as `unsupported`.
+
+The picture is clipped to the group's area. The group's shapes can extend into the effect extent (`wp:effectExtent`), as the shapes of a group without a picture can.
+
+Picture commands, such as resize and replace, do not apply to a picture in a group. Markdown export omits the group as one drawing and reports an `omitted-drawing` warning. Saving preserves the group, its alternative content, and its media without changes. An embedded picture passes the normal image validation and decode limits. A linked picture is never fetched.
 
 ## Find text in text boxes
 
@@ -191,6 +221,10 @@ Standalone `w:pict` can render unrotated embedded photos and bounded groups of p
 Previews are read-only. Saving preserves the original VML, media, and relationships without adding generated SVG parts or converting the source to DrawingML. Deleting another picture preserves shared photo relationships.
 
 The editor does not partially render unsupported, oversized, or clipped groups. Custom templates, text boxes, curves, image effects, rotation, and unsupported group members prevent a group preview. Only recognized standard shape templates are supported. When a document supplies DrawingML and VML alternatives, the editor displays only the selected alternative.
+
+An inline standalone photo can have a picture border (`w10:border*`) when all four sides use one `single` line with the same width and color. The photo keeps its authored size and crop, and the border line surrounds it. The drawing grows by the line width on each side. Other border combinations, and borders on floating, color-keyed, or grouped photos, prevent the preview.
+
+An inline embedded object (`w:object`) shows its cached preview picture when the preview is one standard picture shape (`_x0000_t75`) with an embedded image. The object takes one position in the text, and layout reserves the preview size. The editor never runs, loads, or resolves the embedded object, and never fetches a linked preview. Picture commands, such as resize and replace, do not apply to the preview. You can delete the object with the text around it; the embedded binary stays in the package. Copy and cut refuse selections that contain an object. Rich paste refuses fragments that contain an object and preserves the target selection. A WMF or EMF preview keeps its size and shows a labeled placeholder when conversion is unavailable. Objects inside paragraph frames show no preview or reserved preview size. Direct frames and frames inherited from paragraph styles have this limit. The object keeps its text position, and the surrounding text stays unchanged. Floating objects, linked objects, and objects with other content show no preview.
 
 Standalone photos reuse validated image resources and retain their authored crop. Groups, WordArt, and color-key previews use bounded static SVG resources. Embedded members still pass the normal image validation and decode limits; an external or missing member never triggers a fetch or a misleading partial group preview.
 

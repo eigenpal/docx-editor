@@ -1,3 +1,5 @@
+import type { StyleCascadeTable } from './style-cascade.ts';
+import type { NumberingIndex } from './numbering-index.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import type { DocumentSection } from './section-properties.ts';
@@ -64,9 +66,11 @@ export function paragraphSectionIndexOf(
   sections: readonly DocumentSection[],
   displayMode: RevisionDisplayMode,
   authorFilter: RevisionAuthorFilter | undefined,
-  memoHost?: object
+  memoHost?: object,
+  styles?: StyleCascadeTable,
+  numberingIndex?: NumberingIndex
 ): ReadonlyMap<string, number> {
-  const blocks = storyBlocks(part, displayMode, authorFilter);
+  const blocks = storyBlocks(part, displayMode, authorFilter, styles, numberingIndex);
   const boundsFingerprint = sectionBoundsFingerprint(sections, displayMode, authorFilter);
   const memo = memoHost ? indexMemos.get(memoHost) : undefined;
   if (

@@ -25,6 +25,13 @@ export function readSize(raw: string | undefined, fallback: number | null): numb
   return signed < 0 ? null : Math.min(signed, MAX_EMU);
 }
 
+/** An `a:srcRect` edge (1000ths of a percent) as a 0..1 crop fraction; negatives read as 0. */
+export function parseCropPercent(value: string | undefined): number {
+  const parsed = parseEmu(value, false);
+  if (parsed === null || parsed <= 0) return 0;
+  return Math.min(parsed / 100_000, 1);
+}
+
 export function findDirectChild(
   nodes: readonly OoxmlNode[],
   options: {

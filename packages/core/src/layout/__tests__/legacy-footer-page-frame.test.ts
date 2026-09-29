@@ -87,7 +87,7 @@ test('re-evaluates and re-centers multi-digit PAGE results per page', () => {
 
 test('leaves other frame structures in ordinary flow', () => {
   const samples = [
-    body.replace('w:xAlign="center"', 'w:xAlign="right"'),
+    body.replace('w:xAlign="center"', 'w:xAlign="left"'),
     body.replace('w:y="1"', 'w:y="200"'),
     body.replace('w:y="1"', 'w:y="1" w:w="200"'),
     body.replace(' PAGE ', ' NUMPAGES '),
@@ -103,8 +103,10 @@ test('leaves other frame structures in ordinary flow', () => {
     const story = layoutHeaderFooterStory(partOf(content), 400, measurer, 'test');
     expect(story.fragments[1]!.box.y).toBeGreaterThan(0);
   }
+  // A header takes the header frame lane, not this footer lane.
   const header = layoutHeaderFooterStory(partOf(body, true), 400, measurer, 'test');
-  expect(header.fragments[1]!.box.y).toBeGreaterThan(0);
+  expect(header.fragments[1]!.box.y).toBe(0);
+  expect(header.fragments[0]!.box.y).toBeCloseTo(0.05, 6);
 });
 
 test('centers PAGE over a middle-dot anchor without moving or merging its text', () => {

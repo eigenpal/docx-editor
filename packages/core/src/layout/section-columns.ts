@@ -1,5 +1,6 @@
 import { twips, twipsToPoints } from '@docx-editor.dev/core/store';
 import type { SectionColumns } from './section-properties.ts';
+import type { LayoutBox } from './semantic-records.ts';
 
 export interface ResolvedSectionColumns {
   readonly count: number;
@@ -73,4 +74,18 @@ export function resolveSectionColumns(
     lefts,
     separator: columns.separator === true && count > 1,
   };
+}
+
+/** The 0.75pt rule centered in each column gap, from `top` down to the lowest placed content. */
+export function columnSeparatorBoxes(
+  columns: ResolvedSectionColumns,
+  top: number,
+  usedBottom: number
+): LayoutBox[] {
+  return columns.gaps.map((gap, index) => ({
+    x: columns.lefts[index]! + columns.widths[index]! + gap / 2 - 0.375,
+    y: top,
+    width: 0.75,
+    height: Math.max(0, usedBottom - top),
+  }));
 }

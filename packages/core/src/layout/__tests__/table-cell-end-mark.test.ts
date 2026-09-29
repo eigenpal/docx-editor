@@ -5,14 +5,22 @@ import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { flowBlocksInBox, layoutRowFragment } from '../semantic-table-layout.ts';
 import { readTableStructure } from '../semantic-table.ts';
 import type { PendingLine, TextMeasurer } from '../paragraph-flow.ts';
+import { glyphSizeFactorOf, type ResolvedRunStyle } from '../run-style.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+/** Script text measures at its glyph size, so a superscript line shows its floor. */
+const glyph = (style: ResolvedRunStyle) => style.fontSizePt * glyphSizeFactorOf(style);
 const measurer: TextMeasurer = {
   measure: (text, style) => text.length * style.fontSizePt * 0.5,
-  lineMetrics: (style) => ({ height: style.fontSizePt, baseline: style.fontSizePt * 0.8 }),
+  lineMetrics: (style) => ({ height: glyph(style), baseline: glyph(style) * 0.8 }),
 };
-const paragraph = (text: string, mark = 20) =>
-  `<w:p><w:pPr><w:rPr><w:sz w:val="${mark * 2}"/></w:rPr></w:pPr><w:r><w:rPr><w:sz w:val="10"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
+const paragraph = (text: string, mark = 20, run = '') =>
+  `<w:p><w:pPr><w:rPr><w:sz w:val="${mark * 2}"/></w:rPr></w:pPr><w:r><w:rPr><w:sz w:val="10"/>${run}</w:rPr><w:t>${text}</w:t></w:r></w:p>`;
+/**
+ * A superscript line keeps the 5pt line of its full-size run as a floor, not the mark's 20pt
+ * or the 10pt cascade, except under a cell's end mark, so it shows which role the mark had.
+ */
+const superscript = (text: string) => paragraph(text, 20, '<w:vertAlign w:val="superscript"/>');
 const table = (content: string, cellProperties = '', rowProperties = '') =>
   `<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/><w:tblCellMar>${['top', 'bottom', 'left', 'right'].map((side) => `<w:${side} w:w="0" w:type="dxa"/>`).join('')}</w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:trPr>${rowProperties}</w:trPr><w:tc><w:tcPr>${cellProperties}</w:tcPr>${content}</w:tc></w:tr></w:tbl>`;
 function load(body: string) {
@@ -61,11 +69,12 @@ test('wrapped small text grows beyond the cell marker without enlarging its last
   expect(rows(result)[0]!.box.height).toBe(lines.length * 5);
 });
 
-test('only the final paragraph uses the cell marker, and bottom alignment uses the row floor', () => {
+test('no text line grows from its mark, and the row floor is the final mark', () => {
   const result = run(table(paragraph('First') + paragraph('Last'), '<w:vAlign w:val="bottom"/>'));
   const lines = linesOf(result);
-  expect(lines.map((line) => line.box.height)).toEqual([20, 5]);
-  expect(rows(result)[0]!.box.height).toBe(25);
+  expect(lines.map((line) => line.box.height)).toEqual([5, 5]);
+  expect(rows(result)[0]!.box.height).toBe(20);
+  expect(lines[1]!.box.y + lines[1]!.box.height).toBe(rows(result)[0]!.box.height);
   const single = run(table(paragraph('Last'), '<w:vAlign w:val="bottom"/>'));
   const row = rows(single)[0]!;
   const line = linesOf(single)[0]!;
@@ -86,7 +95,8 @@ for (const [rule, expected] of [
 }
 
 test('a row moves when the printable text fits but its marker minimum does not', () => {
-  const result = run(paragraph('Prefix', 15) + table(paragraph('Cell')), 30);
+  const prefix = '<w:p><w:r><w:rPr><w:sz w:val="30"/></w:rPr><w:t>Prefix</w:t></w:r></w:p>';
+  const result = run(prefix + table(paragraph('Cell')), 30);
   expect(result.pages).toHaveLength(2);
   expect(result.pages[0]!.fragments.every((f) => f.kind !== 'table')).toBe(true);
   expect(rows(result)[0]!.box.height).toBe(20);
@@ -115,12 +125,15 @@ test('a collapsed nested-table terminator cannot restore its oversized marker fl
 });
 
 test('vertical cells keep their existing rotated paragraph-marker geometry', () => {
-  const result = run(table(paragraph('Small'), '<w:textDirection w:val="btLr"/>'));
-  expect(linesOf(result)[0]!.box.height).toBe(20);
+  expect(
+    linesOf(run(table(paragraph('Small'), '<w:textDirection w:val="btLr"/>')))[0]!.box.height
+  ).toBe(5);
+  const result = run(table(superscript('Small'), '<w:textDirection w:val="btLr"/>'));
+  expect(linesOf(result)[0]!.box.height).toBe(5);
 });
 
 test('the same paragraph cannot reuse a break from a different cell-end role', () => {
-  const part = load(table(paragraph('Small')));
+  const part = load(table(superscript('Small')));
   const body = part.root.children.find((n) => n.kind !== 'textValue' && n.localName === 'body')!;
   if (body.kind === 'textValue') throw new Error('body');
   const node = body.children.find((n) => n.kind === 'table')!;
@@ -134,7 +147,7 @@ test('the same paragraph cannot reuse a break from a different cell-end role', (
       ? layoutRowFragment(row, [100], 0, 0, false, 0, deps).record.cells[0]!.blocks[0]!
       : flowBlocksInBox([paragraphNode], 0, 100, 0, 0, deps).blocks[0]!;
     if (placed.kind !== 'paragraph') throw new Error('paragraph');
-    expect(placed.lines[0]!.box.height).toBe(end ? 5 : 20);
+    expect(placed.lines[0]!.box.height).toBeCloseTo(end ? 5 * 0.65 : 5, 5);
   }
   expect(cache.stats.hits).toBeGreaterThan(0);
 });

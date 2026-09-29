@@ -1,4 +1,6 @@
+import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
 import type { StyleSpanRecord } from './semantic-records.ts';
+import { withoutTrailingSpaces } from './trailing-spaces.ts';
 
 /** Spaces Word may hang/clip at a line end instead of wrapping onto a new line. */
 export function isCollapsibleLineEndWhitespace(text: string): boolean {
@@ -9,10 +11,34 @@ export function isCollapsibleLineEndWhitespace(text: string): boolean {
   return true;
 }
 
+/**
+ * Whether the space that opens `pieces[index]` is the trailing space of the word before the
+ * ignored page breaks in front of it. A table cell lays its text out as though the breaks
+ * were absent, and then the word and its space are one candidate with one style, so the
+ * space hangs only when it overflows, not because it ends the paragraph.
+ */
+export function endsWordAcrossIgnoredBreaks(
+  pieces: readonly { readonly text: string; readonly style: object }[],
+  index: number,
+  candidate: string,
+  lastEmitted: string
+): boolean {
+  if (candidate !== ' ' || !/\S$/u.test(lastEmitted)) return false;
+  let before = index - 1;
+  while (pieces[before]?.text === PAGE_BREAK_CHAR) before--;
+  return before < index - 1 && pieces[before]?.style === pieces[index]!.style;
+}
+
 interface ClippedWordEnd {
   readonly length: number;
   readonly visibleWidth: number;
   readonly width: number;
+}
+
+/** The advance of a word without its trailing spaces; undefined when it has none, or no ink. */
+export function wordInkWidth(text: string, measure: (text: string) => number): number | undefined {
+  const ink = withoutTrailingSpaces(text);
+  return ink.length === 0 || ink.length === text.length ? undefined : measure(ink);
 }
 
 /** Price only the ink when a word fits but its trailing separator crosses the margin. */

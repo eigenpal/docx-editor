@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A settled note reserve can block a fitting paragraph continuation.",
+  "after": "A continuation returns when its required opening and complete notes fit.",
+  "reason": "Only derived pagination changes. Stored fields, operations, and identities stay unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/footnote-holdout-frontier.test.ts",
+    "packages/core/src/layout/__tests__/footnote-trailing-depth.test.ts"
+  ],
+  "changeset": null,
+  "migration": null
+}

@@ -1,3 +1,4 @@
+import { createCaretComplexScriptResolver } from './surface-complex-script.ts';
 import { setSurfaceAccessibleLabel } from './surface-accessibility.ts';
 import { refreshWriteBlocked, registerRefreshComposition } from './refresh-write-guard.ts';
 import { createLegacyDropdownInteraction } from './surface-legacy-dropdown.ts';
@@ -233,7 +234,7 @@ import { createSurfaceTableInteraction } from './surface-table-interaction.ts';
 import { createSurfaceFormat } from './surface-format.ts';
 import { createSurfaceFormatPainter } from './surface-format-painter.ts';
 import { authoredRunPropertiesAt, type SurfaceProperty } from './surface-formatting.ts';
-import { complexScriptAt, mergedRunWrite } from '../store/store/direct-properties.ts';
+import { mergedRunWrite } from '../store/store/direct-properties.ts';
 import { bindDirectionChord, createDirectionChordHandler } from './surface-direction-chord.ts';
 import {
   absorbPlaceholderControls,
@@ -757,7 +758,7 @@ export function mountPaginatedSurface(
         properties: mergedRunWrite(
           armed.base,
           armed.properties,
-          complexScriptAt(partOfNodeId(session, paragraphId) ?? session.part(), paragraphId, offset)
+          complexScriptAtCaret(paragraphId, offset)
         ),
       },
     ];
@@ -902,6 +903,11 @@ export function mountPaginatedSurface(
   });
   const revisionFilter = (): RevisionAuthorFilter | undefined =>
     reviewView.filter(revisionAuthorVisibility.filterForSession(session));
+  const complexScriptAtCaret = createCaretComplexScriptResolver(
+    session,
+    revisionDisplayMode,
+    revisionFilter
+  );
   const paragraphMarkVisible = (paragraphId: string): boolean => {
     const part = partOfNodeId(session, paragraphId) ?? session.part();
     const paragraph = findNode(part, paragraphId);
@@ -4619,11 +4625,7 @@ export function mountPaginatedSurface(
       const markProperties = mergedRunWrite(
         armed.base,
         armed.properties,
-        complexScriptAt(
-          partOfNodeId(session, position.paragraphId) ?? session.part(),
-          position.paragraphId,
-          position.offset
-        )
+        complexScriptAtCaret(position.paragraphId, position.offset)
       );
       const markOps: TreeDocOp[] =
         endsParagraph && editingMode === 'edit' && markProperties.length > 0

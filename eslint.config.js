@@ -343,7 +343,6 @@ export default [
   {
     files: [
       'packages/core/src/editor/chrome-controls.ts',
-      'packages/core/src/layout/semantic-table.ts',
       'packages/core/src/store/__tests__/table-resize-ops.test.ts',
       'packages/core/src/store/__tests__/table-row-ops.test.ts',
     ],

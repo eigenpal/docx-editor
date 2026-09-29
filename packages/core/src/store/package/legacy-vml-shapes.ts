@@ -235,10 +235,57 @@ function pathPoints(node: OoxmlElement, box: LegacyBox): [number, number][] | nu
   ]);
 }
 
+/** A picture outline: one solid line of `weight` points in `color` (`#rrggbb`) on all sides. */
+export interface LegacyPictureBorder {
+  readonly weight: number;
+  readonly color: string;
+}
+
+const isBorderSide = (n: OoxmlElement) =>
+  n.namespaceUri === WORD_VML &&
+  ['bordertop', 'borderleft', 'borderbottom', 'borderright'].includes(n.localName);
+
+/**
+ * The `w10:border*` outline of a picture shape. Undefined when the shape has no border side.
+ * Null unless all four sides are present once, as one `single` line of the same width (in
+ * eighths of a point) and the same `o:border*color`; the caller refuses the picture then.
+ */
+export function legacyPictureBorder(node: OoxmlElement): LegacyPictureBorder | null | undefined {
+  const sides = children(node).filter(
+    (n) => n.namespaceUri === WORD_VML && n.localName.startsWith('border')
+  );
+  if (!sides.length) return undefined;
+  if (sides.length !== 4 || !sides.every(isBorderSide)) return null;
+  let border: LegacyPictureBorder | undefined;
+  for (const side of sides) {
+    const name = side.localName;
+    const width = a(side, 'width') ?? '';
+    const ink = color(a(node, `${name}color`, OFFICE), '');
+    if (
+      sides.filter((n) => n.localName === name).length !== 1 ||
+      children(side).length ||
+      side.attributes.some(
+        (attr) => attr.namespaceUri || !['type', 'width'].includes(attr.localName)
+      ) ||
+      a(side, 'type') !== 'single' ||
+      !/^\d{1,2}$/.test(width) ||
+      !ink
+    )
+      return null;
+    const eighths = Number(width);
+    if (eighths < 1 || eighths > 96) return null;
+    if (border && (border.weight !== eighths / 8 || border.color !== ink)) return null;
+    border = { weight: eighths / 8, color: ink };
+  }
+  return border ? Object.freeze(border) : null;
+}
+
+/** `bordered`: the caller validated the shape's `w10:border*` sides and draws the outline. */
 export function legacyShapeFragment(
   node: OoxmlElement,
   box: LegacyBox,
-  canvas: LegacyBox = box
+  canvas: LegacyBox = box,
+  bordered = false
 ): LegacyGraphicFragment | null {
   const inside = (x: number, y: number, padding = 0) =>
     x - padding >= canvas.x &&
@@ -256,7 +303,8 @@ export function legacyShapeFragment(
         ) &&
         !named(n, OFFICE, 'lock') &&
         !named(n, WORD_VML, 'wrap') &&
-        !(named(n, WORD_VML, 'anchorlock') && n.attributes.length === 0)
+        !(named(n, WORD_VML, 'anchorlock') && n.attributes.length === 0) &&
+        !(bordered && isBorderSide(n))
     )
   )
     return null;

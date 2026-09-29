@@ -1,3 +1,8 @@
+import { tocCodeRanges } from './field-code-toc.ts';
+import { tocFieldChromeParagraphIds, emptyTocSuppressedResultParagraphIds } from './toc-layout.ts';
+import type { NumberingIndex } from './numbering-index.ts';
+import { withStyleSeparatorParagraphs } from './style-separator-flow.ts';
+import type { StyleCascadeTable } from './style-cascade.ts';
 // Story roots over the canonical tree (phase 2 of the legacy-lane retirement).
 //
 // A STORY is a flowable sequence of blocks: the body of the main document, the whole
@@ -196,15 +201,30 @@ function mergedTrailingRun(members: readonly OoxmlElement[]): readonly OoxmlElem
 export function mergedFlowBlocks(
   children: readonly OoxmlNode[],
   displayMode: RevisionDisplayMode,
-  authorFilter?: RevisionAuthorFilter
+  authorFilter?: RevisionAuthorFilter,
+  styles?: StyleCascadeTable,
+  styleSeparators = false,
+  numberingIndex?: NumberingIndex,
+  excludedParagraphs?: ReadonlySet<string> | (() => ReadonlySet<string>)
 ): OoxmlElement[] {
   const blocks = flowBlocksWithParent(children).map((entry) => ({
     ...entry,
     block: projectRevisionFormatting(entry.block, displayMode, authorFilter),
   }));
-  const accepted = withMergedParagraphs(blocks, displayMode, authorFilter).filter((entry) =>
+  const revisionBlocks = withMergedParagraphs(blocks, displayMode, authorFilter).filter((entry) =>
     acceptStoryBlock(entry.block, displayMode, authorFilter)
   );
+  const accepted = styleSeparators
+    ? withStyleSeparatorParagraphs(
+        revisionBlocks,
+        styles,
+        numberingIndex,
+        excludedParagraphs,
+        (block) => memberIsAddressable(block, displayMode, authorFilter),
+        (block) => mergeGroups.has(block),
+        (merged, members) => mergeGroups.set(merged, { merged, members })
+      )
+    : revisionBlocks;
   // A merged paragraph's identity keys its merge group, so it is never copied.
   return withoutHiddenMarkParagraphs(
     accepted,
@@ -397,24 +417,52 @@ function fieldCharsBalanced(paragraph: OoxmlElement): boolean {
  */
 const storyBlocksCache = createRecentRootCache<Map<string, OoxmlElement[]>>(16);
 
+const numberingIdentities = new WeakMap<NumberingIndex, number>();
+let nextNumberingIdentity = 1;
+function numberingIdentity(index?: NumberingIndex): number {
+  if (!index) return 0;
+  let id = numberingIdentities.get(index);
+  if (!id) {
+    id = nextNumberingIdentity++;
+    numberingIdentities.set(index, id);
+  }
+  return id;
+}
 /**
- * The story's blocks — paragraphs and tables — in document order, flattening through
- * block-level content-control wrappers under the shared nesting budget.
+ * Return story blocks in document order, flattening block-level content controls.
+ * Compatible hidden paragraph marks join in body stories using the supplied styles and numbering.
+ * Repeated calls with the same part and projection inputs share one array. Treat it as read-only.
  *
- * Repeated calls with the same part and display mode return the SAME array instance,
- * shared by every caller — treat it as read-only; mutating it corrupts later callers.
+ * @public
  */
 export function storyBlocks(
   part: OoxmlPart,
   displayMode: RevisionDisplayMode = 'all-markup',
-  authorFilter?: RevisionAuthorFilter
+  authorFilter?: RevisionAuthorFilter,
+  styles?: StyleCascadeTable,
+  numberingIndex?: NumberingIndex
 ): OoxmlElement[] {
-  const key = `${displayMode}|${authorFilter?.cacheKey ?? ''}`;
+  const key = `${displayMode}|${authorFilter?.cacheKey ?? ''}|${styles?.cacheToken ?? ''}|${numberingIdentity(numberingIndex)}`;
   const perMode = storyBlocksCache.get(part);
   const cached = perMode?.get(key);
   if (cached) return cached;
   const root = storyRootOf(part);
-  const blocks = root ? mergedFlowBlocks(root.children, displayMode, authorFilter) : [];
+  const blocks = root
+    ? mergedFlowBlocks(
+        root.children,
+        displayMode,
+        authorFilter,
+        styles,
+        root.kind === 'body',
+        numberingIndex,
+        () =>
+          new Set([
+            ...tocCodeRanges(part).keys(),
+            ...tocFieldChromeParagraphIds(part),
+            ...emptyTocSuppressedResultParagraphIds(part),
+          ])
+      )
+    : [];
   if (perMode) cacheProjection(perMode, key, blocks);
   else storyBlocksCache.set(part, new Map([[key, blocks]]));
   return blocks;

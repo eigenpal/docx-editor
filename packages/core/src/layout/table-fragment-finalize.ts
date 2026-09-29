@@ -8,6 +8,7 @@
 // because a row cannot know its merged neighbour's box until every row of the span is down.
 
 import { shiftInlineDrawingRecord } from './drawing-layout.ts';
+import { relayOutMergedBottomToTop } from './table-cell-text-direction.ts';
 import { republishAnchoredParagraphsInBlocks } from './table-anchor-republish.ts';
 import {
   borderContentInset,
@@ -32,8 +33,35 @@ import type {
   SemanticTableRow,
   SemanticTableStructure,
 } from './semantic-table.ts';
-import type { BlockFragmentRecord, TableRowFragmentRecord } from './semantic-records.ts';
+import type {
+  BlockFragmentRecord,
+  TableFragmentRecord,
+  TableRowFragmentRecord,
+} from './semantic-records.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
+
+/**
+ * A complete table fragment moved by `dy`, with the anchored drawings its cell paragraphs
+ * already published moved along through `shiftAnchor`.
+ */
+export function shiftTableFragment(
+  fragment: TableFragmentRecord,
+  dy: number,
+  shiftAnchor: (paragraphId: string, dy: number) => void
+): TableFragmentRecord {
+  const shifted = shiftBlocks([fragment], dy)[0] as TableFragmentRecord;
+  if (Math.abs(dy) <= 0.001) return shifted;
+  const shiftParagraphAnchors = (blocks: readonly BlockFragmentRecord[]): void => {
+    for (const block of blocks) {
+      if (block.kind === 'paragraph') shiftAnchor(block.paragraphId, dy);
+      else
+        for (const row of block.rows)
+          for (const cell of row.cells) shiftParagraphAnchors(cell.blocks);
+    }
+  };
+  for (const row of fragment.rows) for (const cell of row.cells) shiftParagraphAnchors(cell.blocks);
+  return shifted;
+}
 
 export function shiftBlocks(
   blocks: readonly BlockFragmentRecord[],
@@ -164,7 +192,8 @@ export function finalizeTableRows(
         height = last.box.y + last.box.height - cell.box.y;
       }
       const authored = authoredById.get(cell.id);
-      let blocks = cell.blocks;
+      // A merged `btLr` head lays its text along the rows its merge covers in this fragment.
+      let blocks = (span > 1 && relayOutMergedBottomToTop(cell.blocks, height)) || cell.blocks;
       if (authored && authored.vAlign !== 'top' && blocks.length > 0) {
         const insets =
           occurrenceInsets?.get(row)?.get(cell.id) ??

@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "VML projection refused a standalone picture shape with w10:border child elements. The w:pict stayed opaque, took no paragraph offset, and reserved no layout space.",
+  "after": "VML projection reads an inline standalone picture with one uniform single-line border on all four sides as one drawing atom. The drawing extent includes the border width on each side. Other border combinations stay refused.",
+  "reason": "The change is a read-only projection of existing document XML. It adds no shared state, operations, snapshot fields, or protocol messages, and it writes nothing to the document. Each participant derives paragraph offsets from the shared tree locally. A published selection after such a picture can differ by one offset between versions, as for other projection subset changes.",
+  "tests": [
+    "packages/core/src/store/__tests__/legacy-vml-graphics.test.ts",
+    "packages/core/src/layout/__tests__/legacy-vml-layout.test.ts",
+    "packages/core/src/store/__tests__/legacy-vml-comment-offsets.test.ts"
+  ],
+  "changeset": "legacy-picture-borders",
+  "migration": null
+}

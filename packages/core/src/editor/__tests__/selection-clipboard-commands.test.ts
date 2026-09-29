@@ -292,3 +292,47 @@ describe('paste', () => {
     expect(texts(editor)).toEqual(['hello']);
   });
 });
+
+describe('embedded object clipboard refusal', () => {
+  const object =
+    '<w:object xmlns:v="urn:schemas-microsoft-com:vml" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><v:shape type="#_x0000_t75" style="width:10pt;height:12pt"><v:imagedata r:id="preview"/></v:shape></w:object>';
+  test('copy and cut refuse object-only and mixed selections without changing text', () => {
+    for (const [start, end] of [
+      [1, 2],
+      [0, 3],
+    ]) {
+      const { editor } = mount(`<w:p><w:r><w:t>A</w:t>${object}<w:t>Z</w:t></w:r></w:p>`);
+      try {
+        selectInFirst(editor, start!, end!);
+        for (const type of ['copy', 'cut'] as const) {
+          expect(editor.exec({ type })).toEqual({
+            ok: false,
+            code: 'unsupported',
+            reason: 'unsupported-content',
+          });
+          expect(texts(editor)).toEqual(['A\uFFFCZ']);
+        }
+        expect(written).toEqual([]);
+      } finally {
+        editor.destroy();
+      }
+    }
+  });
+  test('rich paste refuses objects and preserves the selected target text', async () => {
+    const { wrapInteropHtml } = await import('../clipboard-fragment-codec.ts');
+    const bytes = docx(`<w:p><w:r><w:t>A</w:t>${object}<w:t>Z</w:t></w:r></w:p>`);
+    const html = wrapInteropHtml('<p>AZ</p>', { bytes, lastMarkCovered: true });
+    const { editor } = mount(p('target'));
+    try {
+      selectInFirst(editor, 0, 6);
+      expect(editor.exec({ type: 'paste', html, text: 'AZ' })).toEqual({
+        ok: false,
+        code: 'unsupported',
+        reason: 'unsupported-content',
+      });
+      expect(texts(editor)).toEqual(['target']);
+    } finally {
+      editor.destroy();
+    }
+  });
+});
