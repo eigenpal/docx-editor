@@ -178,7 +178,7 @@ test('auto and atLeast frame heights use content height and authored minimums', 
   }
 });
 
-test('automatic width uses the widest grouped paragraph and keeps aligned content inside it', () => {
+test('automatic width uses the containing text column and keeps aligned content inside it', () => {
   const auto = '<w:framePr w:x="0" w:y="0"/>';
   const source = document(
     paragraph('short', auto + '<w:jc w:val="right"/>') +
@@ -189,7 +189,7 @@ test('automatic width uses the widest grouped paragraph and keeps aligned conten
   expect(first!.positionedFrame?.box.width).toBe(second!.positionedFrame?.box.width);
   expect(first!.positionedFrame!.box.width).toBeGreaterThan(first!.lines[0]!.spans[0]!.box.width);
   expect(first!.lines[0]!.spans[0]!.box.x).toBeGreaterThan(first!.positionedFrame!.box.x);
-  expect(second!.positionedFrame!.box.width).toBeLessThan(100);
+  expect(second!.positionedFrame!.box.width).toBe(180);
 });
 
 test('relative alignment supersedes offsets and follows physical page parity', () => {
@@ -287,7 +287,7 @@ test('exact-height frame groups agree between incremental and cold layout', () =
   }
 });
 
-test('automatic group width changes agree between incremental and cold layout', () => {
+test('automatic frame edits agree between incremental and cold layout', () => {
   const session = createLayoutSession();
   const cache = createParagraphLayoutCache();
   for (const [revision, text] of ['short', 'a much longer frame line', 'tiny'].entries()) {

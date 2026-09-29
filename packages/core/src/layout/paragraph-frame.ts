@@ -1,5 +1,7 @@
 import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
-import { shiftInlineDrawingRecord } from './drawing-layout.ts';
+import { shiftInlineDrawingRecord, type InlineDrawingLayoutContext } from './drawing-layout.ts';
+import { isLegacyVmlAtom } from '../store/package/legacy-vml-projection.ts';
+import { isRunLevelMcAlternateContent } from '../store/package/drawing-projection.ts';
 import { framedTokenJoin } from './layout-cache.ts';
 import type {
   BlockFragmentRecord,
@@ -23,7 +25,7 @@ export interface ParagraphFrame {
   readonly dropCapRtl?: boolean;
   readonly x: number;
   readonly y: number;
-  /** Zero until the intrinsic-width probe resolves an omitted `w:w`. */
+  /** Zero until the containing text width resolves an omitted `w:w`. */
   readonly width: number;
   readonly autoWidth: boolean;
   /** Authored exact or minimum height. Absent for `hRule="auto"`. */
@@ -48,12 +50,28 @@ function coordinate(value: string | undefined): number | null {
 }
 
 /** Reject content whose pagination or external anchors need a separate frame story. */
-export function supportsParagraphFrameContent(paragraph: OoxmlElement): boolean {
+export function supportsParagraphFrameContent(
+  paragraph: OoxmlElement,
+  drawings?: InlineDrawingLayoutContext
+): boolean {
   const pending = [paragraph];
   let count = 0;
   while (pending.length) {
     const node = pending.pop()!;
-    if (++count > MAX_FRAME_NODES || node.namespaceUri !== W) return false;
+    if (++count > MAX_FRAME_NODES || node.localName === 'object') return false;
+    if (node.kind === 'drawing' || isLegacyVmlAtom(node) || isRunLevelMcAlternateContent(node)) {
+      const projection =
+        drawings?.projectionForAtom?.(node.id) ??
+        (node.kind === 'drawing' ? drawings?.project(node) : undefined);
+      if (
+        projection?.kind !== 'inline' ||
+        projection.textboxStory ||
+        drawings?.resourceOf(projection).kind !== 'ready'
+      )
+        return false;
+      continue;
+    }
+    if (node.namespaceUri !== W) return false;
     if (
       [
         'drawing',
@@ -83,11 +101,19 @@ export function supportsParagraphFrameContent(paragraph: OoxmlElement): boolean 
   return true;
 }
 
+/** Direct frame attributes override only the attributes supplied by style layers. */
+export function paragraphFrameAttributes(
+  properties: readonly OoxmlProperty[]
+): OoxmlProperty['attributes'] | undefined {
+  let attributes: OoxmlProperty['attributes'] | undefined;
+  for (const property of properties)
+    if (property.localName === 'framePr') attributes = { ...attributes, ...property.attributes };
+  return attributes;
+}
+
 export function readParagraphFrame(properties: readonly OoxmlProperty[]): ParagraphFrame | null {
-  let property: OoxmlProperty | undefined;
-  for (const item of properties) if (item.localName === 'framePr') property = item;
-  if (!property?.attributes) return null;
-  const attributes = property.attributes;
+  const attributes = paragraphFrameAttributes(properties);
+  if (!attributes) return null;
   const allowed = new Set([
     'x',
     'y',

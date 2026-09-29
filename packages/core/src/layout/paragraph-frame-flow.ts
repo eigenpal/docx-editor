@@ -1,3 +1,4 @@
+import { shiftInlineDrawingRecord, clipInlineDrawingRecordToRegion } from './drawing-layout.ts';
 import { alignDropCap } from './paragraph-drop-cap.ts';
 import { sha256FontBytes } from '../store/package/sha256.ts';
 import { framedTokenJoin } from './layout-cache.ts';
@@ -40,6 +41,9 @@ function shiftFragmentX(
       box: { ...line.box, width },
       contentX: line.contentX + dx,
       spans: line.spans.map((span) => ({ ...span, box: move(span.box) })),
+      ...(line.drawings
+        ? { drawings: line.drawings.map((drawing) => shiftInlineDrawingRecord(drawing, dx, 0)) }
+        : {}),
     })),
   };
 }
@@ -250,6 +254,16 @@ export class ParagraphFrameFlow {
         clipToBox: true,
         box: positionedFrame.box,
         positionedFrame,
+        lines: fragment.lines.map((line) =>
+          line.drawings?.length
+            ? {
+                ...line,
+                drawings: line.drawings.map((drawing) =>
+                  clipInlineDrawingRecordToRegion(drawing, positionedFrame.box)
+                ),
+              }
+            : line
+        ),
       };
     });
   }

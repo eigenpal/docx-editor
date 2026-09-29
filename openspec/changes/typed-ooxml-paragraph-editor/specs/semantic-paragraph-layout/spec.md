@@ -223,3 +223,15 @@ Row and column insertion, deletion, and column resize commits SHALL publish `flo
 #### Scenario: Unaffected pages keep identity after table resize
 - **WHEN** a middle-table column resize converges without repagination before the following page
 - **THEN** preceding and following unchanged pages retain stable identities
+
+#### Scenario: Frame attributes inherit individually
+- **WHEN** direct frame properties override part of a paragraph style's frame properties
+- **THEN** unspecified attributes retain their inherited values and equivalent adjacent frames remain grouped
+
+#### Scenario: Inline pictures remain in their frame
+- **WHEN** a supported frame contains inline pictures
+- **THEN** their line geometry, alignment, clipping, and following text use the shared frame
+
+#### Scenario: Omitted frame width uses the containing column
+- **WHEN** a body frame omits its width
+- **THEN** its paragraphs use the containing text column width regardless of text length

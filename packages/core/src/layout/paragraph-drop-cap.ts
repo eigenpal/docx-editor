@@ -1,10 +1,12 @@
-import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
+import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { breakPreparedParagraph } from './paragraph-break-request.ts';
 import {
   readParagraphFrame,
+  paragraphFrameAttributes,
   supportsParagraphFrameContent,
   type ParagraphFrame,
 } from './paragraph-frame.ts';
+import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
 import type { LineRecord, ParagraphFragmentRecord, TextMeasurer } from './semantic-records.ts';
 import type { ParagraphLayoutInputs, StyleCascadeTable } from './style-cascade.ts';
@@ -22,18 +24,17 @@ export function resolveParagraphFrame(
   paragraph: OoxmlElement,
   inputs: ParagraphLayoutInputs,
   measurer: TextMeasurer,
-  styles: StyleCascadeTable | undefined
+  styles: StyleCascadeTable | undefined,
+  drawings?: InlineDrawingLayoutContext
 ): ParagraphFrame | undefined {
   const ordinary = readParagraphFrame(inputs.props);
   if (ordinary) {
-    if (!supportsParagraphFrameContent(paragraph)) return undefined;
+    if (!supportsParagraphFrameContent(paragraph, drawings)) return undefined;
     if (!ordinary.autoWidth) return ordinary;
-    const width = intrinsicFrameWidth(paragraph, inputs, measurer, styles, 'frame-width-probe');
-    return width === undefined ? undefined : { ...ordinary, width };
+    const width = inputs.available + inputs.indent.left + inputs.indent.right;
+    return width > 0 && width <= 1584 ? { ...ordinary, width } : undefined;
   }
-  let attributes: OoxmlProperty['attributes'];
-  for (const property of inputs.props)
-    if (property.localName === 'framePr') attributes = property.attributes;
+  const attributes = paragraphFrameAttributes(inputs.props);
   if (
     !attributes ||
     !['drop', 'margin'].includes(attributes.dropCap ?? '') ||
@@ -105,7 +106,7 @@ export function resolveParagraphFrame(
       if (characters > 32) return undefined;
     }
   }
-  const width = intrinsicFrameWidth(paragraph, inputs, measurer, styles, 'drop-cap-probe', true);
+  const width = intrinsicFrameWidth(paragraph, inputs, measurer, styles, 'drop-cap-probe');
   if (width === undefined) return undefined;
   const frame = readParagraphFrame([
     {
@@ -138,8 +139,7 @@ function intrinsicFrameWidth(
   inputs: ParagraphLayoutInputs,
   measurer: TextMeasurer,
   styles: StyleCascadeTable | undefined,
-  producer: string,
-  singleLine = false
+  producer: string
 ): number | undefined {
   const lines = breakPreparedParagraph({
     paragraph,
@@ -156,8 +156,7 @@ function intrinsicFrameWidth(
     flow: { firstLineOffset: inputs.indent.firstLine - inputs.indent.hanging },
   });
   if (
-    lines.length === 0 ||
-    (singleLine && lines.length !== 1) ||
+    lines.length !== 1 ||
     lines.some((line) =>
       line.spans.some(
         (span) =>

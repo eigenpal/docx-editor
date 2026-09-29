@@ -76,7 +76,7 @@ A paragraph with `w:keepNext` stays with the opening lines that the following pa
 
 #### Text frames
 
-Body text frames retain numeric and relative page, margin, or text positions. The engine supports fixed and automatic width. It supports `auto`, `atLeast`, and `exact` height rules. Exact-height frames clip content to the authored rectangle. Adjacent paragraphs with identical `w:framePr` attributes share one frame.
+Body text frames retain numeric and relative page, margin, or text positions. The engine supports fixed width. Frames with omitted width use the containing text column. It supports `auto`, `atLeast`, and `exact` height rules. Exact-height frames clip content to the authored rectangle. Frame attributes inherit individually from paragraph styles. Adjacent paragraphs with identical resolved `w:framePr` attributes share one frame. Inline pictures remain inside their frame.
 
 All `ST_Wrap` values use the frame's rectangular contour. `auto` uses the default `around` behavior. `none`, `notBeside`, and vertical `inline` alignment move following text below the frame. Single-line left-to-right dropped caps use the requested body-line band. Multiline dropped caps retain ordinary flow. Right-to-left dropped caps retain ordinary flow. Margin caps sit outside the text column on either side.
 

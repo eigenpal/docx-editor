@@ -228,7 +228,7 @@ Alternative rejected: treating `w:h` as content height or ignoring it. Both choi
 ### D16: Complete bounded `w:framePr` geometry uses the shared float model
 
 General paragraph frames accept the complete `CT_FramePr` attribute vocabulary. Height follows
-`auto`, `atLeast`, and `exact`; omitted width uses a bounded content-width probe; `xAlign` and
+`auto`, `atLeast`, and `exact`; omitted width uses the containing text column; `xAlign` and
 `yAlign` supersede numeric offsets; and every `ST_Wrap` value receives deterministic scanline
 behavior. A text frame has a rectangular contour, so `around`, `tight`, and `through` use the
 same outer rectangle. `through` retains the even-odd fill rule for consistency with drawing
