@@ -41,7 +41,7 @@ Other fields use separate evaluation rules. See [Fields and cross-references](/d
 
 ### Page numbers in legacy frames
 
-Legacy footers can store a centered `PAGE` field in an auto-sized `w:framePr`. Supported anchors include an empty paragraph of the same style or a centered middle-dot decoration. Both paragraphs render in one footer band. The editor centers each page's value and preserves the source structure when you save.
+Legacy footers can store a centered `PAGE` field in an auto-sized `w:framePr`. Supported anchors include an empty paragraph of the same style or a centered middle-dot decoration. Both paragraphs render in one footer band. Centered frames support `w:wrap="around"` and `w:wrap="auto"`. Both paragraphs can use direct formatting without a named style. Unused tab stops and line spacing do not add another footer band. A nonnegative first-line indent contributes to the frame width and offsets the centered page value. Left, right, and hanging indents keep ordinary flow. Paragraph borders, shading, and before or after spacing also keep ordinary flow. The editor updates each page's value and preserves the source structure when you save.
 
 A supported fixed-width frame uses a page-relative X position and text-relative vertical centering over an empty anchor or a second `PAGE` paragraph. A leading tab can place its value outside the frame. The editor clips that value but retains all fields, paragraphs, and source ranges. Selections and pointer hits use the same clip rectangle.
 

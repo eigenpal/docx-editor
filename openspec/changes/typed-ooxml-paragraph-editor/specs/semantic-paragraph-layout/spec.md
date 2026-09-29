@@ -121,6 +121,12 @@ Semantic layout SHALL resolve and represent the D8 run and paragraph property bo
 - **WHEN** a read-only header or footer story contains allowlisted complex `PAGE`/`NUMPAGES` field instructions
 - **THEN** layout projects the physical page index and document page count into that furniture without evaluating other field instructions or claiming body-field support
 
+#### Scenario: Directly formatted centered footer frame shares its anchor band
+- **WHEN** a supported centered PAGE footer frame uses `auto` or `around` wrapping with direct line spacing, unused tab stops, and a nonnegative first-line indent
+- **THEN** the frame and empty anchor share one footer band, the indent contributes to horizontal placement, and the footer does not reserve a second paragraph height
+- **AND** page-field updates, paragraph identities, and save output remain stable
+- **AND** unsupported indents, paragraph decorations, and before or after spacing retain ordinary flow
+
 #### Scenario: Deferred content is encountered
 - **WHEN** paragraph traversal encounters a deferred element
 - **THEN** layout follows its declared preservation or rejection status without claiming semantic layout support

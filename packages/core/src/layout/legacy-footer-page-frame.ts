@@ -71,21 +71,32 @@ function framePair(
     anchorProperties = elements(emptyProps);
   if (
     properties.filter((node) => isW(node, 'framePr')).length !== 1 ||
-    properties.filter((node) => isW(node, 'pStyle')).length !== 1 ||
-    anchorProperties.filter((node) => isW(node, 'pStyle')).length !== 1
+    properties.filter((node) => isW(node, 'pStyle')).length > 1 ||
+    anchorProperties.filter((node) => isW(node, 'pStyle')).length > 1
   )
     return null;
   if (
     properties.some(
-      (node) => !['pStyle', 'framePr', 'jc', 'rPr'].some((name) => isW(node, name))
+      (node) =>
+        !['pStyle', 'framePr', 'jc', 'rPr', 'spacing', 'ind', 'tabs'].some((name) =>
+          isW(node, name)
+        )
     ) ||
-    anchorProperties.some((node) => !['pStyle', 'jc', 'rPr'].some((name) => isW(node, name)))
+    anchorProperties.some(
+      (node) => !['pStyle', 'jc', 'rPr', 'spacing', 'ind', 'tabs'].some((name) => isW(node, name))
+    )
   )
     return null;
-  const style = properties.find((node) => isW(node, 'pStyle'))!;
-  const anchorStyle = anchorProperties.find((node) => isW(node, 'pStyle'))!;
+  const style = properties.find((node) => isW(node, 'pStyle'));
+  const anchorStyle = anchorProperties.find((node) => isW(node, 'pStyle'));
   const frame = properties.find((node) => isW(node, 'framePr'))!;
-  if (!attr(style, 'val') || attr(style, 'val') !== attr(anchorStyle, 'val')) return null;
+  if (
+    (style && !attr(style, 'val')) ||
+    (anchorStyle && !attr(anchorStyle, 'val')) ||
+    (style ? attr(style, 'val') : undefined) !==
+      (anchorStyle ? attr(anchorStyle, 'val') : undefined)
+  )
+    return null;
   let decoration = '';
   for (const run of elements(empty)) {
     if (isW(run, 'pPr')) continue;
@@ -109,7 +120,7 @@ function framePair(
   )
     return null;
   if (
-    attr(frame, 'wrap') !== 'around' ||
+    !['around', 'auto'].includes(attr(frame, 'wrap') ?? '') ||
     attr(frame, 'vAnchor') !== 'text' ||
     attr(frame, 'hAnchor') !== 'margin' ||
     attr(frame, 'xAlign') !== 'center'
@@ -130,7 +141,11 @@ function simpleLine(fragment: BlockFragmentRecord): fragment is ParagraphFragmen
     !fragment.lines[0]!.drawings?.length &&
     fragment.spacing.before === 0 &&
     fragment.spacing.after === 0 &&
-    Object.values(fragment.indent).every((value) => value === 0)
+    fragment.indent.left === 0 &&
+    fragment.indent.right === 0 &&
+    fragment.indent.hanging === 0 &&
+    Number.isFinite(fragment.indent.firstLine) &&
+    fragment.indent.firstLine >= 0
   );
 }
 
@@ -175,7 +190,9 @@ export function positionLegacyFooterPageFrame<
   const left = line.spans[0]?.box.x ?? line.contentX;
   const last = line.spans.at(-1);
   const right = last ? last.box.x + last.box.width : left;
-  const dx = (contentWidth - (right - left)) / 2 - left;
+  if (first.indent.firstLine + right - left > contentWidth) return flow;
+  // The auto-sized frame includes its leading indent, so the ink retains half that offset.
+  const dx = (contentWidth - (right - left) + first.indent.firstLine) / 2 - left;
   // The frame is auto-sized, so its box is the ink it holds, not the story width. Hit testing
   // is containment-first, and a full-width box here would claim every click in the band and
   // leave the anchor paragraph (and its decoration) unreachable by mouse.
