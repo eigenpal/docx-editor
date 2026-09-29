@@ -32,6 +32,19 @@ bun e2e/evaluation-browser.ts --input input.docx --output browser.json
 
 Use the evaluator's locked Python environment, which supplies PyMuPDF and Pillow. Run commands in bounded child processes. PDF measurement can allocate native memory.
 
+For batch PDF exports, use Node with a bounded JavaScript heap:
+
+```sh
+node --max-old-space-size=768 --experimental-transform-types \
+  --import ./packages/docx-to-pdf/scripts/evaluation/runtime-loader.mjs \
+  packages/docx-to-pdf/scripts/evaluation/export.ts input.docx output.pdf
+```
+
+Use Node.js 24 or later for this source loader. Keep an external process memory limit and timeout.
+The heap limit excludes native font, image, and compression memory.
+Record the runtime version, flags, and loader identity with the engine identity.
+Different runtimes can produce different compressed PDF bytes. Compare decoded content when checking rendering parity.
+
 Exports use proposed content, no comments, packaged fonts, and best-effort rendering. Diagnostics remain part of the export response. Approximate output is never reported as strict success.
 
 Exports, traces, and fast summaries use the same explicit glyph fallback list, in this order: `Noto Sans Symbols 2`, `Noto Sans Math`, `Noto Sans Arabic`, `Times New Roman`, `Noto Sans CJK JP`, `Twemoji Mozilla`, and `Noto Emoji`. This list replaces the renderer's default list. Without system fonts, `Times New Roman` resolves to the packaged Liberation Serif. It supplies Hebrew for right-to-left runs whose complex-script face has no Hebrew. Keep the list identical in `export.ts`, `trace.ts`, and `layout-summary.ts`; `export.test.ts` compares the settings on text that reaches every face.

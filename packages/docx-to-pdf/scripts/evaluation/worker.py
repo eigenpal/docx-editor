@@ -136,7 +136,16 @@ def visual_screen(a, b):
     av, bv = (base64.b64decode(p[key], validate=True) for p in (a, b))
     if any(len(v) != width * height * channels for v in (av, bv)):
         raise ValueError("Invalid visual sketch size")
-    delta = [max(abs(av[i + c] - bv[i + c]) for c in range(channels)) for i in range(0, len(av), channels)]
+    # Pillow computes byte differences in native code; retain the exact per-pixel maximum.
+    mode = "RGB" if color else "L"
+    difference = ImageChops.difference(
+        Image.frombytes(mode, (width, height), av),
+        Image.frombytes(mode, (width, height), bv),
+    )
+    if color:
+        red, green, blue = difference.split()
+        difference = ImageChops.lighter(ImageChops.lighter(red, green), blue)
+    delta = difference.tobytes()
     threshold = 24 if color else 12
     changed = [i for i, d in enumerate(delta) if d > threshold]
     fraction = len(changed) / len(delta)
