@@ -233,7 +233,8 @@ General paragraph frames accept the complete `CT_FramePr` attribute vocabulary. 
 behavior. A text frame has a rectangular contour, so `around`, `tight`, and `through` use the
 same outer rectangle. `through` retains the even-odd fill rule for consistency with drawing
 exclusions. The schema-defined application choice `wrap="auto"` uses the default `around`
-behavior.
+behavior. Wrapping defaults without size, position, or anchor properties retain ordinary flow.
+Frames whose wrapping bands stay outside the body area do not advance a following continuous section.
 
 Horizontal `inside` and `outside` follow physical page parity. Vertical `inside` and `outside`
 map to the top and bottom edges of the selected anchor box. `yAlign` is ignored for

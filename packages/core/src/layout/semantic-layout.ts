@@ -2918,7 +2918,7 @@ function layoutBlocksPass(
     endCursorY = Math.max(
       endCursorY,
       tableWrap.floatingTextTableBottom(pages.at(-1)!.fragments),
-      positionedFrameBottom(pages.at(-1)!.fragments)
+      positionedFrameBottom(pages.at(-1)!.fragments, pages.at(-1)!.contentBox.height)
     );
   }
   let terminalFlushAttempts = 0;

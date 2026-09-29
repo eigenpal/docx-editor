@@ -33,6 +33,36 @@ const paras = (layout: ReturnType<typeof layoutSemanticDocument>) =>
     .flatMap((p) => p.fragments)
     .filter((f): f is ParagraphFragmentRecord => f.kind === 'paragraph');
 
+for (const wrap of ['auto', 'around']) {
+  for (const inherited of [false, true]) {
+    test(`${inherited ? 'inherited' : 'direct'} ${wrap} wrapping alone preserves paragraph page breaks`, () => {
+      const property = `<w:framePr w:wrap="${wrap}"/>`;
+      const styleCascade = buildStyleCascadeTable(
+        read(
+          `<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:pPr>${inherited ? property : ''}</w:pPr></w:style>`,
+          'styles'
+        ).root
+      );
+      const part = read(
+        p('first', inherited ? '' : property) + p('second', '<w:pageBreakBefore/>')
+      );
+      const before = serializeOoxmlPart(part);
+      const layout = layoutSemanticDocument(part, 0, { ...options, styleCascade });
+      expect(layout.pages).toHaveLength(2);
+      expect(paras(layout).every((paragraph) => !paragraph.positionedFrame)).toBe(true);
+      expect(
+        layout.pages.map((page) =>
+          page.fragments
+            .filter((f) => f.kind === 'paragraph')
+            .flatMap((f) => f.lines.flatMap((line) => line.spans.map((span) => span.text)))
+            .join('')
+        )
+      ).toEqual(['first', 'second']);
+      expect(serializeOoxmlPart(part)).toBe(before);
+    });
+  }
+}
+
 test('unavailable inline pictures retain ordinary paragraph flow', () => {
   const picture =
     '<w:pict><v:shape id="picture" style="width:40pt;height:30pt"><v:imagedata r:id="rId1"/></v:shape></w:pict>';

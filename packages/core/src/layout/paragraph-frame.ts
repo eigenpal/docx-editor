@@ -114,6 +114,13 @@ export function paragraphFrameAttributes(
 export function readParagraphFrame(properties: readonly OoxmlProperty[]): ParagraphFrame | null {
   const attributes = paragraphFrameAttributes(properties);
   if (!attributes) return null;
+  // Wrapping defaults alone do not turn ordinary paragraphs into positioned frames.
+  if (
+    !['w', 'h', 'x', 'y', 'xAlign', 'yAlign', 'hAnchor', 'vAnchor'].some(
+      (name) => attributes[name] !== undefined
+    )
+  )
+    return null;
   const allowed = new Set([
     'x',
     'y',
@@ -330,12 +337,16 @@ export function translateParagraphFragment(
   };
 }
 
-/** A continuous section starts below prior frame ink when exclusion zones cannot cross sections. */
-export function positionedFrameBottom(blocks: readonly BlockFragmentRecord[]): number {
+/** A continuous section clears frames whose wrapping bands intersect the body area. */
+export function positionedFrameBottom(
+  blocks: readonly BlockFragmentRecord[],
+  contentHeight: number
+): number {
   let bottom = 0;
   for (const block of blocks) {
     if (block.kind !== 'paragraph' || !block.positionedFrame) continue;
     const { box, vSpace } = block.positionedFrame;
+    if (box.y - vSpace >= contentHeight || box.y + box.height + vSpace <= 0) continue;
     bottom = Math.max(bottom, box.y + box.height + vSpace);
   }
   return bottom;

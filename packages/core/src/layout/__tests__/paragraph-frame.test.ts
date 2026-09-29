@@ -414,3 +414,26 @@ test('a continuous section clears preceding frame groups and their vertical text
     positioned.positionedFrame!.box.y + positioned.positionedFrame!.box.height + 5
   );
 });
+
+test('frames below the body do not add a page for an empty continuous section', () => {
+  const geometry =
+    '<w:pgSz w:w="4000" w:h="4000"/><w:pgMar w:top="200" w:bottom="1000" w:left="200" w:right="200"/>';
+  const session = createLayoutSession();
+  const cache = createParagraphLayoutCache();
+  for (const [revision, y] of [3400, 600, 3400].entries()) {
+    const source = document(
+      paragraph('Frame', `<w:framePr w:x="0" w:y="${y}" w:w="1000" w:vAnchor="page"/>`) +
+        paragraph('', `<w:sectPr>${geometry}</w:sectPr>`) +
+        paragraph(''),
+      '<w:type w:val="continuous"/>'
+    );
+    const saved = serializeOoxmlPart(source);
+    const layout = layoutSemanticDocument(source, revision, { measurer, session, cache });
+    expect(layout.pages).toEqual(layoutSemanticDocument(source, revision, { measurer }).pages);
+    expect(layout.pages).toHaveLength(1);
+    const positioned = framesOf(layout)[0]!;
+    expect(positioned.positionedFrame!.box.y).toBe(y / 20 - 10);
+    if (y === 3400) expect(layout.pages[0]!.fragments.at(-1)!.box.y).toBe(0);
+    expect(serializeOoxmlPart(source)).toBe(saved);
+  }
+});

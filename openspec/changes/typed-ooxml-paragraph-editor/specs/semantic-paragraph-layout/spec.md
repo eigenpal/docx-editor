@@ -29,13 +29,29 @@ Semantic layout SHALL resolve and represent the D8 run and paragraph property bo
 - **WHEN** `w:framePr` contains an out-of-range value, an unknown enumeration value, unsupported nested content, or a frame group that cannot leave usable room on a fresh sheet
 - **THEN** semantic layout refuses the positioned-frame projection and keeps the paragraph in ordinary flow without approximating the frame
 
+#### Scenario: Wrapping defaults do not create positioned frames
+- **WHEN** direct or inherited `w:framePr` supplies wrapping defaults without size, position, or anchor properties
+- **THEN** paragraphs retain ordinary flow and their explicit page breaks
+
+#### Scenario: Frame attributes inherit individually
+- **WHEN** direct frame properties override part of a paragraph style's frame properties
+- **THEN** unspecified attributes retain their inherited values and equivalent adjacent frames remain grouped
+
+#### Scenario: Inline pictures remain in their frame
+- **WHEN** a supported frame contains inline pictures
+- **THEN** their line geometry, alignment, clipping, and following text use the shared frame
+
+#### Scenario: A frame stays outside the body area
+- **WHEN** a frame wrapping band stays entirely above or below the body area
+- **THEN** it does not advance the text position of a following continuous section or create an extra empty page
+
 #### Scenario: Frame height rules are resolved
 - **WHEN** a bounded paragraph frame uses omitted or explicit `hRule="auto"`, `hRule="atLeast"`, or `hRule="exact"`
 - **THEN** layout respectively uses content height, the greater of content and authored height, or the authored clipped height, and ignores `w:h` when the rule is `auto`
 
 #### Scenario: Frame width is automatic
 - **WHEN** consecutive matching frame paragraphs omit `w:w`
-- **THEN** layout uses their maximum bounded content-line width as one shared frame width and applies paragraph alignment inside that width
+- **THEN** layout uses the containing text column as their shared frame width and applies paragraph alignment inside that width
 
 #### Scenario: Frame alignment supersedes offsets
 - **WHEN** `xAlign` or a permitted `yAlign` is present
@@ -223,15 +239,3 @@ Row and column insertion, deletion, and column resize commits SHALL publish `flo
 #### Scenario: Unaffected pages keep identity after table resize
 - **WHEN** a middle-table column resize converges without repagination before the following page
 - **THEN** preceding and following unchanged pages retain stable identities
-
-#### Scenario: Frame attributes inherit individually
-- **WHEN** direct frame properties override part of a paragraph style's frame properties
-- **THEN** unspecified attributes retain their inherited values and equivalent adjacent frames remain grouped
-
-#### Scenario: Inline pictures remain in their frame
-- **WHEN** a supported frame contains inline pictures
-- **THEN** their line geometry, alignment, clipping, and following text use the shared frame
-
-#### Scenario: Omitted frame width uses the containing column
-- **WHEN** a body frame omits its width
-- **THEN** its paragraphs use the containing text column width regardless of text length
