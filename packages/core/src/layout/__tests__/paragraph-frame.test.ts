@@ -59,7 +59,11 @@ test('bounded frame properties parse the complete schema vocabulary', () => {
   expect(read({ ...attributes, h: '3301', hRule: 'auto' })).toMatchObject({
     heightRule: 'auto',
   });
-  expect(read({ ...attributes, h: '3301' })).toMatchObject({ heightRule: 'auto' });
+  expect(read({ ...attributes, h: '3301' })).toMatchObject({
+    heightRule: 'atLeast',
+    height: 165.05,
+  });
+  expect(read({ ...attributes, h: '000' })).toMatchObject({ heightRule: 'auto' });
   expect(read({ x: '400', y: '600' })).toMatchObject({ autoWidth: true, width: 0 });
   expect(
     read({
@@ -87,6 +91,8 @@ test('bounded frame properties parse the complete schema vocabulary', () => {
     { hRule: 'exact' },
     { h: '0', hRule: 'exact' },
     { h: '999999999', hRule: 'exact' },
+    { h: '999999999' },
+    { h: '-20' },
     { dropCap: 'drop' },
     { dropCap: 'invalid' },
     { wrap: 'invalid' },
@@ -162,6 +168,9 @@ test('adjacent exact-height frame paragraphs share and stay inside the authored 
 test('auto and atLeast frame heights use content height and authored minimums', () => {
   for (const [attributes, expected] of [
     ['w:h="1200" w:hRule="auto"', 10],
+    ['w:h="1200"', 60],
+    ['w:h="100"', 10],
+    ['w:h="0"', 10],
     ['w:h="1200" w:hRule="atLeast"', 60],
     ['w:h="100" w:hRule="atLeast"', 10],
   ] as const) {

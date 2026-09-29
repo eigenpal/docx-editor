@@ -46,8 +46,12 @@ Semantic layout SHALL resolve and represent the D8 run and paragraph property bo
 - **THEN** it does not advance the text position of a following continuous section or create an extra empty page
 
 #### Scenario: Frame height rules are resolved
-- **WHEN** a bounded paragraph frame uses omitted or explicit `hRule="auto"`, `hRule="atLeast"`, or `hRule="exact"`
+- **WHEN** a bounded paragraph frame uses explicit `hRule="auto"`, `hRule="atLeast"`, or `hRule="exact"`
 - **THEN** layout respectively uses content height, the greater of content and authored height, or the authored clipped height, and ignores `w:h` when the rule is `auto`
+
+#### Scenario: The frame height rule is omitted
+- **WHEN** a frame supplies positive `w:h` without `w:hRule`
+- **THEN** layout uses that height as a minimum; zero or omitted height uses content height
 
 #### Scenario: Frame width is automatic
 - **WHEN** consecutive matching frame paragraphs omit `w:w`

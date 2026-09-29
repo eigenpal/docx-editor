@@ -183,7 +183,9 @@ export function readParagraphFrame(properties: readonly OoxmlProperty[]): Paragr
   const autoWidth = attributes.w === undefined;
   if (!autoWidth && width <= 0) return null;
 
-  const heightRule = attributes.hRule ?? 'auto';
+  const heightRule =
+    attributes.hRule ??
+    (attributes.h !== undefined && coordinate(attributes.h) !== 0 ? 'atLeast' : 'auto');
   if (!['auto', 'atLeast', 'exact'].includes(heightRule)) return null;
   let height: number | undefined;
   if (heightRule !== 'auto') {
