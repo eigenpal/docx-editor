@@ -141,3 +141,18 @@ test('overheight and competing caps fall back without overlapping body ink', () 
     expect(layout.pages.length).toBeLessThan(8);
   }
 });
+
+for (const kind of ['drop', 'margin']) {
+  test(`a multiline ${kind} cap retains ordinary flow without overlapping body text`, () => {
+    const source = read(
+      cap('MMMMMMMMMMMM', '', 0).replace('w:dropCap="drop"', `w:dropCap="${kind}"`) +
+        p('word '.repeat(50))
+    );
+    const before = serializeOoxmlPart(source);
+    const [letter, body] = paras(layoutSemanticDocument(source, 0, options));
+    expect(letter!.lines.length).toBeGreaterThan(1);
+    expect(letter!.positionedFrame).toBeUndefined();
+    expect(body!.box.y).toBeGreaterThanOrEqual(letter!.box.y + letter!.box.height);
+    expect(serializeOoxmlPart(source)).toBe(before);
+  });
+}

@@ -105,7 +105,7 @@ export function resolveParagraphFrame(
       if (characters > 32) return undefined;
     }
   }
-  const width = intrinsicFrameWidth(paragraph, inputs, measurer, styles, 'drop-cap-probe');
+  const width = intrinsicFrameWidth(paragraph, inputs, measurer, styles, 'drop-cap-probe', true);
   if (width === undefined) return undefined;
   const frame = readParagraphFrame([
     {
@@ -138,7 +138,8 @@ function intrinsicFrameWidth(
   inputs: ParagraphLayoutInputs,
   measurer: TextMeasurer,
   styles: StyleCascadeTable | undefined,
-  producer: string
+  producer: string,
+  singleLine = false
 ): number | undefined {
   const lines = breakPreparedParagraph({
     paragraph,
@@ -156,6 +157,7 @@ function intrinsicFrameWidth(
   });
   if (
     lines.length === 0 ||
+    (singleLine && lines.length !== 1) ||
     lines.some((line) =>
       line.spans.some(
         (span) =>

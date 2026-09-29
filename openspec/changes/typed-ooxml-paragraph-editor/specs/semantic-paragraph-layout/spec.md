@@ -57,6 +57,10 @@ Semantic layout SHALL resolve and represent the D8 run and paragraph property bo
 - **WHEN** a bounded simple frame declares `dropCap="drop"`
 - **THEN** layout places a left-to-right cap at the leading text edge and falls back to ordinary flow for a right-to-left cap
 
+#### Scenario: Multiline drop caps retain ordinary flow
+- **WHEN** a dropped or margin cap wraps into more than one line
+- **THEN** layout retains ordinary flow so every cap line stays clear of the following body text
+
 #### Scenario: Locked frame survives supported edits
 - **WHEN** a frame declares `anchorLock` and supported text, property, split, or join operations edit its frame or anchor paragraphs
 - **THEN** the canonical order and normalized save keep the frame directly before the same logical anchor, and unsupported frame movement is not approximated

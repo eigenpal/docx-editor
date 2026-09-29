@@ -244,20 +244,11 @@ export class ParagraphFrameFlow {
         box: groups.get(item.groupId)!,
       };
       if (item.frame.heightRule !== 'exact') return { ...fragment, positionedFrame };
-      const top = Math.max(fragment.box.y, positionedFrame.box.y);
-      const bottom = Math.min(
-        fragment.box.y + fragment.box.height,
-        positionedFrame.box.y + positionedFrame.box.height
-      );
+      // Every paragraph clips to the shared frame, including ink outside its line box.
       return {
         ...fragment,
         clipToBox: true,
-        box: {
-          x: positionedFrame.box.x,
-          y: Math.min(top, positionedFrame.box.y + positionedFrame.box.height),
-          width: positionedFrame.box.width,
-          height: Math.max(0, bottom - top),
-        },
+        box: positionedFrame.box,
         positionedFrame,
       };
     });
