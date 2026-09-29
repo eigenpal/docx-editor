@@ -9,6 +9,7 @@ import {
 import { buildStyleCascadeTable } from '../style-cascade.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import type { InlineDrawingLayoutContext } from '../drawing-layout.ts';
+import type { ImageResourceState } from '../../store/package/image-resources.ts';
 import type { ParagraphFragmentRecord } from '../semantic-records.ts';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const frame =
@@ -31,6 +32,40 @@ const paras = (layout: ReturnType<typeof layoutSemanticDocument>) =>
   layout.pages
     .flatMap((p) => p.fragments)
     .filter((f): f is ParagraphFragmentRecord => f.kind === 'paragraph');
+
+test('unavailable inline pictures retain ordinary paragraph flow', () => {
+  const picture =
+    '<w:pict><v:shape id="picture" style="width:40pt;height:30pt"><v:imagedata r:id="rId1"/></v:shape></w:pict>';
+  const part = read(p('picture', `<w:framePr ${frame} w:w="1600"/>`, picture) + p('body'));
+  const before = serializeOoxmlPart(part);
+  const atoms = indexInlineDrawingProjectionsInPart(part);
+  const states: ImageResourceState[] = [
+    {
+      kind: 'unrenderable',
+      partName: '/word/media/image.tiff',
+      mime: 'image/tiff',
+      reason: 'unsupported-format',
+    },
+    { kind: 'missing', relationshipId: 'rId1' },
+    { kind: 'external', relationshipId: 'rId1', sinkSafe: true },
+    { kind: 'pending', resourceKey: 'image' },
+  ];
+  for (const state of states) {
+    const inlineDrawingLayout: InlineDrawingLayoutContext = {
+      ownerPartName: part.name,
+      projectionForAtom: (id) => atoms.get(id) ?? null,
+      project: (node) => atoms.get(node.id) ?? null,
+      resourceOf: () => state,
+    };
+    const [image, body] = paras(
+      layoutSemanticDocument(part, 0, { ...options, inlineDrawingLayout })
+    );
+    expect(image!.positionedFrame).toBeUndefined();
+    expect(image!.outOfFlow).toBeFalsy();
+    expect(body!.box.y).toBeGreaterThanOrEqual(image!.box.y + image!.box.height);
+    expect(serializeOoxmlPart(part)).toBe(before);
+  }
+});
 
 test('partial direct frame properties inherit anchors and group with equivalent direct properties', () => {
   const styleCascade = buildStyleCascadeTable(
