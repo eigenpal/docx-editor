@@ -176,7 +176,7 @@ The editor renders brightness, contrast, grayscale, and bilevel black-and-white 
 | Solid shapes and bounded shape groups | Render geometry with sRGB or theme colors |
 | One picture in a shape group, below the group's shapes | Render in its own frame, as described in [Pictures in shape groups](#pictures-in-shape-groups) |
 | Charts, SmartArt, unsupported groups, and canvases | Preserve the extent and show a labeled placeholder. In alternative content (`mc:AlternateContent`), charts, SmartArt, and unsupported groups are not shown, and a floating one with a wrapping mode still reserves its wrap area. A canvas in alternative content uses the fallback content instead |
-| Anchored text boxes | Render the story read-only and clip it to the extent |
+| Anchored text boxes | Render clipped stories, edit supported body text boxes, and drag or resize their borders |
 | Page fields in anchored header or footer text boxes | Evaluate per page |
 | Inline text boxes, linked chains, autofit, and rotation | Show a placeholder |
 | Standalone VML (`w:pict`) | Render the subset described in [Legacy VML previews](#legacy-vml-previews) |
@@ -210,7 +210,7 @@ Picture commands, such as resize and replace, do not apply to a picture in a gro
 
 ## Find text in text boxes
 
-**Find** searches anchored text boxes in the body, headers, and footers. Selecting a match selects its text box; the content remains read-only. Inline text boxes and text boxes in footnotes or endnotes are not searched.
+**Find** searches anchored text boxes in the body, headers, and footers. Selecting a match selects its text box. Click inside an unrotated body text box to edit its paragraphs. Use its border to select, drag, or resize it. Press **Delete** or use the context menu to delete the selected box. **Undo** restores it. Pasting into a text box inserts plain text. Table insertion is unavailable inside a text box. Text boxes with tables, and text boxes in headers or footers, remain read-only. Inline text boxes and text boxes in footnotes or endnotes are not searched.
 
 Use `useDocumentSearch` to add Find navigation to a custom [React](/docs/2.x/react/hooks#usedocumentsearch) or [Vue](/docs/2.x/vue/composables#usedocumentsearch) interface.
 

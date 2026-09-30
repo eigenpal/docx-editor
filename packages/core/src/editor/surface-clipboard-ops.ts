@@ -47,6 +47,8 @@ type HistoryMark = { paragraphId: string; start: number; end: number };
 export interface SurfaceClipboardDeps {
   session: TreeDocxSessionView;
   textFormFieldId?(): string | null;
+  richPasteAllowed?(): boolean;
+  paragraphIds?(): readonly string[];
   layout(): SemanticLayout;
   cellSelection(): CellSelection | null;
   editingMode(): SurfaceEditingMode;
@@ -174,7 +176,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     }
     if (ops.length === 0) return;
 
-    const before = new Set(session.paragraphIdsIn(deps.storyScope()));
+    const before = new Set(deps.paragraphIds?.() ?? session.paragraphIdsIn(deps.storyScope()));
     const lastLine = lines[lines.length - 1]!;
     // A paste that stays in ONE paragraph knows exactly where it ends, so redo can put the
     // caret there. A multi-line paste mints its paragraphs inside the transaction, so the
@@ -200,7 +202,9 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
         // The caret lands at the end of the pasted text: in the LAST minted paragraph, right
         // after the final line. Scoped story ids are in document order, so the last unfamiliar
         // id is the tail that carries the final line and whatever followed the caret.
-        const minted = session.paragraphIdsIn(deps.storyScope()).filter((id) => !before.has(id));
+        const minted = (deps.paragraphIds?.() ?? session.paragraphIdsIn(deps.storyScope())).filter(
+          (id) => !before.has(id)
+        );
         const landing = minted[minted.length - 1];
         return landing ? collapsedAt({ paragraphId: landing, offset: lastLine.length }) : null;
       }
@@ -335,6 +339,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     const lane = routePaste(
       {
         richLaneOpen:
+          (deps.richPasteAllowed?.() ?? true) &&
           deps.editingMode() === 'edit' &&
           deps.storyScope().kind === 'body' &&
           deps.cellSelection() === null,

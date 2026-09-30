@@ -59,6 +59,7 @@ export function searchStoriesForSurface(
 export function leaveScopeForBodyParagraph(surface: PaginatedSurface, paragraphId: string): void {
   if (surface.activeScope().kind === 'body') return;
   if (!surface.session.paragraphIds().includes(paragraphId)) return;
+  if (surface.activeScope().kind === 'frame') surface.setActiveScope({ kind: 'body' });
   surface.exitNote?.();
   surface.exitHeaderFooter?.();
 }

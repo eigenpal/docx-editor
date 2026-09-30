@@ -566,50 +566,6 @@
   margin: 4px 0;
 }
 
-/* The LIBRARY toolbar is styled by the CORE stylesheet (`docx-toolbar` family).
-   The demo only insets the pill inside the white chrome band; the seam sits
-   right under it. */
-.demo-toolbar {
-  margin: 8px 12px;
-}
-
-/* The in-place customized FontFamily slot */
-.demo-font-trigger {
-  display: inline-flex;
-  align-items: center;
-  min-width: 150px;
-  height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--doc-border);
-  border-radius: 6px;
-  background: var(--doc-surface);
-  color: var(--doc-text);
-  font-size: 13px;
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: background 0.15s;
-}
-
-.demo-font-trigger:hover:not(:disabled) {
-  background: var(--doc-bg-hover, var(--doc-bg-subtle));
-}
-
-.demo-font-trigger[data-disabled] {
-  color: var(--doc-text-subtle);
-  cursor: default;
-}
-
-/* The popup card and its rows come from the core recipe (white surface card,
-   8px radius, soft shadow, 4px viewport; roomy single-line rows with the
-   right-edge ✓ on the selected one — never a background slab). The demo only
-   widens the card so long family names breathe. */
-.demo-font-menu {
-  margin-top: 4px;
-  min-width: 220px;
-}
-
 /* Family name in its own typeface; clipped with an ellipsis, never wrapped. */
 .demo-font-item__name {
   max-width: 100%;

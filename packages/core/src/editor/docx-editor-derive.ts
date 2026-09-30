@@ -24,7 +24,7 @@ import type { ContainerRef } from '../contracts/types.ts';
 import type { ParagraphSummary } from '../contracts/document.ts';
 import { classifyCommand } from './docx-editor-support.ts';
 import { NO_COPIED_FORMATTING } from './surface-format-painter-contract.ts';
-import { gateImageCommand } from './docx-editor-images.ts';
+import { gateImageCommand, resolveSelectedDrawingRecord } from './docx-editor-images.ts';
 
 /** Whether a command may run, and the engine's own refusal when it may not. */
 export type CommandGate =
@@ -342,6 +342,10 @@ export function gateCommand(
   // builds the entire selected string to answer one bit, and `can` is asked from host
   // selectors that re-run on every tick — the exact cost `EditorSnapshot.selectionCollapsed`
   // exists to avoid, which it would be absurd to reintroduce here.
+  if (command.type === 'deleteText' && resolveSelectedDrawingRecord(surface)) {
+    const refusal = gateImageCommand({ type: 'deleteImage' }, surface);
+    return refusal && !refusal.ok ? { ok: false, refusal } : { ok: true };
+  }
   if (command.type === 'copy' || command.type === 'cut' || command.type === 'deleteText') {
     const { anchor, head } = surface.state().selection;
     if (anchor.paragraphId === head.paragraphId && anchor.offset === head.offset) {

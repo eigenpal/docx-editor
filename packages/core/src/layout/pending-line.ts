@@ -50,6 +50,8 @@ export interface PendingLine {
   deletedRanges?: readonly ModelRange[];
   /** Vertical gap inserted before this line to clear a drawing exclusion band. */
   exclusionSkipBefore?: number;
+  /** Clearance inherited by an empty anchor paragraph from other drawing bands. */
+  anchorClearanceBefore?: number;
   /**
    * The first-line offset this line was broken with: the paragraph's first line, and the
    * first line after page breaks that open it ({@link holdsOnlyPageBreak}). Absent when zero.

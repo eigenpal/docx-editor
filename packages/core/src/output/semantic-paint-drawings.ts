@@ -626,9 +626,9 @@ function paintTextboxStory(
   for (const fragment of story.fragments) {
     content.append(ctx.paintStoryFragment!(document, fragment));
   }
-  // Story text is furniture: strip selection/editing bindings so pointer mapping never
-  // resolves into a story the surface cannot edit.
+  // Keep story bindings inert until the surface enters this textbox for editing.
   for (const bound of content.querySelectorAll<HTMLElement>('[data-paragraph-id]')) {
+    bound.dataset.textboxParagraphId = bound.dataset.paragraphId;
     delete bound.dataset.paragraphId;
   }
   outer.append(content);

@@ -16,6 +16,7 @@ import {
   type OoxmlElement,
   type OoxmlNode,
   type OoxmlPart,
+  type OoxmlParagraphNode,
 } from '../package/ooxml-tree.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import type { TreeOpEffect, TreeOpResult } from './tree-op-types.ts';
@@ -710,4 +711,17 @@ export function parentOf(part: OoxmlPart, nodeId: string): OoxmlElement | null {
   // Served from the part's node index rather than a fresh full-tree walk: split and join
   // ask for a parent on every op, and the walk made each one O(document).
   return parentNodeOf(part, nodeId);
+}
+
+export function paragraphContainingNode(
+  part: OoxmlPart,
+  nodeId: string
+): OoxmlParagraphNode | null {
+  let current: OoxmlNode | null = findNode(part, nodeId);
+  while (current) {
+    if (current.kind === 'paragraph') return current as OoxmlParagraphNode;
+    const parent = parentOf(part, current.id);
+    current = parent;
+  }
+  return null;
 }

@@ -35,7 +35,11 @@ import {
   execSetNoteProperties,
 } from './docx-editor-notes.ts';
 import { isTableEditorCommand, planTableCommand } from './table-command-plan.ts';
-import { execImageCommand, isImageCommand } from './docx-editor-images.ts';
+import {
+  execImageCommand,
+  isImageCommand,
+  resolveSelectedDrawingRecord,
+} from './docx-editor-images.ts';
 import { lineSpacingAttributes, spacingSideAttributes } from './paragraph-format-write.ts';
 
 /**
@@ -360,6 +364,9 @@ export function execEditorCommand(
       }
       break;
     case 'deleteText':
+      if (resolveSelectedDrawingRecord(mounted)) {
+        return execImageCommand(mounted, { type: 'deleteImage' }, options?.editor);
+      }
       mounted.deleteSelection();
       break;
     case 'proposeInsertion':

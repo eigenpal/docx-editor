@@ -96,8 +96,13 @@ export function ownTopAndBottomSkip(
   applied: number,
   paragraphStartY: number,
   firstLine: { readonly box: { readonly height: number } } | undefined,
-  context: { readonly inheritedZones: readonly ExclusionZone[]; readonly spaceAbove: number }
+  context: {
+    readonly inheritedZones: readonly ExclusionZone[];
+    readonly spaceAbove: number;
+    readonly anchorClearanceBefore?: number;
+  }
 ): number {
+  applied = Math.max(0, applied - (context.anchorClearanceBefore ?? 0));
   if (!firstLine || applied <= 0.001) return 0;
   const inherited = topAndBottomSkipBeforeLine(
     paragraphStartY,

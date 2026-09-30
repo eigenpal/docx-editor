@@ -3440,7 +3440,7 @@ a.docx-hyperlink:focus-visible {
   display: flex;
   align-items: center;
   min-inline-size: 0;
-  margin: 0;
+  margin: 8px 12px;
   border: 0;
   /* NOT overflow-scroll like the chrome spec's pill: this toolbar hosts LIVE popups
    * (font menu, swatch grids) positioned absolutely inside their parts, and any
@@ -3870,6 +3870,27 @@ a.docx-hyperlink:focus-visible {
   transition: background-color 0.12s ease;
 }
 
+/* Shared font picker appearance for default toolbars and composed hosts. */
+.docx-toolbar__font-family-trigger {
+  min-width: 150px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--doc-border);
+  border-radius: 6px;
+  background: var(--doc-surface);
+  font-size: 13px;
+  transition: background 0.15s;
+}
+
+.docx-toolbar__font-family-trigger:hover:not(:disabled) {
+  background: var(--doc-bg-hover, var(--doc-bg-subtle));
+}
+
+.docx-toolbar__font-family-trigger[data-disabled] {
+  color: var(--doc-text-subtle);
+  cursor: default;
+}
+
 .docx-toolbar__font-family-trigger::after,
 .docx-toolbar__style-trigger::after {
   content: '▾';
@@ -3877,7 +3898,6 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text-muted);
 }
 
-.docx-toolbar__font-family-trigger:hover:not(:disabled),
 .docx-toolbar__style-trigger:hover:not(:disabled) {
   background: var(--doc-border);
 }
@@ -3972,6 +3992,10 @@ a.docx-hyperlink:focus-visible {
   min-width: 100%;
   max-height: 300px;
   overflow-y: auto;
+}
+
+.docx-toolbar__font-family-content {
+  min-width: 220px;
 }
 
 .docx-toolbar__font-family-content:has(> .docx-toolbar__font-search) {

@@ -1,3 +1,9 @@
+import {
+  hasBorderPayload,
+  positionCommandHasFields,
+  propertiesCommandHasFields,
+} from './image-command-fields.ts';
+import { drawingAtomProjection } from '../store/package/drawing-atom-projection.ts';
 import { commandProtectionRefusal } from './command-protection.ts';
 // Selected-image derivation and image command dispatch for `createDocxEditor` (task 13).
 //
@@ -168,7 +174,8 @@ function projectDrawingForRecord(
   const scope = surface.storyScope();
   const part = surface.session.partFor(scope) ?? surface.session.part();
   const drawing = findNode(part, record.drawingNodeId);
-  if (!drawing || drawing.kind !== 'drawing') return null;
+  if (!drawing) return null;
+  if (drawing.kind !== 'drawing') return drawingAtomProjection(part, record.drawingNodeId);
   return projectDrawing(drawing as import('../store/package/ooxml-tree.ts').OoxmlDrawingNode, {
     ownerPartName: record.ownerPartName,
     supportedMcRequires: DEFAULT_SUPPORTED_MC_REQUIRES,
@@ -217,8 +224,13 @@ function capabilityFlags(
   return Object.freeze({
     canResize: !locks.resize && !projection.hidden,
     canMove: !locks.move && !projection.hidden,
-    canChangeWrap: !locks.move && projection.kind === 'anchored' && !projection.hidden,
-    canCrop: !locks.resize && !locks.changeAspect && !projection.hidden,
+    canChangeWrap:
+      projection.picture !== null &&
+      !locks.move &&
+      projection.kind === 'anchored' &&
+      !projection.hidden,
+    canCrop:
+      projection.picture !== null && !locks.resize && !locks.changeAspect && !projection.hidden,
   });
 }
 
@@ -230,14 +242,13 @@ function wrapOf(record: SelectedDrawingRecord): ImageWrapTarget {
 /**
  * The selected image and what may be done to it, or null when nothing image-like is selected.
  *
- * Null covers more than "no selection": a placeholder graphic, a drawing the file marks hidden,
- * and one whose `select` lock is set all read as no selection, because chrome that offered
- * resize handles on them would promise an edit the store is about to refuse.
+ * Unsupported placeholders, hidden drawings, and select-locked drawings cannot be selected.
  */
 export function selectedImageStateOf(surface: PaginatedSurface | null): SelectedImageState | null {
   const record = resolveSelectedDrawingRecord(surface);
   if (!record) return null;
-  if (record.placeholderGraphicKind !== null) return null;
+  if (record.placeholderGraphicKind !== null && !('textboxStory' in record && record.textboxStory))
+    return null;
   const projection = surface ? projectDrawingForRecord(surface, record) : null;
   if (!projection) return null;
   if (projection.hidden || projection.locks.select) return null;
@@ -423,40 +434,6 @@ function naturalExtentEmu(
   return { cx, cy };
 }
 
-function hasBorderPayload(
-  command: Extract<EditorCommand, { type: 'setImageProperties' }>
-): boolean {
-  return command.borderWidthEmu !== undefined || command.borderColor !== undefined;
-}
-
-function positionCommandHasFields(
-  command: Extract<EditorCommand, { type: 'setImagePosition' }>
-): boolean {
-  return (
-    command.horizontalEmu !== undefined ||
-    command.verticalEmu !== undefined ||
-    command.relativeToH !== undefined ||
-    command.relativeToV !== undefined
-  );
-}
-
-function propertiesCommandHasFields(
-  command: Extract<EditorCommand, { type: 'setImageProperties' }>
-): boolean {
-  return (
-    command.widthEmu !== undefined ||
-    command.heightEmu !== undefined ||
-    command.alt !== undefined ||
-    command.title !== undefined ||
-    command.description !== undefined ||
-    command.hyperlink !== undefined ||
-    command.crop !== undefined ||
-    command.wrap !== undefined ||
-    command.resetToNaturalSize === true ||
-    propertiesCommandHasPositionFields(command)
-  );
-}
-
 function positionInputFromCommand(
   command: Extract<EditorCommand, { type: 'setImagePosition' }>,
   selected: SelectedImageState | null
@@ -595,6 +572,20 @@ export function gateImageCommand(
       return { ok: false, code: 'invalidArgs', reason: 'insertImage dimensions must be positive' };
     }
     return null;
+  }
+  const record = resolveSelectedDrawingRecord(surface);
+  const textbox = record && 'textboxStory' in record && record.textboxStory;
+  if (
+    textbox &&
+    (command.type === 'replaceImage' ||
+      command.type === 'transformImage' ||
+      (command.type === 'setImageProperties' && command.hyperlink !== undefined))
+  ) {
+    return {
+      ok: false,
+      code: 'unsupported',
+      reason: 'this operation is not supported for textboxes',
+    };
   }
   if (command.type === 'replaceImage') {
     if (!(command.data instanceof Uint8Array) || command.data.byteLength === 0) {

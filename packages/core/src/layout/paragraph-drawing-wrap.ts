@@ -20,6 +20,7 @@ export function createParagraphDrawingWrap(options: {
   readonly paragraphOrder: ReadonlyMap<string, number>;
   readonly paragraphIndex: (id: string) => number;
   readonly columnCount: number;
+  readonly seedForwardOnly?: boolean;
 }) {
   // A rectangular exclusion anchored at the next paragraph can reach back into the
   // preceding paragraph's after-spacing. Its origin excludes the extra lines that
@@ -75,7 +76,8 @@ export function createParagraphDrawingWrap(options: {
           // A page- or margin-framed band does not move when the text before it reflows, so it
           // reaches back over the whole page. A flow-framed one would chase its own anchor.
           const reachesBack =
-            zone.pageFramedBand === true || (!placement && followingAnchor(zone, index));
+            (!options.seedForwardOnly && zone.pageFramedBand === true) ||
+            (!placement && followingAnchor(zone, index));
           if (entryOrder !== undefined && anchorOrder !== undefined) {
             if (anchorOrder > entryOrder && !reachesBack) return false;
           } else {

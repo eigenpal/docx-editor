@@ -1,3 +1,5 @@
+import { createDrawingGestures } from './surface-drawing-gestures.ts';
+import { createTextboxEditing } from './surface-textbox-editing.ts';
 import { createCaretComplexScriptResolver } from './surface-complex-script.ts';
 import { setSurfaceAccessibleLabel } from './surface-accessibility.ts';
 import { refreshWriteBlocked, registerRefreshComposition } from './refresh-write-guard.ts';
@@ -477,7 +479,7 @@ export function mountPaginatedSurface(
           ? noteCaretHost(pagesLayer, activeNote.id, notePageIndex)
           : null;
       return {
-        layout: currentLayout,
+        layout: editingLayout(),
         selection: hiddenMarks.shownSelection(selection),
         measurer,
         ...(armedAtCaret()
@@ -614,7 +616,7 @@ export function mountPaginatedSurface(
    */
   function releaseRetainedIfEscaped(next: SemanticSelection): void {
     if (!retainedSelection) return;
-    const { from, to } = orderedRangeOf(currentLayout, retainedSelection);
+    const { from, to } = orderedRangeOf(editingLayout(), retainedSelection);
     const head = next.head;
     if (comparePositions(head, from) >= 0 && comparePositions(head, to) <= 0) return;
     retainedSelections.clear();
@@ -701,6 +703,8 @@ export function mountPaginatedSurface(
     /** The range the insert REPLACES, when the caller's insert stands in for one. */
     replacing?: { readonly start: number; readonly end: number }
   ): TreeDocOp[] {
+    const replacementFormat = textboxEditing?.replacementFormatOps(paragraphId, offset, length);
+    if (replacementFormat?.length) return replacementFormat;
     // A saved empty paragraph carries its typing face on the mark. It has no run
     // for the insertion operation to extend, so copy that face onto the first text.
     const armed =
@@ -744,7 +748,7 @@ export function mountPaginatedSurface(
               { paragraphId, offset: replacing.end }
             ),
           }
-        : positionPastDeletion(currentLayout, anchor);
+        : positionPastDeletion(editingLayout(), anchor);
     if (at.paragraphId !== paragraphId || at.offset !== offset) return [];
     return [
       {
@@ -767,6 +771,10 @@ export function mountPaginatedSurface(
   /** Filled once selection sync exists; enter/exit need its noteModelMoved/mirror helpers. */
   let hfScope: ReturnType<typeof createHeaderFooterScopeController> | null = null;
   let noteOps: ReturnType<typeof createNoteOps> | null = null;
+  let textboxEditing: ReturnType<typeof createTextboxEditing> | null = null;
+  const editingLayout = () => textboxEditing?.layout(currentLayout) ?? currentLayout;
+  const editingParagraphIds = () =>
+    textboxEditing?.active() ? textboxEditing.paragraphIds() : session.paragraphIdsIn(storyScope());
   /**
    * Memo for `notePropertiesState`, keyed on the COMPLETE read set of
    * {@link notePropertiesStateOf}. `packageRevision` covers every publishing
@@ -827,7 +835,7 @@ export function mountPaginatedSurface(
   };
 
   const paragraphOrder = () =>
-    scopedDocumentOrder(currentLayout, hfScope?.getActive() ?? null, noteScopeId());
+    scopedDocumentOrder(editingLayout(), hfScope?.getActive() ?? null, noteScopeId());
   // Phase timers, one slot per phase rather than a log: the state reports the LAST pass,
   // and a host that wants history samples `onChange`. `performance.now()` where the host
   // has one — monotonic, sub-millisecond — and wall clock where it does not (a bare test
@@ -897,7 +905,7 @@ export function mountPaginatedSurface(
     runtimeOptions.revisionAuthorVisibility ??
     createRevisionAuthorVisibility(options.hiddenRevisionAuthors);
   const hiddenMarks = createHiddenMarkEditing({
-    layout: () => currentLayout,
+    layout: editingLayout,
     part: () => session.partFor(storyScope()) ?? session.part(),
     view: revisionView,
   });
@@ -1035,7 +1043,7 @@ export function mountPaginatedSurface(
   // surface mount has no facade session, so it correctly starts a fresh assignment here.
   const stableAuthorSlots = runtimeOptions.reviewAuthorSlots ?? createStableReviewAuthorSlots();
   const reviewAuthors = createSurfaceReviewAuthors({
-    layout: () => currentLayout,
+    layout: editingLayout,
     items: () => session.reviewItems(),
     styles: () => revisionStyles,
     slots: stableAuthorSlots,
@@ -1083,7 +1091,7 @@ export function mountPaginatedSurface(
     session: gatedSession,
     storyScope,
     paragraphOrder,
-    layout: () => currentLayout,
+    layout: editingLayout,
     // Formatting reads the paragraph where the caret SHOWS; see `hidden-mark-joins.ts`.
     selection: () => hiddenMarks.shownSelection(selection),
     displayMode: () => revisionDisplayMode(),
@@ -1102,7 +1110,7 @@ export function mountPaginatedSurface(
   const formatPainter = createSurfaceFormatPainter({
     session: gatedSession,
     storyScope,
-    layout: () => currentLayout,
+    layout: editingLayout,
     selection: () => hiddenMarks.shownSelection(selection),
     displayMode: () => revisionDisplayMode(),
     authorFilter: revisionFilter,
@@ -1146,7 +1154,7 @@ export function mountPaginatedSurface(
       selection.anchor.offset === selection.head.offset
         ? selection.head.paragraphId
         : null,
-    layout: () => currentLayout,
+    layout: editingLayout,
     // Structural edits at the caret KEEP the armed typing format, the way Word does: a
     // Shift+Enter line break, a Tab, a page break or turning the paragraph into a list item
     // all leave the user typing at a new caret in the face they armed. Captured before the
@@ -1187,7 +1195,7 @@ export function mountPaginatedSurface(
     session: gatedSession,
     // A HYPERLINK field is not a tree node, so its link resolves from the layout projection
     // plus the field-link registry rather than the typed tree walk.
-    layout: () => currentLayout,
+    layout: editingLayout,
     fieldLinkById: (linkId) => fieldLinks.linkById(linkId),
     // Asked BEFORE the relationship is minted. The gated session refuses the ops in viewing mode
     // either way, but the mint is a package write that the refusal does not roll back — Ctrl+K in a
@@ -1198,7 +1206,7 @@ export function mountPaginatedSurface(
     // Non-null exactly when suggesting: the link lane then replaces with tracked ops.
     replacementLanding,
     insertionLanding: (paragraphId, offset) =>
-      positionPastDeletion(currentLayout, { paragraphId, offset }).offset,
+      positionPastDeletion(editingLayout(), { paragraphId, offset }).offset,
     selection: () => selection,
     orderedRange: () => orderedRange(),
     selectionMark: () => selectionMark(),
@@ -1266,7 +1274,7 @@ export function mountPaginatedSurface(
     pagesLayer,
     container,
     scale: () => scale,
-    layout: () => currentLayout,
+    layout: editingLayout,
     bookmarks: () => session.bookmarks(),
     // Field-derived ids first: they are a closed `field-hyperlink:` namespace, and the typed
     // lane's tree walk could never answer for them.
@@ -1505,7 +1513,7 @@ export function mountPaginatedSurface(
       kind === 'insertion'
         ? {
             ops: [] as readonly TreeDocOp[],
-            collapseTo: positionPastDeletion(currentLayout, range.from),
+            collapseTo: positionPastDeletion(editingLayout(), range.from),
           }
         : deleteSelectionPlan(writer);
     const ops = attributeTrackedOps(plan.ops, revision, formattingTracked());
@@ -2144,7 +2152,7 @@ export function mountPaginatedSurface(
     document,
     layer: pagesLayer,
     find: findControl,
-    layout: () => currentLayout,
+    layout: editingLayout,
     selectDrawing: (drawingNodeId, paragraphId) =>
       surface.selectDrawing(drawingNodeId, paragraphId),
     allowed: (id) => !contentControlsOps.disabledReason(id, 'edit'),
@@ -2573,6 +2581,7 @@ export function mountPaginatedSurface(
       reviewAuthors.get().value
     );
     // Paint just rebuilt every span, so the caret's field lost its mark with the old DOM.
+    textboxEditing?.syncDom();
     syncActiveFieldShading(pagesLayer, collapsedCaretPosition(), { domReplaced: true });
     setHeaderFooterEditingChrome(container, pagesLayer, activeHf != null);
     // Viewing mode hides write affordances the painter cannot know about — today the
@@ -2648,7 +2657,7 @@ export function mountPaginatedSurface(
   const caretView = createCaretViewFollower({
     storyScopeOpen: () => Boolean(hfScope?.getActive() || noteOps?.activeNoteScope()),
     selection: () => hiddenMarks.shownSelection(selection),
-    layout: () => currentLayout,
+    layout: editingLayout,
     measurer: () => measurer,
     preferredPageIndex: () => selectionSync.selectionPageIndex(),
     pagesLayer,
@@ -3141,7 +3150,7 @@ export function mountPaginatedSurface(
   function selectionPagesBuilt(): boolean {
     if (!materializedSet) return true;
     for (const position of [selection.anchor, selection.head]) {
-      const caret = caretAt(currentLayout, position);
+      const caret = caretAt(editingLayout(), position);
       if (caret && !materializedSet.has(caret.pageIndex)) return false;
     }
     return true;
@@ -3190,6 +3199,12 @@ export function mountPaginatedSurface(
   ): void {
     // Compared BEFORE the flush below, which can itself move the caret.
     const moved = !selectionsEqual(next, selection);
+    if (
+      textboxEditing?.active() &&
+      (!textboxEditing.contains(next.anchor.paragraphId) ||
+        !textboxEditing.contains(next.head.paragraphId))
+    )
+      textboxEditing.exit(false);
     // Buffered typing lands at the OLD caret before a MOVE takes effect —
     // typing then clicking must not teleport the typed text to the click. A
     // same-position set (the selection mirror re-adopting the caret it painted,
@@ -3322,7 +3337,7 @@ export function mountPaginatedSurface(
     recordSelectionMs: (ms) => {
       lastSelectionMs = ms;
     },
-    isGesturing: () => pointer?.dragging() ?? false,
+    isGesturing: () => drawingIntent.kind === 'pointer' || (pointer?.dragging() ?? false),
     domSelection: () => (cellSelection ? collapsedAt(cellSelection.text.anchor) : selection),
     holdsCellSelection: () => cellSelection !== null,
     // `surface` is assigned below; a composition can only end once a caller holds it.
@@ -3332,7 +3347,7 @@ export function mountPaginatedSurface(
 
   hfScope = createHeaderFooterScopeController({
     session,
-    layout: () => currentLayout,
+    layout: editingLayout,
     sectionAtPage,
     revisionDisplayMode,
     revisionAuthorFilter: revisionFilter,
@@ -3359,12 +3374,18 @@ export function mountPaginatedSurface(
     notify: () => options.onChange?.(currentState()),
     materializedPages: () => materializedSet,
     entryRefused: () => editingMode === 'view',
-    leaveOtherStories: () => noteOps?.exitNote(),
+    leaveOtherStories: () => {
+      noteOps?.exitNote();
+      textboxEditing?.exit();
+    },
   });
 
   noteOps = createNoteOps({
     session,
-    exitHeaderFooter: () => hfScope?.exitHeaderFooter(),
+    exitHeaderFooter: () => {
+      hfScope?.exitHeaderFooter();
+      textboxEditing?.exit();
+    },
     applyOps,
     commit,
     selection: () => selection,
@@ -3373,6 +3394,8 @@ export function mountPaginatedSurface(
     deleteSelectionPlan: () => deleteSelectionPlan(),
     undo: () => surface.undo(),
     activeScope: () => {
+      const frame = textboxEditing?.active();
+      if (frame) return frame;
       const note = noteOps?.activeNoteScope();
       if (note) return note;
       return hfScope?.activeScope() ?? { kind: 'body' };
@@ -3457,7 +3480,7 @@ export function mountPaginatedSurface(
    * paint with a real scroller draws it.
    */
   function caretPageWindow(): ReadonlySet<number> {
-    const caret = caretAt(currentLayout, selection.head);
+    const caret = caretAt(editingLayout(), selection.head);
     const centre = caret?.pageIndex ?? 0;
     const window_ = new Set<number>();
     for (let page = centre - 1; page <= centre + 1; page += 1) {
@@ -3895,8 +3918,8 @@ export function mountPaginatedSurface(
     const rects = cellSelection
       ? cellSelectionRects(currentLayout, cellSelection.cellIds)
       : retainedSelection
-        ? selectionRects(currentLayout, retainedSelection, paragraphOrder(), measurer)
-        : selectionMarkRects(currentLayout, selection, paragraphOrder(), measurer);
+        ? selectionRects(editingLayout(), retainedSelection, paragraphOrder(), measurer)
+        : selectionMarkRects(editingLayout(), selection, paragraphOrder(), measurer);
     paintSelectionOverlay(
       overlayLayer,
       currentLayout,
@@ -4059,6 +4082,7 @@ export function mountPaginatedSurface(
   }
 
   function canInsertTable(rows: number, cols: number): boolean {
+    if (textboxEditing?.active()) return false;
     if (editingMode === 'view' || !session.editable) return false;
     const op = insertTableOp(rows, cols);
     // Validated against the part the CARET is in, the same part `applyOps` will write to.
@@ -4283,7 +4307,7 @@ export function mountPaginatedSurface(
     replacementOffset,
   } = createSurfaceRangeEditOps({
     session,
-    layout: () => currentLayout,
+    layout: editingLayout,
     selection: () => selection,
     cellSelection: () => cellSelection,
     editingMode: () => editingMode,
@@ -4303,7 +4327,9 @@ export function mountPaginatedSurface(
     createSurfaceClipboardOps({
       session,
       textFormFieldId: () => textFormInteraction?.fieldId() ?? null,
-      layout: () => currentLayout,
+      richPasteAllowed: () => !textboxEditing?.active(),
+      paragraphIds: editingParagraphIds,
+      layout: editingLayout,
       cellSelection: () => cellSelection,
       editingMode: () => editingMode,
       storyScope,
@@ -4355,7 +4381,7 @@ export function mountPaginatedSurface(
         const page = viewportPage(container, currentLayout, scale);
         if (page !== null) return page;
       }
-      const caret = caretAt(currentLayout, selection.head);
+      const caret = caretAt(editingLayout(), selection.head);
       return caret ? caret.pageIndex + 1 : 1;
     },
 
@@ -4508,7 +4534,7 @@ export function mountPaginatedSurface(
         // the start of a later member takes the character before it — the one under the
         // caret's left edge — instead of joining two paragraphs and carrying a mark revision
         // onto a paragraph nobody edited.
-        for (const member of mergedPredecessorsOf(currentLayout, position.paragraphId)) {
+        for (const member of mergedPredecessorsOf(editingLayout(), position.paragraphId)) {
           const text = textOf(member);
           if (text.length === 0) continue;
           commit(
@@ -4597,7 +4623,7 @@ export function mountPaginatedSurface(
       // strike and the proposed break read as one decision instead of two.
       const plan = deleteSelectionPlan();
       const position = plan.replaceAt ?? plan.collapseTo;
-      const before = new Set(session.paragraphIdsIn(storyScope()));
+      const before = new Set(editingParagraphIds());
       // Enter carries the caret run's direct formatting even when no toolbar command is
       // armed (select text, resize it, then place the caret after it). An empty tail has
       // no run to inherit from. Capture authored properties only, so a heading's inherited
@@ -4704,7 +4730,7 @@ export function mountPaginatedSurface(
           ),
         () => {
           // The tail is the id the store minted that was not there before.
-          const created = session.paragraphIdsIn(storyScope()).filter((id) => !before.has(id));
+          const created = editingParagraphIds().filter((id) => !before.has(id));
           const tail = separator ? created.at(-1) : created[0];
           return tail ? collapsedAt({ paragraphId: tail, offset: 0 }) : null;
         },
@@ -4725,12 +4751,18 @@ export function mountPaginatedSurface(
         // Collapse to the selected edge without taking another navigation step.
         const range = orderedRange();
         desiredX = null;
-        const target = collapseSelection(currentLayout, range, paragraphOrder(), command, measurer);
+        const target = collapseSelection(
+          editingLayout(),
+          range,
+          paragraphOrder(),
+          command,
+          measurer
+        );
         setSelection(collapsedAt(target), true);
         return;
       }
       let moved = navigateInActiveScope(
-        currentLayout,
+        editingLayout(),
         hiddenMarks.shown(selection.head),
         command,
         desiredX,
@@ -4766,7 +4798,7 @@ export function mountPaginatedSurface(
         const limit = tocRegionLineCount(tocIds) + 4;
         for (let step = 0; step < limit; step += 1) {
           const next = navigateInActiveScope(
-            currentLayout,
+            editingLayout(),
             moved.position,
             escape,
             moved.desiredX,
@@ -4829,7 +4861,7 @@ export function mountPaginatedSurface(
         textOf(head.paragraphId),
         head.offset,
         -1,
-        deletedTextBoundaries(currentLayout, head.paragraphId)
+        deletedTextBoundaries(editingLayout(), head.paragraphId)
       );
       if (target === head.offset) {
         surface.deleteBackward();
@@ -4853,7 +4885,7 @@ export function mountPaginatedSurface(
         textOf(head.paragraphId),
         head.offset,
         1,
-        deletedTextBoundaries(currentLayout, head.paragraphId)
+        deletedTextBoundaries(editingLayout(), head.paragraphId)
       );
       if (target === head.offset) {
         surface.deleteForward();
@@ -4921,7 +4953,7 @@ export function mountPaginatedSurface(
       // paragraph, so Delete takes the next CHARACTER, exactly as Backspace does at the other
       // side of the same invisible break — joining here would resolve a tracked decision the
       // keypress never named, and take the paragraph after it as well.
-      if (mergedPredecessorsOf(currentLayout, next).includes(position.paragraphId)) {
+      if (mergedPredecessorsOf(editingLayout(), next).includes(position.paragraphId)) {
         const following = textOf(next);
         if (following.length === 0) return;
         commit(
@@ -4980,7 +5012,7 @@ export function mountPaginatedSurface(
       flushLayout();
       // The paragraph's own line, not the top of its page: a heading two thirds down a
       // page is the thing the caller asked to see.
-      const caret = caretAt(currentLayout, { paragraphId, offset: 0 });
+      const caret = caretAt(editingLayout(), { paragraphId, offset: 0 });
       if (!caret) return false;
       const page = currentLayout.pages.find((entry) => entry.index === caret.pageIndex);
       if (!page) return false;
@@ -4994,7 +5026,7 @@ export function mountPaginatedSurface(
 
     revealPosition(position, options) {
       flushLayout();
-      const caret = caretAt(currentLayout, position);
+      const caret = caretAt(editingLayout(), position);
       if (!caret) return false;
       const page = currentLayout.pages.find((entry) => entry.index === caret.pageIndex);
       if (!page) return false;
@@ -5011,6 +5043,7 @@ export function mountPaginatedSurface(
       // whether the FILE can be round-tripped, and this says whether the user may type into
       // it right now. Both have to be true for an edit to land.
       hostEditable = editable;
+      if (!editable) textboxEditing?.exit();
       applyEditableChrome();
     },
 
@@ -5141,7 +5174,7 @@ export function mountPaginatedSurface(
           const order = paragraphOrder();
           if (order.length === 0) return null;
           const mapped = mappedAcrossTextChange(selection, caretParagraph, beforeText);
-          return clampedToDocument(currentLayout, order, mapped);
+          return clampedToDocument(editingLayout(), order, mapped);
         }
       );
     },
@@ -5225,7 +5258,7 @@ export function mountPaginatedSurface(
           // alone is right there, because a clamp with nothing to clamp to is a caret reset.
           const order = paragraphOrder();
           if (order.length === 0) return null;
-          return clampedToDocument(currentLayout, order, selection);
+          return clampedToDocument(editingLayout(), order, selection);
         }
       );
       return result;
@@ -5274,6 +5307,7 @@ export function mountPaginatedSurface(
       // Viewing has no furniture EDITING scope. Switching while a header was open left the
       // body dimmed and inert under an active band and its whole options bar — a write UI
       // over a document that now refuses writes. Exiting repaints, so this runs first.
+      if (moved && mode !== 'edit') textboxEditing?.exit();
       if (moved && mode === 'view') hfScope?.exitHeaderFooter();
       // An armed format painter is a write surface too, and a more misleading one: the pages
       // keep the paint cursor and every release goes on building ops the session then
@@ -5410,7 +5444,7 @@ export function mountPaginatedSurface(
       // the text range it stands in for would paste back as one run with the grid gone.
       if (cellSelection) return cellSelectionText(currentLayout, cellSelection);
       const { from, to } = orderedRange();
-      return selectedTextIn(currentLayout, from, to, paragraphOrder());
+      return selectedTextIn(editingLayout(), from, to, paragraphOrder());
     },
 
     copyFlavours: () => copyFlavoursNow(),
@@ -5467,6 +5501,8 @@ export function mountPaginatedSurface(
     },
     sectionAtPage,
     activeScope: () => {
+      const frame = textboxEditing?.active();
+      if (frame) return frame;
       const note = noteOps?.activeNoteScope();
       if (note) return note;
       return hfScope!.activeScope();
@@ -5477,11 +5513,11 @@ export function mountPaginatedSurface(
       // into the wrong story, or gets refused and silently drops it. Scope
       // entry resolves geometry from the layout, so a deferred pass lands too.
       flushPendingInputAndLayout();
+      if (scope.kind === 'frame') return textboxEditing!.enter(scope);
+      if (scope.kind !== 'body' && scope.kind !== 'headerFooter' && scope.kind !== 'note')
+        return false;
+      textboxEditing?.exit();
       if (scope.kind === 'note') return noteOps!.enterNote(scope.id);
-      // REFUSED BEFORE ANYTHING IS LEFT. A scope this surface does not open — `frame`, or
-      // anything a later contract adds — used to fall through to the exit below and only
-      // then report false: the call failed AND closed the note the reader had open.
-      if (scope.kind !== 'body' && scope.kind !== 'headerFooter') return false;
       noteOps?.exitNote();
       return hfScope!.setActiveScope(scope);
     },
@@ -5746,7 +5782,7 @@ export function mountPaginatedSurface(
       // paragraph. The caret must still be CLAMPED to the tree undo just restored: leaving it
       // pointed past the end of a shortened paragraph, or at a paragraph the undo removed,
       // and every later keystroke was refused. Select All, type, undo froze the editor.
-      setSelection(clampedToDocument(currentLayout, paragraphOrder(), selection));
+      setSelection(clampedToDocument(editingLayout(), paragraphOrder(), selection));
       return;
     }
     // CLAMPED LIKE THE BRANCH ABOVE. A mark addresses one paragraph of whatever story the
@@ -5770,7 +5806,7 @@ export function mountPaginatedSurface(
     setSelection(
       paragraphOrder().includes(mark.paragraphId)
         ? restored
-        : clampedToDocument(currentLayout, paragraphOrder(), restored)
+        : clampedToDocument(editingLayout(), paragraphOrder(), restored)
     );
   }
 
@@ -5954,64 +5990,12 @@ export function mountPaginatedSurface(
   // Selection lives on the document, so this is where the browser reports it changing —
   // whatever produced it: a drag, a double-click, Select All, or a caret move.
   document.addEventListener('selectionchange', onSelectionChange);
-  // Word's object-selection gestures. A primary press on a painted drawing selects THAT
-  // drawing; a primary press anywhere else deselects. Only this listener can tell a click
-  // ON the drawing from the untouched mount caret at the same offsets. A key that moves or
-  // types (including Escape, which deselects an object in Word) returns the intent to
-  // `none`; a lone modifier or ContextMenu leaves an existing selection alone — Word keeps
-  // the object selected under its context menu. `beforeinput` covers virtual keyboards
-  // that type without a keydown.
-  const NON_DESELECTING_KEYS = new Set([
-    'Shift',
-    'Control',
-    'Alt',
-    'Meta',
-    'CapsLock',
-    'NumLock',
-    'ScrollLock',
-    'ContextMenu',
-  ]);
-  const onDrawingPointerGesture = (event: Event): void => {
-    if (event instanceof PointerEvent && event.button !== 0) return;
-    const element = event.target instanceof Element ? event.target : null;
-    const drawingId = element
-      ?.closest<HTMLElement>('[data-drawing-node-id]')
-      ?.getAttribute('data-drawing-node-id');
-    setDrawingIntent(
-      drawingId ? { kind: 'pointer', drawingNodeId: drawingId } : { kind: 'none' },
-      true
-    );
-  };
-  const onDrawingKeyGesture = (event: Event): void => {
-    if (event instanceof KeyboardEvent && NON_DESELECTING_KEYS.has(event.key)) return;
-    // Delete/Backspace ON a selected drawing deletes THE DRAWING — Word's object gesture.
-    // Without this the key fell through to the text keymap at a collapsed caret, where a
-    // Delete beside the picture read as a paragraph JOIN: in suggesting mode that proposed
-    // a "deleted paragraph break" while the selected picture stayed untouched. Handled
-    // here, in the same capture listener that owns the intent, because it must consume the
-    // key BEFORE the text keymap on this element sees it. The host overlay's own handler
-    // (when the overlay is focused) never reaches this listener at all.
-    const deleteKey =
-      (event instanceof KeyboardEvent &&
-        (event.key === 'Delete' || event.key === 'Backspace') &&
-        !event.altKey &&
-        !event.ctrlKey &&
-        !event.metaKey) ||
-      (event instanceof InputEvent &&
-        (event.inputType === 'deleteContentBackward' ||
-          event.inputType === 'deleteContentForward'));
-    if (deleteKey && drawingIntent.kind === 'pointer') {
-      const target = resolveSelectedDrawingRecord(surface);
-      if (target !== null) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        setDrawingIntent({ kind: 'none' }, true);
-        surface.deleteImage(target.drawingNodeId);
-        return;
-      }
-    }
-    setDrawingIntent({ kind: 'none' }, true);
-  };
+  const { onDrawingPointerGesture, onDrawingKeyGesture } = createDrawingGestures({
+    surface,
+    textbox: () => textboxEditing,
+    intent: () => drawingIntent,
+    setIntent: (intent) => setDrawingIntent(intent, true),
+  });
   pagesLayer.addEventListener('pointerdown', onDrawingPointerGesture, { capture: true });
   pagesLayer.addEventListener('keydown', onDrawingKeyGesture, { capture: true });
   pagesLayer.addEventListener('beforeinput', onDrawingKeyGesture, { capture: true });
@@ -6084,6 +6068,19 @@ export function mountPaginatedSurface(
   }
   watchScrollerSize();
 
+  textboxEditing = createTextboxEditing({
+    session,
+    pagesLayer,
+    layout: () => currentLayout,
+    selection: () => selection,
+    setSelection: (next) => setSelection(next, false, 'none'),
+    flush: flushPendingInputAndLayout,
+    leaveOtherStories: () => {
+      noteOps?.exitNote();
+      hfScope?.exitHeaderFooter();
+    },
+    writable: () => hostEditable && editingMode === 'edit' && session.editable,
+  });
   pointer = createPointerController(
     {
       onTextFormDoubleClick: (event) => textFormInteraction?.doubleClick(event) ?? false,
@@ -6111,7 +6108,7 @@ export function mountPaginatedSurface(
       layout: () => {
         caretFollowPending = false;
         caretView.without(flushLayout);
-        return currentLayout;
+        return editingLayout();
       },
       measurer: () => measurer,
       selection: () => hiddenMarks.shownSelection(selection),

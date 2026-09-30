@@ -1,3 +1,4 @@
+import { createDrawingExclusionPasses } from './drawing-exclusion-passes.ts';
 import { resolveBodyRefFields } from './style-separator-ref.ts';
 import { styleSeparatorRanges, styleSeparatorToken } from './style-separator-group.ts';
 import { layoutWithCharacterHeaders } from './character-header-layout.ts';
@@ -134,7 +135,6 @@ import {
   exclusionLayoutToken,
   localizeExclusionZones,
   exclusionMapsEqual,
-  exclusionMapsToken,
   MAX_ANCHOR_PAGE_DEFERRALS,
   sortDrawingsForPaint,
   topAndBottomSkipBeforeLine,
@@ -488,7 +488,12 @@ function layoutBlocksPass(
     let zonesByPage: ReadonlyMap<number, readonly ExclusionZone[]> = new Map();
     let result: BlockLayoutResult | null = null;
     let converged = false;
-    const seenZoneTokens = new Set<string>();
+    const exclusionPasses = createDrawingExclusionPasses(
+      bodies,
+      options.inlineDrawingLayout,
+      MAX_DRAWING_EXCLUSION_REFLOW_PASSES,
+      options.compatibilityMode
+    );
     const layoutExclusionCandidate = (candidateOptions: BlockLayoutOptions): BlockLayoutResult => {
       noteExclusionLayoutPass();
       return layoutBlocksWithGeometry(bodies, revision, candidateOptions);
@@ -532,7 +537,7 @@ function layoutBlocksPass(
       const nextZones = collectZones(result.pages, true);
       if (exclusionMapsEqual(zonesByPage, nextZones)) return result;
       zonesByPage = new Map(nextZones);
-      seenZoneTokens.add(exclusionMapsToken(nextZones));
+      exclusionPasses.remember(nextZones);
     }
     // The common document has an image-layout port but no exclusion-producing anchors. Build
     // pass zero with a disposable session so that, when its collected zone map is empty, that
@@ -562,12 +567,12 @@ function layoutBlocksPass(
         candidateSession
       );
     };
-    for (let pass = 0; pass < MAX_DRAWING_EXCLUSION_REFLOW_PASSES; pass += 1) {
+    for (let pass = 0; pass < exclusionPasses.maxPasses; pass += 1) {
       const candidateSession = options.session ? createLayoutSession() : undefined;
       result = layoutExclusionCandidate({
         ...options,
         session: candidateSession,
-        drawingExclusionPass: pass,
+        drawingExclusionPass: exclusionPasses.passIndex(pass),
         drawingExclusionZonesByPage: zonesByPage,
       });
       const fallback = fallbackUnplaceableFrames(result);
@@ -580,20 +585,13 @@ function layoutBlocksPass(
         }
         return publishConverged(nextZones);
       }
-      if (exclusionMapsEqual(zonesByPage, nextZones)) {
-        // This candidate was already laid under the exact stable zone map. Check before
-        // cycle detection: a stable token is necessarily in `seenZoneTokens`, but stability
-        // can publish this very pass while treating it as a cycle constructs one cold twin.
-        return publishCandidate(result, candidateSession);
-      }
-      const nextToken = exclusionMapsToken(nextZones);
-      if (seenZoneTokens.has(nextToken)) {
+      const transition = exclusionPasses.advance(zonesByPage, nextZones);
+      if (transition === 'stable') return publishCandidate(result, candidateSession);
+      zonesByPage = new Map(nextZones);
+      if (transition === 'cycle') {
         converged = true;
-        zonesByPage = nextZones;
         break;
       }
-      seenZoneTokens.add(nextToken);
-      zonesByPage = new Map(nextZones);
     }
     if (!converged) {
       for (
@@ -605,28 +603,24 @@ function layoutBlocksPass(
         result = layoutExclusionCandidate({
           ...options,
           session: candidateSession,
-          drawingExclusionPass: MAX_DRAWING_EXCLUSION_REFLOW_PASSES + stab,
+          drawingExclusionPass: exclusionPasses.maxPasses + stab,
           drawingExclusionZonesByPage: zonesByPage,
         });
         const fallback = fallbackUnplaceableFrames(result);
         if (fallback) return fallback;
         const nextZones = collectZones(result.pages);
-        const nextToken = exclusionMapsToken(nextZones);
-        if (exclusionMapsEqual(zonesByPage, nextZones)) {
-          return publishCandidate(result, candidateSession);
-        }
-        if (seenZoneTokens.has(nextToken)) {
+        const transition = exclusionPasses.advance(zonesByPage, nextZones, true);
+        if (transition === 'stable') return publishCandidate(result, candidateSession);
+        zonesByPage = new Map(nextZones);
+        if (transition === 'cycle') {
           converged = true;
-          zonesByPage = nextZones;
           break;
         }
-        seenZoneTokens.add(nextToken);
-        zonesByPage = new Map(nextZones);
       }
     }
     if (!converged) {
       throw new DrawingExclusionConvergenceError(
-        `wrap exclusion reflow did not converge within ${MAX_DRAWING_EXCLUSION_REFLOW_PASSES} passes`
+        `wrap exclusion reflow did not converge within ${exclusionPasses.maxPasses} passes`
       );
     }
     return publishConverged(zonesByPage);
@@ -1648,6 +1642,7 @@ function layoutBlocksPass(
   const { rememberBreakKey, releasePlacedBreaks } = createParagraphBreakRetention(cache);
 
   const paragraphDrawingWrap = createParagraphDrawingWrap({
+    seedForwardOnly: (options.drawingExclusionPass ?? 0) < 0,
     drawingLayout: options.inlineDrawingLayout,
     paragraphAt: (index) => {
       const entry = prepared[index];
@@ -2561,6 +2556,7 @@ function layoutBlocksPass(
             ownTopAndBottomSkip(fragmentFirstLineSkip, fragmentParagraphStartY, pending[0], {
               inheritedZones: pageExclusionZonesForEntry(entry, index),
               spaceAbove: fragmentBefore,
+              anchorClearanceBefore: lines[fragmentFirstLine]?.anchorClearanceBefore,
             }) -
             paragraphDrawingWrap.displacement(pages.length, paragraphId);
           publishLines = pending;

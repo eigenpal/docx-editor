@@ -617,13 +617,13 @@ export const wordFeatures: WordFeature[] = [
     id: 'images.textboxes',
     name: 'Text boxes',
     category: 'images',
-    editing: 'none',
+    editing: 'partial',
     rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Anchored text boxes render their content clipped inside the authored extent. This works in the body, in headers, and in footers, including page-relative anchors. PAGE, NUMPAGES, and SECTIONPAGES fields inside a header or footer text box are evaluated per page. The content is read-only. Inline text boxes, linked chains, autofit, and rotation render as a placeholder or clip.',
+      'Anchored text boxes render their content clipped inside the authored extent. Empty anchor paragraphs flow around preceding floating objects. This works in the body, in headers, and in footers, including page-relative anchors. PAGE, NUMPAGES, and SECTIONPAGES fields inside a header or footer text box are evaluated per page. Unrotated body text boxes support paragraph editing, undo, drag, and resize. Text boxes with tables and text boxes in headers or footers remain read-only. Inline text boxes, linked chains, autofit, and rotation render as a placeholder or clip.',
   },
   {
     id: 'images.shapes',
@@ -1144,7 +1144,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Searches the body, headers, footers, footnotes, and endnotes, including table cells and saved field results. Find also searches anchored text boxes in the body, headers, and footers. Inline text boxes and text boxes in notes are excluded. Selecting a text-box match selects its drawing; the content remains read-only.',
+      'Searches the body, headers, footers, footnotes, and endnotes, including table cells and saved field results. Find also searches anchored text boxes in the body, headers, and footers. Inline text boxes and text boxes in notes are excluded. Selecting a text-box match selects its drawing. Click inside a supported body text box to edit its paragraphs.',
   },
   {
     id: 'collab.anchor-navigation',

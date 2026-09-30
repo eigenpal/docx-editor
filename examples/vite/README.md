@@ -75,3 +75,13 @@ bunx playwright test --config e2e/editor-smoke.config.ts bulk-review.interaction
 ```
 
 See [Resolve a batch of changes](../../docs/site/content/editor-api/revisions.mdx) for selection, result handling, and strict batches.
+
+## Edit textboxes
+
+Open `http://localhost:5173/?textboxes=1` to load the anonymous textbox sample.
+Click inside the box to edit its text. Click its border to select, drag, or resize it.
+Use **Undo**, **Redo**, and **Save** to inspect the result.
+Table and header textboxes remain read-only. Inserting textboxes is not supported.
+
+The demo uses the default `<DocxEditor.Toolbar />` appearance, including the font picker and spacing.
+Applications do not need demo-specific toolbar CSS.

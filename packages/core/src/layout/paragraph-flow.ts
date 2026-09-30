@@ -632,6 +632,7 @@ export function breakParagraph(
     applyNarrowWrapSkipIfNeeded,
     applyInlineObjectSkipIfNeeded,
     finalizeTopAndBottomClearance,
+    clearEmptyParagraph,
   } = createLineExclusionClearance({
     line: () => line,
     top: currentLineTopY,
@@ -990,6 +991,8 @@ export function breakParagraph(
         ? Math.max(0, spaced.trailing ?? spaced.height - naturalHeight)
         : 0;
     finalizeTopAndBottomClearance();
+    if (empty && (wrapAnchorStarts.size > 0 || topAndBottomAnchorStarts.size > 0))
+      clearEmptyParagraph(paragraphId);
     // Mark wrap advances after merging, using the shape paint receives.
     coalesceIdeographicSpans(line);
     markPendingLineWrapAdvances(line);

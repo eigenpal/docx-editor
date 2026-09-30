@@ -186,7 +186,7 @@ export interface SemanticLayoutOptions {
   readonly projectionTokenForTable?: (table: OoxmlNode) => string;
   /** @deprecated Prefer {@link drawingTokenForParagraph}. */
   readonly drawingLayoutToken?: string;
-  /** Internal: reflow pass index while wrap exclusions converge. */
+  /** Internal: reflow pass index; negative values establish anchor pages before backward wrap. */
   readonly drawingExclusionPass?: number;
   /** Internal: converged exclusion zones — skips the reflow loop when set with zones. */
   readonly drawingExclusionConverged?: boolean;

@@ -2,8 +2,7 @@ import { demoExporters } from '../../shared/menu-exporters';
 // The FLAGSHIP demo: the provider-first composition API, end to end.
 //
 // Everything on screen is composed under `<DocxEditor.Root>`: the library's compound
-// toolbar (the FULL chrome registry by default, with the FontFamily slot overridden in
-// place by a composed picker), the library's compound MENU BAR (with a demo-owned row
+// toolbar (the full default chrome registry), the library's compound MENU BAR (with a demo-owned row
 // appended into File and the whole Help menu replaced), and a demo-owned header shell
 // around them — brand, title, status, Open/New/Save buttons, the perf HUD — built from
 // nothing but the public hooks (`useDocxEditor`, `useEditorEvent`, `useFontFamily`).
@@ -92,10 +91,6 @@ function downloadDocx(bytes: ArrayBuffer | Uint8Array, name: string): void {
   anchor.click();
   URL.revokeObjectURL(url);
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Toolbar customization: the in-place FontFamily override with typeface previews
-// ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Perf HUD: the surface's own pass timings, bottom-left, chip-collapsed
@@ -525,16 +520,7 @@ function EditorChrome({
         }}
       />
 
-      {/* The LIBRARY toolbar: the FULL chrome registry by default. One slot is
-          customized IN PLACE to show override semantics: FontFamily renders each
-          document-derived family in its own typeface. Save is
-          live because the toolbar was given an onSave handler. */}
-      <DocxEditor.Toolbar className="demo-toolbar" onSave={saveDocument}>
-        <DocxEditor.Toolbar.FontFamily>
-          <DocxEditor.Toolbar.FontFamily.Trigger className="demo-font-trigger" />
-          <DocxEditor.Toolbar.FontFamily.Content className="demo-font-menu" />
-        </DocxEditor.Toolbar.FontFamily>
-      </DocxEditor.Toolbar>
+      <DocxEditor.Toolbar onSave={saveDocument} />
 
       {/* Word-style compatibility bar when document fonts render in substitutes. */}
       <DocxEditor.FontNotice />

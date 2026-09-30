@@ -184,7 +184,27 @@ export function createLineExclusionClearance(context: {
     if (skip > 0.001) line.exclusionSkipBefore = skip;
     else delete (line as { exclusionSkipBefore?: number }).exclusionSkipBefore;
   };
+  const clearEmptyParagraph = (paragraphId: string): void => {
+    // An anchor-only paragraph needs a passage for its floating objects' attachment.
+    // Its own rectangles position from that mark and must not chase its clearance.
+    const line = context.line();
+    if (context.holdsContent()) return;
+    const zones = context.zones().filter((zone) => zone.anchorParagraphId !== paragraphId);
+    const skip = narrowRectangularWrapSkip(
+      context.top() + (line.exclusionSkipBefore ?? 0),
+      line.height,
+      zones,
+      context.left(),
+      context.right,
+      context.measurer.measure(' ', context.emptyStyle)
+    );
+    if (skip > 0.001) {
+      line.exclusionSkipBefore = (line.exclusionSkipBefore ?? 0) + skip;
+      line.anchorClearanceBefore = skip;
+    }
+  };
   return {
+    clearEmptyParagraph,
     applyTopAndBottomSkipIfNeeded,
     applyNarrowWrapSkipIfNeeded,
     applyInlineObjectSkipIfNeeded,

@@ -1,3 +1,4 @@
+import { drawingAtomProjection } from '../package/drawing-atom-projection.ts';
 // Package-wide image intents: insert, replace, delete, external embed (task 12).
 //
 // Each intent runs as one story transaction promoted to a package undo unit so media bytes,
@@ -511,7 +512,10 @@ export function deleteImage(
 
   const ownerPartName = resolved.story.partName;
   const pkg = store.currentPackage();
-  const projection = drawingProjection(pkg, ownerPartName, drawingNodeId);
+  const part = pkg.parts.get(ownerPartName);
+  const projection =
+    drawingProjection(pkg, ownerPartName, drawingNodeId) ??
+    (part ? drawingAtomProjection(part, drawingNodeId) : null);
   if (!projection) return { ok: false, reason: 'unknown-drawing' };
   const embedRel = projection.picture?.embeddedRelationshipId ?? null;
   const linkRel = projection.picture?.linkedRelationshipId ?? null;
