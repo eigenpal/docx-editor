@@ -7,10 +7,20 @@ import { expect, test } from 'bun:test';
 import { inflateSync } from 'node:zlib';
 import { PDFDict, PDFDocument, PDFName, PDFRawStream } from 'pdf-lib';
 import { exportPdf } from '../src/index.ts';
-import { flateStream, hex, unicodeHex } from '../src/context.ts';
+import { flateStream, hex, unicodeHex, number } from '../src/context.ts';
 import { docx, paragraph } from './fixture.ts';
 
 const decoded = (stream: PDFRawStream): number[] => [...inflateSync(stream.getContents())];
+
+test('PDF numbers retain rounding, signed zero, and coordinate limits', () => {
+  for (const value of [
+    -1_000_000, -42, -0, 0, 42, 1_000_000, -0.0000001, 0.0000001, -0.0000005, 0.0000005,
+    123.4567895, -123.4567895, 999999.9999999,
+  ])
+    expect(number(value)).toBe(String(Number(value.toFixed(6))));
+  for (const value of [NaN, Infinity, -Infinity, 1_000_001, -1_000_001])
+    expect(() => number(value)).toThrow(RangeError);
+});
 
 // The native stream must decode to the bytes pdf-lib's own `flateStream` would have carried,
 // including its low-byte reading of characters above U+00FF, and keep the caller's entries.

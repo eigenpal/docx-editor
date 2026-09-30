@@ -602,15 +602,11 @@ export const createShapedRun = (
     throw new RangeError('Font spans must cover every glyph exactly once');
   }
   const clusters = input.clusters.map((cluster) => {
-    for (const [name, value] of [
-      ['cluster text start', cluster.textStart],
-      ['cluster text end', cluster.textEnd],
-      ['cluster glyph start', cluster.glyphStart],
-      ['cluster glyph end', cluster.glyphEnd],
-      ['cluster font span', cluster.fontSpan],
-    ] as const) {
-      assertIndex(value, name);
-    }
+    assertIndex(cluster.textStart, 'cluster text start');
+    assertIndex(cluster.textEnd, 'cluster text end');
+    assertIndex(cluster.glyphStart, 'cluster glyph start');
+    assertIndex(cluster.glyphEnd, 'cluster glyph end');
+    assertIndex(cluster.fontSpan, 'cluster font span');
     if (
       cluster.textEnd <= cluster.textStart ||
       cluster.textEnd > input.text.length ||
@@ -624,9 +620,13 @@ export const createShapedRun = (
       throw new RangeError('Shaped cluster does not belong to its declared font span');
     }
     return Object.freeze({
-      ...cluster,
+      textStart: cluster.textStart,
+      textEnd: cluster.textEnd,
+      glyphStart: cluster.glyphStart,
+      glyphEnd: cluster.glyphEnd,
       advance: checkedFixedPoint(cluster.advance),
       caretEdges: Object.freeze(cluster.caretEdges.map(checkedFixedPoint)),
+      fontSpan: cluster.fontSpan,
     });
   });
   const metrics = Object.freeze({

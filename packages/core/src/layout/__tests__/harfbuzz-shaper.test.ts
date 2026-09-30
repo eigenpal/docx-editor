@@ -177,6 +177,53 @@ describe('HarfBuzz production shaper', () => {
     outlined.dispose();
   });
 
+  test('keeps outline identities separate across faces and native face eviction', () => {
+    let calls = 0;
+    const outlined = createHarfBuzzTextShaper({
+      maxCachedFaces: 1,
+      instrumentation: { onOutlinePathCall: () => calls++ },
+    });
+    try {
+      const first = outlined.shape(input('A', regular)).glyphs[0]!.outline;
+      const other = outlined.shape(input('A', bold)).glyphs[0]!.outline;
+      const revisited = outlined.shape(input('AA', regular)).glyphs[0]!.outline;
+      expect(first).not.toBe(other);
+      expect(first.path).not.toBe(other.path);
+      expect(revisited).toBe(first);
+      expect(calls).toBe(2);
+    } finally {
+      outlined.dispose();
+    }
+  });
+
+  test('builds logical cluster ends for both directions with marks, ligatures, and context', () => {
+    for (const direction of ['ltr', 'rtl'] as const) {
+      for (const [text, script] of [
+        ['office a\u0301\u0323 😀', 'Latn'],
+        ['السَّلام عليكم', 'Arab'],
+        ['שָׁלוֹם', 'Hebr'],
+      ] as const) {
+        const run = shaper.shape({
+          ...input(text, regular, { direction, script }),
+          context: { before: 'a', after: 'b' },
+        });
+        const starts = [...new Set(run.glyphs.map((glyph) => glyph.cluster))].sort(
+          (left, right) => left - right
+        );
+        for (const cluster of run.clusters) {
+          expect(cluster.textEnd).toBe(
+            starts[starts.indexOf(cluster.textStart) + 1] ?? text.length
+          );
+          expect(
+            run.glyphs
+              .slice(cluster.glyphStart, cluster.glyphEnd)
+              .every((glyph) => glyph.cluster === cluster.textStart)
+          ).toBe(true);
+        }
+      }
+    }
+  });
+
   test('typed-rejects an outline beyond the hard per-outline admission budget', () => {
     const outlined = createHarfBuzzTextShaper({ maxOutlineBytes: 32 });
     expect(() => outlined.shape(input('A'))).toThrow(
@@ -211,6 +258,26 @@ describe('HarfBuzz production shaper', () => {
     expect(Math.max(...retained)).toBeLessThanOrEqual(4096);
     outlined.dispose();
     expect(retained.at(-1)).toBe(0);
+  });
+
+  test('rebuilds an evicted outline without retaining a stale face index entry', () => {
+    let calls = 0;
+    const outlined = createHarfBuzzTextShaper({
+      maxCachedOutlineBytes: 4096,
+      maxCachedShapes: 1,
+      instrumentation: { onOutlinePathCall: () => calls++ },
+    });
+    try {
+      const first = outlined.shape(input('A')).glyphs[0]!.outline;
+      outlined.shape(input('BCDEFGHIJKLMNOPQRSTUVWXYZ'));
+      const before = calls;
+      const next = outlined.shape(input('AA')).glyphs[0]!.outline;
+      expect(calls).toBe(before + 1);
+      expect(next).toEqual(first);
+      expect(next).not.toBe(first);
+    } finally {
+      outlined.dispose();
+    }
   });
 
   test('preserves UTF-16 combining-mark cluster provenance', () => {
@@ -385,6 +452,18 @@ describe('HarfBuzz production shaper', () => {
     for (const [mode, positive, negative] of cases) {
       expect(roundFontUnitToFixedPoint(5, 2, 1, mode)).toBe(positive);
       expect(roundFontUnitToFixedPoint(-5, 2, 1, mode)).toBe(negative);
+    }
+  });
+
+  test('a glyph-limit refusal leaves the shaper usable for a smaller run', () => {
+    const limited = createHarfBuzzTextShaper({ maxGlyphs: 1 });
+    try {
+      expect(() => limited.shape(input('AB'))).toThrow(
+        expect.objectContaining<HarfBuzzShapingError>({ code: 'glyphOverLimit', actual: 2 })
+      );
+      expect(limited.shape(input('A')).glyphs).toEqual(shaper.shape(input('A')).glyphs);
+    } finally {
+      limited.dispose();
     }
   });
 

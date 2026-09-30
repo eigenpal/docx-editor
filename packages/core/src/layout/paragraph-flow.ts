@@ -89,6 +89,7 @@ import { styleForFontSlot } from './script-itemization.ts';
 import {
   createLineExclusionClearance,
   createLineExclusionProbe,
+  exclusionZoneAppliesToLine,
 } from './line-exclusion-clearance.ts';
 import type { LayoutBox, StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import type { MutableChangeSite } from './field-pieces.ts';
@@ -540,21 +541,14 @@ export function breakParagraph(
     if (lineStart !== undefined) anchorLineTopByModelStart.set(start, lineStart);
   }
 
-  const zoneApplies = (zone: ExclusionZone): boolean => {
-    if (zone.anchorParagraphId !== paragraphId) return true;
-    // A band pinned to the page or a margin sits where it sits whatever this paragraph does,
-    // so the lines BEFORE its anchor character wrap around it like the ones after.
-    if (zone.pageFramedBand) return true;
-    const anchorLineStart = anchorLineStartByOffset.get(zone.anchorModelStart);
-    if (anchorLineStart !== undefined && line.start >= anchorLineStart) return true;
-    if (line.end >= zone.anchorModelStart) return true;
-    return false;
-  };
-
+  const emptyExclusionZones: readonly ExclusionZone[] = Object.freeze([]);
   const activeExclusionZones = (): readonly ExclusionZone[] => {
+    if (!flow?.pageExclusionZones?.length && anchorLineTopByModelStart.size === 0)
+      return emptyExclusionZones;
     const pageZones =
       flow?.pageExclusionZones?.filter((zone) => {
-        if (!zoneApplies(zone)) return false;
+        if (!exclusionZoneAppliesToLine(zone, paragraphId, line, anchorLineStartByOffset))
+          return false;
         // Anchor paragraph uses break-time synthesis; page zones are for inherited bands only.
         if (zone.anchorParagraphId === paragraphId) {
           if (!zone.sourceKind && zone.input.mode === 'topAndBottom') return false;
@@ -620,8 +614,10 @@ export function breakParagraph(
   const lineOrigin = (): number => contentOriginX + indentLeft + lineOffset();
   const baseLineAvailable = (): number => Math.max(1, available - lineOffset());
 
-  const priorLineExtent = (): number =>
-    lines.reduce((sum, prior) => sum + prior.height + (prior.exclusionSkipBefore ?? 0), 0);
+  // Closed line heights stay fixed. Accumulate in the same order as a full reduction,
+  // without rescanning every previous line for each float or drawing placement.
+  let closedLineExtent = 0;
+  const priorLineExtent = (): number => closedLineExtent;
 
   const currentLineTopY = (): number => (flow?.paragraphStartY ?? 0) + priorLineExtent();
 
@@ -1003,6 +999,7 @@ export function breakParagraph(
     if (sites.length > 0) line.changeSites = sites;
     recordWrapSegment();
     lines.push(line);
+    closedLineExtent = closedLineExtent + line.height + (line.exclusionSkipBefore ?? 0);
     firstLineOpen = false;
     wordStartSpan = -1;
     wordStartWidth = 0;

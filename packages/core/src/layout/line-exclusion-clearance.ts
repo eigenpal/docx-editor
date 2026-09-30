@@ -10,6 +10,21 @@ import { applyLineSpacing, type ParagraphLineSpacing } from './paragraph-style.t
 import { displayText, type ResolvedRunStyle } from './run-style.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 
+/** Whether an exclusion band has reached this line's logical text range. */
+export function exclusionZoneAppliesToLine(
+  zone: ExclusionZone,
+  paragraphId: string,
+  line: Pick<PendingLine, 'start' | 'end'>,
+  anchorLineStarts: ReadonlyMap<number, number>
+): boolean {
+  if (zone.anchorParagraphId !== paragraphId) return true;
+  // Page- and margin-positioned bands also wrap lines before their anchor character.
+  if (zone.pageFramedBand) return true;
+  const anchorLineStart = anchorLineStarts.get(zone.anchorModelStart);
+  if (anchorLineStart !== undefined && line.start >= anchorLineStart) return true;
+  return line.end >= zone.anchorModelStart;
+}
+
 /** A taller run must not pull already placed text into a newly intersected rectangle. */
 export function relocateLineForExclusionGrowth(
   line: PendingLine,

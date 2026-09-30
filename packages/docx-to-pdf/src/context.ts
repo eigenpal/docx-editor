@@ -19,6 +19,7 @@ export function positiveLimit(value: number, maximum: number, name: string): num
 export function number(value: number): string {
   if (!Number.isFinite(value) || Math.abs(value) > 1_000_000)
     throw new RangeError('Invalid PDF coordinate');
+  if (Number.isInteger(value)) return String(value);
   return String(Number(value.toFixed(6)));
 }
 /**

@@ -46,6 +46,7 @@ export class EmbeddedFace {
   private readonly subset: ReturnType<FontkitFont['createSubset']>;
   /** A `glyf` face, whose subset has a `loca` table; see {@link encodeSubset}. */
   private readonly trueType: boolean;
+  private readonly glyphCount: number;
   private readonly codes = new Map<string, number>();
   private readonly rows: { cid: number; text: string }[] = [];
   private readonly widths = new Map<number, number>();
@@ -64,6 +65,7 @@ export class EmbeddedFace {
     if (Object.keys(font.variationAxes ?? {}).length)
       throw new Error('Variable fonts require an exact static instance');
     this.font = font;
+    this.glyphCount = font.numGlyphs;
     this.colorLayers = Boolean(font.COLR && font.CPAL);
     // fontkit parses both tables but does not type them.
     const tables = font as unknown as {
@@ -101,7 +103,7 @@ export class EmbeddedFace {
    * than gaining an approximate character.
    */
   encode(glyph: number, text: string): string {
-    if (!Number.isInteger(glyph) || glyph <= 0 || glyph >= this.font.numGlyphs)
+    if (!Number.isInteger(glyph) || glyph <= 0 || glyph >= this.glyphCount)
       throw new Error('Core produced a missing or invalid glyph');
     text = mapSymbolPuaText(text, this.family);
     const key = `${glyph}:${text}`;
@@ -144,7 +146,7 @@ export class EmbeddedFace {
     }
     const glyphs = (this.subset as unknown as { glyphs?: number[] }).glyphs;
     if (this.cidText.get(known) === text || !Array.isArray(glyphs)) return known;
-    if (glyphs.length + this.font.numGlyphs >= 65535) return known;
+    if (glyphs.length + this.glyphCount >= 65535) return known;
     // `encode` caches codes per (glyph, text), so each pair reaches here once.
     glyphs.push(glyph);
     this.copies += 1;
