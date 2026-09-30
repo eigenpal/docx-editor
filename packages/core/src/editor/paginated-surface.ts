@@ -515,6 +515,7 @@ export function mountPaginatedSurface(
           : activeNote
             ? { scopedHostKind: 'note' as const }
             : {}),
+        ...textboxEditing?.caretInput(currentLayout),
       };
     }
   );

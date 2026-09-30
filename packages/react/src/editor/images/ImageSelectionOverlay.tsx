@@ -128,6 +128,10 @@ export function ImageSelectionOverlay({
     if (!container) return undefined;
     const onPointerDown = (event: PointerEvent): void => {
       const element = event.target instanceof Element ? event.target : null;
+      if (element?.closest('.docx-drawing-textbox-content')) {
+        focusRequestedForDrawingRef.current = null;
+        return;
+      }
       const drawingId = element
         ?.closest<HTMLElement>('[data-drawing-node-id]')
         ?.getAttribute('data-drawing-node-id');

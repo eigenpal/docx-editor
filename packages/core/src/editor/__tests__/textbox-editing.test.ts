@@ -550,3 +550,37 @@ test('selecting a textbox border does not scroll to its distant anchor paragraph
     scroll.remove();
   }
 });
+
+test('textbox caret paints inside its content layer and returns to body after editing', () => {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const editor = createDocxEditor({ container, document: textboxDocx() });
+  try {
+    const surface = editor.surface!;
+    surface.focus();
+    const match = editor.findMatches('boxed needle')[0]!;
+    expect(surface.setActiveScope(match.scope!)).toBe(true);
+    surface.setSelection({
+      anchor: { paragraphId: match.blockId, offset: 6 },
+      head: { paragraphId: match.blockId, offset: 6 },
+    });
+    const caret = container.querySelector<HTMLElement>('[data-docx-caret]')!;
+    const content = container.querySelector<HTMLElement>(
+      '[data-docx-textbox-active="true"] .docx-drawing-textbox-content'
+    )!;
+    expect(caret.parentElement).toBe(content);
+    expect(content.style.caretColor).toBe('transparent');
+    expect(parseFloat(caret.style.left)).toBeGreaterThan(0);
+    expect(parseFloat(caret.style.left)).toBeLessThan(parseFloat(content.style.width));
+    expect(parseFloat(caret.style.top)).toBeGreaterThanOrEqual(0);
+    expect(parseFloat(caret.style.top)).toBeLessThan(parseFloat(content.style.height));
+    surface.setActiveScope({ kind: 'body' });
+    expect(container.querySelector('[data-docx-caret]')?.parentElement?.className).toBe(
+      'docx-page-content'
+    );
+    expect(content.style.caretColor).toBe('');
+  } finally {
+    editor.destroy();
+    container.remove();
+  }
+});

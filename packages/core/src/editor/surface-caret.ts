@@ -70,7 +70,9 @@ export interface SurfaceCaretInput {
   /** Host for an open header/footer or note whose caret geometry is story-relative. */
   readonly scopedHost?: HTMLElement | null;
   /** Distinguishes stable placement keys for the two scoped story kinds. */
-  readonly scopedHostKind?: 'headerFooter' | 'note';
+  readonly scopedHostKind?: 'headerFooter' | 'note' | 'textbox';
+  /** Layout origin of a scoped host when geometry remains page-content-relative. */
+  readonly scopedOrigin?: { readonly x: number; readonly y: number };
 }
 
 export interface SurfaceCaret {
@@ -177,6 +179,7 @@ export function createSurfaceCaret(
       selection,
       scopedHost,
       scopedHostKind,
+      scopedOrigin,
       preferredPageIndex,
       measurer,
       typingStyle,
@@ -256,8 +259,8 @@ export function createSurfaceCaret(
       hide();
       return;
     }
-    element.style.left = `${geometry.x * currentScale}px`;
-    element.style.top = `${geometry.y * currentScale}px`;
+    element.style.left = `${(geometry.x - (scopedOrigin?.x ?? 0)) * currentScale}px`;
+    element.style.top = `${(geometry.y - (scopedOrigin?.y ?? 0)) * currentScale}px`;
     element.style.height = `${geometry.height * currentScale}px`;
     const bottomToTop = isBottomToTopCaret(geometry);
     element.style.transformOrigin = bottomToTop ? '0 0' : '';

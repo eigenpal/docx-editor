@@ -1,3 +1,4 @@
+import type { SurfaceCaretInput } from './surface-caret.ts';
 import { parentNodeOf } from '../store/package/ooxml-edit.ts';
 import { findDirectChild } from '../store/package/drawing-shape-projection.ts';
 import { schemaAttributeValue, WPS_NAMESPACE_URI } from '../store/package/ooxml-drawing-rules.ts';
@@ -142,6 +143,29 @@ export function createTextboxEditing(deps: {
     paragraphIds: () => {
       const story = root();
       return story ? storyParagraphs(story.root).map((p) => p.id) : [];
+    },
+    caretInput(
+      base: SemanticLayout
+    ): Partial<Pick<SurfaceCaretInput, 'scopedHost' | 'scopedHostKind' | 'scopedOrigin'>> {
+      if (!active) return {};
+      const id = active.drawingNodeId;
+      const drawing = base.pages
+        .flatMap((page) => page.anchoredDrawings ?? [])
+        .find((candidate) => candidate.drawingNodeId === id);
+      const story = drawing?.textboxStory;
+      const box = [...deps.pagesLayer.querySelectorAll<HTMLElement>('.docx-drawing-textbox')].find(
+        (element) => element.dataset.drawingNodeId === id
+      );
+      const host = box?.querySelector<HTMLElement>('.docx-drawing-textbox-content');
+      if (!drawing || !story || !host) return {};
+      return {
+        scopedHost: host,
+        scopedHostKind: 'textbox',
+        scopedOrigin: {
+          x: drawing.x + story.contentOffset.x,
+          y: drawing.y + story.contentOffset.y,
+        },
+      };
     },
     layout(base: SemanticLayout): SemanticLayout {
       if (!active) return base;

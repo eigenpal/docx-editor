@@ -5,4 +5,4 @@
 '@docx-editor.dev/i18n': minor
 ---
 
-Fix pagination around floating text boxes and add Insert → Text Box with paragraph editing, deletion, dragging, and resizing for supported body text boxes. Show frame handles while editing textbox text, use the demo font picker and spacing in the default toolbar, and keep text direction controls in the Format menu.
+Fix floating textbox pagination and add insertion, paragraph editing, deletion, dragging, and resizing for supported body textboxes. Keep textbox carets and frame handles visible, align the default toolbar with the demo, and show text direction commands in Format.
