@@ -15,10 +15,10 @@
 
 Add review, collaboration, and custom content to the [docx-editor.dev](https://docx-editor.dev) React and Vue editors. The package provides these capabilities:
 
-- Tracked changes: Suggesting mode, markup rendering, accept, and reject.
-- Comments: Threads anchored to a range, with replies.
-- Collaboration: Provider-neutral sessions with WebRTC and Hocuspocus helpers.
-- Custom nodes: Inline node types stored as Word content controls.
+- [Tracked changes](https://www.docx-editor.dev/docs/2.x/pro/tracked-changes): Suggesting mode, markup rendering, accept, and reject.
+- [Comments](https://www.docx-editor.dev/docs/2.x/pro/comments): Threads anchored to a range, with replies.
+- [Collaboration](https://www.docx-editor.dev/docs/2.x/pro/collaboration): Provider-neutral sessions with WebRTC and Hocuspocus helpers.
+- [Custom nodes](https://www.docx-editor.dev/docs/2.x/pro/custom-nodes): Inline node types stored as Word content controls.
 
 ```bash
 npm install @docx-editor.dev/react @docx-editor.dev/core @docx-editor.dev/pro

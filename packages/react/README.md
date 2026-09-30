@@ -24,6 +24,13 @@ Install the adapter and its required engine peer:
 npm install @docx-editor.dev/react @docx-editor.dev/core
 ```
 
+## Features
+
+- [Open, edit, and save documents](https://www.docx-editor.dev/docs/2.x/react/props).
+- [Compose your editor interface](https://www.docx-editor.dev/docs/2.x/react/composition).
+- [Connect controls through hooks](https://www.docx-editor.dev/docs/2.x/react/hooks).
+- [Translate editor controls](https://www.docx-editor.dev/docs/2.x/i18n).
+
 ## Quick start
 
 Import the stylesheet once and give the editor a container with a defined height:
@@ -122,20 +129,8 @@ Read `isEnabled` to set the disabled state. Show `disabledReason` when the comma
 - [Composition](https://www.docx-editor.dev/docs/2.x/react/composition)
 - [Hooks](https://www.docx-editor.dev/docs/2.x/react/hooks)
 - [Props and ref](https://www.docx-editor.dev/docs/2.x/react/props)
-
-## Export Markdown and PDF
-
-The adapter does not install either converter. Install only the formats your application uses.
-
-Configure `menu.exporters` to enable **File > Export** with the conversion packages. Markdown downloads as one continuous document. PDF conversion requires a Node.js server. Missing converter handlers show an error with setup instructions. See [Export Markdown and PDF](https://www.docx-editor.dev/docs/2.x/guides/export).
-
-**File > Print** uses the same PDF handler and opens the browser print dialog. Press Ctrl+P, or Cmd+P on macOS. See [Print documents](https://www.docx-editor.dev/docs/2.x/guides/print).
-
-## Accept server updates
-
-Use `createDocumentRefresh(editor)` to accept complete DOCX results from your server. The controller preserves the editor instance and scroll position. Each accepted file resets selection and undo history. Results after local edits and collaborative sessions are refused.
-
-For highlights, change navigation, and recovery, see [Document refresh API](https://www.docx-editor.dev/docs/2.x/guides/document-refresh).
+- [Export Markdown and PDF](https://www.docx-editor.dev/docs/2.x/guides/export)
+- [Print documents](https://www.docx-editor.dev/docs/2.x/guides/print)
 
 ## License
 

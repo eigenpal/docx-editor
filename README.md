@@ -35,6 +35,23 @@ For Node.js, use `^20.16.0 || >=22.3.0`. Browser applications can use the packag
   </a>
 </p>
 
+## Features
+
+| Feature | Description |
+| --- | --- |
+| [Editor API](https://www.docx-editor.dev/docs/2.x/editor-api) | Automate documents in a browser or server with a supported subset of Word Office.js. |
+| [Review workflow](https://www.docx-editor.dev/docs/2.x/pro/tracked-changes) | Add comments and tracked changes with the review module. |
+| [Word fidelity](https://www.docx-editor.dev/docs/2.x/word-fidelity) | Check rendering and editing support for document features. |
+| [Save and reopen](https://www.docx-editor.dev/docs/2.x/guides/loading-and-saving) | Preserve document structure, unsupported OOXML, and embedded files. |
+| [Collaboration](https://www.docx-editor.dev/docs/2.x/pro/collaboration) | Edit together with remote cursors, shared changes, and personal undo. |
+| [Custom UI](https://www.docx-editor.dev/docs/2.x/guides/chrome-slots) | Build controls with shared commands, components, and styles. |
+| [React and Vue](https://www.docx-editor.dev/docs/2.x/installation) | Use either adapter with the same document engine. |
+| [Translations](https://www.docx-editor.dev/docs/2.x/i18n) | Translate editor controls with locale catalogs and custom strings. |
+| [PDF export](https://www.docx-editor.dev/docs/2.x/export/pdf) | Convert DOCX to PDF on a Node.js server. |
+| [Markdown export](https://www.docx-editor.dev/docs/2.x/export/markdown) | Convert DOCX to Markdown with page references and images. |
+
+Review, collaboration, the Editor API, and PDF export require separate packages under the EigenPal Pro License.
+
 ## Packages
 
 | Package | Description | Docs |
@@ -118,22 +135,6 @@ For Nuxt and server-side rendering, load the editor in a client-only component. 
 
 Full docs: [Vue adapter](https://www.docx-editor.dev/docs/2.x/vue) · [Props and ref methods](https://www.docx-editor.dev/docs/2.x/vue/props).
 
-## Customize the editor
-
-Compare [toolbar designs](https://www.docx-editor.dev/docs/2.x/guides/toolbar#compare-toolbar-designs) and inspect their source. Use packaged controls, arrange toolbar parts, or build buttons with the shared command hooks.
-
-Use the [document refresh API](https://www.docx-editor.dev/docs/2.x/guides/document-refresh) to display DOCX results from your server. Preserve scroll, highlight changes, and provide change navigation. The controller refuses results after local edits. Accepted files reset selection and undo history.
-
-Use [paragraph navigation](https://www.docx-editor.dev/docs/2.x/guides/navigation) to scroll to and highlight an external paragraph reference. Configure highlight colors, borders, duration, and motion through the editor instance.
-
-See [Right-to-left text](https://www.docx-editor.dev/docs/2.x/guides/right-to-left) to set paragraph direction from controls, keyboard shortcuts, or code.
-
-## Document fidelity
-
-Check the [feature matrix](https://www.docx-editor.dev/docs/2.x/word-fidelity) for rendering, editing, and save support. Each feature lists its limits separately.
-
-The guide explains pagination, table layout, footnotes, headers, footers, and drawings. Review those limits with your document's fonts and content before choosing an integration.
-
 ## Font measurement
 
 Pass usable font bytes to measure text for line and page breaks. Fallback measurement can change wrapping and pagination.
@@ -175,6 +176,7 @@ See [Contributing](CONTRIBUTING.md) for setup, tests, and the Contributor Licens
 | `he`    | Hebrew               |
 | `hi`    | Hindi                |
 | `id`    | Indonesian           |
+| `ja`    | Japanese             |
 | `pl`    | Polish               |
 | `pt-BR` | Portuguese (Brazil)  |
 | `tr`    | Turkish              |

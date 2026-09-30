@@ -10,6 +10,13 @@ Use Vue 3 components and composables to open, edit, and save DOCX files.
 
 The shared engine handles document state, editing, layout, and rendering.
 
+## Features
+
+- [Open, edit, and save documents](https://www.docx-editor.dev/docs/2.x/vue/props).
+- [Compose your editor interface](https://www.docx-editor.dev/docs/2.x/vue/composition).
+- [Connect controls through composables](https://www.docx-editor.dev/docs/2.x/vue/composables).
+- [Translate editor controls](https://www.docx-editor.dev/docs/2.x/i18n).
+
 ## Install
 
 Install the adapter and its required engine peer:
@@ -87,21 +94,9 @@ The Nuxt module remains a private workspace package. External applications shoul
 - [Vue adapter docs](https://www.docx-editor.dev/docs/2.x/vue)
 - [Composition guide](https://www.docx-editor.dev/docs/2.x/vue/composition)
 - [Composables reference](https://www.docx-editor.dev/docs/2.x/vue/composables)
+- [Export Markdown and PDF](https://www.docx-editor.dev/docs/2.x/guides/export)
+- [Print documents](https://www.docx-editor.dev/docs/2.x/guides/print)
 - Live demo: `bun run dev:vue` in the monorepo (`examples/vue`)
-
-## Export Markdown and PDF
-
-The adapter does not install either converter. Install only the formats your application uses.
-
-Configure `menu.exporters` to enable **File > Export** with the conversion packages. Markdown downloads as one continuous document. PDF conversion requires a Node.js server. Missing converter handlers show an error with setup instructions. See [Export Markdown and PDF](https://www.docx-editor.dev/docs/2.x/guides/export).
-
-**File > Print** uses the same PDF handler and opens the browser print dialog. Press Ctrl+P, or Cmd+P on macOS. See [Print documents](https://www.docx-editor.dev/docs/2.x/guides/print).
-
-## Accept server updates
-
-Use `createDocumentRefresh(editor)` to accept complete DOCX results from your server. The controller preserves the editor instance and scroll position. Each accepted file resets selection and undo history. Results after local edits and collaborative sessions are refused.
-
-For highlights, change navigation, and recovery, see [Document refresh API](https://www.docx-editor.dev/docs/2.x/guides/document-refresh).
 
 ## License
 

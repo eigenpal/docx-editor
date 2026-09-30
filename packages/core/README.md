@@ -23,6 +23,13 @@ npm install @docx-editor.dev/core
 
 Node.js requires `^20.16.0 || >=22.3.0`.
 
+## Features
+
+- [Read and save DOCX files](https://www.docx-editor.dev/docs/2.x/guides/loading-and-saving).
+- [Lay out and render document pages](https://www.docx-editor.dev/docs/2.x/word-fidelity).
+- [Build an editor with shared commands and controls](https://www.docx-editor.dev/docs/2.x/guides/chrome-slots).
+- [Configure fonts for text measurement](https://www.docx-editor.dev/docs/2.x/guides/fonts).
+
 ## Entry points
 
 Import editor creation, font helpers, and contract types from the package root:
@@ -106,12 +113,6 @@ Anything you render from document data (a font name, a hyperlink target, a comme
 - [Core overview](https://www.docx-editor.dev/docs/2.x/core)
 - [Architecture](https://www.docx-editor.dev/docs/2.x/core/architecture)
 - [Word fidelity](https://www.docx-editor.dev/docs/2.x/word-fidelity)
-
-## Accept server updates
-
-Import `createDocumentRefresh` from `@docx-editor.dev/core/editor`. Use `createDocumentRefresh(editor)` to accept complete DOCX results from your server. The controller preserves the editor instance and scroll position. Each accepted file resets selection and undo history. Results after local edits and collaborative sessions are refused.
-
-For highlights, change navigation, and recovery, see [Document refresh API](https://www.docx-editor.dev/docs/2.x/guides/document-refresh).
 
 ## License
 

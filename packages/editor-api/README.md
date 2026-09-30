@@ -126,22 +126,13 @@ Use the `/browser` entry for an open editor. Use the root entry on servers to ex
 
 Supply `author` for comments, replies, and tracked edits. Browser review writes also require the Pro review module and an editable document. Handle errors by `code`. See [Comments](https://www.docx-editor.dev/docs/2.x/editor-api/comments) and [Tracked changes](https://www.docx-editor.dev/docs/2.x/editor-api/revisions) for supported operations.
 
-## Resolve revisions in a batch
-
-Use `RevisionCollection.resolve('accept')` or `resolve('reject')` to process supported changes in one story. To select changes, pass revision objects as the second argument. API batches don't inherit editor filters. Read `result.value` after `context.sync()` for resolved and skipped decisions and the remaining count.
-
-To require every change in the story to resolve, use `acceptAll()` or `rejectAll()`. These methods fail if any revision is unsupported. See [Resolve a batch of changes](https://www.docx-editor.dev/docs/2.x/editor-api/revisions#resolve-a-batch-of-changes) for examples and result handling.
-
-## Range snapshots
-
-Ranges retain the paragraph offsets where they were found. They do not follow later text edits inside those paragraphs, even when their proxies are tracked. After editing a paragraph, search again before acting on another target there. Use the range returned by `insertText()` after sync to address its inserted text. See [Text and ranges](https://www.docx-editor.dev/docs/2.x/editor-api/text-and-ranges) for snapshot and same-batch editing limits.
-
 ## Programming model
 
 - Load properties before reading them. Load collection `items` before item properties.
 - Batch independent writes with `sync()`. A failed batch applies no writes; earlier successful syncs remain committed.
 - Sync after insertion before using the returned object.
 - Keep proxies inside `runtime.run()`, or explicitly track and adopt them across runs.
+- Search again after editing a paragraph. Existing ranges retain their original offsets.
 - Check `isNullObject` after sync when using a null-object accessor.
 - Check nullable font values and review dates before using them.
 
