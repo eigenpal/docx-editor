@@ -39,38 +39,43 @@ function table(grid: readonly number[], rows: readonly (readonly number[])[], ta
 }
 
 describe('fixed tables without a stated table width', () => {
-  test('retains the grid while a deleted row is hidden', () => {
-    const visible = table([1200, 1800], [[1200, 1200]]);
-    const deleted = table(
-      [1200, 1800],
-      [
+  for (const revision of [
+    { kind: 'del', hiddenMode: 'proposed' },
+    { kind: 'ins', hiddenMode: 'original' },
+  ] as const) {
+    test(`retains the grid while a ${revision.kind} row is hidden`, () => {
+      const visible = table([1200, 1800], [[1200, 1200]]);
+      const deleted = table(
         [1200, 1800],
-        [1200, 1200],
-      ]
-    ).replace(
-      '<w:tr>',
-      '<w:tr><w:trPr><w:del w:id="1" w:author="Reviewer" ' +
-        'w:date="2020-01-01T00:00:00Z"/></w:trPr>'
-    );
-    const source = readDocument(
-      `<w:document xmlns:w="${W}"><w:body>${deleted}<w:p/>${visible}</w:body></w:document>`
-    );
-    const xml = serializeOoxmlPart(source);
-    for (const document of [source, readDocument(xml)]) {
-      const layout = layoutSemanticDocument(document, 0, {
-        measurer: createFixedMeasurer(),
-        displayMode: 'proposed',
-      });
-      const tables = layout.pages.flatMap((page) =>
-        page.fragments.filter((fragment) => fragment.kind === 'table')
+        [
+          [1200, 1800],
+          [1200, 1200],
+        ]
+      ).replace(
+        '<w:tr>',
+        `<w:tr><w:trPr><w:${revision.kind} w:id="1" w:author="Reviewer" ` +
+          'w:date="2020-01-01T00:00:00Z"/></w:trPr>'
       );
-      expect(tables).toHaveLength(2);
-      expect(tables[0]!.rows).toHaveLength(1);
-      expect(tables[0]!.rows[0]!.cells.map((cell) => cell.box.width)).toEqual([60, 90]);
-      expect(tables[1]!.rows[0]!.cells.map((cell) => cell.box.width)).toEqual([60, 60]);
-      expect(serializeOoxmlPart(document)).toBe(xml);
-    }
-  });
+      const source = readDocument(
+        `<w:document xmlns:w="${W}"><w:body>${deleted}<w:p/>${visible}</w:body></w:document>`
+      );
+      const xml = serializeOoxmlPart(source);
+      for (const document of [source, readDocument(xml)]) {
+        const layout = layoutSemanticDocument(document, 0, {
+          measurer: createFixedMeasurer(),
+          displayMode: revision.hiddenMode,
+        });
+        const tables = layout.pages.flatMap((page) =>
+          page.fragments.filter((fragment) => fragment.kind === 'table')
+        );
+        expect(tables).toHaveLength(2);
+        expect(tables[0]!.rows).toHaveLength(1);
+        expect(tables[0]!.rows[0]!.cells.map((cell) => cell.box.width)).toEqual([60, 90]);
+        expect(tables[1]!.rows[0]!.cells.map((cell) => cell.box.width)).toEqual([60, 60]);
+        expect(serializeOoxmlPart(document)).toBe(xml);
+      }
+    });
+  }
 
   for (const scenario of [
     {
@@ -146,5 +151,55 @@ describe('fixed tables without a stated table width', () => {
         }
       });
     }
+  }
+});
+
+describe('cell width replacement boundaries', () => {
+  const smallerCells = table([2400, 3600], [[1200, 1800]]);
+  for (const scenario of [
+    {
+      name: 'a positive table width',
+      xml: table([2400, 3600], [[1200, 1800]], '<w:tblW w:w="6000" w:type="dxa"/>'),
+      widths: [120, 180],
+    },
+    {
+      name: 'AutoFit layout',
+      xml: smallerCells.replace('w:type="fixed"', 'w:type="autofit"'),
+      widths: [120, 180],
+    },
+    {
+      name: 'an unspecified cell width',
+      xml: smallerCells.replace('<w:tcW w:w="1200" w:type="dxa"/>', ''),
+      widths: [120, 180],
+    },
+    {
+      name: 'a percentage cell width',
+      xml: smallerCells.replace(
+        '<w:tcW w:w="1200" w:type="dxa"/>',
+        '<w:tcW w:w="5000" w:type="pct"/>'
+      ),
+      widths: [120, 180],
+    },
+    {
+      name: 'a spanning cell',
+      xml: table([2400, 3600], [[3000]]).replace('<w:tcPr>', '<w:tcPr><w:gridSpan w:val="2"/>'),
+      widths: [300],
+    },
+  ]) {
+    test(`preserves existing widths with ${scenario.name}`, () => {
+      const source = readDocument(
+        `<w:document xmlns:w="${W}"><w:body>${scenario.xml}</w:body></w:document>`
+      );
+      const xml = serializeOoxmlPart(source);
+      for (const document of [source, readDocument(xml)]) {
+        const layout = layoutSemanticDocument(document, 0, { measurer: createFixedMeasurer() });
+        const tables = layout.pages.flatMap((page) =>
+          page.fragments.filter((fragment) => fragment.kind === 'table')
+        );
+        expect(tables).toHaveLength(1);
+        expect(tables[0]!.rows[0]!.cells.map((cell) => cell.box.width)).toEqual(scenario.widths);
+        expect(serializeOoxmlPart(document)).toBe(xml);
+      }
+    });
   }
 });
