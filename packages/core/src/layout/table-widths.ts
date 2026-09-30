@@ -248,6 +248,33 @@ export interface CellWidthClaim {
   readonly preferred: PreferredWidth;
 }
 
+/** Absolute single-column preferences replace the initial grid when every cell states one. */
+function fixedCellWidthSeed(
+  seed: readonly (number | undefined)[],
+  claims: readonly CellWidthClaim[]
+): readonly (number | undefined)[] {
+  // Keep the existing reconciliation for spans and unspecified preferences. Those cells
+  // can retain part of the initial grid, so their absence is not a zero-width claim.
+  if (
+    claims.length === 0 ||
+    claims.some(
+      (claim) =>
+        claim.span !== 1 ||
+        claim.preferred.type !== 'dxa' ||
+        !Number.isFinite(claim.preferred.value) ||
+        claim.preferred.value <= 0
+    )
+  ) {
+    return seed;
+  }
+  const widths: (number | undefined)[] = seed.map(() => undefined);
+  for (const claim of claims) {
+    if (claim.start < 0 || claim.start >= seed.length) continue;
+    widths[claim.start] = Math.max(widths[claim.start] ?? 0, claim.preferred.value);
+  }
+  return seed.map((width, index) => widths[index] ?? width);
+}
+
 /** Floor for a column nothing states, so a resolved grid never contains a zero column. */
 const MIN_DERIVED_COLUMN_PT = 1;
 
@@ -361,6 +388,7 @@ export function resolveColumnWidthsPt(input: {
   readonly contentWidthPt: number;
   readonly tableWidth: PreferredWidth;
   readonly layoutFixed: boolean;
+  readonly hasOmittedRows?: boolean;
 }): readonly number[] {
   const { columnCount, tableWidth } = input;
   // A caller with a degenerate or non-finite content box has told us nothing about the page.
@@ -379,7 +407,11 @@ export function resolveColumnWidthsPt(input: {
         ? (available * tableWidth.value) / 100
         : 0;
 
-  const seed = gridColumnWidthsPt(input.gridCols);
+  const grid = gridColumnWidthsPt(input.gridCols);
+  const seed =
+    input.layoutFixed && !input.hasOmittedRows && statedTableWidth <= 0
+      ? fixedCellWidthSeed(grid, input.claims)
+      : grid;
   const settled = applyWidthClaims(seed, input.claims, columnCount, statedTableWidth);
 
   let stated = 0;

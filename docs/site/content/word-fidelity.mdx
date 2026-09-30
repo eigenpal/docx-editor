@@ -96,6 +96,8 @@ This subset requires a separate ordinary paragraph and clear space around the fr
 
 <FeatureMatrix category="tables" />
 
+For fixed tables without a positive table width, explicit cell preferences can replace a wider initial grid. This applies when every cell has a positive absolute width and occupies one column. The largest preference in each column sets its width. Hidden revision rows prevent this replacement. Layout does not rewrite these properties when you save.
+
 #### Table alignment
 
 Explicit Word compatibility modes 11, 12, and 14 preserve content alignment for supported full-width AutoFit tables. This applies in body, header, footer, text-box, and note stories. The table must have explicit zero indentation, left alignment, zero cell spacing, and consistent outer cell margins. Its complete authored grid must equal the text-column width plus those margins. Other layouts keep their existing geometry, including nested tables and files without an explicit compatibility mode.

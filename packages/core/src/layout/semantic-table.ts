@@ -583,6 +583,7 @@ function readTableStructureUncached(
   }
   const plans: RowPlan[] = [];
   const claims: CellWidthClaim[] = [];
+  let hasOmittedRows = false;
   let derivedColumns = 1;
   // A content control may sit between the table and its rows (`CT_SdtRow`) or between a row and
   // its cells (`CT_SdtCell`). It is a label on that row or cell, not a box around it, so it is
@@ -606,6 +607,7 @@ function readTableStructureUncached(
       (projectedMode === 'proposed' && revisionKind === 'del') ||
       (projectedMode === 'original' && revisionKind === 'ins')
     ) {
+      hasOmittedRows = true;
       continue;
     }
     const revision = projectedMode === 'all-markup' ? authoredRevision : undefined;
@@ -859,6 +861,8 @@ function readTableStructureUncached(
     contentWidthPt: legacyWidth ?? contentWidthPt,
     tableWidth,
     layoutFixed,
+    // A hidden revision row can still account for part of the authored grid.
+    hasOmittedRows,
   });
   // Project the grid visually; cell arrays retain document order for keyboard traversal.
   const visualRows = physicalTableRows(rows, columnWidthsPt.length, bidiVisual);
