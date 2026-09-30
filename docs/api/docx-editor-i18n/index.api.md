@@ -40,7 +40,10 @@ export const id: PartialLocaleStrings;
 export function isApplePlatform(): boolean;
 
 // @public
-export type LocaleCode = 'en' | 'de' | 'es' | 'fr' | 'he' | 'hi' | 'id' | 'pl' | 'pt-BR' | 'tr' | 'zh-CN';
+export const ja: PartialLocaleStrings;
+
+// @public
+export type LocaleCode = 'en' | 'de' | 'es' | 'fr' | 'he' | 'hi' | 'id' | 'ja' | 'pl' | 'pt-BR' | 'tr' | 'zh-CN';
 
 // @public
 export const locales: Record<LocaleCode, PartialLocaleStrings>;
