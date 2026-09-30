@@ -1,5 +1,20 @@
 # @docx-editor.dev/docx-to-pdf
 
+## 2.24.0
+
+### Patch Changes
+
+- 79d8bc1: Reduce repeated font metric reads and number formatting during PDF export.
+- 79d8bc1: Reduce the time needed to compare PDF page colors.
+- Updated dependencies [3a8853f]
+- Updated dependencies [de3aac8]
+- Updated dependencies [79d8bc1]
+- Updated dependencies [997814e]
+- Updated dependencies [de3aac8]
+  - @docx-editor.dev/core@2.24.0
+  - @docx-editor.dev/fonts@2.24.0
+  - @docx-editor.dev/fonts-cjk@2.24.0
+
 ## 2.23.0
 
 ### Minor Changes

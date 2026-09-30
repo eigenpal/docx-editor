@@ -1,5 +1,21 @@
 # @docx-editor.dev/core
 
+## 2.24.0
+
+### Minor Changes
+
+- 3a8853f: Support inserting, editing, deleting, moving, and resizing body textboxes, with synchronized edits and remote cursors during collaboration. Fix textbox pagination and caret visibility, and keep text direction commands in Format.
+- de3aac8: Render bounded paragraph frames with authored height rules, automatic width, relative alignment, wrapping, supported drop caps, and locked anchors.
+
+### Patch Changes
+
+- de3aac8: Fix centered footer page numbers and premature page breaks with directly formatted paragraph frames. Fixes #1019
+- 79d8bc1: Reduce text layout work during document rendering and export without changing glyph positions.
+- 997814e: Fix fixed-table column widths when explicit cell preferences are smaller than the initial grid.
+- Updated dependencies [3a8853f]
+- Updated dependencies [567c1e5]
+  - @docx-editor.dev/i18n@2.24.0
+
 ## 2.23.0
 
 ### Minor Changes

@@ -1,5 +1,12 @@
 # @docx-editor.dev/i18n
 
+## 2.24.0
+
+### Minor Changes
+
+- 3a8853f: Support inserting, editing, deleting, moving, and resizing body textboxes, with synchronized edits and remote cursors during collaboration. Fix textbox pagination and caret visibility, and keep text direction commands in Format.
+- 567c1e5: Add Japanese translations through the `ja` export and the `@docx-editor.dev/i18n/ja` subpath.
+
 ## 2.23.0
 
 ### Minor Changes

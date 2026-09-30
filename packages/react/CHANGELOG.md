@@ -1,5 +1,19 @@
 # @eigenpal/docx-js-editor
 
+## 2.24.0
+
+### Patch Changes
+
+- 3a8853f: Support inserting, editing, deleting, moving, and resizing body textboxes, with synchronized edits and remote cursors during collaboration. Fix textbox pagination and caret visibility, and keep text direction commands in Format.
+- Updated dependencies [3a8853f]
+- Updated dependencies [de3aac8]
+- Updated dependencies [79d8bc1]
+- Updated dependencies [997814e]
+- Updated dependencies [de3aac8]
+- Updated dependencies [567c1e5]
+  - @docx-editor.dev/core@2.24.0
+  - @docx-editor.dev/i18n@2.24.0
+
 ## 2.23.0
 
 ### Patch Changes
