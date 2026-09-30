@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import {
   computeImageResizeResult,
+  resizePreservesAspect,
   finalizeImageOverlayInteraction,
 } from '../surface-overlay-coordinates.ts';
 import { pointsToEmu, type ImageInteractionSession } from '../docx-editor-images.ts';
@@ -77,4 +78,12 @@ test('drag converts aligned coordinates to offsets in both original reference fr
     horizontalEmu: pointsToEmu(91),
     verticalEmu: pointsToEmu(115),
   });
+});
+
+test('textbox corner resizing is free unless Shift or an authored lock constrains it', () => {
+  expect(resizePreservesAspect('se', false, false, true)).toBe(false);
+  expect(resizePreservesAspect('se', false, true, true)).toBe(true);
+  expect(resizePreservesAspect('se', true, false, true)).toBe(true);
+  expect(resizePreservesAspect('e', false, true, true)).toBe(false);
+  expect(resizePreservesAspect('se', false, false)).toBe(true);
 });

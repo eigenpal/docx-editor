@@ -695,6 +695,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         target?: TableColumnOccurrenceTarget;
         where: 'left' | 'right';
     };
+    // (undocumented)
     insertImage: {
         data: Uint8Array;
         description?: string;
@@ -710,6 +711,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         target?: TableRowOccurrenceTarget;
         where: 'above' | 'below';
     };
+    insertTextBox: Record<never, never>;
     insertToc: Record<never, never>;
     // (undocumented)
     mergeCells: Record<never, never>;

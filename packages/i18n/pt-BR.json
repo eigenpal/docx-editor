@@ -55,7 +55,8 @@
     "printPreparing": "Preparando para imprimir…",
     "printNoViewer": "Este navegador não pode imprimir arquivos PDF a partir da página. Selecione Abrir PDF e imprima pelo visualizador de PDF.",
     "printLoadFailed": "O PDF não foi carregado para impressão. Selecione Abrir PDF e imprima pelo visualizador de PDF.",
-    "printRefused": "O navegador não permitiu a impressão a partir da página. Selecione Abrir PDF e imprima pelo visualizador de PDF."
+    "printRefused": "O navegador não permitiu a impressão a partir da página. Selecione Abrir PDF e imprima pelo visualizador de PDF.",
+    "insertTextBox": "Caixa de texto"
   },
   "formattingBar": {
     "groups": {

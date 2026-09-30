@@ -1,6 +1,6 @@
 // The Left-to-right and Right-to-left toolbar buttons, against the real engine.
 //
-// What these pin down: the buttons sit in the default toolbar and as named parts, a press
+// What these pin down: the buttons remain available as named parts, a press
 // writes the paragraph base direction (`w:bidi`), and `aria-pressed` follows the caret
 // from a right-to-left paragraph to a left-to-right one.
 
@@ -79,8 +79,24 @@ const caretIn = (editor: DocxEditorInstance, index: number): void => {
 afterEach(cleanup);
 
 describe('the paragraph direction buttons', () => {
-  test('Right-to-left in the default toolbar writes w:bidi and reads back pressed', async () => {
-    const { view, editor } = mount(<DocxEditorToolbar />, p('alpha'));
+  test('the default toolbar omits direction shortcuts', () => {
+    const { view } = mount(<DocxEditorToolbar />, p('alpha'));
+    expect(
+      view.container.querySelector('button[aria-label="' + en.toolbar.leftToRight + '"]')
+    ).toBeNull();
+    expect(
+      view.container.querySelector('button[aria-label="' + en.toolbar.rightToLeft + '"]')
+    ).toBeNull();
+  });
+
+  test('explicit direction controls write w:bidi and read back pressed', async () => {
+    const { view, editor } = mount(
+      <DocxEditorToolbar>
+        <DocxEditorToolbar.LeftToRight />
+        <DocxEditorToolbar.RightToLeft />
+      </DocxEditorToolbar>,
+      p('alpha')
+    );
     await act(async () => {
       caretIn(editor(), 0);
     });

@@ -55,7 +55,8 @@
     "printPreparing": "Menyiapkan pencetakan…",
     "printNoViewer": "Browser ini tidak dapat mencetak file PDF dari halaman. Pilih Buka PDF, lalu cetak dari penampil PDF.",
     "printLoadFailed": "PDF tidak dapat dimuat untuk dicetak. Pilih Buka PDF, lalu cetak dari penampil PDF.",
-    "printRefused": "Browser tidak mengizinkan pencetakan dari halaman. Pilih Buka PDF, lalu cetak dari penampil PDF."
+    "printRefused": "Browser tidak mengizinkan pencetakan dari halaman. Pilih Buka PDF, lalu cetak dari penampil PDF.",
+    "insertTextBox": "Kotak Teks"
   },
   "formattingBar": {
     "groups": {

@@ -55,7 +55,8 @@
     "printPreparing": "Préparation de l’impression…",
     "printNoViewer": "Ce navigateur ne peut pas imprimer de fichiers PDF depuis la page. Sélectionnez « Ouvrir le PDF », puis imprimez depuis le lecteur PDF.",
     "printLoadFailed": "Le PDF n’a pas pu être chargé pour l’impression. Sélectionnez « Ouvrir le PDF », puis imprimez depuis le lecteur PDF.",
-    "printRefused": "Le navigateur a refusé l’impression depuis la page. Sélectionnez « Ouvrir le PDF », puis imprimez depuis le lecteur PDF."
+    "printRefused": "Le navigateur a refusé l’impression depuis la page. Sélectionnez « Ouvrir le PDF », puis imprimez depuis le lecteur PDF.",
+    "insertTextBox": "Zone de texte"
   },
   "formattingBar": {
     "groups": {

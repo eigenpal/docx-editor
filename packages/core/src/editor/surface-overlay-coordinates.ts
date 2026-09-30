@@ -94,11 +94,12 @@ export function overlayHostOrigin(surfaceElement: HTMLElement | null): {
 export function resizePreservesAspect(
   handle: ImageResizeHandle,
   aspectLocked: boolean,
-  shiftKey: boolean
+  shiftKey: boolean,
+  textbox = false
 ): boolean {
   if (aspectLocked) return true;
   if (handle.length === 1) return false;
-  return !shiftKey;
+  return textbox ? shiftKey : !shiftKey;
 }
 
 const HANDLE_ORDER: readonly ImageResizeHandle[] = ['e', 'se', 's', 'sw', 'w', 'nw', 'n', 'ne'];
@@ -354,6 +355,7 @@ export function finalizeImageOverlayInteraction(options: {
   readonly accumulatedScrollPt: number;
   readonly aspectLocked: boolean;
   readonly shiftKey: boolean;
+  readonly textbox?: boolean;
   readonly anchorFrameOrigin: AnchorFrameOrigin | null;
 }): FinalizedImageOverlayInteraction {
   if (options.session.mode === 'move') {
@@ -409,7 +411,8 @@ export function finalizeImageOverlayInteraction(options: {
     preserveAspect: resizePreservesAspect(
       options.session.handle,
       options.aspectLocked,
-      options.shiftKey
+      options.shiftKey,
+      options.textbox
     ),
     kind: options.session.kind,
   });

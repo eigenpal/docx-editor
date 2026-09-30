@@ -84,7 +84,8 @@
     "printLoadFailed": "El PDF no se cargó para imprimir. Selecciona Abrir PDF e imprime desde el visor de PDF.",
     "printRefused": "El navegador no permitió imprimir desde la página. Selecciona Abrir PDF e imprime desde el visor de PDF.",
     "printNoViewer": "Este navegador no puede imprimir archivos PDF desde la página. Selecciona Abrir PDF e imprime desde el visor de PDF.",
-    "printPdfMissing": "La impresión usa la conversión a PDF. Instala @docx-editor.dev/docx-to-pdf en tu servidor Node.js y configura menu.exporters.pdf."
+    "printPdfMissing": "La impresión usa la conversión a PDF. Instala @docx-editor.dev/docx-to-pdf en tu servidor Node.js y configura menu.exporters.pdf.",
+    "insertTextBox": "Cuadro de texto"
   },
   "toc": {
     "refresh": "Actualizar tabla de contenido",

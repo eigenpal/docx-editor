@@ -1094,6 +1094,8 @@ export interface ImageOverlayScrollPort {
  * decide what it is looking at.
  */
 export interface SelectedDrawingOverlayTarget {
+  /** Keep the text area available for pointer editing through the frame. */
+  readonly textbox?: boolean;
   readonly id: string;
   readonly pageIndex: number;
   readonly x: number;
@@ -1138,9 +1140,20 @@ export function selectedDrawingOverlayTargetOf(
   surface: PaginatedSurface | null
 ): SelectedDrawingOverlayTarget | null {
   if (!surface) return null;
+  const scope = surface.activeScope();
   const { anchor, head } = surface.state().selection;
-  if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) return null;
-  const record = resolveSelectedDrawingRecord(surface);
+  if (
+    scope.kind !== 'frame' &&
+    (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset)
+  )
+    return null;
+  const record =
+    scope.kind === 'frame'
+      ? surface
+          .layout()
+          .pages.flatMap((page) => page.anchoredDrawings ?? [])
+          .find((drawing) => drawing.drawingNodeId === scope.drawingNodeId)
+      : resolveSelectedDrawingRecord(surface);
   if (!record) return null;
   if (record.accessibility.hidden) return null;
   // `layout()`, not `publishedLayout()`: the caller is about to act on this geometry — place
@@ -1167,6 +1180,7 @@ export function selectedDrawingOverlayTargetOf(
       : null;
   return Object.freeze({
     id: record.drawingNodeId,
+    textbox: 'textboxStory' in record && !!record.textboxStory,
     pageIndex: frame.pageIndex,
     x: frame.x,
     y: frame.y,

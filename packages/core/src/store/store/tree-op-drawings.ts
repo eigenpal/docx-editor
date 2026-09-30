@@ -385,7 +385,8 @@ export function validateDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): TreeOp
       const anchor = anchorRootOf(op.drawing);
       if (!anchor) return 'not-a-drawing';
       const projection = projectionOf(part, op.drawing);
-      if (!projection || projection.picture === null) return 'not-a-picture-drawing';
+      if (!projection || (projection.picture === null && !projection.textboxStory))
+        return 'not-a-picture-drawing';
       // `CT_TrackChange` makes `@w:author` required, so a tracked variant with an empty one
       // would serialize a proposal no reader can attribute or resolve.
       if (op.revision !== undefined && invalidRevisionAttribution(op.revision)) {

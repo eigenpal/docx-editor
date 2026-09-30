@@ -710,7 +710,13 @@ describe('chrome contracts', () => {
     // The whole registry arrangement is still there, TOC still in its own position.
     // Table is absent from this list because it is a live size grid, which is a submenu and
     // carries no row slot of its own — the arrangement around it is what this pins down.
-    expect(slots).toEqual(['image.insert', 'insert.footnote', 'insert.endnote', 'insert.toc']);
+    expect(slots).toEqual([
+      'image.insert',
+      'insert.textBox',
+      'insert.footnote',
+      'insert.endnote',
+      'insert.toc',
+    ]);
     expect(row(view, 'insert.toc').className).toContain('my-toc');
     // The host's own row appends.
     expect(view.container.textContent).toContain('Clause library');

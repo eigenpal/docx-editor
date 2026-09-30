@@ -55,7 +55,8 @@
     "printPreparing": "Przygotowywanie do drukowania…",
     "printNoViewer": "Ta przeglądarka nie może drukować plików PDF z tej strony. Wybierz „Otwórz PDF”, a następnie wydrukuj plik z przeglądarki PDF.",
     "printLoadFailed": "Nie udało się wczytać pliku PDF do drukowania. Wybierz „Otwórz PDF”, a następnie wydrukuj plik z przeglądarki PDF.",
-    "printRefused": "Przeglądarka nie zezwoliła na drukowanie z tej strony. Wybierz „Otwórz PDF”, a następnie wydrukuj plik z przeglądarki PDF."
+    "printRefused": "Przeglądarka nie zezwoliła na drukowanie z tej strony. Wybierz „Otwórz PDF”, a następnie wydrukuj plik z przeglądarki PDF.",
+    "insertTextBox": "Pole tekstowe"
   },
   "formattingBar": {
     "groups": {

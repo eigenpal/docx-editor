@@ -208,6 +208,10 @@ The picture is clipped to the group's area. The group's shapes can extend into t
 
 Picture commands, such as resize and replace, do not apply to a picture in a group. Markdown export omits the group as one drawing and reports an `omitted-drawing` warning. Saving preserves the group, its alternative content, and its media without changes. An embedded picture passes the normal image validation and decode limits. A linked picture is never fetched.
 
+## Insert and edit text boxes
+
+Choose **Insert → Text Box** from a body paragraph to add an empty rectangular box and start typing. The new box has a white fill, a black border, and a fixed starting size. Drag its border to move it, or drag its handles to resize it. Clicking its text shows the frame and places the caret. Insertion in tables, headers, and footers is unavailable.
+
 ## Find text in text boxes
 
 **Find** searches anchored text boxes in the body, headers, and footers. Selecting a match selects its text box. Click inside an unrotated body text box to edit its paragraphs. Use its border to select, drag, or resize it. Press **Delete** or use the context menu to delete the selected box. **Undo** restores it. Pasting into a text box inserts plain text. Table insertion is unavailable inside a text box. Text boxes with tables, and text boxes in headers or footers, remain read-only. Inline text boxes and text boxes in footnotes or endnotes are not searched.

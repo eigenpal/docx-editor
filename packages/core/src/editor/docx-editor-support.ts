@@ -838,6 +838,8 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
             reason:
               'setSelection accepts { anchor: { paraId } }, a { range } whose from/to are paraId anchors, or a { range } carrying a semantic { anchor: { paragraphId, offset }, head } selection',
           };
+    case 'insertTextBox':
+      return { supported: true, mutating: true };
     case 'insertImage':
       return command.data instanceof Uint8Array &&
         (command.mime === 'image/png' ||

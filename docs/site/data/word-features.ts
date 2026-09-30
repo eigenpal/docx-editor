@@ -623,7 +623,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Anchored text boxes render their content clipped inside the authored extent. Empty anchor paragraphs flow around preceding floating objects. This works in the body, in headers, and in footers, including page-relative anchors. PAGE, NUMPAGES, and SECTIONPAGES fields inside a header or footer text box are evaluated per page. Unrotated body text boxes support paragraph editing, undo, drag, and resize. Text boxes with tables and text boxes in headers or footers remain read-only. Inline text boxes, linked chains, autofit, and rotation render as a placeholder or clip.',
+      'Anchored text boxes render their content clipped inside the authored extent. Empty anchor paragraphs flow around preceding floating objects. This works in the body, in headers, and in footers, including page-relative anchors. PAGE, NUMPAGES, and SECTIONPAGES fields inside a header or footer text box are evaluated per page. Insert → Text Box creates an editable rectangular box from a body paragraph. Unrotated body text boxes support paragraph editing, undo, drag, and resize. Clicking text shows the frame handles. Text boxes with tables and text boxes in headers or footers remain read-only. Inline text boxes, linked chains, autofit, and rotation render as a placeholder or clip.',
   },
   {
     id: 'images.shapes',

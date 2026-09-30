@@ -7548,3 +7548,20 @@ a.docx-hyperlink:focus-visible {
     animation: none;
   }
 }
+
+/* The frame captures its border while pointer input reaches textbox contents. */
+.docx-image-selection-overlay__frame[data-textbox='true'] {
+  clip-path: polygon(
+    evenodd,
+    0 0,
+    100% 0,
+    100% 100%,
+    0 100%,
+    0 0,
+    6px 6px,
+    6px calc(100% - 6px),
+    calc(100% - 6px) calc(100% - 6px),
+    calc(100% - 6px) 6px,
+    6px 6px
+  );
+}

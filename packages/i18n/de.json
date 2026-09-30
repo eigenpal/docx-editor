@@ -55,7 +55,8 @@
     "printPreparing": "Druck wird vorbereitet…",
     "printNoViewer": "Dieser Browser kann PDF-Dateien nicht von der Seite aus drucken. Wählen Sie „PDF öffnen“ und drucken Sie anschließend im PDF-Anzeigeprogramm.",
     "printLoadFailed": "Die PDF-Datei konnte zum Drucken nicht geladen werden. Wählen Sie „PDF öffnen“ und drucken Sie anschließend im PDF-Anzeigeprogramm.",
-    "printRefused": "Der Browser hat das Drucken von der Seite aus nicht zugelassen. Wählen Sie „PDF öffnen“ und drucken Sie anschließend im PDF-Anzeigeprogramm."
+    "printRefused": "Der Browser hat das Drucken von der Seite aus nicht zugelassen. Wählen Sie „PDF öffnen“ und drucken Sie anschließend im PDF-Anzeigeprogramm.",
+    "insertTextBox": "Textfeld"
   },
   "formattingBar": {
     "groups": {

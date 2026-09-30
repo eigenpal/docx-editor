@@ -55,7 +55,8 @@
     "printPreparing": "מכין להדפסה…",
     "printNoViewer": "דפדפן זה אינו יכול להדפיס קובצי PDF מתוך הדף. בחר פתח PDF ולאחר מכן הדפס מתוך מציג ה-PDF.",
     "printLoadFailed": "ה-PDF לא נטען להדפסה. בחר פתח PDF ולאחר מכן הדפס מתוך מציג ה-PDF.",
-    "printRefused": "הדפדפן לא אפשר הדפסה מתוך הדף. בחר פתח PDF ולאחר מכן הדפס מתוך מציג ה-PDF."
+    "printRefused": "הדפדפן לא אפשר הדפסה מתוך הדף. בחר פתח PDF ולאחר מכן הדפס מתוך מציג ה-PDF.",
+    "insertTextBox": "תיבת טקסט"
   },
   "formattingBar": {
     "groups": {

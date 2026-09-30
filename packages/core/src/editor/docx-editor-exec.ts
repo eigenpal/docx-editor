@@ -1,3 +1,4 @@
+import { insertTextbox } from './textbox-commands.ts';
 import { fragmentContainsClipboardObject } from './clipboard-object-selection.ts';
 import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
 import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
@@ -354,6 +355,8 @@ export function execEditorCommand(
         };
       }
       break;
+    case 'insertTextBox':
+      return insertTextbox(mounted);
     case 'insertText':
       mounted.type(command.text);
       if (

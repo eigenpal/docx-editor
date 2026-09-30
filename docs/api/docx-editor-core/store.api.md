@@ -1225,7 +1225,7 @@ export interface DrawingLocks {
     readonly select: boolean;
 }
 
-// @public
+// @public (undocumented)
 export function drawingOpImpact(op: DrawingTreeDocOp): ImpactClass;
 
 // @public

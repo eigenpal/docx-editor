@@ -92,6 +92,7 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'list.numbered': { type: 'toggleList', kind: 'ordered' },
   'list.indent': { type: 'adjustIndent', direction: 'increase' },
   'list.outdent': { type: 'adjustIndent', direction: 'decrease' },
+  'insert.textBox': { type: 'insertTextBox' },
   'insert.footnote': { type: 'insertNote', noteKind: 'footnote' },
   'insert.endnote': { type: 'insertNote', noteKind: 'endnote' },
   'insert.pageNumber': { type: 'insertPageField', field: 'PAGE' },

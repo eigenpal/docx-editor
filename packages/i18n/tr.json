@@ -55,7 +55,8 @@
     "printPreparing": "Yazdırmaya hazırlanıyor…",
     "printNoViewer": "Bu tarayıcı sayfadan PDF dosyalarını yazdıramaz. PDF'yi aç seçeneğini seçin, ardından PDF görüntüleyicisinden yazdırın.",
     "printLoadFailed": "PDF yazdırılmak üzere yüklenemedi. PDF'yi aç seçeneğini seçin, ardından PDF görüntüleyicisinden yazdırın.",
-    "printRefused": "Tarayıcı sayfadan yazdırmaya izin vermedi. PDF'yi aç seçeneğini seçin, ardından PDF görüntüleyicisinden yazdırın."
+    "printRefused": "Tarayıcı sayfadan yazdırmaya izin vermedi. PDF'yi aç seçeneğini seçin, ardından PDF görüntüleyicisinden yazdırın.",
+    "insertTextBox": "Metin Kutusu"
   },
   "formattingBar": {
     "groups": {

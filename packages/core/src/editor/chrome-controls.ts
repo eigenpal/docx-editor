@@ -1,3 +1,4 @@
+import { flattenChromeMenuSlots } from './chrome-menu-slots.ts';
 import { FILE_CHROME_GROUP } from './file-chrome-controls.ts';
 import { REVIEW_CHROME_GROUP } from './review-chrome-controls.ts';
 // Legacy editor chrome, expressed as data (interactive-paginated-editing M6V.1).
@@ -359,6 +360,7 @@ export const CHROME_GROUPS = [
   {
     id: 'direction',
     labelKey: 'formattingBar.groups.direction',
+    contextual: true,
     controls: [
       {
         id: 'ltr',
@@ -603,6 +605,12 @@ export const CHROME_GROUPS = [
     contextual: true,
     controls: [
       {
+        id: 'textBox',
+        labelKey: 'toolbar.insertTextBox',
+        paths: GENERATED_ICON_PATHS['format_paragraph'],
+        state: { kind: 'command' },
+      },
+      {
         id: 'footnote',
         labelKey: 'toolbar.insertFootnote',
         paths: GENERATED_ICON_PATHS['superscript'],
@@ -778,6 +786,7 @@ export type ChromeSlotId =
   | 'file.print'
   | 'paragraph.dialog'
   | 'file.pageSetup'
+  | 'insert.textBox'
   | 'insert.footnote'
   | 'insert.endnote'
   | 'insert.pageNumber'
@@ -1012,6 +1021,7 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
     // still replaces one part, not a second registry.
     entries: [
       { kind: 'item', slot: 'image.insert' },
+      { kind: 'item', slot: 'insert.textBox' },
       { kind: 'item', slot: 'table.insert', picker: 'tableGrid' },
       { kind: 'separator' },
       { kind: 'item', slot: 'insert.footnote' },
@@ -1075,15 +1085,7 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
  * @public
  */
 export function chromeMenuSlots(): readonly ChromeSlotId[] {
-  const slots: ChromeSlotId[] = [];
-  const walk = (entries: readonly ChromeMenuEntry[]): void => {
-    for (const entry of entries) {
-      if (entry.kind === 'item') slots.push(entry.slot);
-      else if (entry.kind === 'submenu') walk(entry.items);
-    }
-  };
-  for (const menu of CHROME_MENUS) walk(menu.entries);
-  return slots;
+  return flattenChromeMenuSlots(CHROME_MENUS);
 }
 
 /** Total controls, so a parity test can assert none were dropped. */
@@ -1091,10 +1093,5 @@ export function chromeControlCount(): number {
   return CHROME_GROUPS.reduce((n, g) => n + g.controls.length, 0);
 }
 
-/**
- * i18n key for the tooltip on a control an ADAPTER renders but cannot drive yet — a
- * value slot in a toolbar that has grown no picker for it, say. It is never the reason
- * a control is disabled: when the ENGINE refuses, the tooltip is the engine's own
- * `disabledReason`, never an adapter paraphrase.
- */
+/** Tooltip for adapter controls without a picker; command refusals use engine reasons. */
 export const CHROME_UNAVAILABLE_KEY = 'formattingBar.unavailableInPreview';

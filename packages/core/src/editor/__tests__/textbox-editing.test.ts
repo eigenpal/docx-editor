@@ -1,9 +1,11 @@
+import { CHROME_GROUPS, CHROME_MENUS } from '../chrome-controls.ts';
+import { commandForSlot } from '../toolbar-commands.ts';
 import { unzipSync, zipSync, strToU8, strFromU8 } from 'fflate';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { expect, test } from 'bun:test';
 import { createDocxEditor } from '../docx-editor.ts';
-import { selectedImageStateOf } from '../docx-editor-images.ts';
+import { selectedImageStateOf, selectedDrawingOverlayTargetOf } from '../docx-editor-images.ts';
 import { textboxDocx } from './textbox-editing-fixture.ts';
 
 test('textbox typing uses its story and supports undo', () => {
@@ -412,6 +414,105 @@ test('rotated textbox text remains read-only', () => {
     expect(editor.surface!.setActiveScope(match.scope!)).toBe(false);
     expect(editor.surface!.activeScope().kind).toBe('body');
     expect(editor.findMatches('boxed needle')).toHaveLength(1);
+  } finally {
+    editor.destroy();
+  }
+});
+
+test('editing textbox text keeps its frame handles without selecting the object', () => {
+  const editor = createDocxEditor({
+    container: document.createElement('div'),
+    document: textboxDocx(),
+  });
+  try {
+    const surface = editor.surface!;
+    surface.setActiveScope(editor.findMatches('boxed needle')[0]!.scope!);
+    surface.selectAll();
+    const target = selectedDrawingOverlayTargetOf(surface);
+    expect(target?.canMove).toBe(true);
+    expect(target?.canResize).toBe(true);
+    expect(selectedImageStateOf(surface)).toBeNull();
+    editor.exec({ type: 'deleteText' });
+    expect(selectedDrawingOverlayTargetOf(surface)?.id).toBe(target!.id);
+    expect(surface.activeScope().kind).toBe('frame');
+    editor.exec({ type: 'insertText', text: 'Edited' });
+    expect(editor.findMatches('Edited')).toHaveLength(1);
+    surface.setActiveScope({ kind: 'body' });
+    expect(selectedDrawingOverlayTargetOf(surface)).toBeNull();
+  } finally {
+    editor.destroy();
+  }
+});
+
+test('insert textbox enters an empty story and preserves inserted text through save and undo', async () => {
+  const editor = createDocxEditor({
+    container: document.createElement('div'),
+    document: textboxDocx(),
+  });
+  try {
+    expect(editor.can({ type: 'insertTextBox' }).ok).toBe(true);
+    expect(editor.exec({ type: 'insertTextBox' }).ok).toBe(true);
+    expect(editor.surface!.activeScope().kind).toBe('frame');
+    expect(selectedDrawingOverlayTargetOf(editor.surface!)?.canResize).toBe(true);
+    editor.exec({ type: 'insertText', text: 'Inserted textbox' });
+    expect(editor.findMatches('Inserted textbox')[0]?.scope?.kind).toBe('frame');
+    const reopened = createDocxEditor({
+      container: document.createElement('div'),
+      document: new Uint8Array(await editor.save()),
+    });
+    try {
+      expect(reopened.findMatches('Inserted textbox')).toHaveLength(1);
+      expect(reopened.findMatches('body')).toHaveLength(1);
+    } finally {
+      reopened.destroy();
+    }
+    editor.exec({ type: 'undo' });
+    editor.exec({ type: 'undo' });
+    expect(editor.surface!.layout().pages.flatMap((p) => p.anchoredDrawings ?? [])).toHaveLength(1);
+    editor.exec({ type: 'redo' });
+    expect(editor.surface!.layout().pages.flatMap((p) => p.anchoredDrawings ?? [])).toHaveLength(2);
+    editor.surface!.setEditingMode('view');
+    expect(editor.can({ type: 'insertTextBox' }).ok).toBe(false);
+  } finally {
+    editor.destroy();
+  }
+});
+
+test('Insert exposes textbox creation and Format retains direction commands', () => {
+  expect(commandForSlot('insert.textBox')).toEqual({ type: 'insertTextBox' });
+  expect(CHROME_GROUPS.find((group) => group.id === 'direction')?.contextual).toBe(true);
+  expect(CHROME_MENUS.find((menu) => menu.id === 'insert')?.entries).toContainEqual({
+    kind: 'item',
+    slot: 'insert.textBox',
+  });
+  expect(CHROME_MENUS.find((menu) => menu.id === 'format')?.entries).toContainEqual({
+    kind: 'item',
+    slot: 'direction.rtl',
+  });
+  expect(CHROME_MENUS.find((menu) => menu.id === 'format')?.entries).toContainEqual({
+    kind: 'item',
+    slot: 'direction.ltr',
+  });
+});
+
+test('inserting from a textbox creates a separate body-anchored story', () => {
+  const editor = createDocxEditor({
+    container: document.createElement('div'),
+    document: textboxDocx(),
+  });
+  try {
+    editor.surface!.setActiveScope(editor.findMatches('boxed needle')[0]!.scope!);
+    expect(editor.exec({ type: 'insertTextBox' }).ok).toBe(true);
+    editor.exec({ type: 'insertText', text: 'First new box' });
+    expect(editor.exec({ type: 'insertTextBox' }).ok).toBe(true);
+    editor.exec({ type: 'insertText', text: 'Second new box' });
+    const first = editor.findMatches('First new box')[0]!.scope!;
+    const second = editor.findMatches('Second new box')[0]!.scope!;
+    expect(first.kind).toBe('frame');
+    expect(second.kind).toBe('frame');
+    expect(first).not.toEqual(second);
+    expect(editor.findMatches('boxed needle')).toHaveLength(1);
+    expect(editor.surface!.layout().pages.flatMap((p) => p.anchoredDrawings ?? [])).toHaveLength(3);
   } finally {
     editor.destroy();
   }

@@ -295,6 +295,7 @@ export const CHROME_GROUPS: readonly [{
     readonly id: "alignment";
     readonly labelKey: "formattingBar.groups.alignment";
 }, {
+    readonly contextual: true;
     readonly controls: readonly [{
         readonly id: "ltr";
         readonly labelKey: "toolbar.leftToRight";
@@ -676,6 +677,13 @@ export const CHROME_GROUPS: readonly [{
 }, {
     readonly contextual: true;
     readonly controls: readonly [{
+        readonly id: "textBox";
+        readonly labelKey: "toolbar.insertTextBox";
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
         readonly id: "footnote";
         readonly labelKey: "toolbar.insertFootnote";
         readonly paths: readonly string[];
@@ -941,7 +949,7 @@ export interface ChromePrintOptions {
 export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null;
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
 
 // @public
 export function chromeSlotId(group: {
@@ -1378,6 +1386,7 @@ export function finalizeImageOverlayInteraction(options: {
     readonly deltaYPt: number;
     readonly session: ImageInteractionSession;
     readonly shiftKey: boolean;
+    readonly textbox?: boolean;
 }): FinalizedImageOverlayInteraction;
 
 // @public
@@ -2448,7 +2457,7 @@ export interface RemoteCaretLabelHost {
 export type RenderableImageMime = SupportedImageMime | VectorImageMime;
 
 // @public
-export function resizePreservesAspect(handle: ImageResizeHandle, aspectLocked: boolean, shiftKey: boolean): boolean;
+export function resizePreservesAspect(handle: ImageResizeHandle, aspectLocked: boolean, shiftKey: boolean, textbox?: boolean): boolean;
 
 // @public
 export function resolveColorValueToCss(color: ColorValue | undefined | null, themeColors: readonly DocumentThemeColorEntry[], defaultHex?: string): string;
@@ -2707,6 +2716,7 @@ export interface SelectedDrawingOverlayTarget {
     readonly pageIndex: number;
     // (undocumented)
     readonly position: DrawingPositionInput | null;
+    readonly textbox?: boolean;
     // (undocumented)
     readonly transform: DrawingTransform;
     // (undocumented)

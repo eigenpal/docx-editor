@@ -1,3 +1,4 @@
+import { textboxInsertionRefusal } from './textbox-commands.ts';
 import { tocAtPosition } from './surface-toc-ranges.ts';
 import { formsProtectionRefusal } from '../store/store/tree-op-content-controls.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
@@ -313,6 +314,10 @@ export function gateCommand(
   }
   const protection = support.mutating ? commandProtectionRefusal(command, surface) : null;
   if (protection) return { ok: false, refusal: protection };
+  if (command.type === 'insertTextBox') {
+    const refusal = textboxInsertionRefusal(surface);
+    return refusal ? { ok: false, refusal } : { ok: true };
+  }
   // History commands are gated on the HISTORY, not just the mode: `can` drives the
   // toolbar's enabled state, and an undo button that stays live over an empty stack
   // silently no-ops — Word greys it out.

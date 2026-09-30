@@ -1280,6 +1280,9 @@ export interface EditorCommands
    * `snapshot().image` or `getSelectedImage()`; use `setImageProperties` to enlarge past
    * the fit afterwards.
    */
+  /** Insert a rectangular body textbox and enter its text. */
+  insertTextBox: Record<never, never>;
+
   insertImage: {
     data: Uint8Array;
     mime: SupportedImageMime;

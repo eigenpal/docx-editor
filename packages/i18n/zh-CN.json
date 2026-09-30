@@ -55,7 +55,8 @@
     "printPreparing": "正在准备打印…",
     "printNoViewer": "此浏览器无法从页面打印 PDF 文件。请选择“打开 PDF”，然后从 PDF 查看器打印。",
     "printLoadFailed": "未能加载要打印的 PDF。请选择“打开 PDF”，然后从 PDF 查看器打印。",
-    "printRefused": "浏览器不允许从页面打印。请选择“打开 PDF”，然后从 PDF 查看器打印。"
+    "printRefused": "浏览器不允许从页面打印。请选择“打开 PDF”，然后从 PDF 查看器打印。",
+    "insertTextBox": "文本框"
   },
   "formattingBar": {
     "groups": {

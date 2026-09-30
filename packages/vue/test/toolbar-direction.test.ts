@@ -39,8 +39,16 @@ const caretIn = (editor: DocxEditorInstance, index: number): void => {
 };
 
 describe('the Vue paragraph direction buttons', () => {
-  test('Right-to-left in the default toolbar writes w:bidi and reads back pressed', async () => {
-    mounted = mountEditorTree(() => h(DocxEditorToolbar), docx(p('alpha')));
+  test('Right-to-left in the explicit toolbar writes w:bidi and reads back pressed', async () => {
+    mounted = mountEditorTree(
+      () =>
+        h(
+          DocxEditorToolbar,
+          {},
+          { default: () => [h(DocxEditorToolbar.LeftToRight), h(DocxEditorToolbar.RightToLeft)] }
+        ),
+      docx(p('alpha'))
+    );
     await flush();
     caretIn(mounted.editor(), 0);
     await flush();
@@ -85,4 +93,15 @@ describe('the Vue paragraph direction buttons', () => {
     expect(rtl.getAttribute('aria-pressed')).toBe('false');
     expect(ltr.getAttribute('aria-pressed')).toBe('true');
   });
+});
+
+test('the default toolbar omits direction shortcuts', async () => {
+  mounted = mountEditorTree(() => h(DocxEditorToolbar), docx(p('alpha')));
+  await flush();
+  expect(
+    mounted.container.querySelector('button[aria-label="' + en.toolbar.leftToRight + '"]')
+  ).toBeNull();
+  expect(
+    mounted.container.querySelector('button[aria-label="' + en.toolbar.rightToLeft + '"]')
+  ).toBeNull();
 });
