@@ -34,6 +34,10 @@ export function createTextboxEditing(deps: {
       (story) => story.root.id === active!.id && story.drawingNodeId === active!.drawingNodeId
     );
   const syncDom = () => {
+    if (active && !root()) {
+      exit();
+      return;
+    }
     for (const box of deps.pagesLayer.querySelectorAll<HTMLElement>('.docx-drawing-textbox')) {
       const editing = box.dataset.drawingNodeId === active?.drawingNodeId;
       box.dataset.docxTextboxActive = String(editing);

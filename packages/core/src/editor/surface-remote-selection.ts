@@ -4,6 +4,7 @@
 // layout to cover every line between them, including a range that crosses a page or a cell.
 // A `kind: 'cells'` payload reconstructs the table rectangle those endpoints name.
 
+import { textboxPresenceLayout } from './textbox-presence-layout.ts';
 import type { TextMeasurer } from '../layout/semantic-records.ts';
 import {
   caretAt,
@@ -208,6 +209,7 @@ export function paintRemoteSelections(
   selections: readonly CollaborationRemoteSelection[],
   options: RemoteSelectionPaintOptions
 ): void {
+  layout = textboxPresenceLayout(layout);
   const { scale, pageOffsetX, pages, colorForAuthor, declaredColorFor } = options;
   const labelHost = options.labelHost ?? null;
   const colors = resolvedSelectionColors(selections, colorForAuthor, declaredColorFor);

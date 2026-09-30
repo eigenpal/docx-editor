@@ -125,6 +125,7 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'file.exportPdf',
   'file.print',
   'file.pageSetup',
+  'insert.textBox',
   'insert.footnote',
   'insert.endnote',
   'insert.pageNumber',
@@ -318,7 +319,7 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the count is stable, so a dropped control fails rather than passing quietly', () => {
-    expect(chromeControlCount()).toBe(72);
+    expect(chromeControlCount()).toBe(73);
   });
 
   test('the table group is contextual and carries border/fill chrome slots', () => {

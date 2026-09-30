@@ -6,7 +6,9 @@
   "reason": "The change uses the existing canonical tree and primitive journal operations. It changes editor access and layout without changing shared identities, repair rules, or wire representations.",
   "tests": [
     "packages/core/src/editor/__tests__/textbox-editing.test.ts",
-    "packages/core/src/editor/__tests__/textbox-overlay-geometry.test.ts"
+    "packages/core/src/editor/__tests__/textbox-overlay-geometry.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-textboxes.test.ts",
+    "packages/core/src/editor/__tests__/textbox-presence.test.ts"
   ],
   "changeset": "calm-textbox-pagination",
   "migration": null

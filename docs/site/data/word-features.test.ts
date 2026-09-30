@@ -57,18 +57,21 @@ describe('word-features — images lane honesty', () => {
   });
 
   test('unsupported non-picture payloads are preserved inertly, not claimed as supported', () => {
-    for (const id of [
-      'images.charts',
-      'images.smartart',
-      'images.shapes',
-      'images.textboxes',
-    ] as const) {
+    for (const id of ['images.charts', 'images.smartart', 'images.shapes'] as const) {
       const row = feature(id);
       expect(row.editing).toBe('none');
       expect(row.rendering).toBe('partial');
       expect(row.roundTrip).toBe('preserved');
       expect(row.notes?.toLowerCase()).toMatch(/placeholder|preserv|generic|inert/);
     }
+  });
+
+  test('textboxes report partial editing with explicit limits', () => {
+    const row = feature('images.textboxes');
+    expect(row.editing).toBe('partial');
+    expect(row.rendering).toBe('partial');
+    expect(row.roundTrip).toBe('preserved');
+    expect(row.notes).toContain('read-only');
   });
 
   test('tracked image revisions report insert and delete support', () => {

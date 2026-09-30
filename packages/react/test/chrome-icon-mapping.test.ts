@@ -57,6 +57,7 @@ const ICON_FOR_SLOT: Record<string, string> = {
   'table.borderStyle': 'border_horizontal',
   'table.borderWidth': 'line_weight',
   'table.cellFill': 'format_color_fill',
+  'insert.textBox': 'format_shapes',
   'insert.footnote': 'superscript',
   'insert.endnote': 'edit_note',
   'insert.pageNumber': 'format_list_numbered',

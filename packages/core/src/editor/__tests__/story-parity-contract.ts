@@ -151,6 +151,10 @@ export const SLOT_PARITY: Readonly<Record<ChromeSlotId, ParityRule>> = Object.fr
 
   // A note reference is a body-story concept: `w:footnoteReference` lives in the main document
   // part, and Word refuses a note inside a note for the same reason.
+  'insert.textBox': {
+    parity: 'bodyOnly',
+    reason: 'Textboxes can only be inserted in body editing mode',
+  },
   'insert.footnote': { parity: 'bodyOnly', reason: 'insertNote requires body scope' },
   'insert.endnote': { parity: 'bodyOnly', reason: 'insertNote requires body scope' },
 

@@ -607,10 +607,7 @@ export const CHROME_GROUPS = [
       {
         id: 'textBox',
         labelKey: 'toolbar.insertTextBox',
-        paths: [
-          'M120-840h720v720H120v-720Zm60 60v600h600v-600H180Z',
-          'M300-660h360v60H510v300h-60v-300H300v-60Z',
-        ],
+        paths: GENERATED_ICON_PATHS['format_shapes'],
         state: { kind: 'command' },
       },
       {

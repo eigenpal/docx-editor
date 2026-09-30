@@ -103,6 +103,18 @@ bytes → readOoxmlPackage (bounded OPC/XML) → canonical OoxmlNode tree per pa
 
 Check current feature support in `docs/site/data/word-features.ts` and the public API snapshots in `docs/api/`. React and Vue expose provider composition, shared editing commands, and live zoom updates. Keep capability claims aligned with those sources.
 
+## Collaboration verification
+
+Always check collaboration when adding or changing an editor feature. Treat collaboration support as part of the feature.
+
+- Exercise the feature through two editor instances attached to real collaboration sessions.
+- Verify that supported edits synchronize, converge, and survive save and reopen.
+- Cover concurrent edits, undo and redo, and deletion while another participant edits the affected content.
+- Check remote cursors and selections when the feature introduces an editable region or changes its geometry.
+- Check reconnect behavior when the feature changes shared state or operation handling.
+- Add regression tests for collaboration defects. Use existing collaboration harnesses and record the compatibility decision.
+- Do not infer collaboration support from local editing tests or use of the shared document store alone.
+
 ## Verify
 
 ```bash

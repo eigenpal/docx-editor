@@ -5,4 +5,4 @@
 '@docx-editor.dev/i18n': minor
 ---
 
-Fix floating textbox pagination and add insertion, paragraph editing, deletion, dragging, and resizing for supported body textboxes. Keep textbox carets and frame handles visible, align the default toolbar with the demo, and show text direction commands in Format.
+Support inserting, editing, deleting, moving, and resizing body textboxes, with synchronized edits and remote cursors during collaboration. Fix textbox pagination and caret visibility, and keep text direction commands in Format.

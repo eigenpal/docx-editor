@@ -85,7 +85,7 @@
     "printRefused": "ブラウザーがこのページからの印刷を許可しませんでした。「PDF を開く」を選択し、PDF ビューアーから印刷してください。",
     "printNoViewer": "このブラウザーでは、ページから PDF を印刷できません。「PDF を開く」を選択し、PDF ビューアーから印刷してください。",
     "printPdfMissing": "印刷には PDF 変換を使用します。Node.js サーバーに @docx-editor.dev/docx-to-pdf をインストールし、menu.exporters.pdf を設定してください。",
-    "insertTextBox": null
+    "insertTextBox": "テキスト ボックス"
   },
   "toc": {
     "refresh": "目次の更新",
