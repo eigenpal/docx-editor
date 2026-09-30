@@ -517,3 +517,36 @@ test('inserting from a textbox creates a separate body-anchored story', () => {
     editor.destroy();
   }
 });
+
+test('selecting a textbox border does not scroll to its distant anchor paragraph', () => {
+  const files = unzipSync(textboxDocx());
+  files['word/document.xml'] = strToU8(
+    strFromU8(files['word/document.xml']!).replace(
+      '<w:body><w:p>',
+      '<w:body><w:p><w:pPr><w:spacing w:after="8000"/></w:pPr>'
+    )
+  );
+  const scroll = document.createElement('div');
+  scroll.className = 'docx-editor__scroll-container';
+  Object.defineProperties(scroll, { clientHeight: { value: 250 }, scrollHeight: { value: 2000 } });
+  const container = document.createElement('div');
+  scroll.append(container);
+  document.body.append(scroll);
+  const editor = createDocxEditor({ container, document: zipSync(files) });
+  try {
+    const match = editor.findMatches('boxed needle')[0]!;
+    expect(match.scope?.kind).toBe('frame');
+    if (match.scope?.kind !== 'frame') throw new Error('textbox scope missing');
+    expect(editor.surface!.setActiveScope(match.scope)).toBe(true);
+    (container.querySelector('.docx-pages') as HTMLElement).focus();
+    scroll.scrollTop = 0;
+    expect(
+      editor.surface!.selectDrawing(match.scope.drawingNodeId, match.scope.hostParagraphId)
+    ).toBe(true);
+    expect(scroll.scrollTop).toBe(0);
+    expect(editor.surface!.activeScope().kind).toBe('body');
+  } finally {
+    editor.destroy();
+    scroll.remove();
+  }
+});

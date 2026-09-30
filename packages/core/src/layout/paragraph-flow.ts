@@ -38,7 +38,7 @@ import {
   type OoxmlProperty,
 } from '@docx-editor.dev/core/store';
 import {
-  propertiesOfRunContainer,
+  propertiesOfRunContainer as propertiesOf,
   type FieldAwarePiece,
   type FieldPageContext,
   type FieldLinkProjector,
@@ -254,9 +254,7 @@ export interface ParagraphFlowOptions {
   readonly paragraphMarkIsCellEnd?: boolean;
 }
 
-export function propertiesOf(container: OoxmlNode | undefined): OoxmlProperty[] {
-  return propertiesOfRunContainer(container);
-}
+export { propertiesOf };
 
 import {
   measureFollowingTabSegment,
@@ -640,6 +638,7 @@ export function breakParagraph(
     zones: activeExclusionZones,
     left: () => Math.max(contentLeft, lineOrigin()),
     right: wrapRight,
+    clearOwnEmptyAnchor: flow?.anchorCellBox == null,
     emptyStyle: lineStartStyle,
     measurer,
     lineSpacing,

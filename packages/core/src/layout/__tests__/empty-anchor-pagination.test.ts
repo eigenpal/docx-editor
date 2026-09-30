@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { WML_NAMESPACE_URI } from '../../store/package/ooxml-tree.ts';
+import { layoutHeaderFooterStory } from '../hf-layout.ts';
 import { createLayoutSession } from '../layout-session.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { paragraphFragmentsOf } from '../semantic-records.ts';
@@ -71,6 +72,74 @@ describe('empty anchor paragraph pagination', () => {
     expect(layout.pages.map((p) => p.anchoredDrawings?.length ?? 0)).toEqual([2, 1]);
     expect(layout.pages[1]!.anchoredDrawings![0]!.y).toBe(8);
     expect(layout.pages[1]!.anchoredDrawings![0]!.textboxStory?.fragments).toHaveLength(1);
+  });
+  test('moving an own rectangle upward clears its mark before placing the following anchors', () => {
+    const moved =
+      text('Heading') +
+      `<w:p>${textbox(180, 580)}${textbox(10, 62, 'paragraph')}</w:p>` +
+      `<w:p>${textbox(80, 320)}</w:p>`;
+    const session = createLayoutSession();
+    render(body('Heading'), session);
+    const layout = render(moved, session, 2);
+    expect(layout.pages.map((p) => p.anchoredDrawings?.length ?? 0)).toEqual([2, 1]);
+    expect(summary(layout)).toEqual(summary(render(moved)));
+    expect(layout.pages[0]!.anchoredDrawings!.find((d) => d.height === 62)!.y).toBeCloseTo(
+      paragraphFragmentsOf(layout.pages[0]!)[0]!.box.height + 10
+    );
+  });
+  test('resizing an own rectangle cannot move its anchor when clearance crosses the page bottom', () => {
+    const resized =
+      text('Heading') +
+      `<w:p>${textbox(180, 580)}${textbox(10, 100, 'paragraph')}</w:p>` +
+      `<w:p>${textbox(80, 320)}</w:p>`;
+    const session = createLayoutSession();
+    render(body('Heading'), session);
+    const layout = render(resized, session, 2);
+    expect(layout.pages.map((p) => p.anchoredDrawings?.length ?? 0)).toEqual([2, 1]);
+    expect(paragraphFragmentsOf(layout.pages[0]!)[0]!.box.y).toBe(0);
+    expect(summary(layout)).toEqual(summary(render(resized)));
+    expect(summary(render(resized, session, 3))).toEqual(summary(layout));
+    expect(layout.pages[0]!.anchoredDrawings!.find((d) => d.height === 100)!.y).toBeCloseTo(
+      paragraphFragmentsOf(layout.pages[0]!)[0]!.box.height + 10
+    );
+  });
+  test('an empty header anchor does not count its own rectangle as story flow height', () => {
+    const xml = document(`<w:p>${anchor(-30, 80, 'paragraph')}</w:p>`)
+      .replace('<w:document', '<w:hdr')
+      .replace('<w:body>', '')
+      .replace('</w:body></w:document>', '</w:hdr>');
+    const part = load(xml, '/word/header1.xml');
+    const story = layoutHeaderFooterStory(
+      part,
+      468,
+      createFixedMeasurer(6, 14),
+      'test',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'proposed',
+      layoutContext(part, '/word/header1.xml'),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { compatibilityMode: 15 }
+    );
+    expect(story.flowHeight).toBeLessThan(20);
+  });
+  test('own fixed bands are resolved on a prospective page before assigning their anchor', () => {
+    const resized =
+      text('Heading') +
+      `<w:p>${textbox(180, 580)}${textbox(2, 50, 'paragraph')}</w:p>` +
+      `<w:p>${textbox(80, 320)}</w:p>`;
+    const session = createLayoutSession();
+    render(body('Heading'), session);
+    const layout = render(resized, session, 2);
+    expect(layout.pages.map((p) => p.anchoredDrawings?.length ?? 0)).toEqual([2, 1]);
+    expect(summary(layout)).toEqual(summary(render(resized)));
+    expect(summary(render(resized, session, 3))).toEqual(summary(layout));
   });
   test('legacy modes retain backward wrapping of fixed anchor bands', () => {
     for (const mode of [11, 12, 14, undefined]) {

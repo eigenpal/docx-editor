@@ -4996,7 +4996,7 @@ export function mountPaginatedSurface(
       if (!at) return false;
       const next = collapsedAt(at);
       setDrawingIntent({ kind: 'pointer', drawingNodeId }, selectionsEqual(next, selection));
-      setSelection(next);
+      setSelection(next, true, 'none');
       return resolveSelectedDrawingRecord(surface)?.drawingNodeId === drawingNodeId;
     },
 

@@ -1,7 +1,14 @@
+import { withOwnAnchorOnlyZones } from './empty-anchor-exclusion.ts';
+import type { bodyAnchorFrameBase } from './body-flow-helpers.ts';
+import type { RevisionDisplayMode, RevisionAuthorFilter } from './revision-projection.ts';
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
 import { anchoredDrawingAtomsInParagraph } from './drawing-atom-walk.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
-import { verticalBandOfExclusion, type ExclusionZone } from './drawing-exclusion.ts';
+import {
+  localizeExclusionZones,
+  verticalBandOfExclusion,
+  type ExclusionZone,
+} from './drawing-exclusion.ts';
 import type { PendingLine } from './pending-line.ts';
 import type { ParagraphFrame } from './paragraph-frame.ts';
 
@@ -21,6 +28,9 @@ export function createParagraphDrawingWrap(options: {
   readonly paragraphIndex: (id: string) => number;
   readonly columnCount: number;
   readonly seedForwardOnly?: boolean;
+  readonly compatibilityMode?: number;
+  readonly displayMode?: RevisionDisplayMode;
+  readonly revisionAuthorFilter?: RevisionAuthorFilter;
 }) {
   // A rectangular exclusion anchored at the next paragraph can reach back into the
   // preceding paragraph's after-spacing. Its origin excludes the extra lines that
@@ -56,6 +66,36 @@ export function createParagraphDrawingWrap(options: {
   const extent = (lines: readonly PendingLine[]) =>
     lines.reduce((sum, line) => sum + line.height + (line.exclusionSkipBefore ?? 0), 0);
   return {
+    breakZones(
+      entry: WrapParagraph,
+      index: number,
+      columnIndex: number,
+      zones: readonly ExclusionZone[],
+      frameBase: () => ReturnType<typeof bodyAnchorFrameBase>,
+      top: number,
+      left: number,
+      right: number,
+      omittedAnchor?: string
+    ): readonly ExclusionZone[] {
+      const all = entry.frame
+        ? []
+        : withOwnAnchorOnlyZones(
+            zones,
+            entry.paragraph,
+            options.drawingLayout,
+            frameBase,
+            top,
+            left,
+            right,
+            columnIndex,
+            options.compatibilityMode,
+            options.displayMode ?? 'proposed',
+            options.revisionAuthorFilter
+          );
+      const selected = this.select(entry, index, columnIndex, all, { omittedAnchor });
+      // Break spans are column-local; placement adds the column origin once.
+      return left === 0 ? selected : localizeExclusionZones(selected, left, 0);
+    },
     select(
       entry: WrapParagraph,
       index: number,

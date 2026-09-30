@@ -446,6 +446,7 @@ export function filterExclusionZonesForParagraphOrder(
 
 /** Paragraph-local square/tight/through zones synthesized during break. */
 export function synthesizeParagraphWrapExclusionZones(options: {
+  readonly frameBase?: ReturnType<typeof import('./body-flow-helpers.ts').bodyAnchorFrameBase>;
   readonly paragraph: OoxmlNode;
   readonly paragraphId: string;
   readonly drawingLayout: InlineDrawingLayoutContext;
@@ -480,7 +481,7 @@ export function synthesizeParagraphWrapExclusionZones(options: {
     if (lineTop === undefined) continue;
     const lineBox = Object.freeze({
       x: options.contentLeft,
-      y: lineTop,
+      y: options.frameBase ? options.paragraphStartY + lineTop : lineTop,
       width: contentWidth,
       height: 14,
     });
@@ -505,8 +506,9 @@ export function synthesizeParagraphWrapExclusionZones(options: {
       layoutInCell,
       ownerPartName: options.drawingLayout.ownerPartName,
       storyKind: 'body',
+      ...options.frameBase,
     });
-    const anchorY = options.paragraphStartY + lineTop;
+    const anchorY = options.frameBase ? resolved.y : options.paragraphStartY + lineTop;
     const measure = measureInlineDrawing(atom.projection);
     const geometry = drawingGeometryFromProjection({
       projection: atom.projection,

@@ -133,7 +133,6 @@ import {
   collectExclusionZonesByPageMemoized,
   DrawingExclusionConvergenceError,
   exclusionLayoutToken,
-  localizeExclusionZones,
   exclusionMapsEqual,
   MAX_ANCHOR_PAGE_DEFERRALS,
   sortDrawingsForPaint,
@@ -1642,6 +1641,9 @@ function layoutBlocksPass(
   const { rememberBreakKey, releasePlacedBreaks } = createParagraphBreakRetention(cache);
 
   const paragraphDrawingWrap = createParagraphDrawingWrap({
+    compatibilityMode: options.compatibilityMode,
+    displayMode,
+    revisionAuthorFilter: authorFilter,
     seedForwardOnly: (options.drawingExclusionPass ?? 0) < 0,
     drawingLayout: options.inlineDrawingLayout,
     paragraphAt: (index) => {
@@ -1698,18 +1700,17 @@ function layoutBlocksPass(
         paragraphSpaceBefore +
         paragraphBorderExtentPt(continuesBorder ? undefined : entry.borders.top);
     }
-    const allPageZones = entry.frame ? [] : pageExclusionZones();
-    const selection = { omittedAnchor };
-    const pageZones = paragraphDrawingWrap.select(
+    const localPageZones = paragraphDrawingWrap.breakZones(
       entry,
       entryIndex,
       flowColumnIndex,
-      allPageZones,
-      selection
+      pageExclusionZones(),
+      anchorFrameBase,
+      paragraphStartY,
+      columnX,
+      columnX + columnWidth(),
+      omittedAnchor
     );
-    // Breaks publish column-local spans; placement adds the column origin once.
-    const localPageZones =
-      columnX === 0 ? pageZones : localizeExclusionZones(pageZones, columnX, 0);
     const exclusionToken = exclusionLayoutToken(localPageZones);
     const anchorParagraphStartY =
       paragraphStartY - paragraphDrawingWrap.displacement(pages.length, paragraphId);
@@ -2660,8 +2661,11 @@ function layoutBlocksPass(
       // Word can let auto spacing below the glyph band cross the bottom text
       // margin. The painted line keeps its full box; only the pagination budget drops that
       // trailing external depth.
+      // An empty anchor's own clearance moves its mark, not the anchor onto another sheet.
       const lineExtent =
-        skipBefore + Math.max(0, pendingLine.height - pendingLine.trailingSpacing) + tail;
+        (pendingLine.anchorClearanceBefore ?? skipBefore) +
+        Math.max(0, pendingLine.height - pendingLine.trailingSpacing) +
+        tail;
       // A leading page break's empty line stays: the break itself opens the next sheet.
       keptBreakLine =
         !frame && lineIndex === 0 && cursorY + lineExtent > contentHeight() && leadingBreak();
