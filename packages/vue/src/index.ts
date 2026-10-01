@@ -50,6 +50,7 @@ export {
   type ImageWrapTarget,
 } from './editor/useEditorValueCommand';
 export { useEditorEvent } from './editor/useEditorEvent';
+export { HIGHLIGHT_REFRESH_MS, useHighlights, type HighlightSource } from './editor/useHighlights';
 export { useEditorCaret, type EditorCaret } from './editor/useEditorCaret';
 export { useEditorSnapshot } from './useEditorSnapshot';
 
@@ -111,6 +112,8 @@ export {
   NAVIGATION_PANE_INSET,
   NAVIGATION_PANE_WIDTH,
   SEARCH_DEBOUNCE_MS,
+  SEARCH_HIGHLIGHT_PRIORITY,
+  SEARCH_HIGHLIGHT_SET,
   SEARCH_MATCH_LIMIT,
   navigationPaneReservation,
   navigationShift,
@@ -123,6 +126,8 @@ export {
   type OutlineHeading,
   type OutlineHeadingItem,
   type UseDocumentOutlineResult,
+  type DocumentSearchHighlight,
+  type UseDocumentSearchOptions,
   type UseDocumentSearchResult,
   type UseNavigationPaneOptions,
   type UseNavigationPaneResult,
@@ -412,6 +417,11 @@ export type {
   AnchorHighlightAnimation,
   AnchorHighlightOptions,
   ClearAnchorHighlightOptions,
+  HighlightHit,
+  HighlightOptions,
+  HighlightRange,
+  HighlightRect,
+  HighlightResult,
   Editor,
   EditorCommand,
   EditorQuery,

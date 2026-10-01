@@ -105,6 +105,8 @@ export {
   NAVIGATION_PANE_INSET,
   NAVIGATION_PANE_WIDTH,
   SEARCH_DEBOUNCE_MS,
+  SEARCH_HIGHLIGHT_PRIORITY,
+  SEARCH_HIGHLIGHT_SET,
   SEARCH_MATCH_LIMIT,
   navigationPaneReservation,
   navigationShift,
@@ -121,6 +123,8 @@ export {
   type OutlineHeading,
   type OutlineHeadingItem,
   type UseDocumentOutlineResult,
+  type DocumentSearchHighlight,
+  type UseDocumentSearchOptions,
   type UseDocumentSearchResult,
   type UseNavigationPaneOptions,
   type UseNavigationPaneResult,
@@ -257,6 +261,7 @@ export {
   type ToolbarContextValue,
 } from './editor/toolbar/toolbar-context';
 export { useEditorEvent } from './editor/useEditorEvent';
+export { HIGHLIGHT_REFRESH_MS, useHighlights, type HighlightSource } from './editor/useHighlights';
 export { usePageSetup, type PageSetupUpdate, type UsePageSetupReturn } from './editor/usePageSetup';
 export {
   useParagraphFormat,
@@ -408,6 +413,11 @@ export type {
   AnchorHighlightAnimation,
   AnchorHighlightOptions,
   ClearAnchorHighlightOptions,
+  HighlightHit,
+  HighlightOptions,
+  HighlightRange,
+  HighlightRect,
+  HighlightResult,
   Editor,
   EditorCommand,
   EditorQuery,

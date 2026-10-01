@@ -306,6 +306,34 @@ The result also includes these pairs:
 - `matchCase` and `setMatchCase`
 - `wholeWord` and `setWholeWord`
 
+The hook highlights every match and the active match. To change this, pass `highlight`: `'all'` (default), `'active'`, or `'none'`.
+
+```tsx
+const search = useDocumentSearch({ highlight: 'active' });
+```
+
+## `useHighlights`
+
+`useHighlights(name, source, options)` highlights text ranges while the component is mounted, and returns `{ applied, unavailable }`. For options, see [Highlight text ranges](/docs/2.x/guides/navigation#highlight-text-ranges).
+
+`source` is an array of ranges or a function of the editor. A function runs again after document changes. Wrap it in `useCallback`:
+
+```tsx
+import { useCallback } from 'react';
+import { useHighlights, type Editor } from '@docx-editor.dev/react';
+
+function GlossaryHighlights({ terms }: { terms: readonly string[] }) {
+  const findTerms = useCallback(
+    (editor: Editor) => terms.flatMap((term) => editor.findMatches(term, { wholeWord: true })),
+    [terms]
+  );
+  useHighlights('glossary', findTerms);
+  return null;
+}
+```
+
+Use a unique name for each hook.
+
 ## `useHistoryGroup`
 
 Use `useHistoryGroup` when your app applies formatting continuously, such as a font-size slider or color picker. The document updates on every input event, and one undo action restores the state before the gesture. A redo action restores the final value.

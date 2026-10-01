@@ -70,6 +70,11 @@ import { FontSourceSubstitution } from '@docx-editor.dev/core/contracts/editor';
 import { FontUrlSource } from '@docx-editor.dev/core/editor';
 import { ForwardRefExoticComponent } from 'react';
 import { generateRulerTicks } from '@docx-editor.dev/core/editor';
+import { HighlightHit } from '@docx-editor.dev/core/contracts/editor';
+import { HighlightOptions } from '@docx-editor.dev/core/contracts/editor';
+import { HighlightRange } from '@docx-editor.dev/core/contracts/editor';
+import { HighlightRect } from '@docx-editor.dev/core/contracts/editor';
+import { HighlightResult } from '@docx-editor.dev/core/contracts/editor';
 import { HistoryGroupBindingOptions } from '@docx-editor.dev/core/editor';
 import { HTMLAttributes } from 'react';
 import { ImageDecodePort } from '@docx-editor.dev/core/editor';
@@ -471,6 +476,9 @@ export { DocumentRefresh }
 export { DocumentRefreshError }
 
 export { DocumentRefreshState }
+
+// @public
+export type DocumentSearchHighlight = 'all' | 'active' | 'none';
 
 export { DocxDocument }
 
@@ -956,6 +964,7 @@ export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
     children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
+    searchHighlight?: DocumentSearchHighlight;
     // (undocumented)
     style?: CSSProperties;
     t?: (key: string, params?: Record<string, string | number>) => string;
@@ -1591,6 +1600,22 @@ export { generateRulerTicks }
 
 // @public
 export type HeaderFooterState = Exclude<ReturnType<Editor['getHeaderFooterState']>, null>;
+
+// @public
+export const HIGHLIGHT_REFRESH_MS = 150;
+
+export { HighlightHit }
+
+export { HighlightOptions }
+
+export { HighlightRange }
+
+export { HighlightRect }
+
+export { HighlightResult }
+
+// @public
+export type HighlightSource = readonly HighlightRange[] | ((editor: Editor) => readonly HighlightRange[]);
 
 // @public (undocumented)
 export function HorizontalRuler(input: HorizontalRulerProps): react__default.ReactElement;
@@ -2301,6 +2326,12 @@ export { ScrollToAnchorOptions }
 export const SEARCH_DEBOUNCE_MS = 150;
 
 // @public
+export const SEARCH_HIGHLIGHT_PRIORITY = 10;
+
+// @public
+export const SEARCH_HIGHLIGHT_SET = "search";
+
+// @public
 export const SEARCH_MATCH_LIMIT = 2000;
 
 // @public
@@ -2695,7 +2726,12 @@ export interface UseDocumentOutlineResult {
 }
 
 // @public
-export function useDocumentSearch(): UseDocumentSearchResult;
+export function useDocumentSearch(options?: UseDocumentSearchOptions): UseDocumentSearchResult;
+
+// @public
+export interface UseDocumentSearchOptions {
+    readonly highlight?: DocumentSearchHighlight;
+}
 
 // @public
 export interface UseDocumentSearchResult {
@@ -2779,6 +2815,9 @@ export function useFonts(...origins: readonly FontOrigin[]): MarkedFontResolver;
 
 // @public
 export function useHeaderFooterState(): HeaderFooterState | null;
+
+// @public
+export function useHighlights(name: string, source: HighlightSource, options?: HighlightOptions): HighlightResult;
 
 // @public
 export function useHistoryGroup(input: HistoryGroupBindingOptions): UseHistoryGroupReturn;

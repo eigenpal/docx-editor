@@ -36,6 +36,7 @@ import type {
 export type SurfaceEditingMode = 'edit' | 'suggest' | 'view';
 
 import type { ReviewWriteIntent } from './review-write-intent.ts';
+import type { SurfaceOverlayPainter } from './surface-overlay-sheet.ts';
 import type {
   ContentControlOps,
   ContentControlSurfaceState,
@@ -569,6 +570,13 @@ export interface PaginatedSurface {
    * collaborator-name labels.
    */
   setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
+  /**
+   * Install the painter for host text highlights, or remove it with `null`. The surface calls
+   * it after every render and once on installation, with the frame it just painted.
+   */
+  setHighlightPainter(painter: SurfaceOverlayPainter | null): void;
+  /** Call the installed highlight painter against the current frame. */
+  repaintHighlights(): void;
   /**
    * Commit ops that came from automation, through the gate a keystroke goes through.
    *

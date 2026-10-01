@@ -316,6 +316,32 @@ const search = useDocumentSearch();
 
 The composable waits 150 milliseconds before it searches. `isPending` reports that delay. It also provides `goTo`, `clear`, `matchCase`, `setMatchCase`, `wholeWord`, and `setWholeWord`. `truncated` becomes true at the 2,000-match limit.
 
+The composable highlights every match and the active match. To change this, pass `highlight` as a value, ref, or getter: `'all'` (default), `'active'`, or `'none'`.
+
+```ts
+const search = useDocumentSearch({ highlight: 'active' });
+```
+
+## `useHighlights`
+
+`useHighlights(name, source, options)` highlights text ranges while the component is mounted, and returns a computed `{ applied, unavailable }`. For options, see [Highlight text ranges](/docs/2.x/guides/navigation#highlight-text-ranges).
+
+`source` is an array, a ref, or a function of the editor. A function runs again when the refs it reads change and after document changes:
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import { useHighlights } from '@docx-editor.dev/vue';
+
+const terms = ref(['Supplier', 'Effective Date']);
+useHighlights('glossary', (editor) =>
+  terms.value.flatMap((term) => editor.findMatches(term, { wholeWord: true }))
+);
+</script>
+```
+
+Use a unique name for each call.
+
 ## `useNavigationPane`
 
 Returns the navigation pane state, width, active tab, and setters.

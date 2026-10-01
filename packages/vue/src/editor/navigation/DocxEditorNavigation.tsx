@@ -12,7 +12,7 @@ import { useScopeClassName } from '../scope-context';
 import { NavigationContext, type NavigationContextValue } from './navigation-context';
 import { NAVIGATION_PANE_INSET, navigationPaneReservation } from './navigation-geometry';
 import { useDocumentOutline } from './useDocumentOutline';
-import { useDocumentSearch } from './useDocumentSearch';
+import { useDocumentSearch, type DocumentSearchHighlight } from './useDocumentSearch';
 import { useNavigationPane, type UseNavigationPaneOptions } from './useNavigationPane';
 import type { NavigationPartProps } from './parts';
 import {
@@ -30,6 +30,11 @@ import {
 export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
   t?: (key: string, params?: Record<string, string | number>) => string;
   toggle?: boolean | NavigationPartProps;
+  /**
+   * Which Find matches to mark in the document while the Find tab is open: `'all'`
+   * (default), `'active'`, or `'none'`. Closing the pane or leaving the tab removes the marks.
+   */
+  searchHighlight?: DocumentSearchHighlight;
   className?: string;
   style?: CSSProperties;
   children?: DocxEditorChildren;
@@ -53,6 +58,7 @@ const DocxEditorNavigationImpl = defineComponent({
   props: {
     t: { type: Function as PropType<DocxEditorNavigationProps['t']>, default: undefined },
     toggle: { type: [Boolean, Object] as PropType<boolean | NavigationPartProps>, default: true },
+    searchHighlight: { type: String as PropType<DocumentSearchHighlight>, default: 'all' },
     className: { type: String, default: undefined },
     style: { type: Object as PropType<CSSProperties>, default: undefined },
     paneWidth: { type: Number, default: undefined },
@@ -79,7 +85,9 @@ const DocxEditorNavigationImpl = defineComponent({
     });
     const pane = useNavigationPane(paneOptions);
     const outline = useDocumentOutline();
-    const search = useDocumentSearch();
+    const search = useDocumentSearch(() => ({
+      highlight: pane.open.value && pane.tab.value === 'find' ? props.searchHighlight : 'none',
+    }));
     const { t: catalogT } = useTranslation();
     const value = computed(() => ({
       pane,

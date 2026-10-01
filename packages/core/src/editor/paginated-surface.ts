@@ -283,6 +283,8 @@ import { CommitHistoryGroup, runWithHistoryGroup } from './history-group-scope.t
 import { settingsPartOf } from '../store/package/note-properties.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
+import { overlaySheet, sizeOverlaySheets } from './surface-overlay-sheet.ts';
+import type { SurfaceOverlayPainter } from './surface-overlay-sheet.ts';
 
 export type {
   ContentControlOps,
@@ -418,50 +420,25 @@ export function mountPaginatedSurface(
   // The one highlight the browser cannot draw. A SIBLING of the pages, never a child: the
   // page painter sweeps anything it did not paint out of its own subtree, and a stray child
   // of a contenteditable is editable content a keystroke could land in.
-  const overlayLayer = document.createElement('div');
-  overlayLayer.className = 'docx-selection-overlay';
-  overlayLayer.contentEditable = 'false';
-  overlayLayer.setAttribute('aria-hidden', 'true');
-  overlayLayer.style.position = 'absolute';
-  overlayLayer.style.left = '0';
-  overlayLayer.style.top = '0';
-  overlayLayer.style.pointerEvents = 'none';
+  const overlayLayer = overlaySheet(document, 'docx-selection-overlay');
 
   // Commented text, highlighted the way Word highlights it. Its own layer OVER the pages —
   // under them the band is invisible, because a page paints an opaque sheet — and the band
   // multiplies rather than covers, which is what a real highlighter does: the yellow darkens
   // the paper and leaves the black glyphs black.
-  const commentLayer = document.createElement('div');
-  commentLayer.className = 'docx-comment-overlay';
-  commentLayer.contentEditable = 'false';
-  commentLayer.setAttribute('aria-hidden', 'true');
-  commentLayer.style.position = 'absolute';
-  commentLayer.style.left = '0';
-  commentLayer.style.top = '0';
-  commentLayer.style.pointerEvents = 'none';
-
-  const remoteSelectionLayer = document.createElement('div');
-  remoteSelectionLayer.className = 'docx-remote-selection-overlay';
-  remoteSelectionLayer.contentEditable = 'false';
-  remoteSelectionLayer.setAttribute('aria-hidden', 'true');
-  remoteSelectionLayer.style.position = 'absolute';
-  remoteSelectionLayer.style.left = '0';
-  remoteSelectionLayer.style.top = '0';
-  remoteSelectionLayer.style.pointerEvents = 'none';
-
-  const tableFurnitureLayer = document.createElement('div');
-  tableFurnitureLayer.className = 'docx-table-furniture';
-  tableFurnitureLayer.contentEditable = 'false';
-  tableFurnitureLayer.style.position = 'absolute';
-  tableFurnitureLayer.style.left = '0';
-  tableFurnitureLayer.style.top = '0';
-  tableFurnitureLayer.style.pointerEvents = 'none';
+  const commentLayer = overlaySheet(document, 'docx-comment-overlay');
+  // Host text highlights (search results, glossary terms): painted by a facade-owned painter.
+  const highlightLayer = overlaySheet(document, 'docx-text-highlight-overlay');
+  let highlightPainter: SurfaceOverlayPainter | null = null;
+  const remoteSelectionLayer = overlaySheet(document, 'docx-remote-selection-overlay');
+  const tableFurnitureLayer = overlaySheet(document, 'docx-table-furniture', false);
 
   container.style.position = 'relative';
   container.replaceChildren(
     pagesLayer,
     tableFurnitureLayer,
     commentLayer,
+    highlightLayer,
     remoteSelectionLayer,
     overlayLayer
   );
@@ -2597,14 +2574,11 @@ export function mountPaginatedSurface(
     pagesLayer.style.height = `${materializedExtent.height * scale}px`;
     container.style.width = `${materializedExtent.width * scale}px`;
     container.style.height = `${materializedExtent.height * scale}px`;
-    overlayLayer.style.width = `${materializedExtent.width * scale}px`;
-    overlayLayer.style.height = `${materializedExtent.height * scale}px`;
-    commentLayer.style.width = overlayLayer.style.width;
-    commentLayer.style.height = overlayLayer.style.height;
-    remoteSelectionLayer.style.width = overlayLayer.style.width;
-    remoteSelectionLayer.style.height = overlayLayer.style.height;
-    tableFurnitureLayer.style.width = overlayLayer.style.width;
-    tableFurnitureLayer.style.height = overlayLayer.style.height;
+    sizeOverlaySheets(
+      [overlayLayer, commentLayer, highlightLayer, remoteSelectionLayer, tableFurnitureLayer],
+      `${materializedExtent.width * scale}px`,
+      `${materializedExtent.height * scale}px`
+    );
     tableInteraction.update();
     // Sizing included: the style writes above invalidate layout, and the selection sync
     // right after is what forces the browser to resolve it. Splitting the timer here would
@@ -2613,6 +2587,7 @@ export function mountPaginatedSurface(
     renderOverlay();
     renderRemoteSelections();
     renderCommentHighlights(true);
+    paintHighlights();
     // The surface may only now have been wrapped in its viewport, so the size watcher
     // re-resolves its target here rather than trusting what existed at mount.
     watchScrollerSize();
@@ -3940,6 +3915,18 @@ export function mountPaginatedSurface(
             }),
       }
     );
+  }
+
+  function paintHighlights(): void {
+    highlightPainter?.({
+      layer: highlightLayer,
+      layout: currentLayout,
+      revision: session.packageRevision(),
+      scale,
+      measurer,
+      ...(materializedSet ? { pages: materializedSet } : {}),
+      ...(materializedExtent ? { pageOffsetX: materializedExtent.pageOffsetX } : {}),
+    });
   }
 
   /** Draw ephemeral remote selections from semantic layout geometry. */
@@ -5370,6 +5357,13 @@ export function mountPaginatedSurface(
       // repaint in the new colours without a layout pass.
       render(false);
     },
+
+    setHighlightPainter(painter) {
+      highlightPainter = painter;
+      if (!painter) highlightLayer.replaceChildren();
+      paintHighlights();
+    },
+    repaintHighlights: paintHighlights,
 
     setRemoteCaretLabelHost: (host) => {
       if (host === remoteCaretLabelHost) return;

@@ -249,6 +249,9 @@
   --doc-selection: rgba(26, 115, 232, 0.3);
   --doc-refresh-highlight-color: #3b82f6;
   --doc-anchor-highlight-color: #3b82f6;
+  /* Text highlights (Find results, host marks). Opaque, because the layer multiplies. */
+  --doc-text-highlight-color: #fff176;
+  --doc-text-highlight-active-color: #ff9632;
   --doc-motion-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 
   /* ----------------------------------------------------------------------
@@ -383,6 +386,9 @@
   --doc-comment-border: rgba(253, 214, 99, 0.5);
   --doc-comment-active-bg: rgba(253, 214, 99, 0.32);
   --doc-comment-active-border: rgba(253, 214, 99, 0.95);
+  /* The text highlight layer screens in dark mode, so these lift the dark sheet. */
+  --doc-text-highlight-color: rgba(255, 214, 0, 0.32);
+  --doc-text-highlight-active-color: rgba(255, 150, 50, 0.62);
   /* NOT the author ramp. It used to be lifted here, back when only the review cards read
      it — but the ramp now colours the painted DOCUMENT too, and the dark page is rendered
      through `invert(1) hue-rotate(180deg)` (see `.docx-page-content` below). A colour
@@ -6212,6 +6218,38 @@ a.docx-hyperlink:focus-visible {
    is the same relationship the light theme has — the paper shifts, the glyphs do not. */
 .docx-editor.dark .docx-comment-overlay {
   mix-blend-mode: screen;
+}
+
+/* Text highlights from `setHighlights()`: Find results and host marks such as glossary terms.
+ *
+ * Same compositing as comment bands: the layer multiplies over light paper and screens over
+ * dark paper, so the glyphs under a mark keep their color. Each named set is one
+ * `[data-highlight-set]` sheet; a set's `color` and `activeColor` options arrive as the two
+ * `--doc-text-highlight-set-*` properties on that sheet. A host restyles one set with
+ *
+ *   .docx-editor [data-highlight-set='glossary'] .docx-text-highlight { ... }
+ *
+ * or with the set's `className`, which lands on every mark. */
+.docx-text-highlight-overlay {
+  mix-blend-mode: multiply;
+}
+
+.docx-editor.dark .docx-text-highlight-overlay {
+  mix-blend-mode: screen;
+}
+
+.docx-text-highlight {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 1px;
+  background-color: var(--doc-text-highlight-set-color, var(--doc-text-highlight-color));
+}
+
+.docx-text-highlight--active {
+  background-color: var(
+    --doc-text-highlight-set-active-color,
+    var(--doc-text-highlight-active-color)
+  );
 }
 
 /* The editing-mode control: a pill that shows the current mode and a menu that changes it.

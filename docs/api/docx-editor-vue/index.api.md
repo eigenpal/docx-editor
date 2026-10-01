@@ -75,6 +75,11 @@ import { FontSourceSubstitution } from '@docx-editor.dev/core/contracts/editor';
 import { FontUrlSource } from '@docx-editor.dev/core/editor';
 import { FunctionalComponent } from 'vue';
 import { generateRulerTicks } from '@docx-editor.dev/core/editor';
+import { HighlightHit } from '@docx-editor.dev/core/contracts/editor';
+import { HighlightOptions } from '@docx-editor.dev/core/contracts/editor';
+import { HighlightRange } from '@docx-editor.dev/core/contracts/editor';
+import { HighlightRect } from '@docx-editor.dev/core/contracts/editor';
+import { HighlightResult } from '@docx-editor.dev/core/contracts/editor';
 import { HistoryGroupBindingOptions } from '@docx-editor.dev/core/editor';
 import { ImageDecodePort } from '@docx-editor.dev/core/editor';
 import { ImageWrapTarget } from '@docx-editor.dev/core/editor';
@@ -2208,6 +2213,9 @@ export { DocumentRefreshError }
 
 export { DocumentRefreshState }
 
+// @public
+export type DocumentSearchHighlight = 'all' | 'active' | 'none';
+
 export { DocxDocument }
 
 // @public (undocumented)
@@ -3111,6 +3119,7 @@ export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
     children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
+    searchHighlight?: DocumentSearchHighlight;
     // (undocumented)
     style?: CSSProperties;
     // (undocumented)
@@ -4327,6 +4336,22 @@ export { generateRulerTicks }
 
 // @public (undocumented)
 export type HeaderFooterState = Exclude<ReturnType<Editor['getHeaderFooterState']>, null>;
+
+// @public
+export const HIGHLIGHT_REFRESH_MS = 150;
+
+export { HighlightHit }
+
+export { HighlightOptions }
+
+export { HighlightRange }
+
+export { HighlightRect }
+
+export { HighlightResult }
+
+// @public
+export type HighlightSource = readonly HighlightRange[] | ((editor: Editor) => readonly HighlightRange[]);
 
 // @public (undocumented)
 export const HorizontalRuler: vue.DefineComponent<vue.ExtractPropTypes<{
@@ -5699,6 +5724,12 @@ export { ScrollToAnchorOptions }
 // @public (undocumented)
 export const SEARCH_DEBOUNCE_MS = 150;
 
+// @public
+export const SEARCH_HIGHLIGHT_PRIORITY = 10;
+
+// @public
+export const SEARCH_HIGHLIGHT_SET = "search";
+
 // @public (undocumented)
 export const SEARCH_MATCH_LIMIT = 2000;
 
@@ -6342,7 +6373,12 @@ export interface UseDocumentOutlineResult {
 }
 
 // @public (undocumented)
-export function useDocumentSearch(): UseDocumentSearchResult;
+export function useDocumentSearch(options?: MaybeRefOrGetter<UseDocumentSearchOptions>): UseDocumentSearchResult;
+
+// @public
+export interface UseDocumentSearchOptions {
+    readonly highlight?: DocumentSearchHighlight;
+}
 
 // @public (undocumented)
 export interface UseDocumentSearchResult {
@@ -6443,6 +6479,9 @@ export function useFonts(...origins: readonly MaybeRefOrGetter<FontOrigin>[]): M
 
 // @public (undocumented)
 export function useHeaderFooterState(): ShallowRef<HeaderFooterState | null>;
+
+// @public
+export function useHighlights(name: MaybeRefOrGetter<string>, source: MaybeRefOrGetter<HighlightSource>, options?: MaybeRefOrGetter<HighlightOptions>): ComputedRef<HighlightResult>;
 
 // @public
 export function useHistoryGroup(input: HistoryGroupBindingOptions): UseHistoryGroupReturn;

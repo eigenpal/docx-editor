@@ -1504,6 +1504,59 @@ export function generateRulerTicks(lengthPx: number, unit: RulerUnit): RulerTick
 export function handlePosition(handle: RulerIndentHandle, indent: RulerIndent, page: RulerPageMetrics): number;
 
 // @public
+export interface HighlightHit {
+    readonly active: boolean;
+    readonly index: number;
+    readonly name: string;
+    readonly range: HighlightRange;
+    readonly rect: HighlightRect;
+}
+
+// @public
+export interface HighlightOptions {
+    readonly activeColor?: string;
+    readonly activeIndex?: number;
+    readonly className?: string;
+    readonly color?: string;
+    readonly priority?: number;
+}
+
+// @public
+export interface HighlightRange {
+    readonly blockId: string;
+    readonly expectedText?: string;
+    readonly length: number;
+    readonly scope?: ViewScope;
+    readonly start: number;
+}
+
+// @public
+export interface HighlightRect {
+    // (undocumented)
+    readonly bottom: number;
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly left: number;
+    // (undocumented)
+    readonly right: number;
+    // (undocumented)
+    readonly top: number;
+    // (undocumented)
+    readonly width: number;
+    // (undocumented)
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+}
+
+// @public
+export interface HighlightResult {
+    readonly applied: number;
+    readonly unavailable: number;
+}
+
+// @public
 export interface HistoryGroupBinding {
     dispose(): void;
     options(): EditorExecOptions;
@@ -1968,6 +2021,7 @@ export interface PaginatedSurface {
     refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
     releaseSelection(pin: SelectionPin): void;
     remotePresenceColor(name: string): string | undefined;
+    repaintHighlights(): void;
     // (undocumented)
     replaceImage(drawingNodeId: string, bytes: Uint8Array, mime: SupportedImageMime, options: {
         readonly commitGuard?: () => boolean;
@@ -2004,6 +2058,7 @@ export interface PaginatedSurface {
     setEditable(editable: boolean): void;
     // (undocumented)
     setEditingMode(mode: SurfaceEditingMode): void;
+    setHighlightPainter(painter: SurfaceOverlayPainter | null): void;
     setIndent(update: {
         readonly firstLine?: number | null;
         readonly left?: number | null;

@@ -11,6 +11,10 @@
 // the same query. That re-derivation is free when nothing changed: the session's memo
 // hands back the SAME array reference for an unchanged revision, and this hook bails on
 // reference equality rather than re-rendering the panel.
+//
+// MATCHES ARE MARKED IN THE DOCUMENT. The hook owns the `search` highlight set: every match
+// by default, the active one in its own color. It clears the set when the query empties and
+// on unmount, so a closed search leaves nothing painted.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { EditorSnapshot, TextMatch } from '@docx-editor.dev/core/contracts/editor';
@@ -26,8 +30,26 @@ export const SEARCH_DEBOUNCE_MS = 150;
  */
 export const SEARCH_MATCH_LIMIT = 2000;
 
+/** The highlight set name the search hook owns. @public */
+export const SEARCH_HIGHLIGHT_SET = 'search';
+
+/** Stacking priority of the search highlight set, above host sets at the default `0`. @public */
+export const SEARCH_HIGHLIGHT_PRIORITY = 10;
+
 const EMPTY_MATCHES: readonly TextMatch[] = Object.freeze([]);
 const selectSnapshot = (snapshot: EditorSnapshot) => snapshot;
+
+/** Which matches `useDocumentSearch` marks in the document. @public */
+export type DocumentSearchHighlight = 'all' | 'active' | 'none';
+
+/** How `useDocumentSearch` behaves. @public */
+export interface UseDocumentSearchOptions {
+  /**
+   * Which matches to mark: every match with the active one emphasized (`'all'`), only the
+   * active match (`'active'`), or none (`'none'`). Default: `'all'`.
+   */
+  readonly highlight?: DocumentSearchHighlight;
+}
 
 /** What `useDocumentSearch` answers. @public */
 export interface UseDocumentSearchResult {
@@ -64,7 +86,8 @@ export interface UseDocumentSearchResult {
  *
  * @public
  */
-export function useDocumentSearch(): UseDocumentSearchResult {
+export function useDocumentSearch(options: UseDocumentSearchOptions = {}): UseDocumentSearchResult {
+  const highlight = options.highlight ?? 'all';
   const editor = useDocxEditor();
   const snapshot = useEditorState(selectSnapshot);
 
@@ -83,7 +106,7 @@ export function useDocumentSearch(): UseDocumentSearchResult {
     return () => clearTimeout(timer);
   }, [query, runQuery]);
 
-  const options = useMemo(() => ({ matchCase, wholeWord }), [matchCase, wholeWord]);
+  const findOptions = useMemo(() => ({ matchCase, wholeWord }), [matchCase, wholeWord]);
 
   // Re-derive on the run query, the flags, and every editor tick. `snapshot` is the tick:
   // its identity moves when the document or the selection does, and an unchanged revision
@@ -94,9 +117,9 @@ export function useDocumentSearch(): UseDocumentSearchResult {
       setActiveIndex(-1);
       return;
     }
-    const next = editor.findMatches(runQuery, options);
+    const next = editor.findMatches(runQuery, findOptions);
     setMatches((current) => (current === next ? current : next));
-  }, [editor, runQuery, options, snapshot]);
+  }, [editor, runQuery, findOptions, snapshot]);
 
   // A changed result set invalidates the cursor. Clamping instead of resetting would point
   // at a different match than the one the user was on, which is worse than starting over.
@@ -107,6 +130,25 @@ export function useDocumentSearch(): UseDocumentSearchResult {
       setActiveIndex((current) => (current >= 0 && current < matches.length ? current : -1));
     }
   }, [matches]);
+
+  // Mark the matches. The set follows the result list and the active index, and an unmount
+  // or an editor swap clears it on the editor that painted it.
+  useEffect(() => {
+    if (!editor) return undefined;
+    // A new result list arrives one render before the index clamp above settles.
+    const index = activeIndex < matches.length ? activeIndex : -1;
+    const active = index >= 0 ? matches[index] : undefined;
+    const ranges = highlight === 'all' ? matches : highlight === 'active' && active ? [active] : [];
+    editor.setHighlights(SEARCH_HIGHLIGHT_SET, ranges, {
+      activeIndex: highlight === 'all' ? index : ranges.length > 0 ? 0 : -1,
+      priority: SEARCH_HIGHLIGHT_PRIORITY,
+    });
+    return undefined;
+  }, [editor, matches, activeIndex, highlight]);
+  useEffect(() => {
+    if (!editor) return undefined;
+    return () => editor.clearHighlights(SEARCH_HIGHLIGHT_SET);
+  }, [editor]);
 
   const goTo = useCallback(
     (index: number) => {

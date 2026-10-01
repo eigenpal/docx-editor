@@ -18,6 +18,7 @@ import { completePendingSuggesting } from './opening-editing-mode.ts';
 import { formattingCommandActive } from './docx-editor-active.ts';
 import { createEditorScrolling } from './docx-editor-scroll.ts';
 import { createAnchorNavigation } from './docx-editor-anchor-navigation.ts';
+import { createTextHighlights } from './text-highlights.ts';
 import { createDocumentProtectionCommands } from './docx-editor-protection.ts';
 
 import {
@@ -517,6 +518,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     emitSelectionChange,
   });
   const scaleOf = (): number => zoomLane.scale();
+  const highlights = createTextHighlights({
+    surface: () => surface,
+    container: () => container,
+    flushOpen: () => openScheduler.flush(),
+  });
 
   function mountBytes(...args: Parameters<typeof mountBytesNow>): void {
     const refreshing = refreshHost?.source !== undefined;
@@ -643,6 +649,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     }
     parseError = null;
     surface = result.surface;
+    // A refresh or recovery mounts different content: node ids no longer name the same text.
+    highlights.attach(surface, refreshHost?.source !== undefined);
     // Before anything can publish: the mount decides the mode itself just below, and a sync
     // firing in between would decide a second time and clear what the first one published.
     protection.prime();
@@ -1858,6 +1866,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         return;
       }
       refreshHost?.invalidate();
+      highlights.reset();
       loadBytes(bytes);
     },
 
@@ -2092,11 +2101,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       selectionFormattingHalfPoints(surface ? snapshotNow().formatting : null),
 
     findMatches: (query, options) =>
-      surface?.session.findText(query, {
-        ...(options?.matchCase !== undefined ? { matchCase: options.matchCase } : {}),
-        ...(options?.wholeWord !== undefined ? { wholeWord: options.wholeWord } : {}),
-        stories: searchStoriesForSurface(surface, editingMode),
-      }).matches ?? [],
+      highlights.noteMatches(
+        surface?.session.findText(query, {
+          ...(options?.matchCase !== undefined ? { matchCase: options.matchCase } : {}),
+          ...(options?.wholeWord !== undefined ? { wholeWord: options.wholeWord } : {}),
+          stories: searchStoriesForSurface(surface, editingMode),
+        }).matches ?? []
+      ),
 
     // Selection uses the match's model address and then reveals its paragraph.
     selectMatch(match: TextMatch): ExecResult {
@@ -2574,6 +2585,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     ),
 
     ...zoomFacadeMembers(zoomLane, () => surface),
+    ...highlights.members,
 
     relayout(options?: { sync?: boolean }) {
       // `layout()` flushes any commit the scheduler has not published yet; the surface

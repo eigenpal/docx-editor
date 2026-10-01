@@ -1364,7 +1364,7 @@ export interface DrawingPositionInput {
 export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'line' | 'margin' | 'outsideMargin' | 'page' | 'paragraph' | 'topMargin';
 
 // @public
-export interface Editor extends EditorAnchorNavigation {
+export interface Editor extends EditorAnchorNavigation, EditorHighlights {
     acceptReviewItem(key: string): ExecResult;
     addComment(text: string, author?: string): ExecResult;
     beginHistoryGroup(): HistoryGroup;
@@ -1862,6 +1862,13 @@ export interface EditorHeaderFooterCommands {
 }
 
 // @public
+export interface EditorHighlights {
+    clearHighlights(name?: string): void;
+    getHighlightsAt(clientX: number, clientY: number): readonly HighlightHit[];
+    setHighlights(name: string, ranges: readonly HighlightRange[], options?: HighlightOptions): HighlightResult;
+}
+
+// @public
 export interface EditorModule {
     readonly collaboration?: CollaborationModuleContribution;
     readonly customNodePayloadNamespaces?: readonly string[];
@@ -2300,6 +2307,59 @@ export interface HeaderFooterState {
     readonly sectionIndex: number;
     readonly titlePage?: boolean;
     readonly variant?: FurnitureVariant;
+}
+
+// @public
+export interface HighlightHit {
+    readonly active: boolean;
+    readonly index: number;
+    readonly name: string;
+    readonly range: HighlightRange;
+    readonly rect: HighlightRect;
+}
+
+// @public
+export interface HighlightOptions {
+    readonly activeColor?: string;
+    readonly activeIndex?: number;
+    readonly className?: string;
+    readonly color?: string;
+    readonly priority?: number;
+}
+
+// @public
+export interface HighlightRange {
+    readonly blockId: string;
+    readonly expectedText?: string;
+    readonly length: number;
+    readonly scope?: ViewScope;
+    readonly start: number;
+}
+
+// @public
+export interface HighlightRect {
+    // (undocumented)
+    readonly bottom: number;
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly left: number;
+    // (undocumented)
+    readonly right: number;
+    // (undocumented)
+    readonly top: number;
+    // (undocumented)
+    readonly width: number;
+    // (undocumented)
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+}
+
+// @public
+export interface HighlightResult {
+    readonly applied: number;
+    readonly unavailable: number;
 }
 
 // @public

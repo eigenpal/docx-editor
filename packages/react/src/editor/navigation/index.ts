@@ -34,7 +34,11 @@ export {
 export {
   useDocumentSearch,
   SEARCH_DEBOUNCE_MS,
+  SEARCH_HIGHLIGHT_PRIORITY,
+  SEARCH_HIGHLIGHT_SET,
   SEARCH_MATCH_LIMIT,
+  type DocumentSearchHighlight,
+  type UseDocumentSearchOptions,
   type UseDocumentSearchResult,
 } from './useDocumentSearch';
 export {

@@ -1143,8 +1143,9 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    docsLink: '/docs/2.x/guides/navigation#highlight-text-ranges',
     notes:
-      'Searches the body, headers, footers, footnotes, and endnotes, including table cells and saved field results. Find also searches anchored text boxes in the body, headers, and footers. Inline text boxes and text boxes in notes are excluded. Selecting a text-box match selects its drawing. Click inside a supported body text box to edit its paragraphs.',
+      'Searches the body, headers, footers, footnotes, and endnotes, including table cells and saved field results. Find also searches anchored text boxes in the body, headers, and footers. Inline text boxes and text boxes in notes are excluded. Selecting a text-box match selects its drawing. Click inside a supported body text box to edit its paragraphs. Find highlights every match and the active match. Use setHighlights or useHighlights to highlight your own ranges, such as glossary terms. Highlights are not saved or shared.',
   },
   {
     id: 'collab.anchor-navigation',
