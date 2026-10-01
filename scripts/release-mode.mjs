@@ -52,7 +52,10 @@ export async function releaseMode(root, lookup = registry, now = Date.now) {
     packages.map(({ name, version }) =>
       lookup(name, version, { deadline }).then(
         (metadata) => metadata?.version === version,
-        () => false
+        (error) => {
+          console.log(`Registry check failed for ${name}@${version}: ${error.message}`);
+          return false;
+        }
       )
     )
   );

@@ -80,6 +80,10 @@ jobs:
       - name: Format check
         run: bun run format:check
         if: "matrix.check == 'lint'"
+      # Also a prepublish check. Running it here finds a missing header before the release PR.
+      - name: License header check
+        run: bun run check:license-headers
+        if: "matrix.check == 'lint'"
       - name: Type check
         if: "matrix.check == 'typecheck'"
         run: bun run typecheck

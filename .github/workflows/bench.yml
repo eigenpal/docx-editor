@@ -1,6 +1,6 @@
 name: Performance benchmark
 
-# Runs two benchmarks for PRs and each main push. PRs receive one
+# Runs two benchmarks for PRs and main pushes (docs-only changes skip it). PRs receive one
 # sticky comment with the before/after tables. Main runs retain artifacts:
 #   - the browser typing-latency bench (e2e/edit-browser.bench.spec.ts) — the
 #     UX number: keystroke handler and frame latency through the real editor;

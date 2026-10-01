@@ -92,7 +92,6 @@ jobs:
     if: always() && github.event_name == 'workflow_dispatch' && inputs.publish && needs.wheel.result != 'cancelled'
     needs: wheel
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
     environment: pypi
     permissions:
       id-token: write

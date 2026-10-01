@@ -87,7 +87,7 @@ Types into one story only, and you measure nothing: each story part counts its o
 
 ### CI performance-benchmark comment
 
-`.github/workflows/bench.yml` runs two benchmarks on every PR, each twice: once on the PR merge ref (the PR merged into current `main`) and once on the `main` tip that merge ref was built against (using that commit's own copy of the scripts, in a separate worktree), so the delta isolates exactly what merging the PR changes:
+`.github/workflows/bench.yml` runs two benchmarks on every PR that changes more than documentation, changesets, or specs, each twice: once on the PR merge ref (the PR merged into current `main`) and once on the `main` tip that merge ref was built against (using that commit's own copy of the scripts, in a separate worktree), so the delta isolates exactly what merging the PR changes:
 
 - the browser typing-latency test from `e2e/edit-browser.bench.spec.ts` — keystroke handler and frame latency through the real adapter, review rail, and paginated DOM: the number a typing user feels;
 - `bench:edit --runs 10` — the headless engine pipeline with deterministic work counters.
