@@ -199,7 +199,8 @@ jobs:
             .cache/collaboration/publish/
             packages/*/dist/
             packages/*/THIRD_PARTY_NOTICES.md
-          retention-days: 7
+          # Only downstream jobs of this run download it (~30 MB per run).
+          retention-days: 1
       - name: Published-package artifact check
         run: bun run check:package-artifacts
         if: "matrix.check == 'build'"
