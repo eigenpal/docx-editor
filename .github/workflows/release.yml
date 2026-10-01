@@ -7,10 +7,12 @@ name: Release
 # 2. When that PR is merged → the same flow runs again, sees no pending
 #    changesets (they were drained by `changeset version`), and instead
 #    publishes the new versions to npm.
+# 3. Any later push without a changeset → every version is already on npm, so
+#    the run is idle and every job after `mode` skips.
 #
 # Job split and runner choice:
 # - `mode` decides which path this run takes (pending changesets ⇒ PR-update,
-#   none ⇒ publish).
+#   none ⇒ publish, none and nothing unpublished ⇒ idle).
 # - `checks` runs lint, format, typecheck, tests, parity, license, and i18n
 #   checks in a fail-fast matrix on Blacksmith. `build` runs the package and
 #   demo builds plus consumer validation in parallel, then hands the validated
@@ -42,7 +44,9 @@ concurrency:
 jobs:
   # Pending changesets ⇒ PR-update path (skip checks/build); none ⇒
   # publish path (run the prepublish jobs before publishing to npm). README.md /
-  # config.json are not changesets.
+  # config.json are not changesets. No changesets and every public version
+  # already on npm ⇒ idle: a merge without a changeset after a release has
+  # nothing to publish, so every later job skips (scripts/release-mode.mjs).
   mode:
     name: Detect release mode
     runs-on: blacksmith-2vcpu-ubuntu-2404
@@ -50,28 +54,26 @@ jobs:
     permissions:
       contents: read
     outputs:
-      publishing: ${{ steps.pending.outputs.publishing }}
+      mode: ${{ steps.mode.outputs.mode }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Detect pending changesets
-        id: pending
-        run: |
-          count=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l | tr -d ' ')
-          echo "Pending changesets: $count"
-          if [ "$count" -gt 0 ]; then
-            echo "publishing=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "publishing=true" >> "$GITHUB_OUTPUT"
-          fi
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Detect pending changesets and unpublished versions
+        id: mode
+        run: node scripts/release-mode.mjs
 
   # Independent checks run concurrently. Publish path only — contributor PRs
   # already run the same checks, and the PR-update path only rewrites versions.
   checks:
     name: Prepublish ${{ matrix.label }}
     needs: mode
-    if: ${{ needs.mode.outputs.publishing == 'true' }}
+    if: ${{ needs.mode.outputs.mode == 'publish' }}
     strategy:
       fail-fast: true
       matrix:
@@ -121,7 +123,7 @@ jobs:
   build:
     name: Prepublish build
     needs: mode
-    if: ${{ needs.mode.outputs.publishing == 'true' }}
+    if: ${{ needs.mode.outputs.mode == 'publish' }}
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 30
     permissions:
@@ -197,7 +199,7 @@ jobs:
   collaboration:
     name: Prepublish collaboration (${{ matrix.shard }})
     needs: [mode, build]
-    if: ${{ needs.mode.outputs.publishing == 'true' }}
+    if: ${{ needs.mode.outputs.mode == 'publish' }}
     strategy:
       fail-fast: false
       matrix:
@@ -241,8 +243,8 @@ jobs:
     name: Release
     needs: [mode, checks, build, collaboration]
     # Run on both paths: checks/build are skipped on the PR-update path by
-    # design, so accept skipped as well as success.
-    if: ${{ !cancelled() && needs.mode.result == 'success' && (needs.checks.result == 'success' || needs.checks.result == 'skipped') && (needs.build.result == 'success' || needs.build.result == 'skipped') && (needs.mode.outputs.publishing != 'true' || needs.collaboration.result == 'success') }}
+    # design, so accept skipped as well as success. The idle path has no work.
+    if: ${{ !cancelled() && needs.mode.result == 'success' && (needs.mode.outputs.mode == 'pending' || needs.mode.outputs.mode == 'publish') && (needs.checks.result == 'success' || needs.checks.result == 'skipped') && (needs.build.result == 'success' || needs.build.result == 'skipped') && (needs.mode.outputs.mode != 'publish' || needs.collaboration.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -298,21 +300,21 @@ jobs:
         run: git config core.hooksPath /dev/null
 
       - name: Download publish artifacts
-        if: ${{ needs.mode.outputs.publishing == 'true' }}
+        if: ${{ needs.mode.outputs.mode == 'publish' }}
         uses: actions/download-artifact@v8
         with:
           name: publish-dist
           path: packages
 
       - name: Download tested collaboration candidate
-        if: ${{ needs.mode.outputs.publishing == 'true' }}
+        if: ${{ needs.mode.outputs.mode == 'publish' }}
         uses: actions/download-artifact@v8
         with:
           name: collaboration-candidate
           path: .cache/collaboration/publish
 
       - name: Verify the publication payload without rebuilding
-        if: ${{ needs.mode.outputs.publishing == 'true' }}
+        if: ${{ needs.mode.outputs.mode == 'publish' }}
         run: node scripts/collaboration/cli.mjs verify --candidate .cache/collaboration/publish
 
       # The single step that does both PR-management and publishing.
@@ -433,7 +435,7 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CHECKS_RESULT: ${{ needs.checks.result }}
           BUILD_RESULT: ${{ needs.build.result }}
-          PUBLISHING: ${{ needs.mode.outputs.publishing }}
+          RELEASE_MODE: ${{ needs.mode.outputs.mode }}
           CHANGESETS_OUTCOME: ${{ needs.release.outputs.changesets_outcome }}
           PUBLISHED: ${{ needs.release.outputs.published }}
         run: |
@@ -445,7 +447,7 @@ jobs:
             mode="pre-release"
             title=":x: docx-editor — pre-release step failed"
             detail="A parallel prepublish check or build failed (checks: $CHECKS_RESULT; build: $BUILD_RESULT), or release-job setup failed. No release PR was updated and no publish was attempted. Check the run logs for the failing step."
-          elif [ "$PUBLISHING" = "false" ]; then
+          elif [ "$RELEASE_MODE" = "pending" ]; then
             mode="release-pr"
             title=":warning: docx-editor — failed to update release PR"
             detail="The Release workflow could not assemble the \`chore: release\` PR (pending changesets exist). No publish was attempted. Likely cause: a malformed changeset file (wrong package name, bad frontmatter)."

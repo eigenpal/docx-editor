@@ -103,9 +103,10 @@ jobs:
           # The same budget as the package build: the Vercel deployment runs this command
           # with Node's default heap.
           NODE_OPTIONS: '--max-old-space-size=2048'
+      # Skips the slow apt step unless Chromium cannot start; see the script header.
       - name: Install Chromium for Markdown preview checks
         if: "matrix.check == 'browser'"
-        run: bunx playwright install --with-deps chromium
+        run: bash scripts/install-ci-chromium.sh
       - name: Build the PDF server package for export checks
         if: "matrix.check == 'browser'"
         run: bun run build:pdf
@@ -288,6 +289,7 @@ jobs:
   office-js-compatibility:
     if: github.actor != 'dependabot[bot]'
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 15
     continue-on-error: true
     steps:
       - name: Checkout
@@ -319,7 +321,7 @@ jobs:
   test:
     if: ${{ !cancelled() && github.actor != 'dependabot[bot]' }}
     needs: [checks, collaboration]
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
     steps:
       - name: Require all verification lanes to pass
@@ -330,7 +332,8 @@ jobs:
 
   package-size:
     if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 10
     needs: checks
     permissions:
       contents: read
@@ -403,7 +406,7 @@ jobs:
     name: Security report
     if: "${{ !cancelled() && github.actor != 'dependabot[bot]' }}"
     needs: checks
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
     continue-on-error: true
     permissions:

@@ -43,6 +43,7 @@ jobs:
           - os: windows-2025
             tag: windows-x64
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
@@ -92,6 +93,7 @@ jobs:
     if: always() && github.event_name == 'workflow_dispatch' && inputs.publish && needs.wheel.result != 'cancelled'
     needs: wheel
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     environment: pypi
     permissions:
       id-token: write
@@ -162,6 +164,7 @@ jobs:
     if: always() && github.event_name == 'workflow_dispatch' && inputs.publish && needs.publish.result == 'failure'
     needs: [wheel, publish]
     runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 5
     permissions: {}
     steps:
       - name: Notify Slack
