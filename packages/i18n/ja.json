@@ -984,16 +984,16 @@
     "processingLabel": "処理中",
     "sampleEdited": "編集内容は文書に保持されています。もう一度試すには、サンプルをリセットしてください。",
     "changeStatus": {
-      "available": null,
-      "deleted": null,
-      "invalid": null,
-      "unavailable": null,
-      "unsupported-story": null
+      "available": "参照先あり",
+      "deleted": "削除された内容",
+      "invalid": "無効な参照先",
+      "unavailable": "強調表示の参照先なし",
+      "unsupported-story": "未対応の文書領域"
     },
-    "lateResult": null,
-    "reviewChanges": null,
-    "showChange": null,
-    "testLateResult": null
+    "lateResult": "古い結果を拒否しました。最新の文書は開いたままです。",
+    "reviewChanges": "変更を確認",
+    "showChange": "変更を表示",
+    "testLateResult": "最新の更新後に古い結果を受信"
   },
   "anchorNavigation": {
     "title": "段落への参照",

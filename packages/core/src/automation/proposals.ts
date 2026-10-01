@@ -50,7 +50,8 @@ export function proposalRevisionError(
   paragraphId: string,
   start: number,
   end: number,
-  ownAuthor?: string
+  ownAuthor?: string,
+  allowOwnDeleted = false
 ): AutomationError | null {
   // Shared note parts can group one revision identity across several stories. Check the
   // individual sites and ranges, rather than discarding a group that spans note boundaries.
@@ -72,7 +73,8 @@ export function proposalRevisionError(
     if (
       ownAuthor &&
       item.author === ownAuthor &&
-      ['insert', 'delete', 'replace', 'paragraphMark', 'format'].includes(item.revisionKind)
+      (['insert', 'paragraphMark', 'format'].includes(item.revisionKind) ||
+        (allowOwnDeleted && ['delete', 'replace'].includes(item.revisionKind)))
     )
       return false;
     if (item.revisionKind === 'structural') {

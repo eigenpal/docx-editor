@@ -115,7 +115,8 @@ export function planProposal(
     paragraphId,
     start,
     end,
-    tracked && insertion ? operation.author.trim() : undefined
+    tracked && insertion ? operation.author.trim() : undefined,
+    insertion && start === (story.value.rawText(paragraphId) ?? '').length
   );
   if (revisionError) return { ok: false, error: revisionError };
   const conflict = claim(story.value, paragraphId);
@@ -161,6 +162,7 @@ export function trackedParagraphInsertError(
     paragraphId,
     0,
     (story.rawText(paragraphId) ?? '').length,
-    author
+    author,
+    true
   );
 }

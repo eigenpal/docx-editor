@@ -21,6 +21,10 @@ Open `http://localhost:3004`. Optional environment variables include `OPENAI_MOD
 
 The default model is `gpt-6.1-sol` with low reasoning effort. The example uses the Responses API for tool calls. Configure `OPENAI_MODEL` with a model that supports Responses tool calls and low reasoning effort.
 
+## Data sent to the model
+
+Document inspection sends the requested text and properties to OpenAI as tool results. The example does not redact personal information. The model request disables response storage with `store: false`.
+
 ## Choose the editing mode
 
 Select **Direct edits** for text, formatting, structure, or content controls. Select **Suggestions** for tracked text, paragraph insertion, font, paragraph-format, paragraph-style, and list-membership edits. The application sets `Document.changeTrackingMode`; the model cannot change that setting to bypass a refusal. Review tools can create comments and resolve requested revisions in either mode.

@@ -219,7 +219,13 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
         operation.op !== 'replaceSpan' &&
         (!supportsTrackedAutomationOperation(operation) ||
           (!stagedTracking.author &&
-            (operation.op === 'startNewList' || operation.op === 'setListLevelFormat')))
+            [
+              'startNewList',
+              'setListLevelFormat',
+              'insertTable',
+              'updateTable',
+              'updateTableCell',
+            ].includes(operation.op)))
       )
         return refuse(
           operations,

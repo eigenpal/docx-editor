@@ -19,7 +19,7 @@ afterAll(() => {
   if (registered) GlobalRegistrator.unregister();
 });
 
-async function room(bytes: Uint8Array) {
+async function room(bytes: Uint8Array, author?: string) {
   const harness = createPeerHarness('rich-api', { offlineEditing: true });
   const pair = await harness.pair(bytes);
   const peers = [pair.alice, pair.bob].map((peer) => {
@@ -29,6 +29,7 @@ async function room(bytes: Uint8Array) {
     const editor = createDocxEditor({
       container,
       document: peer.room.document,
+      ...(author ? { author } : {}),
       modules: [reviewModule(), collaborationModule({ session: peer.room.session })],
     });
     return {
@@ -598,6 +599,68 @@ test('collaboration refuses tracked whole-cell values before they can absorb con
     expect(r.peers[0]!.editor.surface!.session.bodyText()).toBe(
       r.peers[1]!.editor.surface!.session.bodyText()
     );
+  } finally {
+    r.close();
+  }
+});
+
+test('suggesting peers refuse permanent table edits with runtime tracking Off', async () => {
+  const r = await room(
+    zipDocument(
+      '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="4680"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>Cell text</w:t></w:r></w:p></w:tc></w:tr></w:tbl><w:p><w:r><w:t>Tail</w:t></w:r></w:p>'
+    ),
+    'UI reviewer'
+  );
+  try {
+    r.pair.pause();
+    expect(r.peers[0]!.editor.setEditingMode('suggesting').ok).toBe(true);
+    const before = new Uint8Array(await r.peers[0]!.editor.save());
+    for (const action of ['insert', 'properties', 'values', 'cell']) {
+      await expect(
+        r.peers[0]!.runtime.run(async (c) => {
+          const table = c.document.body.tables.getFirst();
+          await c.sync();
+          if (action === 'insert')
+            c.document.body.getRange('End').insertTable(1, 1, 'Before', [['Untracked']]);
+          else if (action === 'properties') table.headerRowCount = 1;
+          else if (action === 'values') table.values = [['Untracked']];
+          else {
+            const cell = table.getCell(0, 0);
+            await c.sync();
+            cell.value = 'Untracked';
+          }
+          await c.sync();
+        })
+      ).rejects.toMatchObject({ code: 'NotSupported' });
+      expect(new Uint8Array(await r.peers[0]!.editor.save())).toEqual(before);
+    }
+    await r.peers[1]!.runtime.run(async (c) => {
+      c.document.body.paragraphs.getLast().insertText(' updated', 'End');
+      await c.sync();
+    });
+    r.sync();
+    r.pair.resume();
+    r.sync();
+    expect(r.peers[0]!.editor.surface!.session.bodyText()).toBe(
+      r.peers[1]!.editor.surface!.session.bodyText()
+    );
+    for (const peer of r.peers) {
+      const reopened = await DocxEditor.createServer(new Uint8Array(await peer.editor.save()));
+      try {
+        await reopened.run(async (c) => {
+          const table = c.document.body.tables.getFirst();
+          table.load('values');
+          c.document.body.load('text');
+          c.document.revisions.load('items');
+          await c.sync();
+          expect(table.values).toEqual([['Cell text']]);
+          expect(c.document.body.text).toContain('Tail updated');
+          expect(c.document.revisions.items).toHaveLength(0);
+        });
+      } finally {
+        reopened.dispose();
+      }
+    }
   } finally {
     r.close();
   }

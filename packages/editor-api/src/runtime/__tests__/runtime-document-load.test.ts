@@ -151,6 +151,44 @@ test('tracked list creation requires the browser review module', async () => {
   }
 });
 
+for (const action of ['properties', 'values', 'cell'] as const) {
+  test(`browser suggesting mode refuses permanent table ${action} with runtime tracking Off`, async () => {
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: bytes,
+      modules: [reviewModule()],
+      author: 'UI reviewer',
+    });
+    const runtime = DocxEditorBrowser.createBrowser(editor, { author: 'Agent' });
+    try {
+      await runtime.run(async (context) => {
+        context.document.body.getRange('Start').insertTable(1, 1, 'Before', [['Original cell']]);
+        await context.sync();
+      });
+      editor.setEditingMode('suggesting');
+      const before = new Uint8Array(await editor.save());
+      await expect(
+        runtime.run(async (context) => {
+          const table = context.document.body.tables.getFirst();
+          await context.sync();
+          if (action === 'properties') table.headerRowCount = 1;
+          else if (action === 'values') table.values = [['Untracked replacement']];
+          else {
+            const cell = table.getCell(0, 0);
+            await context.sync();
+            cell.value = 'Untracked replacement';
+          }
+          await context.sync();
+        })
+      ).rejects.toMatchObject({ code: 'NotSupported' });
+      expect(new Uint8Array(await editor.save())).toEqual(before);
+    } finally {
+      runtime.dispose();
+      editor.destroy();
+    }
+  });
+}
+
 for (const action of ['rows', 'membership', 'level'] as const) {
   test(`tracked ${action} requires the browser review module`, async () => {
     const editor = createDocxEditor({ container: document.createElement('div'), document: bytes });
