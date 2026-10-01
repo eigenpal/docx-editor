@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A press, drag, or caret key in viewing mode moved the local selection and the published presence.",
+  "after": "Viewing mode ignores local pointer, browser-selection, and caret-key selection changes, so presence stays where it was.",
+  "reason": "Only local input handling changes. Shared state, operations, snapshots, and protocol messages are unchanged, and remote edits still apply to a viewing peer.",
+  "tests": [
+    "e2e/collaboration.presence.spec.ts",
+    "packages/core/src/editor/__tests__/viewing-selection-lock.test.ts"
+  ],
+  "changeset": "viewing-mode-no-caret",
+  "migration": null
+}

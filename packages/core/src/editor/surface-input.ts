@@ -25,6 +25,15 @@ const NAVIGATION: Record<string, NavigationCommand> = {
   End: 'lineEnd',
 };
 
+/**
+ * Whether the keymap answers this key by moving the selection: caret motion, page motion
+ * or select-all. Viewing ignores exactly these and keeps the view chords (Show/Hide).
+ */
+function keyMovesSelection(event: KeyboardEvent): boolean {
+  if (NAVIGATION[event.key] || event.key === 'PageUp' || event.key === 'PageDown') return true;
+  return (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'a';
+}
+
 /** Paragraph alignment shortcuts (`w:jc`), matching Word. */
 const ALIGNMENT: Record<string, string> = {
   l: 'left',
@@ -133,6 +142,10 @@ export function createKeyDownHandler(
     // below. Both firing made one keystroke zoom AND rewrite the selection's run properties.
     // A prevented event has an owner, so there is nothing left here to do.
     if (event.defaultPrevented) return;
+    // Viewing moves no caret from the keyboard, as it places none from the pointer. Chromium
+    // drops focus from the pages once they stop being editable; a browser that keeps it would
+    // walk an invisible caret, and the toolbar would follow it. Writes refuse on their own.
+    if (surface.editingMode() === 'view' && keyMovesSelection(event)) return;
     // macOS delivers Fn+Option+F9 as Alt+F9; Fn is handled by the keyboard.
     if (
       event.key === 'F9' &&

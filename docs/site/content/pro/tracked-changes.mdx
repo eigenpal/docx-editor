@@ -61,6 +61,8 @@ A click on a change bar changes the value too. Vue offers the same pair of compo
 | `'suggesting'`    | `'suggesting'` | Records supported edits as revisions. |
 | `'view'`          | `'viewing'`    | Keeps the document read-only.         |
 
+In viewing mode, clicks, drags, and caret keys do not place a caret, select text, or select pictures. The pointer shows an arrow over text, and the toolbar keeps its current values. Links still work: an external link shows its popover, and an internal link jumps to its target. Your code can still set the selection, for example to highlight a search result.
+
 Use the `setEditingMode` command to change the mode after mount. The packaged toolbar exposes the same command in `review.editingMode`.
 
 If you omit `mode`, the root honors `w:trackRevisions` when a review module and an `author` are present. An explicit `mode` overrides this document setting.

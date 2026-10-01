@@ -101,6 +101,14 @@ export interface SurfaceSelectionSyncDeps {
    */
   isGesturing?(): boolean;
   /**
+   * True while the reader's own selection is not taken up at all: viewing.
+   *
+   * The browser can still report one (a host stylesheet that re-enables `user-select`, a
+   * select-all from outside), and adopting it moved the model selection, so the toolbar
+   * reported the formatting of text nobody can edit.
+   */
+  selectionLocked?(): boolean;
+  /**
    * What to write into the browser's own selection, when that is not the model selection.
    *
    * A rectangle of table cells has no native equivalent: writing the text range it stands in
@@ -286,6 +294,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    * mirror the selection into the DOM and report the new state anyway.
    */
   function adoptPendingDomSelection(): boolean {
+    if (deps.selectionLocked?.()) return false;
     const domSelection = document.getSelection();
     const next = semanticSelectionFromDom(pagesLayer, domSelection);
     if (!next) return false;
@@ -322,6 +331,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
 
   /** Mirror the native selection into the model. Ignores selections outside painted text. */
   const adoptDomSelection = (): void => {
+    if (deps.selectionLocked?.()) return;
     const domSelection = document.getSelection();
     const next = semanticSelectionFromDom(pagesLayer, domSelection);
     if (!next) {
@@ -468,6 +478,12 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   /** Arm one adoption opportunity. Secondary buttons are not a caret gesture. */
   function noteUserSelectionGesture(event: Event): void {
     if (event instanceof PointerEvent && event.button !== 0) return;
+    // A drag or multi-click starting a native selection while locked. Refused here rather than
+    // with `user-select: none`, which would also hide the highlight of a selection the host sets.
+    if (event.type === 'selectstart' && deps.selectionLocked?.()) {
+      event.preventDefault();
+      return;
+    }
     userSelectionGesture = true;
   }
 

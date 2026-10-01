@@ -137,6 +137,13 @@ export interface PointerHost {
    * rather than acted on here, because the pointer lane owns geometry and nothing else.
    */
   onSelectionSettled?(): void;
+  /**
+   * True while presses must not place a caret, make a selection or open a story scope.
+   *
+   * Viewing: the reader looks at the document, and a click that moved the selection made
+   * the toolbar report the formatting under it, as if the text were there to edit.
+   */
+  selectionLocked?(): boolean;
   /** Generated navigation paragraphs refuse caret placement and text selection. */
   isReadOnlyParagraph?(paragraphId: string): boolean;
   isReadOnlyPosition?(position: SemanticPosition): boolean;
@@ -775,6 +782,10 @@ export function createPointerController(
       if (controlId && kind) host.onContentControlWidget?.(controlId, kind);
       return;
     }
+    // Not prevented: nothing here claims the press, so outside-click handlers and link
+    // activation still see the ordinary mouse events, and the pages layer is not focusable
+    // while locked, so the press does not focus it either.
+    if (host.selectionLocked?.()) return;
     // Touch keeps the browser's own panning: claiming the gesture would stop the page
     // scrolling under a finger, which is a much worse trade than a less exact caret.
     if (event.pointerType === 'touch') return;
@@ -1088,6 +1099,8 @@ export function createPointerController(
   const onPointerMove = (event: PointerEvent): void => {
     const active = gesture;
     if (!active || event.pointerId !== active.pointerId) return;
+    // Viewing began mid-drag: the rest of the drag selects nothing.
+    if (host.selectionLocked?.()) return endGesture();
     event.preventDefault();
     active.clientX = event.clientX;
     active.clientY = event.clientY;

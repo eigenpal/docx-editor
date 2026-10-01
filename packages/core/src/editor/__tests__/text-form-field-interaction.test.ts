@@ -173,6 +173,20 @@ test('double click edits the field default through shared core UI', () => {
   }
 });
 
+test('double click on pages that are not editable selects nothing and opens no dialog', () => {
+  const host = setup();
+  try {
+    // Viewing: the surface marks the pages not editable.
+    host.pagesLayer.contentEditable = 'false';
+    const before = host.selection();
+    host.span.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    expect(host.container.querySelector('dialog')).toBeNull();
+    expect(host.selection()).toEqual(before);
+  } finally {
+    host.cleanup();
+  }
+});
+
 test('protected Tab selects the next field and double click does not expose defaults', () => {
   const host = setup(true);
   try {

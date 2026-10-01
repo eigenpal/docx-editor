@@ -1283,9 +1283,9 @@ export function mountPaginatedSurface(
     drawingLinkById: (drawingNodeId) => drawingLinkByIdFromLayout(currentLayout, drawingNodeId),
     setSelection: (position) => setSelection(collapsedAt(position)),
     enterStoryFor: (paragraphId) => enterStoryHolding(paragraphId),
+    // Viewing makes no range from a press, so a range left over from editing is no drag.
     isCollapsedSelection: () =>
-      selection.anchor.paragraphId === selection.head.paragraphId &&
-      selection.anchor.offset === selection.head.offset,
+      editingMode === 'view' || selectionsEqual(selection, collapsedAt(selection.head)),
     onScrolled: () => rematerialize(),
     ...(options.onHyperlinkPopover ? { onPopover: options.onHyperlinkPopover } : {}),
   });
@@ -2230,12 +2230,8 @@ export function mountPaginatedSurface(
 
   function onTocRowClick(event: MouseEvent): void {
     if (event.button !== 0 || (event.target as Element | null)?.closest('a.docx-hyperlink')) return;
-    if (
-      selection.anchor.paragraphId !== selection.head.paragraphId ||
-      selection.anchor.offset !== selection.head.offset
-    ) {
-      return;
-    }
+    // A range ends a drag, except in viewing, where a press makes none (see the link lane).
+    if (editingMode !== 'view' && !selectionsEqual(selection, collapsedAt(selection.head))) return;
     const paragraphId = gestureParagraphId(event);
     if (!paragraphId) return;
     const toc = detectBodyTocs(session.part()).find((candidate) =>
@@ -3339,6 +3335,7 @@ export function mountPaginatedSurface(
       lastSelectionMs = ms;
     },
     isGesturing: () => drawingIntent.kind === 'pointer' || (pointer?.dragging() ?? false),
+    selectionLocked: () => editingMode === 'view',
     domSelection: () => (cellSelection ? collapsedAt(cellSelection.text.anchor) : selection),
     holdsCellSelection: () => cellSelection !== null,
     // `surface` is assigned below; a composition can only end once a caller holds it.
@@ -5310,6 +5307,7 @@ export function mountPaginatedSurface(
       // over a document that now refuses writes. Exiting repaints, so this runs first.
       if (moved && mode !== 'edit') textboxEditing?.exit();
       if (moved && mode === 'view') hfScope?.exitHeaderFooter();
+      if (moved && mode === 'view') noteOps?.exitNote();
       // An armed format painter is a write surface too, and a more misleading one: the pages
       // keep the paint cursor and every release goes on building ops the session then
       // refuses. Released rather than left standing, so the affordance and the answer agree.
@@ -6126,6 +6124,7 @@ export function mountPaginatedSurface(
       // An armed format painter paints the selection the gesture just produced. Word's
       // gesture exactly: arm, then drag over the text that should take the formatting.
       onSelectionSettled: () => formatPainter.applyIfArmed(),
+      selectionLocked: () => editingMode === 'view',
       activeHeaderFooter: () => pointerHeaderFooterState(hfScope?.getActive() ?? null),
       activeNote: () => {
         const scope = noteOps?.activeNoteScope();

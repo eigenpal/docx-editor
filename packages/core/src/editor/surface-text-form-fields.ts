@@ -395,6 +395,8 @@ export function createTextFormFieldInteraction(
 
   const doubleClick = (event: MouseEvent): boolean => {
     if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return false;
+    // Pages that are not editable (viewing) select no field and open no dialog for it.
+    if (host.pagesLayer.contentEditable === 'false') return false;
     const hit = fieldAtTarget(event);
     if (!hit) return false;
     const { paragraphId, field } = hit;

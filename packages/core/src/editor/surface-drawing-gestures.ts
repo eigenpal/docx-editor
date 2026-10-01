@@ -24,6 +24,8 @@ export function createDrawingGestures(deps: {
   return {
     onDrawingPointerGesture(event: Event): void {
       if (event instanceof PointerEvent && event.button !== 0) return;
+      // Viewing selects no object, exactly as it places no caret.
+      if (deps.surface.editingMode() === 'view') return;
       const element = event.target instanceof Element ? event.target : null;
       const editingTextbox = deps.textbox()?.preparePointer(element);
       const drawingId =
