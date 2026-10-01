@@ -3,7 +3,7 @@
   "fields": [],
   "before": "Tracked content-control creation refuses.",
   "after": "Standalone hosts can propose text and date controls. Collaborative hosts refuse before mutation. TOC field insertion and ordered writer paragraphs use existing operations.",
-  "reason": "The collaboration wire format does not change. Tracked wrapper creation refuses in collaborative hosts. TOC field insertion uses the existing fragment operation.",
+  "reason": "The collaboration wire format does not change. Tracked wrapper creation refuses in collaborative hosts. TOC field insertion uses the existing fragment operation. Additional paragraph-revision guards only narrow standalone wrapper eligibility.",
   "tests": [
     "packages/pro/src/collaboration/__tests__/document-rich-api.test.ts"
   ],

@@ -655,3 +655,225 @@ for (const mode of ['direct', 'suggest'] as const)
       }
     });
   }
+
+for (const imported of [false, true])
+  for (const mode of ['direct', 'suggest'] as const)
+    for (const externalEdit of [false, true]) {
+      test(`streams disjoint replacements in one ${imported ? 'imported header' : 'body'} paragraph: ${mode}, external=${externalEdit}`, async () => {
+        const { anonymousStories } = await import('./paragraph-targets.fixture');
+        const runtime = await DocxEditor.createServer(imported ? anonymousStories() : seedDocx(), {
+          author: 'Writer',
+          revisionTextView: 'original',
+        });
+        const story = { kind: imported ? 'header' : 'body', section: 0, variant: 'Primary' };
+        try {
+          const read = await runWriterTool(runtime, null, 'inspect_document', {
+            area: 'paragraphs',
+            story,
+          });
+          const target = JSON.parse(read.output).items[0];
+          const edits = [
+            { search: 'Draft', text: 'Final' },
+            { search: imported ? 'header' : 'proposal', text: 'plan' },
+          ].map(({ search, text }) => ({
+            action: 'insertText',
+            target: { paragraphId: target.id, search },
+            location: 'Replace',
+            text,
+          }));
+          let calls = 0;
+          const stream = new WriterStreamEdits(async (name, input, id) => {
+            const result = await runWriterTool(runtime, null, name, input, mode, id);
+            if (++calls === 1 && externalEdit) {
+              await runtime.run(async (context) => {
+                // Simulate an independent user's formatting change.
+                context.document.changeTrackingMode = 'Off';
+                const body = imported
+                  ? context.document.sections.getFirst().getHeader('Primary')
+                  : context.document.body;
+                await context.sync();
+                body.paragraphs.getFirst().font.italic = true;
+                await context.sync();
+              });
+            }
+            return result;
+          });
+          for (const [index, edit] of edits.entries())
+            stream.push({
+              toolCallId: 'same-paragraph',
+              toolName: 'edit_text',
+              index,
+              input: { story, edits: [edit] },
+            });
+          const result = await stream.finish('same-paragraph', 'edit_text', { story, edits });
+          if (externalEdit) expect(result?.code).toBe('StaleDocument');
+          else expect(result?.success, JSON.stringify(result)).toBe(true);
+          await runtime.run(async (context) => {
+            const body = imported
+              ? context.document.sections.getFirst().getHeader('Primary')
+              : context.document.body;
+            await context.sync();
+            if (mode === 'suggest') {
+              body.revisions.acceptAll();
+              await context.sync();
+            }
+            const paragraph = body.paragraphs.getFirst();
+            paragraph.load('text');
+            paragraph.font.load('italic');
+            await context.sync();
+            expect(paragraph.text).toBe(
+              imported
+                ? externalEdit
+                  ? 'Final header'
+                  : 'Final plan'
+                : externalEdit
+                  ? 'Final project proposal'
+                  : 'Final project plan'
+            );
+            if (externalEdit) expect(paragraph.font.italic).toBe(true);
+          });
+        } finally {
+          runtime.dispose();
+        }
+      });
+    }
+
+test('a user edit during paragraph cache refresh still invalidates the writer read', async () => {
+  const { stateFor } = await import('./document-access');
+  const runtime = await DocxEditor.createServer(seedDocx());
+  try {
+    const read = await runWriterTool(runtime, null, 'read_document', {});
+    const target = JSON.parse(read.output).items[0];
+    const run = runtime.run.bind(runtime);
+    let injected = false;
+    runtime.run = (async (
+      callback: (c: import('@docx-editor.dev/editor-api').RequestContext) => Promise<unknown>
+    ) =>
+      run(async (context) => {
+        const sync = context.sync.bind(context);
+        context.sync = async () => {
+          await sync();
+          if (stateFor(runtime).completed.includes('text') && !injected) {
+            injected = true;
+            await run(async (other) => {
+              other.document.body.paragraphs.getFirst().font.italic = true;
+              await other.sync();
+            });
+          }
+        };
+        return callback(context);
+      })) as typeof runtime.run;
+    const result = await runWriterTool(
+      runtime,
+      null,
+      'edit_text',
+      {
+        edits: [
+          {
+            action: 'insertText',
+            target: { paragraphId: target.id, search: 'Draft' },
+            location: 'Replace',
+            text: 'Final',
+          },
+        ],
+      },
+      'direct'
+    );
+    expect(injected).toBe(true);
+    expect(result.code).toBe('StaleDocument');
+    expect(result.completedSteps).toEqual(['text']);
+    expect(stateFor(runtime).paragraphs.size).toBe(0);
+    const retried = await runWriterTool(
+      runtime,
+      null,
+      'edit_text',
+      {
+        edits: [
+          {
+            action: 'insertText',
+            target: { paragraphId: target.id, search: 'proposal' },
+            location: 'Replace',
+            text: 'plan',
+          },
+        ],
+      },
+      'direct'
+    );
+    expect(retried.code).toBe('StaleDocument');
+  } finally {
+    runtime.dispose();
+  }
+});
+
+test('text deletion keeps paragraph positions, while newline insertion refuses', async () => {
+  const { anonymousStories } = await import('./paragraph-targets.fixture');
+  const runtime = await DocxEditor.createServer(anonymousStories());
+  const story = { kind: 'header', section: 0, variant: 'Primary' };
+  try {
+    const read = await runWriterTool(runtime, null, 'inspect_document', {
+      area: 'paragraphs',
+      story,
+    });
+    const items = JSON.parse(read.output).items;
+    const removed = await runWriterTool(
+      runtime,
+      null,
+      'edit_text',
+      {
+        story,
+        edits: [{ action: 'delete', target: { paragraphId: items[0].id } }],
+      },
+      'direct'
+    );
+    expect(removed.success).toBe(true);
+    const next = await runWriterTool(
+      runtime,
+      null,
+      'edit_text',
+      {
+        story,
+        edits: [
+          {
+            action: 'insertText',
+            target: { paragraphId: items[1].id },
+            location: 'Replace',
+            text: 'Kept position',
+          },
+        ],
+      },
+      'direct'
+    );
+    expect(next.success).toBe(true);
+    const invalid = await runWriterTool(
+      runtime,
+      null,
+      'edit_text',
+      {
+        story,
+        edits: [
+          {
+            action: 'insertText',
+            target: { paragraphId: items[1].id },
+            location: 'Replace',
+            text: 'Two\nparagraphs',
+          },
+        ],
+      },
+      'direct'
+    );
+    expect(invalid.code).toBe('InvalidArgument');
+    await runtime.run(async (context) => {
+      const paragraphs = context.document.sections.getFirst().getHeader('Primary').paragraphs;
+      paragraphs.load('items');
+      await context.sync();
+      for (const paragraph of paragraphs.items) paragraph.load('text');
+      await context.sync();
+      expect(paragraphs.items).toHaveLength(items.length);
+      expect(paragraphs.items[0]!.text).toBe('');
+      expect(paragraphs.items[1]!.text).toBe('Kept position');
+      expect(paragraphs.items[2]!.text).toBe('Repeated');
+    });
+  } finally {
+    runtime.dispose();
+  }
+});

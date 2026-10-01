@@ -236,7 +236,12 @@ async function execute(
           : undefined;
       // A header-only edit cannot move footer or main-body paragraph targets.
       // Clear all headers together because sections can share linked content.
-      forgetTransientTargets(state, editedStory?.kind === 'body' ? undefined : editedStory?.kind);
+      const preservesParagraphPositions =
+        name === 'edit_text' &&
+        Array.isArray(input.edits) &&
+        input.edits.every((edit) => edit.action === 'insertText' || edit.action === 'delete');
+      if (!preservesParagraphPositions)
+        forgetTransientTargets(state, editedStory?.kind === 'body' ? undefined : editedStory?.kind);
       state.inspected.clear();
     }
     // The browser's public version replaces a second ZIP serialization. Capture at

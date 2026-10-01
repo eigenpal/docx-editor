@@ -27,7 +27,7 @@ Document inspection sends the requested text and properties to OpenAI as tool re
 
 ## Choose the editing mode
 
-Select **Direct edits** for text, formatting, structure, or content controls. Select **Suggestions** for tracked text, paragraph insertion, font, paragraph-format, paragraph-style, and list-membership edits. The application sets `Document.changeTrackingMode`; the model cannot change that setting to bypass a refusal. Review tools can create comments and resolve requested revisions in either mode.
+Select **Direct edits** for text, formatting, structure, or content controls. Select **Suggestions** for tracked text, paragraph insertion, font, paragraph-format, paragraph-style, list-membership, and supported text/date-control edits. The application sets `Document.changeTrackingMode`; the model cannot change that setting to bypass a refusal. Review tools can create comments and resolve requested revisions in either mode.
 
 The runtime reads the original text view: pending deletions remain visible, and pending insertions stay hidden. Existing revisions remain until you accept or reject them. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration. Page layout requires direct edits. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control’s tag and title. Empty ranges, existing review markup, and other control structure changes refuse. List creation and membership changes produce paragraph-property revisions. Definition changes support new proposed lists; changes to established list definitions refuse.
 
@@ -108,7 +108,7 @@ Use these boundaries when you build an agent integration:
 - Discover supported operations before editing. A signature match does not establish support for every host, document, or tracking mode.
 - Keep streaming and transport in the application. Apply complete, validated operations at explicit sync boundaries.
 - Preserve successful edits after partial failures. Re-read stale targets and reconsider the next edit.
-- Use native revisions for saved suggestions. Existing table column changes and SDT wrapper changes need additional library revision support.
+- Use native revisions for saved suggestions. Existing table column changes and established SDT wrapper changes require direct edits.
 - Use refresh for complete files. Its diagnostics identify unmatched anchors, and processor descriptions support structural review lists.
 - Keep refresh side effects visible. Each accepted file resets selection and undo history, and refresh refuses collaborative sessions.
 
@@ -136,8 +136,8 @@ The deterministic tests require no model API key. They check actual document res
 
 Collaboration verification covers tracked text, formatting, paragraph insertion, list membership, and content-control creation. Tests also cover concurrent new lists after a document rewrite, undo, redo, and saved row suggestions with concurrent cell edits. The standalone writer does not attach a collaboration session.
 
-Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration. SDT wrapper changes remain unsupported in Suggestions. SDT wrapper changes need revision handling for insertion, rejection, selection, and serialization. Changes to SDT metadata have no generic `sdtPrChange` element in the pinned OOXML schema. Direct edits create real plain-text, rich-text, and date-picker controls. Text insertion supports text-like controls. Date-picker values use the editor's calendar; text insertion refuses with `NotSupported`.
+Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration. Suggestions can wrap nonempty ordinary text in plain-text, rich-text, and date-picker controls outside collaboration. Existing review markup and changes to established wrappers refuse. Changes to SDT metadata have no generic `sdtPrChange` element in the pinned OOXML schema. Direct edits create real plain-text, rich-text, and date-picker controls. Text insertion supports text-like controls. Date-picker values use the editor's calendar; text insertion refuses with `NotSupported`.
 
-Repeated paragraph insertions preserve request order, including streamed edits. Each paragraph commits before the next paragraph uses it as an anchor.
+Repeated paragraph insertions preserve request order, including mixed batches and streamed edits. Each paragraph commits before the next paragraph uses it as an anchor. Streaming uses public paragraph IDs to retain imported targets after structural edits. Ambiguous targets require inspection.
 
 The field tool can insert inert TOC instructions. It does not calculate TOC entries or claim a populated table of contents.

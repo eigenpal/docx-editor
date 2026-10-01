@@ -5,7 +5,7 @@ import {
   replaceChildren,
   type EditOptions,
 } from '../package/ooxml-edit.ts';
-import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
+import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlPart } from '../package/ooxml-tree.ts';
 import { splitRunsAt } from './tree-op-apply.ts';
 import { controlElement, propertiesFor } from './tree-op-content-control-insert.ts';
 import { contentControlEffect } from './tree-op-content-controls.ts';
@@ -54,12 +54,15 @@ export function canTrackContentControl(
   const hasRevision = (node: OoxmlNode): boolean =>
     node.kind !== 'textValue' &&
     (node.kind.startsWith('revision') ||
+      (node.namespaceUri === WML_NAMESPACE_URI &&
+        ['ins', 'del', 'moveFrom', 'moveTo'].includes(node.localName)) ||
       node.localName.endsWith('Change') ||
       node.children.some(hasRevision));
   return paragraph.children.every((node) => {
+    // Paragraph properties have no text span. Check their revisions before offsets.
+    if (node.kind === 'paragraphProperties') return !hasRevision(node);
     const span = index.spanOf(node);
     if (!span || span.end < start || span.start > end) return true;
-    if (node.kind === 'paragraphProperties') return !hasRevision(node);
     if (span.start === span.end) return false;
     if (span.end === start || span.start === end) return true;
     return (

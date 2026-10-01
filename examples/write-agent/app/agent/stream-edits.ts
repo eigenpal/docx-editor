@@ -11,6 +11,7 @@ type Execute = (
 ) => Promise<ToolResult>;
 interface Pending {
   insertionAnchors: Map<string, string>;
+  paragraphTargets: Map<string, string>;
   name: StreamTool;
   inputs: Record<string, unknown>[];
   queue: Promise<void>;
@@ -40,6 +41,7 @@ export class WriterStreamEdits {
       call = {
         name: part.toolName,
         insertionAnchors: new Map(),
+        paragraphTargets: new Map(),
         inputs: [],
         queue: Promise.resolve(),
         completed: [],
@@ -92,12 +94,42 @@ export class WriterStreamEdits {
             input.edits as {
               action: string;
               location?: string;
+              paragraphId?: string;
               target?: { paragraphId: string; search?: string };
             }[]
           )[0];
+          if (edit?.action === 'deleteParagraph' && edit.paragraphId) {
+            appliedInput = {
+              ...input,
+              edits: [
+                {
+                  ...edit,
+                  paragraphId: current.paragraphTargets.get(edit.paragraphId) ?? edit.paragraphId,
+                },
+              ],
+            };
+          } else if (edit?.target) {
+            appliedInput = {
+              ...input,
+              edits: [
+                {
+                  ...edit,
+                  target: {
+                    ...edit.target,
+                    paragraphId:
+                      current.paragraphTargets.get(edit.target.paragraphId) ??
+                      edit.target.paragraphId,
+                  },
+                },
+              ],
+            };
+          }
           if (edit?.action === 'insertParagraph' && edit.target) {
             anchorKey = JSON.stringify([input.story, edit.target.paragraphId, edit.location]);
-            appliedAnchor = current.insertionAnchors.get(anchorKey) ?? edit.target.paragraphId;
+            appliedAnchor =
+              current.insertionAnchors.get(anchorKey) ??
+              current.paragraphTargets.get(edit.target.paragraphId) ??
+              edit.target.paragraphId;
             appliedInput = {
               ...input,
               edits: [
@@ -106,7 +138,7 @@ export class WriterStreamEdits {
                   location: current.insertionAnchors.has(anchorKey) ? 'After' : edit.location,
                   target: current.insertionAnchors.has(anchorKey)
                     ? { paragraphId: appliedAnchor }
-                    : edit.target,
+                    : { ...edit.target, paragraphId: appliedAnchor },
                 },
               ],
             };
@@ -122,6 +154,11 @@ export class WriterStreamEdits {
             (current.inputs[part.index - 1]?.blocks as { kind: string }[])[0]?.kind === 'list',
           current.abort.signal
         );
+        if (result.success) {
+          const targets = JSON.parse(result.output).paragraphTargets;
+          for (const [before, after] of Object.entries(targets ?? {}))
+            if (typeof after === 'string') current.paragraphTargets.set(before, after);
+        }
         if (result.success && anchorKey && appliedAnchor) {
           const next = JSON.parse(result.output).insertionAnchors?.[appliedAnchor];
           if (typeof next === 'string') current.insertionAnchors.set(anchorKey, next);

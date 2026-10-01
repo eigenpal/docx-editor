@@ -192,3 +192,80 @@ test('a different author cannot configure a pending inserted control', async () 
     author.dispose();
   }
 });
+
+for (const properties of [
+  '<w:pPrChange w:id="9" w:author="Other"><w:pPr/></w:pPrChange>',
+  '<w:rPr><w:ins w:id="9" w:author="Other"/></w:rPr>',
+  '<w:rPr><w:del w:id="9" w:author="Other"/></w:rPr>',
+]) {
+  test(`tracked controls refuse pending paragraph properties: ${properties.slice(0, 30)}`, async () => {
+    const runtime = await DocxEditor.createServer(
+      docx(`<w:p><w:pPr>${properties}</w:pPr><w:r><w:t>Keep Field tail</w:t></w:r></w:p>`),
+      { author: 'Writer' }
+    );
+    try {
+      const before = await runtime.save();
+      await expect(
+        runtime.run(async (context) => {
+          context.document.changeTrackingMode = 'TrackMineOnly';
+          const matches = context.document.body.search('Field');
+          matches.load('items');
+          await context.sync();
+          matches.items[0]!.insertContentControl('PlainText');
+          await context.sync();
+        })
+      ).rejects.toMatchObject({ code: 'NotSupported' });
+      expect(await runtime.save()).toEqual(before);
+    } finally {
+      runtime.dispose();
+    }
+  });
+}
+
+test('separate control suggestions keep independent review decisions after reopen', async () => {
+  const runtime = await DocxEditor.createServer(docx(p('One Two')), { author: 'Writer' });
+  try {
+    await runtime.run(async (context) => {
+      context.document.changeTrackingMode = 'TrackMineOnly';
+      for (const text of ['One', 'Two']) {
+        const matches = context.document.body.search(text);
+        matches.load('items');
+        await context.sync();
+        const control = matches.items[0]!.insertContentControl('PlainText');
+        await context.sync();
+        control.tag = text.toLowerCase();
+        await context.sync();
+      }
+    });
+    const reopened = await DocxEditor.createServer(await runtime.save());
+    try {
+      await reopened.run(async (context) => {
+        const revisions = context.document.body.revisions;
+        revisions.load('items');
+        await context.sync();
+        expect(revisions.items).toHaveLength(2);
+        revisions.items[0]!.accept();
+        await context.sync();
+        revisions.load('items');
+        await context.sync();
+        expect(revisions.items).toHaveLength(1);
+        revisions.items[0]!.reject();
+        await context.sync();
+        const controls = context.document.contentControls;
+        controls.load('items');
+        context.document.body.load('text');
+        await context.sync();
+        expect(context.document.body.text).toBe('One Two');
+        expect(controls.items).toHaveLength(1);
+        controls.items[0]!.load('tag,text');
+        await context.sync();
+        expect(controls.items[0]!.tag).toBe('one');
+        expect(controls.items[0]!.text).toBe('One');
+      });
+    } finally {
+      reopened.dispose();
+    }
+  } finally {
+    runtime.dispose();
+  }
+});

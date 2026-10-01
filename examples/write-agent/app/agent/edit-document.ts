@@ -10,6 +10,7 @@ import {
   requireInspected,
   resolveTargets,
   stateFor,
+  storyKey,
   WriterError,
   type WriterState,
 } from './document-access';
@@ -111,6 +112,26 @@ export async function editDocument(
           }
         }
         await commit(context, state, 'inserted formatting');
+      }
+      // Keep inspected text current after our own edits. External changes still
+      // fail the version check before the next write.
+      const deleted = new Set(
+        data.edits
+          .filter((edit) => edit.action === 'deleteParagraph')
+          .map((edit) => edit.paragraphId)
+      );
+      const remaining = targets.filter((_, i) => {
+        const edit = data.edits[i]!;
+        return edit.action !== 'deleteParagraph' && !deleted.has(edit.target.paragraphId);
+      });
+      for (const target of remaining) target.paragraph.load('text');
+      await context.sync();
+      for (const [index, edit] of data.edits.entries()) {
+        if (edit.action === 'deleteParagraph' || deleted.has(edit.target.paragraphId)) continue;
+        state.paragraphs.set(
+          `${storyKey(data.story)}:${edit.target.paragraphId}`,
+          targets[index]!.paragraph.text
+        );
       }
       return { edited: data.edits.length };
     }
