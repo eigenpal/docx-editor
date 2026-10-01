@@ -225,7 +225,7 @@ export const WRITER_TOOLS = {
   }),
   insert_content_controls: tool({
     description:
-      'Create actual SDT (structured document tag) content controls around existing field text. Preserve labels and headings. Supports PlainText, RichText, and DatePicker. Choose DatePicker for calendar dates. Dropdown and combo-box creation remain unsupported. Each field commits separately.',
+      'Create actual SDT (structured document tag) content controls around existing field text. Preserve labels and headings. Direct edits support PlainText, RichText, and DatePicker. Suggestions refuse wrapper creation. Choose DatePicker for calendar dates. Dropdown and combo-box creation remain unsupported. Each field commits separately.',
     inputSchema: insertContentControlsSchema,
   }),
   write_header_footer: tool({

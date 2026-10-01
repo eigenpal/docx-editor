@@ -61,7 +61,7 @@ Content controls:
 - Inspect controls before creating them. Edit an existing control instead of adding another wrapper.
 - When drafting fields, write nonempty placeholders such as "Client: [Client name]" and "Effective date: [Select date]". Never leave a field as an empty label.
 - insert_content_controls wraps existing field placeholders. Set search to the placeholder only, such as "[Select date]". Never wrap the label.
-- PlainText, RichText, and DatePicker creation are supported. Use DatePicker for effective dates, birth dates, and other calendar dates.
+- Direct edits support PlainText, RichText, and DatePicker creation. Use DatePicker for calendar dates. Suggestions cannot create control wrappers; report this limit without attempting creation.
 - Dropdowns and combo boxes require API support.
 - Never substitute a text control for an explicitly requested unsupported control type.
 

@@ -71,7 +71,7 @@ Document creation accepts paragraph, list, and table blocks. Paragraph and list 
 
 SDT means structured document tag, an actual content control. The agent preserves field labels and wraps existing field text with `Range.insertContentControl()`. Use an exact `search` phrase to keep a label outside the control. The tool inserts each control in a separate sync and resolves subsequent ranges again. It sets `ContentControl.tag` and `ContentControl.title` after creation. Inspect existing controls before adding another wrapper.
 
-Plain-text, rich-text, and date-picker creation are supported. Dropdown, combo box, checkbox, and repeating-section creation remain unsupported by the public creation API. The tools refuse unsupported types and do not substitute plain text. `edit_control` exposes the supported Office.js-shaped text, metadata, lock, and deletion members. Typed control-value extensions are outside this example's Office.js-shaped editing scope.
+Direct edits support plain-text, rich-text, and date-picker creation. Capability discovery reports creation types for the selected mode. Suggestions report no supported creation types. Discovery does not change tracking. Dropdown, combo box, checkbox, and repeating-section creation remain unsupported by the public creation API. The tools refuse unsupported types and do not substitute plain text. `edit_control` exposes the supported Office.js-shaped text, metadata, lock, and deletion members. Typed control-value extensions are outside this example's Office.js-shaped editing scope.
 
 ## Commit and error behavior
 

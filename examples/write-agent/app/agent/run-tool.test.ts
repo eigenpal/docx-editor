@@ -390,3 +390,31 @@ describe('writer agent browser tools', () => {
     }
   });
 });
+
+for (const tracking of ['Off', 'TrackMineOnly'] as const) {
+  test(`capability discovery respects ${tracking} without changing it`, async () => {
+    const runtime = await DocxEditor.createServer(seedDocx(), { author: 'Writer agent' });
+    try {
+      await runtime.run(async (context) => {
+        context.document.changeTrackingMode = tracking;
+        await context.sync();
+      });
+      const result = await runWriterTool(runtime, null, 'discover_capabilities', {});
+      expect(result.success).toBe(true);
+      const capabilities = JSON.parse(result.output);
+      expect(capabilities.mode).toBe(tracking === 'Off' ? 'direct' : 'suggest');
+      expect(capabilities.controls.create).toEqual(
+        tracking === 'Off' ? ['PlainText', 'RichText', 'DatePicker'] : []
+      );
+      const selected = await runWriterTool(runtime, null, 'discover_capabilities', {}, 'suggest');
+      expect(JSON.parse(selected.output).controls.create).toEqual([]);
+      await runtime.run(async (context) => {
+        context.document.load('changeTrackingMode');
+        await context.sync();
+        expect(context.document.changeTrackingMode).toBe(tracking);
+      });
+    } finally {
+      runtime.dispose();
+    }
+  });
+}

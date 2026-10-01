@@ -135,15 +135,23 @@ async function execute(
     assertActive();
     if (!Object.hasOwn(WRITER_TOOLS, name))
       throw new WriterError('InvalidArgument', `Unknown tool: ${name}`);
-    if (name === 'discover_capabilities')
+    if (name === 'discover_capabilities') {
+      const selectedMode =
+        mode ??
+        (await runtime.run(async (context) => {
+          context.document.load('changeTrackingMode');
+          await context.sync();
+          return context.document.changeTrackingMode === 'Off' ? 'direct' : 'suggest';
+        }));
       return {
         success: true,
         output: JSON.stringify({
           tools: EDITING_COVERAGE,
-          mode: mode ?? 'runtime',
+          mode: selectedMode,
           hosts: runtime.capabilities,
           controls: {
-            create: ['PlainText', 'RichText', 'DatePicker'],
+            create: selectedMode === 'direct' ? ['PlainText', 'RichText', 'DatePicker'] : [],
+            createRequires: 'direct',
             unsupportedCreation: ['DropDownList', 'ComboBox', 'CheckBox'],
           },
           tracking:
@@ -160,6 +168,7 @@ async function execute(
           ],
         }),
       };
+    }
     const read = name === 'read_document' || name === 'inspect_document';
     const capturedRevision = revision?.();
     const before = await save();
