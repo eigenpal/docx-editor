@@ -11,6 +11,7 @@ import type {
   Editor,
   HighlightRange,
   HighlightResult,
+  TextMatch,
 } from '@docx-editor.dev/core/contracts/editor';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
@@ -24,6 +25,8 @@ import {
   type DocumentSearchHighlight,
 } from '../src/editor/navigation/useDocumentSearch';
 import { HIGHLIGHT_REFRESH_MS, useHighlights } from '../src/editor/useHighlights';
+import { useHighlightAt } from '../src/editor/useHighlightAt';
+import { createDocumentSearch } from '@docx-editor.dev/core/editor';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -172,6 +175,30 @@ describe('useDocumentSearch highlights', () => {
   });
 });
 
+describe('shared search session', () => {
+  test('a search started from code shows in the open pane, and the pane drives it back', async () => {
+    const { container, editor } = await mount(() => [
+      h(DocxEditorNavigation, { open: true, tab: 'find' }),
+    ]);
+    const search = createDocumentSearch(editor());
+    search.find('Supplier');
+    await flush();
+    const input = container.querySelector<HTMLInputElement>(
+      '#docx-nav-panel-find .docx-nav__search-input'
+    )!;
+    expect(input.value).toBe('Supplier');
+    expect(indexes(marks(container, SEARCH_HIGHLIGHT_SET))).toEqual([0, 1, 2]);
+    search.goTo(2);
+    await flush();
+    expect(activeIndexes(marks(container, SEARCH_HIGHLIGHT_SET))).toEqual([2]);
+    container
+      .querySelector<HTMLButtonElement>('#docx-nav-panel-find button[aria-label="Next result"]')!
+      .click();
+    await flush();
+    expect(search.getState().activeIndex).toBe(0);
+  });
+});
+
 describe('useHighlights', () => {
   test('applies a ref of ranges, reports the result, and clears with its scope', async () => {
     const ranges: Ref<readonly HighlightRange[]> = ref([]);
@@ -273,12 +300,42 @@ describe('useHighlights', () => {
     });
     const { container, editor } = await mount(() => [h(Marks)]);
     const stale = editor().findMatches('Supplier');
-    // Shift the last match: its old offsets now cover different text.
-    const caret = { paragraphId: stale[2]!.blockId, offset: 0 };
+    // Edit inside the last match: its text no longer exists in the paragraph.
+    const caret = { paragraphId: stale[2]!.blockId, offset: stale[2]!.start + 3 };
     editor().exec({ type: 'setSelection', range: { anchor: caret, head: caret } });
     editor().exec({ type: 'insertText', text: 'X' });
     ranges.value = stale;
     await flush();
     expect(indexes(marks(container, 'glossary'))).toEqual([0, 1]);
+  });
+
+  test('useHighlightAt reports the mark under the pointer, with the range fields you added', async () => {
+    type GlossaryRange = TextMatch & { readonly definition: string };
+    let hit: ReturnType<typeof useHighlightAt<GlossaryRange>> | null = null;
+    const Marks = defineComponent({
+      setup() {
+        useHighlights('glossary', (editor): GlossaryRange[] =>
+          editor.findMatches('signs').map((match) => ({ ...match, definition: 'Executes it.' }))
+        );
+        hit = useHighlightAt<GlossaryRange>('glossary');
+        return () => null;
+      },
+    });
+    const { container } = await mount(() => [h(Marks)]);
+    const layer = container.querySelector<HTMLElement>('.docx-text-highlight-overlay')!;
+    layer.getBoundingClientRect = () => ({ left: 0, top: 0 }) as DOMRect;
+    const mark = marks(container, 'glossary')[0]!;
+    const x = Number.parseFloat(mark.style.left) + 1;
+    const y = Number.parseFloat(mark.style.top) + 1;
+    container
+      .querySelector('[data-page-index]')!
+      .dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: x, clientY: y }));
+    await wait(40);
+    expect(hit!.value?.range.definition).toBe('Executes it.');
+    document.body.dispatchEvent(
+      new PointerEvent('pointermove', { bubbles: true, clientX: x, clientY: y })
+    );
+    await wait(40);
+    expect(hit!.value).toBeNull();
   });
 });

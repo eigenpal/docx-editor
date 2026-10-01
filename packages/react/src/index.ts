@@ -124,6 +124,8 @@ export {
   type OutlineHeadingItem,
   type UseDocumentOutlineResult,
   type DocumentSearchHighlight,
+  type DocumentSearchNavigateOptions,
+  type DocumentSearchOptions,
   type UseDocumentSearchOptions,
   type UseDocumentSearchResult,
   type UseNavigationPaneOptions,
@@ -262,6 +264,7 @@ export {
 } from './editor/toolbar/toolbar-context';
 export { useEditorEvent } from './editor/useEditorEvent';
 export { HIGHLIGHT_REFRESH_MS, useHighlights, type HighlightSource } from './editor/useHighlights';
+export { useHighlightAt } from './editor/useHighlightAt';
 export { usePageSetup, type PageSetupUpdate, type UsePageSetupReturn } from './editor/usePageSetup';
 export {
   useParagraphFormat,
@@ -418,6 +421,7 @@ export type {
   HighlightRange,
   HighlightRect,
   HighlightResult,
+  TextMatch,
   Editor,
   EditorCommand,
   EditorQuery,

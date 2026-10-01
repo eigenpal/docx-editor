@@ -26,6 +26,40 @@ export type HighlightSource =
 /** Milliseconds a function source waits after a document change before it runs again. @public */
 export const HIGHLIGHT_REFRESH_MS = 150;
 
+/** Longest a function source waits while changes keep arriving, such as remote typing. */
+const HIGHLIGHT_REFRESH_MAX_WAIT_MS = 1000;
+
+function createRefreshBatch(run: () => void) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let firstAt = 0;
+  const fire = () => {
+    timer = undefined;
+    firstAt = 0;
+    run();
+  };
+  return {
+    schedule() {
+      const now = Date.now();
+      if (firstAt === 0) firstAt = now;
+      clearTimeout(timer);
+      const waited = now - firstAt;
+      timer = setTimeout(
+        fire,
+        Math.max(0, Math.min(HIGHLIGHT_REFRESH_MS, HIGHLIGHT_REFRESH_MAX_WAIT_MS - waited))
+      );
+    },
+    now() {
+      clearTimeout(timer);
+      fire();
+    },
+    cancel() {
+      clearTimeout(timer);
+      timer = undefined;
+      firstAt = 0;
+    },
+  };
+}
+
 const EMPTY_RESULT: HighlightResult = Object.freeze({ applied: 0, unavailable: 0 });
 
 function optionsKey(options: HighlightOptions | undefined): string {
@@ -84,17 +118,23 @@ export function useHighlights(
       );
     };
     apply();
-    if (typeof source !== 'function') return undefined;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    const batch = createRefreshBatch(apply);
     const off = editor.on('change', (change) => {
-      clearTimeout(timer);
-      // A loaded or replaced document runs at once; edits are batched.
-      if (change.source) apply();
-      else timer = setTimeout(apply, HIGHLIGHT_REFRESH_MS);
+      if (typeof source === 'function') {
+        // A loaded or replaced document runs at once; edits are batched.
+        if (change.source) batch.now();
+        else batch.schedule();
+      } else if (change.source === 'refresh' || change.source === 'recovery') {
+        // A refresh removes every set; ranges of the same document apply again. A new
+        // document's paragraphs are not the ones these ranges name, so a load does not.
+        apply();
+      } else if (change.source === 'load') {
+        setResult({ applied: 0, unavailable: source.length });
+      }
     });
     return () => {
       off();
-      clearTimeout(timer);
+      batch.cancel();
     };
   }, [editor, name, source, key]);
 

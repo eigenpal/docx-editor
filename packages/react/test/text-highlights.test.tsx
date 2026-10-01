@@ -9,7 +9,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { useCallback } from 'react';
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { strToU8, zipSync } from 'fflate';
-import type { Editor, HighlightResult } from '@docx-editor.dev/core/contracts/editor';
+import type { Editor, HighlightResult, TextMatch } from '@docx-editor.dev/core/contracts/editor';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
@@ -23,6 +23,12 @@ import {
   type UseDocumentSearchResult,
 } from '../src/editor/navigation/useDocumentSearch.ts';
 import { HIGHLIGHT_REFRESH_MS, useHighlights } from '../src/editor/useHighlights.ts';
+import { useHighlightAt } from '../src/editor/useHighlightAt.ts';
+import { createDocumentRefresh, createDocumentSearch } from '@docx-editor.dev/core/editor';
+import {
+  refreshFixture,
+  refreshMetadata,
+} from '../../core/src/editor/__tests__/document-refresh-fixture.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -190,6 +196,68 @@ describe('DocxEditor.Navigation highlights', () => {
     expect(marks(view.container, SEARCH_HIGHLIGHT_SET)).toHaveLength(0);
   });
 
+  test('a search started from code shows in the open pane, and the pane drives it back', async () => {
+    let editor: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot document={SOURCE} onReady={(instance) => (editor = instance as never)}>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+        <DocxEditorNavigation open tab="find" />
+      </DocxEditorRoot>
+    );
+    await act(async () => wait(0));
+    const search = createDocumentSearch(editor!);
+    await act(async () => {
+      search.find('Supplier');
+    });
+    const input = view.container.querySelector<HTMLInputElement>(
+      '#docx-nav-panel-find .docx-nav__search-input'
+    )!;
+    expect(input.value).toBe('Supplier');
+    expect(indexes(marks(view.container, SEARCH_HIGHLIGHT_SET))).toEqual([0, 1, 2]);
+
+    await act(async () => {
+      search.goTo(2);
+    });
+    expect(activeIndexes(marks(view.container, SEARCH_HIGHLIGHT_SET))).toEqual([2]);
+    const next = view.container.querySelector<HTMLButtonElement>(
+      '#docx-nav-panel-find button[aria-label="Next result"]'
+    );
+    expect(next).not.toBeNull();
+    await act(async () => {
+      fireEvent.click(next!);
+    });
+    expect(search.getState().activeIndex).toBe(0);
+  });
+
+  test('Enter and Shift+Enter in the Find box move between matches and keep focus', async () => {
+    const view = render(
+      <DocxEditorRoot document={SOURCE}>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+        <DocxEditorNavigation open tab="find" />
+      </DocxEditorRoot>
+    );
+    await act(async () => wait(0));
+    const input = view.container.querySelector<HTMLInputElement>(
+      '#docx-nav-panel-find .docx-nav__search-input'
+    )!;
+    input.focus();
+    // Enter runs a query that is still waiting for its debounce.
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'Supplier' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+    });
+    expect(activeIndexes(marks(view.container, SEARCH_HIGHLIGHT_SET))).toEqual([0]);
+    await act(async () => {
+      fireEvent.keyDown(input, { key: 'Enter', shiftKey: true });
+    });
+    expect(activeIndexes(marks(view.container, SEARCH_HIGHLIGHT_SET))).toEqual([2]);
+    expect(document.activeElement).toBe(input);
+  });
+
   test("searchHighlight='none' keeps the document unmarked", async () => {
     const view = render(
       <DocxEditorRoot document={SOURCE}>
@@ -319,5 +387,77 @@ describe('useHighlights', () => {
       await wait(HIGHLIGHT_REFRESH_MS + 50);
     });
     expect(order()).toEqual(['first', 'second']);
+  });
+
+  test('useHighlightAt reports the mark under the pointer, with the range fields you added', async () => {
+    type GlossaryRange = TextMatch & { readonly definition: string };
+    let hit: ReturnType<typeof useHighlightAt<GlossaryRange>> = null;
+    function Marks() {
+      const find = useCallback(
+        (editor: Editor): GlossaryRange[] =>
+          editor.findMatches('signs').map((match) => ({ ...match, definition: 'Executes it.' })),
+        []
+      );
+      useHighlights('glossary', find);
+      hit = useHighlightAt<GlossaryRange>('glossary');
+      return null;
+    }
+    const { view } = mount(<Marks />);
+    await act(async () => wait(0));
+    const layer = view.container.querySelector<HTMLElement>('.docx-text-highlight-overlay')!;
+    layer.getBoundingClientRect = () => ({ left: 0, top: 0 }) as DOMRect;
+    const mark = marks(view.container, 'glossary')[0]!;
+    const x = Number.parseFloat(mark.style.left) + 1;
+    const y = Number.parseFloat(mark.style.top) + 1;
+    await act(async () => {
+      view.container
+        .querySelector('[data-page-index]')!
+        .dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: x, clientY: y }));
+      await wait(40);
+    });
+    expect(hit).not.toBeNull();
+    expect(hit!.range.definition).toBe('Executes it.');
+    await act(async () => {
+      // Over chrome outside the pages, such as a menu, no mark is reported.
+      document.body.dispatchEvent(
+        new PointerEvent('pointermove', { bubbles: true, clientX: x, clientY: y })
+      );
+      await wait(40);
+    });
+    expect(hit).toBeNull();
+  });
+
+  test('a fixed array applies again after a refresh removes every set', async () => {
+    let editor: DocxEditorInstance | null = null;
+    const source = refreshFixture();
+    let ranges: readonly TextMatch[] = [];
+    function Marks() {
+      useHighlights('glossary', ranges);
+      return null;
+    }
+    const tree = (withMarks: boolean) => (
+      <DocxEditorRoot document={source} onReady={(instance) => (editor = instance as never)}>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+        {withMarks && <Marks />}
+      </DocxEditorRoot>
+    );
+    const view = render(tree(false));
+    const refresh = createDocumentRefresh(editor!);
+    const submission = await refresh.capture();
+    ranges = editor!.findMatches('Project schedule').slice(0, 2);
+    view.rerender(tree(true));
+    await act(async () => wait(0));
+    expect(indexes(marks(view.container, 'glossary'))).toEqual([0, 1]);
+    await act(async () => {
+      await refresh.applyUpdate({
+        submission,
+        sequence: 1,
+        bytes: refreshFixture(2),
+        changes: refreshMetadata(2),
+      });
+    });
+    expect(indexes(marks(view.container, 'glossary'))).toEqual([0, 1]);
   });
 });

@@ -41,7 +41,10 @@ interface HighlightSet {
   readonly name: string;
   /** The caller's array, copied, so a later mutation of theirs cannot move a mark. */
   readonly ranges: readonly HighlightRange[];
+  /** Ranges past {@link HIGHLIGHT_RANGE_LIMIT}, dropped and counted as unavailable. */
+  readonly overflow: number;
   readonly blockIds: readonly string[];
+  /** Current offsets. A range moves with its text when an edit shifts it in its paragraph. */
   readonly starts: Int32Array;
   readonly ends: Int32Array;
   readonly color?: string;
@@ -53,6 +56,8 @@ interface HighlightSet {
   readonly order: number;
   /** Model text each range covered when captured; `null` for a range that did not resolve. */
   expected: (string | null)[] | null;
+  /** Paragraph text each range's offsets refer to, for mapping them through the next edit. */
+  readonly seen: (string | null)[];
   /** Which ranges still cover their expected text, for `checkedAt`. */
   resolved: Uint8Array;
   /** Resolved ranges whose paragraph has a laid-out line: what paints. */
@@ -108,13 +113,13 @@ function buildSet(
   container: HTMLElement | null
 ): HighlightSet {
   if (!Array.isArray(ranges)) throw new TypeError('ranges must be an array of HighlightRange.');
-  if (ranges.length > HIGHLIGHT_RANGE_LIMIT) {
-    throw new RangeError(`A highlight set holds at most ${HIGHLIGHT_RANGE_LIMIT} ranges.`);
-  }
   if (options !== undefined && (typeof options !== 'object' || options === null)) {
     throw new TypeError('options must be an object.');
   }
-  const copy = ranges.slice() as HighlightRange[];
+  // A set past the cap keeps its first ranges and reports the rest as unavailable. The count
+  // depends on the document, not on the caller's code, so it must never throw.
+  const copy = ranges.slice(0, HIGHLIGHT_RANGE_LIMIT) as HighlightRange[];
+  const overflow = ranges.length - copy.length;
   const blockIds: string[] = [];
   const starts = new Int32Array(copy.length);
   const ends = new Int32Array(copy.length);
@@ -163,6 +168,7 @@ function buildSet(
   return {
     name,
     ranges: copy,
+    overflow,
     blockIds,
     starts,
     ends,
@@ -173,14 +179,56 @@ function buildSet(
     priority,
     order,
     expected: null,
+    seen: new Array<string | null>(copy.length).fill(null),
     resolved: new Uint8Array(copy.length),
     live: new Uint8Array(copy.length),
     checkedAt: null,
   };
 }
 
+/**
+ * The window an edit changed, from a paragraph's text before and after: the common prefix and
+ * suffix bound it. Linear, and no regex on file text. Several edits between two checks merge
+ * into one window that covers them all.
+ */
+interface EditWindow {
+  /** First changed offset, the same in both texts. */
+  readonly from: number;
+  /** End of the changed window in the OLD text. */
+  readonly oldTo: number;
+  /** Length change: new length minus old length. */
+  readonly delta: number;
+}
+
+function editWindow(before: string, after: string): EditWindow {
+  const shorter = Math.min(before.length, after.length);
+  let prefix = 0;
+  while (prefix < shorter && before.charCodeAt(prefix) === after.charCodeAt(prefix)) prefix += 1;
+  let suffix = 0;
+  while (
+    suffix < shorter - prefix &&
+    before.charCodeAt(before.length - 1 - suffix) === after.charCodeAt(after.length - 1 - suffix)
+  ) {
+    suffix += 1;
+  }
+  return { from: prefix, oldTo: before.length - suffix, delta: after.length - before.length };
+}
+
+/**
+ * Map a range through an edit window. A range before the window keeps its offsets and one
+ * after it shifts by the length change. One the window overlaps keeps its offsets, so the
+ * text check hides it, and an undo that restores the text shows it again.
+ */
+function mapThrough(start: number, end: number, edit: EditWindow): number {
+  if (end <= edit.from) return 0;
+  if (start >= edit.oldTo) return edit.delta;
+  return 0;
+}
+
 /** Model text each `findMatches()` result covered when it was found. */
 const foundText = new WeakMap<object, string | null>();
+/** The whole paragraph text each result was found in, so a stale result maps to the present. */
+const foundParagraph = new WeakMap<object, string>();
 const notedResults = new WeakSet<object>();
 /**
  * Model text each range object covered the first time any set captured it. Keyed per OBJECT,
@@ -188,6 +236,8 @@ const notedResults = new WeakSet<object>();
  * first set on, never adopt whatever an edit has since moved under their offsets.
  */
 const capturedText = new WeakMap<object, string | null>();
+/** The paragraph text a range object's offsets referred to when it was first captured. */
+const capturedParagraph = new WeakMap<object, string>();
 
 /** The text a range must cover to paint: found, declared, or first captured. */
 function expectedTextOf(range: HighlightRange, covered: string | null): string | null {
@@ -237,12 +287,46 @@ function check(set: HighlightSet, surface: PaginatedSurface, layout: SemanticLay
   const placed = placedParagraphIds(layout);
   const capturing = set.expected === null;
   const expected = set.expected ?? new Array<string | null>(set.ranges.length).fill(null);
+  // One edit window per paragraph and prior text, shared by the ranges that measure from it.
+  const windows = new Map<string, { readonly seen: string; readonly edit: EditWindow }>();
   for (let index = 0; index < set.ranges.length; index += 1) {
+    const range = set.ranges[index]!;
+    const text = set.ends[index]! > set.starts[index]! ? read(set.blockIds[index]!) : null;
+    // The text these offsets were measured against: the last check's, or for a search result
+    // set a revision late, the paragraph it was found in. Map the offsets through the edit.
+    const seen = capturing
+      ? (foundParagraph.get(range) ?? capturedParagraph.get(range) ?? text)
+      : set.seen[index]!;
+    if (text !== null && seen !== null && seen !== text) {
+      const key = set.blockIds[index]!;
+      let cached = windows.get(key);
+      if (cached?.seen !== seen) {
+        cached = { seen, edit: editWindow(seen, text) };
+        windows.set(key, cached);
+      }
+      const delta = mapThrough(set.starts[index]!, set.ends[index]!, cached.edit);
+      set.starts[index] = set.starts[index]! + delta;
+      set.ends[index] = set.ends[index]! + delta;
+    }
+    set.seen[index] = text;
     const start = set.starts[index]!;
     const end = set.ends[index]!;
-    const text = end > start ? read(set.blockIds[index]!) : null;
-    const covered = text !== null && end <= text.length ? text.slice(start, end) : null;
-    if (capturing) expected[index] = expectedTextOf(set.ranges[index]!, covered);
+    let covered = text !== null && end <= text.length ? text.slice(start, end) : null;
+    // Edits merged into one window (two changes before one check) can overlap a range that
+    // only moved. Try the shifted position too; the text check still decides.
+    if (!capturing && text !== null && covered !== expected[index] && seen !== null) {
+      const shift = text.length - seen.length;
+      const shifted = start + shift >= 0 ? text.slice(start + shift, end + shift) : null;
+      if (shift !== 0 && shifted !== null && shifted === expected[index]) {
+        set.starts[index] = start + shift;
+        set.ends[index] = end + shift;
+        covered = shifted;
+      }
+    }
+    if (capturing) {
+      expected[index] = expectedTextOf(range, covered);
+      if (text !== null && !capturedParagraph.has(range)) capturedParagraph.set(range, text);
+    }
     const live = covered !== null && covered === expected[index];
     set.resolved[index] = live ? 1 : 0;
     set.live[index] = live && placed.has(set.blockIds[index]!) ? 1 : 0;
@@ -363,7 +447,7 @@ export function createTextHighlights(deps: {
 
   function resultOf(set: HighlightSet): HighlightResult {
     const surface = deps.surface();
-    if (!surface) return { applied: 0, unavailable: set.ranges.length };
+    if (!surface) return { applied: 0, unavailable: set.ranges.length + set.overflow };
     // The published layout: a decoration must never force a layout pass mid-typing.
     const published = surface.publishedLayout();
     check(set, surface, published);
@@ -374,7 +458,7 @@ export function createTextHighlights(deps: {
     for (let index = 0; index < set.ranges.length; index += 1) {
       applied += lagging ? set.resolved[index]! : set.live[index]!;
     }
-    return { applied, unavailable: set.ranges.length - applied };
+    return { applied, unavailable: set.ranges.length - applied + set.overflow };
   }
 
   const members: EditorHighlights = {
@@ -411,14 +495,17 @@ export function createTextHighlights(deps: {
       }
       repaint();
     },
-    getHighlightsAt(clientX, clientY) {
+    getHighlightsAt<R extends HighlightRange = HighlightRange>(
+      clientX: number,
+      clientY: number
+    ): readonly HighlightHit<R>[] {
       if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return [];
       const layer = paintedLayer;
       if (!layer?.isConnected || painted.length === 0) return [];
       const origin = layer.getBoundingClientRect();
       const x = clientX - origin.left;
       const y = clientY - origin.top;
-      const hits: HighlightHit[] = [];
+      const hits: HighlightHit<R>[] = [];
       const seen = new Set<string>();
       // Painted order is bottom to top, so walk it backwards for topmost first.
       for (let at = painted.length - 1; at >= 0; at -= 1) {
@@ -433,7 +520,9 @@ export function createTextHighlights(deps: {
         hits.push({
           name: mark.set.name,
           index: mark.index,
-          range: mark.set.ranges[mark.index]!,
+          range: mark.set.ranges[mark.index]! as R,
+          start: mark.set.starts[mark.index]!,
+          length: mark.set.ends[mark.index]! - mark.set.starts[mark.index]!,
           active: mark.index === mark.set.activeIndex,
           rect: {
             x: left,
@@ -461,6 +550,7 @@ export function createTextHighlights(deps: {
       const read = textReader(surface);
       for (const match of matches) {
         const text = read(match.blockId);
+        if (text !== null) foundParagraph.set(match, text);
         const end = match.start + match.length;
         foundText.set(
           match,

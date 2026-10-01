@@ -259,8 +259,13 @@ describe('setHighlights', () => {
   test('enforces the range and set limits', () => {
     const { editor } = mount();
     const [match] = editor.findMatches('Supplier');
-    const many = Array.from({ length: HIGHLIGHT_RANGE_LIMIT + 1 }, () => match!);
-    expect(() => editor.setHighlights('search', many)).toThrow(RangeError);
+    // Past the cap, the first ranges paint and the rest count as unavailable; never a throw.
+    const many = Array.from({ length: HIGHLIGHT_RANGE_LIMIT + 2 }, () => match!);
+    expect(editor.setHighlights('many', many)).toEqual({
+      applied: HIGHLIGHT_RANGE_LIMIT,
+      unavailable: 2,
+    });
+    editor.clearHighlights('many');
     for (let index = 0; index < HIGHLIGHT_SET_LIMIT; index += 1) {
       editor.setHighlights(`set${index}`, [match!]);
     }
@@ -279,30 +284,96 @@ describe('setHighlights', () => {
     expect(indexes(marks())).toEqual([0, 1, 2]);
   });
 
-  test('keeps marks across edits elsewhere and drops a mark whose text changes', () => {
+  test('a mark follows its text when an edit shifts it, and hides when its text changes', () => {
+    const { editor, marks, host } = mount();
+    const matches = editor.findMatches('Supplier');
+    editor.setHighlights('search', matches);
+    const last = matches[2]!;
+    const before = host.querySelector<HTMLElement>('[data-highlight-index="2"]')!.style.left;
+    // Type before the match in its paragraph: the mark moves with the word.
+    const start = { paragraphId: last.blockId, offset: 0 };
+    editor.exec({ type: 'setSelection', range: { anchor: start, head: start } });
+    expect(editor.exec({ type: 'insertText', text: 'XX ' }).ok).toBe(true);
+    expect(indexes(marks())).toEqual([0, 1, 2]);
+    const after = host.querySelector<HTMLElement>('[data-highlight-index="2"]')!.style.left;
+    expect(Number.parseFloat(after)).toBeGreaterThan(Number.parseFloat(before));
+    // Type inside the word: the text is gone, so the mark hides rather than cover other text.
+    const inside = { paragraphId: last.blockId, offset: last.start + 3 + 3 };
+    editor.exec({ type: 'setSelection', range: { anchor: inside, head: inside } });
+    expect(editor.exec({ type: 'insertText', text: 'Q' }).ok).toBe(true);
+    expect(indexes(marks())).toEqual([0, 1]);
+  });
+
+  test('a mark follows the nearest occurrence of its text', () => {
+    const { editor, marks } = mount();
+    const matches = editor.findMatches('Supplier');
+    editor.setHighlights('search', matches.slice(0, 2));
+    // Both marks share a paragraph. A shift keeps each on its own occurrence.
+    const start = { paragraphId: matches[0]!.blockId, offset: 0 };
+    editor.exec({ type: 'setSelection', range: { anchor: start, head: start } });
+    expect(editor.exec({ type: 'insertText', text: 'X' }).ok).toBe(true);
+    expect(indexes(marks())).toEqual([0, 1]);
+    const lefts = marks().map((mark) => Number.parseFloat(mark.style.left));
+    expect(new Set(lefts).size).toBe(2);
+  });
+
+  test('a mark never jumps to a longer word or to another occurrence', () => {
+    const { editor, marks } = mount(docx(p('The Act applies.') + p('Act and Act.')));
+    const [first, second] = editor.findMatches('Act', { wholeWord: true, matchCase: true });
+    editor.setHighlights('glossary', [first!, second!]);
+    // Paste text with "Actor" before the first "Act": the mark stays on "Act", not "Actor".
+    const start = { paragraphId: first!.blockId, offset: 0 };
+    editor.exec({ type: 'setSelection', range: { anchor: start, head: start } });
+    expect(editor.exec({ type: 'insertText', text: 'The Actor said hello. ' }).ok).toBe(true);
+    expect(indexes(marks())).toEqual([0, 1]);
+    // Type inside the second paragraph's first "Act": that mark hides. It never stacks on
+    // the paragraph's other "Act".
+    const inside = { paragraphId: second!.blockId, offset: 1 };
+    editor.exec({ type: 'setSelection', range: { anchor: inside, head: inside } });
+    expect(editor.exec({ type: 'insertText', text: 'x' }).ok).toBe(true);
+    expect(indexes(marks())).toEqual([0]);
+  });
+
+  test('undo restores a mark that an edit inside it hid', () => {
     const { editor, marks } = mount();
     const matches = editor.findMatches('Supplier');
     editor.setHighlights('search', matches);
-    const second = matches[2]!;
-    // Type in the second paragraph, before its match: the first two marks keep their text.
-    const caret = { paragraphId: second.blockId, offset: 0 };
-    expect(editor.exec({ type: 'setSelection', range: { anchor: caret, head: caret } }).ok).toBe(
-      true
-    );
+    const last = matches[2]!;
+    const inside = { paragraphId: last.blockId, offset: last.start + 3 };
+    editor.exec({ type: 'setSelection', range: { anchor: inside, head: inside } });
     expect(editor.exec({ type: 'insertText', text: 'X' }).ok).toBe(true);
     expect(indexes(marks())).toEqual([0, 1]);
-    // Searching again marks the moved occurrence.
-    expect(editor.setHighlights('search', editor.findMatches('Supplier')).applied).toBe(3);
+    expect(editor.exec({ type: 'undo' }).ok).toBe(true);
     expect(indexes(marks())).toEqual([0, 1, 2]);
+  });
+
+  test('a hit reports where its text is now', () => {
+    const { editor, host } = mount();
+    const matches = editor.findMatches('Supplier');
+    editor.setHighlights('search', matches);
+    const last = matches[2]!;
+    const start = { paragraphId: last.blockId, offset: 0 };
+    editor.exec({ type: 'setSelection', range: { anchor: start, head: start } });
+    editor.exec({ type: 'insertText', text: 'XX ' });
+    host.querySelector<HTMLElement>('.docx-text-highlight-overlay')!.getBoundingClientRect = () =>
+      ({ left: 0, top: 0 }) as DOMRect;
+    const mark = host.querySelector<HTMLElement>('[data-highlight-index="2"]')!;
+    const [hit] = editor.getHighlightsAt(
+      Number.parseFloat(mark.style.left) + 1,
+      Number.parseFloat(mark.style.top) + 1
+    );
+    expect(hit!.range).toBe(last);
+    expect(hit!.start).toBe(last.start + 3);
+    expect(hit!.length).toBe(last.length);
   });
 
   test('checks a stale match array against the text it was found in', () => {
     const { editor, marks } = mount();
     const stale = editor.findMatches('Supplier');
-    const second = stale[2]!;
-    // Shift the last match: its old offsets now cover different text.
-    const caret = { paragraphId: second.blockId, offset: 0 };
-    editor.exec({ type: 'setSelection', range: { anchor: caret, head: caret } });
+    const last = stale[2]!;
+    // Edit inside the last match before the stale array is set.
+    const inside = { paragraphId: last.blockId, offset: last.start + 3 };
+    editor.exec({ type: 'setSelection', range: { anchor: inside, head: inside } });
     expect(editor.exec({ type: 'insertText', text: 'X' }).ok).toBe(true);
     expect(editor.setHighlights('search', stale)).toEqual({ applied: 2, unavailable: 1 });
     expect(indexes(marks())).toEqual([0, 1]);
@@ -314,8 +385,8 @@ describe('setHighlights', () => {
     // A plain object, not a search result: its text is captured when it is first set.
     const plain: HighlightRange = { blockId: match.blockId, start: match.start, length: 8 };
     expect(editor.setHighlights('glossary', [plain]).applied).toBe(1);
-    const caret = { paragraphId: match.blockId, offset: 0 };
-    editor.exec({ type: 'setSelection', range: { anchor: caret, head: caret } });
+    const inside = { paragraphId: match.blockId, offset: match.start + 3 };
+    editor.exec({ type: 'setSelection', range: { anchor: inside, head: inside } });
     expect(editor.exec({ type: 'insertText', text: 'XY' }).ok).toBe(true);
     expect(marks()).toHaveLength(0);
     expect(editor.setHighlights('glossary', [plain], { activeIndex: 0 })).toEqual({

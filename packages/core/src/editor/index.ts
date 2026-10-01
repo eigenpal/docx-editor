@@ -415,6 +415,20 @@ export {
 } from './toolbar-values.ts';
 
 export { createDocumentRefresh, DocumentRefreshError } from './document-refresh.ts';
+export {
+  createDocumentSearch,
+  SEARCH_DEBOUNCE_MS,
+  SEARCH_HIGHLIGHT_PRIORITY,
+  SEARCH_HIGHLIGHT_SET,
+  SEARCH_MATCH_LIMIT,
+} from './document-search.ts';
+export type {
+  DocumentSearch,
+  DocumentSearchHighlight,
+  DocumentSearchNavigateOptions,
+  DocumentSearchOptions,
+  DocumentSearchState,
+} from './document-search.ts';
 export type {
   DocumentRefresh,
   DocumentRefreshState,

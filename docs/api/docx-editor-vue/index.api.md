@@ -43,6 +43,9 @@ import { DocumentHandle } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentRefresh } from '@docx-editor.dev/core/editor';
 import { DocumentRefreshError } from '@docx-editor.dev/core/editor';
 import { DocumentRefreshState } from '@docx-editor.dev/core/editor';
+import { DocumentSearchHighlight } from '@docx-editor.dev/core/editor';
+import { DocumentSearchNavigateOptions } from '@docx-editor.dev/core/editor';
+import { DocumentSearchOptions } from '@docx-editor.dev/core/editor';
 import { DocumentSource } from '@docx-editor.dev/core/contracts/editor';
 import * as _docx_editor_dev_core from '@docx-editor.dev/core';
 import * as _docx_editor_dev_i18n from '@docx-editor.dev/i18n';
@@ -129,6 +132,10 @@ import { RulerTick } from '@docx-editor.dev/core/editor';
 import { RulerUnit } from '@docx-editor.dev/core/editor';
 import { runToolbarCommand } from '@docx-editor.dev/core/editor';
 import { ScrollToAnchorOptions } from '@docx-editor.dev/core/contracts/editor';
+import { SEARCH_DEBOUNCE_MS } from '@docx-editor.dev/core/editor';
+import { SEARCH_HIGHLIGHT_PRIORITY } from '@docx-editor.dev/core/editor';
+import { SEARCH_HIGHLIGHT_SET } from '@docx-editor.dev/core/editor';
+import { SEARCH_MATCH_LIMIT } from '@docx-editor.dev/core/editor';
 import { SectionProperties } from '@docx-editor.dev/core/editor';
 import { ShallowRef } from 'vue';
 import { SupportedImageMime } from '@docx-editor.dev/core/editor';
@@ -2213,8 +2220,11 @@ export { DocumentRefreshError }
 
 export { DocumentRefreshState }
 
-// @public
-export type DocumentSearchHighlight = 'all' | 'active' | 'none';
+export { DocumentSearchHighlight }
+
+export { DocumentSearchNavigateOptions }
+
+export { DocumentSearchOptions }
 
 export { DocxDocument }
 
@@ -5721,17 +5731,13 @@ export interface ScopedChromeAnchor {
 
 export { ScrollToAnchorOptions }
 
-// @public (undocumented)
-export const SEARCH_DEBOUNCE_MS = 150;
+export { SEARCH_DEBOUNCE_MS }
 
-// @public
-export const SEARCH_HIGHLIGHT_PRIORITY = 10;
+export { SEARCH_HIGHLIGHT_PRIORITY }
 
-// @public
-export const SEARCH_HIGHLIGHT_SET = "search";
+export { SEARCH_HIGHLIGHT_SET }
 
-// @public (undocumented)
-export const SEARCH_MATCH_LIMIT = 2000;
+export { SEARCH_MATCH_LIMIT }
 
 // @public
 export const Slot: vue.DefineComponent<{}, () => VNode<vue.RendererNode, vue.RendererElement, {
@@ -5859,6 +5865,8 @@ export interface TextFormFieldDialogFields {
     // (undocumented)
     type: string;
 }
+
+export { TextMatch }
 
 // @public @deprecated (undocumented)
 export const TitleBar: vue.DefineComponent<{}, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
@@ -6372,7 +6380,7 @@ export interface UseDocumentOutlineResult {
     readonly selectedBlockId: ComputedRef<string | null>;
 }
 
-// @public (undocumented)
+// @public
 export function useDocumentSearch(options?: MaybeRefOrGetter<UseDocumentSearchOptions>): UseDocumentSearchResult;
 
 // @public
@@ -6380,33 +6388,25 @@ export interface UseDocumentSearchOptions {
     readonly highlight?: DocumentSearchHighlight;
 }
 
-// @public (undocumented)
+// @public
 export interface UseDocumentSearchResult {
-    // (undocumented)
     readonly activeIndex: ComputedRef<number>;
-    // (undocumented)
     readonly clear: () => void;
-    // (undocumented)
-    readonly goTo: (index: number) => void;
-    // (undocumented)
+    readonly find: (query: string, options?: DocumentSearchOptions) => readonly TextMatch[];
+    readonly goTo: (index: number) => boolean;
     readonly isPending: ComputedRef<boolean>;
     // (undocumented)
     readonly matchCase: ComputedRef<boolean>;
-    // (undocumented)
     readonly matches: ComputedRef<readonly TextMatch[]>;
+    readonly next: () => boolean;
     // (undocumented)
-    readonly next: () => void;
-    // (undocumented)
-    readonly previous: () => void;
-    // (undocumented)
+    readonly previous: () => boolean;
     readonly query: ComputedRef<string>;
     // (undocumented)
     readonly setMatchCase: (value: boolean) => void;
-    // (undocumented)
     readonly setQuery: (query: string) => void;
     // (undocumented)
     readonly setWholeWord: (value: boolean) => void;
-    // (undocumented)
     readonly truncated: ComputedRef<boolean>;
     // (undocumented)
     readonly wholeWord: ComputedRef<boolean>;
@@ -6479,6 +6479,9 @@ export function useFonts(...origins: readonly MaybeRefOrGetter<FontOrigin>[]): M
 
 // @public (undocumented)
 export function useHeaderFooterState(): ShallowRef<HeaderFooterState | null>;
+
+// @public
+export function useHighlightAt<R extends HighlightRange = HighlightRange>(name?: MaybeRefOrGetter<string>): Readonly<ShallowRef<HighlightHit<R> | null>>;
 
 // @public
 export function useHighlights(name: MaybeRefOrGetter<string>, source: MaybeRefOrGetter<HighlightSource>, options?: MaybeRefOrGetter<HighlightOptions>): ComputedRef<HighlightResult>;

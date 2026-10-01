@@ -539,14 +539,9 @@ export function openTreeSession(
     readonly revision: number;
     readonly outline: readonly DocumentOutlineEntry[];
   } | null = null;
-  // Last search answered, keyed on the revision AND the exact question. A find panel asks
-  // the same question repeatedly — a re-render, a tick, a next/previous press — and one
-  // entry is enough to make those free; a different query simply replaces it.
-  let searchCache: {
-    readonly revision: number;
-    readonly key: string;
-    readonly result: DocumentSearchResult;
-  } | null = null;
+  // Searches at the current revision by exact question. Several entries, so highlight sets
+  // (glossary terms) never evict the Find query; a new revision drops all (32 entries max).
+  let searchCache: { revision: number; results: Map<string, DocumentSearchResult> } | null = null;
   let anchorsCache: {
     readonly revision: number;
     readonly openStories: string;
@@ -957,9 +952,9 @@ export function openTreeSession(
         const key = `${options?.matchCase === true ? 'c' : ''}${
           options?.wholeWord === true ? 'w' : ''
         }${options?.limit ?? ''}:${options?.stories ?? 'all'}${'\u0000'}${query}`;
-        if (searchCache && searchCache.revision === revision && searchCache.key === key) {
-          return searchCache.result;
-        }
+        if (searchCache?.revision !== revision) searchCache = { revision, results: new Map() };
+        const cached = searchCache.results.get(key);
+        if (cached) return cached;
         const pkg = currentPackage();
         const referencedNoteIds = {
           footnote: new Set<number>(),
@@ -974,7 +969,11 @@ export function openTreeSession(
           endnotes: resolveNotesPart(pkg, 'endnote') ?? null,
           referencedNoteIds,
         });
-        searchCache = { revision, key, result };
+        // Oldest first: a Map iterates in insertion order.
+        if (searchCache.results.size >= 32) {
+          searchCache.results.delete(searchCache.results.keys().next().value!);
+        }
+        searchCache.results.set(key, result);
         return result;
       },
 

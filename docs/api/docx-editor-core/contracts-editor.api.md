@@ -979,7 +979,7 @@ export interface EditorHeaderFooterCommands {
 // @public
 export interface EditorHighlights {
     clearHighlights(name?: string): void;
-    getHighlightsAt(clientX: number, clientY: number): readonly HighlightHit[];
+    getHighlightsAt<R extends HighlightRange = HighlightRange>(clientX: number, clientY: number): readonly HighlightHit<R>[];
     setHighlights(name: string, ranges: readonly HighlightRange[], options?: HighlightOptions): HighlightResult;
 }
 
@@ -1319,12 +1319,14 @@ export interface HeaderFooterState {
 }
 
 // @public
-export interface HighlightHit {
+export interface HighlightHit<R extends HighlightRange = HighlightRange> {
     readonly active: boolean;
     readonly index: number;
+    readonly length: number;
     readonly name: string;
-    readonly range: HighlightRange;
+    readonly range: R;
     readonly rect: HighlightRect;
+    readonly start: number;
 }
 
 // @public

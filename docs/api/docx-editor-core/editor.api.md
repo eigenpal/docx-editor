@@ -1100,6 +1100,9 @@ export function createContentControlListNavigation(locale?: string): ContentCont
 export function createDocumentRefresh(editor: DocxEditorInstance): DocumentRefresh;
 
 // @public
+export function createDocumentSearch(editor: Editor): DocumentSearch;
+
+// @public
 export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance;
 
 // @public
@@ -1201,6 +1204,53 @@ export interface DocumentRefreshState {
     readonly recoveryAvailable: boolean;
     // (undocumented)
     readonly result: RefreshResult | null;
+}
+
+// @public
+export interface DocumentSearch {
+    clear(): void;
+    find(query: string, options?: DocumentSearchOptions): readonly TextMatch[];
+    getState(): DocumentSearchState;
+    goTo(index: number, options?: DocumentSearchNavigateOptions): boolean;
+    next(options?: DocumentSearchNavigateOptions): boolean;
+    // (undocumented)
+    previous(options?: DocumentSearchNavigateOptions): boolean;
+    // (undocumented)
+    setMatchCase(value: boolean): void;
+    setQuery(query: string): void;
+    // (undocumented)
+    setWholeWord(value: boolean): void;
+    showHighlights(mode: DocumentSearchHighlight): () => void;
+    subscribe(listener: () => void): () => void;
+}
+
+// @public
+export type DocumentSearchHighlight = 'all' | 'active' | 'none';
+
+// @public
+export interface DocumentSearchNavigateOptions {
+    readonly focus?: boolean;
+}
+
+// @public
+export interface DocumentSearchOptions {
+    // (undocumented)
+    readonly matchCase?: boolean;
+    // (undocumented)
+    readonly wholeWord?: boolean;
+}
+
+// @public
+export interface DocumentSearchState {
+    readonly activeIndex: number;
+    readonly isPending: boolean;
+    // (undocumented)
+    readonly matchCase: boolean;
+    readonly matches: readonly TextMatch[];
+    readonly query: string;
+    readonly truncated: boolean;
+    // (undocumented)
+    readonly wholeWord: boolean;
 }
 
 // @public
@@ -1504,12 +1554,14 @@ export function generateRulerTicks(lengthPx: number, unit: RulerUnit): RulerTick
 export function handlePosition(handle: RulerIndentHandle, indent: RulerIndent, page: RulerPageMetrics): number;
 
 // @public
-export interface HighlightHit {
+export interface HighlightHit<R extends HighlightRange = HighlightRange> {
     readonly active: boolean;
     readonly index: number;
+    readonly length: number;
     readonly name: string;
-    readonly range: HighlightRange;
+    readonly range: R;
     readonly rect: HighlightRect;
+    readonly start: number;
 }
 
 // @public
@@ -2698,6 +2750,18 @@ export interface ScrollToAnchorOptions {
 }
 
 // @public
+export const SEARCH_DEBOUNCE_MS = 150;
+
+// @public
+export const SEARCH_HIGHLIGHT_PRIORITY = 10;
+
+// @public
+export const SEARCH_HIGHLIGHT_SET = "search";
+
+// @public
+export const SEARCH_MATCH_LIMIT = 2000;
+
+// @public
 export type SectionAnchor =
 /** Name this body paragraph. Its section is the one the caret is in. */
     {
@@ -3282,7 +3346,7 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     // (undocumented)
     ensureListDefinition(kind: ListKind): string | null;
     ensureNumberingLevel(numId: string, level: number, kind: ListKind): boolean;
-    findText(query: string, options?: DocumentSearchOptions): DocumentSearchResult;
+    findText(query: string, options?: DocumentSearchOptions_2): DocumentSearchResult;
     hasReviewContent(): boolean;
     headerFooterParts(): HeaderFooterParts;
     headerFooterPartsBySection(): readonly HeaderFooterParts[];

@@ -60,8 +60,9 @@ export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
    */
   toggle?: boolean | NavigationPartProps;
   /**
-   * Which Find matches to mark in the document while the Find tab is open: `'all'`
-   * (default), `'active'`, or `'none'`. Closing the pane or leaving the tab removes the marks.
+   * Which Find matches to highlight while the Find tab is open: `'all'` (default),
+   * `'active'`, or `'none'`. The pane stops requesting highlights when it closes or leaves the
+   * tab; another `useDocumentSearch` consumer can still request them.
    */
   searchHighlight?: DocumentSearchHighlight;
   className?: string;

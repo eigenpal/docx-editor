@@ -38,6 +38,8 @@ export {
   SEARCH_HIGHLIGHT_SET,
   SEARCH_MATCH_LIMIT,
   type DocumentSearchHighlight,
+  type DocumentSearchNavigateOptions,
+  type DocumentSearchOptions,
   type UseDocumentSearchOptions,
   type UseDocumentSearchResult,
 } from './useDocumentSearch';

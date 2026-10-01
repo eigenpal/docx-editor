@@ -165,9 +165,12 @@ function SearchBox({
   label,
   clearLabel,
   autoFocus,
+  onEnter,
 }: {
   value: string;
   onChange: (next: string) => void;
+  /** Enter and Shift+Enter, with `backward` true for Shift. */
+  onEnter?: (backward: boolean) => void;
   onClear: () => void;
   placeholder: string;
   label: string;
@@ -195,6 +198,11 @@ function SearchBox({
         aria-label={label}
         autoFocus={autoFocus}
         onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (!onEnter || event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+          event.preventDefault();
+          onEnter(event.shiftKey);
+        }}
       />
       {value.length > 0 && (
         <button
@@ -359,6 +367,12 @@ export function NavigationFind({ className, style }: NavigationPartProps): React
         label={t('navigation.find.inputAriaLabel')}
         clearLabel={t('navigation.find.clearAriaLabel')}
         autoFocus={autoFocus}
+        onEnter={(backward) => {
+          // Enter runs a query still waiting for its debounce, then moves to a match.
+          if (search.isPending) search.find(search.query);
+          if (backward) search.previous();
+          else search.next();
+        }}
       />
 
       <div

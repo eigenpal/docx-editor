@@ -51,6 +51,7 @@ export {
 } from './editor/useEditorValueCommand';
 export { useEditorEvent } from './editor/useEditorEvent';
 export { HIGHLIGHT_REFRESH_MS, useHighlights, type HighlightSource } from './editor/useHighlights';
+export { useHighlightAt } from './editor/useHighlightAt';
 export { useEditorCaret, type EditorCaret } from './editor/useEditorCaret';
 export { useEditorSnapshot } from './useEditorSnapshot';
 
@@ -127,6 +128,8 @@ export {
   type OutlineHeadingItem,
   type UseDocumentOutlineResult,
   type DocumentSearchHighlight,
+  type DocumentSearchNavigateOptions,
+  type DocumentSearchOptions,
   type UseDocumentSearchOptions,
   type UseDocumentSearchResult,
   type UseNavigationPaneOptions,
@@ -422,6 +425,7 @@ export type {
   HighlightRange,
   HighlightRect,
   HighlightResult,
+  TextMatch,
   Editor,
   EditorCommand,
   EditorQuery,

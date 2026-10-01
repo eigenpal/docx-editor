@@ -40,6 +40,9 @@ import { DocumentHandle } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentRefresh } from '@docx-editor.dev/core/editor';
 import { DocumentRefreshError } from '@docx-editor.dev/core/editor';
 import { DocumentRefreshState } from '@docx-editor.dev/core/editor';
+import { DocumentSearchHighlight } from '@docx-editor.dev/core/editor';
+import { DocumentSearchNavigateOptions } from '@docx-editor.dev/core/editor';
+import { DocumentSearchOptions } from '@docx-editor.dev/core/editor';
 import { DocumentSource } from '@docx-editor.dev/core/contracts/editor';
 import { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 import { DocxEditorInstance } from '@docx-editor.dev/core/editor';
@@ -126,6 +129,10 @@ import { RulerTick } from '@docx-editor.dev/core/editor';
 import { RulerUnit } from '@docx-editor.dev/core/editor';
 import { runToolbarCommand } from '@docx-editor.dev/core/editor';
 import { ScrollToAnchorOptions } from '@docx-editor.dev/core/contracts/editor';
+import { SEARCH_DEBOUNCE_MS } from '@docx-editor.dev/core/editor';
+import { SEARCH_HIGHLIGHT_PRIORITY } from '@docx-editor.dev/core/editor';
+import { SEARCH_HIGHLIGHT_SET } from '@docx-editor.dev/core/editor';
+import { SEARCH_MATCH_LIMIT } from '@docx-editor.dev/core/editor';
 import { SectionProperties } from '@docx-editor.dev/core/editor';
 import { SupportedImageMime } from '@docx-editor.dev/core/editor';
 import { SurfaceFormatting } from '@docx-editor.dev/core/editor';
@@ -477,8 +484,11 @@ export { DocumentRefreshError }
 
 export { DocumentRefreshState }
 
-// @public
-export type DocumentSearchHighlight = 'all' | 'active' | 'none';
+export { DocumentSearchHighlight }
+
+export { DocumentSearchNavigateOptions }
+
+export { DocumentSearchOptions }
 
 export { DocxDocument }
 
@@ -2322,17 +2332,13 @@ export interface ScopedChromeAnchor {
 
 export { ScrollToAnchorOptions }
 
-// @public
-export const SEARCH_DEBOUNCE_MS = 150;
+export { SEARCH_DEBOUNCE_MS }
 
-// @public
-export const SEARCH_HIGHLIGHT_PRIORITY = 10;
+export { SEARCH_HIGHLIGHT_PRIORITY }
 
-// @public
-export const SEARCH_HIGHLIGHT_SET = "search";
+export { SEARCH_HIGHLIGHT_SET }
 
-// @public
-export const SEARCH_MATCH_LIMIT = 2000;
+export { SEARCH_MATCH_LIMIT }
 
 // @public
 export function Slot(input: SlotProps): ReactElement<unknown, string | react.JSXElementConstructor<any>> | null;
@@ -2424,6 +2430,8 @@ export interface TextFormFieldDialogFields {
     // (undocumented)
     type: string;
 }
+
+export { TextMatch }
 
 // @public @deprecated (undocumented)
 export function TitleBar(input: TitleBarProps): react__default.JSX.Element;
@@ -2737,18 +2745,18 @@ export interface UseDocumentSearchOptions {
 export interface UseDocumentSearchResult {
     readonly activeIndex: number;
     readonly clear: () => void;
-    readonly goTo: (index: number) => void;
+    readonly find: (query: string, options?: DocumentSearchOptions) => readonly TextMatch[];
+    readonly goTo: (index: number) => boolean;
     readonly isPending: boolean;
     // (undocumented)
     readonly matchCase: boolean;
     readonly matches: readonly TextMatch[];
-    readonly next: () => void;
+    readonly next: () => boolean;
     // (undocumented)
-    readonly previous: () => void;
+    readonly previous: () => boolean;
     readonly query: string;
     // (undocumented)
     readonly setMatchCase: (value: boolean) => void;
-    // (undocumented)
     readonly setQuery: (query: string) => void;
     // (undocumented)
     readonly setWholeWord: (value: boolean) => void;
@@ -2815,6 +2823,9 @@ export function useFonts(...origins: readonly FontOrigin[]): MarkedFontResolver;
 
 // @public
 export function useHeaderFooterState(): HeaderFooterState | null;
+
+// @public
+export function useHighlightAt<R extends HighlightRange = HighlightRange>(name?: string): HighlightHit<R> | null;
 
 // @public
 export function useHighlights(name: string, source: HighlightSource, options?: HighlightOptions): HighlightResult;

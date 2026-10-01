@@ -288,13 +288,19 @@ Each item has `{ heading, depth }`. A heading has `text`, `level`, and `blockId`
 
 ## `useDocumentSearch`
 
-Search the document and move between matches:
+`useDocumentSearch` returns the editor's shared search: the same query, results, and active match that the packaged **Find** pane shows. This toolbar searches as you type and moves between matches with Enter and Shift+Enter, keeping focus in the input:
 
 ```vue
 <script setup lang="ts">
 import { useDocumentSearch } from '@docx-editor.dev/vue';
 
 const search = useDocumentSearch();
+
+function onEnter(event: KeyboardEvent) {
+  if (search.isPending.value) search.find(search.query.value);
+  if (event.shiftKey) search.previous();
+  else search.next();
+}
 </script>
 
 <template>
@@ -303,6 +309,7 @@ const search = useDocumentSearch();
     <input
       :value="search.query.value"
       @input="search.setQuery(($event.target as HTMLInputElement).value)"
+      @keydown.enter.prevent="onEnter"
     />
   </label>
   <span aria-live="polite">
@@ -314,19 +321,21 @@ const search = useDocumentSearch();
 </template>
 ```
 
-The composable waits 150 milliseconds before it searches. `isPending` reports that delay. It also provides `goTo`, `clear`, `matchCase`, `setMatchCase`, `wholeWord`, and `setWholeWord`. `truncated` becomes true at the 2,000-match limit.
+`setQuery()` waits 150 milliseconds after the last keystroke; `find()` searches at once. The result also has `goTo`, `clear`, `matchCase`, `setMatchCase`, `wholeWord`, and `setWholeWord`. `truncated` becomes true at the 2,000-match limit.
 
-The composable highlights every match and the active match. To change this, pass `highlight` as a value, ref, or getter: `'all'` (default), `'active'`, or `'none'`.
+The `highlight` option requests search highlights while the component is mounted: `'all'` (default), `'active'`, or `'none'`. Pass it as a value, ref, or getter. The widest request among all components and the open **Find** tab wins, so a component that only reads results should pass `'none'`:
 
 ```ts
-const search = useDocumentSearch({ highlight: 'active' });
+const { matches } = useDocumentSearch({ highlight: 'none' });
 ```
+
+For more information, see [Drive search from code](/docs/2.x/guides/navigation#drive-search-from-code).
 
 ## `useHighlights`
 
 `useHighlights(name, source, options)` highlights text ranges while the component is mounted, and returns a computed `{ applied, unavailable }`. For options, see [Highlight text ranges](/docs/2.x/guides/navigation#highlight-text-ranges).
 
-`source` is an array, a ref, or a function of the editor. A function runs again when the refs it reads change and after document changes:
+`source` is an array, a ref, or a function of the editor. A function runs again when the refs it reads change, when a document loads, and after edits once typing pauses:
 
 ```vue
 <script setup lang="ts">
@@ -340,7 +349,11 @@ useHighlights('glossary', (editor) =>
 </script>
 ```
 
-Use a unique name for each call.
+Options can be a value, a ref, or a getter. Use a unique name for each call.
+
+## `useHighlightAt`
+
+`useHighlightAt(name)` returns a ref with the highlight under the pointer, or `null`. Pass your range type to read the fields you added to your ranges. For an example, see [Show details on hover](/docs/2.x/guides/navigation#show-details-on-hover).
 
 ## `useNavigationPane`
 

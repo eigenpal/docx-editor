@@ -165,6 +165,8 @@ const SearchBox = defineComponent({
     label: { type: String, required: true },
     clearLabel: { type: String, required: true },
     autoFocus: { type: Boolean, default: undefined },
+    /** Enter and Shift+Enter, with `backward` true for Shift. */
+    onEnter: { type: Function as PropType<(backward: boolean) => void>, default: undefined },
   },
   setup(props) {
     // The find panel stays mounted (hidden or inert) so a typed query survives a close.
@@ -188,6 +190,11 @@ const SearchBox = defineComponent({
           aria-label={props.label}
           autofocus={props.autoFocus}
           onInput={(event) => props.onChange((event.target as HTMLInputElement).value)}
+          onKeydown={(event: KeyboardEvent) => {
+            if (!props.onEnter || event.key !== 'Enter' || event.isComposing) return;
+            event.preventDefault();
+            props.onEnter(event.shiftKey);
+          }}
         />
         {props.value.length > 0 && (
           <button
@@ -350,6 +357,12 @@ export const NavigationFind = defineComponent({
             label={t('navigation.find.inputAriaLabel')}
             clearLabel={t('navigation.find.clearAriaLabel')}
             autoFocus={autoFocus}
+            onEnter={(backward: boolean) => {
+              // Enter runs a query still waiting for its debounce, then moves to a match.
+              if (search.isPending.value) search.find(search.query.value);
+              if (backward) search.previous();
+              else search.next();
+            }}
           />
           <div
             class="docx-nav__options"

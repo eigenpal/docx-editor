@@ -70,14 +70,24 @@ export interface HighlightRect {
   readonly left: number;
 }
 
-/** One painted mark under a point. @public */
-export interface HighlightHit {
+/**
+ * One painted mark under a point. `R` is your range type: pass ranges with extra fields,
+ * such as a glossary definition, and read them back from `range`. @public
+ */
+export interface HighlightHit<R extends HighlightRange = HighlightRange> {
   /** Set name passed to `setHighlights()`. */
   readonly name: string;
   /** Index of the range in the array passed to `setHighlights()`. */
   readonly index: number;
-  /** The range object exactly as it was passed. */
-  readonly range: HighlightRange;
+  /**
+   * The range object exactly as it was passed, including your own fields. Its offsets are
+   * the ones you passed; `start` and `length` are where the text is now.
+   */
+  readonly range: R;
+  /** Current start of the highlighted text in its paragraph, after edits moved it. */
+  readonly start: number;
+  /** Current length of the highlighted text. */
+  readonly length: number;
   /** Whether this range is the set's active range. */
   readonly active: boolean;
   /** The marked line box under the point, in client coordinates. Anchor popovers to it. */
@@ -96,12 +106,13 @@ export interface EditorHighlights {
    *
    * Names are 1 to 64 letters, digits, `-`, or `_`, and start with a letter. Each set paints
    * in its own layer, so sets never replace each other. An empty `ranges` array clears the
-   * set. A set holds at most 10000 ranges; at most 32 sets exist at once.
+   * set. At most 32 sets exist at once. A set paints its first 10000 ranges and counts the
+   * rest as unavailable. The name `search` belongs to the shared document search.
    *
    * Ranges cover the body, tables, headers, footers, footnotes, endnotes, and anchored text
-   * boxes in the body. A range stays marked across edits elsewhere in the document. When an
-   * edit changes the text inside a range, the range stops painting, so a mark never covers
-   * the wrong text. Search again after edits to mark new occurrences.
+   * boxes in the body. A range moves with its text when an edit before it shifts the
+   * paragraph. When an edit changes the text inside a range, the range stops painting, so a
+   * mark never covers the wrong text. Search again after edits to mark new occurrences.
    *
    * Loading, refreshing, or recovering the document removes every set. Invalid names,
    * ranges, or options throw
@@ -126,5 +137,8 @@ export interface EditorHighlights {
    * handlers on the editor to show definitions or details for a marked term.
    * Only marks on painted pages are reported. @public
    */
-  getHighlightsAt(clientX: number, clientY: number): readonly HighlightHit[];
+  getHighlightsAt<R extends HighlightRange = HighlightRange>(
+    clientX: number,
+    clientY: number
+  ): readonly HighlightHit<R>[];
 }

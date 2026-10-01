@@ -11,6 +11,7 @@ import { clipParagraphBox } from './paragraph-frame-clip.ts';
 import { paragraphFragmentsOfBlocks } from './semantic-records.ts';
 import type {
   BlockFragmentRecord,
+  LineRecord,
   PageRecord,
   SemanticLayout,
   TextMeasurer,
@@ -29,6 +30,18 @@ export interface ParagraphRange {
 /** A painted band and the range it belongs to, in page-content coordinates. */
 export interface KeyedParagraphRect extends SelectionRect {
   readonly key: number;
+}
+
+/**
+ * The glyph band of a line: the line box without the spacing above or below the text, so a
+ * mark or an underline sits on the glyphs under double or exact line spacing.
+ */
+function glyphBand(line: LineRecord): { readonly y: number; readonly height: number } {
+  const leading = Math.max(0, line.leading);
+  const height = line.box.height - leading - Math.max(0, line.trailingSpacing ?? 0);
+  return height > 0
+    ? { y: line.box.y + leading, height }
+    : { y: line.box.y, height: line.box.height };
 }
 
 /**
@@ -84,7 +97,7 @@ export function paragraphRangeRects(
             if (end <= start) continue;
             for (const band of rangeBandsWithinLine(line, start, end, measurer, segment)) {
               const clipped = clipParagraphBox(
-                { pageIndex, ...band, y: line.box.y, height: line.box.height },
+                { pageIndex, ...band, ...glyphBand(line) },
                 fragment.clipToBox ? fragment.box : undefined
               );
               if (!clipped) continue;
