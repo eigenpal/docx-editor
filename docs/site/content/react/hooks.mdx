@@ -277,7 +277,7 @@ Each item has the shape `{ heading, depth }`. `heading` has the shape `{ text, l
 
 ## `useDocumentSearch`
 
-`useDocumentSearch` returns the editor's shared search: the same query, results, and active match that the packaged **Find** pane shows. This toolbar searches as you type and moves between matches with Enter and Shift+Enter, keeping focus in the input:
+`useDocumentSearch` returns the editor's search session, which the **Find** pane also uses. This toolbar searches as you type, and Enter moves to the next match:
 
 ```tsx
 import { useDocumentSearch } from '@docx-editor.dev/react';
@@ -292,16 +292,13 @@ function Find() {
         onChange={(event) => search.setQuery(event.target.value)}
         onKeyDown={(event) => {
           if (event.key !== 'Enter') return;
-          event.preventDefault();
           if (search.isPending) search.find(search.query);
           if (event.shiftKey) search.previous();
           else search.next();
         }}
       />
       <span>
-        {search.matches.length === 0 ? 0 : search.activeIndex + 1}
-        {' / '}
-        {search.matches.length}
+        {search.activeIndex + 1} / {search.matches.length}
         {search.truncated && '+'}
       </span>
       <button onClick={search.previous}>Prev</button>
@@ -311,21 +308,11 @@ function Find() {
 }
 ```
 
-`setQuery()` waits 150 milliseconds after the last keystroke; `find()` searches at once. The result also has `matchCase`, `setMatchCase`, `wholeWord`, `setWholeWord`, `goTo`, and `clear`.
-
-The `highlight` option requests search highlights while the component is mounted: `'all'` (default), `'active'`, or `'none'`. The widest request among all components and the open **Find** tab wins, so a component that only reads results should pass `'none'`:
-
-```tsx
-const { matches } = useDocumentSearch({ highlight: 'none' });
-```
-
-For more information, see [Drive search from code](/docs/2.x/guides/navigation#drive-search-from-code).
+The `highlight` option is `'all'` (default), `'active'`, or `'none'`. If a component only reads results, pass `'none'`. For more information, see [Drive search from code](/docs/2.x/guides/navigation#drive-search-from-code).
 
 ## `useHighlights`
 
-`useHighlights(name, source, options)` highlights text ranges while the component is mounted, and returns `{ applied, unavailable }`. For options, see [Highlight text ranges](/docs/2.x/guides/navigation#highlight-text-ranges).
-
-`source` is an array of ranges or a function of the editor. A function runs again when a document loads, and after edits once typing pauses. Wrap it in `useCallback`:
+`useHighlights(name, source, options)` highlights ranges while the component is mounted and returns `{ applied, unavailable }`. If `source` is a function, it runs again after the document changes. Wrap it in `useCallback`:
 
 ```tsx
 import { useCallback } from 'react';
@@ -341,11 +328,11 @@ function GlossaryHighlights({ terms }: { terms: readonly string[] }) {
 }
 ```
 
-Use a unique name for each hook.
+For options, see [Highlight text ranges](/docs/2.x/guides/navigation#highlight-text-ranges).
 
 ## `useHighlightAt`
 
-`useHighlightAt(name)` returns the highlight under the pointer, or `null`. Pass your range type to read the fields you added to your ranges. For an example, see [Show details on hover](/docs/2.x/guides/navigation#show-details-on-hover).
+`useHighlightAt(name)` returns the highlight under the pointer, or `null`. For an example, see [Show details on hover](/docs/2.x/guides/navigation#show-details-on-hover).
 
 ## `useHistoryGroup`
 

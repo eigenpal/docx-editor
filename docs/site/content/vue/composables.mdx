@@ -288,7 +288,7 @@ Each item has `{ heading, depth }`. A heading has `text`, `level`, and `blockId`
 
 ## `useDocumentSearch`
 
-`useDocumentSearch` returns the editor's shared search: the same query, results, and active match that the packaged **Find** pane shows. This toolbar searches as you type and moves between matches with Enter and Shift+Enter, keeping focus in the input:
+`useDocumentSearch` returns the editor's search session, which the **Find** pane also uses. This toolbar searches as you type, and Enter moves to the next match:
 
 ```vue
 <script setup lang="ts">
@@ -304,38 +304,25 @@ function onEnter(event: KeyboardEvent) {
 </script>
 
 <template>
-  <label>
-    Find
-    <input
-      :value="search.query.value"
-      @input="search.setQuery(($event.target as HTMLInputElement).value)"
-      @keydown.enter.prevent="onEnter"
-    />
-  </label>
-  <span aria-live="polite">
-    {{ search.matches.value.length === 0 ? 0 : search.activeIndex.value + 1 }}
-    / {{ search.matches.value.length }}{{ search.truncated.value ? '+' : '' }}
+  <input
+    :value="search.query.value"
+    @input="search.setQuery(($event.target as HTMLInputElement).value)"
+    @keydown.enter="onEnter"
+  />
+  <span>
+    {{ search.activeIndex.value + 1 }} / {{ search.matches.value.length
+    }}{{ search.truncated.value ? '+' : '' }}
   </span>
-  <button :disabled="search.matches.value.length === 0" @click="search.previous">Previous</button>
-  <button :disabled="search.matches.value.length === 0" @click="search.next">Next</button>
+  <button @click="search.previous">Previous</button>
+  <button @click="search.next">Next</button>
 </template>
 ```
 
-`setQuery()` waits 150 milliseconds after the last keystroke; `find()` searches at once. The result also has `goTo`, `clear`, `matchCase`, `setMatchCase`, `wholeWord`, and `setWholeWord`. `truncated` becomes true at the 2,000-match limit.
-
-The `highlight` option requests search highlights while the component is mounted: `'all'` (default), `'active'`, or `'none'`. Pass it as a value, ref, or getter. The widest request among all components and the open **Find** tab wins, so a component that only reads results should pass `'none'`:
-
-```ts
-const { matches } = useDocumentSearch({ highlight: 'none' });
-```
-
-For more information, see [Drive search from code](/docs/2.x/guides/navigation#drive-search-from-code).
+The `highlight` option is `'all'` (default), `'active'`, or `'none'`, as a value, ref, or getter. If a component only reads results, pass `'none'`. For more information, see [Drive search from code](/docs/2.x/guides/navigation#drive-search-from-code).
 
 ## `useHighlights`
 
-`useHighlights(name, source, options)` highlights text ranges while the component is mounted, and returns a computed `{ applied, unavailable }`. For options, see [Highlight text ranges](/docs/2.x/guides/navigation#highlight-text-ranges).
-
-`source` is an array, a ref, or a function of the editor. A function runs again when the refs it reads change, when a document loads, and after edits once typing pauses:
+`useHighlights(name, source, options)` highlights ranges while the component is mounted and returns a computed `{ applied, unavailable }`. If `source` is a function, it runs again after the document changes and when the refs it reads change:
 
 ```vue
 <script setup lang="ts">
@@ -349,11 +336,11 @@ useHighlights('glossary', (editor) =>
 </script>
 ```
 
-Options can be a value, a ref, or a getter. Use a unique name for each call.
+For options, see [Highlight text ranges](/docs/2.x/guides/navigation#highlight-text-ranges).
 
 ## `useHighlightAt`
 
-`useHighlightAt(name)` returns a ref with the highlight under the pointer, or `null`. Pass your range type to read the fields you added to your ranges. For an example, see [Show details on hover](/docs/2.x/guides/navigation#show-details-on-hover).
+`useHighlightAt(name)` returns a ref with the highlight under the pointer, or `null`. For an example, see [Show details on hover](/docs/2.x/guides/navigation#show-details-on-hover).
 
 ## `useNavigationPane`
 
