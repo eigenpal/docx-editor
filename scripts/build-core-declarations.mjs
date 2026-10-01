@@ -77,8 +77,7 @@ async function emitDeclarations(entries, outDir, paths, pathsBase) {
       // Rooted at the entries, not at tsconfig's `include`: test files and anything no
       // subpath reaches stay out of the program.
       files: entries.map((entry) => entry.source),
-      // Ambient declarations are not reached by any import, so they come in by pattern.
-      include: [join(src, '**', '*.d.ts')],
+      include: [],
       compilerOptions: {
         paths: absolutePaths(paths, pathsBase),
         ...emitOptions(core, src, outDir),

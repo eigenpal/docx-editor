@@ -4,13 +4,14 @@
 //
 // tsup's `dts` option cannot do the first step. It compiles through the TypeScript library
 // API, which TypeScript 7 does not have, and it sets `baseUrl`, which TypeScript 7 removed.
-// So each tsup config sets `dts: false` and calls `buildDeclarations` from `onSuccess`.
+// So each tsup config is wrapped in `withDeclarations`, which turns `dts` off and builds the
+// declarations from `onSuccess`, honoring tsup's `--no-dts` and `--out-dir` flags.
 //
 // The output keeps tsup's layout: `.d.ts` beside the JavaScript, plus `.d.cts` for an ESM
 // package or `.d.mts` for a CommonJS one, each with its own copy of the chunks.
 
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { createRequire, isBuiltin } from 'node:module';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { isBuiltin } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,15 +37,6 @@ export function entryMap(entry) {
   return Object.fromEntries(
     entry.map((source) => [source.replace(/^src\//, '').replace(/\.[cm]?tsx?$/, ''), source])
   );
-}
-
-function removeDeclarations(dir, extensions) {
-  if (!existsSync(dir)) return;
-  for (const item of readdirSync(dir, { withFileTypes: true })) {
-    const path = join(dir, item.name);
-    if (item.isDirectory()) removeDeclarations(path, extensions);
-    else if (extensions.some((extension) => item.name.endsWith(extension))) rmSync(path);
-  }
 }
 
 const JSON_MODULE = '.json.d.ts';
@@ -88,27 +80,46 @@ export function jsonType(value, indent = '', siblingKeys = []) {
   return typeof value;
 }
 
+/** The first `types` condition in an export target, at any depth, in condition order. */
+export function typesCondition(target) {
+  if (typeof target !== 'object' || target === null) return undefined;
+  if (typeof target.types === 'string') return target.types;
+  for (const value of Object.values(target)) {
+    const found = typesCondition(value);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/** The directory of an installed package, found the way Node looks: up through node_modules. */
+function packageDirectory(name, fromDir) {
+  for (let dir = resolve(fromDir); ; dir = dirname(dir)) {
+    const candidate = join(dir, 'node_modules', name);
+    if (existsSync(join(candidate, 'package.json'))) return candidate;
+    if (dirname(dir) === dir) throw new Error(`${name} is not installed.`);
+  }
+}
+
 /**
  * The built declaration file a package publishes for `specifier`: its `types` export
  * condition, or for the root, its `types` field.
  */
 export function publishedDeclaration(specifier, fromDir) {
   const name = packageName(specifier);
-  const manifestPath = createRequire(join(fromDir, 'package.json')).resolve(`${name}/package.json`);
-  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  const directory = packageDirectory(name, fromDir);
+  const manifest = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8'));
   const subpath = specifier === name ? '.' : `.${specifier.slice(name.length)}`;
-  const target = manifest.exports?.[subpath];
-  const types =
-    typeof target === 'object' && target !== null
-      ? (target.types ?? target.import?.types ?? target.default?.types)
-      : subpath === '.'
-        ? (manifest.types ?? manifest.typings)
-        : undefined;
-  if (typeof types !== 'string')
+  // `exports` is either a map of subpaths or, for the root alone, a map of conditions.
+  const map = manifest.exports && typeof manifest.exports === 'object' ? manifest.exports : {};
+  const subpaths = Object.keys(map).some((key) => key.startsWith('.'));
+  const target = subpaths ? map[subpath] : subpath === '.' ? map : undefined;
+  const declared =
+    typesCondition(target) ?? (subpath === '.' ? (manifest.types ?? manifest.typings) : undefined);
+  if (typeof declared !== 'string')
     throw new Error(`${specifier} publishes no declaration file to inline.`);
-  const file = resolve(dirname(manifestPath), types);
+  const file = resolve(directory, declared);
   if (!existsSync(file))
-    throw new Error(`${specifier} declares ${types}, which is not built. Build ${name} first.`);
+    throw new Error(`${specifier} declares ${declared}, which is not built. Build ${name} first.`);
   return file;
 }
 
@@ -130,6 +141,10 @@ function declarationResolver(packageDir, outDir, manifest) {
     name: 'package-declaration-resolver',
     resolveId(source, importer) {
       if (source.startsWith('.') && source.endsWith('.json') && importer) {
+        // Only this package's own emitted files can import its JSON; an inlined package's
+        // declarations come from its build, which already resolved them.
+        if (relative(emitRoot, importer).startsWith('..'))
+          throw new Error(`${importer} imports ${source}, which cannot be inlined.`);
         const json = resolve(packageDir, relative(emitRoot, dirname(importer)), source);
         if (!existsSync(json)) throw new Error(`Cannot resolve ${source} from ${importer}.`);
         return `${json.slice(0, -'.json'.length)}${JSON_MODULE}`;
@@ -175,17 +190,19 @@ function declarationResolver(packageDir, outDir, manifest) {
  * @param {string | URL} configUrl the calling tsup config's `import.meta.url`
  * @param {{
  *   entry: string[] | Record<string, string>,
+ *   outDir?: string,
  *   banner?: string,
  *   compilerOptions?: Record<string, unknown>,
- *   clean?: boolean,
- * }} options
+ *   ambient?: string[],
+ * }} options `ambient` lists declaration files no import reaches, such as a
+ *   `declare module` for an untyped dependency.
  */
 export async function buildDeclarations(configUrl, options) {
   const packageDir = dirname(fileURLToPath(configUrl));
   const manifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'));
   const entries = entryMap(options.entry);
   const extensions = declarationExtensions(manifest);
-  const dist = join(packageDir, 'dist');
+  const dist = resolve(packageDir, options.outDir ?? 'dist');
   const outDir = mkdtempSync(join(tmpdir(), 'docx-declarations-'));
   try {
     // Sibling packages resolve to their built declarations, as in every declaration build.
@@ -199,10 +216,11 @@ export async function buildDeclarations(configUrl, options) {
       JSON.stringify({
         extends: join(packageDir, 'tsconfig.json'),
         // Rooted at the entries: tests and sources no entry reaches stay out. Ambient
-        // declarations (`declare module 'fontkit'`) are not reached by any import, so they
-        // come in by pattern.
-        files: Object.values(entries).map((source) => resolve(packageDir, source)),
-        include: [join(packageDir, 'src', '**', '*.d.ts')],
+        // declarations are not reached by any import, so the config names them.
+        files: [...Object.values(entries), ...(options.ambient ?? [])].map((source) =>
+          resolve(packageDir, source)
+        ),
+        include: [],
         compilerOptions: {
           ...extra,
           paths: absolutePaths(paths, pathsBase),
@@ -224,8 +242,7 @@ export async function buildDeclarations(configUrl, options) {
       plugins: [declarationResolver(packageDir, outDir, manifest), dts()],
     });
     try {
-      // tsup's `clean` already emptied `dist`; a config that keeps it asks for this.
-      if (options.clean) removeDeclarations(dist, extensions);
+      // tsup's `clean` (or the package build script) already emptied `dist`.
       for (const extension of extensions) {
         await bundle.write({
           dir: dist,
@@ -247,4 +264,30 @@ export async function buildDeclarations(configUrl, options) {
   } finally {
     rmSync(outDir, { recursive: true, force: true });
   }
+}
+
+/**
+ * Wrap a tsup config (or array of configs) so TypeScript 7 builds its declarations. Each
+ * config may carry `declarations: { banner, compilerOptions, ambient }`. tsup's `--no-dts`
+ * skips them, and `--out-dir` moves them with the JavaScript.
+ */
+export function withDeclarations(configUrl, config) {
+  return (cli = {}) => {
+    const wrap = ({ declarations = {}, ...options }) => {
+      if (cli.dts === false) return { ...options, dts: false };
+      const outDir = cli.outDir ? resolve(process.cwd(), cli.outDir) : options.outDir;
+      const previous = options.onSuccess;
+      if (typeof previous === 'string')
+        throw new Error('withDeclarations needs `onSuccess` as a function, not a command.');
+      return {
+        ...options,
+        dts: false,
+        onSuccess: async () => {
+          await previous?.();
+          await buildDeclarations(configUrl, { ...declarations, entry: options.entry, outDir });
+        },
+      };
+    };
+    return Array.isArray(config) ? config.map(wrap) : wrap(config);
+  };
 }

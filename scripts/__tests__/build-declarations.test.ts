@@ -7,6 +7,8 @@ import {
   entryMap,
   jsonType,
   publishedDeclaration,
+  typesCondition,
+  withDeclarations,
 } from '../build-declarations.mjs';
 import { defaultTypeRoots, typescript7Compiler } from '../lib/declaration-files.mjs';
 
@@ -119,4 +121,32 @@ test('every package that builds declarations installs the TypeScript 7 compiler'
   ]) {
     expect(typescript7Compiler(join(repository, 'packages', name))).toEndWith('/bin/tsc');
   }
+});
+
+test('a types condition is found at any depth, in condition order', () => {
+  expect(typesCondition({ node: { import: { types: './a.d.ts' } }, types: './b.d.ts' })).toBe(
+    './b.d.ts'
+  );
+  expect(typesCondition({ node: { import: { types: './a.d.ts' } } })).toBe('./a.d.ts');
+  expect(typesCondition('./x.mjs')).toBeUndefined();
+});
+
+test('tsup --no-dts skips declarations, and other flags keep the previous onSuccess', () => {
+  const configUrl = new URL('../../packages/fonts-cjk/tsup.config.ts', import.meta.url);
+  const previous = async () => {};
+  const config = { entry: ['src/index.ts'], declarations: { banner: '// x' }, onSuccess: previous };
+
+  const skipped = withDeclarations(configUrl, config)({ dts: false });
+  expect(skipped.dts).toBe(false);
+  expect(skipped.onSuccess).toBe(previous);
+  expect('declarations' in skipped).toBe(false);
+
+  const [built] = withDeclarations(configUrl, [config])({ outDir: 'out' });
+  expect(built!.dts).toBe(false);
+  expect(built!.onSuccess).not.toBe(previous);
+  expect('declarations' in built!).toBe(false);
+
+  expect(() => withDeclarations(configUrl, { ...config, onSuccess: 'echo' })({})).toThrow(
+    'needs `onSuccess` as a function'
+  );
 });

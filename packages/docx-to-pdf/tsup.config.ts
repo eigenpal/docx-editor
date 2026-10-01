@@ -1,16 +1,17 @@
 import { defineConfig } from 'tsup';
-import { buildDeclarations } from '../../scripts/build-declarations.mjs';
-const entry = ['src/index.ts'];
-
-export default defineConfig({
-  entry,
-  platform: 'node',
-  format: ['esm', 'cjs'],
-  // TypeScript 7 emits the declarations. See scripts/build-declarations.mjs.
-  dts: false,
-  onSuccess: () =>
-    buildDeclarations(import.meta.url, { entry, banner: '/// <reference lib="dom" />' }),
-  clean: true,
-  metafile: true,
-  external: [/^@docx-editor\.dev\//, 'pdf-lib', 'fontkit'],
-});
+import { withDeclarations } from '../../scripts/build-declarations.mjs';
+export default defineConfig(
+  withDeclarations(import.meta.url, {
+    entry: ['src/index.ts'],
+    platform: 'node',
+    format: ['esm', 'cjs'],
+    declarations: {
+      banner: '/// <reference lib="dom" />',
+      // fontkit ships no types; this file declares the part the package uses.
+      ambient: ['src/fontkit.d.ts'],
+    },
+    clean: true,
+    metafile: true,
+    external: [/^@docx-editor\.dev\//, 'pdf-lib', 'fontkit'],
+  })
+);
