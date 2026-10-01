@@ -10,7 +10,7 @@
 // package or `.d.mts` for a CommonJS one, each with its own copy of the chunks.
 
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { createRequire, isBuiltin } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -54,19 +54,35 @@ const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
  * The type TypeScript gives a JSON module: literals widen to their primitive, and an array
  * is an array of its element union.
  */
-export function jsonType(value, indent = '') {
+export function jsonType(value, indent = '', siblingKeys = []) {
   if (value === null) return 'null';
   if (Array.isArray(value)) {
-    const elements = [...new Set(value.map((item) => jsonType(item, indent)))];
+    // Like an array literal: object elements with different keys each get the keys they
+    // lack as optional `undefined`, so a property read works on every element.
+    const objects = value.filter(
+      (item) => item && typeof item === 'object' && !Array.isArray(item)
+    );
+    const keys = [...new Set(objects.flatMap((item) => Object.keys(item)))];
+    const elements = [
+      ...new Set(
+        value.map((item) =>
+          objects.includes(item) ? jsonType(item, indent, keys) : jsonType(item, indent)
+        )
+      ),
+    ];
     if (elements.length === 0) return 'never[]';
     return elements.length === 1 ? `${elements[0]}[]` : `(${elements.join(' | ')})[]`;
   }
   if (typeof value === 'object') {
     const inner = `${indent}    `;
-    const members = Object.entries(value).map(([key, item]) => {
-      const name = IDENTIFIER.test(key) ? key : JSON.stringify(key);
-      return `${inner}${name}: ${jsonType(item, inner)};`;
-    });
+    const label = (key) => (IDENTIFIER.test(key) ? key : JSON.stringify(key));
+    // Inside an array, every element lists the keys of all elements in first-seen order.
+    const keys = siblingKeys.length > 0 ? siblingKeys : Object.keys(value);
+    const members = keys.map((key) =>
+      Object.hasOwn(value, key)
+        ? `${inner}${label(key)}: ${jsonType(value[key], inner)};`
+        : `${inner}${label(key)}?: undefined;`
+    );
     return members.length === 0 ? '{}' : `{\n${members.join('\n')}\n${indent}}`;
   }
   return typeof value;
@@ -129,9 +145,17 @@ function declarationResolver(packageDir, outDir, manifest) {
         const name = packageName(source);
         if (name === manifest.name)
           throw new Error(`The declarations import their own package through ${source}.`);
-        if (declared.has(name)) return { id: source, external: true };
+        if (declared.has(name) || isBuiltin(source)) return { id: source, external: true };
         // Consumers do not install anything else, so its types are inlined, as tsup did.
-        return publishedDeclaration(source, packageDir);
+        try {
+          return publishedDeclaration(source, packageDir);
+        } catch (error) {
+          throw new Error(
+            `The declarations of ${manifest.name} import ${source}, which is not a dependency ` +
+              `or peer dependency, and its types cannot be inlined: ${error.message} ` +
+              'Declare it as a dependency or peer dependency.'
+          );
+        }
       }
       return null;
     },
@@ -165,7 +189,10 @@ export async function buildDeclarations(configUrl, options) {
   const outDir = mkdtempSync(join(tmpdir(), 'docx-declarations-'));
   try {
     // Sibling packages resolve to their built declarations, as in every declaration build.
-    const { paths, ...extra } = declarationCompilerOptions(configUrl, options.compilerOptions);
+    const { paths, pathsBase, ...extra } = declarationCompilerOptions(
+      configUrl,
+      options.compilerOptions
+    );
     const tsconfig = join(outDir, 'tsconfig.json');
     writeFileSync(
       tsconfig,
@@ -178,12 +205,12 @@ export async function buildDeclarations(configUrl, options) {
         include: [join(packageDir, 'src', '**', '*.d.ts')],
         compilerOptions: {
           ...extra,
-          paths: absolutePaths(paths, packageDir),
+          paths: absolutePaths(paths, pathsBase),
           ...emitOptions(packageDir, packageDir, join(outDir, 'emit')),
         },
       })
     );
-    runTypeScript7(packageDir, tsconfig);
+    await runTypeScript7(packageDir, tsconfig);
 
     const emitted = (source) =>
       join(outDir, 'emit', relative(packageDir, resolve(packageDir, source))).replace(

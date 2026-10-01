@@ -1,7 +1,7 @@
 // Helpers shared by the declaration builds: scripts/build-core-declarations.mjs for core and
 // scripts/build-declarations.mjs for every tsup package.
 
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -77,18 +77,30 @@ export function typescript7Compiler(packageDir) {
   return join(dirname(manifest), 'bin', 'tsc');
 }
 
-/** Run TypeScript 7 on a tsconfig, and throw with its diagnostics when it fails. */
+/**
+ * Run TypeScript 7 on a tsconfig, and reject with its diagnostics when it fails. It runs
+ * asynchronously, so concurrent tsup configs keep building while one emits, and the output
+ * is collected without a size limit, so a long diagnostic list is never cut off.
+ */
 export function runTypeScript7(packageDir, tsconfigPath) {
-  const result = spawnSync(
-    process.execPath,
-    [typescript7Compiler(packageDir), '-p', tsconfigPath, '--pretty', 'false'],
-    { cwd: packageDir, encoding: 'utf8' }
-  );
-  if (result.error) throw result.error;
-  if (result.status !== 0) {
-    throw new Error(
-      `Declaration emit failed for ${relative(process.cwd(), packageDir) || '.'}:\n` +
-        `${result.stdout}${result.stderr}`
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn(
+      process.execPath,
+      [typescript7Compiler(packageDir), '-p', tsconfigPath, '--pretty', 'false'],
+      { cwd: packageDir }
     );
-  }
+    const output = [];
+    child.stdout.on('data', (chunk) => output.push(chunk));
+    child.stderr.on('data', (chunk) => output.push(chunk));
+    child.on('error', reject);
+    child.on('close', (status) => {
+      if (status === 0) return resolvePromise();
+      reject(
+        new Error(
+          `Declaration emit failed for ${relative(process.cwd(), packageDir) || '.'}:\n` +
+            Buffer.concat(output).toString('utf8')
+        )
+      );
+    });
+  });
 }

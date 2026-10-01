@@ -28,5 +28,7 @@ export function declarationCompilerOptions(configUrl, extra = {}) {
       ([specifier]) => !siblings.has(packageName(specifier))
     )
   );
-  return { ...extra, paths };
+  // `paths` targets are relative to the config that defines them, which an `extends` base
+  // can move away from the package: TypeScript records that directory as `pathsBasePath`.
+  return { ...extra, paths, pathsBase: options.pathsBasePath ?? dirname(file) };
 }

@@ -70,6 +70,7 @@ test('declaration builds drop sibling source paths and keep local aliases', () =
   expect(pro).toEqual({
     jsx: 'preserve',
     paths: { '@docx-editor.dev/editor-api': ['../editor-api/src/index.ts'] },
+    pathsBase: new URL('../../packages/pro', import.meta.url).pathname,
   });
   const editorApi = declarationCompilerOptions(
     new URL('../../packages/editor-api/tsup.config.ts', import.meta.url)

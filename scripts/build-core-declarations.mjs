@@ -68,7 +68,7 @@ export function publishedEntries(manifest, paths) {
 }
 
 /** Emit declarations for everything the entries reach, into `outDir`. */
-function emitDeclarations(entries, outDir, paths) {
+async function emitDeclarations(entries, outDir, paths, pathsBase) {
   const tsconfig = join(outDir, 'tsconfig.json');
   writeFileSync(
     tsconfig,
@@ -79,10 +79,13 @@ function emitDeclarations(entries, outDir, paths) {
       files: entries.map((entry) => entry.source),
       // Ambient declarations are not reached by any import, so they come in by pattern.
       include: [join(src, '**', '*.d.ts')],
-      compilerOptions: { paths: absolutePaths(paths, core), ...emitOptions(core, src, outDir) },
+      compilerOptions: {
+        paths: absolutePaths(paths, pathsBase),
+        ...emitOptions(core, src, outDir),
+      },
     })
   );
-  runTypeScript7(core, tsconfig);
+  await runTypeScript7(core, tsconfig);
 }
 
 const formatHost = {
@@ -189,7 +192,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
   );
   const outDir = mkdtempSync(join(tmpdir(), 'docx-core-declarations-'));
   try {
-    emitDeclarations(entries, outDir, parsed.options.paths ?? {});
+    await emitDeclarations(
+      entries,
+      outDir,
+      parsed.options.paths ?? {},
+      parsed.options.pathsBasePath ?? core
+    );
     await bundleDeclarations(entries, outDir);
     const missing = entries.filter((entry) => !existsSync(join(dist, `${entry.name}.d.ts`)));
     if (missing.length > 0)

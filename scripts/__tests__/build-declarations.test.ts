@@ -58,6 +58,10 @@ test('a JSON module declares the type TypeScript gives the import', () => {
     ].join('\n')
   );
   expect(jsonType([])).toBe('never[]');
+  // Array elements with different keys get the keys they lack as optional `undefined`.
+  expect(jsonType([{ a: 1 }, { b: 'x' }])).toBe(
+    '({\n    a: number;\n    b?: undefined;\n} | {\n    a?: undefined;\n    b: string;\n})[]'
+  );
   expect(jsonType({ nested: { deep: 'x' } })).toBe(
     '{\n    nested: {\n        deep: string;\n    };\n}'
   );
