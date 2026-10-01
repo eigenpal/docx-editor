@@ -123,6 +123,7 @@ import {
   applySetSectionProperties,
 } from './tree-op-section.ts';
 import { pageFieldContentBuilders, pageFieldModelLength } from './tree-op-fields.ts';
+import { applyTrackedContentControl } from './tracked-content-control-insert.ts';
 import { applyInsertContentControl as applyAutomationInsertContentControl } from './tree-op-content-control-insert.ts';
 import {
   applyRemoveContentControl as applyAutomationRemoveContentControl,
@@ -237,7 +238,9 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     return applyAutomationRemoveContentControl(part, op, options);
   }
   if (op.op === 'insertContentControl') {
-    return applyAutomationInsertContentControl(part, op, options);
+    return op.revision
+      ? applyTrackedContentControl(part, op, options)
+      : applyAutomationInsertContentControl(part, op, options);
   }
   // Typing into a prompt REPLACES it. The transition belongs here rather than beside the
   // caret: an automation call and a paste insert text too, and a prompt that survived them

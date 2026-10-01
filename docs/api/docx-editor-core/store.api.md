@@ -4760,6 +4760,7 @@ export type TreeDocOp = SetFieldCodeOp | {
     readonly lock?: ContentControlLock;
     readonly op: 'insertContentControl';
     readonly paragraphId: string;
+    readonly revision?: RevisionAttributionInput;
     readonly start: number;
     readonly tag?: string;
     readonly type: InsertableContentControlKind;

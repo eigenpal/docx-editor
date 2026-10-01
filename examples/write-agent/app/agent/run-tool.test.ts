@@ -403,11 +403,13 @@ for (const tracking of ['Off', 'TrackMineOnly'] as const) {
       expect(result.success).toBe(true);
       const capabilities = JSON.parse(result.output);
       expect(capabilities.mode).toBe(tracking === 'Off' ? 'direct' : 'suggest');
-      expect(capabilities.controls.create).toEqual(
-        tracking === 'Off' ? ['PlainText', 'RichText', 'DatePicker'] : []
-      );
+      expect(capabilities.controls.create).toEqual(['PlainText', 'RichText', 'DatePicker']);
       const selected = await runWriterTool(runtime, null, 'discover_capabilities', {}, 'suggest');
-      expect(JSON.parse(selected.output).controls.create).toEqual([]);
+      expect(JSON.parse(selected.output).controls.create).toEqual([
+        'PlainText',
+        'RichText',
+        'DatePicker',
+      ]);
       await runtime.run(async (context) => {
         context.document.load('changeTrackingMode');
         await context.sync();
@@ -418,3 +420,64 @@ for (const tracking of ['Off', 'TrackMineOnly'] as const) {
     }
   });
 }
+
+test('browser writer creates a reviewable date control through the document API', async () => {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const editor = createDocxEditor({ container, document: seedDocx(), modules: [reviewModule()] });
+  const runtime = createWriterRuntime(editor);
+  try {
+    const read = await runWriterTool(runtime, editor, 'read_document', {});
+    const target = JSON.parse(read.output).items.find((item: { text: string }) =>
+      item.text.includes('Example Client')
+    );
+    const result = await runWriterTool(
+      runtime,
+      editor,
+      'insert_content_controls',
+      {
+        fields: [
+          {
+            paragraphId: target.id,
+            search: 'Example Client',
+            type: 'DatePicker',
+            tag: 'date',
+            title: 'Date',
+          },
+        ],
+      },
+      'suggest'
+    );
+    expect(result.success, result.output).toBe(true);
+    await runtime.run(async (c) => {
+      c.document.body.revisions.load('items');
+      c.document.contentControls.load('items');
+      await c.sync();
+      expect(c.document.body.revisions.items).toHaveLength(1);
+      expect(c.document.contentControls.items).toHaveLength(1);
+      c.document.body.revisions.items[0]!.reject();
+      await c.sync();
+      c.document.contentControls.load('items');
+      c.document.body.load('text');
+      await c.sync();
+      expect(c.document.contentControls.items).toHaveLength(0);
+      expect(c.document.body.text).toContain('Example Client');
+    });
+    expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+    await runtime.run(async (c) => {
+      c.document.contentControls.load('items');
+      await c.sync();
+      expect(c.document.contentControls.items).toHaveLength(1);
+    });
+    expect(editor.exec({ type: 'redo' }).ok).toBe(true);
+    await runtime.run(async (c) => {
+      c.document.contentControls.load('items');
+      await c.sync();
+      expect(c.document.contentControls.items).toHaveLength(0);
+    });
+  } finally {
+    runtime.dispose();
+    editor.destroy();
+    container.remove();
+  }
+});

@@ -79,7 +79,7 @@ Font writes honor inherited complex-script properties. Font reads return authore
 
 ## Comments and revisions
 
-`Document.changeTrackingMode = "TrackMineOnly"` tracks supported text, font, paragraph, and list edits. Table row tracking supports additions and partial deletions. Complete table insertion, column changes, page setup, and content-control structure refuse while tracking.
+`Document.changeTrackingMode = "TrackMineOnly"` tracks supported text, font, paragraph, and list edits. Table row tracking supports additions and partial deletions. Complete table insertion supports native row revisions. Column changes and page setup refuse while tracking. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control’s tag and title. Empty ranges, existing review markup, and other control structure changes refuse.
 
 | Object or type | Public members beyond inherited members | Guide |
 | --- | --- | --- |

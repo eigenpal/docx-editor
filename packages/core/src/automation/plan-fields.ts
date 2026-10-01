@@ -1,3 +1,4 @@
+import { tocFieldCode } from './toc-field-code.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { effectiveContentLockAt, isBoundAt } from '../store/store/tree-op-nodes.ts';
 import type { AutomationHandleTable } from './handles.ts';
@@ -76,13 +77,15 @@ export function planFields(
     if (operation.fieldType !== undefined && typeof operation.fieldType !== 'string')
       return refuse('field type must be a string');
     const type = operation.fieldType ?? 'Empty';
-    let field: 'PAGE' | 'NUMPAGES' | null = null;
+    let field: string | null = null;
     if (type === 'Page' || type === 'NumPages') {
       if (operation.text !== undefined && operation.text.trim() !== '')
         return refuse('field switches are not supported');
       field = type === 'Page' ? 'PAGE' : 'NUMPAGES';
-    } else if (type === 'Empty') field = supportedPageFieldCode(operation.text ?? '');
-    if (!field) return refuse('only PAGE and NUMPAGES fields are supported');
+    } else if (type === 'TOC') field = tocFieldCode(operation.text ?? '');
+    else if (type === 'Empty') field = supportedPageFieldCode(operation.text ?? '');
+    if (!field)
+      return refuse('only PAGE, NUMPAGES, and TOC with supported switches can be inserted');
     const { start, end } = range.value;
     if (!['Before', 'After', 'Start', 'End', 'Replace'].includes(operation.location))
       return refuse('unsupported field insert location');

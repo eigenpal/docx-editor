@@ -1,3 +1,4 @@
+import { escapeXmlAttribute } from '../store/package/sinks.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { fieldOnOffAttribute } from '../store/package/field-nodes.ts';
 import {
@@ -64,8 +65,8 @@ export function fieldOffset(
 }
 
 /** A schema-valid simple field with an editable empty result run, ready for inline splicing. */
-export function fieldInsertionParagraph(code: 'PAGE' | 'NUMPAGES'): OoxmlParagraphNode {
-  const instruction = code === 'PAGE' ? 'PAGE' : 'NUMPAGES';
+export function fieldInsertionParagraph(code: string): OoxmlParagraphNode {
+  const instruction = escapeXmlAttribute(code);
   const read = readOoxmlPart(
     `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:fldSimple w:instr="${instruction}"><w:r><w:t/></w:r></w:fldSimple></w:p></w:body></w:document>`,
     {
@@ -74,10 +75,10 @@ export function fieldInsertionParagraph(code: 'PAGE' | 'NUMPAGES'): OoxmlParagra
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
     }
   );
-  if (!read.ok) throw new Error('could not build a page field');
+  if (!read.ok) throw new Error('could not build a field');
   const body = read.part.root.children.find((node) => node.kind === 'body');
   const paragraph = body && storyParagraphs(body)[0];
   if (!paragraph || paragraph.kind !== 'paragraph')
-    throw new Error('could not build a page field paragraph');
+    throw new Error('could not build a field paragraph');
   return paragraph;
 }

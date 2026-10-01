@@ -24,6 +24,8 @@ import { isDangerousKey } from '../package/safe-record.ts';
 import { isAuthorableDataBinding } from '../package/custom-node-payloads.ts';
 import { validateDeleteBlock } from './tree-op-blocks.ts';
 import {
+  CONTENT_CONTROL_LOCKS,
+  validateInsertContentControl,
   deleteBlockTouchesContentRestriction,
   holds,
   rejectContentEdit,
@@ -32,7 +34,6 @@ import {
   validateSetContentControlValue,
 } from './tree-op-validate-controls.ts';
 import {
-  INSERTABLE_CONTENT_CONTROL_TYPES,
   contentControlBindingRefusal,
   contentControlLockRefusal,
   isWritableContentControlMetadata,
@@ -80,7 +81,6 @@ import { rangePartiallyOverlapsDrawingAtom } from '../package/drawing-projection
 import { isDrawingTreeDocOp, validateDrawingOp } from './tree-op-drawings.ts';
 import { validateInsertFragment } from './tree-op-fragment.ts';
 import {
-  indivisibleAt,
   isParagraph,
   paragraphLength,
   paragraphOffsetIndex,
@@ -106,12 +106,6 @@ import {
 } from './tree-op-types.ts';
 
 const RUN_PROPERTY_SET: ReadonlySet<string> = new Set(ACCEPTED_RUN_PROPERTIES);
-const CONTENT_CONTROL_LOCKS: ReadonlySet<string> = new Set([
-  'unlocked',
-  'sdtLocked',
-  'contentLocked',
-  'sdtContentLocked',
-]);
 const PARAGRAPH_PROPERTY_SET: ReadonlySet<string> = new Set(ACCEPTED_PARAGRAPH_PROPERTIES);
 
 function validateProperties(
@@ -321,35 +315,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     }
     return null;
   }
-  if (op.op === 'insertContentControl') {
-    if (!INSERTABLE_CONTENT_CONTROL_TYPES.includes(op.type)) return 'invalidArgs';
-    for (const value of [op.tag, op.alias]) {
-      if (!isWritableContentControlMetadata(value)) return 'invalid-property-value';
-    }
-    if (op.lock !== undefined && !CONTENT_CONTROL_LOCKS.has(op.lock)) return 'invalidArgs';
-    if (!Number.isInteger(op.start) || !Number.isInteger(op.end)) return 'invalid-range';
-    const paragraph = findNode(part, op.paragraphId);
-    if (!paragraph) return 'unknown-paragraph';
-    if (!isParagraph(paragraph)) return 'not-a-paragraph';
-    if (op.start < 0 || op.end > paragraphLength(paragraph) || op.start > op.end) {
-      return 'invalid-range';
-    }
-    if (splitsSurrogate(paragraph, op.start) || splitsSurrogate(paragraph, op.end)) {
-      return 'splits-surrogate-pair';
-    }
-    // BOTH EDGES, and here rather than in the applier: a control is a sibling of runs, so an
-    // edge strictly inside a hyperlink, an inline control or an atomic field is not a place one
-    // can start or stop. The applier refused these too, but only after `can` had already told a
-    // caller the command was live — a disabled button that runs, or an enabled one that fails.
-    if (indivisibleAt(paragraph, op.start) || indivisibleAt(paragraph, op.end)) {
-      return 'indivisible-content';
-    }
-    // The same restriction check every other range op runs: a locked or bound control the span
-    // touches, and forms protection. The applier answered it, so the write was refused — but
-    // only after `can` had already told chrome the command was live, on exactly the document
-    // class this verb is for.
-    return rejectContentEdit(part, paragraph, op.start, op.end);
-  }
+  if (op.op === 'insertContentControl') return validateInsertContentControl(part, op);
 
   // Package-level furniture ops cannot run against a single part. Shape-check here so
   // applyTreeOp refuses them; TreePackageStore.applyLifecycleOp is the commit path.

@@ -5,7 +5,7 @@ category: 'Editing API'
 order: 59
 ---
 
-A field stores an instruction and cached result text. Reading a field does not execute its instruction. You can insert and evaluate plain `PAGE` and `NUMPAGES` fields without switches. The runtime preserves other instructions but rejects attempts to create or evaluate them.
+A field stores an instruction and cached result text. Reading a field does not execute its instruction. You can insert and evaluate plain `PAGE` and `NUMPAGES` fields without switches. You can also insert an inert `TOC` field. The runtime does not calculate its entries.
 
 Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
 
@@ -31,7 +31,7 @@ await runtime.run(async (context) => {
 
 New fields start with an empty cached result. Insertion does not calculate pagination. `Before` and `Start` use the start endpoint; `After` and `End` use the end endpoint. `Replace` requires an eligible span in one paragraph.
 
-`FieldType` exports the Office.js-compatible field vocabulary. `FieldTypeLiteral` provides corresponding string literals. The presence of an enum value does not mean its instruction can run. For example, `FieldType.page` is supported. The runtime rejects creation of fields outside the `PAGE` and `NUMPAGES` subset.
+`FieldType` exports the Office.js-compatible field vocabulary. `FieldTypeLiteral` provides corresponding string literals. The presence of an enum value does not mean its instruction can run. For example, `FieldType.page` is supported. Creation supports the `PAGE`, `NUMPAGES`, and bounded `TOC` subset.
 
 ## Read and change instructions
 
@@ -85,3 +85,18 @@ Updates fail with `NotSupported` if pagination is missing, the instruction is un
 ## Next steps
 
 See [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) and [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).
+
+## Insert a table of contents field
+
+Use `TOC` to save a table of contents instruction for an application that calculates it. Creation does not populate entries. The runtime refuses TOC calculation through `updateResult()`.
+
+This example inserts a field for heading levels 1 through 3:
+
+```ts
+await runtime.run(async (context) => {
+  context.document.body.getRange('Start').insertField('Before', 'TOC', '\\o "1-3" \\h \\z \\u');
+  await context.sync();
+});
+```
+
+The runtime accepts `\o` with ascending levels 1 through 9, plus `\h`, `\z`, and `\u`. It rejects duplicate switches, unknown switches, TOC code writes, and tracked field creation.

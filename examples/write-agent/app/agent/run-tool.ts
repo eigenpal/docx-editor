@@ -150,12 +150,15 @@ async function execute(
           mode: selectedMode,
           hosts: runtime.capabilities,
           controls: {
-            create: selectedMode === 'direct' ? ['PlainText', 'RichText', 'DatePicker'] : [],
-            createRequires: 'direct',
+            create: ['PlainText', 'RichText', 'DatePicker'],
+            createRequires:
+              selectedMode === 'direct'
+                ? 'eligible single-paragraph range'
+                : 'nonempty ordinary text outside collaboration; no existing review markup',
             unsupportedCreation: ['DropDownList', 'ComboBox', 'CheckBox'],
           },
           tracking:
-            'Text, paragraph insertion, fonts, paragraph formatting, styles, and list membership can be tracked. New list definitions can be configured while their membership is proposed. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration. Existing list-definition changes, page layout, and control structure require direct edits.',
+            'Text, paragraph insertion, fonts, paragraph formatting, styles, and list membership can be tracked. New list definitions can be configured while their membership is proposed. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration. Existing list-definition changes and page layout require direct edits. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control’s tag and title. Empty ranges, existing review markup, and other control structure changes refuse.',
           limits: [
             'Read before editing. Re-read object indexes after edits.',
             'No HTML or Markdown interpretation.',
@@ -163,7 +166,7 @@ async function execute(
             'Text insertion supports text-like controls. Date and other typed controls require their native value UI.',
             'PAGE/NUMPAGES calculation requires host pagination.',
             'Section columns and new style definitions are unsupported.',
-            'Only PAGE and NUMPAGES field creation is supported. TOC creation and evaluation are unsupported.',
+            'PAGE, NUMPAGES, and inert TOC field creation are supported in direct mode. TOC entry calculation is unsupported; do not claim a populated table of contents.',
             'One write batch targets one story. Separate body, header, and footer edits.',
           ],
         }),
@@ -213,7 +216,8 @@ async function execute(
     if (read) {
       const snapshot = await inspectDocument(
         runtime,
-        name === 'read_document' ? { ...input, area: 'paragraphs', story: bodyStory } : input
+        name === 'read_document' ? { ...input, area: 'paragraphs', story: bodyStory } : input,
+        name === 'read_document'
       );
       result = snapshot;
     } else {

@@ -361,7 +361,14 @@ export const fieldSchema = z.object({
     z.object({
       action: z.literal('insert'),
       target,
-      type: z.enum(['Page', 'NumPages']),
+      type: z.enum(['Page', 'NumPages', 'TOC']),
+      switches: z
+        .string()
+        .max(128)
+        .optional()
+        .describe(
+          'TOC switches only: \\o with a quoted level range, \\h, \\z, and \\u. Creation does not calculate entries.'
+        ),
       location: z.enum(['Before', 'After', 'Replace', 'Start', 'End']),
     }),
     z.object({ action: z.literal('code'), field: index, code: z.enum(['PAGE', 'NUMPAGES']) }),

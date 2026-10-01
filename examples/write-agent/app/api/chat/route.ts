@@ -49,7 +49,7 @@ Edit:
 - After a table, list, or control mutation, inspect that object collection again before the next mutation.
 - Use the SAME editing tools in Direct edits and Suggestions. The application controls tracking. Use edit_text for text and paragraph changes.
 - For an existing bullet list that must become numbered in Suggestions, create a new proposed numbered list on those same paragraphs with edit_list. Do not change an established list definition.
-- Suggestion mode supports text, paragraph insertion, fonts, paragraph formatting, paragraph styles, and list membership. New proposed lists can be configured. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration. Existing list definitions, page layout, and control structure require direct edits. Report refusals; never change the mode yourself.
+- Suggestion mode supports text, paragraph insertion, fonts, paragraph formatting, paragraph styles, and list membership. New proposed lists can be configured. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration. Existing list definitions and page layout require direct edits. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control’s tag and title. Empty ranges, existing review markup, and other control structure changes refuse. Report refusals; never change the mode yourself.
 - Use table, list, layout, picture, field, and review tools for their matching document objects.
 - Never add content to satisfy a tool's schema. Correct invalid arguments when possible.
 - Follow recovery.action and recovery.instruction when a tool fails. Never replay a whole operation after partial completion.
@@ -58,10 +58,10 @@ Edit:
 
 Content controls:
 - SDT means structured document tag, an actual content control. Preserve existing labels and headings.
-- Inspect controls before creating them. Edit an existing control instead of adding another wrapper.
+- Inspect controls when editing an existing control. For plain-text placeholders, read paragraphs and create the control. Creation rejects duplicate tags; inspect controls after that refusal.
 - When drafting fields, write nonempty placeholders such as "Client: [Client name]" and "Effective date: [Select date]". Never leave a field as an empty label.
 - insert_content_controls wraps existing field placeholders. Set search to the placeholder only, such as "[Select date]". Never wrap the label.
-- Direct edits support PlainText, RichText, and DatePicker creation. Use DatePicker for calendar dates. Suggestions cannot create control wrappers; report this limit without attempting creation.
+- Direct edits and Suggestions support PlainText, RichText, and DatePicker creation. Use DatePicker for calendar dates. Suggestions require nonempty ordinary text outside collaboration, without existing review markup.
 - Dropdowns and combo boxes require API support.
 - Never substitute a text control for an explicitly requested unsupported control type.
 

@@ -562,3 +562,96 @@ test('streamed blocks reach a real collaboration peer before the final tool inpu
     harness.cleanup();
   }
 });
+
+for (const mode of ['direct', 'suggest'] as const) {
+  test(`streamed paragraphs preserve order in ${mode}`, async () => {
+    const runtime = await DocxEditor.createServer(seedDocx(), {
+      author: 'Writer',
+      revisionTextView: 'original',
+    });
+    try {
+      const read = await runWriterTool(runtime, null, 'read_document', {});
+      const target = JSON.parse(read.output).items[0];
+      const edits = ['First', 'Second', 'Third'].map((text) => ({
+        action: 'insertParagraph',
+        target: { paragraphId: target.id },
+        location: 'After',
+        text,
+      }));
+      const stream = new WriterStreamEdits((name, input, id) =>
+        runWriterTool(runtime, null, name, input, mode, id)
+      );
+      for (const [index, edit] of edits.entries())
+        stream.push({
+          toolCallId: 'ordered',
+          toolName: 'edit_text',
+          index,
+          input: { edits: [edit] },
+        });
+      const result = await stream.finish('ordered', 'edit_text', { edits });
+      expect(result?.success, JSON.stringify(result)).toBe(true);
+      await runtime.run(async (c) => {
+        if (mode === 'suggest') {
+          c.document.body.revisions.acceptAll();
+          await c.sync();
+        }
+        c.document.body.load('text');
+        await c.sync();
+        expect(c.document.body.text).toContain('First\rSecond\rThird');
+      });
+    } finally {
+      runtime.dispose();
+    }
+  });
+}
+
+for (const mode of ['direct', 'suggest'] as const)
+  for (const location of ['Before', 'After'] as const) {
+    test(`streams ${location} imported header paragraphs in ${mode} without stale targets`, async () => {
+      const { anonymousStories } = await import('./paragraph-targets.fixture');
+      const runtime = await DocxEditor.createServer(anonymousStories(), {
+        author: 'Writer',
+        revisionTextView: 'original',
+      });
+      const story = { kind: 'header', section: 0, variant: 'Primary' };
+      try {
+        const read = await runWriterTool(runtime, null, 'inspect_document', {
+          area: 'paragraphs',
+          story,
+        });
+        const target = JSON.parse(read.output).items[0];
+        expect(target.id).toMatch(/^@writer:/);
+        const edits = ['First', 'Second', 'Third'].map((text) => ({
+          action: 'insertParagraph',
+          target: { paragraphId: target.id },
+          location,
+          text,
+        }));
+        const stream = new WriterStreamEdits((name, input, id) =>
+          runWriterTool(runtime, null, name, input, mode, id)
+        );
+        for (const [index, edit] of edits.entries())
+          stream.push({
+            toolCallId: 'header-ordered',
+            toolName: 'edit_text',
+            index,
+            input: { story, edits: [edit] },
+          });
+        const result = await stream.finish('header-ordered', 'edit_text', { story, edits });
+        expect(result?.success, JSON.stringify(result)).toBe(true);
+        await runtime.run(async (c) => {
+          const header = c.document.sections.getFirst().getHeader('Primary');
+          await c.sync();
+          if (mode === 'suggest') {
+            header.revisions.acceptAll();
+            await c.sync();
+          }
+          header.load('text');
+          await c.sync();
+          expect(header.text).toContain('First\rSecond\rThird');
+        });
+      } finally {
+        runtime.dispose();
+      }
+    });
+  }

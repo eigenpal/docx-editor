@@ -189,7 +189,7 @@ for (const action of ['properties', 'values', 'cell'] as const) {
   });
 }
 
-for (const action of ['rows', 'membership', 'level'] as const) {
+for (const action of ['rows', 'membership', 'level', 'control'] as const) {
   test(`tracked ${action} requires the browser review module`, async () => {
     const editor = createDocxEditor({ container: document.createElement('div'), document: bytes });
     const runtime = DocxEditorBrowser.createBrowser(editor, { author: 'Agent' });
@@ -209,7 +209,9 @@ for (const action of ['rows', 'membership', 'level'] as const) {
           if (action === 'rows') c.document.body.tables.getFirst().addRows('End', 1, [['Three']]);
           else {
             const paragraph = c.document.body.paragraphs.getFirst();
-            if (action === 'membership') paragraph.detachFromList();
+            if (action === 'control')
+              paragraph.getRange('Content').insertContentControl('PlainText');
+            else if (action === 'membership') paragraph.detachFromList();
             else paragraph.listItem.level = 1;
           }
           await c.sync();
@@ -222,3 +224,31 @@ for (const action of ['rows', 'membership', 'level'] as const) {
     }
   });
 }
+
+test('browser suggesting mode refuses permanent control metadata with runtime tracking Off', async () => {
+  const editor = createDocxEditor({
+    container: document.createElement('div'),
+    document: bytes,
+    modules: [reviewModule()],
+    author: 'UI reviewer',
+  });
+  const runtime = DocxEditorBrowser.createBrowser(editor, { author: 'Agent' });
+  try {
+    await runtime.run(async (c) => {
+      c.document.body.getRange('Content').insertContentControl('PlainText');
+      await c.sync();
+    });
+    expect(editor.setEditingMode('suggesting').ok).toBe(true);
+    const before = new Uint8Array(await editor.save());
+    await expect(
+      runtime.run(async (c) => {
+        c.document.contentControls.getFirst().tag = 'changed';
+        await c.sync();
+      })
+    ).rejects.toMatchObject({ code: 'NotSupported' });
+    expect(new Uint8Array(await editor.save())).toEqual(before);
+  } finally {
+    runtime.dispose();
+    editor.destroy();
+  }
+});

@@ -14,6 +14,8 @@ import type { ContentControlLock } from '../store/package/content-control-nodes.
 import type { PlannedOperation } from './plan-types.ts';
 export type { PlannedOperation } from './plan-types.ts';
 import { delimiterOccurrences, anchorForSection, placeable, trimmed } from './plan-read-helpers.ts';
+import { planContentControlInsertion } from './plan-content-control-insert.ts';
+import { ownsInsertedControl } from './tracked-content-controls.ts';
 import { planFields } from './plan-fields.ts';
 import { planTableOperation } from './plan-tables.ts';
 import { planVirtualFurniture } from './virtual-furniture.ts';
@@ -133,7 +135,6 @@ import { contentControlPropertiesOf } from '../store/package/content-control-nod
 import {
   CONTENT_CONTROL_LOCKS,
   CONTENT_CONTROL_RANGE_LOCATIONS,
-  CONTENT_CONTROL_SUBTYPES,
   allControlsUnder,
   contentControlTextInsertionError,
   contentControlValueOf,
@@ -2612,6 +2613,17 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         const found = controlOf(operation.contentControl);
         if (!('control' in found)) return found;
         if (
+          tracked &&
+          (!ownsInsertedControl(found.reads.part, found.control.nodeId, trackingAuthor!) ||
+            operation.lock !== undefined ||
+            operation.cannotEdit !== undefined ||
+            operation.cannotDelete !== undefined)
+        )
+          return refuse(
+            'unsupported-capability',
+            'tracked control metadata requires an own pending insertion; locks require direct edits'
+          );
+        if (
           operation.tag === undefined &&
           operation.title === undefined &&
           operation.lock === undefined &&
@@ -2780,63 +2792,18 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         };
       }
 
-      case 'insertContentControl': {
-        const resolved = resolveSpanRef(operation.span, handles, packageReads);
-        if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
-        if (!resolved.value)
-          return refuse('invalid-offset', 'that story holds nothing to wrap', 'empty-story');
-        const story = storyReadsOf(resolved.value);
-        if (!story) return refuse('invalid-handle', 'that story is not in this document');
-        const range = resolved.value;
-        // ONE PARAGRAPH: a control that starts in one paragraph and ends in another is a BLOCK
-        // control over both, which is a different wrapper than the inline one this operation
-        // authors. Refused rather than guessed, so a caller learns which they asked for.
-        if (range.start.paragraphId !== range.end.paragraphId) {
-          return refuse(
-            'unsupported-content',
-            'wrapping several paragraphs in one control is not supported here',
-            'multi-paragraph'
-          );
-        }
-        if (!CONTENT_CONTROL_SUBTYPES.has(operation.subtype)) {
-          return refuse(
-            'unsupported-content',
-            'that control type cannot be inserted',
-            operation.subtype
-          );
-        }
-        const existingControlIds = new Set(allControlsUnder(story.root).map((node) => node.id));
-        const plan = planFor(story);
-        const pin = pinWrite(plan);
-        if (pin) return pin;
-        const conflict = claim(plan, range.start.paragraphId);
-        if (conflict) return conflict;
-        return {
-          ok: true,
-          kind: 'command',
-          story: story.story,
-          ops: [
-            {
-              op: 'insertContentControl',
-              paragraphId: range.start.paragraphId,
-              start: range.start.offset,
-              end: range.end.offset,
-              type: operation.subtype,
-              ...(operation.tag === undefined ? {} : { tag: operation.tag }),
-              ...(operation.title === undefined ? {} : { alias: operation.title }),
-            },
-          ],
-          answer: (post) => {
-            if (!operation.returnHandle) return APPLIED;
-            const after = post.story(story.story);
-            const created =
-              after &&
-              allControlsUnder(after.root).find((node) => !existingControlIds.has(node.id));
-            if (!created) throw new Error('content control insertion did not create a control');
-            return { kind: 'handle', handle: handles.contentControl(created.id, story.story) };
-          },
-        };
-      }
+      case 'insertContentControl':
+        return planContentControlInsertion(
+          operation,
+          handles,
+          packageReads,
+          trackingAuthor,
+          host.trackedRangeReplacement,
+          (story, paragraphId) => {
+            const plan = planFor(story);
+            return pinWrite(plan) ?? claim(plan, paragraphId);
+          }
+        );
 
       case 'insertCustomNode': {
         // Everything that can be judged from the request alone, before a handle is resolved.

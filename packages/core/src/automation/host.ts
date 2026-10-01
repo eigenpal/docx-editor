@@ -220,6 +220,8 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
         (!supportsTrackedAutomationOperation(operation) ||
           (!stagedTracking.author &&
             [
+              'insertContentControl',
+              'setContentControlProperties',
               'startNewList',
               'setListLevelFormat',
               'insertTable',
@@ -248,7 +250,11 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       if (!step.ok) return refuse(operations, index, step.error, revision);
       planned.push(step);
       if (step.kind === 'command') {
-        if (stagedTracking.author && step.packageEdits?.length) requiresReview = true;
+        if (
+          stagedTracking.author &&
+          (step.packageEdits?.length || operation.op === 'setContentControlProperties')
+        )
+          requiresReview = true;
         if (step.packageEdits) packageEdits.push(...step.packageEdits);
         if (firstCommand < 0) firstCommand = index;
         if (step.lifecycle) lifecycle = step.ops[0] ?? null;

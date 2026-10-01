@@ -1085,9 +1085,7 @@ class Range_2 extends ModelObject implements PromisedItem {
     insertBreak(breakType: BreakType | 'Page' | 'SectionNext' | 'Next' | 'Line' | 'SectionContinuous' | 'SectionEven' | 'SectionOdd', insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After'): void;
     insertComment(commentText: string): Comment_2;
     insertContentControl(contentControlType?: ContentControlType.richText | ContentControlType.plainText | ContentControlType.buildingBlockGallery | ContentControlType.checkBox | ContentControlType.comboBox | ContentControlType.datePicker | ContentControlType.dropDownList | ContentControlType.group | ContentControlType.picture | ContentControlType.repeatingSection | 'RichText' | 'PlainText' | 'BuildingBlockGallery' | 'CheckBox' | 'ComboBox' | 'DatePicker' | 'DropDownList' | 'Group' | 'Picture' | 'RepeatingSection'): ContentControl;
-    // (undocumented)
     insertField(insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace', fieldType?: FieldType, text?: string, removeFormatting?: boolean): Field;
-    // (undocumented)
     insertField(insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace', fieldType?: FieldTypeLiteral, text?: string, removeFormatting?: boolean): Field;
     insertInlinePictureFromBase64(base64EncodedImage: string, insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace'): InlinePicture;
     insertParagraph(paragraphText: string, insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After'): Paragraph;

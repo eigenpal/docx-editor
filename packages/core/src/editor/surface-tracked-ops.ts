@@ -48,6 +48,7 @@ export function isTrackedEdit(op: TreeDocOp): boolean {
       return true;
     // Paste proposes its breaks through the op itself, so a paste of newlines alone is a
     // tracked edit with no `insertText` beside it to report for it.
+    case 'insertContentControl':
     case 'authorTable':
     case 'setListNumbering':
     case 'setListLevel':

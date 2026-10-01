@@ -1,3 +1,16 @@
+import { canTrackContentControl } from './tracked-content-control-insert.ts';
+import { findNode } from '../package/ooxml-edit.ts';
+import {
+  INSERTABLE_CONTENT_CONTROL_TYPES,
+  isWritableContentControlMetadata,
+} from './tree-op-content-controls.ts';
+import { invalidRevisionAttribution, type TreeDocOp } from './tree-op-types.ts';
+import {
+  isParagraph,
+  paragraphLength,
+  splitsSurrogate,
+  indivisibleAt,
+} from './tree-op-segments.ts';
 // Content-control restrictions, as the validator sees them (store lane).
 //
 // Split out of tree-op-validate.ts, which is at its line cap. `w:sdt` locks are the one
@@ -327,4 +340,48 @@ export function validateRemoveContentControl(
   if (!control) return 'unknown-control';
   if (effectiveLockOf(part, control).wrapper) return 'locked';
   return null;
+}
+
+export const CONTENT_CONTROL_LOCKS: ReadonlySet<string> = new Set([
+  'unlocked',
+  'sdtLocked',
+  'contentLocked',
+  'sdtContentLocked',
+]);
+
+export function validateInsertContentControl(
+  part: OoxmlPart,
+  op: Extract<TreeDocOp, { op: 'insertContentControl' }>
+): TreeOpRejection | null {
+  if (op.revision !== undefined && invalidRevisionAttribution(op.revision))
+    return 'invalid-property-value';
+  if (!INSERTABLE_CONTENT_CONTROL_TYPES.includes(op.type)) return 'invalidArgs';
+  for (const value of [op.tag, op.alias]) {
+    if (!isWritableContentControlMetadata(value)) return 'invalid-property-value';
+  }
+  if (op.lock !== undefined && !CONTENT_CONTROL_LOCKS.has(op.lock)) return 'invalidArgs';
+  if (!Number.isInteger(op.start) || !Number.isInteger(op.end)) return 'invalid-range';
+  const paragraph = findNode(part, op.paragraphId);
+  if (!paragraph) return 'unknown-paragraph';
+  if (!isParagraph(paragraph)) return 'not-a-paragraph';
+  if (op.start < 0 || op.end > paragraphLength(paragraph) || op.start > op.end) {
+    return 'invalid-range';
+  }
+  if (splitsSurrogate(paragraph, op.start) || splitsSurrogate(paragraph, op.end)) {
+    return 'splits-surrogate-pair';
+  }
+  // BOTH EDGES, and here rather than in the applier: a control is a sibling of runs, so an
+  // edge strictly inside a hyperlink, an inline control or an atomic field is not a place one
+  // can start or stop. The applier refused these too, but only after `can` had already told a
+  // caller the command was live — a disabled button that runs, or an enabled one that fails.
+  if (indivisibleAt(paragraph, op.start) || indivisibleAt(paragraph, op.end)) {
+    return 'indivisible-content';
+  }
+  // The same restriction check every other range op runs: a locked or bound control the span
+  // touches, and forms protection. The applier answered it, so the write was refused — but
+  // only after `can` had already told chrome the command was live, on exactly the document
+  // class this verb is for.
+  if (op.revision && !canTrackContentControl(part, op.paragraphId, op.start, op.end))
+    return 'indivisible-content';
+  return rejectContentEdit(part, paragraph, op.start, op.end);
 }

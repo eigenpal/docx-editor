@@ -61,7 +61,7 @@
   },
   "Word.Document#changeTrackingMode": {
     "status": "partial",
-    "notes": "Off and TrackMineOnly control this automation runtime only; the mode is not saved as a document-wide policy. TrackMineOnly requires a configured author and supports inline text, font, paragraph-format, and paragraph-style edits. Browser tracked writes require the review module and remain subject to the editor UI mode. TrackAll refuses. Paragraph insertion and list membership changes support native revisions. Table row additions and partial deletions support native row revisions. Existing list definitions, page layout, and control structure still refuse. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration."
+    "notes": "Off and TrackMineOnly control this automation runtime only; the mode is not saved as a document-wide policy. TrackMineOnly requires a configured author and supports inline text, font, paragraph-format, and paragraph-style edits. Browser tracked writes require the review module and remain subject to the editor UI mode. TrackAll refuses. Paragraph insertion and list membership changes support native revisions. Table row additions and partial deletions support native row revisions. Existing list definitions and page layout still refuse. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control’s tag and title. Empty ranges, existing review markup, and other control structure changes refuse. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration."
   },
   "Word.Comment#creationDate": {
     "status": "partial",
@@ -225,7 +225,7 @@
   },
   "Word.Range#insertField": {
     "status": "partial",
-    "notes": "Supports Page and NumPages with no switches, or Empty/default with text PAGE or NUMPAGES. Other field types, switches, and removeFormatting=true refuse. Inserts a simple field with an empty cached result; call updateResult to compute it. Before/Start and After/End use range endpoints; Replace requires one paragraph. Sync before configuring the returned field proxy."
+    "notes": "Supports Page and NumPages with no switches, or Empty/default with text PAGE or NUMPAGES. Other field types, unsupported switches, and removeFormatting=true refuse. Inserts a simple field with an empty cached result; call updateResult to compute supported page fields. Before/Start and After/End use range endpoints; Replace requires one paragraph. Sync before configuring the returned field proxy. Also accepts TOC with optional \\o \"1-3\", \\h, \\z, and \\u switches. The outline range accepts ascending levels 1 through 9. TOC creation saves an empty cached result; TOC evaluation and code writes remain unsupported. Tracked field creation refuses."
   },
   "Word.Field#code": {
     "status": "partial",
@@ -597,15 +597,15 @@
   },
   "Word.Range#insertContentControl": {
     "status": "partial",
-    "notes": "Creates RichText, PlainText, and DatePicker controls around an eligible single-paragraph range. Other types refuse. Sync before configuring the returned proxy. DatePicker creates a real date SDT; typed date configuration accessors remain unavailable."
+    "notes": "Creates RichText, PlainText, and DatePicker controls around an eligible single-paragraph range. Other types refuse. Sync before configuring the returned proxy. DatePicker creates a real date SDT; typed date configuration accessors remain unavailable. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control’s tag and title. Empty ranges, existing review markup, and other control structure changes refuse."
   },
   "Word.ContentControl#tag": {
     "status": "partial",
-    "notes": "Writes the control metadata string while preserving its contents and other properties. The control must still exist and pass canonical protection/binding checks."
+    "notes": "Writes the control metadata string while preserving its contents and other properties. The control must still exist and pass canonical protection/binding checks. While tracking, only the author of a pending inserted control can write this property."
   },
   "Word.ContentControl#title": {
     "status": "partial",
-    "notes": "Writes the control metadata string while preserving its contents and other properties. The control must still exist and pass canonical protection/binding checks."
+    "notes": "Writes the control metadata string while preserving its contents and other properties. The control must still exist and pass canonical protection/binding checks. While tracking, only the author of a pending inserted control can write this property."
   },
   "Word.ContentControl#delete": {
     "status": "partial",

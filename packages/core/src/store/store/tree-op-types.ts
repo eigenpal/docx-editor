@@ -915,6 +915,8 @@ export type TreeDocOp =
        * that were there; only the run boundaries move.
        */
       readonly op: 'insertContentControl';
+      /** Record a wrapper over existing text as a native replacement revision. */
+      readonly revision?: RevisionAttributionInput;
       readonly paragraphId: string;
       readonly start: number;
       readonly end: number;

@@ -59,7 +59,7 @@ const TYPE_ELEMENT_FOR: Readonly<Record<InsertableContentControlKind, string>> =
 type InsertOp = Extract<TreeDocOp, { op: 'insertContentControl' }>;
 
 /** `w:sdtPr` + the type element, in schema order, with the op's metadata on it. */
-function propertiesFor(part: OoxmlPart, op: InsertOp, nextId: () => string): OoxmlElement {
+export function propertiesFor(part: OoxmlPart, op: InsertOp, nextId: () => string): OoxmlElement {
   // Inside the store transaction, so the collaboration actor is already bound. A second
   // local max+1 here would ignore that bind and collide the moment two peers insert.
   const allocated = allocateContentControlId(part.root);
@@ -84,7 +84,7 @@ function propertiesFor(part: OoxmlPart, op: InsertOp, nextId: () => string): Oox
   } as OoxmlElement;
 }
 
-function controlElement(
+export function controlElement(
   properties: OoxmlElement,
   content: readonly OoxmlNode[],
   nextId: () => string

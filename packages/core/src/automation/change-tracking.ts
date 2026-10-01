@@ -57,6 +57,8 @@ export function supportsTrackedAutomationOperation(operation: AutomationOperatio
   if (operation.op === 'updateTable' || operation.op === 'updateTableCell') return true;
   if (operation.op === 'replaceSpan' && !('body' in operation.span)) return true;
   return [
+    'insertContentControl',
+    'setContentControlProperties',
     'startNewList',
     'setListLevelFormat',
     'attachToList',

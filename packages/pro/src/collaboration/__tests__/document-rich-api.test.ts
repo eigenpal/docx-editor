@@ -665,3 +665,151 @@ test('suggesting peers refuse permanent table edits with runtime tracking Off', 
     r.close();
   }
 });
+
+for (const action of ['edit', 'delete'] as const) {
+  test(`tracked control wrapping refuses before concurrent ${action} of its target`, async () => {
+    const r = await room(zipDocument('<w:p><w:r><w:t>Date: [Date]</w:t></w:r></w:p>'));
+    try {
+      r.pair.pause();
+      const before = new Uint8Array(await r.peers[0]!.editor.save());
+      await expect(
+        r.peers[0]!.runtime.run(async (c) => {
+          c.document.changeTrackingMode = 'TrackMineOnly';
+          const ranges = c.document.body.search('[Date]');
+          ranges.load('items');
+          await c.sync();
+          ranges.items[0]!.insertContentControl('DatePicker');
+          await c.sync();
+        })
+      ).rejects.toMatchObject({ code: 'NotSupported' });
+      expect(new Uint8Array(await r.peers[0]!.editor.save())).toEqual(before);
+      await r.peers[1]!.runtime.run(async (c) => {
+        const ranges = c.document.body.search('Date]');
+        ranges.load('items');
+        await c.sync();
+        if (action === 'edit') ranges.items[0]!.insertText('Updated]', 'Replace');
+        else ranges.items[0]!.delete();
+        await c.sync();
+      });
+      r.sync();
+      r.pair.resume();
+      r.sync();
+      const bytes = await Promise.all(
+        r.peers.map(async (peer) => new Uint8Array(await peer.editor.save()))
+      );
+      const documents = await Promise.all(bytes.map((value) => DocxEditor.createServer(value)));
+      try {
+        const texts = [];
+        for (const document of documents) {
+          texts.push(
+            await document.run(async (c) => {
+              c.document.body.load('text');
+              await c.sync();
+              return c.document.body.text;
+            })
+          );
+        }
+        expect(texts[0]).toBe(texts[1]);
+        expect(texts[0]).toBe(action === 'edit' ? 'Date: [Updated]' : 'Date: [');
+      } finally {
+        for (const document of documents) document.dispose();
+      }
+      expect(r.peers[1]!.editor.exec({ type: 'undo' }).ok).toBe(true);
+      r.sync();
+      expect(r.peers[0]!.editor.surface!.session.bodyText()).toBe(
+        r.peers[1]!.editor.surface!.session.bodyText()
+      );
+      expect(r.peers[1]!.editor.exec({ type: 'redo' }).ok).toBe(true);
+      r.sync();
+      expect(r.peers[0]!.editor.surface!.session.bodyText()).toBe(
+        r.peers[1]!.editor.surface!.session.bodyText()
+      );
+    } finally {
+      r.close();
+    }
+  });
+}
+
+test('TOC field insertion converges with concurrent text and survives reconnect, undo, and redo', async () => {
+  const r = await room(
+    zipDocument('<w:p><w:r><w:t>Contents</w:t></w:r></w:p><w:p><w:r><w:t>Heading</w:t></w:r></w:p>')
+  );
+  try {
+    r.pair.pause();
+    await r.peers[0]!.runtime.run(async (c) => {
+      c.document.body.paragraphs
+        .getFirst()
+        .getRange('End')
+        .insertField('After', 'TOC', '\\o "1-3" \\h');
+      await c.sync();
+    });
+    await r.peers[1]!.runtime.run(async (c) => {
+      c.document.body.paragraphs.getLast().insertText(' updated', 'End');
+      await c.sync();
+    });
+    r.sync();
+    r.pair.resume();
+    r.sync();
+    for (const peer of r.peers) {
+      const reopened = await DocxEditor.createServer(new Uint8Array(await peer.editor.save()));
+      try {
+        await reopened.run(async (c) => {
+          c.document.body.fields.load('items');
+          c.document.body.load('text');
+          await c.sync();
+          expect(c.document.body.fields.items).toHaveLength(1);
+          expect(c.document.body.text).toContain('Heading updated');
+          c.document.body.fields.items[0]!.load('code');
+          await c.sync();
+          expect(c.document.body.fields.items[0]!.code).toBe('TOC \\o "1-3" \\h');
+        });
+      } finally {
+        reopened.dispose();
+      }
+    }
+    const rejoined = await r.harness.join(r.pair.alice, 'toc-rejoined');
+    const joinedContainer = document.createElement('div');
+    document.body.appendChild(joinedContainer);
+    const joinedEditor = createDocxEditor({
+      container: joinedContainer,
+      document: rejoined.room.document,
+      modules: [reviewModule(), collaborationModule({ session: rejoined.room.session })],
+    });
+    const joinedRuntime = DocxEditor.createBrowser(joinedEditor);
+    try {
+      await joinedRuntime.run(async (c) => {
+        c.document.body.fields.load('items');
+        c.document.body.load('text');
+        await c.sync();
+        expect(c.document.body.text).toContain('Heading updated');
+        expect(c.document.body.fields.items).toHaveLength(1);
+        c.document.body.fields.items[0]!.load('code');
+        await c.sync();
+        expect(c.document.body.fields.items[0]!.code).toBe('TOC \\o "1-3" \\h');
+      });
+    } finally {
+      joinedRuntime.dispose();
+      joinedEditor.destroy();
+      joinedContainer.remove();
+      r.harness.leave(rejoined);
+    }
+    expect(r.peers[0]!.editor.exec({ type: 'undo' }).ok).toBe(true);
+    r.sync();
+    for (const peer of r.peers)
+      await peer.runtime.run(async (c) => {
+        c.document.body.fields.load('items');
+        await c.sync();
+        expect(c.document.body.fields.items).toHaveLength(0);
+      });
+    expect(r.peers[0]!.editor.exec({ type: 'redo' }).ok).toBe(true);
+    r.sync();
+    for (const peer of r.peers)
+      await peer.runtime.run(async (c) => {
+        c.document.body.fields.load('items');
+        await c.sync();
+        expect(c.document.body.fields.items).toHaveLength(1);
+      });
+  } finally {
+    r.close();
+  }
+});

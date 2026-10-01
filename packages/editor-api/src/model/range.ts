@@ -290,6 +290,8 @@ export class Range extends ModelObject implements PromisedItem {
   /**
    * Wrap this single-paragraph range in a rich-text, plain-text, or date-picker content control.
    * Await sync before configuring the returned control. Other types explicitly refuse.
+   * TrackMineOnly supports nonempty ordinary text outside collaboration.
+   * Existing revisions and empty tracked ranges refuse with NotSupported.
    */
   insertContentControl(
     contentControlType?:
@@ -355,19 +357,30 @@ export class Range extends ModelObject implements PromisedItem {
       'span'
     ));
   }
+  /**
+   * Insert PAGE, NUMPAGES, or an inert TOC field with supported switches.
+   * TOC entries are not calculated. Tracked field insertion refuses.
+   */
   insertField(
     insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace',
     fieldType?: FieldType,
     text?: string,
     removeFormatting?: boolean
   ): Field;
+  /**
+   * Insert PAGE, NUMPAGES, or an inert TOC field with supported switches.
+   * TOC entries are not calculated. Tracked field insertion refuses.
+   */
   insertField(
     insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace',
     fieldType?: FieldTypeLiteral,
     text?: string,
     removeFormatting?: boolean
   ): Field;
-  /** Insert PAGE or NUMPAGES. Sync before configuring the returned field. */
+  /**
+   * Insert PAGE, NUMPAGES, or an inert TOC field with supported switches.
+   * TOC entries are not calculated. Tracked field insertion refuses.
+   */
   insertField(
     insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace',
     fieldType?: FieldType | FieldTypeLiteral,

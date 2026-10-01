@@ -1,4 +1,5 @@
 import type { DocxEditorRuntime, RequestContext } from '@docx-editor.dev/editor-api';
+import { insertParagraphs } from './insert-paragraphs';
 import * as s from './editing-schemas';
 import {
   assignDefined,
@@ -57,6 +58,8 @@ export async function editDocument(
     if (name === 'edit_text') {
       const data = s.textSchema.parse(input);
       const body = await bodyFor(context, data.story);
+      const inserted = await insertParagraphs(context, body, data, state);
+      if (inserted) return inserted;
       const targets = await resolveTargets(
         context,
         body,
@@ -295,7 +298,7 @@ export async function editDocument(
       const body = await bodyFor(context, data.story);
       if (op.action === 'insert') {
         const [target] = await resolveTargets(context, body, [op.target], state, data.story);
-        target!.range.insertField(op.location, op.type);
+        target!.range.insertField(op.location, op.type, op.switches);
       } else {
         const field = await objectAt(context, body.fields, op.field, state, data.story, 'fields');
         if (op.action === 'code') field.code = op.code;

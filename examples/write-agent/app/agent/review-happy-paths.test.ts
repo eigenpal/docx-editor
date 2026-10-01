@@ -383,3 +383,100 @@ for (const mode of ['direct', 'suggest'] as const) {
     }
   });
 }
+
+for (const decision of ['acceptAll', 'rejectAll'] as const) {
+  test(`suggests text and date controls in one paragraph and ${decision}`, async () => {
+    const runtime = await DocxEditor.createServer(seedDocx(), {
+      author: 'Writer agent',
+      revisionTextView: 'original',
+    });
+    try {
+      await runtime.run(async (c) => {
+        c.document.body.insertText('Name: [Name]; Date: [Date]', 'Replace');
+        await c.sync();
+      });
+      const paragraph = (await inspect(runtime, 'paragraphs'))[0];
+      await call(
+        runtime,
+        'insert_content_controls',
+        {
+          fields: [
+            {
+              paragraphId: paragraph.id,
+              search: '[Name]',
+              type: 'PlainText',
+              tag: 'name',
+              title: 'Name',
+            },
+            {
+              paragraphId: paragraph.id,
+              search: '[Date]',
+              type: 'DatePicker',
+              tag: 'date',
+              title: 'Date',
+            },
+          ],
+        },
+        'suggest'
+      );
+      const reopened = await DocxEditor.createServer(await runtime.save());
+      try {
+        await reopened.run(async (c) => {
+          c.document.body.revisions[decision]();
+          await c.sync();
+          c.document.body.load('text');
+          c.document.contentControls.load('items');
+          await c.sync();
+          expect(c.document.body.text).toBe('Name: [Name]; Date: [Date]');
+          expect(c.document.contentControls.items).toHaveLength(decision === 'acceptAll' ? 2 : 0);
+          for (const control of c.document.contentControls.items) control.load('subtype,tag');
+          await c.sync();
+          if (decision === 'acceptAll')
+            expect(
+              c.document.contentControls.items.map((control) => [control.subtype, control.tag])
+            ).toEqual([
+              ['plainText', 'name'],
+              ['date', 'date'],
+            ]);
+        });
+      } finally {
+        reopened.dispose();
+      }
+    } finally {
+      runtime.dispose();
+    }
+  });
+}
+
+for (const mode of ['direct', 'suggest'] as const) {
+  test(`paragraph insertion preserves request order in ${mode}`, async () => {
+    const runtime = await DocxEditor.createServer(seedDocx(), { author: 'Writer agent' });
+    try {
+      const target = (await inspect(runtime, 'paragraphs'))[0];
+      await call(
+        runtime,
+        'edit_text',
+        {
+          edits: ['First', 'Second', 'Third'].map((text) => ({
+            action: 'insertParagraph',
+            target: { paragraphId: target.id },
+            location: 'After',
+            text,
+          })),
+        },
+        mode
+      );
+      await runtime.run(async (c) => {
+        if (mode === 'suggest') {
+          c.document.body.revisions.acceptAll();
+          await c.sync();
+        }
+        c.document.body.load('text');
+        await c.sync();
+        expect(c.document.body.text).toContain('First\rSecond\rThird');
+      });
+    } finally {
+      runtime.dispose();
+    }
+  });
+}

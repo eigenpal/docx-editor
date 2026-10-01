@@ -10,6 +10,7 @@ type Execute = (
   signal: AbortSignal
 ) => Promise<ToolResult>;
 interface Pending {
+  insertionAnchors: Map<string, string>;
   name: StreamTool;
   inputs: Record<string, unknown>[];
   queue: Promise<void>;
@@ -38,6 +39,7 @@ export class WriterStreamEdits {
     if (!call) {
       call = {
         name: part.toolName,
+        insertionAnchors: new Map(),
         inputs: [],
         queue: Promise.resolve(),
         completed: [],
@@ -82,9 +84,37 @@ export class WriterStreamEdits {
     current.queue = current.queue.then(async () => {
       if (current.stopped) return;
       try {
+        let appliedInput = input;
+        let anchorKey: string | undefined;
+        let appliedAnchor: string | undefined;
+        if (part.toolName === 'edit_text') {
+          const edit = (
+            input.edits as {
+              action: string;
+              location?: string;
+              target?: { paragraphId: string; search?: string };
+            }[]
+          )[0];
+          if (edit?.action === 'insertParagraph' && edit.target) {
+            anchorKey = JSON.stringify([input.story, edit.target.paragraphId, edit.location]);
+            appliedAnchor = current.insertionAnchors.get(anchorKey) ?? edit.target.paragraphId;
+            appliedInput = {
+              ...input,
+              edits: [
+                {
+                  ...edit,
+                  location: current.insertionAnchors.has(anchorKey) ? 'After' : edit.location,
+                  target: current.insertionAnchors.has(anchorKey)
+                    ? { paragraphId: appliedAnchor }
+                    : edit.target,
+                },
+              ],
+            };
+          }
+        }
         const result = await this.execute(
           part.toolName,
-          input,
+          appliedInput,
           `${part.toolCallId}:part:${part.index}`,
           part.toolName === 'create_document' && part.index > 0,
           part.toolName === 'create_document' &&
@@ -92,6 +122,10 @@ export class WriterStreamEdits {
             (current.inputs[part.index - 1]?.blocks as { kind: string }[])[0]?.kind === 'list',
           current.abort.signal
         );
+        if (result.success && anchorKey && appliedAnchor) {
+          const next = JSON.parse(result.output).insertionAnchors?.[appliedAnchor];
+          if (typeof next === 'string') current.insertionAnchors.set(anchorKey, next);
+        }
         current.completed.push(...(result.completedSteps ?? []));
         if (current.stopped) return;
         current.result = result;

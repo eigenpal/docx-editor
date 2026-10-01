@@ -197,7 +197,7 @@ export const WRITER_TOOLS = {
   }),
   edit_field: tool({
     description:
-      'Insert, change, calculate, or delete PAGE/NUMPAGES fields. Server calculation requires a pagination measurer. Other field codes are unsupported.',
+      'Insert, change, calculate, or delete PAGE/NUMPAGES fields. Server calculation requires a pagination measurer. You can insert an inert TOC field with supported switches; TOC calculation and code changes refuse.',
     inputSchema: editing.fieldSchema,
   }),
   read_document: tool({
@@ -225,7 +225,7 @@ export const WRITER_TOOLS = {
   }),
   insert_content_controls: tool({
     description:
-      'Create actual SDT (structured document tag) content controls around existing field text. Preserve labels and headings. Direct edits support PlainText, RichText, and DatePicker. Suggestions refuse wrapper creation. Choose DatePicker for calendar dates. Dropdown and combo-box creation remain unsupported. Each field commits separately.',
+      'Create actual SDT (structured document tag) content controls around existing field text. Preserve labels and headings. PlainText, RichText, and DatePicker support direct edits and Suggestions. Suggestions require nonempty ordinary text without existing review markup, outside collaboration. Choose DatePicker for calendar dates. Dropdown and combo-box creation remain unsupported. Each field commits separately.',
     inputSchema: insertContentControlsSchema,
   }),
   write_header_footer: tool({

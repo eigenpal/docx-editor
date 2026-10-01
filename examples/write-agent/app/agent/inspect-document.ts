@@ -2,7 +2,11 @@ import type { DocxEditorRuntime } from '@docx-editor.dev/editor-api';
 import { inspectSchema } from './editing-schemas';
 import { bodyFor, stateFor, storyKey, rememberParagraph } from './document-access';
 
-export async function inspectDocument(runtime: DocxEditorRuntime, input: unknown) {
+export async function inspectDocument(
+  runtime: DocxEditorRuntime,
+  input: unknown,
+  textOnly = false
+) {
   const { story, area, offset, limit } = inspectSchema.parse(input);
   const state = stateFor(runtime);
   return runtime.run(async (context) => {
@@ -34,6 +38,10 @@ export async function inspectDocument(runtime: DocxEditorRuntime, input: unknown
     if (area === 'paragraphs') {
       const ps = body.paragraphs.items.slice(offset, offset + limit);
       for (const p of ps) {
+        if (textOnly) {
+          p.load(['uniqueLocalId', 'text', 'style']);
+          continue;
+        }
         p.load([
           'uniqueLocalId',
           'text',
@@ -62,6 +70,7 @@ export async function inspectDocument(runtime: DocxEditorRuntime, input: unknown
       await context.sync();
       records = ps.map((p, index) => {
         const id = rememberParagraph(state, story, p, { kind: 'paragraph', index: offset + index });
+        if (textOnly) return { id, text: p.text, style: p.style };
         return {
           id,
           text: p.text,
