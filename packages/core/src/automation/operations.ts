@@ -1,20 +1,7 @@
 import type { AutomationAuthoringOperation } from './authoring-operations.ts';
-// The typed operation vocabulary.
-//
-// Each operation reads one canonical package snapshot or becomes `TreeDocOp`s committed
-// through the single transaction path. Nothing in between exists: there is no "read after write in the same batch", because a batch is one
-// atomic transaction and a query that answered post-commit state would describe a document
-// nobody had published yet.
-//
-// ADDRESSING IS ONE VOCABULARY: a stable paragraph handle plus a UTF-16 model offset
-// (`AutomationEndpoint`). A position may also be given as a story EDGE — the start or the end
-// of a body — because an object model that wants "append to the document" would otherwise have
-// to list every paragraph first just to find the last one, and the host already knows.
-//
-// WHERE A HANDLE IS RESOLVED matters for what a command can answer. A read names objects that
-// already exist, so its answer is available while the batch is being planned. A command that
-// CREATES a paragraph cannot name it in advance — the canonical node does not exist yet — so
-// those operations answer after the commit, from the state they made. See `plan.ts`.
+// Operations read one package snapshot or commit through the canonical transaction path.
+// Reads resolve existing handles before writes commit. Created objects become addressable
+// after commit. Endpoints use paragraph handles and UTF-16 offsets, or story edges.
 
 import type { AutomationFontWrite, AutomationParagraphFormatWrite } from './formatting.ts';
 import type { AutomationEndpoint, AutomationHandle } from './protocol.ts';
@@ -164,6 +151,14 @@ export type AutomationOperation =
     }
   /** The document itself — the root every other handle is reached through. */
   | { readonly op: 'getDocument' }
+  | {
+      readonly op: 'getDocumentProperty';
+      readonly name: import('../store/package/document-property-writes.ts').DocumentPropertyName;
+    }
+  | {
+      readonly op: 'setDocumentProperties';
+      readonly values: import('../store/package/document-property-writes.ts').DocumentPropertyWrites;
+    }
   /** The main story of a document. */
   | { readonly op: 'getBody'; readonly document: AutomationHandle }
   /**
@@ -373,7 +368,12 @@ export type AutomationOperation =
    * The reserved separator and continuation-separator notes (`w:id` -1 and 0) are not notes a
    * caller can reach: reporting them would say the document has two more footnotes than it has.
    */
-  | { readonly op: 'getNotes'; readonly document: AutomationHandle; readonly noteKind: NoteKind }
+  | {
+      readonly op: 'getNotes';
+      readonly document: AutomationHandle;
+      readonly noteKind: NoteKind;
+      readonly scope?: AutomationHandle;
+    }
   /** One note's story, as a BODY. Two notes in one part are two stories. */
   | { readonly op: 'getNoteBody'; readonly note: AutomationHandle }
   /**
@@ -827,6 +827,7 @@ export const AUTOMATION_QUERY_OPERATIONS = [
   'getInlinePicture',
   'getChangeTrackingMode',
   'getDocument',
+  'getDocumentProperty',
   'getBody',
   'getParagraphs',
   'getRange',
@@ -887,6 +888,8 @@ export const AUTOMATION_QUERY_OPERATIONS = [
 
 /** Operations that write. Every one of these goes through the single transaction path. */
 export const AUTOMATION_COMMAND_OPERATIONS = [
+  'setDocumentProperties',
+  'insertTableRows',
   'insertTable',
   'updateTable',
   'updateTableCell',
@@ -949,6 +952,7 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
  * caller's batch is published. Refused while planning instead.
  */
 export const AUTOMATION_SOLITARY_OPERATIONS = [
+  'insertTableRows',
   'resolveRevisionBatch',
   'insertTable',
   'insertInlinePicture',

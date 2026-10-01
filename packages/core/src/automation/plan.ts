@@ -1,3 +1,5 @@
+import { planDocumentProperties } from './plan-document-properties.ts';
+import { referencedNoteIds } from './note-references.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
 import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import { createContextualRunFormatting } from '../layout/complex-script-formatting.ts';
@@ -160,6 +162,7 @@ interface Slot {
 }
 
 export interface BatchPlannerHost {
+  readonly collaborative?: boolean;
   readonly trackedRangeReplacement?: boolean;
   readonly fieldPageContext?: (
     story: AutomationStoryId,
@@ -1630,6 +1633,14 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           },
           trackingAuthor
         );
+      case 'getDocumentProperty':
+      case 'setDocumentProperties':
+        return planDocumentProperties(
+          operation,
+          packageReads,
+          () => pinWrite(planFor(packageReads.body!)),
+          !host.collaborative
+        );
       case 'getDocument':
         return query({ kind: 'handle', handle: handles.document() });
 
@@ -1983,9 +1994,20 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             `${kind} identities are not completely and unambiguously enumerable`,
             listing.reason === 'duplicates' ? listing.duplicateIds.join(',') : listing.reason
           );
+        let ids = listing.ids;
+        if (operation.scope) {
+          const scope = storyOfHandle(operation.scope, 'body', handles, packageReads);
+          if (!scope.ok)
+            return refuse(scope.code, 'that handle does not name a body', scope.detail);
+          const referenced = referencedNoteIds(scope.value.root, kind);
+          const available = new Set(listing.ids);
+          if (referenced.some((id) => !available.has(id)))
+            return refuse('ambiguous-document', 'a note reference has no matching note');
+          ids = referenced;
+        }
         return query({
           kind: 'handles',
-          handles: listing.ids.map((noteId) => handles.note(kind, noteId)),
+          handles: ids.map((noteId) => handles.note(kind, noteId)),
         });
       }
 

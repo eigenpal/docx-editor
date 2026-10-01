@@ -295,6 +295,9 @@ describe('informational report', () => {
       for (const uid of ['Word.Body#insertText', 'Word.Font#bold', 'Word.Table#addRows']) {
         expect(report.endpoints.some((row) => row.uid === uid)).toBe(true);
       }
+      expect(report.endpoints.find((row) => row.uid === 'Word.TableRow#insertRows')?.status).toBe(
+        'match'
+      );
       expect(JSON.stringify(actual)).not.toContain(process.cwd());
     },
     ACTUAL_INVENTORY_BUDGET_MS

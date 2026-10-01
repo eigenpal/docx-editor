@@ -35,6 +35,7 @@ const refuse = (code: AutomationErrorCode, detail: string): PlannedOperation => 
 });
 const query = (value: AutomationValue): PlannedOperation => ({ ok: true, kind: 'query', value });
 const TABLE_OPS = new Set([
+  'insertTableRows',
   'getTables',
   'getTable',
   'getTableRows',
@@ -161,9 +162,13 @@ export function planTableOperation(
   }
   // Every remaining operation names an existing table, row, or cell.
   const named: 'table' | 'tableRow' | 'tableCell' =
-    operation.op === 'getTableCells' ? 'tableRow' : 'cell' in operation ? 'tableCell' : 'table';
+    operation.op === 'getTableCells' || operation.op === 'insertTableRows'
+      ? 'tableRow'
+      : 'cell' in operation
+        ? 'tableCell'
+        : 'table';
   const handle: AutomationHandle =
-    operation.op === 'getTableCells'
+    operation.op === 'getTableCells' || operation.op === 'insertTableRows'
       ? operation.row
       : 'cell' in operation
         ? operation.cell
@@ -229,12 +234,21 @@ export function planTableOperation(
           })
         : refuse('invalid-handle', 'cell-not-found');
     }
+    case 'insertTableRows':
     case 'updateTable':
     case 'updateTableCell': {
       let mutation: AutomationTableMutation =
-        operation.op === 'updateTable'
-          ? operation.mutation
-          : { ...operation.properties, kind: 'cell', cellId: target.nodeId };
+        operation.op === 'insertTableRows'
+          ? {
+              kind: 'insertRows',
+              rowId: target.nodeId,
+              location: operation.location,
+              count: operation.count,
+              ...(operation.values ? { values: operation.values } : {}),
+            }
+          : operation.op === 'updateTable'
+            ? operation.mutation
+            : { ...operation.properties, kind: 'cell', cellId: target.nodeId };
       if (mutation.kind === 'properties' && mutation.styleId !== undefined) {
         const wanted = mutation.styleId;
         if (typeof wanted !== 'string' || wanted.trim().length === 0)
@@ -291,7 +305,8 @@ export function planTableOperation(
           },
         ],
         answer: (post) => {
-          if (mutation.kind !== 'addRows') return { kind: 'applied' };
+          if (mutation.kind !== 'addRows' && mutation.kind !== 'insertRows')
+            return { kind: 'applied' };
           const current = post.story(reads.story);
           const updated = current && tableRead(current, table.id);
           return {

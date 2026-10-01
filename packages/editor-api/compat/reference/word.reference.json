@@ -33,6 +33,18 @@
             }
           ]
         },
+        "endnotes": {
+          "uid": "Word.Body#endnotes",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "NoteItemCollection"
+            }
+          ]
+        },
         "font": {
           "uid": "Word.Body#font",
           "kind": "property",
@@ -42,6 +54,18 @@
             {
               "params": [],
               "returns": "Font"
+            }
+          ]
+        },
+        "footnotes": {
+          "uid": "Word.Body#footnotes",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "NoteItemCollection"
             }
           ]
         },
@@ -713,6 +737,18 @@
             }
           ]
         },
+        "properties": {
+          "uid": "Word.Document#properties",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "DocumentProperties"
+            }
+          ]
+        },
         "revisions": {
           "uid": "Word.Document#revisions",
           "kind": "property",
@@ -734,6 +770,79 @@
             {
               "params": [],
               "returns": "SectionCollection"
+            }
+          ]
+        }
+      }
+    },
+    "DocumentProperties": {
+      "uid": "Word.DocumentProperties",
+      "kind": "class",
+      "requirementSet": "WordApi 1.3",
+      "members": {
+        "author": {
+          "uid": "Word.DocumentProperties#author",
+          "kind": "property",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "category": {
+          "uid": "Word.DocumentProperties#category",
+          "kind": "property",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "comments": {
+          "uid": "Word.DocumentProperties#comments",
+          "kind": "property",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "keywords": {
+          "uid": "Word.DocumentProperties#keywords",
+          "kind": "property",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "subject": {
+          "uid": "Word.DocumentProperties#subject",
+          "kind": "property",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "title": {
+          "uid": "Word.DocumentProperties#title",
+          "kind": "property",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
             }
           ]
         }

@@ -63,12 +63,25 @@ await runtime.run(async (context) => {
 | `TableCell.value` | Read or replace one cell's plain text |
 | `Table.rowCount`, `Table.columnCount` | Loaded, read-only dimensions |
 | `Table.addRows(location, rowCount, values?)` | Add rows at `Start` or `End`; return `TableRowCollection` |
+| `TableRow.insertRows(location, rowCount, values?)` | Add rows `Before` or `After` this row; return `TableRowCollection` |
 | `Table.addColumns(location, columnCount, values?)` | Add columns at `Start` or `End`; return `void` |
 | `Table.deleteRows(rowIndex, rowCount?)` | Delete rows from a zero-based index; default count is one |
 | `Table.deleteColumns(columnIndex, columnCount?)` | Delete columns from a zero-based index; default count is one |
 | `Table.delete()` | Delete the table and clean up its references |
 
 Value matrices must match the affected row and column dimensions. Do not assume ragged matrices or implicit resizing work. Deleting all rows or all columns removes the table. `Table.delete()` can remove an existing merged table. Deletion can still fail if the table is protected or its surrounding structure is unsupported. Sync structural changes before addressing newly added cells or relying on changed indexes.
+
+Row insertion preserves unrelated merged headers when the source row has ordinary cells covering the table grid. `addRows()` uses the first or last row as its source. `insertRows()` uses the addressed row. Merged source rows, row offsets, hidden source cells, and boundaries crossing vertical merges refuse with `InvalidArgument`. Tables with merges require an explicit grid. Other table mutations retain their documented restrictions.
+
+For example, insert before the first ordinary row after a merged header:
+
+```ts
+const table = context.document.body.tables.getFirst();
+table.rows.load('items');
+await context.sync();
+const added = table.rows.items[1].insertRows('Before', 1, [['Item', 'Price']]);
+await context.sync();
+```
 
 ## Format tables and cells
 
@@ -104,7 +117,7 @@ See [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) an
 
 ## Row suggestions
 
-Set `document.changeTrackingMode = 'TrackMineOnly'` before `Table.addRows()` or `Table.deleteRows()`. Added rows can include initial cell values. The runtime saves native `w:trPr/w:ins` and `w:trPr/w:del` revisions.
+Set `document.changeTrackingMode = 'TrackMineOnly'` before `Table.addRows()`, `TableRow.insertRows()`, or `Table.deleteRows()`. Added rows can include initial cell values. The runtime saves native `w:trPr/w:ins` and `w:trPr/w:del` revisions.
 
 Save and reopen preserve the suggestions. Use `body.revisions.acceptAll()` or `body.revisions.rejectAll()` to resolve complete tracked rows. The revision collection omits row revisions from `items`.
 

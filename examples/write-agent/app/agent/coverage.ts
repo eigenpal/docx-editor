@@ -1,5 +1,14 @@
 /** Application tool coverage of the repository's pinned editing profile. */
 export const EDITING_COVERAGE: Record<string, readonly string[]> = {
+  read_properties: ['Document.properties'],
+  edit_properties: [
+    'DocumentProperties.author',
+    'DocumentProperties.title',
+    'DocumentProperties.subject',
+    'DocumentProperties.keywords',
+    'DocumentProperties.comments',
+    'DocumentProperties.category',
+  ],
   create_document: ['Body.insertParagraph', 'Paragraph.insertText', 'Paragraph.style'],
   edit_text: ['Range.insertText', 'Range.delete', 'Paragraph.delete', 'Range.insertParagraph'],
   format_document: [
@@ -49,6 +58,7 @@ export const EDITING_COVERAGE: Record<string, readonly string[]> = {
   edit_table: [
     'Table.values',
     'Table.addRows',
+    'TableRow.insertRows',
     'Table.deleteRows',
     'Table.addColumns',
     'Table.deleteColumns',

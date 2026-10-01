@@ -141,3 +141,19 @@ Complete table insertion, table value replacement, row additions, and partial ro
 Repeated paragraph insertions preserve request order, including mixed batches and streamed edits. Each paragraph commits before the next paragraph uses it as an anchor. Streaming uses public paragraph IDs to retain imported targets after structural edits. Ambiguous targets require inspection.
 
 The field tool can insert inert TOC instructions. It does not calculate TOC entries or claim a populated table of contents.
+
+### Notes and document structure
+
+Inspect `footnotes` or `endnotes` from the main body, then pass the returned `story` to reading and editing tools. The example uses `Body.footnotes` and `Body.endnotes`. It supports existing-note edits; note creation remains unsupported.
+
+Picture inspection reports existing table dimensions. Table inspection reports cell paragraph targets and picture counts. Separate paragraphs can already share one table row. Inspect that structure before changing image layout.
+
+Edit existing objects in place. If reconstruction needs an unsupported operation, preserve the source and report the limit. Linked headers and footers can share content across sections. The public API cannot separate those linked stories. The example does not disable tracking after a refusal.
+
+The reconstruction instruction is agent guidance, not a transaction boundary. Separate tool calls can partially complete. Whole-table deletion remains available for explicit deletion requests. Do not use deletion as a prerequisite for an uncertain reconstruction.
+
+### Metadata and row insertion
+
+Use `read_properties` to load selected metadata fields. Use `edit_properties` to batch changes to `author`, `title`, `subject`, `keywords`, `comments`, and `category`. These tools use `Document.properties`. They do not remove custom properties or other document information. Suggestions refuse metadata writes. Collaborative metadata edits require an existing core-properties part.
+
+Use `edit_table` with `insertRows` to insert before or after an inspected row. The tool uses `TableRow.insertRows`. It preserves unrelated merged headers and supports native row suggestions. Merged source rows and crossing vertical merges refuse.

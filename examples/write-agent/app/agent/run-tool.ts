@@ -17,6 +17,7 @@ import {
 } from './document-access';
 import { story as storySchema } from './editing-schemas';
 import { inspectDocument } from './inspect-document';
+import { documentProperties } from './document-properties';
 import { editDocument } from './edit-document';
 import { createOrInsert } from './create-document';
 import { EDITING_COVERAGE } from './coverage';
@@ -149,6 +150,9 @@ async function execute(
           tools: EDITING_COVERAGE,
           mode: selectedMode,
           hosts: runtime.capabilities,
+          stories: ['body', 'header', 'footer', 'footnote', 'endnote'],
+          noteEditing:
+            'Inspect footnotes or endnotes, then use the returned story with read_document, inspect_document, and editing tools.',
           controls: {
             create: ['PlainText', 'RichText', 'DatePicker'],
             createRequires:
@@ -167,12 +171,13 @@ async function execute(
             'PAGE/NUMPAGES calculation requires host pagination.',
             'Section columns and new style definitions are unsupported.',
             'PAGE, NUMPAGES, and inert TOC field creation are supported in direct mode. TOC entry calculation is unsupported; do not claim a populated table of contents.',
-            'One write batch targets one story. Separate body, header, and footer edits.',
+            'One write batch targets one story. Separate body, header, footer, and note edits.',
           ],
         }),
       };
     }
-    const read = name === 'read_document' || name === 'inspect_document';
+    const read =
+      name === 'read_document' || name === 'inspect_document' || name === 'read_properties';
     const capturedRevision = revision?.();
     const before = await save();
     if (revision && revision() !== capturedRevision)
@@ -214,11 +219,16 @@ async function execute(
     }
     let result: unknown;
     if (read) {
-      const snapshot = await inspectDocument(
-        runtime,
-        name === 'read_document' ? { ...input, area: 'paragraphs', story: bodyStory } : input,
-        name === 'read_document'
-      );
+      const snapshot =
+        name === 'read_properties'
+          ? await documentProperties(runtime, input, true)
+          : await inspectDocument(
+              runtime,
+              name === 'read_document'
+                ? { ...input, area: 'paragraphs', story: input.story ?? bodyStory }
+                : input,
+              name === 'read_document'
+            );
       result = snapshot;
     } else {
       // Mode belongs to the application. The model cannot turn tracking off after a refusal.
@@ -227,7 +237,8 @@ async function execute(
           context.document.changeTrackingMode = mode === 'suggest' ? 'TrackMineOnly' : 'Off';
           await context.sync();
         });
-      if (wrappers.has(name))
+      if (name === 'edit_properties') result = await documentProperties(runtime, input, false);
+      else if (wrappers.has(name))
         result = await createOrInsert(runtime, name, input, appendDraft, draftPreviousList);
       else result = await editDocument(runtime, name, input);
       const editedStory =

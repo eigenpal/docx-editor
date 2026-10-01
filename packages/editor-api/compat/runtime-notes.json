@@ -61,7 +61,7 @@
   },
   "Word.Document#changeTrackingMode": {
     "status": "partial",
-    "notes": "Off and TrackMineOnly control this automation runtime only; the mode is not saved as a document-wide policy. TrackMineOnly requires a configured author and supports inline text, font, paragraph-format, and paragraph-style edits. Browser tracked writes require the review module and remain subject to the editor UI mode. TrackAll refuses. Paragraph insertion and list membership changes support native revisions. Table row additions and partial deletions support native row revisions. Existing list definitions and page layout still refuse. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control’s tag and title. Empty ranges, existing review markup, and other control structure changes refuse. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration."
+    "notes": "Off and TrackMineOnly control this automation runtime only; the mode is not saved as a document-wide policy. TrackMineOnly requires a configured author and supports inline text, font, paragraph-format, and paragraph-style edits. Browser tracked writes require the review module and remain subject to the editor UI mode. TrackAll refuses. Paragraph insertion and list membership changes support native revisions. Table row additions and partial deletions support native row revisions. Existing list definitions and page layout still refuse. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control\u2019s tag and title. Empty ranges, existing review markup, and other control structure changes refuse. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration."
   },
   "Word.Comment#creationDate": {
     "status": "partial",
@@ -81,19 +81,19 @@
   },
   "Word.Revision#type": {
     "status": "partial",
-    "notes": "The type union is declared in full and seven of its members occur: Insert, Delete, Replace, Property, ParagraphProperty, MovedFrom and MovedTo. A change to a table row, a cell, the grid or a section's properties is STRUCTURAL, and the canonical accept/reject ops refuse it — so reporting it would list a change with an accept() and a reject() that both fail. Such revisions are therefore not reported at all rather than reported and un-actionable; the document's own markup is untouched either way, and a save round-trips it."
+    "notes": "The type union is declared in full and seven of its members occur: Insert, Delete, Replace, Property, ParagraphProperty, MovedFrom and MovedTo. A change to a table row, a cell, the grid or a section's properties is STRUCTURAL, and the canonical accept/reject ops refuse it \u2014 so reporting it would list a change with an accept() and a reject() that both fail. Such revisions are therefore not reported at all rather than reported and un-actionable; the document's own markup is untouched either way, and a save round-trips it."
   },
   "Word.List#insertParagraph": {
     "status": "partial",
-    "notes": "All four locations are accepted, and Before/After land INSIDE the list at its first and last position — the same places Start and End name. A list is a set of paragraphs sharing a w:numId rather than a contiguous region of the story, so 'before the list' is a position in the story, not in the list, and Word.Paragraph#insertParagraph is the member that addresses it. A refusal on two of the four locations would fail scripts written against the shape; a silent unnumbered insert outside the list would answer a paragraph the list does not contain."
+    "notes": "All four locations are accepted, and Before/After land INSIDE the list at its first and last position \u2014 the same places Start and End name. A list is a set of paragraphs sharing a w:numId rather than a contiguous region of the story, so 'before the list' is a position in the story, not in the list, and Word.Paragraph#insertParagraph is the member that addresses it. A refusal on two of the four locations would fail scripts written against the shape; a silent unnumbered insert outside the list would answer a paragraph the list does not contain."
   },
   "Word.ContentControl#getRange": {
     "status": "partial",
-    "notes": "All six locations are accepted. Whole and Content answer the same stretch, and Before/After answer the content's own edges, because a control's boundary marks occupy no offset in the text this API addresses — there is no position between a mark and the first character for a range to start at. Refusing four of the six would fail scripts written against the shape; answering an invented offset would be worse."
+    "notes": "All six locations are accepted. Whole and Content answer the same stretch, and Before/After answer the content's own edges, because a control's boundary marks occupy no offset in the text this API addresses \u2014 there is no position between a mark and the first character for a range to start at. Refusing four of the six would fail scripts written against the shape; answering an invented offset would be worse."
   },
   "Word.ContentControl#insertText": {
     "status": "partial",
-    "notes": "Text-like controls accept all three locations and return the range of the written text. Replace goes through the control's own value path, so the prompt a control was showing is replaced whole and a w:temporary wrapper is removed — upstream's own behaviour, reached through the one write path the keyboard also takes, which is why a locked or custom-XML-bound control refuses this call with the same named reason a keystroke gets. Supports text-like controls only. Date, checkbox, and other typed controls refuse all insert locations with NotSupported. Use the editor native value UI for typed fields."
+    "notes": "Text-like controls accept all three locations and return the range of the written text. Replace goes through the control's own value path, so the prompt a control was showing is replaced whole and a w:temporary wrapper is removed \u2014 upstream's own behaviour, reached through the one write path the keyboard also takes, which is why a locked or custom-XML-bound control refuses this call with the same named reason a keystroke gets. Supports text-like controls only. Date, checkbox, and other typed controls refuse all insert locations with NotSupported. Use the editor native value UI for typed fields."
   },
   "OfficeExtension.LoadOption#expand": {
     "status": "partial",
@@ -153,7 +153,11 @@
   },
   "Word.Table#addRows": {
     "status": "partial",
-    "notes": "Start/End insert rectangular rows with optional row-major values. Returns the inserted rows. This structural mutation must be alone in its sync. Merged topology refuses. TrackMineOnly writes native row insertion revisions, including initial cell values. Save/reopen and bulk accept/reject preserve the result."
+    "notes": "Start/End insert ordinary rows using the first or last row as the source. Optional values cover every new cell. Unrelated merged headers survive. Merged source rows, row offsets, hidden source cells, and crossing vertical merges refuse with InvalidArgument. Tables with merges require an explicit grid. Returns inserted rows; sync before dependent edits. This structural mutation must be alone in its sync. TrackMineOnly writes native row insertion revisions. Direct and tracked insertion support collaboration, undo/redo, reconnect, and save/reopen."
+  },
+  "Word.TableRow#insertRows": {
+    "status": "partial",
+    "notes": "Before/After insert ordinary rows relative to the addressed row. Optional values cover every new cell. Returns TableRowCollection; sync before dependent edits. Unrelated merged headers survive. Merged source rows, row offsets, hidden source cells, and crossing vertical merges refuse with InvalidArgument. Tables with merges require an explicit grid. This structural mutation must be alone in its sync. TrackMineOnly writes native row insertion revisions. Direct and tracked insertion support collaboration, undo/redo, reconnect, and save/reopen."
   },
   "Word.Table#addColumns": {
     "status": "partial",
@@ -561,7 +565,7 @@
   },
   "Word.ListItem#level": {
     "status": "partial",
-    "notes": "Writes levels 0–8 only when the list defines that level. New authored lists define all nine levels. Missing levels and protected paragraphs refuse. TrackMineOnly records list membership in paragraph-property revisions. Reject restores prior membership; unused numbering definitions can remain in the package."
+    "notes": "Writes levels 0\u20138 only when the list defines that level. New authored lists define all nine levels. Missing levels and protected paragraphs refuse. TrackMineOnly records list membership in paragraph-property revisions. Reject restores prior membership; unused numbering definitions can remain in the package."
   },
   "Word.Range#insertBreak": {
     "status": "partial",
@@ -597,7 +601,7 @@
   },
   "Word.Range#insertContentControl": {
     "status": "partial",
-    "notes": "Creates RichText, PlainText, and DatePicker controls around an eligible single-paragraph range. Other types refuse. Sync before configuring the returned proxy. DatePicker creates a real date SDT; typed date configuration accessors remain unavailable. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control’s tag and title. Empty ranges, existing review markup, and other control structure changes refuse."
+    "notes": "Creates RichText, PlainText, and DatePicker controls around an eligible single-paragraph range. Other types refuse. Sync before configuring the returned proxy. DatePicker creates a real date SDT; typed date configuration accessors remain unavailable. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control\u2019s tag and title. Empty ranges, existing review markup, and other control structure changes refuse."
   },
   "Word.ContentControl#tag": {
     "status": "partial",
@@ -622,5 +626,41 @@
   "Word.Paragraph#insertParagraph": {
     "status": "partial",
     "notes": "TrackMineOnly records inserted text and the paragraph mark as native revisions. Reject removes both after save and reopen. Anchors with foreign, structural, or move revisions refuse. Insertion can continue the runtime author's text, paragraph, and formatting proposals. Other supported behavior uses the standard Before/After insertion locations."
+  },
+  "Word.Body#footnotes": {
+    "status": "partial",
+    "notes": "Enumerates distinct notes referenced within this body in reference order, including table-cell bodies. Separators and unreferenced notes are excluded. Dangling references and ambiguous note identities refuse. Note creation remains unsupported."
+  },
+  "Word.Body#endnotes": {
+    "status": "partial",
+    "notes": "Enumerates distinct notes referenced within this body in reference order, including table-cell bodies. Separators and unreferenced notes are excluded. Dangling references and ambiguous note identities refuse. Note creation remains unsupported."
+  },
+  "Word.Document#properties": {
+    "status": "partial",
+    "notes": "Core string properties only: author, title, subject, keywords, comments, category. Other properties, dates, and custom properties are not exposed. Collaborative writes require an existing core-properties part; create it before joining collaboration."
+  },
+  "Word.DocumentProperties#author": {
+    "status": "partial",
+    "notes": "Missing values read as empty strings. Writes accept XML-safe strings up to 4096 UTF-16 units, preserve unrelated properties, and commit at sync. TrackMineOnly writes refuse with NotSupported. Collaborative writes require an existing core-properties part; create it before joining collaboration."
+  },
+  "Word.DocumentProperties#title": {
+    "status": "partial",
+    "notes": "Missing values read as empty strings. Writes accept XML-safe strings up to 4096 UTF-16 units, preserve unrelated properties, and commit at sync. TrackMineOnly writes refuse with NotSupported. Collaborative writes require an existing core-properties part; create it before joining collaboration."
+  },
+  "Word.DocumentProperties#subject": {
+    "status": "partial",
+    "notes": "Missing values read as empty strings. Writes accept XML-safe strings up to 4096 UTF-16 units, preserve unrelated properties, and commit at sync. TrackMineOnly writes refuse with NotSupported. Collaborative writes require an existing core-properties part; create it before joining collaboration."
+  },
+  "Word.DocumentProperties#keywords": {
+    "status": "partial",
+    "notes": "Missing values read as empty strings. Writes accept XML-safe strings up to 4096 UTF-16 units, preserve unrelated properties, and commit at sync. TrackMineOnly writes refuse with NotSupported. Collaborative writes require an existing core-properties part; create it before joining collaboration."
+  },
+  "Word.DocumentProperties#comments": {
+    "status": "partial",
+    "notes": "Missing values read as empty strings. Writes accept XML-safe strings up to 4096 UTF-16 units, preserve unrelated properties, and commit at sync. TrackMineOnly writes refuse with NotSupported. Collaborative writes require an existing core-properties part; create it before joining collaboration."
+  },
+  "Word.DocumentProperties#category": {
+    "status": "partial",
+    "notes": "Missing values read as empty strings. Writes accept XML-safe strings up to 4096 UTF-16 units, preserve unrelated properties, and commit at sync. TrackMineOnly writes refuse with NotSupported. Collaborative writes require an existing core-properties part; create it before joining collaboration."
   }
 }

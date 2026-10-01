@@ -52,6 +52,7 @@ import {
   type OoxmlReadRejection,
 } from './ooxml-tree.ts';
 import { captureXmlPartRoot } from './canonical-primitive-lower.ts';
+import { commentExportPackage } from './comment-export-cleanup.ts';
 
 const CONTENT_TYPES_PART = '/[Content_Types].xml';
 const CONTENT_TYPES_NAMESPACE = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -533,8 +534,9 @@ export function readOoxmlPackage(
  * save cannot be smuggled into the archive.
  */
 export function writeOoxmlPackage(pkg: OoxmlPackage): Uint8Array {
-  const entries = new Map<string, Uint8Array>(pkg.partBytes);
-  for (const [name, part] of pkg.parts) {
+  const exported = commentExportPackage(pkg);
+  const entries = new Map<string, Uint8Array>(exported.partBytes);
+  for (const [name, part] of exported.parts) {
     entries.set(name, strToU8(serializeOoxmlPart(part)));
   }
   return writeZip(entries);

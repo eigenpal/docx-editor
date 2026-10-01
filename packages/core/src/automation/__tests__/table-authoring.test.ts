@@ -7,6 +7,7 @@ import {
   type OoxmlPart,
 } from '../../store/package/ooxml-tree.ts';
 import { paragraphModelTextOf } from '../../store/store/paragraph-model-text.ts';
+import { planRevisionBatch } from '../../store/store/revision-batch.ts';
 import { applyTreeOp } from '../../store/store/tree-ops.ts';
 import {
   planInsertTable,
@@ -252,3 +253,87 @@ describe('canonical table authoring', () => {
     expect(id.length).toBeGreaterThan(0);
   });
 });
+
+for (const revision of [undefined, { author: 'Reviewer', date: '2026-01-01T00:00:00Z' }]) {
+  test(`ordinary row insertion preserves unrelated merged headers; tracked=${!!revision}`, () => {
+    const part = load(
+      '<w:tbl><w:tblGrid><w:gridCol/><w:gridCol/></w:tblGrid>' +
+        '<w:tr><w:trPr><w:tblHeader/></w:trPr><w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr><w:p><w:r><w:t>Header</w:t></w:r></w:p></w:tc></w:tr>' +
+        '<w:tr><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc></w:tr></w:tbl><w:p/>'
+    );
+    const tableId = tableNodes(part.root)[0]!.id;
+    const rows = tableRead(read(part), tableId)!.rowIds;
+    const plan = planTableMutation(
+      read(part),
+      tableId,
+      {
+        kind: 'insertRows',
+        rowId: rows[1]!,
+        location: 'before',
+        count: 2,
+        values: [
+          ['A', 'B'],
+          ['C', 'D'],
+        ],
+      },
+      revision
+    );
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(tableRead(read(plan.resultPart), tableId)!.values).toEqual([
+      ['Header'],
+      ['A', 'B'],
+      ['C', 'D'],
+      ['', ''],
+    ]);
+    const xml = serializeOoxmlPart(plan.resultPart);
+    expect(xml).toContain('<w:gridSpan w:val="2"/>');
+    expect((xml.match(/<w:ins /g) ?? []).length > 0).toBe(!!revision);
+    expect(serializeOoxmlPart(part)).not.toContain('>A<');
+    if (revision)
+      for (const action of ['accept', 'reject'] as const) {
+        const resolved = planRevisionBatch(plan.resultPart, action);
+        expect(resolved.result.skipped).toEqual([]);
+        let saved = plan.resultPart;
+        for (const op of resolved.ops) {
+          const applied = applyTreeOp(saved, op);
+          expect(applied.ok).toBe(true);
+          if (applied.ok) saved = applied.part;
+        }
+        expect(tableRead(read(saved), tableId)!.values).toEqual(
+          action === 'accept'
+            ? [['Header'], ['A', 'B'], ['C', 'D'], ['', '']]
+            : [['Header'], ['', '']]
+        );
+        expect(serializeOoxmlPart(saved)).toContain('<w:gridSpan w:val="2"/>');
+      }
+  });
+}
+
+for (const geometry of ['source-merge', 'orphan-continuation', 'offset', 'wrapped-cell'] as const) {
+  test(`row insertion refuses ${geometry} without mutation`, () => {
+    const sourceProperties =
+      geometry === 'source-merge' ? '<w:tcPr><w:vMerge w:val="restart"/></w:tcPr>' : '';
+    const offset = geometry === 'offset' ? '<w:trPr><w:gridBefore w:val="1"/></w:trPr>' : '';
+    const hidden =
+      geometry === 'wrapped-cell'
+        ? '<w:sdt><w:sdtContent><w:tc><w:p/></w:tc></w:sdtContent></w:sdt>'
+        : '';
+    const lower = geometry === 'orphan-continuation' ? '<w:tcPr><w:vMerge/></w:tcPr>' : '';
+    const part = load(
+      '<w:tbl><w:tblGrid><w:gridCol/><w:gridCol/></w:tblGrid>' +
+        `<w:tr>${offset}<w:tc>${sourceProperties}<w:p/></w:tc><w:tc><w:p/></w:tc>${hidden}</w:tr>` +
+        `<w:tr><w:tc>${lower}<w:p/></w:tc><w:tc><w:p/></w:tc></w:tr></w:tbl><w:p/>`
+    );
+    const before = serializeOoxmlPart(part);
+    const tableId = tableNodes(part.root)[0]!.id;
+    const plan = planTableMutation(read(part), tableId, {
+      kind: 'insertRows',
+      rowId: tableRead(read(part), tableId)!.rowIds[0]!,
+      location: 'after',
+      count: 1,
+    });
+    expect(plan).toEqual({ ok: false, reason: 'unsupported-row-insertion-geometry' });
+    expect(serializeOoxmlPart(part)).toBe(before);
+  });
+}

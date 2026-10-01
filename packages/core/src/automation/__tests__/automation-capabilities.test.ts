@@ -195,6 +195,8 @@ describe('the operation vocabulary declares which operations write', () => {
     // A proxy layer deciding whether a batch needs a write path reads this, so it must not
     // drift from the union the host actually treats as a command.
     expect([...AUTOMATION_COMMAND_OPERATIONS]).toEqual([
+      'setDocumentProperties',
+      'insertTableRows',
       'insertTable',
       'updateTable',
       'updateTableCell',
@@ -248,6 +250,7 @@ describe('the operation vocabulary declares which operations write', () => {
     ]);
     // And the ones that commit as a PACKAGE transaction, which is why they travel alone.
     expect([...AUTOMATION_SOLITARY_OPERATIONS]).toEqual([
+      'insertTableRows',
       'resolveRevisionBatch',
       'insertTable',
       'insertInlinePicture',

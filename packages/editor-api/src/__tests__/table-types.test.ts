@@ -5,7 +5,14 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { expectTypeOf, test } from 'bun:test';
 import type { Table as BrowserTable, TableCell as BrowserCell } from '../browser.ts';
-import type { Table, TableCell, TableRowCollection, Range, InsertLocation } from '../index.ts';
+import type {
+  Table,
+  TableRow,
+  TableCell,
+  TableRowCollection,
+  Range,
+  InsertLocation,
+} from '../index.ts';
 
 test('table editing has matching public server/browser types and Office-shaped call signatures', () => {
   expectTypeOf<BrowserTable>().toEqualTypeOf<Table>();
@@ -21,6 +28,13 @@ test('table editing has matching public server/browser types and Office-shaped c
   expectTypeOf<Table['addRows']>().toEqualTypeOf<
     (
       insertLocation: InsertLocation.start | InsertLocation.end | 'Start' | 'End',
+      rowCount: number,
+      values?: string[][]
+    ) => TableRowCollection
+  >();
+  expectTypeOf<TableRow['insertRows']>().toEqualTypeOf<
+    (
+      insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After',
       rowCount: number,
       values?: string[][]
     ) => TableRowCollection

@@ -364,10 +364,8 @@ const noteItemsAreNotes: Satisfies<
   [NoteItemCollection['items'], ReturnType<NoteItemCollection['getFirst']>],
   [readonly NoteItem[], NoteItem]
 > = true;
-// Upstream hangs these off a story; here they are the document's, because only the main story may
-// reference a note (a recorded omission). The collection they answer is the measured one.
 const notesAreReachable: Satisfies<
-  [Document['footnotes'], Document['endnotes']],
+  [Body['footnotes'], Body['endnotes']],
   [NoteItemCollection, NoteItemCollection]
 > = true;
 

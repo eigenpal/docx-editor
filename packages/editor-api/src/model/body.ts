@@ -16,6 +16,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // creating a paragraph in a story that has none is a different operation from editing one, and this
 // slice does not implement it.
 
+import { NoteItemCollection } from './notes.ts';
 import { InsertLocation } from './editing-enums.ts';
 import { FieldCollection } from './fields.ts';
 import { InlinePictureCollection } from './pictures.ts';
@@ -61,6 +62,38 @@ import { searchOptions, type SearchOptions } from './search-options.ts';
  * @public
  */
 export class Body extends ModelObject {
+  #footnotes: NoteItemCollection | undefined;
+  #endnotes: NoteItemCollection | undefined;
+  /** Footnotes referenced within this body, in reference order. */
+  get footnotes(): NoteItemCollection {
+    return (this.#footnotes ??= NoteItemCollection.of(
+      this.context,
+      `${this.path.label}.footnotes`,
+      this.path,
+      () => ({
+        op: 'getNotes',
+        document: this.internals.roots().document,
+        scope: this.#handle(),
+        noteKind: 'footnote',
+      })
+    ));
+  }
+
+  /** Endnotes referenced within this body, in reference order. */
+  get endnotes(): NoteItemCollection {
+    return (this.#endnotes ??= NoteItemCollection.of(
+      this.context,
+      `${this.path.label}.endnotes`,
+      this.path,
+      () => ({
+        op: 'getNotes',
+        document: this.internals.roots().document,
+        scope: this.#handle(),
+        noteKind: 'endnote',
+      })
+    ));
+  }
+
   #tables: TableCollection | undefined;
   #fields: FieldCollection | undefined;
   #inlinePictures: InlinePictureCollection | undefined;

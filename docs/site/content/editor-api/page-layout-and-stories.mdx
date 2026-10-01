@@ -86,7 +86,7 @@ Read note text in two batches:
 
 ```ts
 const notes = await runtime.run(async (context) => {
-  const collection = context.document.footnotes;
+  const collection = context.document.body.footnotes;
   collection.load('items');
   await context.sync();
   for (const note of collection.items) note.load(['type', 'text']);
@@ -102,3 +102,9 @@ const notes = await runtime.run(async (context) => {
 ## Next steps
 
 See [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Comments](/docs/2.x/editor-api/comments), and [API member directory](/docs/2.x/editor-api/reference).
+
+## Read notes referenced by a body
+
+`Body.footnotes` and `Body.endnotes` return distinct referenced notes in reference order. A table-cell body includes only its own references. Load `items`, then load each note's `text` or use its `body` for edits. Separate writes to different notes with `context.sync()`.
+
+The legacy `Document.footnotes` and `Document.endnotes` aliases enumerate note parts. They are not Office.js members. Note creation remains unsupported.

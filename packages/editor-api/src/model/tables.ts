@@ -134,6 +134,7 @@ export class Table extends ModelObject implements PromisedItem {
   }
   /**
    * Add rows at an edge. Sync before configuring the returned rows; omitted values create empty cells.
+   * Ordinary edge rows can belong to a table with unrelated merged headers.
    * TrackMineOnly records native row insertion revisions, including supplied initial values.
    */
   addRows(
@@ -259,6 +260,35 @@ export class TableRow extends ModelObject implements PromisedItem {
   /** @internal */
   hydrateNull(): void {
     this.path.resolveNull();
+  }
+  /**
+   * Insert ordinary rows before or after this row. Sync before using the returned rows.
+   * Unrelated merged headers remain unchanged. Merged source rows and crossing merges refuse.
+   * TrackMineOnly records native row insertion revisions, including initial values.
+   */
+  insertRows(
+    insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After',
+    rowCount: number,
+    values?: string[][]
+  ): TableRowCollection {
+    const label = `${this.path.label}.insertRows`;
+    if (insertLocation !== 'Before' && insertLocation !== 'After')
+      fail({ code: 'InvalidArgument', target: label });
+    integer(rowCount, label, 1);
+    const copied = values === undefined ? undefined : matrix(values, label);
+    const rows = TableRowCollection.of(this.context, label, this.path, () => null);
+    this.commandAnswering(
+      label,
+      () => ({
+        op: 'insertTableRows',
+        row: this.path.handle(),
+        location: insertLocation === 'Before' ? 'before' : 'after',
+        count: rowCount,
+        ...(copied ? { values: copied } : {}),
+      }),
+      (answer) => rows.fill(answer, label)
+    );
+    return rows;
   }
   /** Stable cell collection for this row. Load `items` and sync before reading. */
   get cells(): TableCellCollection {

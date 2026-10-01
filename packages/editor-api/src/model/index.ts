@@ -21,6 +21,7 @@ export {
   type ContentControlValue,
 } from './content-controls.ts';
 export { Document } from './document.ts';
+export { DocumentProperties } from './document-properties.ts';
 export { Font, UnderlineType } from './font.ts';
 export { List, ListCollection, ListItem, ListBullet, ListNumbering } from './lists.ts';
 export { NoteItem, NoteItemCollection, type NoteItemType } from './notes.ts';

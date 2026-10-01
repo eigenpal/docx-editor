@@ -39,6 +39,7 @@ export {
   ContentControl,
   ContentControlCollection,
   Document,
+  DocumentProperties,
   Font,
   UnderlineType,
   List,

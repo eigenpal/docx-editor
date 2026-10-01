@@ -42,8 +42,10 @@ class Body_2 extends ModelObject {
     get bookmarks(): BookmarkCollection;
     clear(): void;
     get contentControls(): ContentControlCollection;
+    get endnotes(): NoteItemCollection;
     get fields(): FieldCollection;
     get font(): Font;
+    get footnotes(): NoteItemCollection;
     getComments(): CommentCollection;
     getRange(rangeLocation?: 'Whole' | 'Content' | 'Start' | 'End' | 'Before' | 'After'): Range_2;
     // @internal
@@ -366,6 +368,7 @@ class Document_2 extends ModelObject {
     // @internal
     static open(context: RequestContext): Document_2;
     get paragraphs(): ParagraphCollection;
+    get properties(): DocumentProperties;
     get revisions(): RevisionCollection;
     get sections(): SectionCollection;
 }
@@ -387,6 +390,26 @@ export interface DocumentLimits {
     readonly maxXmlParts?: number;
     readonly xml?: DocumentXmlLimits;
     readonly zip?: DocumentZipLimits;
+}
+
+// @public
+export class DocumentProperties extends ModelObject {
+    get author(): string;
+    set author(value: string);
+    get category(): string;
+    set category(value: string);
+    get comments(): string;
+    set comments(value: string);
+    get keywords(): string;
+    set keywords(value: string);
+    // @internal (undocumented)
+    static of(context: RequestContext, owner: ObjectPath): DocumentProperties;
+    // (undocumented)
+    protected onLoad(request: ResolvedLoadOptions): void;
+    get subject(): string;
+    set subject(value: string);
+    get title(): string;
+    set title(value: string);
 }
 
 // @public
@@ -1337,6 +1360,7 @@ export class TableRow extends ModelObject implements PromisedItem {
     hydrateAddress(address: ObjectAddress): void;
     // @internal (undocumented)
     hydrateNull(): void;
+    insertRows(insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After', rowCount: number, values?: string[][]): TableRowCollection;
     // @internal (undocumented)
     static promised(context: RequestContext, label: string, nullable?: boolean): TableRow;
 }

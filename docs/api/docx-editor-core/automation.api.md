@@ -5,13 +5,13 @@
 ```ts
 
 // @public
-export const AUTOMATION_COMMAND_OPERATIONS: readonly ["insertTable", "updateTable", "updateTableCell", "setInlinePicture", "deleteInlinePicture", "insertField", "setFieldCode", "deleteField", "updateFieldResult", "insertInlinePicture", "insertBreak", "setChangeTrackingMode", "proposeInsertion", "proposeDeletion", "proposeReplacement", "insertText", "replaceSpan", "replaceStoryBlocks", "insertParagraph", "splitParagraph", "deleteParagraph", "selectSpan", "selectBookmark", "setFont", "setParagraphFormat", "setStyle", "setPageSetup", "deleteNote", "setListLevel", "startNewList", "attachToList", "detachFromList", "setListLevelFormat", "insertListParagraph", "setHyperlink", "insertComment", "setCommentResolved", "replyToComment", "deleteComment", "acceptRevision", "rejectRevision", "resolveRevisionBatch", "acceptAllRevisions", "rejectAllRevisions", "setContentControlValue", "setContentControlProperties", "deleteContentControl", "insertContentControlText", "insertContentControl", "insertCustomNode"];
+export const AUTOMATION_COMMAND_OPERATIONS: readonly ["setDocumentProperties", "insertTableRows", "insertTable", "updateTable", "updateTableCell", "setInlinePicture", "deleteInlinePicture", "insertField", "setFieldCode", "deleteField", "updateFieldResult", "insertInlinePicture", "insertBreak", "setChangeTrackingMode", "proposeInsertion", "proposeDeletion", "proposeReplacement", "insertText", "replaceSpan", "replaceStoryBlocks", "insertParagraph", "splitParagraph", "deleteParagraph", "selectSpan", "selectBookmark", "setFont", "setParagraphFormat", "setStyle", "setPageSetup", "deleteNote", "setListLevel", "startNewList", "attachToList", "detachFromList", "setListLevelFormat", "insertListParagraph", "setHyperlink", "insertComment", "setCommentResolved", "replyToComment", "deleteComment", "acceptRevision", "rejectRevision", "resolveRevisionBatch", "acceptAllRevisions", "rejectAllRevisions", "setContentControlValue", "setContentControlProperties", "deleteContentControl", "insertContentControlText", "insertContentControl", "insertCustomNode"];
 
 // @public
-export const AUTOMATION_QUERY_OPERATIONS: readonly ["getTables", "getTable", "getTableRows", "getTableCells", "getTableCell", "getTableCellProperties", "getTableCellBody", "getFields", "getField", "getInlinePictures", "getInlinePicture", "getChangeTrackingMode", "getDocument", "getBody", "getParagraphs", "getRange", "getSpanParagraphs", "getText", "getSpanText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteText", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlIsBound", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
+export const AUTOMATION_QUERY_OPERATIONS: readonly ["getTables", "getTable", "getTableRows", "getTableCells", "getTableCell", "getTableCellProperties", "getTableCellBody", "getFields", "getField", "getInlinePictures", "getInlinePicture", "getChangeTrackingMode", "getDocument", "getDocumentProperty", "getBody", "getParagraphs", "getRange", "getSpanParagraphs", "getText", "getSpanText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteText", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlIsBound", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
 
 // @public
-export const AUTOMATION_SOLITARY_OPERATIONS: readonly ["resolveRevisionBatch", "insertTable", "insertInlinePicture", "insertBreak", "startNewList", "deleteNote", "insertComment", "setCommentResolved", "replyToComment", "insertCustomNode"];
+export const AUTOMATION_SOLITARY_OPERATIONS: readonly ["insertTableRows", "resolveRevisionBatch", "insertTable", "insertInlinePicture", "insertBreak", "startNewList", "deleteNote", "insertComment", "setCommentResolved", "replyToComment", "insertCustomNode"];
 
 // @public
 export type AutomationAlignment = 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
@@ -216,6 +216,12 @@ export type AutomationOperation = AutomationAuthoringOperation | {
 /** The document itself — the root every other handle is reached through. */
 | {
     readonly op: 'getDocument';
+} | {
+    readonly name: DocumentPropertyName;
+    readonly op: 'getDocumentProperty';
+} | {
+    readonly op: 'setDocumentProperties';
+    readonly values: DocumentPropertyWrites;
 }
 /** The main story of a document. */
 | {
@@ -471,6 +477,7 @@ export type AutomationOperation = AutomationAuthoringOperation | {
     readonly document: AutomationHandle;
     readonly noteKind: NoteKind;
     readonly op: 'getNotes';
+    readonly scope?: AutomationHandle;
 }
 /** One note's story, as a BODY. Two notes in one part are two stories. */
 | {

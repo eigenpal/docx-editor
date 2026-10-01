@@ -146,6 +146,10 @@ Use `isDocxEditorError(error)` and branch on `error.code`. `error.target` identi
 
 Standard `insertText('', 'Replace')` means deletion, and an empty insertion is a no-op. Agent tools should require nonempty insertion/replacement text and expose deletion as an explicit model decision. The shipped worker does this. The [compatibility manifest](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/compat/manifest.json) records measured members and behavioral differences.
 
+## Insert table rows
+
+`TableRow.insertRows('Before', count, values)` and `'After'` support ordinary source rows beside unrelated merged headers. Merged source rows and crossing vertical merges refuse.
+
 ## Pictures and page fields
 
 Insert PNG or JPEG images with `range.insertInlinePictureFromBase64(data, 'After')`. Sync before setting properties on the returned picture. Width and height use points. New pictures lock the aspect ratio. Set `lockAspectRatio = false` before setting independent dimensions. Set `altTextDescription` to describe the image. Deletion preserves shared media relationships.
@@ -159,3 +163,9 @@ Headless field calculation requires an explicit `pagination.measurer` when creat
 Character formatting also supports underline, strikethrough, exact Word-palette highlighting, subscript, and superscript. `font.underline = 'None'` removes an underline. Setting one script mode to `true` clears the other mode. The highlight setter keeps Office's pinned `string` type, although Microsoft documents runtime `null` for clearing. The runtime accepts this clearing value. The runtime rejects unsupported highlight colors.
 
 The workflow tests cover both hosts and save/reopen: `model-font-editing.test.ts`, `model-pictures.test.ts`, `model-fields.test.ts`, and `model-picture-field-parity.test.ts`. The final test includes primary footer creation and a saved `NUMPAGES` result.
+
+## Set document metadata
+
+Use `context.document.properties` for core metadata. The supported string properties are `author`, `title`, `subject`, `keywords`, `comments`, and `category`. Batch independent assignments, then call `context.sync()`. Load explicit property names before reading them. Metadata writes require tracking mode `Off`. Do not substitute revision author settings for document author metadata. Other document information and custom properties remain unchanged.
+
+Collaborative writes require an existing core-properties part. If the input omits this part, set properties before joining collaboration. Concurrent creation of this package part cannot merge safely.

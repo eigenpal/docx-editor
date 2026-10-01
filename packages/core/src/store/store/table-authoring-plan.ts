@@ -8,6 +8,7 @@ import type {
   OoxmlPart,
   OoxmlParagraphNode,
 } from '../package/ooxml-tree.ts';
+import { safeRowInsertion } from './table-authoring-row-insertion.ts';
 import { readEditableTableTopology } from './tree-op-table-topology.ts';
 import { wmlAttributeValue, wmlChildNamed } from './tree-op-table-shared.ts';
 import { applyTreeOp, type TreeDocOp, type TreeOpEffect } from './tree-ops.ts';
@@ -18,6 +19,13 @@ interface AutomationStoryReads {
 }
 
 export type AutomationTableMutation =
+  | {
+      readonly kind: 'insertRows';
+      readonly rowId: string;
+      readonly location: 'before' | 'after';
+      readonly count: number;
+      readonly values?: readonly (readonly string[])[];
+    }
   | { readonly kind: 'values'; readonly values: readonly (readonly string[])[] }
   | {
       readonly kind: 'addRows' | 'addColumns';
@@ -182,6 +190,7 @@ function validMutation(value: AutomationTableMutation): boolean {
   const allowed: Record<string, readonly string[]> = {
     values: ['kind', 'values'],
     addRows: ['kind', 'location', 'count', 'values'],
+    insertRows: ['kind', 'rowId', 'location', 'count', 'values'],
     addColumns: ['kind', 'location', 'count', 'values'],
     deleteRows: ['kind', 'index', 'count'],
     deleteColumns: ['kind', 'index', 'count'],
@@ -241,9 +250,12 @@ export function planTableMutation(
       const ins = trPr && wmlChildNamed(trPr, 'ins');
       return ins && wmlAttributeValue(ins, 'author') === revision!.author;
     });
-  if (ownInsertion && !['addRows', 'deleteRows', 'values'].includes(mutation.kind))
+  if (ownInsertion && !['addRows', 'insertRows', 'deleteRows', 'values'].includes(mutation.kind))
     revision = undefined;
-  if (revision && !['addRows', 'deleteRows', 'values', 'cell'].includes(mutation.kind))
+  if (
+    revision &&
+    !['addRows', 'insertRows', 'deleteRows', 'values', 'cell'].includes(mutation.kind)
+  )
     return { ok: false, reason: 'unsupported-tracked-table-operation' };
   if (
     revision &&
@@ -255,7 +267,10 @@ export function planTableMutation(
     return { ok: false, reason: 'unsupported-tracked-table-operation' };
   const initial = topology;
   if (!initial.ok) return { ok: false, reason: initial.reason };
-  if (initial.topology.hasMerge && mutation.kind !== 'delete' && mutation.kind !== 'properties')
+  if (
+    initial.topology.hasMerge &&
+    !['delete', 'properties', 'addRows', 'insertRows'].includes(mutation.kind)
+  )
     return { ok: false, reason: 'table-has-merge' };
   let part: OoxmlPart = reads.part;
   const ops: TreeDocOp[] = [];
@@ -319,6 +334,8 @@ export function planTableMutation(
   if (
     mutation.kind !== 'delete' &&
     mutation.kind !== 'properties' &&
+    mutation.kind !== 'addRows' &&
+    mutation.kind !== 'insertRows' &&
     current.rows.some(({ cells }) => cells.length !== cols)
   )
     return { ok: false, reason: 'nonrectangular-table' };
@@ -403,15 +420,31 @@ export function planTableMutation(
                 ...(revision ? { revision } : {}),
               })
             : apply({ op: 'deleteTableColumn', tableId, gridColumnId: current.gridColumns[i]!.id });
-  } else if (mutation.kind === 'addRows' || mutation.kind === 'addColumns') {
+  } else if (
+    mutation.kind === 'addRows' ||
+    mutation.kind === 'insertRows' ||
+    mutation.kind === 'addColumns'
+  ) {
     if (
       !Number.isInteger(mutation.count) ||
       mutation.count < 1 ||
       mutation.count > 1000 ||
-      !['start', 'end'].includes(mutation.location)
+      !(mutation.kind === 'insertRows' ? ['before', 'after'] : ['start', 'end']).includes(
+        mutation.location
+      )
     )
       return { ok: false, reason: 'invalid-table-count' };
-    const isRows = mutation.kind === 'addRows';
+    const isRows = mutation.kind !== 'addColumns';
+    const sourceIndex =
+      mutation.kind === 'insertRows'
+        ? current.rows.findIndex(({ row }) => row.id === mutation.rowId)
+        : mutation.location === 'start'
+          ? 0
+          : current.rows.length - 1;
+    const before = mutation.location === 'start' || mutation.location === 'before';
+    if (isRows && !safeRowInsertion(current, sourceIndex, before, cols))
+      return { ok: false, reason: 'unsupported-row-insertion-geometry' };
+    const insertionIndex = sourceIndex + (before ? 0 : 1);
     if (
       !matrix(
         mutation.values,
@@ -428,8 +461,8 @@ export function planTableMutation(
         ? apply({
             op: 'insertTableRow',
             tableId,
-            rowId: t.rows[first ? 0 : t.rows.length - 1]!.row.id,
-            where: first ? 'above' : 'below',
+            rowId: current.rows[sourceIndex]!.row.id,
+            where: before ? 'above' : 'below',
             ...(revision ? { revision } : {}),
           })
         : apply({
@@ -447,7 +480,7 @@ export function planTableMutation(
       if (mutation.values)
         for (let r = 0; r < mutation.values.length && !error; r++)
           for (let c = 0; c < mutation.values[r]!.length && !error; c++) {
-            const ri = isRows && mutation.location === 'end' ? current.rows.length + r : r;
+            const ri = isRows ? insertionIndex + r : r;
             const ci = !isRows && mutation.location === 'end' ? cols + c : c;
             error = writeCell(t.rows[ri]!.cells[ci]!, mutation.values[r]![c]!);
           }

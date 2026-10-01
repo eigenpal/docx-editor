@@ -97,6 +97,7 @@ export declare namespace DocxEditor {
 
   export class Document {
     changeTrackingMode: 'Off' | 'TrackAll' | 'TrackMineOnly';
+    readonly properties: DocumentProperties;
     readonly body: Body;
     readonly comments: CommentCollection;
     readonly contentControls: ContentControlCollection;
@@ -105,7 +106,18 @@ export declare namespace DocxEditor {
     readonly sections: SectionCollection;
   }
 
+  export class DocumentProperties {
+    author: string;
+    title: string;
+    subject: string;
+    keywords: string;
+    comments: string;
+    category: string;
+  }
+
   export class Body {
+    readonly footnotes: NoteItemCollection;
+    readonly endnotes: NoteItemCollection;
     readonly contentControls: ContentControlCollection;
     readonly font: Font;
     readonly lists: ListCollection;
@@ -285,9 +297,6 @@ export declare namespace DocxEditor {
     getNext(): NoteItem;
   }
 
-  // Upstream reaches this from `Body#footnotes`/`#endnotes`; here it hangs off the document, because
-  // a note is a part of the package that only the main story may reference. See
-  // `compat/manifest.json`.
   export class NoteItemCollection {
     readonly items: NoteItem[];
     getFirst(): NoteItem;

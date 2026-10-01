@@ -1,6 +1,6 @@
 import type { DocxEditorRuntime } from '@docx-editor.dev/editor-api';
 import { inspectSchema } from './editing-schemas';
-import { bodyFor, stateFor, storyKey, rememberParagraph } from './document-access';
+import { bodyFor, stateFor, storyKey, rememberParagraph, WriterError } from './document-access';
 
 export async function inspectDocument(
   runtime: DocxEditorRuntime,
@@ -8,6 +8,11 @@ export async function inspectDocument(
   textOnly = false
 ) {
   const { story, area, offset, limit } = inspectSchema.parse(input);
+  if ((area === 'footnotes' || area === 'endnotes') && story.kind !== 'body')
+    throw new WriterError(
+      'InvalidArgument',
+      'Inspect note collections from the main body, then use each returned note story.'
+    );
   const state = stateFor(runtime);
   return runtime.run(async (context) => {
     const body = await bodyFor(context, story);
@@ -15,28 +20,51 @@ export async function inspectDocument(
     const collection =
       area === 'paragraphs'
         ? body.paragraphs
-        : area === 'tables'
-          ? body.tables
-          : area === 'controls'
-            ? body.contentControls
-            : area === 'lists'
-              ? body.lists
-              : area === 'comments'
-                ? body.getComments()
-                : area === 'revisions'
-                  ? body.revisions
-                  : area === 'sections'
-                    ? context.document.sections
-                    : area === 'pictures'
-                      ? body.inlinePictures
-                      : body.fields;
+        : area === 'footnotes'
+          ? context.document.body.footnotes
+          : area === 'endnotes'
+            ? context.document.body.endnotes
+            : area === 'tables'
+              ? body.tables
+              : area === 'controls'
+                ? body.contentControls
+                : area === 'lists'
+                  ? body.lists
+                  : area === 'comments'
+                    ? body.getComments()
+                    : area === 'revisions'
+                      ? body.revisions
+                      : area === 'sections'
+                        ? context.document.sections
+                        : area === 'pictures'
+                          ? body.inlinePictures
+                          : body.fields;
     collection.load('items');
+    if (area === 'paragraphs' || area === 'pictures') body.tables.load('items');
     await context.sync();
     const items = collection.items.slice(offset, offset + limit);
     // Each branch narrows its collection before selecting explicit load properties.
     let records: unknown[] = [];
-    if (area === 'paragraphs') {
+    if (area === 'footnotes' || area === 'endnotes') {
+      const notes = (
+        area === 'footnotes' ? context.document.body.footnotes : context.document.body.endnotes
+      ).items.slice(offset, offset + limit);
+      for (const note of notes) note.load(['text', 'type']);
+      await context.sync();
+      records = notes.map((note, index) => ({
+        text: note.text,
+        type: note.type,
+        story: {
+          kind: area === 'footnotes' ? 'footnote' : 'endnote',
+          section: 0,
+          variant: 'Primary',
+          noteIndex: offset + index,
+        },
+      }));
+    } else if (area === 'paragraphs') {
       const ps = body.paragraphs.items.slice(offset, offset + limit);
+      const pictures = textOnly ? [] : ps.map((p) => p.getRange('Content').inlinePictures);
+      for (const collection of pictures) collection.load('items');
       for (const p of ps) {
         if (textOnly) {
           p.load(['uniqueLocalId', 'text', 'style']);
@@ -73,6 +101,7 @@ export async function inspectDocument(
         if (textOnly) return { id, text: p.text, style: p.style };
         return {
           id,
+          pictureCount: pictures[index]!.items.length,
           text: p.text,
           style: p.style,
           alignment: p.alignment,
@@ -110,9 +139,12 @@ export async function inspectDocument(
             column < (table.values[row]?.length ?? 0) && remainingCells > 0;
             column++
           ) {
-            const paragraphs = table.getCell(row, column).body.paragraphs;
+            const cellBody = table.getCell(row, column).body;
+            const paragraphs = cellBody.paragraphs;
+            const pictures = cellBody.inlinePictures;
             paragraphs.load('items');
-            cells.push({ row, column, paragraphs });
+            pictures.load('items');
+            cells.push({ row, column, paragraphs, pictures });
             remainingCells--;
           }
         }
@@ -131,9 +163,10 @@ export async function inspectDocument(
         headerRowCount: t.headerRowCount,
         cellTargetsTruncated:
           targets[index]!.length < t.values.reduce((total, row) => total + row.length, 0),
-        cells: targets[index]!.map(({ row, column, paragraphs }) => ({
+        cells: targets[index]!.map(({ row, column, paragraphs, pictures }) => ({
           row,
           column,
+          pictureCount: pictures.items.length,
           paragraphs: paragraphs.items.map((paragraph, paragraphIndex) => {
             const id = rememberParagraph(state, story, paragraph, {
               kind: 'cell',
@@ -247,6 +280,7 @@ export async function inspectDocument(
     } else if (area === 'pictures') {
       const ps = body.inlinePictures.items.slice(offset, offset + limit);
       for (const p of ps) p.load(['width', 'height', 'lockAspectRatio', 'altTextDescription']);
+      for (const table of body.tables.items.slice(0, 40)) table.load(['rowCount', 'columnCount']);
       await context.sync();
       records = ps.map((p) => ({
         width: p.width,
@@ -267,7 +301,24 @@ export async function inspectDocument(
     return {
       area,
       story,
+      ...(area === 'pictures'
+        ? {
+            tables: body.tables.items.slice(0, 40).map((table, index) => ({
+              index,
+              rowCount: table.rowCount,
+              columnCount: table.columnCount,
+            })),
+          }
+        : {}),
       tracking: context.document.changeTrackingMode,
+      ...(area === 'paragraphs' || area === 'pictures'
+        ? {
+            tableCount: body.tables.items.length,
+            structureHint: body.tables.items.length
+              ? 'Paragraphs include table cells. Inspect tables for cell ownership before moving or rebuilding content.'
+              : null,
+          }
+        : {}),
       items: records.map((record, i) => ({ index: offset + i, ...(record as object) })),
       nextOffset: offset + limit < collection.items.length ? offset + limit : null,
     };

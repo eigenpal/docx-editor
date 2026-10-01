@@ -48,6 +48,7 @@ describe('writer agent tools', () => {
       'edit_layout',
       'edit_list',
       'edit_picture',
+      'edit_properties',
       'edit_review',
       'edit_table',
       'edit_text',
@@ -58,6 +59,7 @@ describe('writer agent tools', () => {
       'insert_table',
       'inspect_document',
       'read_document',
+      'read_properties',
       'write_header_footer',
       'write_story',
     ]);

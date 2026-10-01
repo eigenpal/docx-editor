@@ -53,7 +53,7 @@ export function trackingStep(
 export function supportsTrackedAutomationOperation(operation: AutomationOperation): boolean {
   if (!isAutomationCommand(operation) || operation.op === 'setChangeTrackingMode') return true;
   if (operation.op === 'insertText') return true;
-  if (operation.op === 'insertTable') return true;
+  if (operation.op === 'insertTable' || operation.op === 'insertTableRows') return true;
   if (operation.op === 'updateTable' || operation.op === 'updateTableCell') return true;
   if (operation.op === 'replaceSpan' && !('body' in operation.span)) return true;
   return [

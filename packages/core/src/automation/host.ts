@@ -176,6 +176,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       handles,
       reads: readsOf(pkg),
       capabilities,
+      collaborative: port.collaborative?.() ?? false,
       trackedRangeReplacement: port.trackedRangeReplacement?.() ?? true,
       // Read ONCE per batch: the formatting lanes must not answer one operation against
       // All Markup and the next against the resolved result.
@@ -225,6 +226,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
               'startNewList',
               'setListLevelFormat',
               'insertTable',
+              'insertTableRows',
               'updateTable',
               'updateTableCell',
             ].includes(operation.op)))

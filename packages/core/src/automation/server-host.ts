@@ -262,6 +262,7 @@ export function packageStorePort(
   };
   return {
     localChangeTracking: true,
+    collaborative: () => !!collaboration,
     revision: () => store.packageRevision,
     currentPackage: (): OoxmlPackage | null => (live ? store.currentPackage() : null),
     apply(

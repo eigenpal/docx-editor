@@ -143,7 +143,13 @@ export async function editDocument(
       if (op.action === 'values') table.values = op.values;
       else if (op.action === 'delete') table.delete();
       else if (op.action === 'addRows') table.addRows(op.location, op.count, op.values);
-      else if (op.action === 'addColumns') table.addColumns(op.location, op.count, op.values);
+      else if (op.action === 'insertRows') {
+        table.rows.load('items');
+        await context.sync();
+        const row = table.rows.items[op.row];
+        if (!row) throw new WriterError('ItemNotFound', 'The table row does not exist.');
+        row.insertRows(op.location, op.count, op.values);
+      } else if (op.action === 'addColumns') table.addColumns(op.location, op.count, op.values);
       else if (op.action === 'deleteRows') table.deleteRows(op.start, op.count);
       else if (op.action === 'deleteColumns') table.deleteColumns(op.start, op.count);
       else if (op.action === 'format') {

@@ -83,7 +83,7 @@ export function rememberParagraph(
   state.paragraphs.set(`${storyKey(story)}:${id}`, paragraph.text);
   return id;
 }
-export function forgetTransientTargets(state: WriterState, kind?: 'header' | 'footer') {
+export function forgetTransientTargets(state: WriterState, kind?: Exclude<Story['kind'], 'body'>) {
   for (const [id, target] of state.transientTargets) {
     if (kind && target.kind !== kind) continue;
     state.paragraphs.delete(`${target.story}:${id}`);
@@ -98,6 +98,18 @@ export function invalidate(state: WriterState) {
 }
 export async function bodyFor(context: RequestContext, story: Story): Promise<Body> {
   if (story.kind === 'body') return context.document.body;
+  if (story.kind === 'footnote' || story.kind === 'endnote') {
+    const notes =
+      story.kind === 'footnote' ? context.document.body.footnotes : context.document.body.endnotes;
+    notes.load('items');
+    await context.sync();
+    const note = notes.items[story.noteIndex ?? 0];
+    if (!note) throw new WriterError('ItemNotFound', 'The note does not exist.');
+    const body = note.body;
+    body.load('text');
+    await context.sync();
+    return body;
+  }
   const sections = context.document.sections;
   sections.load('items');
   await context.sync();

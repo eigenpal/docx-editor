@@ -2,7 +2,15 @@
   "schemaVersion": 1,
   "$comment": "Allowlisted subset of the Microsoft Word JavaScript API (Word.* namespace) that DocxEditor's public surface is measured against for source/shape compatibility. This file selects the upstream UIDs used as *reference-only conformance input*; it is not a dependency declaration and DocxEditor does not vendor, copy, or generate its own declarations from Microsoft's. See README.md in this directory for the full policy.",
   "categories": {
-    "core": ["RequestContext", "ClientObject", "Document", "Body", "Range", "Paragraph"],
+    "core": [
+      "RequestContext",
+      "ClientObject",
+      "Document",
+      "Body",
+      "Range",
+      "Paragraph",
+      "DocumentProperties"
+    ],
     "collectionsAndSearch": ["ParagraphCollection", "RangeCollection", "SearchOptions"],
     "fontAndParagraphFormatting": ["Font"],
     "contentControls": ["ContentControl", "ContentControlCollection"],
@@ -44,7 +52,8 @@
         "contentControls",
         "paragraphs",
         "sections",
-        "revisions"
+        "revisions",
+        "properties"
       ]
     },
     "Body": {
@@ -59,7 +68,9 @@
         "getComments",
         "insertParagraph",
         "insertText",
-        "search"
+        "search",
+        "footnotes",
+        "endnotes"
       ]
     },
     "Range": {
@@ -195,6 +206,9 @@
     },
     "NoteItemCollection": {
       "members": ["items", "getFirst"]
+    },
+    "DocumentProperties": {
+      "members": ["author", "title", "subject", "keywords", "comments", "category"]
     }
   },
   "omissions": [
@@ -383,20 +397,12 @@
       "reason": "See Word.Document#revisions."
     },
     {
-      "uid": "Word.Body#footnotes",
-      "reason": "Upstream hangs a story's notes off the story. A footnote is not IN a story — it is a part of the package (word/footnotes.xml) that a story REFERENCES, and only the main story may reference one (Word refuses a note in a header, a footer or another note). So this subset answers the notes on the document, where the statement is true, as DocxEditor's own Document#footnotes/#endnotes; the NoteItem and NoteItemCollection they answer are both selected and measured. Selecting Body#footnotes would mean answering the document's notes for a header body, which is a false answer to a question a caller is entitled to ask."
-    },
-    {
-      "uid": "Word.Body#endnotes",
-      "reason": "See Word.Body#footnotes."
-    },
-    {
       "uid": "Word.Document#footnotes",
-      "reason": "Implemented by DocxEditor's object model as the reachable accessor for the selected NoteItem/NoteItemCollection (see Word.Body#footnotes for why it is on the document), but not itself selected for exact conformance: upstream declares the member on Body, not on Document, so there is no reference shape to measure this one against. Recorded so the extra member is a decision rather than drift."
+      "reason": "Legacy non-Office alias enumerates the notes part. Use Body#footnotes for references within a body."
     },
     {
       "uid": "Word.Document#endnotes",
-      "reason": "See Word.Document#footnotes."
+      "reason": "Legacy non-Office alias enumerates the notes part. Use Body#endnotes for references within a body."
     },
     {
       "uid": "Word.Body#revisions",
@@ -530,7 +536,11 @@
     },
     {
       "uid": "Word.Table#addRows",
-      "note": "Start/End insert rectangular rows with optional row-major values. Returns the inserted rows. This structural mutation must be alone in its sync. Merged topology refuses."
+      "note": "Start/End insert ordinary rows using the first or last row as the source. Optional values cover every new cell. Unrelated merged headers survive. Merged source rows, row offsets, hidden source cells, and crossing vertical merges refuse with InvalidArgument. Tables with merges require an explicit grid. Returns inserted rows; sync before dependent edits. This structural mutation must be alone in its sync. TrackMineOnly writes native row insertion revisions. Direct and tracked insertion support collaboration, undo/redo, reconnect, and save/reopen."
+    },
+    {
+      "uid": "Word.TableRow#insertRows",
+      "note": "Before/After insert ordinary rows relative to the addressed row. Optional values cover every new cell. Returns TableRowCollection; sync before dependent edits. Unrelated merged headers survive. Merged source rows, row offsets, hidden source cells, and crossing vertical merges refuse with InvalidArgument. Tables with merges require an explicit grid. This structural mutation must be alone in its sync. TrackMineOnly writes native row insertion revisions. Direct and tracked insertion support collaboration, undo/redo, reconnect, and save/reopen."
     },
     {
       "uid": "Word.Table#addColumns",

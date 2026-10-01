@@ -10,8 +10,11 @@ export const target = z.object({ paragraphId: z.string().min(1), search: nonempt
 export const targets = z.array(target).min(1).max(40);
 export const story = z
   .object({
-    kind: z.enum(['body', 'header', 'footer']).default('body'),
+    kind: z.enum(['body', 'header', 'footer', 'footnote', 'endnote']).default('body'),
     section: index.default(0),
+    noteIndex: index
+      .optional()
+      .describe('Zero-based note index from footnotes or endnotes inspection.'),
     variant: z.enum(['Primary', 'FirstPage', 'EvenPages']).default('Primary'),
   })
   .default({ kind: 'body', section: 0, variant: 'Primary' });
@@ -26,6 +29,8 @@ export const area = z.enum([
   'sections',
   'pictures',
   'fields',
+  'footnotes',
+  'endnotes',
 ]);
 export const inspectSchema = z.object({
   ...scope,
@@ -206,6 +211,13 @@ export const tableSchema = z.object({
         style: z.string().optional(),
         headerRowCount: index.optional(),
       }),
+    }),
+    z.object({
+      action: z.literal('insertRows'),
+      row: index,
+      location: z.enum(['Before', 'After']),
+      count: z.number().int().min(1).max(100),
+      values: matrix.optional(),
     }),
     z.object({
       action: z.literal('addRows'),

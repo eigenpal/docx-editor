@@ -21,6 +21,13 @@ export type AutomationAuthoringOperation =
   | { readonly op: 'getTable' | 'getTableRows'; readonly table: AutomationHandle }
   | { readonly op: 'getTableCells'; readonly row: AutomationHandle }
   | {
+      readonly op: 'insertTableRows';
+      readonly row: AutomationHandle;
+      readonly location: 'before' | 'after';
+      readonly count: number;
+      readonly values?: readonly (readonly string[])[];
+    }
+  | {
       readonly op: 'getTableCell';
       readonly table: AutomationHandle;
       readonly rowIndex: number;
@@ -30,13 +37,19 @@ export type AutomationAuthoringOperation =
   | {
       readonly op: 'updateTable';
       readonly table: AutomationHandle;
-      readonly mutation: Exclude<import('./tables.ts').AutomationTableMutation, { kind: 'cell' }>;
+      readonly mutation: Exclude<
+        import('./tables.ts').AutomationTableMutation,
+        { kind: 'cell' } | { kind: 'insertRows' }
+      >;
     }
   | {
       readonly op: 'updateTableCell';
       readonly cell: AutomationHandle;
       readonly properties: Omit<
-        Extract<import('./tables.ts').AutomationTableMutation, { kind: 'cell' }>,
+        Extract<
+          import('./tables.ts').AutomationTableMutation,
+          { kind: 'cell' } | { kind: 'insertRows' }
+        >,
         'kind' | 'cellId'
       >;
     }

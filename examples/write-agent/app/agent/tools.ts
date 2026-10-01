@@ -1,6 +1,7 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import * as editing from './editing-schemas';
+import { readPropertiesSchema, editPropertiesSchema } from './document-properties';
 
 const paragraphId = z
   .string()
@@ -126,6 +127,16 @@ export const writeHeaderFooterSchema = z.object({
 });
 
 export const WRITER_TOOLS = {
+  read_properties: tool({
+    description:
+      'Read selected document metadata properties. These are separate from body text and review authors.',
+    inputSchema: readPropertiesSchema,
+  }),
+  edit_properties: tool({
+    description:
+      'Set requested document metadata properties in one batch. Empty strings clear values. Omitted properties remain unchanged. Requires direct editing mode.',
+    inputSchema: editPropertiesSchema,
+  }),
   write_story: tool({
     description:
       'Insert or replace plain text in a body, header, or footer. Use Replace only for an explicit complete-story rewrite. This creates an absent header or footer. Other content remains unchanged.',
@@ -137,7 +148,7 @@ export const WRITER_TOOLS = {
   }),
   inspect_document: tool({
     description:
-      'Inspect one document area with explicit formatting and object indexes. Read again after editing or a stale-target error. Indexes are valid only for this inspected document state. Empty paragraphs remain visible.',
+      'Inspect one document area with explicit formatting and object indexes. Read again after editing or a stale-target error. Indexes are valid only for this inspected document state. Empty paragraphs remain visible. Inspect footnotes/endnotes to obtain note stories. Table cells include paragraph targets and picture counts; paragraphs include table cells.',
     inputSchema: editing.inspectSchema,
   }),
   discover_capabilities: tool({
@@ -157,7 +168,7 @@ export const WRITER_TOOLS = {
   }),
   edit_table: tool({
     description:
-      'Edit an inspected table: values, cell properties, style, header rows, rows, or columns. One structural operation per call. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration. Merged and protected structures can refuse.',
+      'Edit an inspected table: values, cell properties, style, header rows, rows, or columns. Use insertRows with a row index and Before/After for middle insertion. One structural operation per call. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration. Merged and protected structures can refuse.',
     inputSchema: editing.tableSchema,
   }),
   edit_list: tool({
@@ -202,8 +213,9 @@ export const WRITER_TOOLS = {
   }),
   read_document: tool({
     description:
-      'Read main-body paragraphs and IDs. Original view includes pending deletions and hides pending insertions. Use inspect_document for formatting and objects.',
+      'Read paragraphs and IDs in the selected story. Original view includes pending deletions and hides pending insertions. Use inspect_document for formatting and objects.',
     inputSchema: z.object({
+      ...editing.scope,
       offset: editing.index.default(0),
       limit: z.number().int().min(1).max(40).default(40),
     }),
