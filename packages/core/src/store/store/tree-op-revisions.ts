@@ -1,3 +1,4 @@
+import { hasRevisionMarkerContent } from './revision-marker-content.ts';
 import { retainedNestedRowSites } from './revision-table-preserve-nested.ts';
 import { unboundTableHistories } from './revision-table-unbound-history.ts';
 import { implicitTableRowProperties } from './revision-table-implicit-height.ts';
@@ -223,16 +224,11 @@ function collectRevisionSitesIn(
       grandparent?.namespaceUri === WML_NAMESPACE_URI ? grandparent.localName : undefined;
     if (node.namespaceUri === WML_NAMESPACE_URI) {
       const isContent = isContentRevisionKind(node.kind);
-      // A mark-position `w:moveFrom`/`w:moveTo` is generic in the tree, so `isContent` misses
-      // it; naming it here is what raises the card for a paragraph that was MOVED whole.
       const markMove =
         parentName === 'rPr' && grandparentName === 'pPr' && MARK_MOVE_NAMES.has(node.localName);
-      // The broad preflight intentionally recognizes mark-move names anywhere so artifact scans
-      // do not miss hostile markup. Resolution is narrower: only the schema-valid paragraph-mark
-      // position is an actionable move decision.
       const isNamedRevision =
         isContent ||
-        markMove ||
+        MARK_MOVE_NAMES.has(node.localName) ||
         CELL_REVISION_NAMES.has(node.localName) ||
         PROPERTY_CHANGE_NAMES.has(node.localName) ||
         node.localName === 'ins' ||
@@ -241,11 +237,6 @@ function collectRevisionSitesIn(
         isNamedRevision &&
         (wmlAttribute(node, 'id') !== undefined || part.root.localName === 'styles')
       ) {
-        // A revision on a RUN's `w:rPr` is not schema-valid — the paragraph mark is the only
-        // `w:rPr` that carries one — so it is refused rather than resolved. Treating it as a
-        // paragraph mark made accepting it merge two paragraphs; treating it as ordinary
-        // content would make accepting it edit a run's properties. Neither is what the file
-        // says, and the file says something impossible.
         const misplacedMark =
           parentName === 'rPr' &&
           grandparentName !== 'pPr' &&
@@ -258,21 +249,31 @@ function collectRevisionSitesIn(
           (PROPERTY_CHANGE_NAMES.has(node.localName)
             ? !validRevisionPropertyRecord(node, parent)
             : parentName !== undefined && STRUCTURAL_REVISION_PARENTS.has(parentName));
-        // `w:pPr/w:rPr/w:ins` marks the paragraph mark. `w:rPr` also appears inside a run,
-        // where an `ins` child is not schema-valid; treating both as a paragraph mark would
-        // be wrong, so the grandparent decides.
-        // ...and now it does. A `w:rPr` inside a RUN carrying a `w:del` is malformed input,
-        // not a paragraph mark, and treating it as one made accepting it merge two
-        // paragraphs — a silent structural edit from markup no valid file contains.
         const paragraphMark =
           (!isContent || markMove) &&
           parentName === 'rPr' &&
           grandparentName === 'pPr' &&
           !structural;
+        // Generic content wrappers have unsupported children or placement. Removing
+        // them would discard preserved content instead of resolving a known revision.
+        const unsupportedContent =
+          !isContent &&
+          (node.localName === 'ins' ||
+            node.localName === 'del' ||
+            MARK_MOVE_NAMES.has(node.localName)) &&
+          !paragraphMark &&
+          !tableRevision &&
+          !numberingRevision;
         sites.push({
           node,
           parent,
-          refused: addressOf(node) === null || (structural && !tableRevision && !numberingRevision),
+          refused:
+            addressOf(node) === null ||
+            unsupportedContent ||
+            (!isContent &&
+              !PROPERTY_CHANGE_NAMES.has(node.localName) &&
+              hasRevisionMarkerContent(node)) ||
+            (structural && !tableRevision && !numberingRevision),
           paragraphMark,
           propertyChange: PROPERTY_CHANGE_NAMES.has(node.localName),
           nesting,

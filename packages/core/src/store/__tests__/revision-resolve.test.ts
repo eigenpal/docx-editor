@@ -503,13 +503,13 @@ describe('a move recorded on the paragraph mark', () => {
     expect(xml(apply(moved('moveTo'), accept(QA))).match(/<w:p[ >]/g)).toHaveLength(2);
   });
 
-  test('a move marker in run properties stays inert malformed input', () => {
+  test('a move marker in run properties refuses as malformed input', () => {
     const part = load(
       `<w:p><w:r><w:rPr><w:moveFrom w:id="${QA.id}" w:author="${QA.author}" w:date="${QA.date}"/></w:rPr><w:t>text</w:t></w:r></w:p>`
     );
     const before = xml(part);
 
-    expect(refuse(part, accept(QA))).toBe('unknown-revision');
+    expect(refuse(part, accept(QA))).toBe('unsupported-revision');
     expect(xml(part)).toBe(before);
   });
 });

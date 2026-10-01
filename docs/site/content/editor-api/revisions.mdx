@@ -187,6 +187,8 @@ await runtime.run(async (context) => {
 
 These collection methods ignore editor filters and fail the entire sync if any revision is unsupported. They include complete tracked rows omitted from `items`. An empty collection succeeds and keeps document content unchanged.
 
+Malformed content revision wrappers refuse resolution and retain their content. This includes `w:ins` or `w:del` wrappers containing paragraphs.
+
 If a strict batch fails with `NotImplemented`, use `resolve()` to process supported changes and report what remains. For `StaleDocument`, start a fresh run and reload revisions before deciding again.
 
 ### Update existing integrations

@@ -545,19 +545,19 @@
   },
   "Word.Revision#accept": {
     "status": "partial",
-    "notes": "Resolves the addressed supported revision by stable identity. Unsupported revision structures refuse without partial changes. Browser decisions require the review module and an editable document."
+    "notes": "Resolves the addressed supported revision by stable identity. Unsupported revision structures, including malformed content wrappers, refuse without partial changes. Browser decisions require the review module and an editable document."
   },
   "Word.Revision#reject": {
     "status": "partial",
-    "notes": "Resolves the addressed supported revision by stable identity. Unsupported revision structures refuse without partial changes. Browser decisions require the review module and an editable document."
+    "notes": "Resolves the addressed supported revision by stable identity. Unsupported revision structures, including malformed content wrappers, refuse without partial changes. Browser decisions require the review module and an editable document."
   },
   "Word.RevisionCollection#acceptAll": {
     "status": "partial",
-    "notes": "Resolves every store-resolvable revision in the addressed collection scope, including structural records omitted from individually named items. An empty collection succeeds without changing document content. Any unsupported record refuses the batch; browser decisions require the review module."
+    "notes": "Resolves every store-resolvable revision in the addressed collection scope, including structural records omitted from individually named items. An empty collection succeeds without changing document content. Any unsupported record refuses the batch; browser decisions require the review module. Malformed content revision wrappers preserve their content and refuse resolution, including wrappers that contain paragraphs."
   },
   "Word.RevisionCollection#rejectAll": {
     "status": "partial",
-    "notes": "Resolves every store-resolvable revision in the addressed collection scope, including structural records omitted from individually named items. An empty collection succeeds without changing document content. Any unsupported record refuses the batch; browser decisions require the review module."
+    "notes": "Resolves every store-resolvable revision in the addressed collection scope, including structural records omitted from individually named items. An empty collection succeeds without changing document content. Any unsupported record refuses the batch; browser decisions require the review module. Malformed content revision wrappers preserve their content and refuse resolution, including wrappers that contain paragraphs."
   },
   "Word.ListItem#level": {
     "status": "partial",
