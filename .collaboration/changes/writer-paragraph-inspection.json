@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Imported header and footer paragraphs without stored IDs could not receive targeted writer edits.",
+  "after": "The writer uses temporary inspection targets and public collections for these paragraphs.",
+  "reason": "Target tokens exist only in the example. Collaboration imports retain shared IDs. Document operations and the collaboration format remain unchanged.",
+  "tests": [],
+  "changeset": null,
+  "migration": null
+}

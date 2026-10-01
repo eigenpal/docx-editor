@@ -2,7 +2,12 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import * as editing from './editing-schemas';
 
-const paragraphId = z.string().min(1).describe('The stable paragraph id from read_document.');
+const paragraphId = z
+  .string()
+  .min(1)
+  .describe(
+    'Copy the paragraph target from the latest read or inspection. Reinspect temporary @writer: targets after an edit.'
+  );
 const exactPhrase = z
   .string()
   .min(1)

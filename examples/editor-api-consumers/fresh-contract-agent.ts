@@ -273,14 +273,15 @@ probes['hyperlink-partial-retarget'] = async (runtime) => {
     reopened.dispose();
   }
 };
-probes['tracked-unsupported-rollback'] = async (runtime) => {
+probes['tracked-conflicting-rollback'] = async (runtime) => {
   const before = await text(runtime);
   await runtime.run(async (c) => {
     const target = await unique(c, 'within 7 days');
     c.document.changeTrackingMode = 'TrackMineOnly';
     target.insertText('within 30 days', 'Replace');
     target.font.bold = true;
-    await assert.rejects(c.sync(), (e) => isDocxEditorError(e) && e.code === 'NotSupported');
+    // Text and formatting on the same range require separate write batches.
+    await assert.rejects(c.sync(), (e) => isDocxEditorError(e) && e.code === 'ConflictingChanges');
     c.document.load('changeTrackingMode');
     c.document.body.load('text');
     await c.sync();

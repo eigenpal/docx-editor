@@ -57,6 +57,7 @@ for (const type of ['PlainText', 'RichText', 'DatePicker'] as const) {
             'direct'
           );
           expect(refused.code).toBe('NotSupported');
+          expect(refused.recovery?.action).toBe('report_limit');
           expect(await runtime.save()).toEqual(before);
         }
       }

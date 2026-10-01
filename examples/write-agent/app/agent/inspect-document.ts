@@ -1,6 +1,6 @@
 import type { DocxEditorRuntime } from '@docx-editor.dev/editor-api';
 import { inspectSchema } from './editing-schemas';
-import { bodyFor, stateFor, storyKey } from './document-access';
+import { bodyFor, stateFor, storyKey, rememberParagraph } from './document-access';
 
 export async function inspectDocument(runtime: DocxEditorRuntime, input: unknown) {
   const { story, area, offset, limit } = inspectSchema.parse(input);
@@ -60,10 +60,10 @@ export async function inspectDocument(runtime: DocxEditorRuntime, input: unknown
         ]);
       }
       await context.sync();
-      records = ps.map((p) => {
-        state.paragraphs.set(`${storyKey(story)}:${p.uniqueLocalId}`, p.text);
+      records = ps.map((p, index) => {
+        const id = rememberParagraph(state, story, p, { kind: 'paragraph', index: offset + index });
         return {
-          id: p.uniqueLocalId,
+          id,
           text: p.text,
           style: p.style,
           alignment: p.alignment,
@@ -125,9 +125,15 @@ export async function inspectDocument(runtime: DocxEditorRuntime, input: unknown
         cells: targets[index]!.map(({ row, column, paragraphs }) => ({
           row,
           column,
-          paragraphs: paragraphs.items.map((paragraph) => {
-            state.paragraphs.set(`${storyKey(story)}:${paragraph.uniqueLocalId}`, paragraph.text);
-            return { id: paragraph.uniqueLocalId, text: paragraph.text };
+          paragraphs: paragraphs.items.map((paragraph, paragraphIndex) => {
+            const id = rememberParagraph(state, story, paragraph, {
+              kind: 'cell',
+              table: offset + index,
+              row,
+              column,
+              index: paragraphIndex,
+            });
+            return { id, text: paragraph.text };
           }),
         })),
       }));
@@ -168,11 +174,15 @@ export async function inspectDocument(runtime: DocxEditorRuntime, input: unknown
           p.listItem.load('level');
         }
       await context.sync();
-      records = ls.map((l) => ({
+      records = ls.map((l, index) => ({
         id: l.id,
-        paragraphs: l.paragraphs.items.map((p) => {
-          state.paragraphs.set(`${storyKey(story)}:${p.uniqueLocalId}`, p.text);
-          return { id: p.uniqueLocalId, text: p.text, level: p.listItem.level };
+        paragraphs: l.paragraphs.items.map((p, paragraphIndex) => {
+          const id = rememberParagraph(state, story, p, {
+            kind: 'list',
+            list: offset + index,
+            index: paragraphIndex,
+          });
+          return { id, text: p.text, level: p.listItem.level };
         }),
       }));
     } else if (area === 'comments') {

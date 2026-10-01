@@ -136,7 +136,7 @@ export async function editDocument(
       const data = s.listSchema.parse(input),
         op = data.operation;
       const body = await bodyFor(context, data.story);
-      const map = await paragraphMap(context, body);
+      const map = await paragraphMap(context, body, state, data.story);
       const paragraphs = data.paragraphIds.map((id) =>
         checkedParagraph(map, id, state, data.story)
       );

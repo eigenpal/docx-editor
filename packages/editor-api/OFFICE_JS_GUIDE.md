@@ -62,6 +62,29 @@ Supported read-derived proxies can share one `sync()` with their edits. For exam
 
 Proxies returned by insertions require a completed `sync()` before dependent operations. Do not configure a newly inserted table, image, list, or text range before that sync. If a prerequisite fails, the runtime commits no queued writes. Completed prerequisite reads can remain loaded after a later command fails.
 
+## Keep writes within one story
+
+A story is the main body, a header, a footer, or another document text container. One `context.sync()` can write only one story. Writes across stories fail with `ConflictingChanges`. Reads from different stories can share a sync.
+
+If the document has a primary header and footer, resolve both objects before formatting them. Then commit each story's writes separately:
+
+```ts
+await runtime.run(async (context) => {
+  const section = context.document.sections.getFirst();
+  await context.sync();
+  const stories = [section.getHeader('Primary'), section.getFooter('Primary')];
+  await context.sync();
+
+  for (const story of stories) {
+    story.font.name = 'Calibri';
+    story.font.size = 10;
+    await context.sync();
+  }
+});
+```
+
+Each write sync creates a separate transaction. Earlier successful transactions remain if a later transaction fails. Linked headers or footers can share content. Re-read that content before making a dependent edit through another section.
+
 ## Preserve Office.js enum property types
 
 Like Office.js, `Document.changeTrackingMode` and `PageSetup.orientation` use unions of the enum and its string literals for both reads and writes. Enum constants and the corresponding string literals are accepted by the type system. This matches Microsoft's [change-tracking declaration](https://learn.microsoft.com/en-us/javascript/api/word/word.document#word-word-document-changetrackingmode-member) and [page-orientation declaration](https://learn.microsoft.com/en-us/javascript/api/word/word.pagesetup#word-word-pagesetup-orientation-member).

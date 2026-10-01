@@ -45,6 +45,8 @@ Select **Stop** to stop generation and pending edit batches. An atomic batch alr
 
 Paragraph targets use an inspected paragraph ID and an optional exact phrase. Phrase matches must be unique within the paragraph. Object targets use indexes from inspection. Re-inspect objects after a mutation. The adapter compares saved document bytes before execution. It checks paragraph text before resolving ranges. Before each write batch, it checks the browser document revision or the server document bytes. Later target loads cannot absorb an external edit into the inspection baseline. A changed document returns `StaleDocument`; the model must read again and reconsider the edit. Paragraph IDs and object indexes do not identify objects across separate file sessions.
 
+Imported paragraphs can lack stored IDs. Inspection returns temporary targets for those paragraphs, including header, footer, table, and list paragraphs. Edits expire affected temporary targets. Inspect the changed story again before the next edit. The adapter resolves targets through public document collections.
+
 ## Tool coverage
 
 `discover_capabilities` returns the tool mapping, host capabilities, and operation limits. `app/agent/coverage.ts` maps the repository's 81-member editing profile to tools and the application mode. A test checks that every profile member has a mapping. This mapping measures exposure, not complete Office.js compatibility or runtime success for every document.
@@ -75,7 +77,18 @@ Plain-text, rich-text, and date-picker creation are supported. Dropdown, combo b
 
 Calls execute sequentially for each runtime. Repeated tool-call IDs return their original result without another edit. Independent font and paragraph writes share one sync. Structural edits use separate sync boundaries where the public API requires them. Creation and configuration of returned proxies also use separate syncs.
 
-Results include `success`, JSON output, and `completedSteps`. Errors include a stable `code` and the public member `target` when available. Completed steps remain committed if a later step fails. The adapter does not claim that a complete draft or multi-stage tool is atomic. It does not replay failed writes automatically.
+Results include `success`, JSON output, and `completedSteps`. Errors include a stable `code`, a `recovery` instruction, and the public member `target` when available. Completed steps remain committed if a later step fails. The adapter does not claim that a complete draft or multi-stage tool is atomic. It does not replay failed writes automatically.
+
+Use `recovery.action` to choose the next step:
+
+| Action | Next step |
+| --- | --- |
+| `inspect` | Read the affected story and revisions. Reconsider remaining edits. |
+| `revise_arguments` | Correct the arguments without changing the requested scope. |
+| `report_limit` | Report the unsupported operation. Continue other supported edits in the selected mode. |
+| `stop` | Stop generation. Keep earlier completed edits. |
+
+Do not infer rollback from an error. Check `completedSteps` before continuing. After a partial operation, inspect existing content before creating tables or controls again. Verify the edited properties before reporting success. In Suggestions, inspect revisions because original-view text can hide proposed insertions.
 
 Protected content, XML-bound controls, merged tables, and pending revisions can refuse edits. Image insertion requires supplied PNG or JPEG bytes. Field calculation requires host pagination; a server without a measurer refuses calculation. Section columns, new style definitions, and unsupported field instructions remain unavailable.
 

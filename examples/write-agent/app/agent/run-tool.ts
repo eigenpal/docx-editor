@@ -7,11 +7,20 @@ import { DocxEditor as EditorApi } from '@docx-editor.dev/editor-api/browser';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { ZodError } from 'zod';
 import { WRITER_TOOLS } from './tools';
-import { bodyStory, invalidate, sameBytes, stateFor, WriterError } from './document-access';
+import {
+  bodyStory,
+  invalidate,
+  forgetTransientTargets,
+  sameBytes,
+  stateFor,
+  WriterError,
+} from './document-access';
+import { story as storySchema } from './editing-schemas';
 import { inspectDocument } from './inspect-document';
 import { editDocument } from './edit-document';
 import { createOrInsert } from './create-document';
 import { EDITING_COVERAGE } from './coverage';
+import { toolRecovery, type ToolRecovery } from './tool-recovery';
 
 export const WRITER_AUTHOR = 'Writer agent';
 export interface ToolResult {
@@ -20,6 +29,7 @@ export interface ToolResult {
   code?: string;
   target?: string;
   completedSteps?: readonly string[];
+  recovery?: ToolRecovery;
 }
 export function createWriterRuntime(editor: DocxEditorInstance): DocxEditorRuntime {
   const runtime = EditorApi.createBrowser(editor, {
@@ -145,6 +155,8 @@ async function execute(
             'Text insertion supports text-like controls. Date and other typed controls require their native value UI.',
             'PAGE/NUMPAGES calculation requires host pagination.',
             'Section columns and new style definitions are unsupported.',
+            'Only PAGE and NUMPAGES field creation is supported. TOC creation and evaluation are unsupported.',
+            'One write batch targets one story. Separate body, header, and footer edits.',
           ],
         }),
       };
@@ -205,6 +217,13 @@ async function execute(
       if (wrappers.has(name))
         result = await createOrInsert(runtime, name, input, appendDraft, draftPreviousList);
       else result = await editDocument(runtime, name, input);
+      const editedStory =
+        name === 'edit_text' || name === 'format_document'
+          ? storySchema.parse(input.story)
+          : undefined;
+      // A header-only edit cannot move footer or main-body paragraph targets.
+      // Clear all headers together because sections can share linked content.
+      forgetTransientTargets(state, editedStory?.kind === 'body' ? undefined : editedStory?.kind);
       state.inspected.clear();
     }
     // The browser's public version replaces a second ZIP serialization. Capture at
@@ -242,6 +261,7 @@ async function execute(
       code,
       target,
       output: error instanceof Error ? error.message : String(error),
+      recovery: toolRecovery(code, state.completed.length > 0),
       completedSteps: [...state.completed],
     };
   } finally {

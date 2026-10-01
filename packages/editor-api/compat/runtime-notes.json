@@ -1,4 +1,8 @@
 {
+  "OfficeExtension.ClientRequestContext#sync": {
+    "status": "partial",
+    "notes": "One atomic write batch targets one story. Main-body, header, footer, and other story writes need separate sync calls. Mixed-story writes refuse with ConflictingChanges without committing that batch. Reads can span stories. Earlier successful syncs remain committed after a later failure."
+  },
   "Word.run": {
     "status": "different",
     "notes": "Create a server or browser runtime, then use runtime.run(batch). The package does not export Word.run."

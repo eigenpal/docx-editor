@@ -66,6 +66,29 @@ The two syncs are separate transactions. A later failure does not undo an earlie
 
 Disjoint plain-text edits can batch within an ordinary paragraph with direct text runs. Their returned ranges account for that batch's changes. Older ranges still retain snapshot offsets across later batches; tracking does not change this behavior. After editing a paragraph, search again before a later dependent edit. The runtime rejects a batch that combines text edits with formatting, hyperlinks, or structural writes in the same paragraph. See [Text and ranges](/docs/2.x/editor-api/text-and-ranges) for the supported domain.
 
+## Keep writes within one story
+
+A story is the main body, a header, a footer, or another document text container. One `context.sync()` can write only one story. Writes across stories fail with `ConflictingChanges`. Reads from different stories can share a sync.
+
+If the document has a primary header and footer, resolve both objects before formatting them. Then commit each story's writes separately:
+
+```ts
+await runtime.run(async (context) => {
+  const section = context.document.sections.getFirst();
+  await context.sync();
+  const stories = [section.getHeader('Primary'), section.getFooter('Primary')];
+  await context.sync();
+
+  for (const story of stories) {
+    story.font.name = 'Calibri';
+    story.font.size = 10;
+    await context.sync();
+  }
+});
+```
+
+Each write sync creates a separate transaction. Earlier successful transactions remain if a later transaction fails. Linked headers or footers can share content. Re-read that content before making a dependent edit through another section.
+
 ## Handle an absent item
 
 Use the collection's null-object accessor when absence is expected:

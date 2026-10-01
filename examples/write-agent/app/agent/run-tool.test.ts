@@ -49,7 +49,11 @@ for (const change of ['text', 'formatting'] as const) {
         ],
       });
       expect(injected).toBe(true);
-      expect(result).toMatchObject({ success: false, code: 'StaleDocument' });
+      expect(result).toMatchObject({
+        success: false,
+        code: 'StaleDocument',
+        recovery: { action: 'inspect' },
+      });
       await run(async (c) => {
         c.document.body.load('text');
         await c.sync();
@@ -92,7 +96,11 @@ test('a stale refusal cannot be bypassed by repeating a whole-story edit', async
         text: 'Agent draft',
         location: 'Replace',
       });
-      expect(result).toMatchObject({ success: false, code: 'StaleDocument' });
+      expect(result).toMatchObject({
+        success: false,
+        code: 'StaleDocument',
+        recovery: { action: 'inspect' },
+      });
       expect(await runtime.save()).toEqual(before);
     }
     expect((await runWriterTool(runtime, null, 'read_document', {})).success).toBe(true);
@@ -143,6 +151,7 @@ for (const afterFinalWrite of [false, true]) {
       expect(result).toMatchObject({
         success: false,
         code: 'StaleDocument',
+        recovery: { action: 'inspect' },
         completedSteps: afterFinalWrite
           ? ['clear body', 'paragraph', 'paragraph formatting']
           : ['clear body'],
