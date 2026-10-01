@@ -112,7 +112,7 @@ import type { NoteKind } from '../store/package/note-nodes.ts';
 import { paragraphStyleName, styleIdFor } from './styles.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 import { commentReads, revisionReads, type AutomationRevisionRead } from './review.ts';
-import { planProposal } from './plan-proposal.ts';
+import { planProposal, trackedParagraphInsertError } from './plan-proposal.ts';
 import { planRevisionDecision, revisionItemOps } from './revision-operations.ts';
 import type { ReviewCommentItem } from '../store/store/review-items.ts';
 import {
@@ -135,6 +135,7 @@ import {
   CONTENT_CONTROL_RANGE_LOCATIONS,
   CONTENT_CONTROL_SUBTYPES,
   allControlsUnder,
+  contentControlTextInsertionError,
   contentControlValueOf,
 } from './content-control-input.ts';
 import {
@@ -158,6 +159,7 @@ interface Slot {
 }
 
 export interface BatchPlannerHost {
+  readonly trackedRangeReplacement?: boolean;
   readonly fieldPageContext?: (
     story: AutomationStoryId,
     paragraphId: string,
@@ -1534,6 +1536,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       return virtual;
     }
     const table = planTableOperation(operation, {
+      trackingAuthor,
+      trackedRangeReplacement: host.trackedRangeReplacement,
       handles,
       reads: packageReads,
       admitWrite: (reads, count, paragraphIds) => {
@@ -1622,7 +1626,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
                 numbering ? `list:${numbering.numId}:${numbering.level}` : 'paragraph'
               )
             );
-          }
+          },
+          trackingAuthor
         );
       case 'getDocument':
         return query({ kind: 'handle', handle: handles.document() });
@@ -1745,10 +1750,17 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       case 'proposeInsertion':
       case 'proposeDeletion':
       case 'proposeReplacement':
-        return planProposal(operation, tracked, handles, packageReads, (story, paragraphId) => {
-          const storyPlan = planFor(story);
-          return pinWrite(storyPlan) ?? claim(storyPlan, paragraphId);
-        });
+        return planProposal(
+          operation,
+          tracked,
+          handles,
+          packageReads,
+          (story, paragraphId) => {
+            const storyPlan = planFor(story);
+            return pinWrite(storyPlan) ?? claim(storyPlan, paragraphId);
+          },
+          host.trackedRangeReplacement !== false
+        );
 
       case 'insertText': {
         const at = resolvePoint(operation.at, handles, packageReads);
@@ -1806,6 +1818,9 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           );
         const story = packageReads.story(anchor.value.story);
         if (!story) return refuse('invalid-handle', 'that story is not in this document');
+        const error =
+          tracked && trackedParagraphInsertError(story, anchor.value.paragraphId, trackingAuthor!);
+        if (error) return { ok: false, error };
         return planInsertParagraph(planFor(story), anchor.value, operation.where, operation.text);
       }
 
@@ -2664,16 +2679,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       case 'insertContentControlText': {
         const found = controlOf(operation.contentControl);
         if (!('control' in found)) return found;
-        if (typeof operation.text !== 'string') {
-          return refuse('unsupported-content', 'text is required', 'text');
-        }
-        if (operation.at !== 'replace' && operation.at !== 'start' && operation.at !== 'end') {
-          return refuse(
-            'unsupported-content',
-            'that is not a place to insert at',
-            String(operation.at)
-          );
-        }
+        const error = contentControlTextInsertionError(
+          found.control.properties.type,
+          operation.text,
+          operation.at
+        );
+        if (error) return { ok: false, error };
         const plan = planFor(found.reads);
         const pin = pinWrite(plan);
         if (pin) return pin;

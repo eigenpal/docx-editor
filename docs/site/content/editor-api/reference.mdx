@@ -63,6 +63,8 @@ Font writes honor inherited complex-script properties. Font reads return authore
 
 ## Fields, stories, and controls
 
+`Range.insertContentControl()` creates `RichText`, `PlainText`, and `DatePicker` controls.
+
 | Object or type | Public members beyond inherited members | Guide |
 | --- | --- | --- |
 | `Field`, `FieldCollection` | Field `code`, `updateResult`, `delete`; collection `getFirst`, `getLast`, `getFirstOrNullObject`, `getLastOrNullObject` | [Fields and pagination](/docs/2.x/editor-api/fields) |
@@ -76,6 +78,8 @@ Font writes honor inherited complex-script properties. Font reads return authore
 | `ContentControlType`, `ContentControlSubtype`, `ContentControlValue`, `ContentControlLockState` | Creation vocabulary, DOCX subtype terms, typed values, and lock vocabulary | [Content controls](/docs/2.x/editor-api/content-controls) |
 
 ## Comments and revisions
+
+`Document.changeTrackingMode = "TrackMineOnly"` tracks supported text, font, paragraph, and list edits. Table row tracking supports additions and partial deletions. Complete table insertion, column changes, page setup, and content-control structure refuse while tracking.
 
 | Object or type | Public members beyond inherited members | Guide |
 | --- | --- | --- |
@@ -99,3 +103,5 @@ For integration patterns, see [Connect an agent to a document](/docs/2.x/build-a
 ## External document refresh
 
 The refresh controller belongs to the browser host, outside the Office.js document model. `RefreshHighlightOptions` controls change selection and decoration. `NavigateToChangeOptions` controls scroll alignment, motion, padding, and focus. For more information, see [Document refresh API](/docs/2.x/guides/document-refresh).
+
+`RefreshChangeInput.description` supplies a processor review summary. `RefreshChange.diagnostic` reports unavailable locations with stable codes and the requested anchor. Refresh resets selection and undo history. It refuses collaborative sessions.

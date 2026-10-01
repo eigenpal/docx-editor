@@ -59,7 +59,10 @@ export class Table extends ModelObject implements PromisedItem {
   hydrateNull(): void {
     this.path.resolveNull();
   }
-  /** Cell text by row. A write replaces the whole rectangular matrix; rich cell content refuses. */
+  /**
+   * Cell text by row. Writes require the current dimensions and ordinary cell text.
+   * TrackMineOnly records text revisions outside collaboration; collaborative tracked writes refuse.
+   */
   get values(): string[][] {
     return this.loadedProperty<string[][]>('values');
   }
@@ -129,7 +132,10 @@ export class Table extends ModelObject implements PromisedItem {
     );
     return cell;
   }
-  /** Add rows at an edge. Sync before configuring the returned rows; omitted values create empty cells. */
+  /**
+   * Add rows at an edge. Sync before configuring the returned rows; omitted values create empty cells.
+   * TrackMineOnly records native row insertion revisions, including supplied initial values.
+   */
   addRows(
     insertLocation: InsertLocation.start | InsertLocation.end | 'Start' | 'End',
     rowCount: number,
@@ -177,7 +183,10 @@ export class Table extends ModelObject implements PromisedItem {
       },
     }));
   }
-  /** Delete consecutive rows from a zero-based index. Defaults to one row. */
+  /**
+   * Delete consecutive rows from a zero-based index. Defaults to one row.
+   * Tracking requires one row without a pending deletion to remain and refuses pending row or cell structure revisions.
+   */
   deleteRows(rowIndex: number, rowCount?: number): void {
     if (rowCount === undefined) rowCount = 1;
     integer(rowIndex, this.path.label);
@@ -302,7 +311,10 @@ export class TableCell extends ModelObject implements PromisedItem {
     this.#body = body;
     return body;
   }
-  /** Plain cell text. Replacing complex content refuses; use the scoped body for targeted edits. */
+  /**
+   * Plain cell text. Replacing complex content refuses; use the scoped body for targeted edits.
+   * TrackMineOnly records text revisions outside collaboration; collaborative tracked writes refuse.
+   */
   get value(): string {
     return this.loadedProperty<string>('value');
   }

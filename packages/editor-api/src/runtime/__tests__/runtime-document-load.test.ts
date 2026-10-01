@@ -129,3 +129,58 @@ for (const action of ['list', 'table', 'field', 'control'] as const) {
     }
   });
 }
+
+test('tracked list creation requires the browser review module', async () => {
+  const editor = createDocxEditor({ container: document.createElement('div'), document: bytes });
+  const runtime = DocxEditorBrowser.createBrowser(editor, { author: 'Agent' });
+  const before = new Uint8Array(await editor.save());
+  try {
+    await expect(
+      runtime.run(async (c) => {
+        const paragraph = c.document.body.paragraphs.getFirst();
+        await c.sync();
+        c.document.changeTrackingMode = 'TrackMineOnly';
+        paragraph.startNewList();
+        await c.sync();
+      })
+    ).rejects.toMatchObject({ code: 'NotSupported' });
+    expect(new Uint8Array(await editor.save())).toEqual(before);
+  } finally {
+    runtime.dispose();
+    editor.destroy();
+  }
+});
+
+for (const action of ['rows', 'membership', 'level'] as const) {
+  test(`tracked ${action} requires the browser review module`, async () => {
+    const editor = createDocxEditor({ container: document.createElement('div'), document: bytes });
+    const runtime = DocxEditorBrowser.createBrowser(editor, { author: 'Agent' });
+    try {
+      await runtime.run(async (c) => {
+        const paragraph = c.document.body.paragraphs.getFirst();
+        await c.sync();
+        paragraph.startNewList();
+        await c.sync();
+        c.document.body.getRange('End').insertTable(2, 1, 'After', [['One'], ['Two']]);
+        await c.sync();
+      });
+      const before = new Uint8Array(await editor.save());
+      await expect(
+        runtime.run(async (c) => {
+          c.document.changeTrackingMode = 'TrackMineOnly';
+          if (action === 'rows') c.document.body.tables.getFirst().addRows('End', 1, [['Three']]);
+          else {
+            const paragraph = c.document.body.paragraphs.getFirst();
+            if (action === 'membership') paragraph.detachFromList();
+            else paragraph.listItem.level = 1;
+          }
+          await c.sync();
+        })
+      ).rejects.toMatchObject({ code: 'NotSupported' });
+      expect(new Uint8Array(await editor.save())).toEqual(before);
+    } finally {
+      runtime.dispose();
+      editor.destroy();
+    }
+  });
+}

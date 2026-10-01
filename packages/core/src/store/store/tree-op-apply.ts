@@ -416,7 +416,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
       return applyInsertContent(part, paragraph, op.offset, [element], options);
     }
     case 'setListLevel':
-      return applySetListLevel(part, paragraph, op.level, options, nextId);
+      return applySetListLevel(part, paragraph, op.level, options, nextId, op.revision);
     case 'setParagraphMarkProperties':
       return applySetParagraphMarkProperties(
         part,
@@ -427,7 +427,15 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
         op.revision
       );
     case 'setListNumbering':
-      return applySetListNumbering(part, paragraph, op.numId, op.level ?? 0, options, nextId);
+      return applySetListNumbering(
+        part,
+        paragraph,
+        op.numId,
+        op.level ?? 0,
+        options,
+        nextId,
+        op.revision
+      );
     case 'setParagraphTabStops':
       return applySetParagraphTabStops(
         part,

@@ -5182,7 +5182,7 @@ export function mountPaginatedSurface(
 
     revisionDisplayMode: reviewDisplayMode,
     replacementLanding,
-    applyAutomationOps: (staged, scope, packageEdits) => {
+    applyAutomationOps: (staged, scope, packageEdits, requiresReview = false) => {
       // THE SAME PATH A KEYSTROKE TAKES, minus the keystroke. `applyOps` is where viewing
       // refuses and where suggesting turns an edit into a proposal, and `commit` is where the
       // refusal is recorded, the caret is re-clamped and the pages are repainted. A host that
@@ -5235,7 +5235,7 @@ export function mountPaginatedSurface(
               reason: refused ?? 'this engine will not author that hyperlink target',
             });
           }
-          if (!options.reviewModel && ops.some(isTrackedEdit)) {
+          if (!options.reviewModel && (requiresReview || ops.some(isTrackedEdit))) {
             return (result = {
               committed: false,
               rejected: true,

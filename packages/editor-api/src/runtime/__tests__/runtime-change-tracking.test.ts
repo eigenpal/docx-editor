@@ -88,7 +88,7 @@ test('failed trailing operation rolls back edits, mode, revision, and loaded pro
       await c.sync();
       c.document.changeTrackingMode = 'TrackMineOnly';
       range.insertText('New', 'Replace');
-      c.document.body.font.bold = true; // unsupported tracked mutation
+      c.document.body.clear(); // unsupported tracked mutation
       await expect(c.sync()).rejects.toMatchObject({ code: 'NotSupported' });
       expect<string>(c.document.changeTrackingMode).toBe('Off');
       expect(await markup(r)).toBe(before);
@@ -194,6 +194,158 @@ test('unsupported structural edits refuse without silently making permanent chan
       await expect(c.sync()).rejects.toMatchObject({ code: 'NotSupported' });
       expect(await markup(r)).toBe(before);
     });
+  } finally {
+    r.dispose();
+  }
+});
+
+test('tracked font and paragraph formatting supports accept, reject, and save/reopen', async () => {
+  const r = await open();
+  try {
+    await r.run(async (c) => {
+      const paragraph = c.document.body.paragraphs.getFirst();
+      await c.sync();
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      paragraph.font.bold = true;
+      paragraph.font.italic = true;
+      paragraph.spaceAfter = 12;
+      await c.sync();
+    });
+    expect(await markup(r)).toContain('rPrChange');
+    expect(await markup(r)).toContain('pPrChange');
+    const reopened = await DocxEditor.createServer(await r.save(), { author: 'Agent' });
+    try {
+      await reopened.run(async (c) => {
+        c.document.revisions.load('items');
+        await c.sync();
+        expect(c.document.revisions.items.length).toBeGreaterThan(0);
+        c.document.body.revisions.rejectAll();
+        await c.sync();
+      });
+      expect(await markup(reopened)).not.toContain('PrChange');
+      expect(await markup(reopened)).not.toMatch(/<w:b[ \/>]/);
+      expect(await markup(reopened)).not.toContain('w:after="240"');
+    } finally {
+      reopened.dispose();
+    }
+    await r.run(async (c) => {
+      c.document.body.revisions.acceptAll();
+      await c.sync();
+    });
+    expect(await markup(r)).not.toContain('PrChange');
+    expect(await markup(r)).toContain('w:after="240"');
+  } finally {
+    r.dispose();
+  }
+});
+
+for (const location of ['Before', 'After'] as const) {
+  test(`tracked paragraph insertion ${location} rejects text and its paragraph break together`, async () => {
+    const r = await open();
+    try {
+      await r.run(async (c) => {
+        const paragraph = c.document.body.paragraphs.getFirst();
+        await c.sync();
+        c.document.changeTrackingMode = 'TrackMineOnly';
+        const inserted = paragraph.insertParagraph('New paragraph', location);
+        await c.sync();
+        inserted.font.bold = true;
+        inserted.spaceAfter = 18;
+        await c.sync();
+      });
+      const next = await DocxEditor.createServer(await r.save(), { author: 'Agent' });
+      try {
+        await next.run(async (c) => {
+          c.document.body.revisions.rejectAll();
+          await c.sync();
+          c.document.body.paragraphs.load('items');
+          c.document.body.load('text');
+          await c.sync();
+          expect(c.document.body.paragraphs.items).toHaveLength(3);
+          expect(c.document.body.text).not.toContain('New paragraph');
+          expect(c.document.body.text).toContain('First clause.');
+        });
+        expect(await markup(next)).not.toMatch(/<w:b[ \/>]/);
+        expect(await markup(next)).not.toContain('w:after="360"');
+      } finally {
+        next.dispose();
+      }
+    } finally {
+      r.dispose();
+    }
+  });
+}
+
+test('proposed numbered lists reject membership and keep text', async () => {
+  const r = await open();
+  try {
+    await r.run(async (c) => {
+      const paragraphs = c.document.body.paragraphs;
+      paragraphs.load('items');
+      await c.sync();
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      const list = paragraphs.items[0]!.startNewList();
+      await c.sync();
+      list.load('id');
+      await c.sync();
+      list.setLevelNumbering(0, 'Arabic', [0, '.']);
+      await c.sync();
+      paragraphs.items[1]!.attachToList(list.id, 0);
+      await c.sync();
+      paragraphs.items[1]!.listItem.level = 1;
+      await c.sync();
+    });
+    expect(await markup(r)).toContain('pPrChange');
+    const next = await DocxEditor.createServer(await r.save());
+    try {
+      await next.run(async (c) => {
+        c.document.body.revisions.rejectAll();
+        await c.sync();
+        c.document.body.lists.load('items');
+        c.document.body.load('text');
+        await c.sync();
+        expect(c.document.body.lists.items).toHaveLength(0);
+        expect(c.document.body.text).toContain('First clause.');
+        expect(c.document.body.text).toContain('Second clause.');
+      });
+    } finally {
+      next.dispose();
+    }
+  } finally {
+    r.dispose();
+  }
+});
+
+test('accepting a proposed list preserves numbering after reopen', async () => {
+  const r = await open();
+  try {
+    await r.run(async (c) => {
+      const paragraph = c.document.body.paragraphs.getFirst();
+      await c.sync();
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      const list = paragraph.startNewList();
+      await c.sync();
+      list.setLevelNumbering(0, 'Arabic', [0, '.']);
+      await c.sync();
+      c.document.body.revisions.acceptAll();
+      await c.sync();
+    });
+    const next = await DocxEditor.createServer(await r.save(), { author: 'Agent' });
+    try {
+      await next.run(async (c) => {
+        c.document.body.lists.load('items');
+        c.document.revisions.load('items');
+        await c.sync();
+        expect(c.document.body.lists.items).toHaveLength(1);
+        expect(c.document.revisions.items).toHaveLength(0);
+        c.document.changeTrackingMode = 'TrackMineOnly';
+        c.document.body.lists.items[0]!.setLevelBullet(0, 'Solid');
+        await expect(c.sync()).rejects.toMatchObject({ code: 'NotSupported' });
+      });
+      expect(await markup(next)).not.toContain('pPrChange');
+    } finally {
+      next.dispose();
+    }
   } finally {
     r.dispose();
   }

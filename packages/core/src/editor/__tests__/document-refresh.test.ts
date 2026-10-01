@@ -4,6 +4,7 @@ import { createDocumentRefresh } from '../document-refresh.ts';
 import { refreshHostFor } from '../document-refresh-host.ts';
 import { refreshFixture, refreshMetadata } from './document-refresh-fixture.ts';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 
 const disposers: (() => void)[] = [];
 afterEach(() => {
@@ -205,6 +206,169 @@ describe('external document refresh', () => {
     expect(readOoxmlPackage(new Uint8Array(saved)).ok).toBe(true);
     editor.load(saved);
     expect(await editor.save()).toEqual(saved);
+  });
+  test('matches paragraph IDs without case sensitivity and reports failed anchors', async () => {
+    const { refresh } = open();
+    const submission = await refresh.capture();
+    const location = { paragraphId: '0000000d', start: 12, end: 33, text: 'Updated delivery date' };
+    const cases = [
+      ['range', { ...location, paragraphId: '80000000' }, 'invalid-paragraph-id'],
+      ['zero', { ...location, paragraphId: '00000000' }, 'invalid-paragraph-id'],
+      ['syntax', { ...location, paragraphId: 'para-12' }, 'invalid-paragraph-id'],
+      ['missing', { ...location, paragraphId: '7FFFFFFF' }, 'paragraph-not-found'],
+      ['both', { ...location, paragraphIndex: 12 }, 'invalid-selector'],
+      ['offset', { ...location, end: 999 }, 'invalid-offsets'],
+      ['text', { ...location, text: 'Old delivery date' }, 'text-mismatch'],
+    ] as const;
+    const result = await refresh.applyUpdate({
+      submission,
+      sequence: 1,
+      bytes: refreshFixture(1),
+      changes: [
+        { id: 'matched', location },
+        ...cases.map(([id, location]) => ({ id, location })),
+        { id: 'footer', description: 'Updated footer version' },
+        { id: 'deleted', description: 'Removed an obsolete clause', unavailableReason: 'deleted' },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.changes[0]).toMatchObject({ status: 'available', location });
+    expect(result.changes[0]?.diagnostic).toBeUndefined();
+    for (const [id, requested, code] of cases) {
+      const change = result.changes.find((c) => c.id === id)!;
+      expect(change.status).toBe('invalid');
+      expect(change.location).toBeUndefined();
+      expect(change.diagnostic).toEqual({ code, location: requested });
+      expect(Object.isFrozen(change.diagnostic)).toBe(true);
+      expect(Object.isFrozen(change.diagnostic?.location)).toBe(true);
+      expect(refresh.navigateToChange(id)).toBe(false);
+    }
+    expect(result.changes.find((c) => c.id === 'footer')).toMatchObject({
+      description: 'Updated footer version',
+      status: 'unavailable',
+      diagnostic: { code: 'missing-location' },
+    });
+    expect(result.changes.find((c) => c.id === 'deleted')).toMatchObject({
+      status: 'deleted',
+      diagnostic: { code: 'deleted' },
+    });
+    expect(refresh.highlightChanges()).toBe(1);
+    expect(result.failures).toEqual([]);
+  });
+  test('owns descriptions at delivery and detects changed structural summaries', async () => {
+    const { refresh } = open();
+    const submission = await refresh.capture();
+    const changes = [{ id: 'style', description: 'Heading size: 18 pt' }];
+    const first = refresh.applyUpdate({
+      submission,
+      sequence: 1,
+      bytes: refreshFixture(1),
+      changes,
+    });
+    changes[0]!.description = 'Mutated after delivery';
+    const accepted = await first;
+    expect(accepted).toMatchObject({ ok: true, changes: [{ description: 'Heading size: 18 pt' }] });
+    const second = await refresh.applyUpdate({
+      submission,
+      sequence: 2,
+      bytes: refreshFixture(2),
+      changes: [{ id: 'style', description: 'Heading size: 20 pt' }],
+    });
+    expect(second).toMatchObject({
+      ok: true,
+      changes: [{ isNew: true, description: 'Heading size: 20 pt' }],
+    });
+    expect(
+      await refresh.applyUpdate({
+        submission,
+        sequence: 3,
+        bytes: refreshFixture(2),
+        changes: [{ id: 'style', description: 'x'.repeat(1001) }],
+      })
+    ).toMatchObject({ ok: false, code: 'invalid-result' });
+  });
+  test('refuses malformed metadata before replacing the document', async () => {
+    const { refresh, text } = open();
+    const before = text();
+    const submission = await refresh.capture();
+    for (const changes of [
+      new Array(1),
+      null,
+      [{ id: 'bad', description: { text: 'not a string' } }],
+      [{ id: 'bad', location: { paragraphIndex: 12, start: {}, end: 1, text: 'S' } }],
+      [{ id: 'bad', location: null }],
+    ]) {
+      expect(
+        await refresh.applyUpdate({
+          submission,
+          sequence: 1,
+          bytes: refreshFixture(1),
+          changes: changes as unknown as Parameters<typeof refresh.applyUpdate>[0]['changes'],
+        })
+      ).toMatchObject({ ok: false, code: 'invalid-result' });
+      expect(text()).toBe(before);
+    }
+    expect(
+      await refresh.applyUpdate({
+        submission,
+        sequence: 1,
+        bytes: refreshFixture(1),
+        failures: new Array(1),
+      })
+    ).toMatchObject({ ok: false, code: 'invalid-result' });
+    expect(text()).toBe(before);
+    expect(
+      await refresh.applyUpdate({
+        submission,
+        sequence: 1,
+        bytes: refreshFixture(1),
+        changes: refreshMetadata(),
+      })
+    ).toMatchObject({ ok: true });
+  });
+  test('locates table cells and block content controls in returned files', async () => {
+    const { editor, refresh } = open();
+    const files = unzipSync(refreshFixture());
+    const nested =
+      '<w:tbl><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:tc>' +
+      '<w:tcPr><w:tcW w:w="4000" w:type="dxa"/></w:tcPr>' +
+      '<w:p w14:paraId="00ABCDEF"><w:r><w:t>Updated table cell</w:t></w:r></w:p>' +
+      '</w:tc></w:tr></w:tbl><w:sdt><w:sdtPr><w:richText/></w:sdtPr><w:sdtContent>' +
+      '<w:p w14:paraId="00ABCDE0"><w:r><w:t>Updated control</w:t></w:r></w:p>' +
+      '</w:sdtContent></w:sdt>';
+    files['word/document.xml'] = strToU8(
+      strFromU8(files['word/document.xml']!).replace('<w:body>', `<w:body>${nested}`)
+    );
+    const submission = await refresh.capture();
+    const result = await refresh.applyUpdate({
+      submission,
+      sequence: 1,
+      bytes: zipSync(files),
+      changes: [
+        {
+          id: 'table',
+          description: 'Updated table cell',
+          location: { paragraphId: '00abcdef', start: 0, end: 18, text: 'Updated table cell' },
+        },
+        {
+          id: 'control',
+          description: 'Updated content control',
+          location: { paragraphIndex: 1, start: 0, end: 15, text: 'Updated control' },
+        },
+      ],
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      changes: [{ status: 'available' }, { status: 'available' }],
+    });
+    expect(refresh.highlightChanges({ timeoutMs: 5000 })).toBe(2);
+    expect(refresh.navigateToChange('table')).toBe(true);
+    expect(refresh.navigateToChange('control')).toBe(true);
+    const saved = await editor.save();
+    editor.load(saved);
+    expect(editor.surface!.session.bodyText()).toContain('Updated table cell');
+    expect(editor.surface!.session.bodyText()).toContain('Updated control');
   });
   test('blocks writes during deferred loads and restores scroll on completion', async () => {
     const { editor, refresh, scroll } = open();

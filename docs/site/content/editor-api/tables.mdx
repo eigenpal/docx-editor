@@ -94,10 +94,22 @@ await context.sync();
 
 Structural edits can fail on merged grids, protected content, nested preserved structures, and pending revisions. Adding columns or deleting some columns requires an existing table grid. Deleting all columns can still remove a table without a grid. A matching TypeScript signature does not guarantee an edit works on every table. Table value replacement does not silently discard unsupported cell content. Inspect and edit a smaller cell-body range when that preserves the intended structure.
 
-The runtime rejects table creation, structural edits, and formatting while tracking changes. Tracked text edits can operate inside one eligible cell paragraph. A pending tracked row insertion or deletion blocks tracked text edits throughout that row. See [Tracked changes](/docs/2.x/editor-api/revisions).
+Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration. Tracked text and font edits can operate inside eligible cell paragraphs. A pending tracked row insertion or deletion blocks tracked text edits throughout that row. See [Tracked changes](/docs/2.x/editor-api/revisions).
 
 Each row or column addition or deletion must run alone in its sync, even across separate tables. Do not combine it with cell values or formatting. Separate other dependent structural operations into distinct syncs. If a batch returns `ConflictingChanges`, read the table again before retrying a revised operation.
 
 ## Next steps
 
 See [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) and [API member directory](/docs/2.x/editor-api/reference).
+
+## Row suggestions
+
+Set `document.changeTrackingMode = 'TrackMineOnly'` before `Table.addRows()` or `Table.deleteRows()`. Added rows can include initial cell values. The runtime saves native `w:trPr/w:ins` and `w:trPr/w:del` revisions.
+
+Save and reopen preserve the suggestions. Use `body.revisions.acceptAll()` or `body.revisions.rejectAll()` to resolve complete tracked rows. The revision collection omits row revisions from `items`.
+
+Delete fewer than all rows when you suggest a deletion. Deleting every row refuses in tracking mode. Changing columns and table properties requires an eligible complete proposed table. Merged tables also refuse. The runtime never changes tracking mode to complete an unsupported edit.
+
+Each deletion must leave a row without a pending deletion. Existing deletion suggestions do not count as surviving rows. Independent concurrent deletions can combine to mark every row. Bulk Accept and Reject resolve that combined result after save and reopen.
+
+Tracked deletion refuses rows with pending row or cell structure revisions with `NotImplemented`. Resolve those revisions before suggesting another deletion.

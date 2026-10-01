@@ -593,7 +593,8 @@ export interface PaginatedSurface {
     scope?: StoryScope,
     packageEdits?: readonly ((
       pkg: import('../store/package/ooxml-package.ts').OoxmlPackage
-    ) => import('../store/package/ooxml-package.ts').OoxmlPackage)[]
+    ) => import('../store/package/ooxml-package.ts').OoxmlPackage)[],
+    requiresReview?: boolean
   ): TreeApplyResult;
   /**
    * Which revision halves this surface is SHOWING.

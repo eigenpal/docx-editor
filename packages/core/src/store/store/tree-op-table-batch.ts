@@ -15,9 +15,10 @@ function plan(part: OoxmlPart, op: Op) {
         action.offset,
         action.rowCount,
         action.columnCount,
-        action.values
+        action.values,
+        op.revision
       )
-    : planTableMutation(reads, action.tableId, action.mutation);
+    : planTableMutation(reads, action.tableId, action.mutation, op.revision);
 }
 function malformed(op: Op): boolean {
   return (

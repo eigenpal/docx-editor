@@ -31,7 +31,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-Assignments on one `Font` proxy coalesce within a sync. Different proxies that address overlapping content can still conflict. The runtime rejects formatting writes while tracking changes. Never switch tracking off automatically to bypass that refusal.
+Assignments on one `Font` proxy coalesce within a sync. Different proxies that address overlapping content can still conflict. The runtime tracks font, paragraph-format, and paragraph-style writes as property revisions. Accept retains the changes; reject restores previous properties. Never switch tracking off automatically to bypass that refusal.
 
 Font writes use effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults. Bold, italic, size, and font-name writes update the complex-script properties when those properties control the text. Direct false values override inherited direction.
 
@@ -57,12 +57,27 @@ Every font getter can return `null`. That means mixed values, no authored value,
 | `size` | Positive finite point size within the supported OOXML range |
 | `color` | Concrete `#RRGGBB` color |
 | `underline` | Supported `UnderlineType` value or matching string |
-| `highlightColor` | Exact Word palette name or its hexadecimal color |
+| `highlightColor` | Exact Word palette name or its hexadecimal color; `null` clears highlighting |
 | `subscript`, `superscript` | Boolean; both cannot be `true` in the same write |
 
 Underline writes support `None`, `Single`, `Word`, `Double`, `Thick`, `Dotted`, `DottedHeavy`, `DashLine`, `DashLineHeavy`, `DashLineLong`, `DashLineLongHeavy`, `DotDashLine`, `DotDashLineHeavy`, `TwoDotDashLine`, `TwoDotDashLineHeavy`, `Wave`, `WaveHeavy`, and `WaveDouble`. The exported enum also includes `Mixed`, `Hidden`, and `DotLine`, which the runtime rejects on writes. For example, `UnderlineType.single` has the value `Single`.
 
-Highlight names are `Yellow`, `Lime`, `Turquoise`, `Pink`, `Blue`, `Red`, `DarkBlue`, `Teal`, `Green`, `Purple`, `DarkRed`, `Olive`, `Gray`, `LightGray`, `Black`, and `White`. Reads return `#RRGGBB` or `null`. The runtime rejects colors outside that palette. The getter returns `string | null`; the setter accepts `string`. A nullable read is not a valid typed setter argument.
+Highlight names are `Yellow`, `Lime`, `Turquoise`, `Pink`, `Blue`, `Red`, `DarkBlue`, `Teal`, `Green`, `Purple`, `DarkRed`, `Olive`, `Gray`, `LightGray`, `Black`, and `White`. Reads return `#RRGGBB` or `null`. The runtime rejects colors outside that palette. The getter returns `string | null`; the setter keeps the Office.js `string` declaration.
+
+### Clear highlighting
+
+Microsoft documents `null` for clearing highlights, despite the `string` declaration. See [Word.Font.highlightColor](https://learn.microsoft.com/en-us/javascript/api/word/word.font#word-word-font-highlightcolor-member). The runtime supports that documented value. Use an explicit compiler annotation for the assignment:
+
+```ts
+await runtime.run(async (context) => {
+  const font = context.document.body.font;
+  // @ts-expect-error Office.js declares string but documents null clearing.
+  font.highlightColor = null;
+  await context.sync();
+});
+```
+
+The compiler reports an unused annotation if the declaration later accepts `null`.
 
 ## Format paragraphs
 

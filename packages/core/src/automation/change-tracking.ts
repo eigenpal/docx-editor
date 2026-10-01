@@ -49,12 +49,23 @@ export function trackingStep(
   return refused(`${operation.op} does not support TrackMineOnly; no permanent edit was applied`);
 }
 
-/** The editing profile only authors tracked inline text; annotations and decisions remain available. */
+/** The editing profile authors tracked text and property changes; annotations and decisions remain available. */
 export function supportsTrackedAutomationOperation(operation: AutomationOperation): boolean {
   if (!isAutomationCommand(operation) || operation.op === 'setChangeTrackingMode') return true;
   if (operation.op === 'insertText') return true;
+  if (operation.op === 'insertTable') return true;
+  if (operation.op === 'updateTable' || operation.op === 'updateTableCell') return true;
   if (operation.op === 'replaceSpan' && !('body' in operation.span)) return true;
   return [
+    'startNewList',
+    'setListLevelFormat',
+    'attachToList',
+    'detachFromList',
+    'setListLevel',
+    'insertParagraph',
+    'setFont',
+    'setStyle',
+    'setParagraphFormat',
     'proposeInsertion',
     'proposeDeletion',
     'proposeReplacement',
@@ -70,4 +81,50 @@ export function supportsTrackedAutomationOperation(operation: AutomationOperatio
     'selectSpan',
     'selectBookmark',
   ].includes(operation.op);
+}
+
+/** Reuse canonical revisions so review decisions restore text, paragraph breaks, and properties. */
+export function trackPlannedChanges(
+  operation: AutomationOperation,
+  plan: PlannedOperation,
+  author: string | undefined
+): PlannedOperation {
+  if (
+    !author ||
+    ![
+      'setFont',
+      'setStyle',
+      'setParagraphFormat',
+      'insertParagraph',
+      'attachToList',
+      'detachFromList',
+      'setListLevel',
+    ].includes(operation.op) ||
+    !plan.ok ||
+    plan.kind !== 'command'
+  )
+    return plan;
+  const revision = { author, date: new Date().toISOString() };
+  return {
+    ...plan,
+    ops: plan.ops.map((op) => {
+      if (op.op === 'insertText') return { ...op, revision };
+      if (op.op === 'splitParagraph')
+        return {
+          op: 'splitParagraphMany' as const,
+          paragraphId: op.paragraphId,
+          offsets: [op.offset],
+          revision,
+        };
+      if (
+        op.op === 'setRunProperties' ||
+        op.op === 'setParagraphProperties' ||
+        op.op === 'setParagraphMarkProperties' ||
+        op.op === 'setListNumbering' ||
+        op.op === 'setListLevel'
+      )
+        return { ...op, revision };
+      throw new Error('Formatting plan contains an operation without property revision support');
+    }),
+  };
 }

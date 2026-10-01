@@ -208,8 +208,9 @@ export class Range extends ModelObject implements PromisedItem {
    * Await `context.sync()` before loading or addressing that returned range.
    *
    * With server `document.changeTrackingMode = 'TrackMineOnly'`, this creates a tracked text
-   * edit attributed to the runtime author. Tracked edits must stay within one paragraph and
-   * cannot touch pending revisions. Structural and formatting tracking are not supported.
+   * edit attributed to the runtime author. Tracked range replacement supports adjacent sibling paragraphs outside collaboration.
+   * Table and wrapper boundaries and foreign pending revisions refuse. Font and paragraph
+   * formatting support property revisions.
    * Empty text with `Replace` deletes the range; empty text at an insertion point is a no-op.
    * Agent tools that intend a replacement should validate non-empty model output first.
    *
@@ -246,7 +247,7 @@ export class Range extends ModelObject implements PromisedItem {
     return created;
   }
 
-  /** Delete this range's content. TrackMineOnly preserves inline text as a pending deletion. */
+  /** Delete range content. Tracking supports adjacent sibling paragraphs outside collaboration. */
   delete(): void {
     this.requireUsablePath();
     this.commandDiscarding('delete', () => ({ op: 'replaceSpan', span: this.#span(), text: '' }));
@@ -287,7 +288,7 @@ export class Range extends ModelObject implements PromisedItem {
   }
 
   /**
-   * Wrap this single-paragraph range in a rich-text or plain-text content control.
+   * Wrap this single-paragraph range in a rich-text, plain-text, or date-picker content control.
    * Await sync before configuring the returned control. Other types explicitly refuse.
    */
   insertContentControl(
@@ -315,14 +316,15 @@ export class Range extends ModelObject implements PromisedItem {
   ): ContentControl {
     const target = `${this.path.label}.insertContentControl`;
     const type = contentControlType ?? 'RichText';
-    if (type !== 'RichText' && type !== 'PlainText') fail({ code: 'NotSupported', target });
+    if (type !== 'RichText' && type !== 'PlainText' && type !== 'DatePicker')
+      fail({ code: 'NotSupported', target });
     const created = ContentControl.promised(this.context, target, false);
     this.commandAnswering(
       target,
       () => ({
         op: 'insertContentControl',
         span: this.#span(),
-        subtype: type === 'PlainText' ? 'plainText' : 'richText',
+        subtype: type === 'DatePicker' ? 'date' : type === 'PlainText' ? 'plainText' : 'richText',
         returnHandle: true,
       }),
       (value) => {
@@ -459,7 +461,11 @@ export class Range extends ModelObject implements PromisedItem {
     );
   }
 
-  /** Insert a rectangular table before or after this range. */
+  /**
+   * Insert a rectangular table before or after this range.
+   * TrackMineOnly records native row/cell insertions, including initial values.
+   * Sync before configuring the returned table. Nested table authoring refuses.
+   */
   insertTable(
     rowCount: number,
     columnCount: number,

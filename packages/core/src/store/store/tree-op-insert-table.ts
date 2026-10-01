@@ -31,6 +31,7 @@ import {
   type OoxmlElement,
   type OoxmlNode,
   type OoxmlParagraphNode,
+  type OoxmlParagraphPropertiesNode,
   type OoxmlPart,
   type OoxmlTableCellNode,
   type OoxmlTableNode,
@@ -52,6 +53,9 @@ import {
   TEXT_DEPS,
 } from './tree-op-nodes.ts';
 import type { TreeDocOp, TreeOpEffect, TreeOpRejection, TreeOpResult } from './tree-op-types.ts';
+import { invalidRevisionAttribution } from './tree-op-revision-attribution.ts';
+import { nextRevisionId } from './tree-op-revision-ids.ts';
+import { withTrackedRowMarker } from './tree-op-tables.ts';
 
 export type InsertTableOp = Extract<TreeDocOp, { op: 'insertTable' }>;
 
@@ -208,7 +212,8 @@ function buildTable(
   w14Prefix: string | null,
   usedParagraphIds: Set<string>,
   nextId: () => string,
-  wml: WmlFreshNamespaceContext
+  wml: WmlFreshNamespaceContext,
+  revisionId?: string
 ): BuiltTable {
   const cellIds: string[] = [];
   const paragraphIds: string[] = [];
@@ -242,7 +247,7 @@ function buildTable(
       cellIds.push(cell.id);
       cells.push(cell);
     }
-    rows.push({
+    const row = {
       id: nextId(),
       kind: 'tableRow',
       namespaceUri: WML_NAMESPACE_URI,
@@ -251,7 +256,10 @@ function buildTable(
       namespaceBindings: [],
       attributes: [],
       children: cells,
-    } as OoxmlTableRowNode);
+    } as OoxmlTableRowNode;
+    rows.push(
+      op.revision ? withTrackedRowMarker(row, 'ins', revisionId!, op.revision, nextId, wml) : row
+    );
   }
   const table = {
     id: nextId(),
@@ -277,6 +285,7 @@ function boundedInteger(value: unknown, min: number, max: number): boolean {
 }
 
 export function validateInsertTable(part: OoxmlPart, op: InsertTableOp): TreeOpRejection | null {
+  if (op.revision !== undefined && invalidRevisionAttribution(op.revision)) return 'invalidArgs';
   if (typeof op.beforeParagraphId !== 'string' || op.beforeParagraphId.length === 0) {
     return 'invalidArgs';
   }
@@ -320,16 +329,34 @@ export function applyInsertTable(
   const wml = wmlFreshNamespaceContextAt(part, parent);
   const w14Prefix = w14PrefixInScopeAt(part, parent);
   const usedParagraphIds = new Set(usedParaIds(part.root));
-  const built = buildTable(op, w14Prefix, usedParagraphIds, nextId, wml);
+  const revisionId = op.revision ? (options?.revisionIds?.() ?? nextRevisionId(part)()) : undefined;
+  const built = buildTable(op, w14Prefix, usedParagraphIds, nextId, wml, revisionId);
 
   // Two `w:tbl` siblings are ONE table when Word reopens the file. An empty paragraph
   // between them is the separator Word itself authors, and it has to be minted here
   // rather than left to a later normalization pass: by then the tables have merged.
   const previous = index > 0 ? parent.children[index - 1] : undefined;
-  const separator =
+  let separator =
     previous && previous.kind !== 'textValue' && previous.localName === 'tbl'
       ? emptyParagraph(w14Prefix, `${op.beforeParagraphId}:sep`, usedParagraphIds, nextId, wml)
       : null;
+
+  if (separator && op.revision) {
+    const marker = fresh('ins', nextId, wml, [
+      attribute('id', revisionId!, wml),
+      attribute('author', op.revision.author, wml),
+      ...(op.revision.date ? [attribute('date', op.revision.date, wml)] : []),
+    ]);
+    const rPr = {
+      ...fresh('rPr', nextId, wml, [], [marker]),
+      kind: 'runProperties',
+    } as OoxmlElement;
+    const pPr = {
+      ...fresh('pPr', nextId, wml, [], [rPr]),
+      kind: 'paragraphProperties',
+    } as OoxmlParagraphPropertiesNode;
+    separator = { ...separator, children: [pPr] };
+  }
 
   const inserted: OoxmlNode[] = separator ? [separator, built.table] : [built.table];
   const effect: TreeOpEffect = {

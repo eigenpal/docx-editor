@@ -71,6 +71,8 @@ export const PROPERTY_CHANGE_WRAPPER_OF_OP: ReadonlyMap<string, 'rPrChange' | 'p
     ['setRunProperties', 'rPrChange'],
     ['setParagraphMarkProperties', 'rPrChange'],
     ['setParagraphProperties', 'pPrChange'],
+    ['setListLevel', 'pPrChange'],
+    ['setListNumbering', 'pPrChange'],
   ]);
 
 /** `w:rPr` records through `w:rPrChange`; `w:pPr` through `w:pPrChange`. */

@@ -127,13 +127,16 @@ interface PartIndex {
    * each allocator resumes where the last one stopped. Restarting at zero made every mint
    * probe the whole run of previously minted ids: in a document built by editing, that was
    * millions of taken-id checks per paste. Monotone, so freed counters are never reused,
-   * which no correctness property depends on. A rebuilt index starts at zero again and
-   * pays one skip-forward walk on its first allocation.
+   * which prevents reuse of identities retained by collaboration. Rebuilt indexes share
+   * the frontier with every root in the same edit lineage.
    */
-  mintFrontier: number;
+  readonly mintState: { frontier: number };
 }
 
 const partIndexes = new WeakMap<OoxmlElement, PartIndex>();
+// Preview edits and undo can revisit an old root after its index moved. Keep allocations
+// monotone across that lineage: collaboration retains identities for removed nodes too.
+const mintStates = new WeakMap<OoxmlElement, { frontier: number }>();
 
 let nodeIndexCompleteBuilds = 0;
 let nodeIndexCompleteVisits = 0;
@@ -174,7 +177,9 @@ function nodeIndexFor(root: OoxmlElement): PartIndex {
     for (const child of node.children) walk(child, node.id);
   };
   walk(root, null);
-  const index: PartIndex = { nodes, parents, mintFrontier: 0 };
+  const mintState = mintStates.get(root) ?? { frontier: 0 };
+  mintStates.set(root, mintState);
+  const index: PartIndex = { nodes, parents, mintState };
   partIndexes.set(root, index);
   return index;
 }
@@ -192,11 +197,8 @@ export function collectNodeIds(part: OoxmlPart): Set<string> {
  * can never coincide, and the counter skips anything already taken so repeated edits in one
  * session stay unique.
  *
- * The collision check only sees nodes that are IN the tree. A caller that clones a subtree
- * and attaches it LATER — after other ops have replaced the root and reset the counter —
- * must mint in its own `family`: two `new`-family allocators over different roots can hand
- * out the same id, one to a detached clone and one to the tree, and the clone's insertion
- * then fails the duplicate-id invariant.
+ * Allocators share reservations across edited roots and restored roots. Preview edits,
+ * detached nodes, and undo branches must not reuse an identity that collaboration retains.
  *
  * Checks the part's node index directly rather than copying every id into a fresh set: the
  * copy was O(document) per op, and an allocator is created for every op.
@@ -207,8 +209,9 @@ export function createNodeIdAllocator(
 ): () => string {
   const index = nodeIndexFor(part.root);
   const minted = new Set<string>();
-  let counter = index.mintFrontier;
+  let counter = index.mintState.frontier;
   return () => {
+    counter = Math.max(counter, index.mintState.frontier);
     let id = `${part.name}#${family}:${counter}`;
     while (index.nodes.has(id) || minted.has(id)) {
       counter += 1;
@@ -218,7 +221,7 @@ export function createNodeIdAllocator(
     counter += 1;
     // Published back, so the next allocator — this op's successor in the same transaction,
     // or the next transaction entirely — starts past everything ever taken.
-    index.mintFrontier = counter;
+    index.mintState.frontier = counter;
     return id;
   };
 }
@@ -287,11 +290,14 @@ function withChildren(element: OoxmlElement, children: readonly OoxmlNode[]): Oo
  * commit-boundary validation enforces before any tree is published.
  */
 function stealPatchedIndex(oldRoot: OoxmlElement, newRoot: OoxmlElement): void {
+  const mintState = mintStates.get(oldRoot);
+  if (mintState) mintStates.set(newRoot, mintState);
   const index = partIndexes.get(oldRoot);
   if (!index) return;
   partIndexes.delete(oldRoot);
   diffPatch(index, oldRoot, newRoot, null);
   partIndexes.set(newRoot, index);
+  mintStates.set(newRoot, index.mintState);
 }
 
 /**

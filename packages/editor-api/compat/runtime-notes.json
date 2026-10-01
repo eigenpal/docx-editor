@@ -25,23 +25,23 @@
   },
   "Word.Font#bold": {
     "status": "different",
-    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a boolean. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults."
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a boolean. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties."
   },
   "Word.Font#italic": {
     "status": "different",
-    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a boolean. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults."
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a boolean. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties."
   },
   "Word.Font#color": {
     "status": "different",
-    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a string."
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a string. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties."
   },
   "Word.Font#name": {
     "status": "different",
-    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a string. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults."
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a string. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties."
   },
   "Word.Font#size": {
     "status": "different",
-    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a number. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults."
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a number. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties."
   },
   "Word.Range#insertComment": {
     "status": "partial",
@@ -57,7 +57,7 @@
   },
   "Word.Document#changeTrackingMode": {
     "status": "partial",
-    "notes": "Off and TrackMineOnly control this automation runtime only; the mode is not saved as a document-wide policy. TrackMineOnly requires a configured author and supports inline text edits. Browser tracked writes require the review module and remain subject to the editor UI mode. TrackAll and tracked structural or formatting edits refuse."
+    "notes": "Off and TrackMineOnly control this automation runtime only; the mode is not saved as a document-wide policy. TrackMineOnly requires a configured author and supports inline text, font, paragraph-format, and paragraph-style edits. Browser tracked writes require the review module and remain subject to the editor UI mode. TrackAll refuses. Paragraph insertion and list membership changes support native revisions. Table row additions and partial deletions support native row revisions. Existing list definitions, page layout, and control structure still refuse. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration."
   },
   "Word.Comment#creationDate": {
     "status": "partial",
@@ -89,7 +89,7 @@
   },
   "Word.ContentControl#insertText": {
     "status": "partial",
-    "notes": "All three locations are accepted and the answer is the range of the text that was written. Replace goes through the control's own value path, so the prompt a control was showing is replaced whole and a w:temporary wrapper is removed — upstream's own behaviour, reached through the one write path the keyboard also takes, which is why a locked or custom-XML-bound control refuses this call with the same named reason a keystroke gets."
+    "notes": "Text-like controls accept all three locations and return the range of the written text. Replace goes through the control's own value path, so the prompt a control was showing is replaced whole and a w:temporary wrapper is removed — upstream's own behaviour, reached through the one write path the keyboard also takes, which is why a locked or custom-XML-bound control refuses this call with the same named reason a keystroke gets. Supports text-like controls only. Date, checkbox, and other typed controls refuse all insert locations with NotSupported. Use the editor native value UI for typed fields."
   },
   "OfficeExtension.LoadOption#expand": {
     "status": "partial",
@@ -97,23 +97,23 @@
   },
   "Word.Font#underline": {
     "status": "partial",
-    "notes": "Writes 18 OOXML underline styles, including None and Single. Mixed, Hidden, and DotLine refuse with InvalidArgument. Underline color survives style changes. Reads return the agreed direct formatting value or null, not resolved style formatting."
+    "notes": "Writes 18 OOXML underline styles, including None and Single. Mixed, Hidden, and DotLine refuse with InvalidArgument. Underline color survives style changes. Reads return the agreed direct formatting value or null, not resolved style formatting. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties."
   },
   "Word.Font#highlightColor": {
     "status": "partial",
-    "notes": "Writes exact Word palette colors by Office name or #RRGGBB; accepts null to clear with w:highlight=none. Other colors refuse with InvalidArgument instead of approximating. Reads return #RRGGBB or null for mixed, absent, or cleared direct highlighting. Run shading is preserved and is not treated as highlighting. The public setter keeps the pinned string signature. Runtime null clearing follows Microsoft documentation and needs a type escape under that upstream declaration."
+    "notes": "Writes exact Word palette colors by Office name or #RRGGBB; accepts null to clear with w:highlight=none. Other colors refuse with InvalidArgument instead of approximating. Reads return #RRGGBB or null for mixed, absent, or cleared direct highlighting. Run shading is preserved and is not treated as highlighting. The public setter keeps the pinned string signature. Runtime null clearing follows Microsoft documentation and needs a type escape under that upstream declaration. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties."
   },
   "Word.Font#strikeThrough": {
     "status": "partial",
-    "notes": "Writes explicit on/off single strikethrough and preserves other run properties. Reads return agreed direct formatting or null; inherited style formatting is not resolved."
+    "notes": "Writes explicit on/off single strikethrough and preserves other run properties. Reads return agreed direct formatting or null; inherited style formatting is not resolved. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties."
   },
   "Word.Font#subscript": {
     "status": "partial",
-    "notes": "Writes mutually exclusive vertical alignment. True clears superscript; false preserves superscript if subscript was not active. Repeated assignments on one Font proxy respect assignment order. Reads report agreed direct formatting or null. Aliased proxies retain the existing conflicting-write refusal."
+    "notes": "Writes mutually exclusive vertical alignment. True clears superscript; false preserves superscript if subscript was not active. Repeated assignments on one Font proxy respect assignment order. Reads report agreed direct formatting or null. Aliased proxies retain the existing conflicting-write refusal. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties."
   },
   "Word.Font#superscript": {
     "status": "partial",
-    "notes": "Writes mutually exclusive vertical alignment. True clears subscript; false preserves subscript if superscript was not active. Repeated assignments on one Font proxy respect assignment order. Reads report agreed direct formatting or null. Aliased proxies retain the existing conflicting-write refusal."
+    "notes": "Writes mutually exclusive vertical alignment. True clears subscript; false preserves subscript if superscript was not active. Repeated assignments on one Font proxy respect assignment order. Reads report agreed direct formatting or null. Aliased proxies retain the existing conflicting-write refusal. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties."
   },
   "Word.Range#insertInlinePictureFromBase64": {
     "status": "partial",
@@ -141,15 +141,15 @@
   },
   "Word.Range#insertTable": {
     "status": "partial",
-    "notes": "Creates a rectangular table with optional row-major string values. Before/After use range endpoints. Insertion may split a paragraph; adjacent tables retain a paragraph separator. Nested table authoring refuses. Initial values commit atomically. Table insertion is the only mutation in its sync; sync before using its returned proxy."
+    "notes": "Creates a rectangular table with optional row-major string values. Before/After use range endpoints. Insertion may split a paragraph; adjacent tables retain a paragraph separator. Nested table authoring refuses. Initial values commit atomically. Table insertion is the only mutation in its sync; sync before using its returned proxy. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration."
   },
   "Word.Table#values": {
     "status": "partial",
-    "notes": "Reads a row-major matrix. Writes require exactly the current rectangular dimensions. Values replace plain cell text while preserving cell properties. Multiline values, nested blocks, merged tables, and complex cell contents refuse. Cells remain reachable through getCell(), rows/cells, and cell.body."
+    "notes": "Reads a row-major matrix. Writes require exactly the current rectangular dimensions. Values replace plain cell text while preserving cell properties. Multiline values, nested blocks, merged tables, and complex cell contents refuse. Cells remain reachable through getCell(), rows/cells, and cell.body. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration."
   },
   "Word.Table#addRows": {
     "status": "partial",
-    "notes": "Start/End insert rectangular rows with optional row-major values. Returns the inserted rows. This structural mutation must be alone in its sync. Merged topology refuses."
+    "notes": "Start/End insert rectangular rows with optional row-major values. Returns the inserted rows. This structural mutation must be alone in its sync. Merged topology refuses. TrackMineOnly writes native row insertion revisions, including initial cell values. Save/reopen and bulk accept/reject preserve the result."
   },
   "Word.Table#addColumns": {
     "status": "partial",
@@ -157,7 +157,7 @@
   },
   "Word.Table#deleteRows": {
     "status": "partial",
-    "notes": "Deletes count rows from a zero-based index; default count is one. Deleting all rows removes the table. Invalid bounds refuse atomically. Structural mutations are solitary."
+    "notes": "Deletes count rows from a zero-based index; default count is one. Deleting all rows removes the table. Invalid bounds refuse atomically. Structural mutations are solitary. TrackMineOnly retains deleted rows as native row deletion revisions. Each tracked deletion must leave a row without a pending deletion. Deleting the final surviving row refuses, including after earlier suggestions. Independent concurrent deletions can mark every row; bulk accept/reject resolves the combined result. Bulk accept/reject resolves complete rows. Tracked deletion refuses rows with pending row or cell structure revisions with NotImplemented; existing proposals and authors remain unchanged."
   },
   "Word.Table#deleteColumns": {
     "status": "partial",
@@ -177,7 +177,7 @@
   },
   "Word.TableCell#value": {
     "status": "partial",
-    "notes": "Replaces ordinary single-paragraph cell text. Complex or multiline cell content refuses; use the cell body for supported targeted edits. Same-sync overlapping range/cell replacements refuse atomically."
+    "notes": "Replaces ordinary single-paragraph cell text. Complex or multiline cell content refuses; use the cell body for supported targeted edits. Same-sync overlapping range/cell replacements refuse atomically. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration."
   },
   "Word.TableCell#columnWidth": {
     "status": "partial",
@@ -193,31 +193,31 @@
   },
   "Word.Paragraph#startNewList": {
     "status": "partial",
-    "notes": "Creates an independent bullet-list counter and nine defined levels. Existing templates may be shared, but missing levels and later format changes use private instance overrides. Creation must be the only mutation in its sync. Sync before configuring the returned list. Protected or tracked structural edits refuse."
+    "notes": "Creates an independent bullet-list counter and nine defined levels. Existing templates may be shared, but missing levels and later format changes use private instance overrides. Creation must be the only mutation in its sync. Sync before configuring the returned list. Protected targets refuse. TrackMineOnly records list membership in paragraph-property revisions. Reject restores prior membership; unused numbering definitions can remain in the package."
   },
   "Word.Paragraph#attachToList": {
     "status": "partial",
-    "notes": "Joins a list already present in the same story, at a defined zero-based level from 0 through 8. Configure an undefined imported level before attaching to it. Returns the joined list. Unknown IDs, protected targets, and tracked structural edits refuse."
+    "notes": "Joins a list already present in the same story, at a defined zero-based level from 0 through 8. Configure an undefined imported level before attaching to it. Returns the joined list. Unknown IDs and protected targets refuse. TrackMineOnly records list membership in paragraph-property revisions. Reject restores prior membership; unused numbering definitions can remain in the package."
   },
   "Word.Paragraph#detachFromList": {
     "status": "partial",
-    "notes": "Writes explicit numId 0 to suppress direct and style-inherited numbering while preserving other paragraph properties. It does not delete shared numbering definitions."
+    "notes": "Writes explicit numId 0 to suppress direct and style-inherited numbering while preserving other paragraph properties. It does not delete shared numbering definitions. TrackMineOnly records list membership in paragraph-property revisions. Reject restores prior membership; unused numbering definitions can remain in the package."
   },
   "Word.List#setLevelBullet": {
     "status": "partial",
-    "notes": "Supports the seven public bullet choices and custom BMP character codes with an optional font name. Symbol and Wingdings stock glyphs retain their font mappings. Edits target this list instance, not other lists sharing a template. Mixed-story or protected list membership refuses. Same-level setters on one proxy coalesce. Different levels and existing item membership edits may share a sync. Aliases writing the same level in one batch refuse. Numbering instances referenced by styles refuse with InvalidArgument because inherited membership can affect protected paragraphs. This conservative refusal includes unused styles."
+    "notes": "Supports the seven public bullet choices and custom BMP character codes with an optional font name. Symbol and Wingdings stock glyphs retain their font mappings. Edits target this list instance, not other lists sharing a template. Mixed-story or protected list membership refuses. Same-level setters on one proxy coalesce. Different levels and existing item membership edits may share a sync. Aliases writing the same level in one batch refuse. Numbering instances referenced by styles refuse with InvalidArgument because inherited membership can affect protected paragraphs. This conservative refusal includes unused styles. TrackMineOnly supports definition changes only for a newly proposed list whose membership belongs to the runtime author. Established list definitions refuse."
   },
   "Word.List#setLevelNumbering": {
     "status": "partial",
-    "notes": "Supports None, Arabic, upper/lower letters, and upper/lower Roman numerals. Format arrays contain literal strings and zero-based ancestor/current-level numbers. Literal strings cannot embed OOXML counter placeholders. Switching from bullets clears the symbol font. Delegating style-linked and picture-bullet definitions refuse. Membership shared across stories, including main body, headers, and notes, refuses with InvalidArgument. Numbering instances referenced by styles refuse with InvalidArgument because inherited membership can affect protected paragraphs. This conservative refusal includes unused styles."
+    "notes": "Supports None, Arabic, upper/lower letters, and upper/lower Roman numerals. Format arrays contain literal strings and zero-based ancestor/current-level numbers. Literal strings cannot embed OOXML counter placeholders. Switching from bullets clears the symbol font. Delegating style-linked and picture-bullet definitions refuse. Membership shared across stories, including main body, headers, and notes, refuses with InvalidArgument. Numbering instances referenced by styles refuse with InvalidArgument because inherited membership can affect protected paragraphs. This conservative refusal includes unused styles. TrackMineOnly supports definition changes only for a newly proposed list whose membership belongs to the runtime author. Established list definitions refuse."
   },
   "Word.List#setLevelStartingNumber": {
     "status": "partial",
-    "notes": "Sets the instance level counter start, including zero, as a nonnegative 32-bit integer. Existing startOverride values are replaced by the authored level start. Changes save/reopen and undo/redo without changing unrelated list counters. Membership shared across stories, including main body, headers, and notes, refuses with InvalidArgument. Unrelated override metadata is preserved. Numbering instances referenced by styles refuse with InvalidArgument because inherited membership can affect protected paragraphs. This conservative refusal includes unused styles."
+    "notes": "Sets the instance level counter start, including zero, as a nonnegative 32-bit integer. Existing startOverride values are replaced by the authored level start. Changes save/reopen and undo/redo without changing unrelated list counters. Membership shared across stories, including main body, headers, and notes, refuses with InvalidArgument. Unrelated override metadata is preserved. Numbering instances referenced by styles refuse with InvalidArgument because inherited membership can affect protected paragraphs. This conservative refusal includes unused styles. TrackMineOnly supports definition changes only for a newly proposed list whose membership belongs to the runtime author. Established list definitions refuse."
   },
   "Word.List#setLevelIndents": {
     "status": "partial",
-    "notes": "Uses points for paragraph left indent and relative first-line indent. A negative relative value creates a hanging indent. Absolute values are bounded to 1584 points. Other level and paragraph properties survive. Membership shared across stories, including main body, headers, and notes, refuses with InvalidArgument. Numbering instances referenced by styles refuse with InvalidArgument because inherited membership can affect protected paragraphs. This conservative refusal includes unused styles."
+    "notes": "Uses points for paragraph left indent and relative first-line indent. A negative relative value creates a hanging indent. Absolute values are bounded to 1584 points. Other level and paragraph properties survive. Membership shared across stories, including main body, headers, and notes, refuses with InvalidArgument. Numbering instances referenced by styles refuse with InvalidArgument because inherited membership can affect protected paragraphs. This conservative refusal includes unused styles. TrackMineOnly supports definition changes only for a newly proposed list whose membership belongs to the runtime author. Established list definitions refuse."
   },
   "Word.Range#insertField": {
     "status": "partial",
@@ -465,11 +465,11 @@
   },
   "Word.Body#insertParagraph": {
     "status": "partial",
-    "notes": "Inserts a canonical paragraph at the supported endpoint (Body Start/End; Range Before/After). The returned proxy requires a sync before configuration. Newline-containing text and unsupported structural boundaries refuse; adjacent content is preserved."
+    "notes": "Inserts a canonical paragraph at the supported endpoint (Body Start/End; Range Before/After). The returned proxy requires a sync before configuration. Newline-containing text and unsupported structural boundaries refuse; adjacent content is preserved. TrackMineOnly records inserted text and paragraph marks. Reject restores the original paragraph boundaries."
   },
   "Word.Range#insertParagraph": {
     "status": "partial",
-    "notes": "Inserts a canonical paragraph at the supported endpoint (Body Start/End; Range Before/After). The returned proxy requires a sync before configuration. Newline-containing text and unsupported structural boundaries refuse; adjacent content is preserved."
+    "notes": "Inserts a canonical paragraph at the supported endpoint (Body Start/End; Range Before/After). The returned proxy requires a sync before configuration. Newline-containing text and unsupported structural boundaries refuse; adjacent content is preserved. TrackMineOnly records inserted text and paragraph marks. Reject restores the original paragraph boundaries."
   },
   "Word.Body#insertText": {
     "status": "partial",
@@ -481,11 +481,11 @@
   },
   "Word.Range#insertText": {
     "status": "partial",
-    "notes": "Authors plain text at the specified location. Range replacement targets its exact span; protected or unsupported structures refuse. Read-derived ranges may be edited in one sync; a range returned by this write needs sync before reuse. TrackMineOnly supports inline range edits; whole-body replacement is not tracked. Disjoint ordinary text edits in one paragraph use batch-snapshot coordinates and return correctly rebased result ranges. Overlap or same-paragraph mixing with formatting, links, or structural edits refuses. Existing ranges remain snapshots across later batches; re-search or use the returned result range. For untracked edits, full placeholder prompts can be replaced; replacement that would consume untargeted prompt text or insertion away from the prompt start refuses with NotSupported. Insertion at the prompt start consumes the prompt. In an empty paragraph, the inserted text takes the character style that the paragraph mark names, but not the mark's direct run properties."
+    "notes": "Authors plain text at the specified location. Range replacement targets its exact span; protected or unsupported structures refuse. Read-derived ranges may be edited in one sync; a range returned by this write needs sync before reuse. TrackMineOnly supports inline range edits; whole-body replacement is not tracked. Disjoint ordinary text edits in one paragraph use batch-snapshot coordinates and return correctly rebased result ranges. Overlap or same-paragraph mixing with formatting, links, or structural edits refuses. Existing ranges remain snapshots across later batches; re-search or use the returned result range. For untracked edits, full placeholder prompts can be replaced; replacement that would consume untargeted prompt text or insertion away from the prompt start refuses with NotSupported. Insertion at the prompt start consumes the prompt. In an empty paragraph, the inserted text takes the character style that the paragraph mark names, but not the mark's direct run properties. Tracked range replacement supports adjacent sibling paragraphs. Table and wrapper boundaries and foreign revisions refuse. Ranges across paragraphs refuse in collaboration."
   },
   "Word.Range#delete": {
     "status": "partial",
-    "notes": "Deletes the addressed range contents. TrackMineOnly proposes inline text deletion. Cross-structure, protected, and unsupported revision targets refuse instead of flattening preserved content."
+    "notes": "Deletes the addressed range contents. TrackMineOnly proposes inline text deletion. Cross-structure, protected, and unsupported revision targets refuse instead of flattening preserved content. Tracked range replacement supports adjacent sibling paragraphs. Table and wrapper boundaries and foreign revisions refuse. Ranges across paragraphs refuse in collaboration."
   },
   "Word.Paragraph#delete": {
     "status": "partial",
@@ -505,27 +505,27 @@
   },
   "Word.Paragraph#leftIndent": {
     "status": "partial",
-    "notes": "Writes paragraph leftIndent in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; unsupported tracked formatting refuses."
+    "notes": "Writes paragraph leftIndent in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions."
   },
   "Word.Paragraph#rightIndent": {
     "status": "partial",
-    "notes": "Writes paragraph rightIndent in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; unsupported tracked formatting refuses."
+    "notes": "Writes paragraph rightIndent in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions."
   },
   "Word.Paragraph#firstLineIndent": {
     "status": "partial",
-    "notes": "Writes paragraph firstLineIndent in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; unsupported tracked formatting refuses."
+    "notes": "Writes paragraph firstLineIndent in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions."
   },
   "Word.Paragraph#lineSpacing": {
     "status": "partial",
-    "notes": "Writes paragraph lineSpacing in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; unsupported tracked formatting refuses."
+    "notes": "Writes paragraph lineSpacing in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions."
   },
   "Word.Paragraph#spaceBefore": {
     "status": "partial",
-    "notes": "Writes paragraph spaceBefore in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; unsupported tracked formatting refuses."
+    "notes": "Writes paragraph spaceBefore in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions."
   },
   "Word.Paragraph#spaceAfter": {
     "status": "partial",
-    "notes": "Writes paragraph spaceAfter in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; unsupported tracked formatting refuses."
+    "notes": "Writes paragraph spaceAfter in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions."
   },
   "Word.Comment#resolved": {
     "status": "partial",
@@ -549,15 +549,15 @@
   },
   "Word.RevisionCollection#acceptAll": {
     "status": "partial",
-    "notes": "Resolves every store-resolvable revision in the addressed collection scope, including structural records omitted from individually named items. Any unsupported record refuses the batch; browser decisions require the review module."
+    "notes": "Resolves every store-resolvable revision in the addressed collection scope, including structural records omitted from individually named items. An empty collection succeeds without changing document content. Any unsupported record refuses the batch; browser decisions require the review module."
   },
   "Word.RevisionCollection#rejectAll": {
     "status": "partial",
-    "notes": "Resolves every store-resolvable revision in the addressed collection scope, including structural records omitted from individually named items. Any unsupported record refuses the batch; browser decisions require the review module."
+    "notes": "Resolves every store-resolvable revision in the addressed collection scope, including structural records omitted from individually named items. An empty collection succeeds without changing document content. Any unsupported record refuses the batch; browser decisions require the review module."
   },
   "Word.ListItem#level": {
     "status": "partial",
-    "notes": "Writes levels 0–8 only when the list defines that level. New authored lists define all nine levels. Missing levels, protected paragraphs, and tracked structural edits refuse."
+    "notes": "Writes levels 0–8 only when the list defines that level. New authored lists define all nine levels. Missing levels and protected paragraphs refuse. TrackMineOnly records list membership in paragraph-property revisions. Reject restores prior membership; unused numbering definitions can remain in the package."
   },
   "Word.Range#insertBreak": {
     "status": "partial",
@@ -593,7 +593,7 @@
   },
   "Word.Range#insertContentControl": {
     "status": "partial",
-    "notes": "Creates RichText or PlainText over a supported single-paragraph span. Other control types, cross-paragraph targets, bound content, and protected structures refuse. The created proxy needs sync before configuration."
+    "notes": "Creates RichText, PlainText, and DatePicker controls around an eligible single-paragraph range. Other types refuse. Sync before configuring the returned proxy. DatePicker creates a real date SDT; typed date configuration accessors remain unavailable."
   },
   "Word.ContentControl#tag": {
     "status": "partial",
@@ -614,5 +614,9 @@
   "Word.ContentControl#cannotDelete": {
     "status": "partial",
     "notes": "Writes one lock axis without requiring a prior load. Assignments on the same proxy coalesce and preserve the other axis. Effective ancestor locks and bound controls remain enforced; this is not a protection bypass."
+  },
+  "Word.Paragraph#insertParagraph": {
+    "status": "partial",
+    "notes": "TrackMineOnly records inserted text and the paragraph mark as native revisions. Reject removes both after save and reopen. An anchor with pending revisions refuses. Other supported behavior uses the standard Before/After insertion locations."
   }
 }

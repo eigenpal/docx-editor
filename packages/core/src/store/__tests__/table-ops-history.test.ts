@@ -64,15 +64,6 @@ describe('table row ops history', () => {
     const changes: TreeModelChange[] = [];
     const unsubscribe = store.subscribe((change) => changes.push(change));
 
-    const direct = applyTreeOp(partBefore, {
-      op: 'insertTableRow',
-      tableId: table.id,
-      rowId,
-      where: 'above',
-    });
-    expect(direct.ok).toBe(true);
-    if (!direct.ok) return;
-
     const result = store.transact((tx) => {
       tx.apply({ op: 'insertTableRow', tableId: table.id, rowId, where: 'above' });
     });
@@ -81,8 +72,15 @@ describe('table row ops history', () => {
     expect(result.ok).toBe(true);
     expect(changes).toHaveLength(1);
     expect(changes[0]!.impact).toBe('flow-structural');
-    expect(sortedIds(changes[0]!.dirty)).toEqual(sortedIds(direct.effect.dirty));
-    expect(sortedIds(changes[0]!.created)).toEqual(sortedIds(direct.effect.created));
+    const insertedRow = collectByKind(store.part.root, 'tableRow')[1]!;
+    expect(sortedIds(changes[0]!.dirty)).toEqual(sortedIds([table.id, insertedRow.id]));
+    expect(sortedIds(changes[0]!.created)).toEqual(
+      sortedIds([
+        insertedRow.id,
+        ...insertedRow.children.filter((node) => node.kind === 'tableCell').map((node) => node.id),
+        ...paragraphIdsInRow(store.part.root, insertedRow.id),
+      ])
+    );
     expect(changes[0]!.deleted).toEqual([]);
     expect(collectByKind(store.part.root, 'tableRow').length).toBe(rowsBefore + 1);
 

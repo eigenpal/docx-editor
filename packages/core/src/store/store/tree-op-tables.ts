@@ -286,7 +286,7 @@ function trackedRevisionAttributes(
   ];
 }
 
-function withTrackedRowMarker(
+export function withTrackedRowMarker(
   row: OoxmlTableRowNode,
   markerKind: 'ins' | 'del',
   revisionId: string,
@@ -712,6 +712,30 @@ export function validateTableRowOp(
 
   if (op.op === 'deleteTableRow') {
     if (topology.rows.length === 1) return 'block-required';
+    if (op.revision) {
+      const { row, cells } = topology.rows[rowIndex]!;
+      const trPr = wmlChildNamed(row, 'trPr');
+      if (trPr && (wmlChildNamed(trPr, 'ins') || wmlChildNamed(trPr, 'del')))
+        return 'unsupported-revision';
+      for (const cell of cells) {
+        const tcPr = wmlChildNamed(cell, 'tcPr');
+        if (
+          tcPr &&
+          (wmlChildNamed(tcPr, 'cellIns') ||
+            wmlChildNamed(tcPr, 'cellDel') ||
+            wmlChildNamed(tcPr, 'cellMerge'))
+        )
+          return 'unsupported-revision';
+      }
+      if (
+        !topology.rows.some(({ row }, index) => {
+          if (index === rowIndex) return false;
+          const properties = wmlChildNamed(row, 'trPr');
+          return !properties || !wmlChildNamed(properties, 'del');
+        })
+      )
+        return 'block-required';
+    }
     return null;
   }
 

@@ -7,7 +7,7 @@ import type {
 
 /** A processor location in the returned document's body, including table paragraphs. @public */
 export interface RefreshLocation {
-  /** OOXML w14:paraId. Use this or paragraphIndex, not both. */
+  /** OOXML w14:paraId: eight hexadecimal digits, 00000001 through 7FFFFFFF. Case-insensitive. Use this or paragraphIndex, not both. */
   readonly paragraphId?: string;
   /** Zero-based body paragraph index in document order. */
   readonly paragraphIndex?: number;
@@ -21,6 +21,8 @@ export interface RefreshLocation {
 /** One processor change. Keep its id stable across cumulative results. @public */
 export interface RefreshChangeInput {
   readonly id: string;
+  /** Processor-provided review summary, including changes without a body location. Maximum: 1000 characters. */
+  readonly description?: string;
   readonly location?: RefreshLocation;
   /** Deletions without a surviving range have no highlight. */
   readonly unavailableReason?: 'deleted' | 'unavailable';
@@ -29,12 +31,30 @@ export interface RefreshChangeInput {
 /** One validated change for an accepted result. @public */
 export interface RefreshChange {
   readonly id: string;
+  /** Processor-provided summary. The controller does not compute a document diff. */
+  readonly description?: string;
   /** Identity of the accepted submission and processor sequence. */
   readonly resultId: string;
-  /** True for a new change id or changed text in an existing change id. */
+  /** True for a new change id, changed text, or changed description in an existing change id. */
   readonly isNew: boolean;
   readonly status: 'available' | 'deleted' | 'unavailable' | 'invalid' | 'unsupported-story';
   readonly location?: RefreshLocation;
+  /** Why this change cannot receive a highlight. Includes the requested location when supplied. */
+  readonly diagnostic?: {
+    readonly code:
+      | 'missing-location'
+      | 'deleted'
+      | 'invalid-selector'
+      | 'invalid-paragraph-id'
+      | 'paragraph-not-found'
+      | 'ambiguous-paragraph-id'
+      | 'invalid-offsets'
+      | 'text-mismatch'
+      | 'not-rendered'
+      | 'unsupported-story'
+      | 'multiple-paragraphs';
+    readonly location?: RefreshLocation;
+  };
 }
 
 /** A document captured for external processing. Treat this object as an opaque token. @public */

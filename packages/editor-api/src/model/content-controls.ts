@@ -289,6 +289,7 @@ export class ContentControl extends ModelObject implements PromisedItem {
 
   /**
    * Put text into the control: over what it holds, or at one end of it.
+   * Supports text-like controls. Date, checkbox, and other typed controls refuse with NotSupported.
    *
    * `Replace` goes through the control's own value path, so the prompt it was showing and a
    * `w:temporary` wrapper are dealt with there rather than a second time here. The range comes

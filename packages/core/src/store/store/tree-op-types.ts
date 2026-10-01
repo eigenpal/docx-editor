@@ -320,6 +320,7 @@ export type TreeDocOp =
       readonly op: 'setListLevel';
       readonly paragraphId: string;
       readonly level: number;
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       /**
@@ -347,6 +348,7 @@ export type TreeDocOp =
       readonly paragraphId: string;
       readonly numId: string | null;
       readonly level?: number;
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       /**
@@ -641,6 +643,8 @@ export type TreeDocOp =
       readonly cols: number;
       /** Width of every grid column, in twips. The caller divides the content width. */
       readonly columnWidthTwips: number;
+      /** Propose the complete table through native row and cell insertion revisions. */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       /** Insert a fresh row above or below a canonical table row. */
@@ -709,6 +713,8 @@ export type TreeDocOp =
   | {
       /** Atomic semantic table authoring. Newly created nodes never need caller-supplied IDs. */
       readonly op: 'authorTable';
+      /** Native row revisions. Other structural mutations refuse this option. */
+      readonly revision?: RevisionAttributionInput;
       readonly action:
         | {
             readonly kind: 'existing';

@@ -81,6 +81,7 @@ import {
   readContentTypeOverrides,
   readPartEntries,
 } from './registry-package-reads.ts';
+import { retainsNumberingInfrastructure } from './undo-numbering.ts';
 import { nodeRecordDeleteFilter } from './undo-delete-filter.ts';
 
 function itemKeyOf(type: Y.Map<unknown>): string | null {
@@ -203,7 +204,8 @@ export class DocumentRegistry {
    * {@link nodeRecordDeleteFilter}. Omitting this is silent data loss, not a missing nicety.
    */
   undoDeleteFilter(): (item: Y.Item) => boolean {
-    return nodeRecordDeleteFilter(this.schema.nodes);
+    const nodeFilter = nodeRecordDeleteFilter(this.schema.nodes);
+    return (item) => !retainsNumberingInfrastructure(this.schema, item) && nodeFilter(item);
   }
 
   encodeSnapshot(): Uint8Array {

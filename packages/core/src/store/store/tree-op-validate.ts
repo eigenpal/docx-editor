@@ -657,6 +657,8 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       return rejectContentEdit(part, paragraph, op.offset, op.offset, op.bias);
     }
     case 'setListLevel': {
+      if (op.revision !== undefined && invalidRevisionAttribution(op.revision))
+        return 'invalid-property-value';
       if (!Number.isInteger(op.level) || op.level < 0 || op.level > 8) return 'invalid-range';
       if (isBoundAt(part, op.paragraphId)) return 'bound';
       if (effectiveContentLockAt(part, op.paragraphId).content) return 'locked';
@@ -746,6 +748,8 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       return null;
     }
     case 'setListNumbering': {
+      if (op.revision !== undefined && invalidRevisionAttribution(op.revision))
+        return 'invalid-property-value';
       const level = op.level ?? 0;
       if (!Number.isInteger(level) || level < 0 || level > 8) return 'invalid-range';
       // A numId is file-addressable and becomes an attribute value: digits only.

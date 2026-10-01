@@ -201,7 +201,7 @@ export function applySetSectionProperties(
  * states. A paragraph without `w:numPr` is not a list item, so there is no level to move
  * and the edit is refused — Increase Indent on a plain paragraph is a different op.
  */
-export function applySetListLevel(
+function applySetListLevelUntracked(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
   level: number,
@@ -239,7 +239,7 @@ export function applySetListLevel(
  * `w:pPr` after `w:pStyle` (17.3.1.26), so a new one is inserted there rather than
  * appended.
  */
-export function applySetListNumbering(
+function applySetListNumberingUntracked(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
   numId: string | null,
@@ -904,4 +904,63 @@ export function applySetParagraphMarkProperties(
   const created = build(nextId(), 'paragraphProperties', 'pPr', [], [rPr]);
   // `w:pPr` must be the paragraph's FIRST child per the schema.
   return fromEdit(insertChildren(part, paragraph.id, 0, [created], options), effect);
+}
+
+function trackListProperties(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  result: TreeOpResult,
+  revision: RevisionAttributionInput | undefined,
+  options: EditOptions | undefined
+): TreeOpResult {
+  if (!revision || !result.ok) return result;
+  const prior = paragraphPropertiesNodeOf(paragraph);
+  if (ownProposedMark(namedChild(prior, 'rPr')?.children ?? [], revision.author)) return result;
+  const changed = findNode(result.part, paragraph.id);
+  if (!changed || changed.kind !== 'paragraph') return result;
+  const current = paragraphPropertiesNodeOf(changed);
+  if (!current) return result;
+  const children = withPropertyChangeRecord({
+    container: 'paragraphProperties',
+    prior: prior?.children ?? [],
+    next: current.children,
+    revision,
+    mint: createNodeIdAllocator(result.part),
+    nextRevisionId: () => options?.revisionIds?.() ?? nextRevisionId(part)(),
+  });
+  return fromEdit(replaceChildren(result.part, current.id, children, options), result.effect);
+}
+
+export function applySetListLevel(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  level: number,
+  options: EditOptions | undefined,
+  nextId: () => string,
+  revision?: RevisionAttributionInput
+): TreeOpResult {
+  return trackListProperties(
+    part,
+    paragraph,
+    applySetListLevelUntracked(part, paragraph, level, options, nextId),
+    revision,
+    options
+  );
+}
+export function applySetListNumbering(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  numId: string | null,
+  level: number,
+  options: EditOptions | undefined,
+  nextId: () => string,
+  revision?: RevisionAttributionInput
+): TreeOpResult {
+  return trackListProperties(
+    part,
+    paragraph,
+    applySetListNumberingUntracked(part, paragraph, numId, level, options, nextId),
+    revision,
+    options
+  );
 }

@@ -18,6 +18,8 @@ import {
 } from './tables.ts';
 
 export interface TablePlannerContext {
+  readonly trackingAuthor?: string;
+  readonly trackedRangeReplacement?: boolean;
   readonly handles: AutomationHandleTable;
   readonly reads: AutomationPackageReads;
   /** Pin story writes and reserve externally planned paragraph creation for commit reconciliation. */
@@ -113,7 +115,10 @@ export function planTableOperation(
       point.offset,
       operation.rowCount,
       operation.columnCount,
-      operation.values
+      operation.values,
+      context.trackingAuthor
+        ? { author: context.trackingAuthor, date: new Date().toISOString() }
+        : undefined
     );
     if (!planned.ok) return refuse('unsupported-content', planned.reason);
     const admission = context.admitWrite(
@@ -138,6 +143,11 @@ export function planTableOperation(
             columnCount: operation.columnCount,
             ...(operation.values ? { values: operation.values } : {}),
           },
+          ...(context.trackingAuthor
+            ? {
+                revision: { author: context.trackingAuthor, date: new Date().toISOString() },
+              }
+            : {}),
         },
       ],
       answer: (post) => {
@@ -235,8 +245,29 @@ export function planTableOperation(
         if (!style) return refuse('unsupported-content', 'table-style-not-defined');
         mutation = { ...mutation, styleId: style.styleId };
       }
-      const planned = planTableMutation(reads, table.id, mutation);
-      if (!planned.ok) return refuse('unsupported-content', planned.reason);
+      const revision = context.trackingAuthor
+        ? { author: context.trackingAuthor, date: new Date().toISOString() }
+        : undefined;
+      if (
+        revision &&
+        context.trackedRangeReplacement === false &&
+        (mutation.kind === 'values' || (mutation.kind === 'cell' && mutation.value !== undefined))
+      )
+        return refuse(
+          'unsupported-capability',
+          'tracked table value replacement is unsupported in collaboration'
+        );
+      const planned = planTableMutation(reads, table.id, mutation, revision);
+      if (!planned.ok)
+        return refuse(
+          planned.reason === 'unsupported-revision'
+            ? 'unsupported-revision'
+            : planned.reason === 'tracked-table-deletion-unsupported' ||
+                planned.reason === 'unsupported-tracked-table-operation'
+              ? 'unsupported-capability'
+              : 'unsupported-content',
+          planned.reason
+        );
       const admission = context.admitWrite(
         reads,
         countNew(reads.part.root, planned.resultPart.root),
@@ -252,7 +283,13 @@ export function planTableOperation(
         ok: true,
         kind: 'command',
         story: reads.story,
-        ops: [{ op: 'authorTable', action: { kind: 'existing', tableId: table.id, mutation } }],
+        ops: [
+          {
+            op: 'authorTable',
+            action: { kind: 'existing', tableId: table.id, mutation },
+            ...(revision ? { revision } : {}),
+          },
+        ],
         answer: (post) => {
           if (mutation.kind !== 'addRows') return { kind: 'applied' };
           const current = post.story(reads.story);

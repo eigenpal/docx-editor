@@ -1,26 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   DocxEditor,
   DocumentRefreshError,
   createDocumentRefresh,
   useDocxEditor,
-  type RefreshChangeInput,
-  type RefreshSubmission,
 } from '@docx-editor.dev/react';
 import { createT, en } from '@docx-editor.dev/i18n';
 import '@docx-editor.dev/core/styles/editor.css';
 import './styles.css';
+import { receiveSampleUpdates, runRefreshJob } from './refresh-job';
 
 const t = createT(en);
-
-interface ServerUpdate {
-  documentId: string;
-  submissionId: string;
-  sequence: number;
-  bytes: string;
-  changes: RefreshChangeInput[];
-}
 
 function UpdateControls() {
   const editor = useDocxEditor();
@@ -31,7 +22,9 @@ function ReadyControls({ editor }: { editor: NonNullable<ReturnType<typeof useDo
   const refresh = createDocumentRefresh(editor);
   const request = useRef<AbortController | null>(null);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
+  const round = useRef(0);
+  const state = useSyncExternalStore(refresh.subscribe, refresh.snapshot);
+  const [includeLateResult, setIncludeLateResult] = useState(false);
   const [sampleEdited, setSampleEdited] = useState(false);
   const sampleEditedRef = useRef(false);
   const [scrollToChange, setScrollToChange] = useState(false);
@@ -62,51 +55,33 @@ function ReadyControls({ editor }: { editor: NonNullable<ReturnType<typeof useDo
     const controller = new AbortController();
     request.current = controller;
     setBusy(true);
-    let submission: RefreshSubmission | undefined;
     try {
-      submission = await refresh.capture();
-      if (controller.signal.aborted) return;
-      if (sampleEditedRef.current) {
-        setMessage(t('documentRefresh.sampleEdited'));
-        return;
-      }
       setMessage(t('documentRefresh.processing'));
-      const response = await fetch('/api/update', {
-        method: 'POST',
-        headers: { 'X-Submission-Id': submission.id },
-        signal: controller.signal,
-        // A real processor can receive body: submission.bytes.
-      });
-      if (!response.ok) throw new Error('request-failed');
-      const output: ServerUpdate = await response.json();
-      if (output.documentId !== 'schedule' || output.submissionId !== submission.id) {
-        throw new Error('identity-mismatch');
-      }
-      if (controller.signal.aborted) return;
-      const result = await refresh.applyUpdate({
-        submission,
-        sequence: output.sequence,
-        bytes: Uint8Array.from(atob(output.bytes), (c) => c.charCodeAt(0)),
-        changes: output.changes,
-      });
-      if (!result.ok) {
-        setMessage(
-          result.code === 'local-edits'
-            ? t('documentRefresh.sampleEdited')
-            : `${t('documentRefresh.failed')} (${result.code})`
-        );
-        return;
-      }
-      const change = result.changes.find((c) => c.status === 'available');
-      const moved =
-        scrollToChange && change && refresh.navigateToChange(change.id, { behavior: 'instant' });
-      // Keep the default blue fill, padding, and rounded corners.
-      refresh.highlightChanges({
-        timeoutMs: 3000,
-        animation: { durationMs: 180, exitDurationMs: 300 },
-      });
-      setDone(true);
-      setMessage(moved ? t('documentRefresh.scrolled') : t('documentRefresh.complete'));
+      await runRefreshJob(
+        refresh,
+        controller.signal,
+        (submission) =>
+          receiveSampleUpdates(submission, controller.signal, ++round.current, includeLateResult),
+        (result) => {
+          if (!result.ok) {
+            setMessage(
+              result.code === 'local-edits'
+                ? t('documentRefresh.sampleEdited')
+                : result.code === 'out-of-order'
+                  ? t('documentRefresh.lateResult')
+                  : `${t('documentRefresh.failed')} (${result.code})`
+            );
+            return;
+          }
+          const change = result.changes.find((c) => c.isNew && c.status === 'available');
+          const moved =
+            scrollToChange &&
+            change &&
+            refresh.navigateToChange(change.id, { behavior: 'instant' });
+          refresh.highlightChanges({ timeoutMs: 5000 });
+          setMessage(moved ? t('documentRefresh.scrolled') : t('documentRefresh.complete'));
+        }
+      );
     } catch (error) {
       if (!controller.signal.aborted) {
         setMessage(
@@ -116,7 +91,6 @@ function ReadyControls({ editor }: { editor: NonNullable<ReturnType<typeof useDo
         );
       }
     } finally {
-      if (submission) refresh.finish(submission);
       if (request.current === controller) {
         request.current = null;
         setBusy(false);
@@ -127,23 +101,91 @@ function ReadyControls({ editor }: { editor: NonNullable<ReturnType<typeof useDo
   return (
     <section className="refresh-controls">
       <h1>{t('documentRefresh.title')}</h1>
-      <p>{t('documentRefresh.sampleDescription')}</p>
+      <p>{t('documentRefresh.description')}</p>
+      <p>{t('documentRefresh.limitations')}</p>
       <label>
         <input
           type="checkbox"
           checked={scrollToChange}
-          disabled={busy || done || sampleEdited}
+          disabled={busy || sampleEdited}
           onChange={(event) => setScrollToChange(event.target.checked)}
         />
         {t('documentRefresh.scrollToChange')}
       </label>{' '}
-      <button disabled={busy || done || sampleEdited} onClick={update}>
+      <label>
+        <input
+          type="checkbox"
+          checked={includeLateResult}
+          disabled={busy}
+          onChange={(event) => setIncludeLateResult(event.target.checked)}
+        />
+        {t('documentRefresh.testLateResult')}
+      </label>
+      <button disabled={busy || sampleEdited} onClick={update}>
         {busy ? t('documentRefresh.processingLabel') : t('documentRefresh.start')}
+      </button>{' '}
+      <button
+        disabled={!busy}
+        onClick={() => {
+          request.current?.abort();
+          refresh.cancel();
+          setMessage(t('documentRefresh.cancelled'));
+        }}
+      >
+        {t('documentRefresh.cancel')}
       </button>{' '}
       <button disabled={busy} onClick={() => location.reload()}>
         {t('documentRefresh.reset')}
       </button>
       <p role="status">{message}</p>
+      {state.result?.ok && state.result.failures.length > 0 && (
+        <p>{t('documentRefresh.partial', { count: state.result.failures.length })}</p>
+      )}
+      {state.recoveryAvailable && (
+        <div>
+          <button disabled={busy} onClick={() => void refresh.recover()}>
+            {t('documentRefresh.retry')}
+          </button>{' '}
+          <button
+            onClick={() => {
+              const bytes = refresh.recoveryBytes();
+              if (!bytes) return;
+              const url = URL.createObjectURL(new Blob([bytes]));
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = 'recovery.docx';
+              link.click();
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }}
+          >
+            {t('documentRefresh.download')}
+          </button>
+        </div>
+      )}
+      {state.changes.length > 0 && (
+        <details open>
+          <summary>{t('documentRefresh.reviewChanges')}</summary>
+          <ul className="refresh-change-list">
+            {state.changes.map((change) => (
+              <li key={change.id}>
+                <span>{change.description ?? change.id}</span>{' '}
+                <span>{t(`documentRefresh.changeStatus.${change.status}`)}</span>{' '}
+                {change.status === 'available' && (
+                  <button
+                    onClick={() => {
+                      refresh.navigateToChange(change.id);
+                      refresh.highlightChanges({ changeIds: [change.id], timeoutMs: 5000 });
+                    }}
+                  >
+                    {t('documentRefresh.showChange')}
+                  </button>
+                )}
+                {change.diagnostic && <code>{change.diagnostic.code}</code>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </section>
   );
 }

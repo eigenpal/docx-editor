@@ -656,6 +656,22 @@ describe('a range creates a root comment through the package transaction', () =>
 });
 
 describe('a tracked change is a decision, and the ones offered are the ones the engine can make', () => {
+  test('empty collection decisions preserve document content', () => {
+    for (const op of ['acceptAllRevisions', 'rejectAllRevisions'] as const) {
+      for (const form of ['body', 'document'] as const) {
+        const host = open(richDocx({ body: '<w:p><w:r><w:t>Example</w:t></w:r></w:p>' }));
+        const { body, document } = roots(host);
+        const before = savedPartBytes(host, 'word/document.xml');
+        const response =
+          op === 'acceptAllRevisions'
+            ? host.execute({ operations: [form === 'body' ? { op, body } : { op, document }] })
+            : host.execute({ operations: [form === 'body' ? { op, body } : { op, document }] });
+        expect(response.ok).toBe(true);
+        expect(savedPartBytes(host, 'word/document.xml')).toBe(before);
+      }
+    }
+  });
+
   test('a story answers its pending changes, each with its author, date and kind', () => {
     const host = reviewed();
     const { body } = roots(host);

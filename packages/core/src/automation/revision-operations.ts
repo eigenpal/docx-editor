@@ -1,4 +1,5 @@
 import { ordinaryMoveRanges } from '../store/store/revision-move-ranges.ts';
+import { collectRevisionSites } from '../store/store/tree-op-revisions.ts';
 import {
   reviewItemKey,
   revisionSiteNodeIdsOf,
@@ -74,6 +75,11 @@ export function revisionCollectionOps(
   operation: CollectionDecision,
   reads: AutomationStoryReads
 ): readonly TreeDocOp[] {
+  if (
+    reads.root.kind !== 'textValue' &&
+    collectRevisionSites({ ...reads.part, root: reads.root }).length === 0
+  )
+    return [];
   const accept = operation.op === 'acceptAllRevisions';
   const scope = reads.story.kind === 'note' ? { scopeRootId: reads.root.id } : {};
   return [accept ? { op: 'acceptAllRevisions', ...scope } : { op: 'rejectAllRevisions', ...scope }];

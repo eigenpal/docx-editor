@@ -981,6 +981,31 @@ describe('insertTableRow', () => {
 });
 
 describe('deleteTableRow', () => {
+  test('pending deletions cannot keep a table alive for another row suggestion', () => {
+    const part = load(TABLE(ROW(CELL('remove')), ROW(CELL('keep'))));
+    const table = firstTable(part);
+    const [first, second] = rowIds(part, table.id);
+    const revision = { author: 'Writer', date: '2026-10-01T00:00:00Z' };
+    const proposed = applyTreeOp(part, {
+      op: 'deleteTableRow',
+      tableId: table.id,
+      rowId: first!,
+      revision,
+    });
+    expect(proposed.ok).toBe(true);
+    if (!proposed.ok) return;
+    const before = serializeOoxmlPart(proposed.part);
+    expect(
+      applyTreeOp(proposed.part, {
+        op: 'deleteTableRow',
+        tableId: table.id,
+        rowId: second!,
+        revision,
+      })
+    ).toMatchObject({ ok: false, reason: 'block-required' });
+    expect(serializeOoxmlPart(proposed.part)).toBe(before);
+  });
+
   test('removes the targeted row and its cell paragraphs', () => {
     const part = load(TABLE(ROW(CELL('a1'), CELL('a2')), ROW(CELL('b1'), CELL('b2'))));
     const table = firstTable(part);

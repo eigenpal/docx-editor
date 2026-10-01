@@ -1,3 +1,4 @@
+import type { RevisionAttributionInput } from './tree-op-revision-attribution.ts';
 import { paragraphModelTextOf } from './paragraph-model-text.ts';
 // Canonical table reads and host-neutral mutation plans. No browser/editor dependencies.
 import { collectStoryParagraphs } from '../package/story-blocks.ts';
@@ -206,14 +207,53 @@ function validMutation(value: AutomationTableMutation): boolean {
   return true;
 }
 
+/** Keep another author's pending edits when configuring a proposed table. */
+function hasForeignRevision(root: OoxmlNode, author: string): boolean {
+  const stack = [root];
+  while (stack.length) {
+    const node = stack.pop()!;
+    if (node.kind === 'textValue') continue;
+    const revisionAuthor = wmlAttributeValue(node, 'author');
+    if (revisionAuthor !== undefined && revisionAuthor !== author) return true;
+    for (const child of node.children) stack.push(child);
+  }
+  return false;
+}
+
 /** Simulate ordered canonical operations privately so newly allocated cells can receive values atomically. */
 export function planTableMutation(
   reads: AutomationStoryReads,
   tableId: string,
-  mutation: AutomationTableMutation
+  mutation: AutomationTableMutation,
+  revision?: RevisionAttributionInput
 ): TableMutationPlan {
   if (!validMutation(mutation)) return { ok: false, reason: 'invalid-table-mutation' };
-  const initial = readEditableTableTopology(reads.root as OoxmlElement, tableId);
+  const topology = readEditableTableTopology(reads.root as OoxmlElement, tableId);
+  // Properties and structure belong to an author's complete pending table insertion.
+  // Rejecting that insertion removes them with the table; existing tables still refuse.
+  const ownInsertion =
+    revision &&
+    topology.ok &&
+    topology.topology.rows.length > 0 &&
+    !hasForeignRevision(topology.topology.table, revision.author) &&
+    topology.topology.rows.every(({ row }) => {
+      const trPr = wmlChildNamed(row, 'trPr');
+      const ins = trPr && wmlChildNamed(trPr, 'ins');
+      return ins && wmlAttributeValue(ins, 'author') === revision!.author;
+    });
+  if (ownInsertion && !['addRows', 'deleteRows', 'values'].includes(mutation.kind))
+    revision = undefined;
+  if (revision && !['addRows', 'deleteRows', 'values', 'cell'].includes(mutation.kind))
+    return { ok: false, reason: 'unsupported-tracked-table-operation' };
+  if (
+    revision &&
+    mutation.kind === 'cell' &&
+    (mutation.columnWidth !== undefined ||
+      mutation.shadingColor !== undefined ||
+      mutation.verticalAlignment !== undefined)
+  )
+    return { ok: false, reason: 'unsupported-tracked-table-operation' };
+  const initial = topology;
   if (!initial.ok) return { ok: false, reason: initial.reason };
   if (initial.topology.hasMerge && mutation.kind !== 'delete' && mutation.kind !== 'properties')
     return { ok: false, reason: 'table-has-merge' };
@@ -248,7 +288,14 @@ export function planTableMutation(
     let error: string | null = null;
     // Insert while the original first run still supplies its formatting. Deleting
     // every original character first would leave no run properties to inherit.
-    if (text.length) error = apply({ op: 'insertText', paragraphId: p.id, offset: 0, text });
+    if (text.length)
+      error = apply({
+        op: 'insertText',
+        paragraphId: p.id,
+        offset: 0,
+        text,
+        ...(revision ? { revision } : {}),
+      });
     if (error) return error;
     if (old.length)
       return apply({
@@ -256,6 +303,7 @@ export function planTableMutation(
         paragraphId: p.id,
         start: text.length,
         end: text.length + old.length,
+        ...(revision ? { revision } : {}),
       });
     return null;
   };
@@ -330,12 +378,30 @@ export function planTableMutation(
       mutation.index + mutation.count > size
     )
       return { ok: false, reason: 'invalid-table-index' };
+    if (revision && mutation.count === size)
+      return { ok: false, reason: 'tracked-table-deletion-unsupported' };
+    // Pending row deletions remain in the tree until review. They cannot keep the table alive.
+    if (
+      revision &&
+      mutation.kind === 'deleteRows' &&
+      !current.rows.some(({ row }, index) => {
+        if (index >= mutation.index && index < mutation.index + mutation.count) return false;
+        const properties = wmlChildNamed(row, 'trPr');
+        return !properties || !wmlChildNamed(properties, 'del');
+      })
+    )
+      return { ok: false, reason: 'tracked-table-deletion-unsupported' };
     if (mutation.count === size) error = apply({ op: 'deleteBlock', blockId: tableId });
     else
       for (let i = mutation.index + mutation.count - 1; i >= mutation.index && !error; i--)
         error =
           mutation.kind === 'deleteRows'
-            ? apply({ op: 'deleteTableRow', tableId, rowId: current.rows[i]!.row.id })
+            ? apply({
+                op: 'deleteTableRow',
+                tableId,
+                rowId: current.rows[i]!.row.id,
+                ...(revision ? { revision } : {}),
+              })
             : apply({ op: 'deleteTableColumn', tableId, gridColumnId: current.gridColumns[i]!.id });
   } else if (mutation.kind === 'addRows' || mutation.kind === 'addColumns') {
     if (
@@ -364,6 +430,7 @@ export function planTableMutation(
             tableId,
             rowId: t.rows[first ? 0 : t.rows.length - 1]!.row.id,
             where: first ? 'above' : 'below',
+            ...(revision ? { revision } : {}),
           })
         : apply({
             op: 'insertTableColumn',
@@ -398,7 +465,8 @@ export function planInsertTable(
   offset: number,
   rowCount: number,
   columnCount: number,
-  values?: readonly (readonly string[])[]
+  values?: readonly (readonly string[])[],
+  revision?: RevisionAttributionInput
 ):
   | {
       readonly ok: true;
@@ -432,7 +500,9 @@ export function planInsertTable(
   let anchor = paragraphId;
   let splitParagraphId: string | undefined;
   if (offset > 0) {
-    const op: TreeDocOp = { op: 'splitParagraph', paragraphId, offset };
+    const op: TreeDocOp = revision
+      ? { op: 'splitParagraphMany', paragraphId, offsets: [offset], revision }
+      : { op: 'splitParagraph', paragraphId, offset };
     const result = applyTreeOp(part, op);
     if (!result.ok) return { ok: false, reason: result.reason };
     part = result.part;
@@ -457,6 +527,7 @@ export function planInsertTable(
     rows: rowCount,
     cols: columnCount,
     columnWidthTwips: Math.max(120, Math.floor(9360 / columnCount)),
+    ...(revision ? { revision } : {}),
   };
   const result = applyTreeOp(part, op);
   if (!result.ok) return { ok: false, reason: result.reason };

@@ -982,7 +982,18 @@
     "scrollToChange": "更新後に変更箇所までスクロール",
     "scrolled": "文書を更新し、変更された段落までスクロールしました。",
     "processingLabel": "処理中",
-    "sampleEdited": "編集内容は文書に保持されています。もう一度試すには、サンプルをリセットしてください。"
+    "sampleEdited": "編集内容は文書に保持されています。もう一度試すには、サンプルをリセットしてください。",
+    "changeStatus": {
+      "available": null,
+      "deleted": null,
+      "invalid": null,
+      "unavailable": null,
+      "unsupported-story": null
+    },
+    "lateResult": null,
+    "reviewChanges": null,
+    "showChange": null,
+    "testLateResult": null
   },
   "anchorNavigation": {
     "title": "段落への参照",
@@ -1040,5 +1051,51 @@
       "scroll": "参照先までスクロールしました。",
       "highlight": "参照先を強調表示しました。画面の外にある場合は、スクロールして確認してください。"
     }
+  },
+  "writerAgent": {
+    "title": "文書作成エージェント",
+    "subtitle": "文書 API で文書を編集",
+    "empty": "作成する文書または編集内容を入力してください。",
+    "placeholder": "文書または編集内容を入力…",
+    "send": "送信",
+    "working": "処理中…",
+    "mode": "編集モード",
+    "direct": "直接編集",
+    "suggest": "変更の提案",
+    "notReady": "エディターの準備ができていません。",
+    "suggestions": {
+      "nda": "相互秘密保持契約書を作成する。",
+      "intake": "問診票を作成する。",
+      "proposal": "プロジェクト提案書を作成する。"
+    },
+    "tools": {
+      "read_document": "文書を読み取り",
+      "inspect_document": "文書を確認",
+      "discover_capabilities": "利用可能な機能を確認",
+      "create_document": "文書を作成",
+      "format_lists": "リストの書式を設定",
+      "insert_table": "表を挿入",
+      "insert_content_controls": "コンテンツ コントロールを挿入",
+      "write_header_footer": "ヘッダーとフッターを編集",
+      "propose_replacement": "置換を提案",
+      "propose_insertion": "挿入を提案",
+      "propose_deletion": "削除を提案",
+      "format_document": "文書の書式を設定",
+      "edit_text": "テキストを編集",
+      "edit_table": "表を編集",
+      "edit_list": "リストを編集",
+      "configure_list": "リストを設定",
+      "edit_control": "コントロールを編集",
+      "edit_review": "変更履歴を編集",
+      "edit_layout": "レイアウトを編集",
+      "insert_break": "区切りを挿入",
+      "edit_picture": "画像を編集",
+      "edit_field": "フィールドを編集",
+      "write_story": "文書のテキストを編集"
+    },
+    "failed": "失敗",
+    "updatedParts": "{count} 件を更新",
+    "stop": "停止",
+    "stopped": "生成を停止しました。完了した編集は文書に残ります。"
   }
 }

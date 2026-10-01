@@ -12,6 +12,14 @@ The controller is a host integration API. It is separate from the Office.js docu
 
 Your application receives updates and calls `refresh.applyUpdate()`; the editor does not watch files or URLs. The [DOCX document refresh example](/examples/document-refresh) includes a React app and mock server.
 
+## Choose an editing path
+
+Use the document API when your agent can issue document edits. Set `document.changeTrackingMode` and use supported Office.js-shaped members to create native revisions. For more information, see [Revisions](/docs/2.x/editor-api/revisions).
+
+Use document refresh when your processor returns complete DOCX files. Each accepted file resets selection and undo history. Scroll restoration does not preserve either state. Refresh refuses collaborative sessions, including disconnected sessions. Use document edits with your collaboration transport when several users share a document.
+
+Highlights are temporary review indicators. They do not create revisions or compare files. Keep deletion, header, footer, table, content control, and style summaries in your application's change list when no body location survives.
+
 ## API overview
 
 Call `createDocumentRefresh(editor)` after the editor mounts. Repeated calls for the same editor return the same controller. It provides these methods:
@@ -97,10 +105,12 @@ try {
       failures: update.failedOperationIds,
     });
     if (!result.ok) {
+      if (result.code === 'out-of-order') continue;
       showRefreshError(result.code);
       break;
     }
-    refresh.highlightChanges();
+    refresh.highlightChanges({ timeoutMs: 5000 });
+    showChanges(result.changes);
     showPartialFailures(result.failures);
   }
 } finally {
@@ -133,6 +143,7 @@ const result = await refresh.applyUpdate({
   changes: [
     {
       id: 'delivery-date',
+      description: 'Changed the delivery date',
       location: {
         paragraphId: '00A12B34',
         start: 10,
@@ -140,20 +151,62 @@ const result = await refresh.applyUpdate({
         text: 'October 12',
       },
     },
-    { id: 'removed-clause', unavailableReason: 'deleted' },
+    {
+      id: 'removed-clause',
+      description: 'Removed an obsolete clause',
+      unavailableReason: 'deleted',
+    },
+    { id: 'footer-version', description: 'Updated the footer version' },
   ],
 });
 ```
 
 `paragraphId` is the paragraph's OOXML `w14:paraId`. Alternatively, use `paragraphIndex`, starting at zero in body document order. This order includes paragraphs inside tables. Specify exactly one paragraph selector. Offsets count UTF-16 code units. The `text` must equal the text between `start` and `end` in the returned paragraph.
 
+Paragraph IDs contain eight hexadecimal digits from `00000001` through `7FFFFFFF`. Matching ignores letter case. Loading normalizes invalid or duplicate IDs. Use valid IDs from the returned document. Do not use arbitrary UUIDs or assume that normalization preserves an invalid ID.
+
 Locations cover nonempty ranges within one body paragraph. A missing, ambiguous, mismatched, or unplaced location does not receive a highlight. The result reports `invalid`, `unavailable`, `deleted`, or `unsupported-story` explicitly. Header, footer, note, and multiparagraph revision locations are unavailable for this presentation API. Use explicit metadata for a surviving body location when appropriate.
+
+### Report unmatched locations
+
+Each unavailable change includes `diagnostic.code`. If you supplied a location, `diagnostic.location` preserves that requested location. A successful file replacement can include invalid locations. These diagnostics do not appear in `result.failures`, which contains processor operation IDs.
+
+Inspect diagnostics before requesting highlights:
+
+```ts
+if (result.ok) {
+  const unmatched = result.changes.filter((change) => change.diagnostic);
+  showLocationDiagnostics(unmatched);
+  const count = refresh.highlightChanges({ timeoutMs: 5000 });
+  showHighlightCount(count);
+}
+```
+
+| Diagnostic code | Meaning |
+| --- | --- |
+| `invalid-selector` | The location has both selectors, neither selector, or an invalid paragraph index. |
+| `invalid-paragraph-id` | The ID falls outside the supported hexadecimal range. |
+| `paragraph-not-found` | The returned document does not contain the requested paragraph. |
+| `ambiguous-paragraph-id` | Several paragraphs match the requested ID. |
+| `invalid-offsets` | The offsets do not identify a nonempty range within the paragraph. |
+| `text-mismatch` | The returned text differs from the supplied text. |
+| `not-rendered` | The paragraph has no available layout position. |
+| `missing-location` | The change has no location. |
+| `deleted` | The deleted content has no surviving location. |
+| `unsupported-story` | A revision names a story outside the body. |
+| `multiple-paragraphs` | A revision spans several paragraphs. |
+
+### Present structural changes
+
+Supply `description` to describe a change without a highlight location. The controller accepts up to 1000 characters. It returns the summary unchanged. Render descriptions as text in your change list. Keep unavailable entries visible and enable navigation only for changes with `status: 'available'`.
+
+A table or content control can use a surviving body paragraph location. Header, footer, style, and deletion summaries can appear without a location. The controller does not infer these summaries or provide structural Accept and Reject actions. Use native revisions when your workflow requires saved review decisions.
 
 If you omit `changes`, a registered review module supplies tracked revision locations. Tracked revisions already present at capture do not count as new changes. Their preservation does not require a review module. Review module use requires the EigenPal Pro License.
 
 ## Highlight and navigate
 
-`result.changes` belongs to that result's `resultId`. `isNew` identifies new change IDs and changed text within an existing change ID. It compares cumulative results within one submission, plus tracked revisions present at capture. Plain metadata IDs do not form a history across independent captures. Locations remain valid only until the next accepted result or local edit. The controller clears stale highlights after a local edit.
+`result.changes` belongs to that result's `resultId`. `isNew` identifies new change IDs, changed text, and changed descriptions. It compares cumulative results within one submission, plus tracked revisions present at capture. Plain metadata IDs do not form a history across independent captures. Locations remain valid only until the next accepted result or local edit. The controller clears stale highlights after a local edit.
 
 Call `highlightChanges()` after a successful `applyUpdate()` to display highlights. These calls change presentation only:
 

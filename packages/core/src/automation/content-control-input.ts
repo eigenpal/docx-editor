@@ -9,9 +9,10 @@ import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
 import {
   contentControlContentNodeOf,
   contentControlsIn,
+  type ContentControlProperties,
 } from '../store/package/content-control-nodes.ts';
 import type { ContentControlValueInput } from '../store/store/tree-op-content-controls.ts';
-import type { AutomationErrorCode } from './protocol.ts';
+import type { AutomationError, AutomationErrorCode } from './protocol.ts';
 
 /**
  * Every control under a scope, nested ones included, in document order.
@@ -52,6 +53,29 @@ export const CONTENT_CONTROL_SUBTYPES: ReadonlySet<string> = new Set([
 
 /** Longest tag/title/value a caller may author, so a script cannot ask for an unbounded write. */
 const MAX_CONTROL_STRING = 4_096;
+
+/** Text insertion cannot replace or append to a typed control value. */
+export function contentControlTextInsertionError(
+  type: ContentControlProperties['type'],
+  text: unknown,
+  at: unknown
+): AutomationError | null {
+  if (!['richText', 'plainText', 'comboBox', 'untyped'].includes(type))
+    return {
+      code: 'unsupported-capability',
+      message: 'this control requires a typed value rather than a text insertion',
+      detail: type,
+    };
+  if (typeof text !== 'string')
+    return { code: 'unsupported-content', message: 'text is required', detail: 'text' };
+  if (at !== 'replace' && at !== 'start' && at !== 'end')
+    return {
+      code: 'unsupported-content',
+      message: 'that is not a place to insert at',
+      detail: String(at),
+    };
+  return null;
+}
 
 /**
  * The typed value a caller offered, or why it is not one.

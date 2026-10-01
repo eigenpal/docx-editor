@@ -5,6 +5,68 @@ import { reviewModule } from '@docx-editor.dev/pro';
 import type { DocxEditorRuntime } from '@docx-editor.dev/editor-api/browser';
 import { seedDocx } from '../seed-document';
 import { createWriterRuntime, runWriterTool } from './run-tool';
+import { DocxEditor } from '@docx-editor.dev/editor-api';
+
+for (const change of ['text', 'formatting'] as const) {
+  test(`writer refuses a replacement when ${change} changes between target reads`, async () => {
+    const runtime = await DocxEditor.createServer(seedDocx());
+    try {
+      const read = await runWriterTool(runtime, null, 'read_document', {});
+      expect(read.success).toBe(true);
+      const target = JSON.parse(read.output).items[0];
+      const run = runtime.run.bind(runtime);
+      let injected = false;
+      runtime.run = (async (
+        callback: (
+          context: import('@docx-editor.dev/editor-api').RequestContext
+        ) => Promise<unknown>
+      ) =>
+        run(async (context) => {
+          const sync = context.sync.bind(context);
+          let reads = 0;
+          context.sync = async () => {
+            await sync();
+            if (++reads === 2 && !injected) {
+              injected = true;
+              await run(async (other) => {
+                const paragraph = other.document.body.paragraphs.getFirst();
+                if (change === 'text') paragraph.insertText('User edit: ', 'Start');
+                else paragraph.font.italic = true;
+                await other.sync();
+              });
+            }
+          };
+          return callback(context);
+        })) as typeof runtime.run;
+      const result = await runWriterTool(runtime, null, 'edit_text', {
+        edits: [
+          {
+            action: 'insertText',
+            target: { paragraphId: target.id },
+            location: 'Replace',
+            text: 'Agent replacement',
+          },
+        ],
+      });
+      expect(injected).toBe(true);
+      expect(result).toMatchObject({ success: false, code: 'StaleDocument' });
+      await run(async (c) => {
+        c.document.body.load('text');
+        await c.sync();
+        if (change === 'text') expect(c.document.body.text).toContain('User edit: ');
+        else {
+          const font = c.document.body.paragraphs.getFirst().font;
+          font.load('italic');
+          await c.sync();
+          expect(font.italic).toBe(true);
+        }
+        expect(c.document.body.text).not.toContain('Agent replacement');
+      });
+    } finally {
+      runtime.dispose();
+    }
+  });
+}
 
 const brief = {
   documentType: 'mutual NDA',
@@ -15,12 +77,97 @@ const brief = {
   length: 'two pages',
 };
 
+test('a stale refusal cannot be bypassed by repeating a whole-story edit', async () => {
+  const runtime = await DocxEditor.createServer(seedDocx());
+  try {
+    expect((await runWriterTool(runtime, null, 'read_document', {})).success).toBe(true);
+    await runtime.run(async (context) => {
+      context.document.body.insertText('User draft', 'Replace');
+      await context.sync();
+    });
+    const before = await runtime.save();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const result = await runWriterTool(runtime, null, 'write_story', {
+        story: { kind: 'body' },
+        text: 'Agent draft',
+        location: 'Replace',
+      });
+      expect(result).toMatchObject({ success: false, code: 'StaleDocument' });
+      expect(await runtime.save()).toEqual(before);
+    }
+    expect((await runWriterTool(runtime, null, 'read_document', {})).success).toBe(true);
+    expect(
+      (
+        await runWriterTool(runtime, null, 'write_story', {
+          story: { kind: 'body' },
+          text: 'Reconsidered draft',
+          location: 'Replace',
+        })
+      ).success
+    ).toBe(true);
+  } finally {
+    runtime.dispose();
+  }
+});
+
+for (const afterFinalWrite of [false, true]) {
+  test(`a user edit stops a progressive draft, final write ${afterFinalWrite}`, async () => {
+    const runtime = await DocxEditor.createServer(seedDocx());
+    const run = runtime.run.bind(runtime);
+    let injected = false;
+    runtime.run = (async (
+      callback: (context: import('@docx-editor.dev/editor-api').RequestContext) => Promise<unknown>
+    ) =>
+      run(async (context) => {
+        const sync = context.sync.bind(context);
+        let reads = 0;
+        context.sync = async () => {
+          await sync();
+          if (++reads === (afterFinalWrite ? 7 : 3) && !injected) {
+            injected = true;
+            await run(async (other) => {
+              other.document.body.insertText('User draft', 'Start');
+              await other.sync();
+            });
+          }
+        };
+        return callback(context);
+      })) as typeof runtime.run;
+    try {
+      const result = await runWriterTool(runtime, null, 'create_document', {
+        brief,
+        title: 'Agent draft',
+        blocks: [{ text: 'Agent draft', style: 'Title' }],
+      });
+      expect(injected).toBe(true);
+      expect(result).toMatchObject({
+        success: false,
+        code: 'StaleDocument',
+        completedSteps: afterFinalWrite
+          ? ['clear body', 'paragraph', 'paragraph formatting']
+          : ['clear body'],
+      });
+      await run(async (context) => {
+        context.document.body.load('text');
+        await context.sync();
+        expect(context.document.body.text).toBe(
+          afterFinalWrite ? 'User draftAgent draft' : 'User draft'
+        );
+      });
+    } finally {
+      runtime.dispose();
+    }
+  });
+}
+
 describe('writer agent browser tools', () => {
   let editor: DocxEditorInstance;
   let runtime: DocxEditorRuntime;
+  let registered = false;
 
   beforeAll(() => {
-    if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+    registered = !GlobalRegistrator.isRegistered;
+    if (registered) GlobalRegistrator.register();
     const container = document.createElement('div');
     document.body.appendChild(container);
     editor = createDocxEditor({
@@ -35,7 +182,7 @@ describe('writer agent browser tools', () => {
   afterAll(() => {
     runtime.dispose();
     editor.destroy();
-    if (GlobalRegistrator.isRegistered) GlobalRegistrator.unregister();
+    if (registered) GlobalRegistrator.unregister();
   });
 
   test('builds rich structure and creates attributed proposals', async () => {
@@ -77,11 +224,13 @@ describe('writer agent browser tools', () => {
       fields: [
         {
           paragraphId: id('[Effective date]'),
+          search: '[Effective date]',
           tag: 'effective-date',
           title: 'Effective date',
         },
         {
           paragraphId: id('[Governing law]'),
+          search: '[Governing law]',
           tag: 'governing-law',
           title: 'Governing law',
         },
@@ -114,8 +263,8 @@ describe('writer agent browser tools', () => {
     ]).toEqual([true, true, true, true, true]);
 
     const read = await runWriterTool(runtime, editor, 'read_document', {});
-    const records = JSON.parse(read.output) as { id: string; text: string }[];
-    expect(records).toHaveLength(21);
+    const records = JSON.parse(read.output).items as { id: string; text: string }[];
+    expect(records.filter((record) => record.text)).toHaveLength(21);
     expect(records.every((record) => /^[0-9A-F]{8}$/.test(record.id))).toBe(true);
     expect(records.map((record) => record.text)).toContain('Milestone');
     expect(records.map((record) => record.text)).toContain('To be completed');
@@ -124,21 +273,50 @@ describe('writer agent browser tools', () => {
     const purpose = records.find((record) => record.text.includes('possible project'));
     expect(purpose).toBeDefined();
 
-    const insertion = await runWriterTool(runtime, editor, 'propose_insertion', {
-      paragraphId: purpose!.id,
-      after: 'evaluate',
-      text: ' carefully',
-    });
-    const replacement = await runWriterTool(runtime, editor, 'propose_replacement', {
-      paragraphId: purpose!.id,
-      search: 'evaluate a possible',
-      replaceWith: 'assess a potential',
-    });
-    const deletion = await runWriterTool(runtime, editor, 'propose_deletion', {
-      paragraphId: purpose!.id,
-      search: 'The parties ',
-    });
-    expect([replacement.success, insertion.success, deletion.success]).toEqual([true, true, true]);
+    const insertion = await runWriterTool(
+      runtime,
+      editor,
+      'edit_text',
+      {
+        edits: [
+          {
+            action: 'insertText',
+            target: { paragraphId: purpose!.id, search: 'evaluate' },
+            text: ' carefully',
+            location: 'After',
+          },
+        ],
+      },
+      'suggest'
+    );
+    const replacement = await runWriterTool(
+      runtime,
+      editor,
+      'edit_text',
+      {
+        edits: [
+          {
+            action: 'insertText',
+            target: { paragraphId: purpose!.id, search: 'possible project' },
+            text: 'potential project',
+            location: 'Replace',
+          },
+        ],
+      },
+      'suggest'
+    );
+    const deletion = await runWriterTool(
+      runtime,
+      editor,
+      'edit_text',
+      {
+        edits: [{ action: 'delete', target: { paragraphId: purpose!.id, search: 'The parties ' } }],
+      },
+      'suggest'
+    );
+    expect(insertion.success, insertion.output).toBe(true);
+    expect(replacement.success, replacement.output).toBe(true);
+    expect(deletion.success, deletion.output).toBe(true);
 
     const revisions = await runtime.run(async (context) => {
       const collection = context.document.body.revisions;
@@ -148,7 +326,58 @@ describe('writer agent browser tools', () => {
       await context.sync();
       return collection.items.map((item) => ({ type: item.type, author: item.author }));
     });
-    expect(revisions.map((revision) => revision.type).sort()).toEqual(['Delete', 'Replace']);
+    expect(revisions.map((revision) => revision.type).sort()).toEqual([
+      'Delete',
+      'Insert',
+      'Replace',
+    ]);
     expect(revisions.every((revision) => revision.author === 'Writer agent')).toBe(true);
+  });
+  test('creates an SDT around field text without changing labels', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const local = createDocxEditor({ container, document: seedDocx() });
+    const api = createWriterRuntime(local);
+    try {
+      const records = JSON.parse((await runWriterTool(api, local, 'read_document', {})).output)
+        .items as {
+        id: string;
+        text: string;
+      }[];
+      const target = records.find((record) => record.text.includes('Example Client'))!;
+      const result = await runWriterTool(api, local, 'insert_content_controls', {
+        fields: [
+          {
+            paragraphId: target.id,
+            search: 'Example Client',
+            type: 'PlainText',
+            tag: 'client',
+            title: 'Client',
+          },
+        ],
+      });
+      expect(result.success).toBe(true);
+      expect(
+        JSON.parse((await runWriterTool(api, local, 'read_document', {})).output).items
+      ).toEqual(records);
+      await api.run(async (context) => {
+        const controls = context.document.contentControls;
+        controls.load('items');
+        await context.sync();
+        expect(controls.items).toHaveLength(1);
+        controls.items[0]!.load(['text', 'tag', 'title']);
+        await context.sync();
+        expect(controls.items[0]!.text).toBe('Example Client');
+        expect(controls.items[0]!.tag).toBe('client');
+      });
+      const rejected = await runWriterTool(api, local, 'insert_content_controls', {
+        fields: [{ paragraphId: target.id, type: 'DropDownList', tag: 'date', title: 'Date' }],
+      });
+      expect(rejected.success).toBe(false);
+    } finally {
+      api.dispose();
+      local.destroy();
+      container.remove();
+    }
   });
 });

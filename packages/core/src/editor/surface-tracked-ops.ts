@@ -12,6 +12,7 @@ type RevisionCapableOp = Extract<
       | 'insertPageBreak'
       | 'insertPageField'
       | 'insertNote'
+      | 'insertTable'
       | 'insertTableRow'
       | 'deleteTableRow'
       | 'setRunProperties'
@@ -27,6 +28,7 @@ const REVISION_CAPABLE_OPS: ReadonlySet<TreeDocOp['op']> = new Set<RevisionCapab
   'insertPageBreak',
   'insertPageField',
   'insertNote',
+  'insertTable',
   'insertTableRow',
   'deleteTableRow',
   'setRunProperties',
@@ -46,6 +48,9 @@ export function isTrackedEdit(op: TreeDocOp): boolean {
       return true;
     // Paste proposes its breaks through the op itself, so a paste of newlines alone is a
     // tracked edit with no `insertText` beside it to report for it.
+    case 'authorTable':
+    case 'setListNumbering':
+    case 'setListLevel':
     case 'splitParagraphMany':
       return op.revision !== undefined;
     default:

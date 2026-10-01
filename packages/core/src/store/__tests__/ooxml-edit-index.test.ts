@@ -9,7 +9,13 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlNode, type OoxmlPart } from '../package/ooxml-tree.ts';
-import { collectNodeIds, findNode, parentNodeOf } from '../package/ooxml-edit.ts';
+import {
+  carryIndexToRebuiltRoot,
+  collectNodeIds,
+  createNodeIdAllocator,
+  findNode,
+  parentNodeOf,
+} from '../package/ooxml-edit.ts';
 import { applyTreeOp, paragraphTextOf, type TreeDocOp } from '../store/tree-ops.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -152,4 +158,45 @@ describe('the patched node index is indistinguishable from a fresh walk', () => 
       expect(applied).toBeGreaterThan(200);
     });
   }
+});
+
+test('preview and restored roots never reuse reserved node IDs', () => {
+  const original = load(['Draft']);
+  const mintOriginal = createNodeIdAllocator(original);
+  const reserved = mintOriginal();
+  const result = applyTreeOp(original, {
+    op: 'splitParagraph',
+    paragraphId: paragraphIdsOf(original)[0]!,
+    offset: 5,
+  });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  const mintPreview = createNodeIdAllocator(result.part);
+  const preview = mintPreview();
+  // Rebuilding the old root index must retain reservations from the preview.
+  const mintRestored = createNodeIdAllocator(original);
+  const restored = mintRestored();
+  const lateOriginal = mintOriginal();
+  expect(new Set([reserved, preview, restored, lateOriginal]).size).toBe(4);
+  expect(collectNodeIds(result.part).has(restored)).toBe(false);
+  expect(collectNodeIds(result.part).has(lateOriginal)).toBe(false);
+});
+
+test('external root rebuilds retain allocations after a preview steals the index', () => {
+  const original = load(['Draft']);
+  const allocate = createNodeIdAllocator(original);
+  const reserved = allocate();
+  const preview = applyTreeOp(original, {
+    op: 'splitParagraph',
+    paragraphId: paragraphIdsOf(original)[0]!,
+    offset: 2,
+  });
+  expect(preview.ok).toBe(true);
+  if (!preview.ok) return;
+  const previewId = createNodeIdAllocator(preview.part)();
+  const rebuilt = { ...original, root: { ...original.root } };
+  carryIndexToRebuiltRoot(original.root, rebuilt.root);
+  const next = createNodeIdAllocator(rebuilt)();
+  expect(new Set([reserved, previewId, next]).size).toBe(3);
+  expect(collectNodeIds(preview.part).has(next)).toBe(false);
 });

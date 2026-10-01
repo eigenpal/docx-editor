@@ -4482,6 +4482,7 @@ export type TreeDocOp = SetFieldCodeOp | {
     readonly level: number;
     readonly op: 'setListLevel';
     readonly paragraphId: string;
+    readonly revision?: RevisionAttributionInput;
 } | {
     readonly op: 'setParagraphMarkProperties';
     readonly paragraphId: string;
@@ -4492,6 +4493,7 @@ export type TreeDocOp = SetFieldCodeOp | {
     readonly numId: string | null;
     readonly op: 'setListNumbering';
     readonly paragraphId: string;
+    readonly revision?: RevisionAttributionInput;
 } | {
     readonly inForcePositionsTwips?: readonly number[];
     readonly op: 'setParagraphTabStops';
@@ -4600,6 +4602,7 @@ export type TreeDocOp = SetFieldCodeOp | {
     readonly cols: number;
     readonly columnWidthTwips: number;
     readonly op: 'insertTable';
+    readonly revision?: RevisionAttributionInput;
     readonly rows: number;
 } | {
     readonly op: 'insertTableRow';
@@ -4654,6 +4657,7 @@ export type TreeDocOp = SetFieldCodeOp | {
         readonly values?: readonly (readonly string[])[];
     };
     readonly op: 'authorTable';
+    readonly revision?: RevisionAttributionInput;
 } | {
     readonly columnWidthsTwips?: readonly number[];
     readonly headerRowCount?: number;

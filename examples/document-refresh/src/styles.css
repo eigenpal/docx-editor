@@ -38,3 +38,14 @@
   outline: 2px solid var(--doc-primary);
   outline-offset: 2px;
 }
+.refresh-change-list {
+  display: grid;
+  gap: 8px;
+  max-height: 160px;
+  overflow: auto;
+}
+.refresh-change-list code {
+  display: inline-block;
+  margin-inline: 8px;
+  color: var(--doc-text-muted);
+}

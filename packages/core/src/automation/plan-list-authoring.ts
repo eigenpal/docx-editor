@@ -1,3 +1,4 @@
+import { isProposedList } from './tracked-list.ts';
 import { withPart } from '../store/package/ooxml-package.ts';
 import {
   WML_NAMESPACE_URI as W,
@@ -58,7 +59,8 @@ export function planListAuthoring(
     story: AutomationStoryReads,
     paragraphId: string,
     numbering?: { numId: string; level: number }
-  ) => PlannedOperation | null
+  ) => PlannedOperation | null,
+  trackingAuthor?: string
 ): PlannedOperation {
   const pkg = reads.package;
   if (!pkg) return refuse('no document');
@@ -68,6 +70,14 @@ export function planListAuthoring(
     const story = reads.story(target.story);
     const list = story && listReads(story).find((entry) => entry.numId === target.numId);
     if (!story || !list) return refuse('that list no longer exists');
+    if (trackingAuthor && !isProposedList(story, list.paragraphIds, target.numId, trackingAuthor))
+      return {
+        ok: false,
+        error: {
+          code: 'unsupported-capability',
+          message: 'Only a newly proposed list definition can change while tracking',
+        },
+      };
     if (!validAutomationListFormat(operation.level, operation.format))
       return refuse('invalid list level format');
     // A definition affects every paragraph using this instance. Refuse cross-story sharing
@@ -152,6 +162,9 @@ export function planListAuthoring(
             paragraphId,
             numId: created.numId,
             level: 0,
+            ...(trackingAuthor
+              ? { revision: { author: trackingAuthor, date: new Date().toISOString() } }
+              : {}),
           });
           if (!applied.ok) throw new Error('cannot number this paragraph');
           committedId = created.numId;

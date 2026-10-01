@@ -201,3 +201,33 @@ test('unlock and value writes preserve metadata in a preserved out-of-order prop
     reopened.dispose();
   }
 });
+
+test('creates a real date-picker control and preserves its type after reopen', async () => {
+  const runtime = await serverRuntime(docx(p('Effective date: [Date]')));
+  try {
+    await runtime.run(async (context) => {
+      const range = context.document.body.search('[Date]').getFirst();
+      await context.sync();
+      const control = range.insertContentControl('DatePicker');
+      await context.sync();
+      control.tag = 'effective-date';
+      control.title = 'Effective date';
+      await context.sync();
+    });
+    expect(await mainXmlOf(runtime)).toContain('<w:date');
+    const next = await reopen(runtime);
+    try {
+      await next.run(async (context) => {
+        const control = context.document.contentControls.getByTag('effective-date').getFirst();
+        control.load('subtype,text');
+        await context.sync();
+        expect(control.subtype).toBe('date');
+        expect(control.text).toBe('[Date]');
+      });
+    } finally {
+      next.dispose();
+    }
+  } finally {
+    runtime.dispose();
+  }
+});

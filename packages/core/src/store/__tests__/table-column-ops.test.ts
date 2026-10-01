@@ -796,22 +796,14 @@ describe('table column ops history', () => {
     const [, col2] = gridColIds(store.part, table.id);
     const beforeParagraph = collectByKind(part.root, 'paragraph')[0]!;
 
-    const applied = applyTreeOp(part, {
-      op: 'insertTableColumn',
-      tableId: table.id,
-      gridColumnId: col2!,
-      where: 'left',
-    });
-    expect(applied.ok).toBe(true);
-    if (!applied.ok) return;
-
     const result = store.transact((tx) => {
       tx.selectionBefore({ paragraphId: beforeParagraph.id, start: 0, end: 0 });
       tx.apply({ op: 'insertTableColumn', tableId: table.id, gridColumnId: col2!, where: 'left' });
     });
     expect(result.ok).toBe(true);
+    const inserted = collectByKind(store.part.root, 'paragraph')[1]!;
     expect(result.change?.caret).toEqual({
-      paragraphId: applied.effect.caret!.paragraphId,
+      paragraphId: inserted.id,
       start: 0,
       end: 0,
     });
@@ -820,7 +812,7 @@ describe('table column ops history', () => {
     store.undo();
     expect(store.part).toBe(part);
     expect(store.selectionForRedo()).toEqual({
-      paragraphId: applied.effect.caret!.paragraphId,
+      paragraphId: inserted.id,
       start: 0,
       end: 0,
     });

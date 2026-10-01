@@ -982,7 +982,18 @@
     "scrollToChange": "Güncellemeden sonra değişikliğe kaydır",
     "scrolled": "Belge güncellendi. Değiştirilen paragrafa kaydırıldı.",
     "processingLabel": "İşleniyor",
-    "sampleEdited": "Düzenlemeleriniz belgede kalır. Bu demoyu yeniden çalıştırmak için örneği sıfırlayın."
+    "sampleEdited": "Düzenlemeleriniz belgede kalır. Bu demoyu yeniden çalıştırmak için örneği sıfırlayın.",
+    "changeStatus": {
+      "available": null,
+      "deleted": null,
+      "invalid": null,
+      "unavailable": null,
+      "unsupported-story": null
+    },
+    "lateResult": null,
+    "reviewChanges": null,
+    "showChange": null,
+    "testLateResult": null
   },
   "anchorNavigation": {
     "clear": "Vurguyu temizle",
@@ -1040,5 +1051,51 @@
       "instant": "Solma olmadan varsayılan mavi"
     },
     "title": "Paragraf başvuruları"
+  },
+  "writerAgent": {
+    "direct": null,
+    "empty": null,
+    "mode": null,
+    "notReady": null,
+    "placeholder": null,
+    "send": null,
+    "subtitle": null,
+    "suggest": null,
+    "suggestions": {
+      "intake": null,
+      "nda": null,
+      "proposal": null
+    },
+    "title": null,
+    "tools": {
+      "configure_list": null,
+      "create_document": null,
+      "discover_capabilities": null,
+      "edit_control": null,
+      "edit_field": null,
+      "edit_layout": null,
+      "edit_list": null,
+      "edit_picture": null,
+      "edit_review": null,
+      "edit_table": null,
+      "edit_text": null,
+      "format_document": null,
+      "format_lists": null,
+      "insert_break": null,
+      "insert_content_controls": null,
+      "insert_table": null,
+      "inspect_document": null,
+      "propose_deletion": null,
+      "propose_insertion": null,
+      "propose_replacement": null,
+      "read_document": null,
+      "write_header_footer": null,
+      "write_story": null
+    },
+    "working": null,
+    "failed": null,
+    "stop": null,
+    "updatedParts": null,
+    "stopped": null
   }
 }

@@ -49,7 +49,8 @@ export function proposalRevisionError(
   story: AutomationStoryReads,
   paragraphId: string,
   start: number,
-  end: number
+  end: number,
+  ownAuthor?: string
 ): AutomationError | null {
   // Shared note parts can group one revision identity across several stories. Check the
   // individual sites and ranges, rather than discarding a group that spans note boundaries.
@@ -66,6 +67,14 @@ export function proposalRevisionError(
     }
   }
   const overlaps = items.some((item) => {
+    // Runtime-local continuation can extend its own text or paragraph proposal.
+    // Structural revisions still own their complete row or cell subtree.
+    if (
+      ownAuthor &&
+      item.author === ownAuthor &&
+      ['insert', 'delete', 'replace', 'paragraphMark', 'format'].includes(item.revisionKind)
+    )
+      return false;
     if (item.revisionKind === 'structural') {
       // Row/cell ranges locate review cards at the first paragraph's start. Their actual
       // coverage is the owning subtree, including later paragraphs and nested tables.

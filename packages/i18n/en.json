@@ -982,7 +982,18 @@
     "scrollToChange": "Scroll to the change after the update",
     "scrolled": "Document updated. Scrolled to the changed paragraph.",
     "processingLabel": "Processing",
-    "sampleEdited": "Your edits stay in the document. Reset the sample to run this demo again."
+    "sampleEdited": "Your edits stay in the document. Reset the sample to run this demo again.",
+    "lateResult": "The late result was refused. The latest document stays open.",
+    "testLateResult": "Deliver an older result after the latest update",
+    "reviewChanges": "Review changes",
+    "showChange": "Show change",
+    "changeStatus": {
+      "available": "Available location",
+      "deleted": "Deleted content",
+      "unavailable": "No highlight location",
+      "invalid": "Invalid location",
+      "unsupported-story": "Unsupported location"
+    }
   },
   "anchorNavigation": {
     "title": "Paragraph references",
@@ -1040,5 +1051,51 @@
       "scroll": "Scrolled to the reference.",
       "highlight": "Highlighted the reference. If it is offscreen, scroll to see it."
     }
+  },
+  "writerAgent": {
+    "title": "Writer agent",
+    "subtitle": "Edit documents with the document API",
+    "empty": "Describe a document or request an edit.",
+    "placeholder": "Describe the document or edit…",
+    "send": "Send",
+    "working": "Working…",
+    "mode": "Editing mode",
+    "direct": "Direct edits",
+    "suggest": "Suggestions",
+    "notReady": "The editor is not ready.",
+    "suggestions": {
+      "nda": "Draft a mutual NDA.",
+      "intake": "Create a medical intake form.",
+      "proposal": "Write a project proposal."
+    },
+    "tools": {
+      "read_document": "Read document",
+      "inspect_document": "Inspect document",
+      "discover_capabilities": "Discover capabilities",
+      "create_document": "Create document",
+      "format_lists": "Format lists",
+      "insert_table": "Insert table",
+      "insert_content_controls": "Insert content controls",
+      "write_header_footer": "Write header footer",
+      "propose_replacement": "Propose replacement",
+      "propose_insertion": "Propose insertion",
+      "propose_deletion": "Propose deletion",
+      "format_document": "Format document",
+      "edit_text": "Edit text",
+      "edit_table": "Edit table",
+      "edit_list": "Edit list",
+      "configure_list": "Configure list",
+      "edit_control": "Edit control",
+      "edit_review": "Edit review",
+      "edit_layout": "Edit layout",
+      "insert_break": "Insert break",
+      "edit_picture": "Edit picture",
+      "edit_field": "Edit field",
+      "write_story": "Editing document text"
+    },
+    "failed": "Failed",
+    "updatedParts": "Updated {count} parts",
+    "stop": "Stop",
+    "stopped": "Generation stopped. Completed edits remain in the document."
   }
 }

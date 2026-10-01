@@ -218,14 +218,28 @@ export function createDocumentRefresh(editor: DocxEditorInstance): DocumentRefre
           (update.failures !== undefined &&
             (!Array.isArray(update.failures) ||
               update.failures.length > 10000 ||
-              update.failures.some((id) => typeof id !== 'string'))) ||
-          (update.changes &&
-            (update.changes.length > 10000 ||
+              Array.from(update.failures).some((id) => typeof id !== 'string'))) ||
+          (update.changes !== undefined &&
+            (!Array.isArray(update.changes) ||
+              update.changes.length > 10000 ||
               new Set(update.changes.map((c) => c.id)).size !== update.changes.length ||
-              update.changes.some(
+              Array.from(update.changes).some(
                 (c) =>
+                  !c ||
                   typeof c.id !== 'string' ||
                   !c.id ||
+                  (c.description !== undefined &&
+                    (typeof c.description !== 'string' || c.description.length > 1000)) ||
+                  (c.location !== undefined &&
+                    (!c.location ||
+                      typeof c.location !== 'object' ||
+                      (c.location.paragraphId !== undefined &&
+                        typeof c.location.paragraphId !== 'string') ||
+                      (c.location.paragraphIndex !== undefined &&
+                        typeof c.location.paragraphIndex !== 'number') ||
+                      typeof c.location.start !== 'number' ||
+                      typeof c.location.end !== 'number' ||
+                      typeof c.location.text !== 'string')) ||
                   (c.unavailableReason !== undefined &&
                     !['deleted', 'unavailable'].includes(c.unavailableReason))
               )))
@@ -237,8 +251,18 @@ export function createDocumentRefresh(editor: DocxEditorInstance): DocumentRefre
             update.bytes instanceof Uint8Array ? update.bytes : update.bytes
           ).slice(),
           changes: update.changes?.map((c) => ({
-            ...c,
-            location: c.location ? { ...c.location } : undefined,
+            id: c.id,
+            description: c.description,
+            unavailableReason: c.unavailableReason,
+            location: c.location
+              ? {
+                  paragraphId: c.location.paragraphId,
+                  paragraphIndex: c.location.paragraphIndex,
+                  start: c.location.start,
+                  end: c.location.end,
+                  text: c.location.text,
+                }
+              : undefined,
           })),
           failures: update.failures?.slice(),
         };

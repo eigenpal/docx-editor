@@ -7,7 +7,7 @@ import {
   type OoxmlPart,
 } from '../../store/package/ooxml-tree.ts';
 import { paragraphModelTextOf } from '../../store/store/paragraph-model-text.ts';
-import { applyTreeOp, type TreeDocOp } from '../../store/store/tree-ops.ts';
+import { applyTreeOp } from '../../store/store/tree-ops.ts';
 import {
   planInsertTable,
   planTableMutation,
@@ -43,14 +43,6 @@ function read(part: OoxmlPart): AutomationStoryReads {
     },
   } as AutomationStoryReads;
 }
-function apply(part: OoxmlPart, ops: readonly TreeDocOp[]): OoxmlPart {
-  for (const op of ops) {
-    const result = applyTreeOp(part, op);
-    if (!result.ok) throw new Error(result.reason);
-    part = result.part;
-  }
-  return part;
-}
 function tableFixture(): { part: OoxmlPart; id: string } {
   let part = load('<w:p><w:r><w:t>Untouched</w:t></w:r></w:p>');
   const body = part.root.children[0]!;
@@ -61,7 +53,7 @@ function tableFixture(): { part: OoxmlPart; id: string } {
     ['C', 'D'],
   ]);
   if (!plan.ok) throw new Error(plan.reason);
-  part = apply(part, plan.ops);
+  part = plan.resultPart;
   return { part, id: plan.tableId };
 }
 function mutate(
@@ -71,7 +63,7 @@ function mutate(
 ): OoxmlPart {
   const plan = planTableMutation(read(part), id, mutation);
   if (!plan.ok) throw new Error(plan.reason);
-  return apply(part, plan.ops);
+  return plan.resultPart;
 }
 
 describe('canonical table authoring', () => {
