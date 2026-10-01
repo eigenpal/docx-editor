@@ -1,14 +1,15 @@
 import { defineConfig } from 'tsup';
-import { declarationCompilerOptions } from '../../scripts/declaration-options.mjs';
+import { buildDeclarations } from '../../scripts/build-declarations.mjs';
+const entry = ['src/index.ts'];
+
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry,
   platform: 'node',
   format: ['esm', 'cjs'],
-  // See scripts/declaration-options.mjs.
-  dts: {
-    banner: '/// <reference lib="dom" />',
-    compilerOptions: declarationCompilerOptions(import.meta.url),
-  },
+  // TypeScript 7 emits the declarations. See scripts/build-declarations.mjs.
+  dts: false,
+  onSuccess: () =>
+    buildDeclarations(import.meta.url, { entry, banner: '/// <reference lib="dom" />' }),
   clean: true,
   metafile: true,
   external: [/^@docx-editor\.dev\//, 'pdf-lib', 'fontkit'],

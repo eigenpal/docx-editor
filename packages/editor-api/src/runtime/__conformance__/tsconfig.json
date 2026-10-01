@@ -18,7 +18,6 @@
     "noEmit": true,
     "skipLibCheck": true,
     "types": [],
-    "baseUrl": ".",
     "paths": {
       // Every published subpath, mapped to source. The export map points at dist, so a subpath
       // missing here resolves to built .d.ts while its siblings resolve to src, and the same

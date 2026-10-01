@@ -88,7 +88,7 @@
   },
   "devDependencies": {
     "tsup": "^8.0.1",
-    "typescript": "^5.3.3"
+    "typescript7": "npm:typescript@^7.0.2"
   },
   "keywords": [
     "docx",

@@ -40,7 +40,7 @@
     "@docx-editor.dev/core": "workspace:*",
     "@happy-dom/global-registrator": "^20.8.3",
     "fflate": "^0.8.2",
-    "typescript": "^5.3.3"
+    "typescript7": "npm:typescript@^7.0.2"
   },
   "keywords": [
     "docx",

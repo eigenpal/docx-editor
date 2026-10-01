@@ -1,4 +1,5 @@
 import { defineConfig } from 'tsup';
+import { buildDeclarations } from '../../scripts/build-declarations.mjs';
 import { readLocaleCodes } from './locale-files.mjs';
 
 // Each shipped locale gets its own subpath entry
@@ -8,11 +9,14 @@ import { readLocaleCodes } from './locale-files.mjs';
 // — same source `scripts/validate-i18n.mjs` reads, so the build and codegen
 // can't drift on the BCP-47 filename rule.
 const localeCodes = readLocaleCodes(import.meta.dirname);
+const entry = ['src/index.ts', ...localeCodes.map((code) => `src/${code}.ts`)];
 
 export default defineConfig({
-  entry: ['src/index.ts', ...localeCodes.map((code) => `src/${code}.ts`)],
+  entry,
   format: ['cjs', 'esm'],
-  dts: { resolve: true },
+  // TypeScript 7 emits the declarations. See scripts/build-declarations.mjs.
+  dts: false,
+  onSuccess: () => buildDeclarations(import.meta.url, { entry }),
   splitting: false,
   sourcemap: false,
   clean: true,

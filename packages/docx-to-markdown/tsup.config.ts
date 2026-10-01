@@ -1,18 +1,19 @@
 import { defineConfig } from 'tsup';
-import { declarationCompilerOptions } from '../../scripts/declaration-options.mjs';
+import { buildDeclarations } from '../../scripts/build-declarations.mjs';
+
+const entry = { index: 'src/index.ts', node: 'src/node.ts' };
 
 export default defineConfig({
-  entry: { index: 'src/index.ts', node: 'src/node.ts' },
+  entry,
   platform: 'node',
   format: ['cjs', 'esm'],
   // Advanced live-view types share browser contracts with Core. Declare that type-only
   // dependency here so Node consumers do not need to change lib or skipLibCheck.
   // This adds no DOM runtime dependency or polyfill.
-  // See scripts/declaration-options.mjs.
-  dts: {
-    banner: '/// <reference lib="dom" />',
-    compilerOptions: declarationCompilerOptions(import.meta.url),
-  },
+  // TypeScript 7 emits the declarations. See scripts/build-declarations.mjs.
+  dts: false,
+  onSuccess: () =>
+    buildDeclarations(import.meta.url, { entry, banner: '/// <reference lib="dom" />' }),
   splitting: true,
   clean: true,
   treeshake: true,

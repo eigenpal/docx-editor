@@ -1,13 +1,15 @@
 import { defineConfig } from 'tsup';
-import { declarationCompilerOptions } from '../../scripts/declaration-options.mjs';
+import { buildDeclarations } from '../../scripts/build-declarations.mjs';
 
 // Two entries, one build. `index` is the server-safe one; `browser` is the one that reaches the
 // editor lane. See `src/index.ts` for why that split exists.
+const entry = {
+  index: 'src/index.ts',
+  browser: 'src/browser.ts',
+};
+
 export default defineConfig({
-  entry: {
-    index: 'src/index.ts',
-    browser: 'src/browser.ts',
-  },
+  entry,
   // The same reason `packages/react` sets it: tsup's default platform is `node`, which resolves
   // bundled dependencies through their `node` export condition, and fflate's node build runs
   // `createRequire("/")` at module top level — which throws on a page. fflate's browser build is
@@ -15,8 +17,9 @@ export default defineConfig({
   // makes the ROOT entry importable from all three rather than only from Node.
   platform: 'browser',
   format: ['cjs', 'esm'],
-  // See scripts/declaration-options.mjs.
-  dts: { resolve: true, compilerOptions: declarationCompilerOptions(import.meta.url) },
+  // TypeScript 7 emits the declarations. See scripts/build-declarations.mjs.
+  dts: false,
+  onSuccess: () => buildDeclarations(import.meta.url, { entry }),
   tsconfig: 'tsconfig.json',
   // Off on purpose. With splitting, "what is in the server bundle" becomes a question about a
   // graph of shared chunks; off, `scripts/pack-smoke.mjs` can answer it by reading one entry file.

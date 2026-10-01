@@ -40,7 +40,8 @@
   },
   "devDependencies": {
     "@docx-editor.dev/core": "workspace:*",
-    "fflate": "^0.8.2"
+    "fflate": "^0.8.2",
+    "typescript7": "npm:typescript@^7.0.2"
   },
   "keywords": [
     "docx",

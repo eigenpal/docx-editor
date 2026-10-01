@@ -5,10 +5,10 @@
 ```ts
 
 // @public
-export const ACCEPTED_PARAGRAPH_PROPERTIES: readonly ["pStyle", "jc", "spacing", "ind", "tabs", "numPr", "keepNext", "keepLines", "widowControl", "pageBreakBefore", "contextualSpacing", "shd", "bidi"];
+export const ACCEPTED_PARAGRAPH_PROPERTIES: readonly ['pStyle', 'jc', 'spacing', 'ind', 'tabs', 'numPr', 'keepNext', 'keepLines', 'widowControl', 'pageBreakBefore', 'contextualSpacing', 'shd', 'bidi'];
 
 // @public
-export const ACCEPTED_RUN_PROPERTIES: readonly ["rFonts", "sz", "szCs", "color", "b", "bCs", "i", "iCs", "u", "strike", "dstrike", "highlight", "vertAlign", "position", "caps", "smallCaps", "spacing", "w", "kern"];
+export const ACCEPTED_RUN_PROPERTIES: readonly ['rFonts', 'sz', 'szCs', 'color', 'b', 'bCs', 'i', 'iCs', 'u', 'strike', 'dstrike', 'highlight', 'vertAlign', 'position', 'caps', 'smallCaps', 'spacing', 'w', 'kern'];
 
 // @public
 export function addComment(store: TreeDocumentStore, request: AddCommentRequest): AddCommentResult;
@@ -524,62 +524,62 @@ export const COMPARATORS: {
     readonly anchor: {
         readonly ephemera: readonly [];
         readonly id: "dev.docx-editor.core.comparator.anchor";
-        readonly mode: "exact";
-        readonly note: "internal anchor identity/affinity compares exactly";
+        readonly mode: 'exact';
+        readonly note: 'internal anchor identity/affinity compares exactly';
     };
     readonly authoredState: {
         readonly ephemera: readonly ["revision", "provenance", "producedAt", "commitId"];
         readonly id: "dev.docx-editor.core.comparator.authored-state";
-        readonly mode: "canonical-exact";
-        readonly note: "canonical normalized authored records; ephemera excluded";
+        readonly mode: 'canonical-exact';
+        readonly note: 'canonical normalized authored records; ephemera excluded';
     };
     readonly benchmarkEvidence: {
         readonly ephemera: readonly [];
         readonly id: "dev.docx-editor.core.comparator.benchmark-evidence";
-        readonly mode: "sync-optimization-only";
-        readonly note: "diagnostic evidence, not an equivalence basis";
+        readonly mode: 'sync-optimization-only';
+        readonly note: 'diagnostic evidence, not an equivalence basis';
     };
     readonly hitTest: {
         readonly ephemera: readonly [];
         readonly id: "dev.docx-editor.core.comparator.hit-test";
-        readonly mode: "exact";
-        readonly note: "resolved hit target and cluster affinity compare exactly";
+        readonly mode: 'exact';
+        readonly note: 'resolved hit target and cluster affinity compare exactly';
     };
     readonly paginationFingerprint: {
         readonly ephemera: readonly [];
         readonly id: "dev.docx-editor.core.comparator.pagination-fingerprint";
-        readonly mode: "exact";
-        readonly note: "page/column boundaries, break causes, fixed-point geometry compare exactly";
+        readonly mode: 'exact';
+        readonly note: 'page/column boundaries, break causes, fixed-point geometry compare exactly';
     };
     readonly pdfSemantics: {
         readonly ephemera: readonly ["objectNumber", "producer", "creationDate", "modDate", "subsetTag"];
         readonly id: "dev.docx-editor.core.comparator.pdf-semantics";
-        readonly mode: "canonical-exact";
-        readonly note: "canonical semantic PDF objects; container ephemera excluded";
+        readonly mode: 'canonical-exact';
+        readonly note: 'canonical semantic PDF objects; container ephemera excluded';
     };
     readonly rasterCheckpoint: {
         readonly ephemera: readonly [];
         readonly id: "dev.docx-editor.core.comparator.raster-checkpoint";
-        readonly mode: "tolerance";
-        readonly note: "documented unavoidable raster comparison; explicit tolerance only";
+        readonly mode: 'tolerance';
+        readonly note: 'documented unavoidable raster comparison; explicit tolerance only';
     };
     readonly semanticTree: {
         readonly ephemera: readonly [];
         readonly id: "dev.docx-editor.core.comparator.semantic-tree";
-        readonly mode: "exact";
-        readonly note: "reading order, roles, headings, alt text compare exactly";
+        readonly mode: 'exact';
+        readonly note: 'reading order, roles, headings, alt text compare exactly';
     };
     readonly shapedRun: {
         readonly ephemera: readonly [];
         readonly id: "dev.docx-editor.core.comparator.shaped-run";
-        readonly mode: "exact";
-        readonly note: "glyph ids, clusters, and fixed-point advances compare exactly";
+        readonly mode: 'exact';
+        readonly note: 'glyph ids, clusters, and fixed-point advances compare exactly';
     };
     readonly yjsStateVector: {
         readonly ephemera: readonly [];
         readonly id: "dev.docx-editor.core.comparator.yjs-state-vector";
-        readonly mode: "sync-optimization-only";
-        readonly note: "exchange optimization only; never proves update or delete-set coverage";
+        readonly mode: 'sync-optimization-only';
+        readonly note: 'exchange optimization only; never proves update or delete-set coverage';
     };
 };
 
@@ -1809,7 +1809,7 @@ export interface HyperlinkTarget {
 export function hyperlinkTargetOf(link: OoxmlNode, resolve: RelationshipTargetResolver): HyperlinkTarget;
 
 // @public
-export const ID_KINDS: readonly ["extension", "capability", "command", "query", "schema", "dependencyKey", "runtimePort", "result", "origin"];
+export const ID_KINDS: readonly ['extension', 'capability', 'command', 'query', 'schema', 'dependencyKey', 'runtimePort', 'result', 'origin'];
 
 // @public
 export interface IdentityPort {
@@ -1946,7 +1946,7 @@ export type IndexResult = {
 export function indexStyles(part: OoxmlPart | undefined): Map<string, StyleIndexEntry>;
 
 // @public
-export const INERT_EXECUTABLE_KINDS: readonly ["field-dde", "field-include", "macro", "activex", "ole", "embedded-object", "executable-relationship"];
+export const INERT_EXECUTABLE_KINDS: readonly ['field-dde', 'field-include', 'macro', 'activex', 'ole', 'embedded-object', 'executable-relationship'];
 
 // @public
 export type InertExecutableKind = (typeof INERT_EXECUTABLE_KINDS)[number];
@@ -4228,7 +4228,7 @@ export type SupportedImageMime = 'image/png' | 'image/jpeg' | 'image/gif' | 'ima
 export function sweepCustomNodePayloads(pkg: OoxmlPackage, storyPartName: string, namespaces: readonly string[]): CustomNodeSweepResult;
 
 // @public
-export const TABLE_BORDER_STYLES: readonly ["single", "dashed", "dotted", "double", "triple", "thick"];
+export const TABLE_BORDER_STYLES: readonly ['single', 'dashed', 'dotted', 'double', 'triple', 'thick'];
 
 // @public
 export type TableBorderStyle = (typeof TABLE_BORDER_STYLES)[number];

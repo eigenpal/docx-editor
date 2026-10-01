@@ -192,10 +192,10 @@ export { composeFontOrigins }
 
 // @public (undocumented)
 export const CONTENT_CONTROL_SLOTS: {
-    readonly formFill: "contentControl.formFill";
-    readonly inspector: "contentControl.inspector";
-    readonly remove: "contentControl.remove";
-    readonly showAll: "contentControl.showAll";
+    readonly formFill: 'contentControl.formFill';
+    readonly inspector: 'contentControl.inspector';
+    readonly remove: 'contentControl.remove';
+    readonly showAll: 'contentControl.showAll';
 };
 
 // @public
@@ -2681,7 +2681,7 @@ export const DocxEditorHorizontalRuler: vue.DefineComponent<vue.ExtractPropTypes
     };
     unit: {
         default: undefined;
-        type: PropType<"inch" | "cm">;
+        type: PropType<'inch' | 'cm'>;
     };
 }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     className: {
@@ -2694,12 +2694,12 @@ export const DocxEditorHorizontalRuler: vue.DefineComponent<vue.ExtractPropTypes
     };
     unit: {
         default: undefined;
-        type: PropType<"inch" | "cm">;
+        type: PropType<'inch' | 'cm'>;
     };
 }>> & Readonly<{}>, {
     className: string;
     style: CSSProperties;
-    unit: "inch" | "cm";
+    unit: "cm" | "inch";
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
@@ -3239,7 +3239,7 @@ export const DocxEditorNotesContextMenu: vue.DefineComponent<vue.ExtractPropType
     };
     noteKind: {
         required: true;
-        type: PropType<"footnote" | "endnote">;
+        type: PropType<'footnote' | 'endnote'>;
     };
     onClose: {
         readonly required: true;
@@ -3287,7 +3287,7 @@ export const DocxEditorNotesContextMenu: vue.DefineComponent<vue.ExtractPropType
     };
     noteKind: {
         required: true;
-        type: PropType<"footnote" | "endnote">;
+        type: PropType<'footnote' | 'endnote'>;
     };
     onClose: {
         readonly required: true;
@@ -3478,9 +3478,9 @@ export const DocxEditorPageSetupDialog: {
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
     className: string;
     preset: boolean;
-}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Cancel" | "Apply" | "Title" | "Header" | "Footer" | "Body" | "Error", vue.DefineComponent<DialogPartProps>> & {
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Apply" | "Body" | "Cancel" | "Error" | "Footer" | "Header" | "Title", vue.DefineComponent<DialogPartProps>> & {
     Field: vue.DefineComponent<DialogPartProps & {
-        name: "pageSize" | "orientation" | "scope" | "marginBottom" | "marginLeft" | "marginRight" | "marginTop";
+        name: "marginBottom" | "marginLeft" | "marginRight" | "marginTop" | "orientation" | "pageSize" | "scope";
     }>;
 };
 
@@ -3571,9 +3571,9 @@ export const DocxEditorParagraphDialog: {
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
     className: string;
     preset: boolean;
-}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Cancel" | "Apply" | "Title" | "Header" | "Footer" | "Body" | "Error", vue.DefineComponent<DialogPartProps>> & {
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Apply" | "Body" | "Cancel" | "Error" | "Footer" | "Header" | "Title", vue.DefineComponent<DialogPartProps>> & {
     Field: vue.DefineComponent<DialogPartProps & {
-        name: "alignment" | "direction" | "special" | "spaceBefore" | "spaceAfter" | "contextualSpacing" | "keepNext" | "keepLines" | "widowControl" | "pageBreakBefore" | "tabStops" | "indentLeft" | "indentRight" | "specialBy" | "lineRule" | "lineValue";
+        name: "alignment" | "contextualSpacing" | "direction" | "indentLeft" | "indentRight" | "keepLines" | "keepNext" | "lineRule" | "lineValue" | "pageBreakBefore" | "spaceAfter" | "spaceBefore" | "special" | "specialBy" | "tabStops" | "widowControl";
     }>;
 };
 
@@ -3759,7 +3759,7 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     };
     fonts: {
         default: undefined;
-        type: PropType<DocxEditorRootProps["fonts"]>;
+        type: PropType<DocxEditorRootProps['fonts']>;
     };
     imageDecodePort: {
         default: undefined;
@@ -3771,7 +3771,7 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     };
     mode: {
         default: undefined;
-        type: PropType<"edit" | "view" | "suggesting">;
+        type: PropType<'edit' | 'view' | 'suggesting'>;
     };
     modules: {
         default: undefined;
@@ -3780,11 +3780,11 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     popups: PropType<DocxEditorPopups>;
     tableInteractionLabel: {
         default: undefined;
-        type: PropType<DocxEditorRootProps["tableInteractionLabel"]>;
+        type: PropType<DocxEditorRootProps['tableInteractionLabel']>;
     };
     translate: {
         default: undefined;
-        type: PropType<DocxEditorRootProps["translate"]>;
+        type: PropType<DocxEditorRootProps['translate']>;
     };
     zoom: {
         default: undefined;
@@ -3792,7 +3792,7 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     };
     zoomMode: {
         default: undefined;
-        type: PropType<ZoomMode | "auto">;
+        type: PropType<ZoomMode | 'auto'>;
     };
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
@@ -3811,7 +3811,7 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     };
     fonts: {
         default: undefined;
-        type: PropType<DocxEditorRootProps["fonts"]>;
+        type: PropType<DocxEditorRootProps['fonts']>;
     };
     imageDecodePort: {
         default: undefined;
@@ -3823,7 +3823,7 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     };
     mode: {
         default: undefined;
-        type: PropType<"edit" | "view" | "suggesting">;
+        type: PropType<'edit' | 'view' | 'suggesting'>;
     };
     modules: {
         default: undefined;
@@ -3832,11 +3832,11 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     popups: PropType<DocxEditorPopups>;
     tableInteractionLabel: {
         default: undefined;
-        type: PropType<DocxEditorRootProps["tableInteractionLabel"]>;
+        type: PropType<DocxEditorRootProps['tableInteractionLabel']>;
     };
     translate: {
         default: undefined;
-        type: PropType<DocxEditorRootProps["translate"]>;
+        type: PropType<DocxEditorRootProps['translate']>;
     };
     zoom: {
         default: undefined;
@@ -3844,7 +3844,7 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     };
     zoomMode: {
         default: undefined;
-        type: PropType<ZoomMode | "auto">;
+        type: PropType<ZoomMode | 'auto'>;
     };
 }>> & Readonly<{
     onChange?: ((_change: DocumentChange) => any) | undefined;
@@ -3856,9 +3856,9 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     fonts: _docx_editor_dev_core.FontConfiguration | _docx_editor_dev_core.FontConfigurationFragment | _docx_editor_dev_core.FontResolver | undefined;
     imageDecodePort: ImageDecodePort;
     locale: string;
-    mode: "suggesting" | "edit" | "view";
+    mode: "edit" | "suggesting" | "view";
     modules: readonly EditorModule[];
-    tableInteractionLabel: ((key: "table.insertRowBelow" | "table.insertColumnRight") => string) | undefined;
+    tableInteractionLabel: ((key: 'table.insertRowBelow' | 'table.insertColumnRight') => string) | undefined;
     translate: ((key: string, params?: Record<string, string | number>) => string) | undefined;
     zoom: number;
     zoomMode: "auto" | ZoomMode;
@@ -3976,7 +3976,7 @@ export const DocxEditorTextFormFieldDialog: {
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
     preset: boolean;
     session: TextFormFieldDialogSession | null;
-}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Cancel" | "Apply" | "Title" | "Header" | "Footer" | "Body" | "Error", vue.DefineComponent<DialogPartProps>> & {
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Apply" | "Body" | "Cancel" | "Error" | "Footer" | "Header" | "Title", vue.DefineComponent<DialogPartProps>> & {
     Field: vue.DefineComponent<DialogPartProps & {
         name: keyof TextFormFieldDialogFields;
     }>;
@@ -4123,7 +4123,7 @@ export const DocxEditorVerticalRuler: vue.DefineComponent<vue.ExtractPropTypes<{
     };
     unit: {
         default: undefined;
-        type: PropType<"inch" | "cm">;
+        type: PropType<'inch' | 'cm'>;
     };
 }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     className: {
@@ -4136,12 +4136,12 @@ export const DocxEditorVerticalRuler: vue.DefineComponent<vue.ExtractPropTypes<{
     };
     unit: {
         default: undefined;
-        type: PropType<"inch" | "cm">;
+        type: PropType<'inch' | 'cm'>;
     };
 }>> & Readonly<{}>, {
     className: string;
     style: CSSProperties;
-    unit: "inch" | "cm";
+    unit: "cm" | "inch";
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
@@ -4388,7 +4388,7 @@ export const HorizontalRuler: vue.DefineComponent<vue.ExtractPropTypes<{
     };
     unit: {
         default: string;
-        type: PropType<"inch" | "cm">;
+        type: PropType<'inch' | 'cm'>;
     };
     zoom: {
         default: number;
@@ -4453,7 +4453,7 @@ export const HorizontalRuler: vue.DefineComponent<vue.ExtractPropTypes<{
     };
     unit: {
         default: string;
-        type: PropType<"inch" | "cm">;
+        type: PropType<'inch' | 'cm'>;
     };
     zoom: {
         default: number;
@@ -4474,7 +4474,7 @@ export const HorizontalRuler: vue.DefineComponent<vue.ExtractPropTypes<{
     showIndentHandles: boolean;
     style: CSSProperties;
     tabMarks: RulerTabStop[] | null;
-    unit: "inch" | "cm";
+    unit: "cm" | "inch";
     zoom: number;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
@@ -5394,7 +5394,7 @@ export const PaginatedDocxEditorShell: vue.DefineComponent<vue.ExtractPropTypes<
     };
     colorMode: {
         default: undefined;
-        type: PropType<"light" | "dark">;
+        type: PropType<'light' | 'dark'>;
     };
     documentFontFamily: {
         default: undefined;
@@ -5441,7 +5441,7 @@ export const PaginatedDocxEditorShell: vue.DefineComponent<vue.ExtractPropTypes<
     };
     colorMode: {
         default: undefined;
-        type: PropType<"light" | "dark">;
+        type: PropType<'light' | 'dark'>;
     };
     documentFontFamily: {
         default: undefined;
@@ -6044,7 +6044,7 @@ export const ToolbarImageProperties: {
     className: string;
     hidden: boolean;
 }, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
-    docxSlot: "image.properties";
+    docxSlot: 'image.properties';
 };
 
 // @public (undocumented)
@@ -6712,7 +6712,7 @@ export const VerticalRuler: vue.DefineComponent<vue.ExtractPropTypes<{
     };
     unit: {
         default: string;
-        type: PropType<"inch" | "cm">;
+        type: PropType<'inch' | 'cm'>;
     };
     zoom: {
         default: number;
@@ -6749,7 +6749,7 @@ export const VerticalRuler: vue.DefineComponent<vue.ExtractPropTypes<{
     };
     unit: {
         default: string;
-        type: PropType<"inch" | "cm">;
+        type: PropType<'inch' | 'cm'>;
     };
     zoom: {
         default: number;
@@ -6763,7 +6763,7 @@ export const VerticalRuler: vue.DefineComponent<vue.ExtractPropTypes<{
     onTopMarginChange: (marginTwips: number) => void;
     pageSetup: _docx_editor_dev_core.PageSetup | null;
     style: CSSProperties;
-    unit: "inch" | "cm";
+    unit: "cm" | "inch";
     zoom: number;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 

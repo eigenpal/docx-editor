@@ -1,14 +1,17 @@
 import { defineConfig } from 'tsup';
-import { declarationCompilerOptions } from '../../scripts/declaration-options.mjs';
+import { buildDeclarations } from '../../scripts/build-declarations.mjs';
+
+const entry = {
+  index: 'src/index.ts',
+};
 
 export default defineConfig({
-  entry: {
-    index: 'src/index.ts',
-  },
+  entry,
   platform: 'browser',
   format: ['cjs', 'esm'],
-  // See scripts/declaration-options.mjs.
-  dts: { compilerOptions: declarationCompilerOptions(import.meta.url) },
+  // TypeScript 7 emits the declarations. See scripts/build-declarations.mjs.
+  dts: false,
+  onSuccess: () => buildDeclarations(import.meta.url, { entry }),
   splitting: false,
   sourcemap: false,
   clean: true,

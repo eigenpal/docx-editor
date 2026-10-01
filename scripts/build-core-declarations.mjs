@@ -5,22 +5,39 @@
 // hands TypeScript sources to rollup-plugin-dts, which keeps the whole program alive while
 // it emits and re-parses every module through rollup. For core that peaked at 4.7 GiB of
 // heap, above Node's default limit, so every caller had to know to raise the heap, and the
-// one that did not (the documentation sync) failed the 2.22.0 release. Here TypeScript
-// emits the declarations once (about 1.1 GiB), and rollup-plugin-dts then bundles `.d.ts`
-// files only, which needs no TypeScript program at all.
+// one that did not (the documentation sync) failed the 2.22.0 release. Here TypeScript 7
+// emits the declarations once, in its own process, and rollup-plugin-dts then bundles
+// `.d.ts` files only. scripts/build-declarations.mjs does the same for the tsup packages.
 //
 // The subpath list is not written down again here. It comes from the two tables
 // subpath-tables.test.ts already holds in step with the tsup entries: `exports` in
 // package.json says which declaration file each subpath ships, and `paths` in tsconfig.json
 // says which source file that subpath compiles from.
 
-import { existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { rollup } from 'rollup';
 import dts from 'rollup-plugin-dts';
 import ts from 'typescript';
+import {
+  absolutePaths,
+  declarationCandidates,
+  emitOptions,
+  packageName,
+  runTypeScript7,
+} from './lib/declaration-files.mjs';
+
+export { declarationCandidates, packageName };
 
 const core = join(dirname(fileURLToPath(import.meta.url)), '..', 'packages', 'core');
 const src = join(core, 'src');
@@ -51,30 +68,21 @@ export function publishedEntries(manifest, paths) {
 }
 
 /** Emit declarations for everything the entries reach, into `outDir`. */
-function emitDeclarations(entries, outDir, parsedOptions) {
-  const options = {
-    ...parsedOptions,
-    noEmit: false,
-    declaration: true,
-    emitDeclarationOnly: true,
-    declarationMap: false,
-    // As tsup did: a type error anywhere in the program fails the build, not only an
-    // error the declaration emitter itself reports.
-    noEmitOnError: true,
-    rootDir: src,
-    outDir,
-  };
-  // Rooted at the entries, not at tsconfig's `include`: test files and anything no subpath
-  // reaches stay out of the program.
-  const program = ts.createProgram(
-    entries.map((entry) => entry.source),
-    options
+function emitDeclarations(entries, outDir, paths) {
+  const tsconfig = join(outDir, 'tsconfig.json');
+  writeFileSync(
+    tsconfig,
+    JSON.stringify({
+      extends: join(core, 'tsconfig.json'),
+      // Rooted at the entries, not at tsconfig's `include`: test files and anything no
+      // subpath reaches stay out of the program.
+      files: entries.map((entry) => entry.source),
+      // Ambient declarations are not reached by any import, so they come in by pattern.
+      include: [join(src, '**', '*.d.ts')],
+      compilerOptions: { paths: absolutePaths(paths, core), ...emitOptions(core, src, outDir) },
+    })
   );
-  const { diagnostics, emitSkipped } = program.emit(undefined, undefined, undefined, true);
-  const errors = diagnostics.filter((d) => d.category === ts.DiagnosticCategory.Error);
-  if (emitSkipped || errors.length > 0) {
-    throw new Error(`Declaration emit failed:\n${ts.formatDiagnostics(errors, formatHost)}`);
-  }
+  runTypeScript7(core, tsconfig);
 }
 
 const formatHost = {
@@ -82,12 +90,6 @@ const formatHost = {
   getCurrentDirectory: () => core,
   getNewLine: () => '\n',
 };
-
-/** `@scope/name/sub` → `@scope/name`, `name/sub` → `name`. */
-export function packageName(specifier) {
-  const parts = specifier.split('/');
-  return specifier.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
-}
 
 /** Remove the declarations of an earlier run: chunk names carry hashes, so none is overwritten. */
 function removeDeclarations(dir) {
@@ -97,17 +99,6 @@ function removeDeclarations(dir) {
     if (entry.isDirectory()) removeDeclarations(path);
     else if (entry.name.endsWith('.d.ts')) rmSync(path);
   }
-}
-
-/**
- * The emitted declaration files an import of `target` can mean, most specific first. An
- * extension keeps its module kind: `.mts` and `.mjs` map to `.d.mts`, `.cts` and `.cjs`
- * to `.d.cts`. A path without one can name a file or a directory index.
- */
-export function declarationCandidates(target) {
-  const match = /(?:\.d)?\.(m|c)?(?:ts|tsx|js|jsx)$/.exec(target);
-  if (!match) return [`${target}.d.ts`, join(target, 'index.d.ts')];
-  return [`${target.slice(0, match.index)}.d.${match[1] ?? ''}ts`];
 }
 
 /** The emitted declaration file for a source file. */
@@ -198,7 +189,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
   );
   const outDir = mkdtempSync(join(tmpdir(), 'docx-core-declarations-'));
   try {
-    emitDeclarations(entries, outDir, parsed.options);
+    emitDeclarations(entries, outDir, parsed.options.paths ?? {});
     await bundleDeclarations(entries, outDir);
     const missing = entries.filter((entry) => !existsSync(join(dist, `${entry.name}.d.ts`)));
     if (missing.length > 0)

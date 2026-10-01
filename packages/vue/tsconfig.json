@@ -8,6 +8,7 @@
     "target": "ES2022",
     "useDefineForClassFields": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["bun"],
     "module": "ESNext",
     "jsx": "preserve",
     "jsxImportSource": "vue",
@@ -23,7 +24,6 @@
     "noFallthroughCasesInSwitch": true,
     "declaration": true,
     "declarationMap": true,
-    "baseUrl": ".",
     // Every published subpath, mapped to source and kept in step with `packages/core/tsconfig.json`.
     // Bun resolves test imports through these, and the export map points at `dist`, so a stale or
     // missing entry does not fall back — it fails to resolve on a tree that has never been built.

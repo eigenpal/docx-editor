@@ -8,6 +8,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL, URL as NodeURL } from 'node:url';
+import type { FontSource } from '@docx-editor.dev/core';
 import { createFontSource, defineFontResolver } from '@docx-editor.dev/core/editor';
 import type { FontRequest } from '@docx-editor.dev/core/export';
 import { FONT_ASSET_ROOT } from '@docx-editor.dev/fonts';
@@ -362,7 +363,12 @@ export function packagedFontResolvers(locateCjkFace: CjkFaceLocator = importCjkF
         throw error;
       }
     ));
-  const readFaces = (faces: readonly PackagedFace[], signal: AbortSignal | undefined) =>
+  // Annotated with the public `FontSource`, so the declarations of the resolvers below
+  // name it through `@docx-editor.dev/core` rather than through a private build chunk.
+  const readFaces = (
+    faces: readonly PackagedFace[],
+    signal: AbortSignal | undefined
+  ): Promise<FontSource[]> =>
     Promise.all(
       faces.map(async ([family, file, weight, style]) => {
         const bytes = new Uint8Array(await readFontFile(file, signal));

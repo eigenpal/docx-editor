@@ -123,7 +123,7 @@
     "license-check-and-add": "^4.0.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "typescript": "^5.3.3",
+    "typescript7": "npm:typescript@^7.0.2",
     "y-webrtc": "^10.3.0",
     "yjs": "^13.6.32",
     "zod": "^4.4.3"

@@ -24,9 +24,16 @@ const APPLE_PLATFORM = /mac|iphone|ipad|ipod/i;
  * @public
  */
 export function isApplePlatform(): boolean {
-  const agent = globalThis.navigator as
-    | (Navigator & { readonly userAgentData?: { readonly platform?: string } })
-    | undefined;
+  // The package has no DOM lib, because it also runs on servers. These are the two fields
+  // it reads.
+  const agent = (
+    globalThis as {
+      readonly navigator?: {
+        readonly platform?: string;
+        readonly userAgentData?: { readonly platform?: string };
+      };
+    }
+  ).navigator;
   if (!agent) return false;
   const declared = agent.userAgentData?.platform;
   if (typeof declared === 'string' && declared.length > 0) return APPLE_PLATFORM.test(declared);

@@ -8,6 +8,7 @@
     "target": "ES2022",
     "useDefineForClassFields": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["bun"],
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
@@ -22,7 +23,6 @@
     "noFallthroughCasesInSwitch": true,
     "declaration": true,
     "declarationMap": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
       // Every published subpath, mapped to source. The export map points at dist, so a subpath missing here resolves to built .d.ts while its siblings resolve to src, and the same type arrives under two identities.

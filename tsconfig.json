@@ -5,6 +5,7 @@
     "target": "ES2022",
     "useDefineForClassFields": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["bun", "vite/client"],
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
@@ -19,7 +20,6 @@
     "noFallthroughCasesInSwitch": true,
     "declaration": true,
     "declarationMap": true,
-    "baseUrl": ".",
     // Core resolves to SOURCE here, the way `react` above already does. Without it this project
     // held two copies of the engine: `dist` for anything importing the package name, and `src`
     // for the harnesses that reach in by relative path. Identical classes from two copies are

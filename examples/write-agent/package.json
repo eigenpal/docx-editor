@@ -7,7 +7,7 @@
     "dev": "next dev --webpack --port 3004",
     "prebuild": "bun run build:workspace-packages",
     "build": "next build --webpack",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node node_modules/typescript7/bin/tsc --noEmit",
     "test": "bun test",
     "start": "next start --port 3004"
   },
@@ -30,6 +30,7 @@
     "@types/node": "^26.1.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "typescript7": "npm:typescript@^7.0.2"
   }
 }

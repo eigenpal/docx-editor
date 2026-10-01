@@ -1,0 +1,223 @@
+// Emits a package's published declaration files: TypeScript 7 writes one `.d.ts` per source
+// file, and rollup-plugin-dts bundles them into one file per entry, with the declarations
+// that entries share split into chunks.
+//
+// tsup's `dts` option cannot do the first step. It compiles through the TypeScript library
+// API, which TypeScript 7 does not have, and it sets `baseUrl`, which TypeScript 7 removed.
+// So each tsup config sets `dts: false` and calls `buildDeclarations` from `onSuccess`.
+//
+// The output keeps tsup's layout: `.d.ts` beside the JavaScript, plus `.d.cts` for an ESM
+// package or `.d.mts` for a CommonJS one, each with its own copy of the chunks.
+
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { rollup } from 'rollup';
+import dts from 'rollup-plugin-dts';
+import { declarationCompilerOptions } from './declaration-options.mjs';
+import {
+  absolutePaths,
+  declarationCandidates,
+  emitOptions,
+  packageName,
+  runTypeScript7,
+} from './lib/declaration-files.mjs';
+
+/** The declaration extensions tsup wrote for this package, `.d.ts` first. */
+export function declarationExtensions(manifest) {
+  return manifest.type === 'module' ? ['.d.ts', '.d.cts'] : ['.d.ts', '.d.mts'];
+}
+
+/** Normalize tsup's `entry` (array or object) to `{ name: source }`. */
+export function entryMap(entry) {
+  if (!Array.isArray(entry)) return entry;
+  return Object.fromEntries(
+    entry.map((source) => [source.replace(/^src\//, '').replace(/\.[cm]?tsx?$/, ''), source])
+  );
+}
+
+function removeDeclarations(dir, extensions) {
+  if (!existsSync(dir)) return;
+  for (const item of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, item.name);
+    if (item.isDirectory()) removeDeclarations(path, extensions);
+    else if (extensions.some((extension) => item.name.endsWith(extension))) rmSync(path);
+  }
+}
+
+const JSON_MODULE = '.json.d.ts';
+const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
+
+/**
+ * The type TypeScript gives a JSON module: literals widen to their primitive, and an array
+ * is an array of its element union.
+ */
+export function jsonType(value, indent = '') {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) {
+    const elements = [...new Set(value.map((item) => jsonType(item, indent)))];
+    if (elements.length === 0) return 'never[]';
+    return elements.length === 1 ? `${elements[0]}[]` : `(${elements.join(' | ')})[]`;
+  }
+  if (typeof value === 'object') {
+    const inner = `${indent}    `;
+    const members = Object.entries(value).map(([key, item]) => {
+      const name = IDENTIFIER.test(key) ? key : JSON.stringify(key);
+      return `${inner}${name}: ${jsonType(item, inner)};`;
+    });
+    return members.length === 0 ? '{}' : `{\n${members.join('\n')}\n${indent}}`;
+  }
+  return typeof value;
+}
+
+/**
+ * The built declaration file a package publishes for `specifier`: its `types` export
+ * condition, or for the root, its `types` field.
+ */
+export function publishedDeclaration(specifier, fromDir) {
+  const name = packageName(specifier);
+  const manifestPath = createRequire(join(fromDir, 'package.json')).resolve(`${name}/package.json`);
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  const subpath = specifier === name ? '.' : `.${specifier.slice(name.length)}`;
+  const target = manifest.exports?.[subpath];
+  const types =
+    typeof target === 'object' && target !== null
+      ? (target.types ?? target.import?.types ?? target.default?.types)
+      : subpath === '.'
+        ? (manifest.types ?? manifest.typings)
+        : undefined;
+  if (typeof types !== 'string')
+    throw new Error(`${specifier} publishes no declaration file to inline.`);
+  const file = resolve(dirname(manifestPath), types);
+  if (!existsSync(file))
+    throw new Error(`${specifier} declares ${types}, which is not built. Build ${name} first.`);
+  return file;
+}
+
+/**
+ * Resolve imports inside the emitted declarations. Relative imports still name `.ts`
+ * sources, so they map to the emitted files, and a JSON import becomes a declaration of
+ * its type. A bare specifier stays external when it is a dependency or peer dependency;
+ * any other package's types are inlined from its built declarations.
+ */
+function declarationResolver(packageDir, outDir, manifest) {
+  const declared = new Set([
+    ...Object.keys(manifest.dependencies ?? {}),
+    ...Object.keys(manifest.peerDependencies ?? {}),
+  ]);
+  // Emitted files sit under `outDir/emit`, mirroring the package, so a JSON import
+  // resolves against the same relative path in the package itself.
+  const emitRoot = join(outDir, 'emit');
+  return {
+    name: 'package-declaration-resolver',
+    resolveId(source, importer) {
+      if (source.startsWith('.') && source.endsWith('.json') && importer) {
+        const json = resolve(packageDir, relative(emitRoot, dirname(importer)), source);
+        if (!existsSync(json)) throw new Error(`Cannot resolve ${source} from ${importer}.`);
+        return `${json.slice(0, -'.json'.length)}${JSON_MODULE}`;
+      }
+      if (source.startsWith('.') && importer) {
+        const target = resolve(dirname(importer), source);
+        for (const candidate of declarationCandidates(target)) {
+          if (existsSync(candidate)) return candidate;
+        }
+        throw new Error(`Cannot resolve ${source} from ${relative(outDir, importer)}.`);
+      }
+      if (!isAbsolute(source)) {
+        const name = packageName(source);
+        if (name === manifest.name)
+          throw new Error(`The declarations import their own package through ${source}.`);
+        if (declared.has(name)) return { id: source, external: true };
+        // Consumers do not install anything else, so its types are inlined, as tsup did.
+        return publishedDeclaration(source, packageDir);
+      }
+      return null;
+    },
+    load(id) {
+      if (!id.endsWith(JSON_MODULE)) return null;
+      const json = `${id.slice(0, -JSON_MODULE.length)}.json`;
+      const type = jsonType(JSON.parse(readFileSync(json, 'utf8')));
+      // Bundled declarations keep this name (`en.json` → `enJson`, `pt-BR.json` → `ptBRJson`),
+      // so the API reports read `typeof enJson`, as the sources do.
+      const name = `${basename(json, '.json').replace(/[^A-Za-z0-9]+(.)?/g, (_, c = '') => c.toUpperCase())}Json`;
+      return `declare const ${name}: ${type};\nexport default ${name};\n`;
+    },
+  };
+}
+
+/**
+ * @param {string | URL} configUrl the calling tsup config's `import.meta.url`
+ * @param {{
+ *   entry: string[] | Record<string, string>,
+ *   banner?: string,
+ *   compilerOptions?: Record<string, unknown>,
+ *   clean?: boolean,
+ * }} options
+ */
+export async function buildDeclarations(configUrl, options) {
+  const packageDir = dirname(fileURLToPath(configUrl));
+  const manifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'));
+  const entries = entryMap(options.entry);
+  const extensions = declarationExtensions(manifest);
+  const dist = join(packageDir, 'dist');
+  const outDir = mkdtempSync(join(tmpdir(), 'docx-declarations-'));
+  try {
+    // Sibling packages resolve to their built declarations, as in every declaration build.
+    const { paths, ...extra } = declarationCompilerOptions(configUrl, options.compilerOptions);
+    const tsconfig = join(outDir, 'tsconfig.json');
+    writeFileSync(
+      tsconfig,
+      JSON.stringify({
+        extends: join(packageDir, 'tsconfig.json'),
+        // Rooted at the entries: tests and sources no entry reaches stay out. Ambient
+        // declarations (`declare module 'fontkit'`) are not reached by any import, so they
+        // come in by pattern.
+        files: Object.values(entries).map((source) => resolve(packageDir, source)),
+        include: [join(packageDir, 'src', '**', '*.d.ts')],
+        compilerOptions: {
+          ...extra,
+          paths: absolutePaths(paths, packageDir),
+          ...emitOptions(packageDir, packageDir, join(outDir, 'emit')),
+        },
+      })
+    );
+    runTypeScript7(packageDir, tsconfig);
+
+    const emitted = (source) =>
+      join(outDir, 'emit', relative(packageDir, resolve(packageDir, source))).replace(
+        /\.([cm]?)tsx?$/,
+        '.d.$1ts'
+      );
+    const bundle = await rollup({
+      input: Object.fromEntries(
+        Object.entries(entries).map(([name, source]) => [name, emitted(source)])
+      ),
+      plugins: [declarationResolver(packageDir, outDir, manifest), dts()],
+    });
+    try {
+      // tsup's `clean` already emptied `dist`; a config that keeps it asks for this.
+      if (options.clean) removeDeclarations(dist, extensions);
+      for (const extension of extensions) {
+        await bundle.write({
+          dir: dist,
+          format: 'es',
+          banner: options.banner,
+          entryFileNames: `[name]${extension}`,
+          // A chunk takes its name from its first module, `types.d.ts`, so drop the `.d`.
+          chunkFileNames: (chunk) => `${chunk.name.replace(/\.d$/, '')}-[hash]${extension}`,
+        });
+      }
+    } finally {
+      await bundle.close();
+    }
+    const missing = Object.keys(entries).filter(
+      (name) => !extensions.every((extension) => existsSync(join(dist, `${name}${extension}`)))
+    );
+    if (missing.length > 0)
+      throw new Error(`No declarations written for ${missing.join(', ')} in ${manifest.name}.`);
+  } finally {
+    rmSync(outDir, { recursive: true, force: true });
+  }
+}

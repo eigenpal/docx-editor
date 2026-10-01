@@ -37,7 +37,8 @@
   "devDependencies": {
     "@docx-editor.dev/core": "workspace:*",
     "fflate": "^0.8.2",
-    "vue": "^3.5.29"
+    "vue": "^3.5.29",
+    "typescript7": "npm:typescript@^7.0.2"
   },
   "dependencies": {
     "@docx-editor.dev/i18n": "^2.24.0"

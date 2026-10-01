@@ -1257,7 +1257,7 @@ export interface GlyphOutline {
 export function glyphSizeFactorOf(style: ResolvedRunStyle): number;
 
 // @public
-export const GRAPHEME_SEGMENTER_LOCALE: "und";
+export const GRAPHEME_SEGMENTER_LOCALE: 'und';
 
 // @public
 export interface GraphemeBoundary {
@@ -1765,7 +1765,7 @@ export interface LayoutSessionStats {
 export class LayoutShapingConfigurationError extends Error {
     constructor(message: string);
     // (undocumented)
-    readonly code: "overLimit";
+    readonly code: 'overLimit';
 }
 
 // @public
@@ -2320,7 +2320,7 @@ export type OperationSnapshotGuard = {
 };
 
 // @public
-export const PAGE_BORDER_SIDES: readonly ["top", "left", "bottom", "right"];
+export const PAGE_BORDER_SIDES: readonly ['top', 'left', 'bottom', 'right'];
 
 // @public
 export function pageAtY(layout: SemanticLayout, sheetY: number): number;
@@ -2442,7 +2442,7 @@ export function pageRefPageNumbersFromLayout(layout: SemanticLayout): (targetPar
 export function pagesToMaterialize(input: MaterializationInput): Set<number>;
 
 // @public
-export const PARAGRAPH_BORDER_SIDES: readonly ["top", "left", "bottom", "right", "between", "bar"];
+export const PARAGRAPH_BORDER_SIDES: readonly ['top', 'left', 'bottom', 'right', 'between', 'bar'];
 
 // @public
 export interface ParagraphAutoSpacingContext {
@@ -4658,7 +4658,7 @@ export function withResolvedListItems<T extends {
 };
 
 // @public
-export const WORD_SEGMENTER_LOCALE: "und";
+export const WORD_SEGMENTER_LOCALE: 'und';
 
 // @public
 export interface WordBoundary {
