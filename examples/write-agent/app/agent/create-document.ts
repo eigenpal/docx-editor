@@ -20,15 +20,28 @@ import {
 } from './document-access';
 import { editDocument } from './edit-document';
 import { font } from './editing-schemas';
+import { preflightDraftStyles } from './draft-style-preflight';
 
 export async function createOrInsert(
   runtime: DocxEditorRuntime,
   name: string,
   input: Record<string, unknown>,
   appendDraft = false,
-  draftPreviousList = false
+  draftPreviousList = false,
+  beforeBytes?: Uint8Array
 ) {
   const state = stateFor(runtime);
+  if (name === 'create_document') {
+    const { blocks } = createDocumentSchema.parse(input);
+    if (!beforeBytes)
+      throw new WriterError('InvalidArgument', 'Draft creation requires a captured document.');
+    await preflightDraftStyles(
+      beforeBytes,
+      blocks.flatMap((block) =>
+        block.kind === 'paragraph' ? [block.style] : block.kind === 'list' ? ['Normal'] : []
+      )
+    );
+  }
   if (name === 'format_lists') {
     const { items } = formatListsSchema.parse(input);
     for (const kind of ['bullet', 'numbered'] as const) {

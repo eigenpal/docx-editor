@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Document property removal was unavailable.",
+  "after": "Standalone hosts remove property parts. Collaboration explicitly refuses property removal.",
+  "reason": "Removal emits no collaboration operation and leaves shared package state unchanged. Existing property writes retain their format.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-properties-api.test.ts",
+    "packages/editor-api/src/model/__tests__/model-document-information.test.ts"
+  ],
+  "changeset": "document-property-removal",
+  "migration": null
+}

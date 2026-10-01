@@ -1633,6 +1633,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           },
           trackingAuthor
         );
+      case 'removeDocumentInformation':
       case 'getDocumentProperty':
       case 'setDocumentProperties':
         return planDocumentProperties(

@@ -1,6 +1,8 @@
 /** Application tool coverage of the repository's pinned editing profile. */
 export const EDITING_COVERAGE: Record<string, readonly string[]> = {
-  read_properties: ['Document.properties'],
+  inspect_document_batch: ['Body.paragraphs', 'Body.tables', 'Body.footnotes', 'Body.endnotes'],
+  read_properties: ['Document.properties', 'DocumentProperties.lastAuthor'],
+  remove_document_properties: ['Document.removeDocumentInformation'],
   edit_properties: [
     'DocumentProperties.author',
     'DocumentProperties.title',

@@ -53,6 +53,15 @@ test('document properties synchronize between real editor sessions', async () =>
     pair.bob.room.session.flushPendingJournals();
     expect(await read(1)).toEqual(['Author', 'Title']);
     pair.pause();
+    // Removal refuses before any package edit, including while another peer writes.
+    const beforeRemoval = new Uint8Array(await peers[0]!.editor.save());
+    await expect(
+      peers[0]!.runtime.run(async (c) => {
+        c.document.removeDocumentInformation('DocumentProperties');
+        await c.sync();
+      })
+    ).rejects.toMatchObject({ code: 'NotSupported' });
+    expect(new Uint8Array(await peers[0]!.editor.save())).toEqual(beforeRemoval);
     await peers[0]!.runtime.run(async (c) => {
       c.document.properties.author = 'Alice';
       await c.sync();
@@ -61,6 +70,12 @@ test('document properties synchronize between real editor sessions', async () =>
       c.document.properties.title = 'Bob';
       await c.sync();
     });
+    await expect(
+      peers[1]!.runtime.run(async (c) => {
+        c.document.removeDocumentInformation('DocumentProperties');
+        await c.sync();
+      })
+    ).rejects.toMatchObject({ code: 'NotSupported' });
     pair.resume();
     pair.alice.room.session.flushPendingJournals();
     pair.bob.room.session.flushPendingJournals();

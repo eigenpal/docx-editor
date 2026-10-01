@@ -749,6 +749,31 @@
             }
           ]
         },
+        "removeDocumentInformation": {
+          "uid": "Word.Document#removeDocumentInformation",
+          "kind": "method",
+          "requirementSet": "WordApiDesktop 1.4",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "removeDocInfoType",
+                  "type": "RemoveDocInfoType"
+                }
+              ],
+              "returns": "void"
+            },
+            {
+              "params": [
+                {
+                  "name": "removeDocInfoType",
+                  "type": "\"Comments\" | \"Revisions\" | \"Versions\" | \"RemovePersonalInformation\" | \"EmailHeader\" | \"RoutingSlip\" | \"SendForReview\" | \"DocumentProperties\" | \"Template\" | \"DocumentWorkspace\" | \"InkAnnotations\" | \"DocumentServerProperties\" | \"DocumentManagementPolicy\" | \"ContentType\" | \"TaskpaneWebExtensions\" | \"AtMentions\" | \"DocumentTasks\" | \"DocumentIntelligence\" | \"CommentReactions\" | \"All\""
+                }
+              ],
+              "returns": "void"
+            }
+          ]
+        },
         "revisions": {
           "uid": "Word.Document#revisions",
           "kind": "property",
@@ -816,6 +841,18 @@
         "keywords": {
           "uid": "Word.DocumentProperties#keywords",
           "kind": "property",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "lastAuthor": {
+          "uid": "Word.DocumentProperties#lastAuthor",
+          "kind": "property",
+          "readonly": true,
           "requirementSet": "WordApi 1.3",
           "overloads": [
             {

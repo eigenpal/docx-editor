@@ -12,13 +12,21 @@ import {
   type ResolvedLoadOptions,
 } from '../runtime/model-support.ts';
 import { ModelObject } from './model-object.ts';
-const FIELDS = ['author', 'title', 'subject', 'keywords', 'comments', 'category'] as const;
-type Field = (typeof FIELDS)[number];
+const FIELDS = [
+  'author',
+  'title',
+  'subject',
+  'keywords',
+  'comments',
+  'category',
+  'lastAuthor',
+] as const;
+type Field = Exclude<(typeof FIELDS)[number], 'lastAuthor'>;
 
 /**
  * Core document properties. Load explicit names before reads; assignments commit at sync.
  * Values are XML-safe strings of at most 4096 characters. Tracked writes are unsupported.
- * Dates, custom properties, and removal of other document information are unsupported.
+ * Individual dates and custom properties are unsupported. Document.removeDocumentInformation can remove property parts.
  * Collaborative writes require an existing core-properties part.
  * Create properties before joining collaboration when the input omits that part.
  * @public
@@ -31,6 +39,10 @@ export class DocumentProperties extends ModelObject {
   }
   private constructor(context: RequestContext, path: ObjectPath) {
     super(context, path);
+  }
+  /** Last saved author, from cp:lastModifiedBy. Load before reading. */
+  get lastAuthor(): string {
+    return this.loadedProperty<string>('lastAuthor');
   }
   /** Document author metadata, separate from the revision author. Load before reading; assign before sync. */
   get author(): string {
@@ -75,7 +87,7 @@ export class DocumentProperties extends ModelObject {
     this.#write('category', value);
   }
   protected override onLoad(request: ResolvedLoadOptions): void {
-    for (const field of this.selection(request, FIELDS) as Field[]) {
+    for (const field of this.selection(request, FIELDS) as (typeof FIELDS)[number][]) {
       this.read(
         `${this.path.label}.${field}`,
         () => ({ op: 'getDocumentProperty', name: field }),

@@ -12,7 +12,10 @@ export const propertyNames = [
 ] as const;
 export const readPropertiesSchema = z
   .object({
-    properties: z.array(z.enum(propertyNames)).min(1).max(6),
+    properties: z
+      .array(z.enum([...propertyNames, 'lastAuthor']))
+      .min(1)
+      .max(7),
   })
   .strict();
 export const editPropertiesSchema = z
@@ -56,6 +59,20 @@ export async function documentProperties(
       updated: Object.keys(values).filter(
         (name) => values[name as (typeof propertyNames)[number]] !== undefined
       ),
+    };
+  });
+}
+
+export const removePropertiesSchema = z.object({}).strict();
+export async function removeDocumentProperties(runtime: DocxEditorRuntime, input: unknown) {
+  removePropertiesSchema.parse(input);
+  return runtime.run(async (context) => {
+    context.document.removeDocumentInformation('DocumentProperties');
+    await commit(context, stateFor(runtime), 'remove document properties');
+    return {
+      removed: 'DocumentProperties',
+      scope:
+        'Document metadata only; body text, comments, revisions, and other personal information remain.',
     };
   });
 }

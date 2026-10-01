@@ -637,7 +637,7 @@
   },
   "Word.Document#properties": {
     "status": "partial",
-    "notes": "Core string properties only: author, title, subject, keywords, comments, category. Other properties, dates, and custom properties are not exposed. Collaborative writes require an existing core-properties part; create it before joining collaboration."
+    "notes": "Core string properties: author, title, subject, keywords, comments, category, and read-only lastAuthor. Other properties, dates, and individual custom properties are not exposed. Collaborative writes require an existing core-properties part; create it before joining collaboration."
   },
   "Word.DocumentProperties#author": {
     "status": "partial",
@@ -662,5 +662,13 @@
   "Word.DocumentProperties#category": {
     "status": "partial",
     "notes": "Missing values read as empty strings. Writes accept XML-safe strings up to 4096 UTF-16 units, preserve unrelated properties, and commit at sync. TrackMineOnly writes refuse with NotSupported. Collaborative writes require an existing core-properties part; create it before joining collaboration."
+  },
+  "Word.DocumentProperties#lastAuthor": {
+    "status": "partial",
+    "notes": "Reads cp:lastModifiedBy after explicit load and sync. Missing values read as empty strings. This property has no setter."
+  },
+  "Word.Document#removeDocumentInformation": {
+    "status": "partial",
+    "notes": "Only DocumentProperties removes standard core, extended, and custom property parts and their package relationships. Other modes, TrackMineOnly, and collaboration refuse with NotSupported. Run as the only write in its sync. Malformed or ambiguous part topology refuses before mutation. Content, comments, revisions, and media remain unchanged; this operation does not anonymize document content."
   }
 }

@@ -58,8 +58,10 @@ describe('writer agent tools', () => {
       'insert_content_controls',
       'insert_table',
       'inspect_document',
+      'inspect_document_batch',
       'read_document',
       'read_properties',
+      'remove_document_properties',
       'write_header_footer',
       'write_story',
     ]);

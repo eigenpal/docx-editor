@@ -17,7 +17,8 @@ import {
 } from './document-access';
 import { story as storySchema } from './editing-schemas';
 import { inspectDocument } from './inspect-document';
-import { documentProperties } from './document-properties';
+import { inspectDocumentBatch } from './inspect-document-batch';
+import { documentProperties, removeDocumentProperties } from './document-properties';
 import { editDocument } from './edit-document';
 import { createOrInsert } from './create-document';
 import { EDITING_COVERAGE } from './coverage';
@@ -177,7 +178,10 @@ async function execute(
       };
     }
     const read =
-      name === 'read_document' || name === 'inspect_document' || name === 'read_properties';
+      name === 'read_document' ||
+      name === 'inspect_document' ||
+      name === 'inspect_document_batch' ||
+      name === 'read_properties';
     const capturedRevision = revision?.();
     const before = await save();
     if (revision && revision() !== capturedRevision)
@@ -220,15 +224,17 @@ async function execute(
     let result: unknown;
     if (read) {
       const snapshot =
-        name === 'read_properties'
-          ? await documentProperties(runtime, input, true)
-          : await inspectDocument(
-              runtime,
-              name === 'read_document'
-                ? { ...input, area: 'paragraphs', story: input.story ?? bodyStory }
-                : input,
-              name === 'read_document'
-            );
+        name === 'inspect_document_batch'
+          ? await inspectDocumentBatch(runtime, input)
+          : name === 'read_properties'
+            ? await documentProperties(runtime, input, true)
+            : await inspectDocument(
+                runtime,
+                name === 'read_document'
+                  ? { ...input, area: 'paragraphs', story: input.story ?? bodyStory }
+                  : input,
+                name === 'read_document'
+              );
       result = snapshot;
     } else {
       // Mode belongs to the application. The model cannot turn tracking off after a refusal.
@@ -237,9 +243,11 @@ async function execute(
           context.document.changeTrackingMode = mode === 'suggest' ? 'TrackMineOnly' : 'Off';
           await context.sync();
         });
-      if (name === 'edit_properties') result = await documentProperties(runtime, input, false);
+      if (name === 'remove_document_properties')
+        result = await removeDocumentProperties(runtime, input);
+      else if (name === 'edit_properties') result = await documentProperties(runtime, input, false);
       else if (wrappers.has(name))
-        result = await createOrInsert(runtime, name, input, appendDraft, draftPreviousList);
+        result = await createOrInsert(runtime, name, input, appendDraft, draftPreviousList, before);
       else result = await editDocument(runtime, name, input);
       const editedStory =
         name === 'edit_text' || name === 'format_document'
@@ -269,7 +277,7 @@ async function execute(
     if (output.length > 128000)
       throw new WriterError(
         'ResultTooLarge',
-        'The result exceeds 128 KB. Inspect fewer items or a smaller document.'
+        'The result exceeds 128,000 characters. Inspect fewer items or a smaller document.'
       );
     return { success: true, output, completedSteps: [...state.completed] };
   } catch (error) {

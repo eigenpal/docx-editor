@@ -32,8 +32,9 @@ Every model object inherits the common `ClientObject` members. Each collection a
 
 | Object | Public members beyond inherited members | Guide |
 | --- | --- | --- |
-| `Document` | `properties`, `body`, `paragraphs`, `sections`, `contentControls`, `comments`, `revisions`, `footnotes`, `endnotes`, `changeTrackingMode` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories), [Tracked changes](/docs/2.x/editor-api/revisions) |
-| `DocumentProperties` | `author`, `title`, `subject`, `keywords`, `comments`, `category` | [Document properties](#document-properties) |
+| `Document` | `removeDocumentInformation`, `properties`, `body`, `paragraphs`, `sections`, `contentControls`, `comments`, `revisions`, `footnotes`, `endnotes`, `changeTrackingMode` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories), [Tracked changes](/docs/2.x/editor-api/revisions) |
+| `RemoveDocInfoType` | All standard enum values; only `documentProperties` removal is supported | [Remove document properties](#remove-document-properties) |
+| `DocumentProperties` | `author`, `title`, `subject`, `keywords`, `comments`, `category`, read-only `lastAuthor` | [Document properties](#document-properties) |
 | `Body` | `text`, `footnotes`, `endnotes`, `paragraphs`, `getRange`, `search`, `clear`, `insertText`, `insertParagraph`; `font`, `style`, `lists`, `bookmarks`, `contentControls`, `getComments`, `revisions`, `tables`, `inlinePictures`, `fields` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges) |
 | `Paragraph` | `text`, `uniqueLocalId`, `getRange`, `insertText`, `insertParagraph`, `split`, `clear`, `delete`; `font`, `style`, paragraph formatting; `list`, `listItem`, `startNewList`, `attachToList`, `detachFromList` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Formatting and styles](/docs/2.x/editor-api/formatting), [Lists and numbering](/docs/2.x/editor-api/lists) |
 | `Range` | `text`, `paragraphs`, `search`, `insertText`, `insertParagraph`, `clear`, `delete`, `select`; `font`, `style`, `hyperlink`, `bookmarks`, `tables`, `inlinePictures`, `fields`; `insertTable`, `insertInlinePictureFromBase64`, `insertField`, `insertBreak`, `insertContentControl`, `insertComment` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges) and the dedicated insertion guides |
@@ -109,7 +110,7 @@ The refresh controller belongs to the browser host, outside the Office.js docume
 
 ## Document properties
 
-`Document.properties` returns a `DocumentProperties` proxy. It exposes the string properties `author`, `title`, `subject`, `keywords`, `comments`, and `category`. Load each property before reading it. Assignments commit at `context.sync()`. Missing properties read as empty strings. An empty assignment clears that value. Writes preserve unrelated document properties and accept XML-safe strings up to 4096 UTF-16 code units. `TrackMineOnly` refuses these writes with `NotSupported`. Dates, custom properties, and `removeDocumentInformation` are unsupported.
+`Document.properties` returns a `DocumentProperties` proxy. It exposes the string properties `author`, `title`, `subject`, `keywords`, `comments`, and `category`. Load each property before reading it. Assignments commit at `context.sync()`. Missing properties read as empty strings. An empty assignment clears that value. Writes preserve unrelated document properties and accept XML-safe strings up to 4096 UTF-16 code units. `TrackMineOnly` refuses these writes with `NotSupported`. Individual dates and custom properties are unsupported. `lastAuthor` reads `cp:lastModifiedBy` and has no setter.
 
 ```ts
 await runtime.run(async (context) => {
@@ -124,3 +125,14 @@ await runtime.run(async (context) => {
 ```
 
 Collaborative writes require an existing core-properties part. If the input omits this part, set properties before joining collaboration. Concurrent creation of this package part cannot merge safely.
+
+### Remove document properties
+
+Call `document.removeDocumentInformation('DocumentProperties')` in a separate sync to remove standard core, extended, and custom property parts. This also removes last-author information and property relationships. It preserves document content, comments, revisions, and media. Ambiguous parts, incorrect roots or types, and unknown dependencies refuse with `NotSupported`. The method refuses all other `RemoveDocInfoType` modes, tracked writes, and collaboration. This subset does not anonymize text, cached field results, images, or review authors.
+
+```ts
+await runtime.run(async (context) => {
+  context.document.removeDocumentInformation('DocumentProperties');
+  await context.sync();
+});
+```

@@ -749,6 +749,31 @@
             }
           ]
         },
+        "removeDocumentInformation": {
+          "uid": "DocxEditor.Document#removeDocumentInformation",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "removeDocInfoType",
+                  "type": "RemoveDocInfoType"
+                }
+              ],
+              "returns": "void"
+            },
+            {
+              "params": [
+                {
+                  "name": "removeDocInfoType",
+                  "type": "\"Comments\" | \"Revisions\" | \"Versions\" | \"RemovePersonalInformation\" | \"EmailHeader\" | \"RoutingSlip\" | \"SendForReview\" | \"DocumentProperties\" | \"Template\" | \"DocumentWorkspace\" | \"InkAnnotations\" | \"DocumentServerProperties\" | \"DocumentManagementPolicy\" | \"ContentType\" | \"TaskpaneWebExtensions\" | \"AtMentions\" | \"DocumentTasks\" | \"DocumentIntelligence\" | \"CommentReactions\" | \"All\""
+                }
+              ],
+              "returns": "void"
+            }
+          ]
+        },
         "revisions": {
           "uid": "DocxEditor.Document#revisions",
           "kind": "property",
@@ -816,6 +841,18 @@
         "keywords": {
           "uid": "DocxEditor.DocumentProperties#keywords",
           "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "lastAuthor": {
+          "uid": "DocxEditor.DocumentProperties#lastAuthor",
+          "kind": "property",
+          "readonly": true,
           "requirementSet": null,
           "overloads": [
             {

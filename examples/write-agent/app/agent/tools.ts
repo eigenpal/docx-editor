@@ -1,7 +1,13 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import * as editing from './editing-schemas';
-import { readPropertiesSchema, editPropertiesSchema } from './document-properties';
+import { draftFont, draftChanges, isDraftXmlText } from './draft-format';
+import { inspectBatchSchema } from './inspect-document-batch';
+import {
+  readPropertiesSchema,
+  editPropertiesSchema,
+  removePropertiesSchema,
+} from './document-properties';
 
 const paragraphId = z
   .string()
@@ -24,15 +30,15 @@ export const briefSchema = z.object({
 });
 
 export const inlineRun = z.object({
-  text: editing.nonemptyText,
-  font: editing.font.optional(),
+  text: editing.nonemptyText.refine(isDraftXmlText, 'Draft text must be valid XML text.'),
+  font: draftFont.optional(),
 });
 
 const blockSchema = z.union([
   z
     .object({
       kind: z.literal('paragraph').default('paragraph'),
-      text: editing.text,
+      text: editing.text.refine(isDraftXmlText, 'Draft text must be valid XML text.'),
       runs: z
         .array(inlineRun)
         .min(1)
@@ -44,10 +50,10 @@ const blockSchema = z.union([
       style: z
         .enum(['Title', 'Subtitle', 'Heading 1', 'Heading 2', 'Quote', 'Normal'])
         .default('Normal'),
-      format: editing.paragraphChanges
+      format: draftChanges
         .optional()
         .describe(
-          'Explicit font and paragraph properties for this block, applied through public APIs. Use alignment=Centered for a centered title and alignment=Justified for justified body text.'
+          'Explicit draft font and paragraph properties. Set style through block.style; format cannot override style. Use alignment=Centered for a centered title and alignment=Justified for justified body text.'
         ),
     })
     .refine(
@@ -57,15 +63,21 @@ const blockSchema = z.union([
   z.object({
     kind: z.literal('list'),
     listType: z.enum(['bullet', 'numbered']),
-    items: z.array(editing.nonemptyText).min(1).max(100),
-    format: editing.paragraphChanges.optional(),
+    items: z
+      .array(editing.nonemptyText.refine(isDraftXmlText, 'Draft text must be valid XML text.'))
+      .min(1)
+      .max(100),
+    format: draftChanges.optional(),
   }),
   z
     .object({
       kind: z.literal('table'),
-      rows: editing.matrix,
+      rows: editing.matrix.refine(
+        (rows) => rows.every((row) => row.every(isDraftXmlText)),
+        'Draft cells must contain valid XML text.'
+      ),
       headerRowCount: z.number().int().min(0).max(100).default(1),
-      headerFont: editing.font.optional(),
+      headerFont: draftFont.optional(),
     })
     .refine((value) => value.headerRowCount <= value.rows.length, 'Header rows exceed table rows.'),
 ]);
@@ -129,8 +141,13 @@ export const writeHeaderFooterSchema = z.object({
 export const WRITER_TOOLS = {
   read_properties: tool({
     description:
-      'Read selected document metadata properties. These are separate from body text and review authors.',
+      'Read selected document metadata properties, including readonly lastAuthor. These are separate from body text and review authors.',
     inputSchema: readPropertiesSchema,
+  }),
+  remove_document_properties: tool({
+    description:
+      'Remove document metadata properties only when explicitly requested. Uses Document.removeDocumentInformation with DocumentProperties. Requires direct mode. This does not redact body text, comments, revisions, or all personal information.',
+    inputSchema: removePropertiesSchema,
   }),
   edit_properties: tool({
     description:
@@ -145,6 +162,11 @@ export const WRITER_TOOLS = {
       text: editing.text,
       location: z.enum(['Start', 'End', 'Replace']),
     }),
+  }),
+  inspect_document_batch: tool({
+    description:
+      'Inspect up to six independent document areas or known stories in one call. Request at most 120 top-level items. The batch returns one stable snapshot or fails entirely. Use returned indexes and targets before editing. Discover unknown note stories in a previous inspection.',
+    inputSchema: inspectBatchSchema,
   }),
   inspect_document: tool({
     description:

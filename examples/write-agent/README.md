@@ -157,3 +157,13 @@ The reconstruction instruction is agent guidance, not a transaction boundary. Se
 Use `read_properties` to load selected metadata fields. Use `edit_properties` to batch changes to `author`, `title`, `subject`, `keywords`, `comments`, and `category`. These tools use `Document.properties`. They do not remove custom properties or other document information. Suggestions refuse metadata writes. Collaborative metadata edits require an existing core-properties part.
 
 Use `edit_table` with `insertRows` to insert before or after an inspected row. The tool uses `TableRow.insertRows`. It preserves unrelated merged headers and supports native row suggestions. Merged source rows and crossing vertical merges refuse.
+
+### Batch inspections and metadata removal
+
+Use `inspect_document_batch` for up to six independent inspections of document areas or known stories. The combined limit is 120 top-level items and 120,000 UTF-8 bytes of result data. An external edit or inspection failure rejects the complete batch. The tool reduces model calls; each inspector retains its public API sync boundaries. Discover unknown note stories before including them in a batch.
+
+`read_properties` supports readonly `lastAuthor`. For explicit metadata removal, use `remove_document_properties` in direct mode. It calls `Document.removeDocumentInformation('DocumentProperties')`. This removes document metadata, not body text, comments, revisions, or all personal information. Suggestions refuse this operation.
+
+Draft blocks select paragraph styles through `block.style`. Draft lists use `Normal`; `block.format` cannot override styles. Draft font sizes must round to 1–1999 half-points. After rounding to twips, spacing must be nonnegative and line spacing positive. All paragraph measurements must remain within ±31,680 twips. Draft text and font names must contain valid XML characters. These checks reject known invalid inputs before replacement. They do not make progressive drafts atomic. Use `format_document` for supported custom styles on existing content.
+
+Before each draft batch, the writer checks requested styles on a disposable server runtime opened from captured bytes. The check uses public paragraph style writes and disposes the runtime. Missing styles refuse before the active document changes. This adds one document open, one setup sync, and one sync per distinct requested style. Earlier streamed blocks remain saved if a later block fails.

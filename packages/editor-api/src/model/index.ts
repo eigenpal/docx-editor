@@ -65,6 +65,7 @@ export { Field, FieldCollection } from './fields.ts';
 export { FieldType, type FieldTypeLiteral } from './field-types.ts';
 
 export {
+  RemoveDocInfoType,
   InsertLocation,
   Alignment,
   PageOrientation,

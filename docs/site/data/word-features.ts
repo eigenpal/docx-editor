@@ -1221,7 +1221,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'A batching object model shaped after a documented subset of the Word JavaScript API. The server entry works over bytes and reports exceeded resource limits with typed errors. The browser entry works over an open editor. Core metadata supports author, title, subject, keywords, comments, and category reads and writes. Metadata writes require tracking to be off. It ships no model integration, tool catalog, or MCP transport.',
+      'A batching object model shaped after a documented subset of the Word JavaScript API. The server entry works over bytes and reports exceeded resource limits with typed errors. The browser entry works over an open editor. Core metadata supports author, title, subject, keywords, comments, and category reads and writes. The last saved author is read-only. Standard core, extended, and custom properties can be removed outside collaboration. Other document content remains unchanged. Metadata writes require tracking to be off. It ships no model integration, tool catalog, or MCP transport.',
     docsLink: '/docs/2.x/editor-api',
   },
 ];

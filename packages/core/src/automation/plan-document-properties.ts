@@ -1,3 +1,4 @@
+import { withoutDocumentProperties } from '../store/package/document-property-removal.ts';
 import {
   documentProperty,
   documentPropertiesPart,
@@ -11,7 +12,10 @@ import type { AutomationPackageReads } from './reads.ts';
 import { BODY_STORY } from './stories.ts';
 
 export function planDocumentProperties(
-  operation: Extract<AutomationOperation, { op: 'getDocumentProperty' | 'setDocumentProperties' }>,
+  operation: Extract<
+    AutomationOperation,
+    { op: 'getDocumentProperty' | 'setDocumentProperties' | 'removeDocumentInformation' }
+  >,
   reads: AutomationPackageReads,
   pin: () => PlannedOperation | null,
   supportsPartCreation = true
@@ -28,6 +32,40 @@ export function planDocumentProperties(
       ok: true,
       kind: 'query',
       value: { kind: 'text', text: documentProperty(reads.package, operation.name) },
+    };
+  }
+  if (operation.op === 'removeDocumentInformation') {
+    if (operation.removeDocInfoType !== 'DocumentProperties' || !supportsPartCreation)
+      return {
+        ok: false,
+        error: {
+          code: 'unsupported-capability',
+          message: 'Only direct DocumentProperties removal outside collaboration is supported.',
+        },
+      };
+    if (!withoutDocumentProperties(reads.package))
+      return {
+        ok: false,
+        error: {
+          code: 'unsupported-capability',
+          message: 'Document property parts have unsupported structure or dependencies.',
+        },
+      };
+    const conflict = pin();
+    if (conflict) return conflict;
+    return {
+      ok: true,
+      kind: 'command',
+      story: BODY_STORY,
+      ops: [],
+      packageEdits: [
+        (pkg) => {
+          const next = withoutDocumentProperties(pkg);
+          if (!next) throw new Error('Document property parts changed');
+          return next;
+        },
+      ],
+      answer: () => ({ kind: 'applied' }),
     };
   }
   if (!validDocumentPropertyWrites(operation.values))

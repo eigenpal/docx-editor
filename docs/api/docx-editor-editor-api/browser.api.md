@@ -376,6 +376,9 @@ class Document_2 extends ModelObject {
     static open(context: RequestContext): Document_2;
     get paragraphs(): ParagraphCollection;
     get properties(): DocumentProperties;
+    removeDocumentInformation(removeDocInfoType: RemoveDocInfoType): void;
+    // (undocumented)
+    removeDocumentInformation(removeDocInfoType: 'Comments' | 'Revisions' | 'Versions' | 'RemovePersonalInformation' | 'EmailHeader' | 'RoutingSlip' | 'SendForReview' | 'DocumentProperties' | 'Template' | 'DocumentWorkspace' | 'InkAnnotations' | 'DocumentServerProperties' | 'DocumentManagementPolicy' | 'ContentType' | 'TaskpaneWebExtensions' | 'AtMentions' | 'DocumentTasks' | 'DocumentIntelligence' | 'CommentReactions' | 'All'): void;
     get revisions(): RevisionCollection;
     get sections(): SectionCollection;
 }
@@ -409,6 +412,7 @@ export class DocumentProperties extends ModelObject {
     set comments(value: string);
     get keywords(): string;
     set keywords(value: string);
+    get lastAuthor(): string;
     // @internal (undocumented)
     static of(context: RequestContext, owner: ObjectPath): DocumentProperties;
     // (undocumented)
@@ -1159,6 +1163,50 @@ export class RangeCollection extends ItemCollection<Range_2> {
 
 // @public
 export type RangeInsertTextLocation = 'Replace' | 'Start' | 'End' | 'Before' | 'After';
+
+// @public
+export enum RemoveDocInfoType {
+    // (undocumented)
+    all = "All",
+    // (undocumented)
+    atMentions = "AtMentions",
+    // (undocumented)
+    commentReactions = "CommentReactions",
+    // (undocumented)
+    comments = "Comments",
+    // (undocumented)
+    contentType = "ContentType",
+    // (undocumented)
+    documentIntelligence = "DocumentIntelligence",
+    // (undocumented)
+    documentManagementPolicy = "DocumentManagementPolicy",
+    // (undocumented)
+    documentProperties = "DocumentProperties",
+    // (undocumented)
+    documentServerProperties = "DocumentServerProperties",
+    // (undocumented)
+    documentTasks = "DocumentTasks",
+    // (undocumented)
+    documentWorkspace = "DocumentWorkspace",
+    // (undocumented)
+    emailHeader = "EmailHeader",
+    // (undocumented)
+    inkAnnotations = "InkAnnotations",
+    // (undocumented)
+    removePersonalInformation = "RemovePersonalInformation",
+    // (undocumented)
+    revisions = "Revisions",
+    // (undocumented)
+    routingSlip = "RoutingSlip",
+    // (undocumented)
+    sendForReview = "SendForReview",
+    // (undocumented)
+    taskpaneWebExtensions = "TaskpaneWebExtensions",
+    // (undocumented)
+    template = "Template",
+    // (undocumented)
+    versions = "Versions"
+}
 
 // @public
 export class RequestContext {

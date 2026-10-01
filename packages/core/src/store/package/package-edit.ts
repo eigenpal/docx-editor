@@ -647,8 +647,13 @@ function withoutContentTypeOverride(pkg: OoxmlPackage, partName: string): OoxmlP
   });
   if (!parsed.ok) return pkg;
   const children = parsed.part.root.children.filter((child) => {
-    if (child.kind === 'textValue' || child.localName !== 'Override') return true;
-    const named = child.attributes.find((a) => a.localName === 'PartName');
+    if (
+      child.kind === 'textValue' ||
+      child.namespaceUri !== CONTENT_TYPES_NAMESPACE ||
+      child.localName !== 'Override'
+    )
+      return true;
+    const named = child.attributes.find((a) => a.namespaceUri === '' && a.localName === 'PartName');
     return named === undefined || partNameKey(named.value) !== overrideKey;
   });
   if (children.length === parsed.part.root.children.length) return pkg;

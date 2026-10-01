@@ -12,3 +12,15 @@ export async function publishProperties(): Promise<void> {
     await context.sync();
   });
 }
+
+export async function removeProperties(): Promise<void> {
+  await DocxEditor.run(async (context) => {
+    // Runtime tests cover explicit load and sync; this fixture checks the selected shape.
+    const lastAuthor: string = context.document.properties.lastAuthor;
+    void lastAuthor;
+    context.document.removeDocumentInformation(DocxEditor.RemoveDocInfoType.documentProperties);
+    await context.sync();
+    context.document.removeDocumentInformation('DocumentProperties');
+    await context.sync();
+  });
+}

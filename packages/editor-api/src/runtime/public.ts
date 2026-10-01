@@ -66,6 +66,7 @@ export {
   type ContentControlSubtype,
   type ContentControlValue,
   type HeaderFooterType,
+  RemoveDocInfoType,
   InsertLocation,
   Alignment,
   VerticalAlignment,

@@ -48,6 +48,7 @@
       "members": [
         "body",
         "changeTrackingMode",
+        "removeDocumentInformation",
         "comments",
         "contentControls",
         "paragraphs",
@@ -208,7 +209,7 @@
       "members": ["items", "getFirst"]
     },
     "DocumentProperties": {
-      "members": ["author", "title", "subject", "keywords", "comments", "category"]
+      "members": ["author", "title", "subject", "keywords", "comments", "category", "lastAuthor"]
     }
   },
   "omissions": [
@@ -414,6 +415,10 @@
     }
   ],
   "divergences": [
+    {
+      "uid": "Word.Document#removeDocumentInformation",
+      "note": "Only DocumentProperties removes standard core, extended, and custom property parts. Other modes, tracked edits, and collaboration refuse with NotSupported. Run as the only write in its sync. Malformed or ambiguous dependencies refuse atomically. Document content and review authors remain unchanged."
+    },
     {
       "uid": "Word.Font#bold",
       "note": "Reads report authored values or null without resolving inherited formatting. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults."

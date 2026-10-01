@@ -89,7 +89,7 @@ function collectKnownTypeNames(manifest) {
   const typeSymbolNames = Object.entries(manifest.symbols ?? {})
     .filter(([, selection]) => !selection.isFunction)
     .map(([name]) => name);
-  return new Set([...typeSymbolNames, 'ClientRequestContext', 'SelectionMode', 'HeaderFooterType']);
+  return new Set([...typeSymbolNames, 'ClientRequestContext', 'SelectionMode', 'HeaderFooterType', 'RemoveDocInfoType']);
 }
 
 function sanitizeIdentifier(text) {

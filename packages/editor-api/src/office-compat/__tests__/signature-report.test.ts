@@ -298,6 +298,10 @@ describe('informational report', () => {
       expect(report.endpoints.find((row) => row.uid === 'Word.TableRow#insertRows')?.status).toBe(
         'match'
       );
+      expect(
+        report.endpoints.find((row) => row.uid === 'Word.Document#removeDocumentInformation')
+          ?.status
+      ).toBe('match');
       expect(JSON.stringify(actual)).not.toContain(process.cwd());
     },
     ACTUAL_INVENTORY_BUDGET_MS

@@ -19,9 +19,10 @@ const MEMBERS = {
   keywords: [CP, 'keywords'],
   category: [CP, 'category'],
 } as const;
-export type DocumentPropertyName = keyof typeof MEMBERS;
-export type DocumentPropertyWrites = Partial<Record<DocumentPropertyName, string>>;
-export const DOCUMENT_PROPERTY_NAMES = Object.keys(MEMBERS) as DocumentPropertyName[];
+const READ_MEMBERS = { ...MEMBERS, lastAuthor: [CP, 'lastModifiedBy'] } as const;
+export type DocumentPropertyName = keyof typeof READ_MEMBERS;
+export type DocumentPropertyWrites = Partial<Record<keyof typeof MEMBERS, string>>;
+export const DOCUMENT_PROPERTY_NAMES = Object.keys(READ_MEMBERS) as DocumentPropertyName[];
 
 export function documentPropertiesPart(pkg: OoxmlPackage) {
   const rel = (pkg.relationships.get('/') ?? []).find((r) => r.type === REL);
@@ -32,7 +33,7 @@ export function documentPropertiesPart(pkg: OoxmlPackage) {
 
 export function documentProperty(pkg: OoxmlPackage, name: DocumentPropertyName): string {
   const part = documentPropertiesPart(pkg);
-  const [ns, local] = MEMBERS[name];
+  const [ns, local] = READ_MEMBERS[name];
   const node = part?.root.children.find(
     (n) => n.kind !== 'textValue' && n.namespaceUri === ns && n.localName === local
   );
@@ -77,7 +78,7 @@ export function withDocumentProperties(
   const parsed = readOoxmlPart(
     `<cp:coreProperties xmlns:cp="${CP}" xmlns:dc="${DC}">${Object.entries(values)
       .map(([key, value]) => {
-        const [ns, local] = MEMBERS[key as DocumentPropertyName];
+        const [ns, local] = MEMBERS[key as keyof typeof MEMBERS];
         const prefix = ns === CP ? 'cp' : 'dc';
         return `<${prefix}:${local}>${escapeXml(value)}</${prefix}:${local}>`;
       })

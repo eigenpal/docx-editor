@@ -30,6 +30,17 @@ export async function insertParagraphs(
     new Set(targetIds).size === targetIds.length
   )
     return undefined;
+  // Reject a known impossible sequence before its first destructive write.
+  const removedTargets = new Set<string>();
+  for (const [index, edit] of edits.entries()) {
+    const id = targetIds[index]!;
+    if (removedTargets.has(id))
+      throw new WriterError(
+        'InvalidArgument',
+        'A batch cannot target a paragraph after deleting it.'
+      );
+    if (edit.action === 'deleteParagraph') removedTargets.add(id);
+  }
   const targets = await resolveTargets(
     context,
     body,
@@ -39,6 +50,30 @@ export async function insertParagraphs(
     state,
     input.story
   );
+  for (const [index, edit] of edits.entries()) {
+    if (edit.action !== 'deleteParagraph') continue;
+    const deletedParagraph = targets[index]!.paragraph;
+    const deletedLocation = state.transientTargets.get(edit.paragraphId)?.locator;
+    for (let later = index + 1; later < edits.length; later++) {
+      const paragraph = targets[later]!.paragraph;
+      if (deletedParagraph.uniqueLocalId || paragraph.uniqueLocalId) {
+        if (deletedParagraph.uniqueLocalId !== paragraph.uniqueLocalId) continue;
+      } else {
+        const location = state.transientTargets.get(targetIds[later]!)?.locator;
+        if (
+          location &&
+          deletedLocation &&
+          location.kind === deletedLocation.kind &&
+          JSON.stringify(location) !== JSON.stringify(deletedLocation)
+        )
+          continue;
+      }
+      throw new WriterError(
+        'AmbiguousTarget',
+        'A later target can name a deleted paragraph. Inspect targets from one document area before editing.'
+      );
+    }
+  }
   const deletions = edits.flatMap((edit, index) =>
     edit.action === 'deleteParagraph'
       ? [{ id: edit.paragraphId, paragraph: targets[index]!.paragraph }]

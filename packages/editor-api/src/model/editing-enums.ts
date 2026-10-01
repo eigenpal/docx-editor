@@ -76,3 +76,27 @@ export enum ContentControlType {
   richTextTableCell = 'RichTextTableCell',
   richTextTableRow = 'RichTextTableRow',
 }
+
+/** Document information categories. Only DocumentProperties removal is supported. @public */
+export enum RemoveDocInfoType {
+  all = 'All',
+  atMentions = 'AtMentions',
+  commentReactions = 'CommentReactions',
+  comments = 'Comments',
+  contentType = 'ContentType',
+  documentIntelligence = 'DocumentIntelligence',
+  documentManagementPolicy = 'DocumentManagementPolicy',
+  documentProperties = 'DocumentProperties',
+  documentServerProperties = 'DocumentServerProperties',
+  documentTasks = 'DocumentTasks',
+  documentWorkspace = 'DocumentWorkspace',
+  emailHeader = 'EmailHeader',
+  inkAnnotations = 'InkAnnotations',
+  removePersonalInformation = 'RemovePersonalInformation',
+  revisions = 'Revisions',
+  routingSlip = 'RoutingSlip',
+  sendForReview = 'SendForReview',
+  taskpaneWebExtensions = 'TaskpaneWebExtensions',
+  template = 'Template',
+  versions = 'Versions',
+}

@@ -28,7 +28,7 @@ import { SectionCollection } from './sections.ts';
 
 /** Office.js tracking mode names. TrackAll is recognized but currently refused. @public */
 export { ChangeTrackingMode } from './editing-enums.ts';
-import { ChangeTrackingMode } from './editing-enums.ts';
+import { ChangeTrackingMode, RemoveDocInfoType } from './editing-enums.ts';
 
 /**
  * The document: the root every other object is reached from.
@@ -112,6 +112,42 @@ export class Document extends ModelObject {
   get body(): Body {
     this.#body ??= Body.main(this.context, 'document.body');
     return this.#body;
+  }
+
+  /**
+   * Remove standard core, extended, and custom document-property parts in one sync.
+   * Only DocumentProperties is supported. Tracking and collaboration refuse with NotSupported.
+   * This command must be the only write in its sync. It does not anonymize document content.
+   */
+  removeDocumentInformation(removeDocInfoType: RemoveDocInfoType): void;
+  removeDocumentInformation(
+    removeDocInfoType:
+      | 'Comments'
+      | 'Revisions'
+      | 'Versions'
+      | 'RemovePersonalInformation'
+      | 'EmailHeader'
+      | 'RoutingSlip'
+      | 'SendForReview'
+      | 'DocumentProperties'
+      | 'Template'
+      | 'DocumentWorkspace'
+      | 'InkAnnotations'
+      | 'DocumentServerProperties'
+      | 'DocumentManagementPolicy'
+      | 'ContentType'
+      | 'TaskpaneWebExtensions'
+      | 'AtMentions'
+      | 'DocumentTasks'
+      | 'DocumentIntelligence'
+      | 'CommentReactions'
+      | 'All'
+  ): void;
+  removeDocumentInformation(removeDocInfoType: string): void {
+    this.command(`${this.path.label}.removeDocumentInformation`, () => ({
+      op: 'removeDocumentInformation',
+      removeDocInfoType,
+    }));
   }
 
   /** Core document metadata. Reads require load; writes commit at sync. */
