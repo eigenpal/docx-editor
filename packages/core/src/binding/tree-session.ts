@@ -51,7 +51,6 @@ import {
   relationshipTargetIn,
   normalizeParagraphIdentity,
   paragraphTextOf,
-  collectNoteReferences,
   collectRevisionSites,
   type BookmarkIndex,
   type EmbeddedFont,
@@ -79,7 +78,7 @@ import {
   type DocumentOutlineEntry,
 } from './document-outline.ts';
 import { collectRenderedFontFamilies } from './document-rendered-fonts.ts';
-import { collectTextMatches, type DocumentSearchResult } from './document-search.ts';
+import { createSessionTextSearch } from './session-text-search.ts';
 import {
   collectDocumentThemeColors,
   collectDocumentThemeFonts,
@@ -539,9 +538,6 @@ export function openTreeSession(
     readonly revision: number;
     readonly outline: readonly DocumentOutlineEntry[];
   } | null = null;
-  // Searches at the current revision by exact question. Several entries, so highlight sets
-  // (glossary terms) never evict the Find query; a new revision drops all (32 entries max).
-  let searchCache: { revision: number; results: Map<string, DocumentSearchResult> } | null = null;
   let anchorsCache: {
     readonly revision: number;
     readonly openStories: string;
@@ -946,36 +942,12 @@ export function openTreeSession(
         return outlineCache.outline;
       },
 
-      findText(query, options) {
-        const store = bodyStore();
-        const revision = packageStore.packageRevision;
-        const key = `${options?.matchCase === true ? 'c' : ''}${
-          options?.wholeWord === true ? 'w' : ''
-        }${options?.limit ?? ''}:${options?.stories ?? 'all'}${'\u0000'}${query}`;
-        if (searchCache?.revision !== revision) searchCache = { revision, results: new Map() };
-        const cached = searchCache.results.get(key);
-        if (cached) return cached;
-        const pkg = currentPackage();
-        const referencedNoteIds = {
-          footnote: new Set<number>(),
-          endnote: new Set<number>(),
-        };
-        for (const reference of collectNoteReferences(store.part)) {
-          referencedNoteIds[reference.noteKind].add(reference.noteId);
-        }
-        const result = collectTextMatches(store.part, query, options ?? {}, {
-          headerFooterBySection: resolvedHeaderFooterBySection().resolution,
-          footnotes: resolveNotesPart(pkg, 'footnote') ?? null,
-          endnotes: resolveNotesPart(pkg, 'endnote') ?? null,
-          referencedNoteIds,
-        });
-        // Oldest first: a Map iterates in insertion order.
-        if (searchCache.results.size >= 32) {
-          searchCache.results.delete(searchCache.results.keys().next().value!);
-        }
-        searchCache.results.set(key, result);
-        return result;
-      },
+      findText: createSessionTextSearch({
+        revision: () => packageStore.packageRevision,
+        bodyPart: () => bodyStore().part,
+        currentPackage,
+        headerFooterBySection: () => resolvedHeaderFooterBySection().resolution,
+      }),
 
       embeddedFonts: resolveEmbeddedFonts,
 

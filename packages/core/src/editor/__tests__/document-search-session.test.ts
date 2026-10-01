@@ -72,7 +72,7 @@ describe('createDocumentSearch', () => {
     expect(search.getState().matches).toHaveLength(0);
   });
 
-  test('results follow document edits under the same query', () => {
+  test('results follow document edits once typing pauses', async () => {
     const { editor } = mount();
     const search = createDocumentSearch(editor);
     search.find('Supplier');
@@ -80,6 +80,21 @@ describe('createDocumentSearch', () => {
     const caret = { paragraphId: last.blockId, offset: last.start };
     editor.exec({ type: 'setSelection', range: { anchor: caret, head: caret } });
     editor.exec({ type: 'insertText', text: 'Supplier ' });
+    // No rescan per keystroke: the results wait for the pause.
+    expect(search.getState().matches).toHaveLength(3);
+    await wait(SEARCH_DEBOUNCE_MS + 30);
+    expect(search.getState().matches).toHaveLength(4);
+  });
+
+  test('navigation refreshes results an edit made stale before it selects', () => {
+    const { editor } = mount();
+    const search = createDocumentSearch(editor);
+    search.find('Supplier');
+    const first = search.getState().matches[0]!;
+    const caret = { paragraphId: first.blockId, offset: 0 };
+    editor.exec({ type: 'setSelection', range: { anchor: caret, head: caret } });
+    editor.exec({ type: 'insertText', text: 'Supplier ' });
+    expect(search.next()).toBe(true);
     expect(search.getState().matches).toHaveLength(4);
   });
 
@@ -144,7 +159,7 @@ describe('createDocumentSearch', () => {
     expect(focused).toBe(1);
   });
 
-  test('the active match stays on its occurrence when an edit adds an earlier match', () => {
+  test('the active match stays on its occurrence when an edit adds an earlier match', async () => {
     const { editor } = mount();
     const search = createDocumentSearch(editor);
     search.find('Supplier');
@@ -154,9 +169,25 @@ describe('createDocumentSearch', () => {
     const start = { paragraphId: search.getState().matches[0]!.blockId, offset: 0 };
     editor.exec({ type: 'setSelection', range: { anchor: start, head: start } });
     editor.exec({ type: 'insertText', text: 'Supplier ' });
+    await wait(SEARCH_DEBOUNCE_MS + 30);
     const state = search.getState();
     expect(state.matches).toHaveLength(4);
     expect(state.activeIndex).toBe(3);
     expect(state.matches[3]!.blockId).toBe(active.blockId);
+  });
+
+  test('findMatches with many terms answers like one call per term, in one pass', () => {
+    const { editor } = mount();
+    const terms = ['Supplier', 'signs', 'missing', ''];
+    const many = editor.findMatches(terms, { wholeWord: true });
+    expect(many).toHaveLength(terms.length);
+    for (const [index, term] of terms.entries()) {
+      const single = editor.findMatches(term, { wholeWord: true });
+      expect(many[index]!.map((match) => [match.blockId, match.start, match.length])).toEqual(
+        single.map((match) => [match.blockId, match.start, match.length])
+      );
+    }
+    // Results from one pass are valid highlight ranges.
+    expect(editor.setHighlights('glossary', many.flat()).applied).toBe(4);
   });
 });

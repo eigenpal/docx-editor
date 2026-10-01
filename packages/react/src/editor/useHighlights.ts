@@ -77,7 +77,7 @@ function optionsKey(options: HighlightOptions | undefined): string {
  * @example
  * ```tsx
  * const findTerms = useCallback(
- *   (editor: Editor) => terms.flatMap((term) => editor.findMatches(term, { wholeWord: true })),
+ *   (editor: Editor) => editor.findMatches(terms, { wholeWord: true }).flat(),
  *   [terms]
  * );
  * useHighlights('glossary', findTerms, { className: 'glossary-term' });

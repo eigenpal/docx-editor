@@ -253,6 +253,9 @@ function bounded(raw: string, max: number): string {
   return raw.replace(CONTROL_CHARS_ALL, ' ').slice(0, max);
 }
 
+/** Most queries one multi-term search accepts. Queries are host input, so they are bounded. */
+export const SEARCH_QUERY_COUNT_MAX = 1000;
+
 /**
  * Every occurrence of `query` across stories, in navigation order.
  *
@@ -266,9 +269,20 @@ export function collectTextMatches(
   options: DocumentSearchOptions = {},
   sources?: DocumentSearchSources
 ): DocumentSearchResult {
-  const empty: DocumentSearchResult = { matches: [], truncated: false };
-  if (!isSearchableQuery(query)) return empty;
+  return collectTextMatchesForQueries(part, [query], options, sources)[0]!;
+}
 
+/**
+ * Every occurrence of each query, in one walk. Each paragraph is projected once and scanned
+ * for every query, so a glossary of many terms costs one pass over the document, not one per
+ * term. Each query has its own match budget and `truncated` flag.
+ */
+export function collectTextMatchesForQueries(
+  part: OoxmlPart,
+  queries: readonly string[],
+  options: DocumentSearchOptions = {},
+  sources?: DocumentSearchSources
+): DocumentSearchResult[] {
   const limit =
     options.limit !== undefined && Number.isInteger(options.limit) && options.limit > 0
       ? Math.min(options.limit, SEARCH_MATCH_LIMIT)
@@ -277,8 +291,13 @@ export function collectTextMatches(
     ...(options.matchCase === undefined ? {} : { matchCase: options.matchCase }),
     ...(options.wholeWord === undefined ? {} : { wholeWord: options.wholeWord }),
   };
+  const bounded_ = queries.slice(0, SEARCH_QUERY_COUNT_MAX);
+  const results = bounded_.map(() => ({ matches: [] as DocumentSearchMatch[], truncated: false }));
+  // Queries still scanning. An empty or over-long query finds nothing.
+  let open = bounded_.map((query, index) => (isSearchableQuery(query) ? index : -1));
+  open = open.filter((index) => index >= 0);
+  if (open.length === 0) return results;
 
-  const matches: DocumentSearchMatch[] = [];
   const searchableSources = options.stories === 'body' ? undefined : sources;
   for (const story of searchStories(part, searchableSources)) {
     let paragraphIndex = 0;
@@ -289,46 +308,64 @@ export function collectTextMatches(
       const rawText = paragraphTextOf(story.part, paragraph.id) ?? '';
       const projected = projectVisibleParagraphText(paragraph, rawText);
       if (projected.text.length === 0) continue;
-
-      // One global budget, not one per paragraph or story.
-      const remaining = limit - matches.length;
-      // Once full, scan for one more occurrence to distinguish an exact total from truncation.
-      const found = projected.findOccurrences(query, Math.max(remaining, 1), scan);
-      if (remaining === 0 && found.matches.length > 0) return { matches, truncated: true };
       // Run starts are derived once per paragraph that has a hit, not per occurrence.
       let starts: RunStart[] | null = null;
-      for (const occurrence of found.matches) {
-        const projectedEnd = occurrence.start + occurrence.length;
-        starts ??= runStarts(paragraph);
-        // Simple-field expansions retain their visible result-run boundaries. Complex-field
-        // results remain one editable atom, so their address names the field's begin run.
-        const resultRun = projected.resultRunAddressAt(occurrence.start);
-        const address = resultRun
-          ? (resultRunAddressAt(starts, resultRun.runId, resultRun.offset) ??
-            runAddressAt(starts, occurrence.rawStart))
-          : runAddressAt(starts, occurrence.rawStart);
-        matches.push({
-          blockId: paragraph.id,
-          start: occurrence.rawStart,
-          length: occurrence.rawEnd - occurrence.rawStart,
-          paragraphIndex: index,
-          runIndex: address.index,
-          runOffset: address.offset,
-          ...(story.scope ? { scope: story.scope } : {}),
-          text: bounded(projected.text.slice(occurrence.start, projectedEnd), SEARCH_QUERY_MAX),
-          contextBefore: bounded(
-            projected.text.slice(Math.max(0, occurrence.start - CONTEXT_RADIUS), occurrence.start),
-            CONTEXT_RADIUS
-          ),
-          contextAfter: bounded(
-            projected.text.slice(projectedEnd, projectedEnd + CONTEXT_RADIUS),
-            CONTEXT_RADIUS
-          ),
-        });
+      let closed = false;
+      for (const queryIndex of open) {
+        const result = results[queryIndex]!;
+        // One budget per query, not per paragraph or story.
+        const remaining = limit - result.matches.length;
+        // Once full, scan for one more occurrence to tell an exact total from truncation.
+        const found = projected.findOccurrences(
+          bounded_[queryIndex]!,
+          Math.max(remaining, 1),
+          scan
+        );
+        if (remaining === 0 && found.matches.length > 0) {
+          result.truncated = true;
+          closed = true;
+          continue;
+        }
+        for (const occurrence of found.matches) {
+          const projectedEnd = occurrence.start + occurrence.length;
+          starts ??= runStarts(paragraph);
+          // Simple-field expansions retain their visible result-run boundaries. Complex-field
+          // results remain one editable atom, so their address names the field's begin run.
+          const resultRun = projected.resultRunAddressAt(occurrence.start);
+          const address = resultRun
+            ? (resultRunAddressAt(starts, resultRun.runId, resultRun.offset) ??
+              runAddressAt(starts, occurrence.rawStart))
+            : runAddressAt(starts, occurrence.rawStart);
+          result.matches.push({
+            blockId: paragraph.id,
+            start: occurrence.rawStart,
+            length: occurrence.rawEnd - occurrence.rawStart,
+            paragraphIndex: index,
+            runIndex: address.index,
+            runOffset: address.offset,
+            ...(story.scope ? { scope: story.scope } : {}),
+            text: bounded(projected.text.slice(occurrence.start, projectedEnd), SEARCH_QUERY_MAX),
+            contextBefore: bounded(
+              projected.text.slice(
+                Math.max(0, occurrence.start - CONTEXT_RADIUS),
+                occurrence.start
+              ),
+              CONTEXT_RADIUS
+            ),
+            contextAfter: bounded(
+              projected.text.slice(projectedEnd, projectedEnd + CONTEXT_RADIUS),
+              CONTEXT_RADIUS
+            ),
+          });
+        }
+        if (found.truncated) {
+          result.truncated = true;
+          closed = true;
+        }
       }
-      if (found.truncated) return { matches, truncated: true };
+      if (closed) open = open.filter((queryIndex) => !results[queryIndex]!.truncated);
+      if (open.length === 0) return results;
     }
   }
-
-  return { matches, truncated: false };
+  return results;
 }

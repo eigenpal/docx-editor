@@ -501,6 +501,10 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights {
         readonly matchCase?: boolean;
         readonly wholeWord?: boolean;
     }): readonly TextMatch[];
+    findMatches(queries: readonly string[], options?: {
+        readonly matchCase?: boolean;
+        readonly wholeWord?: boolean;
+    }): readonly (readonly TextMatch[])[];
     // (undocumented)
     focus(scope?: EditorScope): InteractionOutcome<void>;
     // (undocumented)

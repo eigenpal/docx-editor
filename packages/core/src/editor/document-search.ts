@@ -88,6 +88,8 @@ export interface DocumentSearch {
 }
 
 const EMPTY_MATCHES: readonly TextMatch[] = Object.freeze([]);
+/** Longest results wait while edits keep arriving. */
+const SEARCH_REFRESH_MAX_WAIT_MS = 1000;
 
 /**
  * The active match's index in a new result list. It follows the same occurrence: the match in
@@ -201,15 +203,39 @@ export function createDocumentSearch(editor: Editor): DocumentSearch {
     commit({ matches: derive(), isPending: false });
   }
 
-  // Results follow the document under the same query. The engine memoizes per revision, so
-  // an unchanged document hands back the same array and nothing re-renders.
-  const refresh = () => {
+  // Results follow the document under the same query, after typing pauses: a rescan on every
+  // keystroke would cost a document walk per character. Highlights stay on their text in
+  // between, because the engine maps them through each edit. A load refreshes at once.
+  let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+  let refreshFirstAt = 0;
+  const refreshNow = () => {
+    clearTimeout(refreshTimer);
+    refreshTimer = undefined;
+    refreshFirstAt = 0;
     if (searched.length > 0) commit({ matches: derive() });
   };
-  editor.on('change', refresh);
-  editor.on('selectionChange', refresh);
+  const flushRefresh = () => {
+    if (refreshTimer !== undefined) refreshNow();
+  };
+  editor.on('change', (change) => {
+    if (searched.length === 0) return;
+    if (change.source) return refreshNow();
+    const now = Date.now();
+    if (refreshFirstAt === 0) refreshFirstAt = now;
+    clearTimeout(refreshTimer);
+    const wait = Math.min(SEARCH_DEBOUNCE_MS, SEARCH_REFRESH_MAX_WAIT_MS - (now - refreshFirstAt));
+    refreshTimer = setTimeout(refreshNow, Math.max(0, wait));
+  });
+  // The editing mode narrows which stories search can reach.
+  let editingMode = editor.snapshot().editingMode;
+  editor.on('selectionChange', (snapshot) => {
+    if (snapshot.editingMode === editingMode) return;
+    editingMode = snapshot.editingMode;
+    refreshNow();
+  });
 
   const step = (delta: number, options?: DocumentSearchNavigateOptions): boolean => {
+    flushRefresh();
     const count = state.matches.length;
     if (count === 0) return false;
     const from = state.activeIndex < 0 ? (delta > 0 ? -1 : 0) : state.activeIndex;
@@ -245,6 +271,8 @@ export function createDocumentSearch(editor: Editor): DocumentSearch {
       commit({ wholeWord: value, matches: derive(searched, { ...state, wholeWord: value }) });
     },
     goTo(index, options) {
+      // Never select a match from results an edit has made stale.
+      flushRefresh();
       const match = state.matches[index];
       if (!match) return false;
       if (options?.focus) editor.focus();

@@ -36,7 +36,7 @@ const EMPTY_RESULT: HighlightResult = Object.freeze({ applied: 0, unavailable: 0
  * ```ts
  * useHighlights(
  *   'glossary',
- *   (editor) => terms.value.flatMap((term) => editor.findMatches(term, { wholeWord: true })),
+ *   (editor) => editor.findMatches(terms.value, { wholeWord: true }).flat(),
  *   { className: 'glossary-term' }
  * );
  * ```

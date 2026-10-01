@@ -320,7 +320,7 @@ import { useHighlights, type Editor } from '@docx-editor.dev/react';
 
 function GlossaryHighlights({ terms }: { terms: readonly string[] }) {
   const findTerms = useCallback(
-    (editor: Editor) => terms.flatMap((term) => editor.findMatches(term, { wholeWord: true })),
+    (editor: Editor) => editor.findMatches(terms, { wholeWord: true }).flat(),
     [terms]
   );
   useHighlights('glossary', findTerms);

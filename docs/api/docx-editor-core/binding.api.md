@@ -162,6 +162,7 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     ensureListDefinition(kind: ListKind): string | null;
     ensureNumberingLevel(numId: string, level: number, kind: ListKind): boolean;
     findText(query: string, options?: DocumentSearchOptions): DocumentSearchResult;
+    findText(queries: readonly string[], options?: DocumentSearchOptions): readonly DocumentSearchResult[];
     hasReviewContent(): boolean;
     headerFooterParts(): HeaderFooterParts;
     headerFooterPartsBySection(): readonly HeaderFooterParts[];

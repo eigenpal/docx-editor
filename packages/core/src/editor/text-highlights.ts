@@ -18,10 +18,11 @@ import type {
   HighlightRange,
   HighlightResult,
 } from '../contracts/editor-highlights.ts';
-import type { SemanticLayout } from '../layout/semantic-records.ts';
+import type { PageRecord, SemanticLayout } from '../layout/semantic-records.ts';
 import {
   paragraphRangeRects,
   placedParagraphIds,
+  type KeyedParagraphRect,
   type ParagraphRange,
 } from '../layout/paragraph-range-rects.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
@@ -292,6 +293,12 @@ function check(set: HighlightSet, surface: PaginatedSurface, layout: SemanticLay
   for (let index = 0; index < set.ranges.length; index += 1) {
     const range = set.ranges[index]!;
     const text = set.ends[index]! > set.starts[index]! ? read(set.blockIds[index]!) : null;
+    // Fast path: the paragraph is the same string as at the last check (the tree reuses an
+    // untouched paragraph's text), so only placement can have changed.
+    if (!capturing && text !== null && text === set.seen[index]) {
+      set.live[index] = set.resolved[index] && placed.has(set.blockIds[index]!) ? 1 : 0;
+      continue;
+    }
     // The text these offsets were measured against: the last check's, or for a search result
     // set a revision late, the paragraph it was found in. Map the offsets through the edit.
     const seen = capturing
@@ -333,6 +340,54 @@ function check(set: HighlightSet, surface: PaginatedSurface, layout: SemanticLay
   }
   set.expected = expected;
   set.checkedAt = { session, revision, layout };
+}
+
+/** Rectangles per set and page record; see `setRects`. */
+const rectCache = new WeakMap<HighlightSet, WeakMap<PageRecord, KeyedParagraphRect[]>>();
+const sheetCache = new WeakMap<HighlightSet, HTMLElement>();
+/** What a pooled mark element currently shows, so a repaint writes only what changed. */
+const markState = new WeakMap<HTMLElement, { key: string }>();
+
+function liveRangesByParagraph(set: HighlightSet): Map<string, ParagraphRange[]> {
+  const byParagraph = new Map<string, ParagraphRange[]>();
+  for (let index = 0; index < set.ranges.length; index += 1) {
+    if (!set.live[index]) continue;
+    const blockId = set.blockIds[index]!;
+    const bucket = byParagraph.get(blockId) ?? [];
+    bucket.push({ key: index, start: set.starts[index]!, end: set.ends[index]! });
+    byParagraph.set(blockId, bucket);
+  }
+  return byParagraph;
+}
+
+/** Reuse the sheet's mark element at `at`, writing only the properties that changed. */
+function writeMark(
+  document: Document,
+  sheet: HTMLElement,
+  at: number,
+  mark: PaintedMark,
+  set: HighlightSet
+): void {
+  let element = sheet.children[at] as HTMLElement | undefined;
+  if (!element) {
+    element = document.createElement('div');
+    element.style.position = 'absolute';
+    sheet.append(element);
+  }
+  const active = mark.index === set.activeIndex;
+  const key = `${mark.index}|${active ? 1 : 0}|${mark.left}|${mark.top}|${mark.width}|${mark.height}`;
+  const state = markState.get(element);
+  if (state?.key === key) return;
+  element.className = active
+    ? 'docx-text-highlight docx-text-highlight--active'
+    : 'docx-text-highlight';
+  if (set.classes.length > 0) element.classList.add(...set.classes);
+  element.setAttribute('data-highlight-index', String(mark.index));
+  element.style.left = `${mark.left}px`;
+  element.style.top = `${mark.top}px`;
+  element.style.width = `${mark.width}px`;
+  element.style.height = `${mark.height}px`;
+  markState.set(element, { key });
 }
 
 function pagesKey(pages: ReadonlySet<number> | undefined): string {
@@ -391,24 +446,9 @@ export function createTextHighlights(deps: {
     const sheets: HTMLElement[] = [];
     const marks: PaintedMark[] = [];
     for (const set of list) {
-      const byParagraph = new Map<string, ParagraphRange[]>();
-      for (let index = 0; index < set.ranges.length; index += 1) {
-        if (!set.live[index]) continue;
-        const blockId = set.blockIds[index]!;
-        const bucket = byParagraph.get(blockId) ?? [];
-        bucket.push({ key: index, start: set.starts[index]!, end: set.ends[index]! });
-        byParagraph.set(blockId, bucket);
-      }
-      const sheet = document.createElement('div');
-      sheet.className = 'docx-text-highlight-set';
-      sheet.setAttribute('data-highlight-set', set.name);
-      if (set.color) sheet.style.setProperty('--doc-text-highlight-set-color', set.color);
-      if (set.activeColor) {
-        sheet.style.setProperty('--doc-text-highlight-set-active-color', set.activeColor);
-      }
-      const rects = paragraphRangeRects(layout, byParagraph, frame.pages, frame.measurer);
-      // The active range paints last in its set, so a neighbour never covers it.
-      rects.sort((a, b) => Number(a.key === set.activeIndex) - Number(b.key === set.activeIndex));
+      const rects = setRects(set, layout, frame);
+      const sheet = sheetFor(document, set);
+      let used = 0;
       for (const rect of rects) {
         const page = layout.pages[rect.pageIndex];
         if (!page) continue;
@@ -421,23 +461,69 @@ export function createTextHighlights(deps: {
           width: rect.width * frame.scale,
           height: rect.height * frame.scale,
         };
-        const element = document.createElement('div');
-        element.className = 'docx-text-highlight';
-        element.style.position = 'absolute';
-        if (rect.key === set.activeIndex) element.classList.add('docx-text-highlight--active');
-        if (set.classes.length > 0) element.classList.add(...set.classes);
-        element.setAttribute('data-highlight-index', String(rect.key));
-        element.style.left = `${mark.left}px`;
-        element.style.top = `${mark.top}px`;
-        element.style.width = `${mark.width}px`;
-        element.style.height = `${mark.height}px`;
-        sheet.append(element);
+        writeMark(document, sheet, used, mark, set);
+        used += 1;
         marks.push(mark);
       }
+      // Drop marks left over from the previous paint.
+      while (sheet.childElementCount > used) sheet.lastElementChild!.remove();
       sheets.push(sheet);
     }
-    frame.layer.replaceChildren(...sheets);
+    // Keep sheets in stacking order; reattach only when the order or the set list changed.
+    const current = frame.layer.children;
+    if (current.length !== sheets.length || sheets.some((sheet, at) => current[at] !== sheet)) {
+      frame.layer.replaceChildren(...sheets);
+    }
     painted = marks;
+  }
+
+  /**
+   * A set's rectangles on the visible pages, in paint order. Cached per page record: layout
+   * hands an untouched page back as the same object, and a range's offsets and liveness only
+   * change with its paragraph, so a keystroke measures only the page it changed.
+   */
+  function setRects(
+    set: HighlightSet,
+    layout: SemanticLayout,
+    frame: SurfaceOverlayFrame
+  ): KeyedParagraphRect[] {
+    let byPage = rectCache.get(set);
+    if (!byPage) {
+      byPage = new WeakMap();
+      rectCache.set(set, byPage);
+    }
+    let byParagraph: Map<string, ParagraphRange[]> | null = null;
+    const rects: KeyedParagraphRect[] = [];
+    for (const page of layout.pages) {
+      if (frame.pages && !frame.pages.has(page.index)) continue;
+      let pageRects = byPage.get(page);
+      if (!pageRects) {
+        byParagraph ??= liveRangesByParagraph(set);
+        pageRects = paragraphRangeRects(layout, byParagraph, new Set([page.index]), frame.measurer);
+        byPage.set(page, pageRects);
+      }
+      for (const rect of pageRects) rects.push(rect);
+    }
+    // The active range paints last in its set, so a neighbour never covers it.
+    if (set.activeIndex >= 0) {
+      rects.sort((a, b) => Number(a.key === set.activeIndex) - Number(b.key === set.activeIndex));
+    }
+    return rects;
+  }
+
+  /** One persistent sheet per set object, so a repaint updates marks in place. */
+  function sheetFor(document: Document, set: HighlightSet): HTMLElement {
+    const existing = sheetCache.get(set);
+    if (existing) return existing;
+    const sheet = document.createElement('div');
+    sheet.className = 'docx-text-highlight-set';
+    sheet.setAttribute('data-highlight-set', set.name);
+    if (set.color) sheet.style.setProperty('--doc-text-highlight-set-color', set.color);
+    if (set.activeColor) {
+      sheet.style.setProperty('--doc-text-highlight-set-active-color', set.activeColor);
+    }
+    sheetCache.set(set, sheet);
+    return sheet;
   }
 
   function repaint(): void {

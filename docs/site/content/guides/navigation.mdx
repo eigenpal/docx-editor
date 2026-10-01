@@ -434,6 +434,12 @@ editor.clearHighlights('glossary'); // Or clearHighlights() for every set.
 
 To highlight ranges that you compute yourself, pass objects with `blockId`, `start`, and `length`. If you compute them outside the editor, add `expectedText`, so a range highlights only while the document has that text.
 
+To find many terms, such as a glossary, pass an array. The editor searches the document once and returns one result list per term:
+
+```ts
+const [suppliers, buyers] = editor.findMatches(['Supplier', 'Buyer'], { wholeWord: true });
+```
+
 In React and Vue, [`useHighlights`](/docs/2.x/react/hooks#usehighlights) keeps a set up to date as the document changes.
 
 ### Style highlights
@@ -483,11 +489,14 @@ type GlossaryRange = TextMatch & { readonly definition: string };
 function Glossary({ entries }: { entries: readonly { term: string; definition: string }[] }) {
   const findTerms = useCallback(
     (editor: Editor): GlossaryRange[] =>
-      entries.flatMap((entry) =>
-        editor
-          .findMatches(entry.term, { wholeWord: true })
-          .map((match) => ({ ...match, definition: entry.definition }))
-      ),
+      editor
+        .findMatches(
+          entries.map((entry) => entry.term),
+          { wholeWord: true }
+        )
+        .flatMap((matches, index) =>
+          matches.map((match) => ({ ...match, definition: entries[index]!.definition }))
+        ),
     [entries]
   );
   useHighlights('glossary', findTerms);
@@ -516,11 +525,14 @@ type GlossaryRange = TextMatch & { readonly definition: string };
 const props = defineProps<{ entries: readonly { term: string; definition: string }[] }>();
 
 useHighlights('glossary', (editor): GlossaryRange[] =>
-  props.entries.flatMap((entry) =>
-    editor
-      .findMatches(entry.term, { wholeWord: true })
-      .map((match) => ({ ...match, definition: entry.definition }))
-  )
+  editor
+    .findMatches(
+      props.entries.map((entry) => entry.term),
+      { wholeWord: true }
+    )
+    .flatMap((matches, index) =>
+      matches.map((match) => ({ ...match, definition: props.entries[index]!.definition }))
+    )
 );
 const hit = useHighlightAt<GlossaryRange>('glossary');
 </script>

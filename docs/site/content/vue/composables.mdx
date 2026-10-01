@@ -330,9 +330,7 @@ import { ref } from 'vue';
 import { useHighlights } from '@docx-editor.dev/vue';
 
 const terms = ref(['Supplier', 'Effective Date']);
-useHighlights('glossary', (editor) =>
-  terms.value.flatMap((term) => editor.findMatches(term, { wholeWord: true }))
-);
+useHighlights('glossary', (editor) => editor.findMatches(terms.value, { wholeWord: true }).flat());
 </script>
 ```
 

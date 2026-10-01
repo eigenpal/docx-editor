@@ -2100,14 +2100,22 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getSelectionFormatting: () =>
       selectionFormattingHalfPoints(surface ? snapshotNow().formatting : null),
 
-    findMatches: (query, options) =>
-      highlights.noteMatches(
-        surface?.session.findText(query, {
-          ...(options?.matchCase !== undefined ? { matchCase: options.matchCase } : {}),
-          ...(options?.wholeWord !== undefined ? { wholeWord: options.wholeWord } : {}),
-          stories: searchStoriesForSurface(surface, editingMode),
-        }).matches ?? []
-      ),
+    findMatches: ((
+      query: string | readonly string[],
+      options?: { readonly matchCase?: boolean; readonly wholeWord?: boolean }
+    ) => {
+      const scan = {
+        ...(options?.matchCase !== undefined ? { matchCase: options.matchCase } : {}),
+        ...(options?.wholeWord !== undefined ? { wholeWord: options.wholeWord } : {}),
+        ...(surface ? { stories: searchStoriesForSurface(surface, editingMode) } : {}),
+      };
+      if (typeof query === 'string') {
+        return highlights.noteMatches(surface?.session.findText(query, scan).matches ?? []);
+      }
+      // Many terms in one walk of the document.
+      const results = surface?.session.findText(query, scan);
+      return query.map((_, index) => highlights.noteMatches(results?.[index]?.matches ?? []));
+    }) as DocxEditorInstance['findMatches'],
 
     // Selection uses the match's model address and then reveals its paragraph.
     selectMatch(match: TextMatch): ExecResult {

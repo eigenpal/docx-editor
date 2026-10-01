@@ -448,6 +448,11 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights {
     query: string,
     options?: { readonly matchCase?: boolean; readonly wholeWord?: boolean }
   ): readonly TextMatch[];
+  /** Find many terms in one pass, such as a glossary: one result list per term, in order. */
+  findMatches(
+    queries: readonly string[],
+    options?: { readonly matchCase?: boolean; readonly wholeWord?: boolean }
+  ): readonly (readonly TextMatch[])[];
 
   /**
    * Move the selection to a found match — what a find dialog's next/previous do.

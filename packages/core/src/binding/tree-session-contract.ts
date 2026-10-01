@@ -384,6 +384,11 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
    * growing a cache the session would have to bound.
    */
   findText(query: string, options?: DocumentSearchOptions): DocumentSearchResult;
+  /** Many queries in one walk of the document, one result per query in the same order. */
+  findText(
+    queries: readonly string[],
+    options?: DocumentSearchOptions
+  ): readonly DocumentSearchResult[];
   /**
    * The faces the package EMBEDS (`word/fontTable.xml` embed relationships),
    * deobfuscated — the only font source that needs neither a substitute nor a network.
