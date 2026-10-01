@@ -43,6 +43,7 @@
       ],
       "@docx-editor.dev/core/collaboration": ["../core/src/collaboration/index.ts"],
       "@docx-editor.dev/editor-api": ["../editor-api/src/index.ts"],
+      "@docx-editor.dev/editor-api/browser": ["../editor-api/src/browser.ts"],
       "@docx-editor.dev/react": ["../react/src/index.ts"],
       "@docx-editor.dev/vue": ["../vue/src/index.ts"]
     }
