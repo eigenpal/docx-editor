@@ -433,6 +433,7 @@ jobs:
           ACTOR: ${{ github.actor }}
           RUN_NUMBER: ${{ github.run_number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          MODE_RESULT: ${{ needs.mode.result }}
           CHECKS_RESULT: ${{ needs.checks.result }}
           BUILD_RESULT: ${{ needs.build.result }}
           RELEASE_MODE: ${{ needs.mode.outputs.mode }}
@@ -443,6 +444,10 @@ jobs:
             mode="post-publish"
             title=":warning: docx-editor — release tagging failed after publication"
             detail="Packages were published, but release tagging failed. Check the original run and restore its version tag before using Recover release. Do not republish to repair a tag."
+          elif [ "$MODE_RESULT" != "success" ]; then
+            mode="release-mode"
+            title=":x: docx-editor — release mode detection failed"
+            detail="The Detect release mode job failed, so no release PR was updated and no publish was attempted. Check \`.changeset/config.json\` and the job log."
           elif [ "$CHANGESETS_OUTCOME" != "failure" ]; then
             mode="pre-release"
             title=":x: docx-editor — pre-release step failed"

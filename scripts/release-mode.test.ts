@@ -79,13 +79,25 @@ test('metadata for a different version is not a publication', async () => {
   expect((await releaseMode(fixture(), lookup)).mode).toBe('publish');
 });
 
-test('a group member without a manifest takes the publish path', async () => {
+test('a group member without a manifest fails instead of hiding in the publish path', async () => {
   const root = fixture([], ['@scope/core', '@scope/react', '@scope/new']);
   const lookup = npm(['@scope/core@1.2.0', '@scope/react@1.2.0']);
-  expect(await releaseMode(root, lookup)).toEqual({
-    mode: 'publish',
-    unpublished: ['@scope/new@missing'],
-  });
+  expect(releaseMode(root, lookup)).rejects.toThrow(
+    'No packages/*/package.json is named @scope/new'
+  );
+});
+
+test('manifests resolve by package name, not by directory name', () => {
+  const root = fixture([], ['@scope/core', '@scope/pdf-tools']);
+  mkdirSync(join(root, 'packages/pdf'), { recursive: true });
+  writeFileSync(
+    join(root, 'packages/pdf/package.json'),
+    JSON.stringify({ name: '@scope/pdf-tools', version: '1.2.0' })
+  );
+  expect(publicPackages(root)).toEqual([
+    { name: '@scope/core', version: '1.2.0' },
+    { name: '@scope/pdf-tools', version: '1.2.0' },
+  ]);
 });
 
 test('every lookup shares one bounded deadline', async () => {

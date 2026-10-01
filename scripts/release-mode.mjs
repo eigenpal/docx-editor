@@ -22,16 +22,24 @@ export function pendingChangesets(root) {
 }
 
 // The fixed group is the published package set; scripts/release-plan.test.ts proves it
-// equals every public workspace. A member without a manifest has no version on npm.
+// equals every public workspace. Manifests resolve by package name, not directory name.
 export function publicPackages(root) {
+  const manifests = new Map(
+    readdirSync(join(root, 'packages'), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => join(root, 'packages', entry.name, 'package.json'))
+      .filter((path) => existsSync(path))
+      .map((path) => json(path))
+      .map((manifest) => [manifest.name, manifest])
+  );
   return json(join(root, '.changeset/config.json'))
     .fixed.flat()
     .map((name) => {
-      const path = join(root, 'packages', name.split('/')[1], 'package.json');
-      const manifest = existsSync(path) ? json(path) : { version: 'missing' };
-      return { name, version: manifest.version, private: manifest.private === true };
+      const manifest = manifests.get(name);
+      if (!manifest) throw new Error(`No packages/*/package.json is named ${name}`);
+      return manifest;
     })
-    .filter((entry) => !entry.private)
+    .filter((manifest) => !manifest.private)
     .map(({ name, version }) => ({ name, version }));
 }
 
