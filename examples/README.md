@@ -2,6 +2,8 @@
 
 Install dependencies from the repository root. Build the workspace packages before you run an example that imports package output.
 
+Example controls use English text from `shared/example-text.ts`. Editor controls use the published locale catalogs.
+
 ```bash
 bun install
 bun run build:packages

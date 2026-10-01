@@ -139,6 +139,10 @@ t('navigation.find.total', { total: 15 }); // ICU plurals
 
 ## Contributing
 
+The catalogs contain editor controls. Examples keep English text in `examples/shared/example-text.ts`.
+
+If you use `collaborationDemo`, `documentRefresh`, `anchorNavigation`, or `writerAgent` keys, move those messages into your application's text catalog. Also move `toolbar.exportPdfServerUnavailable`. These keys are removed from `LocaleStrings` and `TranslationKey`.
+
 To contribute, see [CONTRIBUTING.md](https://github.com/eigenpal/docx-editor/blob/main/CONTRIBUTING.md) for setup, tests, and the one-time CLA signature.
 
 ## Commercial support

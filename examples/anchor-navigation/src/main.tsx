@@ -7,12 +7,10 @@ import {
   type ScrollToAnchorOptions,
 } from '@docx-editor.dev/react';
 import type { DocAnchor } from '@docx-editor.dev/core';
-import { createT, en } from '@docx-editor.dev/i18n';
+import { exampleText as t } from '../../shared/example-text';
 import '@docx-editor.dev/core/styles/editor.css';
 import { PARA_IDS, sampleDocument } from './sample-document';
 import './styles.css';
-
-const t = createT(en);
 
 // Findings as a review tool or server stores them: a paragraph ID, plus optional text.
 const REFERENCES = {

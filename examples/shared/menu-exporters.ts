@@ -1,7 +1,5 @@
 import type { ChromeExportHandlers } from '@docx-editor.dev/core/editor';
-import { createT, en } from '@docx-editor.dev/i18n';
-
-const t = createT(en, 'en');
+import { exampleText as t } from './example-text';
 
 /** Browser Markdown conversion and an explicit, user-triggered PDF server request. */
 export const demoExporters: ChromeExportHandlers = {

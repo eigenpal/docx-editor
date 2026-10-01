@@ -6,12 +6,10 @@ import {
   createDocumentRefresh,
   useDocxEditor,
 } from '@docx-editor.dev/react';
-import { createT, en } from '@docx-editor.dev/i18n';
+import { exampleText as t } from '../../shared/example-text';
 import '@docx-editor.dev/core/styles/editor.css';
 import './styles.css';
 import { receiveSampleUpdates, runRefreshJob } from './refresh-job';
-
-const t = createT(en);
 
 function UpdateControls() {
   const editor = useDocxEditor();
@@ -210,7 +208,7 @@ function App() {
     void load();
     return () => controller.abort();
   }, []);
-  if (!bytes) return <p role="status">{error || t('loading.label')}</p>;
+  if (!bytes) return <p role="status">{error || t('documentRefresh.loading')}</p>;
   return (
     <div
       className="docx-editor"

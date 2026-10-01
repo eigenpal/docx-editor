@@ -23,8 +23,8 @@ const CATALOGUE = join(ROOT, 'packages/i18n/en.json');
 
 /** Directories that never hold usage. */
 const SKIP_DIRS = new Set(['node_modules', 'dist', '.git', 'coverage', '.next', 'build', '.astro']);
-/** Where shipping source lives. Docs and the locale JSONs are deliberately absent. */
-const SOURCE_ROOTS = ['packages', 'examples', 'scripts'];
+/** Examples own their English text and cannot keep published catalog keys alive. */
+const SOURCE_ROOTS = ['packages', 'scripts'];
 /**
  * The Vue and Nuxt adapters are work in progress and do not ship, so a key only THEY name
  * is still dead weight in every community locale. They keep the catalogue honest by being

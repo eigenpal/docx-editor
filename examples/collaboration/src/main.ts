@@ -1,7 +1,7 @@
 import '@docx-editor.dev/core/styles/editor.css';
 import './style.css';
 
-import { createT, en } from '@docx-editor.dev/i18n';
+import { exampleText as t } from '../../shared/example-text';
 import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { collaborationModule } from '@docx-editor.dev/pro';
 import {
@@ -11,7 +11,6 @@ import {
 } from '@docx-editor.dev/pro/collaboration/webrtc';
 import { demoDocumentBytes } from './demo-document';
 
-const t = createT(en);
 const strings = {
   title: t('collaborationDemo.title'),
   subtitle: t('collaborationDemo.subtitle'),

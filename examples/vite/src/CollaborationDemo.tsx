@@ -9,7 +9,7 @@ import {
   useCollaborationStatus,
 } from '@docx-editor.dev/pro/react';
 import type { CollaborationSession } from '@docx-editor.dev/pro/react';
-import { createT, en } from '@docx-editor.dev/i18n';
+import { exampleText as t } from '../../shared/example-text';
 import {
   createCollaborationRoomId,
   validateRoomId,
@@ -18,7 +18,6 @@ import type { UseWebrtcCollaborationConnectOptions } from '@docx-editor.dev/pro/
 import { DemoHeaderButton } from './DemoHeaderButton';
 
 const NAME_KEY = 'docx-editor-collaboration-name';
-const t = createT(en);
 const strings = {
   name: t('collaborationDemo.name'),
   room: t('collaborationDemo.room'),

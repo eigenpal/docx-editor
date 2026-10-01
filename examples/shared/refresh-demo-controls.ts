@@ -3,15 +3,11 @@ import {
   type DocxEditorInstance,
   type RefreshSubmission,
 } from '@docx-editor.dev/core/editor';
-import type { TFunction } from '@docx-editor.dev/i18n';
+import { exampleText as t } from './example-text';
 import { refreshFixture, sampleProcessor } from './refresh-demo-fixture';
 
 /** Shared example transport and controls. Both adapters use the engine controller. */
-export function mountRefreshDemoControls(
-  container: HTMLElement,
-  editor: DocxEditorInstance,
-  t: TFunction
-) {
+export function mountRefreshDemoControls(container: HTMLElement, editor: DocxEditorInstance) {
   const refresh = createDocumentRefresh(editor);
   const doc = container.ownerDocument;
   let disposed = false;

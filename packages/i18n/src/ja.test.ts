@@ -46,8 +46,6 @@ describe('Japanese editor locale', () => {
       assert.equal(t('navigation.find.total', { total: count }), `${count} 件`);
       assert.equal(t('navigation.find.totalTruncated', { total: count }), `${count} 件以上`);
       assert.equal(t('collaboration.moreParticipants', { count }), `他 ${count} 人`);
-      assert.equal(t('collaborationDemo.caretPages', { count }), `${count} ページ`);
-      assert.equal(t('documentRefresh.count', { count }), `最近の変更 ${count} 件`);
     }
     assert.equal(t('navigation.find.counter', { current: 2, total: 15 }), '15 件中 2 件目');
     assert.equal(

@@ -6,7 +6,7 @@ import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } fro
 import type { DocxEditorRuntime } from '@docx-editor.dev/editor-api/browser';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { createWriterRuntime, runWriterTool } from '../agent/run-tool';
-import { useTranslation } from '@docx-editor.dev/react';
+import { exampleText as t } from '../../../shared/example-text';
 import type { WriterMode } from '../agent/run-tool';
 import { WriterStreamEdits } from '../agent/stream-edits';
 import type { WriterPart } from '../agent/stream-input';
@@ -45,7 +45,6 @@ export function WriterPanel({
   editor: DocxEditorInstance | null;
   onDocumentTitle: (title: string) => void;
 }) {
-  const { t } = useTranslation();
   const [mode, setMode] = useState<WriterMode>('direct');
   const [input, setInput] = useState('');
   const [stopped, setStopped] = useState(false);

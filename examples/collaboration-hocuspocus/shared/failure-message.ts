@@ -1,7 +1,5 @@
-import { createT, en, type TFunction } from '@docx-editor.dev/i18n';
+import { exampleText as t } from '../../shared/example-text';
 import type { CollaborationFailure } from '@docx-editor.dev/core/collaboration';
-
-const english = createT(en);
 
 export interface DemoFailureMessage {
   readonly title: string;
@@ -13,8 +11,7 @@ export interface DemoFailureMessage {
 /** English copy for this demo's recovery screen, shared with its admission tests. */
 export function failureMessage(
   failure: CollaborationFailure,
-  connection: { readonly serverUrl: string; readonly serverCommand: string },
-  t: TFunction = english
+  connection: { readonly serverUrl: string; readonly serverCommand: string }
 ): DemoFailureMessage {
   if (
     failure.code === 'collaboration-format-mismatch' ||
