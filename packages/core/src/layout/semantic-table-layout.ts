@@ -2,8 +2,8 @@ import { adjustedBreakIndex, paragraphKeeps } from './pagination-keeps.ts';
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { cellContextualSpacing, contextualCellNeighbours } from './contextual-paragraph-spacing.ts';
 import { emitNestedTable } from './nested-table-layout.ts';
-import { lineContentX, paragraphIsRtl } from './rtl-paragraph.ts';
-import { pendingLineExclusionSkipAtPlacement } from './pending-line.ts';
+import { paragraphIsRtl } from './rtl-paragraph.ts';
+import { lineContentX, pendingLineExclusionSkipAtPlacement } from './pending-line.ts';
 import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
 // Table row and cell layout over the canonical tree.
 //
@@ -666,14 +666,12 @@ function placeCellParagraph(
     y = lineTops[lineIndex - lineStart]!;
     const lineIndent = originX + indent.left + (lineIndex === 0 && !rtl ? firstLineOffset : 0);
     const lineAvailableWidth = Math.max(1, available - (lineIndex === 0 ? firstLineOffset : 0));
+    // Spans and inline drawings come from one pen, so they share one origin.
+    const penX = originX - (rtl && lineIndex === 0 ? firstLineOffset : 0);
     const placedSpans = pendingLine.spans.map((span) => ({
       ...span,
       range: { ...span.range, paragraphId },
-      box: {
-        ...span.box,
-        x: span.box.x + originX - (rtl && lineIndex === 0 ? firstLineOffset : 0),
-        y,
-      },
+      box: { ...span.box, x: span.box.x + penX, y },
     }));
     const alignedSpans = alignSpans(
       placedSpans,
@@ -704,7 +702,7 @@ function placeCellParagraph(
       pendingLine.drawings.map((drawing) =>
         clipInlineDrawingRecordToRegion(
           Object.freeze({
-            ...shiftInlineDrawingRecord(drawing, originX, y),
+            ...shiftInlineDrawingRecord(drawing, penX, y),
             paragraphId,
           }),
           cellClip

@@ -40,6 +40,22 @@ const SCALE = 2;
 
 const paragraph = (content: string, pPr = '') => `<w:p><w:pPr>${pPr}</w:pPr>${content}</w:p>`;
 const center = '<w:jc w:val="center"/>';
+const rtlFirstLine = '<w:bidi/><w:ind w:firstLine="400"/>';
+/** A 100pt square-wrapped float whose left edge is 120pt into the column. */
+const floatAt120 =
+  '<w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" ' +
+  'behindDoc="0" locked="0" allowOverlap="1" layoutInCell="1" relativeHeight="1">' +
+  '<wp:simplePos x="0" y="0"/>' +
+  '<wp:positionH relativeFrom="column"><wp:posOffset>1524000</wp:posOffset></wp:positionH>' +
+  '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
+  '<wp:extent cx="1270000" cy="1270000"/>' +
+  '<wp:wrapSquare wrapText="bothSides" distT="0" distB="0" distL="0" distR="0"/>' +
+  '<wp:docPr id="2" name="float"/>' +
+  '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+  '<pic:pic><pic:nvPicPr><pic:cNvPr id="2" name=""/><pic:cNvPicPr/></pic:nvPicPr>' +
+  '<pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
+  '<pic:spPr><a:xfrm><a:ext cx="1270000" cy="1270000"/></a:xfrm><a:prstGeom prst="rect"/>' +
+  '</pic:spPr></pic:pic></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>';
 const cell = (content: string) =>
   '<w:tbl><w:tblGrid><w:gridCol w:w="7200"/></w:tblGrid><w:tr><w:tc>' +
   `<w:tcPr><w:tcW w:w="7200" w:type="dxa"/></w:tcPr>${content}</w:tc></w:tr></w:tbl>`;
@@ -70,9 +86,9 @@ function paintedRunOffsets(layout: SemanticLayout, line: LineRecord): number[] {
   let flow = 0;
   const offsets: number[] = [];
   for (const child of element.querySelectorAll<HTMLElement>(
-    ':scope > .docx-inline-drawing-advance, :scope > .layout-run'
+    ':scope > .docx-inline-drawing-advance, :scope > .docx-wrap-advance, :scope > .layout-run'
   )) {
-    if (child.classList.contains('docx-inline-drawing-advance')) {
+    if (!child.classList.contains('layout-run')) {
       flow += parseFloat(child.style.width) / SCALE;
       continue;
     }
@@ -104,6 +120,35 @@ describe('a line that opens with an inline picture', () => {
       expectRunsAtLayout(layout, line);
     });
   }
+
+  test('keeps the jump a float forces between the picture and the text', () => {
+    const { layout, line } = pictureLine(
+      paragraph(`${floatAt120}<w:r>${drawing}<w:t>abcd</w:t></w:r>`)
+    );
+    const picture = line.drawings![0]!;
+    // The word does not fit between the picture and the float, so it resumes after the float.
+    expect(line.spans[0]!.box.x).toBeCloseTo(220, 5);
+    expect(line.spans[0]!.wrapAdvanceBefore).toBeCloseTo(220 - picture.advanceEnd, 5);
+    expectRunsAtLayout(layout, line);
+  });
+
+  test('keeps the jump a float forces after a picture between two words', () => {
+    const { layout, line } = pictureLine(
+      paragraph(`${floatAt120}<w:r><w:t xml:space="preserve">a </w:t>${drawing}<w:t>bc</w:t></w:r>`)
+    );
+    expect(line.spans.at(-1)!.box.x).toBeCloseTo(220, 5);
+    expectRunsAtLayout(layout, line);
+  });
+
+  test('a right-to-left first line places the picture with its text', () => {
+    const { layout, line } = pictureLine(
+      paragraph(`<w:r>${drawing}<w:t>abcd</w:t></w:r>`, rtlFirstLine)
+    );
+    const picture = line.drawings![0]!;
+    expect(line.spans[0]!.box.x).toBeCloseTo(picture.advanceEnd, 5);
+    expect(line.contentX).toBeCloseTo(picture.advanceStart, 5);
+    expectRunsAtLayout(layout, line);
+  });
 
   test('a centered line centers the picture and the text as one unit', () => {
     const { line } = pictureLine(paragraph(`<w:r>${drawing}<w:t>abcd</w:t></w:r>`, center));

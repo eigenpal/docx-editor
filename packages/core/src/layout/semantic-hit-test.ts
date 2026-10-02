@@ -686,8 +686,9 @@ function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContex
       ? candidate
       : { ...candidate, offset, x: caretBoxOnLine(line, offset, context.measurer, segment).x };
   }
-  const first = spans[0]!;
-  if (x <= first.box.x) return { offset: line.range.start, x: first.box.x, withinSpan: false };
+  // The line starts at its first content, which can be an inline picture before the text. A
+  // point over that picture's advance is decided by the drawing checks below.
+  if (x <= line.contentX) return { offset: line.range.start, x: line.contentX, withinSpan: false };
 
   const last = spans[spans.length - 1]!;
   const rightEdge = last.box.x + last.box.width;
@@ -738,7 +739,9 @@ function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContex
     if (x < span.box.x) {
       // Justified text carries its slack in the gaps BETWEEN spans, so a point can be inside
       // the line and inside no span. Take the nearer edge rather than inventing a position.
-      const previous = spans[index - 1]!;
+      // Before the first span, that gap is a wrap jump after a leading picture.
+      const previous = spans[index - 1];
+      if (!previous) return { offset: span.range.start, x: span.box.x, withinSpan: false };
       const previousRight = previous.box.x + previous.box.width;
       return x - previousRight <= span.box.x - x
         ? { offset: previous.range.end, x: previousRight, withinSpan: false }

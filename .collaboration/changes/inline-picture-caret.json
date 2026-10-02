@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A caret after an inline picture that is alone in its paragraph was written to the browser as the paragraph start, so typing could land before the picture.",
+  "after": "That caret position is not written to the browser selection; the editor keeps the model caret, as it does for other positions the painted text cannot express.",
+  "reason": "The change only decides where the local browser caret is drawn. It does not change shared document data, operations, awareness, or package formats.",
+  "tests": [
+    "packages/core/src/editor/__tests__/dom-selection.test.ts",
+    "packages/core/src/output/__tests__/inline-drawing-line-origin.test.ts"
+  ],
+  "changeset": "inline-picture-line-start",
+  "migration": null
+}

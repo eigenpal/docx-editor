@@ -383,6 +383,12 @@ function domPointFromPositionIn(
   // keeps the model — which the engine's own painted caret draws from anyway.
   if (painted) return null;
 
+  // The line's child index 0 reads back as the paragraph START, so it can stand only for
+  // offset 0. A paragraph that paints no text can still hold other offsets: the position
+  // after an inline picture on its own line. Writing index 0 for it moved the caret to before
+  // the picture, so the next character typed landed in front of it.
+  if (position.offset !== 0) return null;
+
   // An EMPTY paragraph paints a line with no spans, so there is no text node to point at —
   // yet it still has exactly one caret position. Without this the caret vanished after every
   // Enter, and Select All drew no highlight at all on a document ending in a blank

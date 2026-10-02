@@ -315,8 +315,8 @@ export interface LineRecord {
    * the caret each fell back to `box.x` and drew a centred empty paragraph's caret hard
    * against the left margin, where it stayed until the first character was typed.
    *
-   * Equal to the leftmost span's x whenever there is one, so it is the single origin every
-   * consumer can read without a spans-or-box fallback of its own.
+   * The leftmost x of any span box or inline drawing `advanceStart`: one origin for every
+   * consumer. On a line that opens with a picture, the text starts at the leftmost span.
    */
   readonly contentX: number;
   /** Distance from the line box top to the text baseline. */

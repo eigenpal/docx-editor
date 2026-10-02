@@ -397,24 +397,53 @@ export function alignDrawings(
 }
 
 /**
- * Record the jumps a float's wrap zone forced between this line's spans.
+ * The line's content origin: the leftmost advance of any span OR inline drawing.
+ *
+ * An inline drawing is content too. Paint opens the line at this x and reserves each
+ * drawing's advance as an inline spacer before the spans that follow it, so an origin taken
+ * from the spans alone started a picture-first line at its first glyph and the spacer then
+ * pushed that glyph a second picture width to the right.
+ */
+export function lineContentX(
+  spans: readonly StyleSpanRecord[],
+  drawings: readonly Pick<InlineDrawingRecord, 'advanceStart'>[],
+  fallback: number
+): number {
+  if (spans.length === 0 && drawings.length === 0) return fallback;
+  let x = Infinity;
+  for (const span of spans) x = Math.min(x, span.box.x);
+  for (const drawing of drawings) x = Math.min(x, drawing.advanceStart);
+  return x;
+}
+
+/**
+ * Record the jumps a float's wrap zone forced before each of this line's spans.
  *
  * Spans are laid contiguously as the pen advances, so at close time the ONLY horizontal
- * gaps between them are advances the pen skipped: an inline drawing's own reserved slot,
+ * gaps before them are advances the pen skipped: an inline drawing's own reserved slot,
  * which paint already fills, and a wrap exclusion the line stepped over to resume in the
  * next passage. Justification has not run yet, so nothing here can be confused with slack.
+ *
+ * Paint flows each span after the previous one and after a spacer for every inline drawing
+ * between them, so the jump is whatever that flow leaves short of the span. A span with no
+ * span before it flows from the line's leading drawing, when there is one.
  */
 export function markPendingLineWrapAdvances(line: PendingLine): void {
-  if (line.spans.length < 2) return;
-  for (let index = 1; index < line.spans.length; index += 1) {
-    const previous = line.spans[index - 1]!;
+  for (let index = 0; index < line.spans.length; index += 1) {
+    const previous = line.spans[index - 1];
     const current = line.spans[index]!;
-    const gap = current.box.x - (previous.box.x + previous.box.width);
+    let flowEnd = previous ? previous.box.x + previous.box.width : Infinity;
+    let advances = 0;
+    for (const drawing of line.drawings) {
+      if (drawing.start >= current.range.start) continue;
+      if (previous && drawing.start < previous.range.end) continue;
+      if (!previous) flowEnd = Math.min(flowEnd, drawing.advanceStart);
+      advances += Math.max(0, drawing.advanceEnd - drawing.advanceStart);
+    }
+    // The line's first content: nothing flows before it, so there is nothing to jump.
+    if (!Number.isFinite(flowEnd)) continue;
+    const gap = current.box.x - (flowEnd + advances);
     if (gap <= 0.001) continue;
-    const drawingFillsGap = line.drawings.some(
-      (drawing) => drawing.start >= previous.range.end && drawing.start < current.range.start
-    );
-    if (drawingFillsGap) continue;
     line.spans[index] = { ...current, wrapAdvanceBefore: gap };
   }
 }

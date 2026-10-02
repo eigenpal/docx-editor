@@ -13,6 +13,24 @@ import {
   selectionsEqual,
   semanticSelectionFromDom,
 } from '../dom-selection.ts';
+import { layoutContext, load } from '../../layout/__tests__/anchored-drawing-test-fixtures.ts';
+
+const PICTURE_NAMESPACES =
+  'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +
+  'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ' +
+  'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+  'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" ' +
+  'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+
+/** An inline picture 100pt wide and 10pt tall. */
+const PICTURE =
+  '<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+  '<wp:extent cx="1270000" cy="127000"/><wp:docPr id="1" name="p1"/>' +
+  '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+  '<pic:pic><pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr>' +
+  '<pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
+  '<pic:spPr><a:xfrm><a:ext cx="1270000" cy="127000"/></a:xfrm><a:prstGeom prst="rect"/>' +
+  '</pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing>';
 
 /** A painted line: spans stamped with the source range they were laid out from. */
 function paintedLine(
@@ -328,6 +346,48 @@ describe('the empty-paragraph caret', () => {
   test('an endpoint on the empty line reads back as the paragraph start', () => {
     const root = paintedEmptyParagraph('p9');
     expect(positionFromDomPoint(root.querySelector('.docx-line')!, 0, root)).toEqual(caret);
+  });
+});
+
+describe('a paragraph that holds only an inline picture', () => {
+  /** A painted page whose one paragraph is a 100pt inline picture and nothing else. */
+  function paintedPictureParagraph(): { root: HTMLElement; paragraphId: string } {
+    const part = load(
+      `<w:document ${PICTURE_NAMESPACES}><w:body><w:p><w:r>${PICTURE}</w:r></w:p></w:body></w:document>`
+    );
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+      inlineDrawingLayout: layoutContext(part),
+    });
+    const root = document.createElement('div');
+    paintSemanticLayout(root, layout, { scale: 1 });
+    const line = root.querySelector<HTMLElement>('.docx-line')!;
+    expect(line.querySelector('[data-start]')).toBeNull();
+    return { root, paragraphId: line.dataset.paragraphId! };
+  }
+
+  test('the caret after the picture is not written as the paragraph start', () => {
+    // The line's child index 0 reads back as offset 0. Writing it for the position after
+    // the picture moved the caret in front of the picture, and typing landed there.
+    const { root, paragraphId } = paintedPictureParagraph();
+    document.body.append(root);
+    const after = { paragraphId, offset: 1 };
+    getSelection()!.removeAllRanges();
+    expect(applySelectionToDom(root, { anchor: after, head: after }, getSelection())).toBe(false);
+    expect(getSelection()!.rangeCount).toBe(0);
+    root.remove();
+  });
+
+  test('the caret before the picture still targets the line', () => {
+    const { root, paragraphId } = paintedPictureParagraph();
+    document.body.append(root);
+    const before = { paragraphId, offset: 0 };
+    expect(applySelectionToDom(root, { anchor: before, head: before }, getSelection())).toBe(true);
+    const selection = getSelection()!;
+    expect(positionFromDomPoint(selection.anchorNode!, selection.anchorOffset, root)).toEqual(
+      before
+    );
+    root.remove();
   });
 });
 

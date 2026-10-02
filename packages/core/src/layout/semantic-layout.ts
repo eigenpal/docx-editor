@@ -23,7 +23,7 @@ import {
 import { tocLinkRanges, tocLinkStyleToken } from './toc-link-formatting.ts';
 import { tocCodeRanges } from './field-code-toc.ts';
 import { tocIdsToken, tocVerdictFor, type TocIdSets } from './toc-id-sets.ts';
-import { lineContentX, paragraphIsRtl } from './rtl-paragraph.ts';
+import { paragraphIsRtl } from './rtl-paragraph.ts';
 import * as sectionPrep from './section-preparation.ts';
 import { resolveListAutoSpacing, listAutoSpacingFlowKeys } from './list-auto-spacing.ts';
 import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
@@ -93,7 +93,7 @@ import { collapsingSpaceAfter, resolveParagraphLayoutInputs } from './style-casc
 import { paragraphBorderGroupKey } from './cell-border-groups.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import { paragraphFragmentBorders } from './paragraph-fragment-borders.ts';
-import { holdsOnlyPageBreak } from './pending-line.ts';
+import { holdsOnlyPageBreak, lineContentX } from './pending-line.ts';
 import { createLeadingBreakGroups } from './leading-break-border-group.ts';
 import { type TableAnchorFrames } from './semantic-table.ts';
 import * as tableFloat from './table-float-position.ts';
@@ -2799,7 +2799,7 @@ function layoutBlocksPass(
       });
       const placedDrawings = pendingLine.drawings.map((drawing) => {
         const placed = Object.freeze({
-          ...shiftInlineDrawingRecord(drawing, columnX, cursorY),
+          ...shiftInlineDrawingRecord(drawing, columnX - (rtl ? firstLineOffset : 0), cursorY),
           paragraphId,
         });
         return clipInlineDrawingRecordToRegion(placed, pageClip);
