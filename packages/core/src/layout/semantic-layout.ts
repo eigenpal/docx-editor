@@ -23,7 +23,7 @@ import {
 import { tocLinkRanges, tocLinkStyleToken } from './toc-link-formatting.ts';
 import { tocCodeRanges } from './field-code-toc.ts';
 import { tocIdsToken, tocVerdictFor, type TocIdSets } from './toc-id-sets.ts';
-import { paragraphIsRtl, spanContentX } from './rtl-paragraph.ts';
+import { lineContentX, paragraphIsRtl } from './rtl-paragraph.ts';
 import * as sectionPrep from './section-preparation.ts';
 import { resolveListAutoSpacing, listAutoSpacingFlowKeys } from './list-auto-spacing.ts';
 import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
@@ -2815,7 +2815,7 @@ function layoutBlocksPass(
           width: available,
           height: pendingLine.height,
         },
-        contentX: spanContentX(alignedSpans, lineIndent + alignOffset),
+        contentX: lineContentX(alignedSpans, alignedDrawings, lineIndent + alignOffset),
         baseline: pendingLine.baseline,
         leading: pendingLine.leading,
         trailingSpacing: pendingLine.trailingSpacing,

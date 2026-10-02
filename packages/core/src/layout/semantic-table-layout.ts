@@ -2,7 +2,7 @@ import { adjustedBreakIndex, paragraphKeeps } from './pagination-keeps.ts';
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { cellContextualSpacing, contextualCellNeighbours } from './contextual-paragraph-spacing.ts';
 import { emitNestedTable } from './nested-table-layout.ts';
-import { paragraphIsRtl, spanContentX } from './rtl-paragraph.ts';
+import { lineContentX, paragraphIsRtl } from './rtl-paragraph.ts';
 import { pendingLineExclusionSkipAtPlacement } from './pending-line.ts';
 import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
 // Table row and cell layout over the canonical tree.
@@ -727,7 +727,7 @@ function placeCellParagraph(
         // caret until something is typed into it, which un-collapses it.
         height: collapseHeight ? 0 : pendingLine.height,
       },
-      contentX: spanContentX(alignedSpans, lineIndent + alignOffset),
+      contentX: lineContentX(alignedSpans, alignedDrawings, lineIndent + alignOffset),
       baseline: collapseHeight
         ? Math.max(0, Math.min(pendingLine.baseline, options?.collapseBandAbove ?? 0))
         : pendingLine.baseline,

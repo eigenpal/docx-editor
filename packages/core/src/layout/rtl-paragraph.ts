@@ -1,5 +1,6 @@
 import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import { coalesceBidiPieces } from './bidi-piece-coalescing.ts';
+import type { InlineDrawingRecord } from './drawing-layout.ts';
 import { bidiAlgorithm } from './bidi.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
 import { itemizeScriptFontSlots } from './script-itemization.ts';
@@ -533,8 +534,24 @@ export function reorderBidiSpans(
   return result;
 }
 
-export function spanContentX(spans: readonly StyleSpanRecord[], fallback: number): number {
-  return spans.length ? spans.reduce((x, s) => Math.min(x, s.box.x), Infinity) : fallback;
+/**
+ * The line's content origin: the leftmost advance of any span OR inline drawing.
+ *
+ * An inline drawing is content too. Paint opens the line at this x and reserves each
+ * drawing's advance as an inline spacer before the spans that follow it, so an origin taken
+ * from the spans alone started a picture-first line at its first glyph and the spacer then
+ * pushed that glyph a second picture width to the right.
+ */
+export function lineContentX(
+  spans: readonly StyleSpanRecord[],
+  drawings: readonly Pick<InlineDrawingRecord, 'advanceStart'>[],
+  fallback: number
+): number {
+  if (spans.length === 0 && drawings.length === 0) return fallback;
+  let x = Infinity;
+  for (const span of spans) x = Math.min(x, span.box.x);
+  for (const drawing of drawings) x = Math.min(x, drawing.advanceStart);
+  return x;
 }
 
 export function nearestBidiSpan(

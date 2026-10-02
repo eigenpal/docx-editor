@@ -21,13 +21,17 @@ export function lineTerminatorEdge(
 } {
   const base = line.spans.find((span) => span.style.shaping)?.style.shaping?.baseLevel;
   const rtl = base === undefined ? paragraphRtl : base === 1;
-  if (!line.spans.length) return { x: line.contentX, rtl };
-  return {
-    x: rtl
-      ? line.spans.reduce((x, span) => Math.min(x, span.box.x), Infinity)
-      : line.spans.reduce((x, span) => Math.max(x, span.box.x + span.box.width), -Infinity),
-    rtl,
-  };
+  const drawings = line.drawings ?? [];
+  if (!line.spans.length && !drawings.length) return { x: line.contentX, rtl };
+  // An inline picture is content: the mark follows a picture that ends the line.
+  let x = rtl ? Infinity : -Infinity;
+  for (const span of line.spans) {
+    x = rtl ? Math.min(x, span.box.x) : Math.max(x, span.box.x + span.box.width);
+  }
+  for (const drawing of drawings) {
+    x = rtl ? Math.min(x, drawing.advanceStart) : Math.max(x, drawing.advanceEnd);
+  }
+  return { x, rtl };
 }
 
 export function positionTerminatorMark(
