@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/i18n': major
+'@docx-editor.dev/i18n': patch
 ---
 
-Remove example-only translation keys from the published locale catalogs. Example controls use local English text.
+Remove accidentally included example-only messages from the locale catalogs.

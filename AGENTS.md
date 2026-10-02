@@ -174,13 +174,15 @@ Fix sibling sinks when you fix one. The HTML sinks in that grep are also lint er
 
 `packages/i18n/en.json` is source of truth; other locales mirror its shape with `null` = fall back to English. A missing key fails CI.
 
+The published catalogs cover only UI shipped by the library packages. Files under `examples/` must not add translation keys to `packages/i18n`. Keep example-only text in the example or `examples/shared/example-text.ts`. Examples may reuse existing keys for shipped editor controls. Examples use English unless the task explicitly requires local translations.
+
 ```ts
 const { t } = useTranslation();
 t('formattingBar.bold');
 t('navigation.find.counter', { current: 3, total: 15 });
 ```
 
-New string: add to `en.json`, use `t('key')`, `bun run i18n:fix`. New language: `bun run i18n:new <code>`, fill nulls, `bun run i18n:status`. Never hardcode user-facing English in components.
+New library UI string: add to `en.json`, use `t('key')`, `bun run i18n:fix`. New language: `bun run i18n:new <code>`, fill nulls, `bun run i18n:status`. Never hardcode user-facing English in shipped library components. This restriction does not apply to example-only text.
 
 ## Docs site
 
