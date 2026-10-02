@@ -1300,8 +1300,7 @@ function paintLine(
       rankOf(left.paragraphId) - rankOf(right.paragraphId) || left.start - right.start
   );
   let nextInlineDrawing = 0;
-  // Shaped spans (bidi, or spaces compressed by justification) are placed relative to where
-  // inline flow left them. That flow holds every drawing spacer as well as the spans before.
+  // Shaped spans are placed relative to where inline flow (spans and spacers) left them.
   const bidi =
     line.spans.some((span) => span.style.shaping !== undefined) ||
     (line.drawings ?? []).some(pictureIsRtl);
@@ -1323,8 +1322,7 @@ function paintLine(
       const spacer = document.createElement('span');
       spacer.className = 'docx-inline-drawing-advance';
       spacer.dataset.docxMarker = '';
-      // The picture's model position, so a selection can be written just after it and read
-      // back: a picture alone in its paragraph paints no text to hold that caret.
+      // The picture's model position: a lone picture paints no text to hold a caret after it.
       spacer.dataset.drawingParagraphId = drawing.paragraphId;
       spacer.dataset.drawingStart = String(drawing.start);
       spacer.setAttribute('contenteditable', 'false');
@@ -1374,8 +1372,14 @@ function paintLine(
   let pendingGap = 0;
   let previousSpanAbsorbedGap = false;
   for (const [spanIndex, span] of line.spans.entries()) {
+    const flushed = nextInlineDrawing;
     appendDrawingAdvancesBefore(span.range.paragraphId, span.range.start);
     if (!bidi) appendWrapAdvance(span);
+    // Justify slack after a picture: its spacer ends at its far edge, and no span gap paints it.
+    const slackAfterPicture =
+      !bidi && nextInlineDrawing > flushed
+        ? span.box.x - flowRight - (span.wrapAdvanceBefore ?? 0)
+        : 0;
     flowRight = Math.max(flowRight, span.box.x + span.box.width);
     const band = Math.min(span.box.height + leading, line.box.height);
     const painted = span.noteSeparator
@@ -1392,9 +1396,8 @@ function paintLine(
         painted.style.wordSpacing = `${span.style.shaping.wordSpacingPt * scale}px`;
       logicalAdvance += span.box.width;
     }
-    if (pendingGap > 0 && !previousSpanAbsorbedGap) {
-      painted.style.marginLeft = `${pendingGap * scale}px`;
-    }
+    const margin = pendingGap > 0 && !previousSpanAbsorbedGap ? pendingGap : slackAfterPicture;
+    if (margin > 0.001) painted.style.marginLeft = `${margin * scale}px`;
     // A justify gap is drawn INSIDE the span before it wherever that span can stretch its
     // trailing space: the browser highlights a space's advance but never a margin, so a
     // margin gap broke the selection band into one block per word on justified lines.

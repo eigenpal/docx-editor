@@ -351,7 +351,10 @@ describe('the empty-paragraph caret', () => {
 
 describe('the position just after an inline picture', () => {
   /** A painted page whose one paragraph is `content`, with a 100pt inline picture in it. */
-  function painted(content: string): { root: HTMLElement; paragraphId: string } {
+  function painted(
+    content: string,
+    showParagraphMarks = false
+  ): { root: HTMLElement; paragraphId: string } {
     const part = load(
       `<w:document ${PICTURE_NAMESPACES}><w:body><w:p>${content}</w:p></w:body></w:document>`
     );
@@ -360,7 +363,7 @@ describe('the position just after an inline picture', () => {
       inlineDrawingLayout: layoutContext(part),
     });
     const root = document.createElement('div');
-    paintSemanticLayout(root, layout, { scale: 1 });
+    paintSemanticLayout(root, layout, { scale: 1, showParagraphMarks });
     document.body.append(root);
     return {
       root,
@@ -427,6 +430,17 @@ describe('the position just after an inline picture', () => {
     expect(positionFromDomPoint(spacer, 0, root)).toEqual({ paragraphId, offset: 2 });
     expect(positionFromDomPoint(spacer, 1, root)).toEqual({ paragraphId, offset: 3 });
     root.remove();
+  });
+
+  test('an endpoint on the paragraph mark reads back at the end of its line', () => {
+    // The mark's seat is furniture after the line's content, not the paragraph's start.
+    for (const content of [`<w:r><w:t>ab</w:t>${PICTURE}</w:r>`, `<w:r><w:t>abc</w:t></w:r>`]) {
+      const { root, paragraphId } = painted(content, true);
+      const mark = root.querySelector('.docx-paragraph-mark')!;
+      expect(positionFromDomPoint(mark, 0, root)).toEqual({ paragraphId, offset: 3 });
+      expect(positionFromDomPoint(mark.firstChild!, 1, root)).toEqual({ paragraphId, offset: 3 });
+      root.remove();
+    }
   });
 
   test('an endpoint on the paragraph fragment resolves through the picture', () => {

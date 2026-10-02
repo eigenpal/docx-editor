@@ -7,6 +7,7 @@ import { growRunBorderLineMetrics, textBandHeightWithBorders } from './run-borde
 import type { CellAnchorScope } from './cell-anchor-layout.ts';
 import {
   growPendingLineDrawingExtent,
+  lineContentX,
   lineHoldsContent,
   markPendingLineWrapAdvances,
   placeLeadingIgnoredBreaks,
@@ -727,7 +728,8 @@ export function breakParagraph(
     if (zones.length === 0) return;
     const intervals = availableIntervals(zones);
     if (intervals.length === 0) return;
-    const contentStart = line.spans[0]?.box.x ?? Math.max(contentLeft, lineOrigin());
+    const fallbackStart = Math.max(contentLeft, lineOrigin());
+    const contentStart = lineContentX(line.spans, line.drawings, fallbackStart);
     const contentEnd = lineOrigin() + line.width;
     const segment = intervals.find(
       (interval) => contentStart >= interval.start - 0.001 && contentStart <= interval.end + 0.001
@@ -1139,11 +1141,11 @@ export function breakParagraph(
       recordTopAndBottomAnchorLineTop(piece.start);
       const measure = measureInlineDrawing(piece.inlineDrawing.projection);
       const atomWidth = measure.totalWidth;
-      // Like a word, a picture that does not fit before a float resumes past it, so the line
-      // closes only when no passage on it fits; the probe leaves the pen where it settled.
+      // Like a word, a picture that does not fit before a float resumes past it when it fits.
       if (holdsContent() && line.width + atomWidth > lineAvailable()) {
         const settledWidth = line.width;
-        const jumps = tryAdvanceToNextPassage() && line.width + atomWidth <= lineAvailable();
+        const jumps =
+          tryAdvanceToNextPassage() && line.width + atomWidth <= lineAvailable() + 0.001;
         line.width = settledWidth;
         if (!jumps) closeLine();
       }

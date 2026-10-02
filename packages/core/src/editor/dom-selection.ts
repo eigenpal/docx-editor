@@ -292,10 +292,14 @@ export function positionFromDomPoint(
   const picture = drawingSpacerIdentity(marker ?? undefined);
   if (picture) return offset > 0 ? { ...picture, offset: picture.offset + 1 } : picture;
   // A float's wrap jump spacer is mid-line as well: it is the gap between the content before
-  // and after it, so it resolves as the line's child index on that side of it.
-  if (marker?.classList.contains('docx-wrap-advance') && marker.parentElement) {
-    const index = [...marker.parentElement.childNodes].indexOf(marker);
-    const resolved = positionFromChildIndex(marker.parentElement, index + (offset > 0 ? 1 : 0));
+  // and after it, so it resolves as the line's child index on that side of it. A terminator
+  // mark's seat stands after the line's content, so it resolves as the line's end.
+  const seat = nearestElement?.closest<HTMLElement>('.docx-terminator-seat');
+  const flowMarker = seat ?? (marker?.classList.contains('docx-wrap-advance') ? marker : null);
+  if (flowMarker?.parentElement) {
+    const index = [...flowMarker.parentElement.childNodes].indexOf(flowMarker);
+    const past = !seat && offset > 0 ? 1 : 0;
+    const resolved = positionFromChildIndex(flowMarker.parentElement, index + past);
     if (resolved) return resolved;
   }
   if (marker) return marker.parentElement ? paragraphStartAt(marker.parentElement) : null;
@@ -447,12 +451,14 @@ function domPointFromPositionIn(
   }
   if (fallback) return fallback;
 
-  // Beside an inline picture that no text holds: just after one that ends a line or stands
-  // alone, or just before one that opens a line. The line's child index past (or at) the
+  // Beside an inline picture that no text holds: just before one that opens a line, or else
+  // just after one that ends a line or stands alone. The line's child index past (or at) the
   // picture's advance spacer is that position, and `positionFromChildIndex` reads it back.
-  const after = drawingSpacerAt(searchRoot, position.paragraphId, position.offset - 1);
-  const before = after ? null : drawingSpacerAt(searchRoot, position.paragraphId, position.offset);
-  const spacer = after ?? before;
+  const before = drawingSpacerAt(searchRoot, position.paragraphId, position.offset);
+  const after = before
+    ? null
+    : drawingSpacerAt(searchRoot, position.paragraphId, position.offset - 1);
+  const spacer = before ?? after;
   if (spacer?.parentNode) {
     return {
       node: spacer.parentNode,

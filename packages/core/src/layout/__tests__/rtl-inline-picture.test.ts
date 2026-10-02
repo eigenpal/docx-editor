@@ -147,3 +147,17 @@ test('a point past the logical end of a line beyond its last picture is the line
   const hit = hitTestPage(layout, 0, { x: drawing.advanceStart - 20, y: line.box.y + 1 });
   expect(hit?.position.offset).toBe(line.range.end);
 });
+
+test('in a right-to-left paragraph, left of a line of left-to-right pictures is its end', () => {
+  // Five pictures between two long left-to-right words: they resolve left to right, and the
+  // second line holds only pictures. Its logical end is still on the paragraph's left.
+  const word = (letter: string) => latin(letter.repeat(70));
+  const { layout, line } = lay(word('x') + picture.repeat(5) + word('y'));
+  expect(line.spans).toHaveLength(0);
+  expect(line.drawings!.every((drawing) => drawing.bidiLevel === 0)).toBe(true);
+  const left = Math.min(...line.drawings!.map((drawing) => drawing.advanceStart));
+  const right = Math.max(...line.drawings!.map((drawing) => drawing.advanceEnd));
+  const y = line.box.y + 1;
+  expect(hitTestPage(layout, 0, { x: left - 10, y })?.position.offset).toBe(line.range.end);
+  expect(hitTestPage(layout, 0, { x: right + 10, y })?.position.offset).toBe(line.range.start);
+});

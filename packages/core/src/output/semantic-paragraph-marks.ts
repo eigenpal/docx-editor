@@ -49,6 +49,7 @@ export function seatTerminatorMark(
   const edge = lineTerminatorEdge(line, paragraphRtl);
   const seat = lineElement.ownerDocument.createElement('span');
   seat.className = 'docx-terminator-seat';
+  seat.dataset.docxMarker = '';
   seat.setAttribute('aria-hidden', 'true');
   seat.setAttribute('contenteditable', 'false');
   seat.style.position = 'absolute';
@@ -60,6 +61,7 @@ export function seatTerminatorMark(
   seat.style.lineHeight = '0';
   seat.style.whiteSpace = 'pre';
   seat.style.pointerEvents = 'none';
+  seat.style.userSelect = 'none';
   if (edge.rtl) seat.style.direction = 'rtl';
   glyph.style.display = 'inline-block';
   glyph.style.verticalAlign = 'baseline';

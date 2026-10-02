@@ -1,6 +1,6 @@
 import { drawingAtOffset, pictureEdgeX, pictureIsRtl } from './inline-picture-caret.ts';
 import { bidiPrefixWidth } from './shaped-caret-advances.ts';
-import { nearestBidiSpan } from './rtl-paragraph.ts';
+import { nearestBidiSpan, paragraphIsRtl } from './rtl-paragraph.ts';
 import { lineContentEdges } from './pending-line.ts';
 // Pointer hit testing in MODEL space, over semantic layout records.
 //
@@ -480,7 +480,7 @@ function resolveParagraph(
   if (fragment.clipToBox && !insideBox) return null;
   const line = lineAtY(fragment.lines, point.y);
   if (!line) return null;
-  const resolved = offsetOnLine(line, point.x, point.y, context);
+  const resolved = offsetOnLine(line, point.x, point.y, context, paragraphIsRtl(fragment.props));
   // WHICH paragraph the pointer is over, not which one the line is named after. A resolved
   // display mode merges the paragraphs a tracked decision merges, so one line can carry two,
   // and the offset the walk just resolved counts in the one under the pointer.
@@ -634,7 +634,13 @@ function hitBoundsContainDrawing(
  * would report every such click as "left of the line". With no spans to read, the aligned
  * origin comes from {@link LineRecord.contentX}, which obeys the same rule.
  */
-function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContext): LineOffset {
+function offsetOnLine(
+  line: LineRecord,
+  x: number,
+  y: number,
+  context: HitContext,
+  paragraphRtl = false
+): LineOffset {
   const spans = line.spans;
   for (const drawing of line.drawings ?? []) {
     if (hitBoundsContainDrawing(drawing, { x, y })) {
@@ -656,7 +662,14 @@ function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContex
       if (item.advanceEnd > rightmost.advanceEnd) rightmost = item;
       if (x >= item.advanceStart && x < item.advanceEnd) return pictureHit(item, x, y);
     }
-    const beyond = beyondLine(line, leftmost.advanceStart, rightmost.advanceEnd, x, context);
+    const beyond = beyondLine(
+      line,
+      leftmost.advanceStart,
+      rightmost.advanceEnd,
+      x,
+      context,
+      paragraphRtl
+    );
     return beyond ?? gapOffset(line, spans, x, context);
   }
   if (spans.length === 0) {
@@ -680,7 +693,7 @@ function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContex
           Math.abs(drawing.advanceEnd - edge) < 0.001
       );
     if ((x < edges.left && pictureAt(edges.left)) || (x >= edges.right && pictureAt(edges.right))) {
-      const beyond = beyondLine(line, edges.left, edges.right, x, context);
+      const beyond = beyondLine(line, edges.left, edges.right, x, context, paragraphRtl);
       if (beyond) return beyond;
     }
   }
@@ -732,21 +745,14 @@ function beyondLine(
   left: number,
   right: number,
   x: number,
-  context: HitContext
+  context: HitContext,
+  rtl: boolean
 ): LineOffset | null {
   if (x > left && x < right) return null;
-  const rtl = lineReadsRtl(line);
-  if (rtl ? x <= left : x >= right) return endOfLine(line, rtl ? left : right, context);
-  const offset = line.range.start;
+  if (!rtl && x >= right) return endOfLine(line, right, context);
+  // `endOfLine` measures a trailing space from a span's left, which is left to right only.
+  const offset = rtl && x <= left ? lineEndOffset(context.layout, line) : line.range.start;
   return { offset, x: caretBoxOnLine(line, offset, context.measurer).x, withinSpan: false };
-}
-
-/** A line of a right-to-left paragraph, read from its text or else from its pictures. */
-function lineReadsRtl(line: LineRecord): boolean {
-  const shaped = line.spans.find((span) => span.style.shaping);
-  if (shaped) return shaped.style.shaping!.baseLevel === 1;
-  if (line.spans.length > 0) return false;
-  return (line.drawings ?? []).some(pictureIsRtl);
 }
 
 /**
@@ -770,7 +776,7 @@ function gapOffset(
     end: span.range.end,
     paragraphId: span.range.paragraphId,
     text: true,
-    rtl: (span.style.shaping?.level ?? 0) % 2 === 1,
+    rtl: span.style.shaping?.direction === 'rtl',
   }));
   for (const picture of line.drawings ?? []) {
     pieces.push({

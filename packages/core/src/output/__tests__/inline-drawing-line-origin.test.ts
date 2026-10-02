@@ -226,6 +226,35 @@ describe('a line that opens with an inline picture', () => {
     );
   });
 
+  test('paints the slack justification puts between a picture and the text after it', () => {
+    // Justified CJK text spreads slack between every character, the picture's included, so
+    // the text after the picture starts past the picture's far edge.
+    const part = load(
+      `<w:document ${NAMESPACES}><w:body>` +
+        paragraph(
+          `<w:r><w:t>\u4e00\u4e8c</w:t>${drawing}<w:t>${'\u4e09'.repeat(80)}</w:t></w:r>`,
+          '<w:jc w:val="both"/>'
+        ) +
+        '</w:body></w:document>'
+    );
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+      inlineDrawingLayout: layoutContext(part),
+    });
+    const line = linesOf(layout).find((record) => (record.drawings?.length ?? 0) > 0)!;
+    const picture = line.drawings![0]!;
+    const after = line.spans.find((span) => span.range.start > picture.start)!;
+    const slack = after.box.x - picture.advanceEnd;
+    expect(slack).toBeGreaterThan(0.001);
+    const host = document.createElement('div');
+    paintSemanticLayout(host, layout, { scale: SCALE });
+    const element = host.querySelector<HTMLElement>(`[data-line-id="${line.id}"]`)!;
+    const spacer = element.querySelector<HTMLElement>('.docx-inline-drawing-advance')!;
+    const run = spacer.nextElementSibling as HTMLElement;
+    expect(run.classList.contains('layout-run')).toBe(true);
+    expect(parseFloat(run.style.marginLeft) / SCALE).toBeCloseTo(slack, 5);
+  });
+
   test('a centered line centers the picture and the text as one unit', () => {
     const { line } = pictureLine(paragraph(`<w:r>${drawing}<w:t>abcd</w:t></w:r>`, center));
     const last = line.spans.at(-1)!;
