@@ -17,6 +17,9 @@
 # examples load it as a library, and TypeScript 7 has no library API. The compiler is
 # TypeScript 7, installed as `typescript7`. Lift the ignore once those tools support 7.
 #
+# `tailwindcss` stays on 3: the core dist stylesheet and most examples use a v3
+# config, and v4 needs a config migration, not a version bump.
+#
 # Dependabot v2 rejects YAML aliases (dependabot-core#1582), so the cooldown
 # and group blocks are spelled out per entry.
 version: 2
@@ -39,6 +42,8 @@ updates:
     ignore:
       - dependency-name: 'typescript'
         update-types: ['version-update:semver-major']
+      - dependency-name: 'tailwindcss'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: 'npm'
     directories:
@@ -56,6 +61,8 @@ updates:
         update-types: ['minor', 'patch']
     ignore:
       - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'tailwindcss'
         update-types: ['version-update:semver-major']
 
   - package-ecosystem: 'github-actions'
