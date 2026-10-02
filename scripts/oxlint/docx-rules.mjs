@@ -3,9 +3,11 @@
 // here, with the same selectors and messages.
 //
 // One rule per concern also removes a trap the ESLint config had to work around. There, every
-// block that set `no-restricted-syntax` REPLACED the earlier value, so each block had to restate
-// the security-sink selectors or silently drop them for its files. Here a block turns on the
-// rules it needs, and nothing else changes.
+// block that set `no-restricted-syntax` REPLACED the earlier value, so a block that added one
+// selector had to restate the security-sink selectors or drop them for its files. Here a block
+// turns on the rules it needs without touching the others. Override order still matters for the
+// test exemption: `.oxlintrc.json` turns the sink rules off for tests, and the adapter blocks
+// after it turn them back on for their own tests. A new adapter block must do the same.
 //
 // oxlint runs JavaScript plugins in alpha, outside semver. `scripts/__tests__/oxlint-rules.test.ts`
 // lints a fixture of every banned shape, so a version that stops running these rules fails CI.

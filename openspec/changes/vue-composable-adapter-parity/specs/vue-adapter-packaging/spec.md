@@ -148,7 +148,7 @@ Subpath parity is strict and React has one entry, so Vue keeps one. The module c
 
 ### Requirement: Dead lint overrides SHALL be removed
 
-The lint configuration (`.oxlintrc.json`) SHALL carry no `max-lines` override naming a path that does not exist.
+`.oxlintrc.json` SHALL carry no `max-lines` override naming a path that does not exist.
 
 Four globs name three pre-v2 Vue files: `packages/vue/src/components/DocxEditor.vue`, `packages/vue/src/composables/useDocxEditor.ts` and `packages/vue/src/components/Toolbar.vue`. A cap that matches nothing is a cap that silently stops applying when a file with that name comes back.
 

@@ -112,6 +112,9 @@ function reports(): string[] {
     { cwd: workspace, encoding: 'utf8' }
   );
   if (result.error) throw result.error;
+  // Exit 1 is expected: the fixture has errors. Anything on stderr (a plugin that failed to
+  // load, an invalid config) is the real failure, so report it rather than a diff.
+  if (result.stderr.trim()) throw new Error(`oxlint failed:\n${result.stderr}`);
   const { diagnostics } = JSON.parse(result.stdout) as {
     diagnostics: { code: string; filename: string; labels: { span: { line: number } }[] }[];
   };
@@ -128,10 +131,14 @@ beforeAll(() => {
   // directory is a symlink that oxlint resolves, which would put every file outside them.
   workspace = realpathSync(mkdtempSync(join(tmpdir(), 'docx-oxlint-rules-')));
   // The real config, with its plugin path made absolute so it loads from the workspace.
-  const config = ts.parseConfigFileTextToJson(
+  const parsed = ts.parseConfigFileTextToJson(
     '.oxlintrc.json',
     readFileSync(join(root, '.oxlintrc.json'), 'utf8')
-  ).config as {
+  );
+  if (parsed.error) {
+    throw new Error(ts.flattenDiagnosticMessageText(parsed.error.messageText, '\n'));
+  }
+  const config = parsed.config as {
     jsPlugins: string[];
     $schema?: string;
   };
