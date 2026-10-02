@@ -406,14 +406,33 @@ export function alignDrawings(
  */
 export function lineContentX(
   spans: readonly StyleSpanRecord[],
-  drawings: readonly Pick<InlineDrawingRecord, 'advanceStart'>[],
+  drawings: readonly Pick<InlineDrawingRecord, 'advanceStart' | 'advanceEnd'>[],
   fallback: number
 ): number {
-  if (spans.length === 0 && drawings.length === 0) return fallback;
-  let x = Infinity;
-  for (const span of spans) x = Math.min(x, span.box.x);
-  for (const drawing of drawings) x = Math.min(x, drawing.advanceStart);
-  return x;
+  return lineContentEdges(spans, drawings)?.left ?? fallback;
+}
+
+/**
+ * The left and right edges of a line's content: every span box and inline drawing advance,
+ * or null for a line with neither. The one place that decides what counts as line content,
+ * for the line's origin, its end in hit testing, and where its terminator mark goes.
+ */
+export function lineContentEdges(
+  spans: readonly StyleSpanRecord[],
+  drawings: readonly Pick<InlineDrawingRecord, 'advanceStart' | 'advanceEnd'>[]
+): { readonly left: number; readonly right: number } | null {
+  if (spans.length === 0 && drawings.length === 0) return null;
+  let left = Infinity;
+  let right = -Infinity;
+  for (const span of spans) {
+    left = Math.min(left, span.box.x);
+    right = Math.max(right, span.box.x + span.box.width);
+  }
+  for (const drawing of drawings) {
+    left = Math.min(left, drawing.advanceStart);
+    right = Math.max(right, drawing.advanceEnd);
+  }
+  return { left, right };
 }
 
 /**

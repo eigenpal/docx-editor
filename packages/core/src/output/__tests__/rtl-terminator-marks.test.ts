@@ -2,10 +2,22 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { expect, test } from 'bun:test';
 import { readOoxmlPart } from '../../store/index.ts';
-import { createFixedMeasurer, layoutSemanticDocument } from '../../layout/index.ts';
+import {
+  createFixedMeasurer,
+  layoutSemanticDocument,
+  type LineRecord,
+} from '../../layout/index.ts';
 import { paintSemanticLayout } from '../semantic-paint.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
+/**
+ * Where a terminator glyph sits in its line's inline flow before its own offset: the line's
+ * right content edge. Its `left` moves it from there to the terminator edge.
+ */
+const flowEnd = (line: LineRecord): number =>
+  Math.max(line.contentX, ...line.spans.map((span) => span.box.x + span.box.width));
+
 test.each([false, true])(
   'RTL terminator marks stay outside the physical left text edge (mixed=%s)',
   (mixed) => {
@@ -22,17 +34,17 @@ test.each([false, true])(
     const mark = host.querySelector<HTMLElement>('.docx-paragraph-mark')!;
     const last = fragment.lines.at(-1)!;
     const edge = Math.min(...last.spans.map((s) => s.box.x));
-    expect(parseFloat(mark.style.left)).toBeCloseTo((edge - fragment.box.x) * 2, 5);
-    expect(mark.style.transform).toBe('translateX(-100%)');
-    expect(mark.style.marginLeft).toBe('-4px');
+    expect(parseFloat(mark.style.left)).toBeCloseTo((edge - flowEnd(last)) * 2, 5);
+    expect(mark.style.direction).toBe('rtl');
+    expect(mark.style.marginLeft).toBe('');
     const manual = host.querySelector<HTMLElement>('.docx-line-break-mark')!;
     const first = fragment.lines[0]!;
     expect(parseFloat(manual.style.left)).toBeCloseTo(
-      (Math.min(...first.spans.map((s) => s.box.x)) - first.contentX) * 2,
+      (Math.min(...first.spans.map((s) => s.box.x)) - flowEnd(first)) * 2,
       5
     );
-    expect(manual.style.transform).toBe('translateX(-100%)');
-    expect(manual.style.marginLeft).toBe('-4px');
+    expect(manual.style.direction).toBe('rtl');
+    expect(manual.style.marginLeft).toBe('');
   }
 );
 
@@ -48,7 +60,7 @@ test('empty and tab-containing RTL paragraphs keep marks on the leading-directio
   for (const mark of host.querySelectorAll<HTMLElement>(
     '.docx-paragraph-mark,.docx-line-break-mark'
   )) {
-    expect(mark.style.transform).toBe('translateX(-100%)');
-    expect(mark.style.marginLeft).toBe('-2px');
+    expect(mark.style.direction).toBe('rtl');
+    expect(mark.style.marginLeft).toBe('');
   }
 });

@@ -5,11 +5,11 @@ import { isRunKerningEnabled } from '../layout/run-kerning.ts';
 import { paintLegacyDropdown } from './semantic-paint-legacy-dropdown.ts';
 import { paintLegacyCheckbox } from './semantic-paint-legacy-checkbox.ts';
 import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
+import { DEFAULT_RUN_STYLE } from '../layout/run-style.ts';
 import {
   paintParagraphMark,
   paintManualLineBreak,
-  lineTerminatorEdge,
-  positionTerminatorMark,
+  seatTerminatorMark,
 } from './semantic-paragraph-marks.ts';
 // Non-authoritative semantic DOM paint: position elements from the numbers layout already
 // published and never measures anything back: no `getBoundingClientRect`, no `offsetWidth`,
@@ -1451,7 +1451,7 @@ function paintLine(
   });
   paintRunBorders(document, element, line, scale);
   if (ctx.showParagraphMarks && line.manualBreakAfter)
-    element.append(paintManualLineBreak(document, line, scale, ctx.revisionStyles, paragraphRtl));
+    paintManualLineBreak(document, line, element, scale, ctx.revisionStyles, paragraphRtl);
   const drawingCtx = drawingContextOf(asResolvedPaintContext(ctx));
   if (line.drawings && line.drawings.length > 0) {
     for (const painted of paintInlineDrawingsOnLine(
@@ -1584,6 +1584,20 @@ function paintFragment(
       if (leader) element.append(leader);
     }
   }
+  let lastElement: HTMLElement | null = null;
+  for (const line of fragment.lines) {
+    const painted = paintLine(document, line, ctx, paragraphIsRtl(fragment.props));
+    lastElement = painted;
+    if (fragment.markFormatRevision && line === fragment.lines[fragment.lines.length - 1]) {
+      applyParagraphFormatAnchor(painted, fragment, true);
+    }
+    // Line boxes are page-relative; inside a fragment they are drawn relative to it —
+    // BOTH axes. The fragment box already carries the x origin (indent, or a table cell's
+    // content edge), so an absolute left here would count that origin twice.
+    painted.style.top = `${(line.box.y - fragment.box.y) * scale}px`;
+    painted.style.left = `${(line.contentX - fragment.box.x) * scale}px`;
+    element.append(painted);
+  }
   if (
     (ctx.showParagraphMarks && fragment.paragraphEnd) ||
     (fragment.markRevisions && fragment.markRevisions.length > 0)
@@ -1595,31 +1609,16 @@ function paintFragment(
       ctx.revisionStyles
     );
     const last = fragment.lines[fragment.lines.length - 1];
-    if (last) {
-      // At the end of the last line's text, which is where the mark itself sits.
-      glyph.style.top = `${(last.box.y - fragment.box.y) * scale}px`;
-      // No spans means an empty paragraph, whose mark sits at the ALIGNED origin — the same
-      // place the caret goes. Reading the line box drew a centred one against the margin.
-      positionTerminatorMark(
-        glyph,
-        lineTerminatorEdge(last, paragraphIsRtl(fragment.props)),
-        fragment.box.x,
-        scale
-      );
-      element.append(glyph);
+    if (last && lastElement) {
+      // On the last line's baseline after its content, at the mark's own size. No content
+      // means an empty paragraph, whose mark sits at the ALIGNED origin, where the caret goes.
+      const markStyle = fragment.paragraphMarkStyle ?? fragment.emptyParagraphStyle;
+      const size =
+        markStyle?.fontSizePt ??
+        last.spans.at(-1)?.style.fontSizePt ??
+        DEFAULT_RUN_STYLE.fontSizePt;
+      seatTerminatorMark(glyph, lastElement, last, paragraphIsRtl(fragment.props), size, scale);
     }
-  }
-  for (const line of fragment.lines) {
-    const painted = paintLine(document, line, ctx, paragraphIsRtl(fragment.props));
-    if (fragment.markFormatRevision && line === fragment.lines[fragment.lines.length - 1]) {
-      applyParagraphFormatAnchor(painted, fragment, true);
-    }
-    // Line boxes are page-relative; inside a fragment they are drawn relative to it —
-    // BOTH axes. The fragment box already carries the x origin (indent, or a table cell's
-    // content edge), so an absolute left here would count that origin twice.
-    painted.style.top = `${(line.box.y - fragment.box.y) * scale}px`;
-    painted.style.left = `${(line.contentX - fragment.box.x) * scale}px`;
-    element.append(painted);
   }
   // Layout owns border geometry. Side rules sit OUTSIDE the text column — Word draws them
   // there and never reflows the text for them — so a painter deriving an edge from the

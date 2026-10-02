@@ -164,20 +164,23 @@ describe('a line that opens with an inline picture', () => {
     expectRunsAtLayout(layout, line);
   });
 
-  test('a right-to-left first line places the picture with its text', () => {
+  test('a right-to-left first line indents the picture with its text', () => {
+    // The picture reads in the paragraph's direction, so it stands at the right, inside the
+    // 20pt first-line indent on that side, and the text after it stands to its left.
     const { layout, line } = pictureLine(
       paragraph(`<w:r>${drawing}<w:t>abcd</w:t></w:r>`, rtlFirstLine)
     );
     const picture = line.drawings![0]!;
-    expect(line.spans[0]!.box.x).toBeCloseTo(picture.advanceEnd, 5);
-    expect(line.contentX).toBeCloseTo(picture.advanceStart, 5);
+    expect(picture.advanceEnd).toBeCloseTo(468 - 20, 5);
+    expect(line.spans[0]!.box.x + line.spans[0]!.box.width).toBeCloseTo(picture.advanceStart, 5);
+    expect(line.contentX).toBeCloseTo(line.spans[0]!.box.x, 5);
     expectRunsAtLayout(layout, line);
   });
 
   test('shaped runs count the picture spacer in the flow they are placed from', () => {
     // Shaped runs take a relative offset from where inline flow left them, and that flow
-    // holds the picture's spacer. Layout keeps shaping off lines with inline pictures today,
-    // so the shaping is stamped on here to hold paint to the same geometry anyway.
+    // holds the picture's spacer. The shaping is stamped on here so the rule is held for any
+    // picture position, not only the ones bidi reordering produces.
     const { layout, line } = pictureLine(
       paragraph(`<w:r><w:t xml:space="preserve">ab </w:t>${drawing}<w:t>cd</w:t></w:r>`)
     );
@@ -211,13 +214,20 @@ describe('a line that opens with an inline picture', () => {
 
 describe('the paragraph mark after an inline picture', () => {
   /** The mark's x in points, in the same space as the line's records. */
+  /**
+   * The mark's x in points, in the same space as the line's records. It sits in its line's
+   * inline flow, which ends at the line's right content edge, and `left` moves it from there.
+   */
   function markX(layout: SemanticLayout): number {
     const host = document.createElement('div');
     paintSemanticLayout(host, layout, { scale: SCALE, showParagraphMarks: true });
-    const fragment = layout.pages[0]!.fragments[0]!;
+    const line = linesOf(layout).at(-1)!;
     const mark = host.querySelector<HTMLElement>('.docx-paragraph-mark')!;
-    expect(mark).not.toBeNull();
-    return fragment.box.x + parseFloat(mark.style.left) / SCALE;
+    expect(mark.parentElement?.dataset.lineId).toBe(line.id);
+    let flowEnd = line.contentX;
+    for (const span of line.spans) flowEnd = Math.max(flowEnd, span.box.x + span.box.width);
+    for (const picture of line.drawings ?? []) flowEnd = Math.max(flowEnd, picture.advanceEnd);
+    return flowEnd + parseFloat(mark.style.left) / SCALE;
   }
 
   for (const [name, body] of [
@@ -234,5 +244,20 @@ describe('the paragraph mark after an inline picture', () => {
     const { layout, line } = pictureLine(paragraph(`<w:r>${drawing}<w:t>ab</w:t></w:r>`));
     const last = line.spans.at(-1)!;
     expect(markX(layout)).toBeCloseTo(last.box.x + last.box.width, 5);
+  });
+
+  test("sits on the line's baseline at the paragraph mark's own size", () => {
+    // A tall picture line has its baseline at the picture's foot. The mark joins the line's
+    // inline flow, so it shares that baseline, and its size is the mark's, not the text's.
+    const { layout } = pictureLine(
+      paragraph(`<w:r>${drawing}<w:t>ab</w:t></w:r>`, '<w:rPr><w:sz w:val="48"/></w:rPr>')
+    );
+    const host = document.createElement('div');
+    paintSemanticLayout(host, layout, { scale: SCALE, showParagraphMarks: true });
+    const mark = host.querySelector<HTMLElement>('.docx-paragraph-mark')!;
+    expect(mark.parentElement?.classList.contains('docx-line')).toBe(true);
+    expect(mark.style.verticalAlign).toBe('baseline');
+    expect(mark.style.lineHeight).toBe('0');
+    expect(mark.style.fontSize).toBe(`${24 * SCALE}px`);
   });
 });

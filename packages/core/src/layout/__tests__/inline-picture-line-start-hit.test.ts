@@ -88,14 +88,30 @@ describe('a point over a trailing picture but outside it', () => {
 });
 
 describe('a point in the float jump after a leading picture', () => {
-  test('reports the x the caret for that position draws at', () => {
+  // The jump sits between two pieces of content, so a point in it is the boundary between
+  // them. That caret draws on the far side of the jump, at the content that starts there,
+  // with that content's height: Word reports the same x for it.
+  test('is the boundary after the picture, drawn at the text after the jump', () => {
     const { layout, line, picture } = pictureLine(
       `${floatAt120}<w:r>${drawing}<w:t>abcd</w:t></w:r>`
     );
     expect(line.spans[0]!.box.x).toBeCloseTo(220, 5);
     const hit = hitTestPage(layout, 0, { x: 110, y: picture.hitBounds.y + 1 });
     expect(hit?.position.offset).toBe(picture.start + 1);
-    expect(hit?.caret.x).toBeCloseTo(picture.advanceEnd, 5);
+    expect(hit?.caret.x).toBeCloseTo(line.spans[0]!.box.x, 5);
+    expect(hit?.caret.height).toBeLessThan(picture.height + 14);
+    expect(hit?.caret.height).not.toBeCloseTo(picture.height, 5);
+  });
+
+  test('between two pictures, is the boundary between them, drawn at the second', () => {
+    const { layout, line, picture } = pictureLine(
+      `${floatAt120}<w:r>${drawing}${drawing}<w:t>abcd</w:t></w:r>`
+    );
+    const second = line.drawings![1]!;
+    expect(second.advanceStart).toBeCloseTo(220, 5);
+    const hit = hitTestPage(layout, 0, { x: 110, y: picture.hitBounds.y + 1 });
+    expect(hit?.position.offset).toBe(picture.start + 1);
+    expect(hit?.caret.x).toBeCloseTo(second.advanceStart, 5);
   });
 
   test('is not claimed by a later picture on the same line', () => {
@@ -106,5 +122,30 @@ describe('a point in the float jump after a leading picture', () => {
     expect(line.drawings).toHaveLength(2);
     const hit = hitTestPage(layout, 0, { x: 110, y: picture.hitBounds.y + 1 });
     expect(hit?.position.offset).toBe(picture.start + 1);
+  });
+});
+
+describe('a picture that does not fit before a float', () => {
+  // A float flush at 120pt leaves 20pt after a 100pt picture: too little for a second one.
+  // Like a word, the second picture resumes past the float on the same line, at its top.
+  const flushFloat = floatAt120.replaceAll('254000', '0');
+
+  test('resumes past the float on the same line', () => {
+    const { layout, line } = pictureLine(
+      `${flushFloat}<w:r>${drawing}${drawing}<w:t>abcd</w:t></w:r>`
+    );
+    expect(linesOf(layout)).toHaveLength(1);
+    expect(line.box.y).toBeCloseTo(0, 5);
+    expect(line.drawings!.map((picture) => picture.advanceStart)).toEqual([0, 220]);
+    expect(line.spans[0]!.box.x).toBeCloseTo(320, 5);
+  });
+
+  test('a point in the gap before the float is the boundary between the pictures', () => {
+    const { layout, line, picture } = pictureLine(
+      `${flushFloat}<w:r>${drawing}${drawing}<w:t>abcd</w:t></w:r>`
+    );
+    const hit = hitTestPage(layout, 0, { x: 111, y: picture.hitBounds.y + 1 });
+    expect(hit?.position.offset).toBe(picture.start + 1);
+    expect(hit?.caret.x).toBeCloseTo(line.drawings![1]!.advanceStart, 5);
   });
 });

@@ -308,12 +308,9 @@ export interface LineRecord {
   /**
    * Where the line's content actually starts, after alignment and the first-line indent.
    *
-   * {@link box} is the content BAND the line was broken against — its `x` is the indented
-   * column edge and its `width` the available measure, neither of which moves with
-   * `w:jc`. Alignment is otherwise expressed only as x offsets on the span boxes, so a line
-   * with no spans (an empty paragraph) had no aligned origin at all: paint, hit testing and
-   * the caret each fell back to `box.x` and drew a centred empty paragraph's caret hard
-   * against the left margin, where it stayed until the first character was typed.
+   * {@link box} is the content BAND the line was broken against: its `x` is the indented column
+   * edge and its `width` the available measure, and neither moves with `w:jc`. A line with no
+   * spans needs this aligned origin, or paint, hit testing and the caret fall back to `box.x`.
    *
    * The leftmost x of any span box or inline drawing `advanceStart`: one origin for every
    * consumer. On a line that opens with a picture, the text starts at the leftmost span.
@@ -418,6 +415,8 @@ export interface ParagraphFragmentRecord {
   readonly paragraphEnd?: true;
   /** Resolved paragraph-mark style when this fragment has no text or inline drawings. */
   readonly emptyParagraphStyle?: ResolvedRunStyle;
+  /** Resolved paragraph-mark style on the fragment that ends the paragraph; sizes the pilcrow. */
+  readonly paragraphMarkStyle?: ResolvedRunStyle;
   /** A fixed text frame clips its painted ink to this fragment's box; source ranges remain intact. */
   readonly clipToBox?: true;
   /**

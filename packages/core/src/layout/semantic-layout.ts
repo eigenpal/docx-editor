@@ -58,7 +58,6 @@ import {
 } from './layout-cache.ts';
 import {
   alignSpans,
-  alignDrawings,
   lineAlignmentMeasure,
   pendingLineFlowExtentAtPlacement,
   type PendingLine,
@@ -94,6 +93,7 @@ import { paragraphBorderGroupKey } from './cell-border-groups.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import { paragraphFragmentBorders } from './paragraph-fragment-borders.ts';
 import { holdsOnlyPageBreak, lineContentX } from './pending-line.ts';
+import { alignLineWithPictures } from './line-picture-alignment.ts';
 import { createLeadingBreakGroups } from './leading-break-border-group.ts';
 import { type TableAnchorFrames } from './semantic-table.ts';
 import * as tableFloat from './table-float-position.ts';
@@ -2529,7 +2529,7 @@ function layoutBlocksPass(
         ...(isLast && showsMarkup ? markRevisionFields(markRevisions, markFormatRevision) : {}),
         ...(isLast && markChangeSites.length > 0 ? { markChangeSites } : {}),
         lines: mergedLines ?? pending,
-        ...emptyParagraphStyleFields(pending, markRunProperties, styleCascade?.themeFonts),
+        ...emptyParagraphStyleFields(pending, markRunProperties, styleCascade?.themeFonts, isLast),
         box: { x: columnX + indent.left, y: top, width: available, height },
       };
       if (frame) paragraphFrames.add(frame, publishedFragment, frameStart?.groupId, index);
@@ -2760,51 +2760,48 @@ function layoutBlocksPass(
       const firstLineOffset = pendingLine.firstLineOffset ?? 0;
       const lineIndent = columnX + indent.left + (rtl ? 0 : firstLineOffset);
       const lineAvailableWidth = Math.max(1, available - firstLineOffset);
+      // Spans and inline drawings come from one pen, so they share one origin.
+      const penX = columnX - (rtl ? firstLineOffset : 0);
       const placedSpans = pendingLine.spans.map((span) => ({
         ...span,
         range: { ...span.range, paragraphId },
-        box: {
-          ...span.box,
-          x: span.box.x + columnX - (rtl ? firstLineOffset : 0),
-          y: cursorY,
-        },
+        box: { ...span.box, x: span.box.x + penX, y: cursorY },
       }));
       // Word aligns inside the passage a float leaves the line, not the page margins.
       const measure = lineAlignmentMeasure(pendingLine, columnX, lineIndent, lineAvailableWidth);
-      const alignedSpans = alignSpans(
-        placedSpans,
-        measurer,
-        measure.indent,
-        measure.available,
-        alignment,
-        isLastLine,
-        alignment === 'center' || alignment === 'right' ? measure.used : undefined,
-        rtl,
-        false,
-        pendingLine.spaceShrink === true
-      );
-      const alignOffset = lineAlignOffset(
-        placedSpans,
-        alignedSpans,
-        alignment,
-        measure.available,
-        measure.used
-      );
+      // Use page width: column-zero width would erase drawings in later columns.
       const pageClip = Object.freeze({
         x: 0,
         y: 0,
-        // Use page width: column-zero width would erase drawings in later columns.
         width: contentWidthForReflow,
         height: contentHeight(),
       });
-      const placedDrawings = pendingLine.drawings.map((drawing) => {
-        const placed = Object.freeze({
-          ...shiftInlineDrawingRecord(drawing, columnX - (rtl ? firstLineOffset : 0), cursorY),
-          paragraphId,
-        });
-        return clipInlineDrawingRecordToRegion(placed, pageClip);
-      });
-      const alignedDrawings = alignDrawings(placedDrawings, alignOffset);
+      const placedDrawings = pendingLine.drawings.map((drawing) =>
+        clipInlineDrawingRecordToRegion(
+          Object.freeze({ ...shiftInlineDrawingRecord(drawing, penX, cursorY), paragraphId }),
+          pageClip
+        )
+      );
+      const content = alignLineWithPictures(
+        placedSpans,
+        placedDrawings,
+        (spans) =>
+          alignSpans(
+            spans,
+            measurer,
+            measure.indent,
+            measure.available,
+            alignment,
+            isLastLine,
+            alignment === 'center' || alignment === 'right' ? measure.used : undefined,
+            rtl,
+            false,
+            pendingLine.spaceShrink === true
+          ),
+        (aligned) =>
+          lineAlignOffset(placedSpans, aligned, alignment, measure.available, measure.used)
+      );
+      const { spans: alignedSpans, drawings: alignedDrawings, offset: alignOffset } = content;
       const record: LineRecord = {
         id: bodyLineId(paragraph.id, pendingLine.start, lineIndex),
         range: { paragraphId, start: pendingLine.start, end: pendingLine.end },

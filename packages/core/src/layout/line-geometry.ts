@@ -6,7 +6,7 @@
 
 import { segmentGraphemes, type GraphemeSegment } from './grapheme.ts';
 import { MAX_CARET_ADVANCE_UTF16 } from './shaped-caret-advances.ts';
-import { spanOffsetX } from './semantic-hit-test.ts';
+import { drawingAtOffset, pictureEdgeX, spanOffsetX } from './semantic-hit-test.ts';
 import type { LineSegment } from './line-segments.ts';
 import type { LineRecord, StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 
@@ -21,10 +21,9 @@ function xWithinLine(
   // segment that owns it. Given none, the line is its own segment, which is every ordinary
   // line and the path this function always took.
   const spans = segment ? segment.spans : line.spans;
-  for (const drawing of segment ? segment.drawings : (line.drawings ?? [])) {
-    if (offset === drawing.start) return drawing.advanceStart;
-    if (offset === drawing.start + 1) return drawing.advanceEnd;
-  }
+  // The content that starts at an offset owns it; see `drawingAtOffset`.
+  const picture = drawingAtOffset(line, offset, segment);
+  if (picture) return pictureEdgeX(picture, offset > picture.start);
   let x = segment ? (segment.spans[0]?.box.x ?? line.contentX) : line.contentX;
   for (const span of spans) {
     if (offset <= span.range.start)

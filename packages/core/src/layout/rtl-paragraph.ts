@@ -75,12 +75,33 @@ export function bidiPieces(
     !pieces.some((piece) => runIsRtl(piece.props))
   )
     return pieces;
+  // An inline picture is its U+FFFC in the text (UAX #9 class ON), and it gets its own piece
+  // back afterwards with the level it resolved to. Its run's own `w:rtl` does not place it: a
+  // picture joins the direction of the runs on both sides of it when they agree, and takes
+  // the paragraph's direction otherwise, so one in a right-to-left paragraph reads with it.
+  const pictures = new Map<number, FieldAwarePiece>();
+  const isPicture = (piece: FieldAwarePiece | undefined) =>
+    piece?.inlineDrawing !== undefined && piece.text === OBJECT_REPLACEMENT;
+  const resolvable = pieces.map((piece, index): FieldAwarePiece => {
+    if (!isPicture(piece)) return piece;
+    pictures.set(piece.start, piece);
+    const { projected: _projected, inlineDrawing: _picture, ...plain } = piece;
+    const side = (step: number) => {
+      let at = index + step;
+      while (isPicture(pieces[at])) at += step;
+      return pieces[at] ? runIsRtl(pieces[at]!.props) : undefined;
+    };
+    const before = side(-1);
+    const direction = before !== undefined && before === side(1) ? before : rtl;
+    const props = piece.props.filter((prop) => prop.localName !== 'rtl');
+    return { ...plain, props: direction ? [...props, { localName: 'rtl' }] : props };
+  });
   // Atom placement has separate advances and is not an ordinary text run. A tab is: it is a
   // segment separator (UAX #9 class S), so it takes the paragraph level below and the text
   // on each side of it resolves as usual. Bailing out on tabs left every tab-aligned RTL form
   // label unshaped and in left-to-right order.
   if (
-    pieces.some(
+    resolvable.some(
       (p) =>
         p.projected ||
         p.inlineDrawing ||
@@ -91,11 +112,39 @@ export function bidiPieces(
     )
   )
     return pieces;
-  const ignored = pageBreaksIgnored && pieces.some(isPageBreak);
+  const ignored = pageBreaksIgnored && resolvable.some(isPageBreak);
   const items = ignored
-    ? withoutIgnoredBreaks(pieces, rtl, sourceBoundaries)
-    : resolvedItems(pieces, rtl, sourceBoundaries);
-  return items ? withJoiningContext(items, ignored) : pieces;
+    ? withoutIgnoredBreaks(resolvable, rtl, sourceBoundaries)
+    : resolvedItems(resolvable, rtl, sourceBoundaries);
+  return items ? withJoiningContext(withPictures(items, pictures), ignored) : pieces;
+}
+
+const OBJECT_REPLACEMENT = '\ufffc';
+
+/** Put each picture's own piece back where its U+FFFC resolved, with that level. */
+function withPictures(
+  items: FieldAwarePiece[],
+  pictures: ReadonlyMap<number, FieldAwarePiece>
+): FieldAwarePiece[] {
+  if (pictures.size === 0) return items;
+  const result: FieldAwarePiece[] = [];
+  for (const item of items) {
+    let from = item.start;
+    const keep = (to: number) => {
+      if (to <= from) return;
+      const text = item.text.slice(from - item.start, to - item.start);
+      result.push({ ...item, text, start: from, end: to });
+    };
+    for (let at = item.start; at < item.end; at += 1) {
+      const picture = pictures.get(at);
+      if (!picture) continue;
+      keep(at);
+      result.push({ ...picture, style: { ...picture.style, shaping: item.style.shaping } });
+      from = at + 1;
+    }
+    keep(item.end);
+  }
+  return result;
 }
 
 const isPageBreak = (piece: FieldAwarePiece | undefined) => piece?.text === PAGE_BREAK_CHAR;

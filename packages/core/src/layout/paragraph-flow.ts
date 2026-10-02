@@ -696,12 +696,9 @@ export function breakParagraph(
   };
 
   /**
-   * Total capacity of the line being built, in the same units as `line.width` — how far the
-   * pen may travel from `lineOrigin()`, not how much room is left from where it stands.
-   *
-   * Callers compare `line.width + width` against this, so it MUST stay a capacity. Returning
-   * the room remaining ahead of the pen makes the test `line.width + width > remaining`, which
-   * halves the usable width of every line on a page that carries any exclusion zone.
+   * Total capacity of the line being built, in `line.width` units: how far the pen may travel
+   * from `lineOrigin()`. Callers test `line.width + width` against it, so it MUST stay a
+   * capacity; the room ahead of the pen would halve every line beside an exclusion zone.
    */
   const lineAvailable = (): number => {
     const base = baseLineAvailable();
@@ -857,14 +854,10 @@ export function breakParagraph(
   const { changeSitesOn, claimTrailingChangeSites } = collectLineChangeSites(changeSites);
 
   /**
-   * Where the word currently being placed started on this line.
+   * Where the word being placed started on this line; `-1` when the line has no partial word.
    *
-   * A word can span RUNS — `<w:del>which</w:del><w:ins>that</w:ins>` is one word, so is
-   * `<w:r><w:b/>un</w:r><w:r>breakable</w:r>` — and a run boundary is not a break opportunity.
-   * Breaking there put half a word at the end of one line and half at the start of the next,
-   * which no word processor does and which changed where every following line broke.
-   *
-   * `-1` means the line has no partial word: the next span may legally start a line.
+   * A word can span RUNS (`<w:del>which</w:del><w:ins>that</w:ins>`, or a bold prefix), and a
+   * run boundary is not a break opportunity: breaking there split a word across two lines.
    */
   let wordStartSpan = -1;
   let wordStartWidth = 0;
@@ -1148,7 +1141,12 @@ export function breakParagraph(
       recordTopAndBottomAnchorLineTop(piece.start);
       const measure = measureInlineDrawing(piece.inlineDrawing.projection);
       const atomWidth = measure.totalWidth;
-      if (holdsContent() && line.width + atomWidth > lineAvailable()) closeLine();
+      // Like a word, a picture that does not fit before a float resumes past it on this line
+      // (placement below makes that jump once the float is cleared; only probe it here).
+      const [penWidth, fits] = [line.width, () => line.width + atomWidth <= lineAvailable()];
+      const jumps = !fits() && tryAdvanceToNextPassage() && fits();
+      line.width = penWidth;
+      if (holdsContent() && !fits() && !jumps) closeLine();
       exclusionProbe.setMetrics(
         {
           height: measure.lineContribution,
@@ -1171,6 +1169,7 @@ export function breakParagraph(
           contentLeft: contentOriginX,
           contentRight: contentOriginX + rightEdge,
           ...(piece.revisions ? { revisions: piece.revisions } : {}),
+          ...(piece.style.shaping ? { bidiLevel: piece.style.shaping.level } : {}),
         })
       );
       // A picture a resolved view kept has no span to carry its site; the line takes it.

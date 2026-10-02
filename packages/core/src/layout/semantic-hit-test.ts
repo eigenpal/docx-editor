@@ -1,5 +1,6 @@
 import { bidiPrefixWidth } from './shaped-caret-advances.ts';
 import { nearestBidiSpan } from './rtl-paragraph.ts';
+import { lineContentEdges } from './pending-line.ts';
 // Pointer hit testing in MODEL space, over semantic layout records.
 //
 // A pointer lands somewhere on a sheet; this answers which text position the person meant.
@@ -596,15 +597,48 @@ function segmentAtX(line: LineRecord, x: number): LineSegment {
   return found;
 }
 
-function drawingAtOffset(
+/**
+ * The inline picture that owns the caret at `offset`, or null when text owns it.
+ *
+ * Content that STARTS at an offset owns its caret: a picture there, or else a span. Only when
+ * nothing starts there does the picture that ENDS there own it. This is the side a wrap jump
+ * puts the caret on, and the text after a picture gets a caret of its own height.
+ */
+export function drawingAtOffset(
   line: LineRecord,
   offset: number,
-  only?: readonly InlineDrawingRecord[]
+  segment?: {
+    readonly spans: readonly StyleSpanRecord[];
+    readonly drawings: readonly InlineDrawingRecord[];
+  } | null
 ): InlineDrawingRecord | null {
-  for (const drawing of only ?? line.drawings ?? []) {
-    if (drawing.start === offset || drawing.start + 1 === offset) return drawing;
-  }
-  return null;
+  const drawings = segment?.drawings ?? line.drawings ?? [];
+  const starting = drawings.find((drawing) => drawing.start === offset);
+  if (starting) return starting;
+  const spans = segment?.spans ?? line.spans;
+  if (spans.some((span) => span.range.start === offset && span.range.end > offset)) return null;
+  return drawings.find((drawing) => drawing.start + 1 === offset) ?? null;
+}
+
+/**
+ * The x of the position before or after an inline picture. A right-to-left picture (odd bidi
+ * level) starts at its right edge, so the position after it is on its left.
+ */
+export function pictureEdgeX(drawing: InlineDrawingRecord, after: boolean): number {
+  const rtl = (drawing.bidiLevel ?? 0) % 2 === 1;
+  return after !== rtl ? drawing.advanceEnd : drawing.advanceStart;
+}
+
+/** The position a point over a picture's advance means: the side of the picture it is on. */
+function pictureHit(drawing: InlineDrawingRecord, x: number, y: number): LineOffset {
+  const rtl = (drawing.bidiLevel ?? 0) % 2 === 1;
+  const after = x >= drawing.x + drawing.width / 2 !== rtl;
+  return {
+    offset: after ? drawing.start + 1 : drawing.start,
+    x: pictureEdgeX(drawing, after),
+    withinSpan: hitBoundsContainDrawing(drawing, { x, y }),
+    drawing,
+  };
 }
 
 function hitBoundsContainDrawing(
@@ -645,23 +679,16 @@ function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContex
     }
   }
   if (spans.length === 0 && (line.drawings?.length ?? 0) > 0) {
-    const drawing = line.drawings![0]!;
-    if (x <= drawing.advanceStart) {
-      return { offset: line.range.start, x: drawing.advanceStart, withinSpan: false, drawing };
+    // Pictures only: a point beyond either end takes that end's picture, and its direction
+    // says which side of the picture that is.
+    let leftmost = line.drawings![0]!;
+    let rightmost = leftmost;
+    for (const item of line.drawings!) {
+      if (item.advanceStart < leftmost.advanceStart) leftmost = item;
+      if (item.advanceEnd > rightmost.advanceEnd) rightmost = item;
+      if (x >= item.advanceStart && x < item.advanceEnd) return pictureHit(item, x, y);
     }
-    const last = line.drawings![line.drawings!.length - 1]!;
-    if (x >= last.advanceEnd) return endOfLine(line, last.advanceEnd, context);
-    for (const item of line.drawings ?? []) {
-      if (x >= item.advanceStart && x < item.advanceEnd) {
-        const after = x >= item.x + item.width / 2;
-        return {
-          offset: after ? item.start + 1 : item.start,
-          x: after ? item.advanceEnd : item.advanceStart,
-          withinSpan: hitBoundsContainDrawing(item, { x, y }),
-          drawing: item,
-        };
-      }
-    }
+    return pictureHit(x <= leftmost.advanceStart ? leftmost : rightmost, x, y);
   }
   if (spans.length === 0) {
     // An empty paragraph still has a position to click into, and it is the line's ALIGNED
@@ -670,6 +697,10 @@ function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContex
   }
 
   const bidiSpan = nearestBidiSpan(spans, x);
+  // A picture on a shaped line has its own side to give, before the nearest text answers.
+  for (const drawing of bidiSpan ? (line.drawings ?? []) : []) {
+    if (x >= drawing.advanceStart && x < drawing.advanceEnd) return pictureHit(drawing, x, y);
+  }
   if (bidiSpan) {
     const candidate = offsetWithinSpan(
       bidiSpan,
@@ -691,9 +722,7 @@ function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContex
   if (x <= line.contentX) return { offset: line.range.start, x: line.contentX, withinSpan: false };
 
   // The line ends at its last content, which can be an inline picture after the text.
-  const last = spans[spans.length - 1]!;
-  let rightEdge = last.box.x + last.box.width;
-  for (const drawing of line.drawings ?? []) rightEdge = Math.max(rightEdge, drawing.advanceEnd);
+  const rightEdge = lineContentEdges(spans, line.drawings ?? [])!.right;
   if (x >= rightEdge) return endOfLine(line, rightEdge, context);
 
   // Text owns its published box. Check every text box before looking at drawing gaps:
@@ -707,16 +736,7 @@ function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContex
   for (let index = 0; index < spans.length; index += 1) {
     const span = spans[index]!;
     for (const drawing of line.drawings ?? []) {
-      if (x >= drawing.advanceStart && x < drawing.advanceEnd) {
-        const insideHit = hitBoundsContainDrawing(drawing, { x, y });
-        const after = x >= drawing.x + drawing.width / 2;
-        return {
-          offset: after ? drawing.start + 1 : drawing.start,
-          x: after ? drawing.advanceEnd : drawing.advanceStart,
-          withinSpan: insideHit,
-          drawing,
-        };
-      }
+      if (x >= drawing.advanceStart && x < drawing.advanceEnd) return pictureHit(drawing, x, y);
       // A picture after this span is decided at its own span, or as the line's end. Weighing
       // it here sent a point in any gap before this span to that later picture.
       if (drawing.advanceStart >= span.box.x + span.box.width) continue;
@@ -747,12 +767,20 @@ function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContex
       // Before the first span, that gap is a wrap jump after a leading picture.
       const previous = spans[index - 1];
       if (!previous) {
-        // Report the x the caret for that offset draws at: the picture's end, not the text.
+        // A wrap jump sits between two pieces of content, so a point in it means the boundary
+        // between them: just after the last picture that ends before it. The caret for that
+        // offset draws on the far side of the jump, with the content that starts there.
         const segment = lineSegments(line).find(
           (entry) => entry.paragraphId === span.range.paragraphId
         );
-        const caretX = caretBoxOnLine(line, span.range.start, context.measurer, segment).x;
-        return { offset: span.range.start, x: caretX, withinSpan: false };
+        let offset = span.range.start;
+        let reach = -Infinity;
+        for (const picture of segment?.drawings ?? line.drawings ?? []) {
+          if (picture.start >= span.range.start || picture.advanceEnd > x) continue;
+          if (picture.advanceEnd > reach) [offset, reach] = [picture.start + 1, picture.advanceEnd];
+        }
+        const caretX = caretBoxOnLine(line, offset, context.measurer, segment).x;
+        return { offset, x: caretX, withinSpan: false };
       }
       const previousRight = previous.box.x + previous.box.width;
       return x - previousRight <= span.box.x - x
@@ -952,11 +980,10 @@ export function caretBoxOnLine(
 ): { x: number; y: number; height: number } {
   // A merged line carries two paragraphs, and an offset means something in only one of them.
   // Without a segment the line IS the segment, which is every ordinary line.
-  const drawing = drawingAtOffset(line, offset, segment?.drawings);
+  const drawing = drawingAtOffset(line, offset, segment);
   if (drawing) {
-    const after = offset > drawing.start;
     return {
-      x: after ? drawing.advanceEnd : drawing.advanceStart,
+      x: pictureEdgeX(drawing, offset > drawing.start),
       // Drawing records are page-relative once semantic layout places them; line.box.y is
       // already folded into drawing.y.
       y: drawing.y,
