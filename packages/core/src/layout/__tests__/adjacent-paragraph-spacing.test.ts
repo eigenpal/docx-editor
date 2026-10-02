@@ -14,7 +14,7 @@ import {
   WML_NAMESPACE_URI,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
-import { adjacentParagraphSpacingSettings } from '../adjacent-paragraph-spacing.ts';
+import { compatibilityProfileFromSettings } from '../compatibility/compatibility-profile.ts';
 import { layoutHeaderFooterStory } from '../hf-layout.ts';
 import { buildNumberingIndex } from '../numbering-index.ts';
 import { keepNextGroupHeight } from '../pagination-keeps.ts';
@@ -130,7 +130,7 @@ const LINE = bodyPitch(paragraph('One', NO_SPACING) + paragraph('Two', NO_SPACIN
 describe('reading the setting', () => {
   test('presence, and every ST_OnOff spelling', () => {
     const read = (compat: string) =>
-      adjacentParagraphSpacingSettings(settingsPart(compat).root).fixedParagraphSpacing ?? false;
+      compatibilityProfileFromSettings(settingsPart(compat).root).has('fixedParagraphSpacing');
     expect(read('')).toBe(false);
     expect(read(FLAG)).toBe(true);
     for (const on of ['1', 'true', 'on']) {
@@ -143,8 +143,8 @@ describe('reading the setting', () => {
 
   test('only a compat child of settings counts', () => {
     const outside = read(`<w:settings xmlns:w="${W}">${FLAG}</w:settings>`, '/word/settings.xml');
-    expect(adjacentParagraphSpacingSettings(outside.root)).toEqual({});
-    expect(adjacentParagraphSpacingSettings(null)).toEqual({});
+    expect(compatibilityProfileFromSettings(outside.root).has('fixedParagraphSpacing')).toBe(false);
+    expect(compatibilityProfileFromSettings(null).has('fixedParagraphSpacing')).toBe(false);
   });
 
   test('the setting is part of the cascade cache identity; an off value is not', () => {

@@ -58,8 +58,8 @@ test('modern side clearance participates in wrapping and survives cache reuse', 
   );
   if (!parsed.ok) throw new Error(parsed.reason);
   const before = serializeOoxmlPart(parsed.part);
-  // Mode 16 keeps the full-stroke side clearance. A mode 15 fixed left `dxa` table shares the
-  // grid line instead (`legacy-table-side-rules.ts`).
+  // A mode 15 or newer fixed left `dxa` table shares the grid line, so the text keeps half the
+  // stroke as side clearance (`legacy-table-side-rules.ts`). Mode 16 lays out as mode 15.
   const options = {
     compatibilityMode: 16,
     measurer: createFixedMeasurer(12.16, 12),
@@ -71,7 +71,14 @@ test('modern side clearance participates in wrapping and survives cache reuse', 
   const paragraph = cell.blocks.find((block) => block.kind === 'paragraph')!;
   expect(paragraph.lines).toHaveLength(1);
   expect(paragraph.lines[0]!.spans.map((span) => span.text).join('')).toBe('ABCD');
-  expect(paragraph.lines[0]!.box.width).toBeCloseTo(48.7, 8);
+  expect(paragraph.lines[0]!.box.width).toBeCloseTo(49.2, 8);
   expect(layoutSemanticDocument(parsed.part, 1, options).pages).toEqual(layout.pages);
+  expect(
+    layoutSemanticDocument(parsed.part, 1, {
+      ...options,
+      compatibilityMode: 15,
+      session: createLayoutSession(),
+    }).pages
+  ).toEqual(layout.pages);
   expect(serializeOoxmlPart(parsed.part)).toBe(before);
 });

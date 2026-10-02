@@ -77,7 +77,9 @@ function counts(page: PageRecord) {
   };
 }
 describe('legal footnote opening admission', () => {
-  for (const mode of [undefined, 14, 15, 12]) {
+  // The admission does not depend on the compatibility mode: every mode places the same note
+  // lines on the first page.
+  for (const mode of [undefined, 11, 12, 14, 15, 16]) {
     for (const [reference, widow, keep, head] of [
       [49, true, false, 4],
       [49, true, true, 0],
@@ -92,7 +94,7 @@ describe('legal footnote opening admission', () => {
           notes: { ...options.notes, compatibilityMode: mode },
         };
         const layout = layoutSemanticDocument(document, 0, configured);
-        expect(counts(layout.pages[0]!).notes).toBe(mode === 12 ? 0 : head);
+        expect(counts(layout.pages[0]!).notes).toBe(head);
         expect(layout.pages.reduce((n, p) => n + counts(p).notes, 0)).toBe(6);
       });
     }

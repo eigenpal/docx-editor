@@ -147,12 +147,13 @@ test('mode 15 right dxa table moves its grid inward by half the trailing rule', 
   }
 });
 
-test('the reclaimed rule width changes where a mode 15 left table wraps', () => {
+test('the reclaimed rule width changes where a mode 15 or newer left table wraps', () => {
   // 24 characters of 10pt text (130.9pt) fit the 133.2pt budget, not the 130.2pt
-  // full-stroke budget that mode 16 keeps.
+  // full-stroke budget. Mode 16 lays out as mode 15.
   const { part } = source({ text: 'aaaaaaaaaaa aaaaaaaaaaaa' });
   expect(contentEdges(layout(part, 15)).lines).toBe(1);
-  expect(contentEdges(layout(part, 16)).lines).toBe(2);
+  expect(contentEdges(layout(part, 16)).lines).toBe(1);
+  expect(layout(part, 16).pages).toEqual(layout(part, 15).pages);
 });
 
 // Captured fixed-layout controls drawn with `w:tblW w:type="auto"` put text and strokes where
@@ -178,7 +179,7 @@ test('the reclaimed rule width changes where a mode 15 auto-width table wraps', 
   // The same 130.9pt line as the `dxa` case fits the 133.2pt budget, not the 130.2pt one.
   const shape = { text: 'aaaaaaaaaaa aaaaaaaaaaaa', widthType: 'auto' };
   expect(contentEdges(layout(source(shape).part, 15)).lines).toBe(1);
-  expect(contentEdges(layout(source(shape).part, 16)).lines).toBe(2);
+  expect(contentEdges(layout(source(shape).part, 16)).lines).toBe(1);
 });
 
 test('a vertical merge continuation does not block the shared grid line', () => {
@@ -222,14 +223,19 @@ test('mode 15 keeps the full-stroke inset and unshifted grid for shapes its cont
   expect(contentEdges(layout(part, 15)).left).toBeCloseTo(6.9, 8);
 });
 
-test('unsupported modes and centred tables take no grid offset', () => {
-  for (const mode of [undefined, 11, 12, 16]) {
+test('legacy modes align the content edge, newer modes take the edge-aligned grid', () => {
+  // A fixed left table in an absent, 11, 12 or 14 mode puts its first content edge on the
+  // text column; mode 15 and every newer mode move the grid by half the outer rule.
+  for (const mode of [undefined, 11, 12, 14]) {
     const { part, table } = source();
-    expect(read(table, mode).outerRuleOffsetPt).toBeUndefined();
-    expect(firstTable(layout(part, mode)).box.x).toBe(0);
+    expect(read(table, mode).outerRuleOffsetPt).toBe(-5.4);
+    expect(firstTable(layout(part, mode)).box.x).toBe(-5.4);
   }
-  expect(read(source().table, 14).outerRuleOffsetPt).toBe(-5.4);
-  expect(firstTable(layout(source().part, 14)).box.x).toBe(-5.4);
+  for (const mode of [15, 16, 17]) {
+    const { part, table } = source();
+    expect(read(table, mode).outerRuleOffsetPt).toBe(1.5);
+    expect(firstTable(layout(part, mode)).box.x).toBe(1.5);
+  }
   expect(read(source({ jc: 'center' }).table, 15).outerRuleOffsetPt).toBeUndefined();
   expect(firstTable(layout(source({ jc: 'center' }).part, 15)).box.x).toBe(78);
 });
@@ -237,13 +243,13 @@ test('unsupported modes and centred tables take no grid offset', () => {
 test('a retained session relays an edge-aligned table when the mode or width changes', () => {
   const { part, table } = source({ fixed: false });
   const session = createLayoutSession();
-  for (const mode of [14, 15, 16, 15, 14])
+  for (const mode of [14, 15, 12, 15, 14])
     expect(layout(part, mode, session).pages).toEqual(layout(part, mode).pages);
   for (const width of [300, 146.9, 147, 300])
     expect(layout(part, 15, session, width).pages).toEqual(
       layout(part, 15, createLayoutSession(), width).pages
     );
   expect(firstTable(layout(part, 15, session, 146.9)).box.x).toBe(0);
-  expect(read(table, 16).outerRuleOffsetPt).toBeUndefined();
+  expect(read(table, 16).outerRuleOffsetPt).toBe(1.5);
   expect(read(table, 15).outerRuleOffsetPt).toBe(1.5);
 });

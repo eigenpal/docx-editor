@@ -32,7 +32,6 @@ import { MAX_NOTE_KEEP_SCAN, paragraphKeeps } from './pagination-keeps.ts';
 import { tableRowHoldOutNeed } from './note-table-row-holdout.ts';
 import type { PageRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 import { PAGE_BREAK_CHAR, type OoxmlPart } from '@docx-editor.dev/core/store';
-import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 
 /**
  * Bound the note-reserve recovery scan on the next page. This scan is separate from
@@ -282,13 +281,7 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   // in that paragraph do not require their notes until their own body lines return.
   // Price complete notes here; split notes and kept successors retain the existing policy.
   const keeps = paragraphKeeps(owningBlock.props);
-  if (
-    returningPrefix > 0 &&
-    paragraphSplitsAllowed &&
-    !keeps.keepLines &&
-    !keeps.keepNext &&
-    hasCompatibilityRule(args.opts.compatibilityMode, 'noteHoldoutPricesReturningOpening')
-  ) {
+  if (returningPrefix > 0 && paragraphSplitsAllowed && !keeps.keepLines && !keeps.keepNext) {
     const openingBottom = noteReferenceOpeningBottom(nextBody, frontierRef, frontier);
     let demand = args.existingAreaHeight > 0 ? args.existingAreaHeight : args.plainSeparatorHeight;
     let complete = true;
@@ -383,12 +376,7 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
       band.tableRow !== true &&
       joinedOffset < columnBudget &&
       laid.flowHeight > remaining + 0.001 &&
-      splitNoteKeepsParagraphReference(
-        laid,
-        room,
-        columnBudget - noticeHeight,
-        args.opts.compatibilityMode
-      )
+      splitNoteKeepsParagraphReference(laid, room, columnBudget - noticeHeight)
     ) {
       pulledNotesHeight +=
         splitNoteHead(laid, room, columnBudget - noticeHeight).height + noticeHeight;

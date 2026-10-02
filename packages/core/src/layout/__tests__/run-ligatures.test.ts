@@ -18,12 +18,9 @@ import {
   cascadeRunProperties,
 } from '../style-cascade.ts';
 import { DEFAULT_RUN_STYLE, resolveRunStyle, runStylesEqual } from '../run-style.ts';
-import {
-  optionalLigaturesEnabled,
-  resolveRunLigatures,
-  runLigatureFeatures,
-} from '../run-ligatures.ts';
+import { resolveRunLigatures, runLigatureFeatures } from '../run-ligatures.ts';
 import { propertiesOfRunContainer } from '../field-run-text.ts';
+import { compatibilityProfileFromSettings } from '../compatibility/compatibility-profile.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
@@ -44,9 +41,15 @@ function settings(mode: number | undefined, enabled?: boolean) {
 test('compatibility controls optional ligatures without suppressing required script features', () => {
   // Mode 15 and every newer mode default on.
   for (const mode of [undefined, 11, 12, 14, 15, 16, 17]) {
-    expect(optionalLigaturesEnabled(settings(mode))).toBe(mode !== undefined && mode >= 15);
-    expect(optionalLigaturesEnabled(settings(mode, false))).toBe(false);
-    expect(optionalLigaturesEnabled(settings(mode, true))).toBe(true);
+    expect(compatibilityProfileFromSettings(settings(mode)).has('optionalLigatures')).toBe(
+      mode !== undefined && mode >= 15
+    );
+    expect(compatibilityProfileFromSettings(settings(mode, false)).has('optionalLigatures')).toBe(
+      false
+    );
+    expect(compatibilityProfileFromSettings(settings(mode, true)).has('optionalLigatures')).toBe(
+      true
+    );
   }
   expect(runLigatureFeatures(DEFAULT_RUN_STYLE)).toEqual({ liga: 0, clig: 0, hlig: 0, dlig: 0 });
   expect(

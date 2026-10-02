@@ -43,7 +43,7 @@ The editor supports Word note positions such as page bottom, beneath text, secti
 
 A footnote starts with its reference line when enough note text fits below it. The note can continue on the next page even when it fits whole on a fresh page. Note paragraphs respect keep-lines (`w:keepLines`) and widow-control (`w:widowControl`) settings. Without widow control, one note line can start below the reference.
 
-This behavior applies to full-width body paragraphs in single-column sections. The document must use compatibility mode 14 or 15, or omit the mode. Other modes require room for the whole note before it starts. Notes containing tables or keep-with-next groups also require room for the whole note.
+This behavior applies to full-width body paragraphs in single-column sections, in every compatibility mode. Notes containing tables or keep-with-next groups require room for the whole note before it starts.
 
 The note area can use trailing space from the last body line's `auto` or `atLeast` line spacing. Each line whose footnote starts on the same page keeps its full height above the note area. This rule applies in every column.
 

@@ -444,7 +444,7 @@ describe('the table fragment box reports the table’s own width', () => {
         `${grid(7200, 7200)}<w:tr>${cell()}${cell()}</w:tr></w:tbl>`
     );
     expect(fragment!.box.width).toBeCloseTo(720, 6);
-    expect(fragment!.box.width).toBeCloseTo(rightEdge(fragment!), 6);
+    expect(fragment!.box.x + fragment!.box.width).toBeCloseTo(rightEdge(fragment!), 6);
   });
 
   test('every fragment of a table that paginates reports the same width', () => {

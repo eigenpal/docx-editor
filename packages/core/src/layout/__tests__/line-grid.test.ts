@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlElement } from '@docx-editor.dev/core/store';
 import { applyLineSpacing, type ParagraphLineSpacing } from '../paragraph-style.ts';
-import { adjustLineHeightInTable, paragraphSnapsToLineGrid, withLineGrid } from '../line-grid.ts';
+import { paragraphSnapsToLineGrid, withLineGrid } from '../line-grid.ts';
 import { parseSectionProperties } from '../section-properties.ts';
 import { buildStyleCascadeTable, type StyleCascadeTable } from '../style-cascade.ts';
 import {
@@ -10,6 +10,7 @@ import {
   layoutSemanticDocument,
 } from '../semantic-layout.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
+import { compatibilityProfileFromSettings } from '../compatibility/compatibility-profile.ts';
 
 // The fixed measurer gives an 11pt line a 14pt box with its baseline at 11.2pt.
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -173,10 +174,20 @@ describe('which paragraphs snap', () => {
   });
 
   test('adjustLineHeightInTable is read from the compatibility settings', () => {
-    expect(adjustLineHeightInTable(settings('<w:adjustLineHeightInTable/>'))).toBe(true);
-    expect(adjustLineHeightInTable(settings('<w:adjustLineHeightInTable w:val="0"/>'))).toBe(false);
-    expect(adjustLineHeightInTable(settings(''))).toBe(false);
-    expect(adjustLineHeightInTable(null)).toBe(false);
+    expect(
+      compatibilityProfileFromSettings(settings('<w:adjustLineHeightInTable/>')).has(
+        'adjustLineHeightInTable'
+      )
+    ).toBe(true);
+    expect(
+      compatibilityProfileFromSettings(settings('<w:adjustLineHeightInTable w:val="0"/>')).has(
+        'adjustLineHeightInTable'
+      )
+    ).toBe(false);
+    expect(compatibilityProfileFromSettings(settings('')).has('adjustLineHeightInTable')).toBe(
+      false
+    );
+    expect(compatibilityProfileFromSettings(null).has('adjustLineHeightInTable')).toBe(false);
   });
 });
 

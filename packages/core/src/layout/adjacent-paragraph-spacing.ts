@@ -4,10 +4,8 @@
 // separates them, and automatic spacing is the HTML `<p>` margin. With the setting on, the two
 // gaps add up, and automatic spacing is a fixed 5pt before and 10pt after (`paragraphSpacing`).
 // The setting lives in `settings.xml`, outside every paragraph's property chain, so the style
-// cascade reads it once and carries it; its cache token covers it.
-
-import type { OoxmlElement } from '@docx-editor.dev/core/store';
-import { compatibilityProfileFromSettings } from './compatibility/compatibility-profile.ts';
+// cascade reads it once (the `fixedParagraphSpacing` compatibility rule) and carries it; its
+// cache token covers it.
 
 /** The settings-derived part of the paragraph spacing rules. */
 export interface AdjacentParagraphSpacingSettings {
@@ -16,19 +14,6 @@ export interface AdjacentParagraphSpacingSettings {
    * automatic spacing resolves to fixed values.
    */
   readonly fixedParagraphSpacing?: true;
-}
-
-/**
- * Read `w:settings/w:compat/w:doNotUseHTMLParagraphAutoSpacing` through the
- * `fixedParagraphSpacing` compatibility rule. An absent `w:val` means on; `0`, `false` and
- * `off` mean off.
- */
-export function adjacentParagraphSpacingSettings(
-  settings: OoxmlElement | null
-): AdjacentParagraphSpacingSettings {
-  return compatibilityProfileFromSettings(settings).has('fixedParagraphSpacing')
-    ? { fixedParagraphSpacing: true }
-    : {};
 }
 
 /**

@@ -17,9 +17,7 @@ import {
   type CompatibilityModeClass,
 } from '../compatibility/compatibility-mode.ts';
 import {
-  ABSENT_DIFFERS_FROM_WORD2007,
   MODE_COMPATIBILITY_RULES,
-  NEWER_DIFFERS_FROM_WORD2013,
   PROFILE_COMPATIBILITY_RULES,
   hasCompatibilityRule,
   type CompatibilityRuleName,
@@ -40,7 +38,7 @@ const MODE_MATRIX = {
   anchorOnlyParagraphSeeding: MODERN,
   anchorOnlyParagraphWrapExclusion: MODERN,
   anchorsLayOutInCell: MODERN,
-  fixedTableContentEdgeOrigin: ['word2010'],
+  fixedTableContentEdgeOrigin: LEGACY,
   floatingTableContentOrigin: LEGACY,
   headerFooterAnchorsWrapText: MODERN,
   headerRowsKeepWithBody: MODERN,
@@ -48,11 +46,9 @@ const MODE_MATRIX = {
   keepNextGivesTailLines: MODERN,
   legacyPercentTableContentWidth: LEGACY,
   legacySharedGridLineSideRules: LEGACY,
-  modernGridLineSideRules: ['word2013'],
-  noteHoldoutPricesReturningOpening: ['absent', 'word2010', 'word2013'],
+  modernGridLineSideRules: MODERN,
   noteTableCellKeeps: MODERN,
   rowPageBreakYieldsToKeep: MODERN,
-  splitNoteKeepsParagraphReference: ['absent', 'word2010', 'word2013'],
   tableParagraphWidowControl: MODERN,
   vMergeTextMovesPastHeadRow: MODERN,
 } as const satisfies Record<ModeCompatibilityRuleName, readonly CompatibilityModeClass[]>;
@@ -103,12 +99,21 @@ describe('mode rules', () => {
     }
   });
 
-  test('the absent and newer exception lists are exact', () => {
-    const rules = Object.keys(MODE_MATRIX) as ModeCompatibilityRuleName[];
-    const differs = (a: number | undefined, b: number) =>
-      rules.filter((rule) => hasCompatibilityRule(a, rule) !== hasCompatibilityRule(b, rule));
-    expect(differs(undefined, 12)).toEqual([...ABSENT_DIFFERS_FROM_WORD2007]);
-    expect(differs(16, 15)).toEqual([...NEWER_DIFFERS_FROM_WORD2013]);
+  test('an absent mode reads as 12, and a mode above 15 reads as 15', () => {
+    // Word lays out a document without a declaration as mode 12, and modes 16, 17, 99 and
+    // 9999 as mode 15.
+    for (const rule of Object.keys(MODE_MATRIX) as ModeCompatibilityRuleName[]) {
+      expect([rule, hasCompatibilityRule(undefined, rule)]).toEqual([
+        rule,
+        hasCompatibilityRule(12, rule),
+      ]);
+      for (const newer of [16, 17, 99, 9999])
+        expect([rule, newer, hasCompatibilityRule(newer, rule)]).toEqual([
+          rule,
+          newer,
+          hasCompatibilityRule(15, rule),
+        ]);
+    }
   });
 });
 

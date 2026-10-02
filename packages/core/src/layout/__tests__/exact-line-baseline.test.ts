@@ -8,7 +8,7 @@ import {
   layoutSemanticDocument,
 } from '../semantic-layout.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
-import { preserveExactLineBaseline } from '../exact-line-baseline.ts';
+import { compatibilityProfileFromSettings } from '../compatibility/compatibility-profile.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 function part(xml: string, name = '/word/settings.xml') {
@@ -45,15 +45,33 @@ test('legacy noExtraLineSpacing retains natural baselines only within the author
     applyLineSpacing({ rule: 'exact', value: 8, preserveExactBaseline: true }, 14, 11)
   ).toEqual({ height: 8, baseline: 8 });
   for (const mode of [undefined, 11, 12, 14]) {
-    expect(preserveExactLineBaseline(settings(mode, '<w:noExtraLineSpacing/>'))).toBe(true);
+    expect(
+      compatibilityProfileFromSettings(settings(mode, '<w:noExtraLineSpacing/>')).has(
+        'preserveExactLineBaseline'
+      )
+    ).toBe(true);
     for (const value of ['0', 'false', 'off', 'invalid'])
       expect(
-        preserveExactLineBaseline(settings(mode, `<w:noExtraLineSpacing w:val="${value}"/>`))
+        compatibilityProfileFromSettings(
+          settings(mode, `<w:noExtraLineSpacing w:val="${value}"/>`)
+        ).has('preserveExactLineBaseline')
       ).toBe(false);
   }
-  expect(preserveExactLineBaseline(settings(15, '<w:noExtraLineSpacing/>'))).toBe(false);
-  expect(preserveExactLineBaseline(settings(99, '<w:noExtraLineSpacing/>'))).toBe(false);
-  expect(preserveExactLineBaseline(settings(12, '<x:noExtraLineSpacing/>'))).toBe(false);
+  expect(
+    compatibilityProfileFromSettings(settings(15, '<w:noExtraLineSpacing/>')).has(
+      'preserveExactLineBaseline'
+    )
+  ).toBe(false);
+  expect(
+    compatibilityProfileFromSettings(settings(99, '<w:noExtraLineSpacing/>')).has(
+      'preserveExactLineBaseline'
+    )
+  ).toBe(false);
+  expect(
+    compatibilityProfileFromSettings(settings(12, '<x:noExtraLineSpacing/>')).has(
+      'preserveExactLineBaseline'
+    )
+  ).toBe(false);
 });
 
 test('baseline policy reaches body and cell lines and invalidates reused paragraph geometry', () => {

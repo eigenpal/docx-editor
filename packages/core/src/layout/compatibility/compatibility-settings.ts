@@ -263,16 +263,16 @@ function setting(section: string, summary: string, overrides?: Partial<CompatOpt
  */
 export const WORD_COMPAT_SETTINGS = Object.freeze({
   overrideTableStyleFontSizeAndJustification: setting(
-    '2.3, overrideTableStyleFontSizeAndJustification',
+    '2.3.1 overrideTableStyleFontSizeAndJustification',
     'Apply the table style font size and justification over the default paragraph style',
     { repeat: 'last' }
   ),
   enableOpenTypeFeatures: setting(
-    '2.3, enableOpenTypeFeatures',
+    'enableOpenTypeFeatures',
     'Enable OpenType ligatures and other font features'
   ),
   doNotFlipMirrorIndents: setting(
-    '2.3, doNotFlipMirrorIndents',
+    '2.3.2 doNotFlipMirrorIndents',
     'Do not swap mirrored paragraph indents'
   ),
   differentiateMultirowTableHeaders: setting(

@@ -15,8 +15,7 @@
 // Table cells do not snap unless the document sets the `w:adjustLineHeightInTable`
 // compatibility option (§17.15.3.1).
 
-import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
-import { compatibilityProfileFromSettings } from './compatibility/compatibility-profile.ts';
+import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { ParagraphLineSpacing } from './paragraph-style.ts';
 
 /**
@@ -43,11 +42,6 @@ export function paragraphSnapsToLineGrid(props: readonly OoxmlProperty[]): boole
     if (property.localName === 'snapToGrid') snaps = isOn(property.attributes?.val);
   }
   return snaps;
-}
-
-/** Whether settings turn on `w:compat/w:adjustLineHeightInTable` (the rule of that name). */
-export function adjustLineHeightInTable(settingsRoot: OoxmlElement | null): boolean {
-  return compatibilityProfileFromSettings(settingsRoot).has('adjustLineHeightInTable');
 }
 
 /**

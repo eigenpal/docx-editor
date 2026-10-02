@@ -102,7 +102,7 @@ For fixed tables without a positive table width, explicit cell preferences can r
 
 Explicit Word compatibility modes 11, 12, and 14 preserve content alignment for supported full-width AutoFit tables. This applies in body, header, footer, text-box, and note stories. The table must have explicit zero indentation, left alignment, zero cell spacing, and consistent outer cell margins. Its complete authored grid must equal the text-column width plus those margins. Other layouts keep their existing geometry, including nested tables and files without an explicit compatibility mode.
 
-In compatibility mode 14, supported fixed tables align the first cell’s content with the table indent. This applies to left-aligned, top-level tables with automatic or absolute widths and no cell spacing. Each row must cover the grid and use the same leading cell margin. Simple side rules share the margin space when the margins clear half the rule. The column widths remain unchanged.
+With no compatibility mode, or in compatibility mode 11, 12, or 14, supported fixed tables align the first cell’s content with the table indent. This applies to left-aligned, top-level tables with automatic or absolute widths and no cell spacing. Each row must cover the grid and use the same leading cell margin. Simple side rules share the margin space when the margins clear half the rule. The column widths remain unchanged.
 
 Nested, positioned, and right-to-left tables retain their existing geometry. Tables with row-level geometry exceptions also retain their existing geometry.
 

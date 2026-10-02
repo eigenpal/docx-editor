@@ -1123,7 +1123,6 @@ function buildFootnoteArea(
       band &&
       evictsReferenceLine(band, laid, splitRoom, {
         keepWholeBudget,
-        compatibilityMode: opts.compatibilityMode,
         paragraphSplitAllowed,
         firstContentTop,
         fullNoteColumn,

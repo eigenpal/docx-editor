@@ -53,10 +53,11 @@ function layout(
   doc: ReturnType<typeof document>,
   session = createLayoutSession(),
   revision = 0,
-  cascade = styles
+  cascade = styles,
+  compatibilityMode: number | undefined = 14
 ) {
   return layoutSemanticDocument(doc, revision, {
-    compatibilityMode: 14,
+    compatibilityMode,
     styleCascade: cascade,
     measurer: createFixedMeasurer(3.9, 12),
     session,
@@ -112,9 +113,33 @@ describe('legacy fixed table content edges', () => {
         .trim()
     ).toBe('abcdefghij');
   });
-  test('unsupported modes and table boundaries retain their prior origin', () => {
-    for (const mode of [null, 11, 12, 16])
-      expect(tableOriginX(structure(document(), mode), 300)).toBe(5.4);
+  test('every legacy mode aligns the first content edge; newer modes keep the prior origin', () => {
+    // Word places the first cell's text at the same position with no mode and with modes 11,
+    // 12 and 14, and about 5.7pt further in with modes 15, 16 and above.
+    for (const mode of [null, 11, 12, 14]) {
+      expect(tableOriginX(structure(document(), mode), 300)).toBeCloseTo(0, 8);
+      for (const width of ['auto', 'dxa']) {
+        const doc = document('', '', 108, width);
+        const table = layout(doc, createLayoutSession(), 0, styles, mode ?? undefined).pages[0]!
+          .fragments[0]!;
+        if (table.kind !== 'table') throw new Error('table');
+        const p = table.rows[0]!.cells[0]!.blocks[0]!;
+        if (p.kind !== 'paragraph') throw new Error('paragraph');
+        expect(p.lines[0]!.box.x).toBeCloseTo(5.4, 8);
+      }
+    }
+    for (const mode of [15, 16, 17]) {
+      // The prior origin plus half the 0.5pt outer rule (`modernGridLineSideRules`).
+      expect(tableOriginX(structure(document(), mode), 300)).toBeCloseTo(5.65, 8);
+      const table = layout(document(), createLayoutSession(), 0, styles, mode).pages[0]!
+        .fragments[0]!;
+      if (table.kind !== 'table') throw new Error('table');
+      const p = table.rows[0]!.cells[0]!.blocks[0]!;
+      if (p.kind !== 'paragraph') throw new Error('paragraph');
+      expect(p.lines[0]!.box.x).toBeCloseTo(11.05, 8);
+    }
+  });
+  test('table boundaries retain their prior origin', () => {
     for (const extra of [
       '<w:bidiVisual/>',
       '<w:tblCellSpacing w:w="20" w:type="dxa"/>',

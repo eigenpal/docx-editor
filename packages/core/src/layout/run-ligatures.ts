@@ -1,6 +1,5 @@
 import { combineStyleToggles } from './style-toggles.ts';
-import type { OoxmlProperty, OoxmlElement } from '@docx-editor.dev/core/store';
-import { compatibilityProfileFromSettings } from './compatibility/compatibility-profile.ts';
+import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { ResolvedRunStyle } from './run-style.ts';
 
 const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
@@ -51,15 +50,6 @@ export function runLigatureFeatures(style: ResolvedRunStyle): Record<string, num
 
 export function runLigatureFeatureKey(style: ResolvedRunStyle): string {
   return `${style.ligatures?.standard ? 1 : 0}${style.ligatures?.contextual ? 1 : 0}${style.ligatures?.historical ? 1 : 0}${style.ligatures?.discretionary ? 1 : 0}`;
-}
-
-/**
- * Whether optional ligatures apply: the `optionalLigatures` rule in
- * `compatibility/compatibility-rules.ts` (mode 15 and later by default; an explicit
- * `enableOpenTypeFeatures` setting overrides the mode).
- */
-export function optionalLigaturesEnabled(settings: OoxmlElement | null): boolean {
-  return compatibilityProfileFromSettings(settings).has('optionalLigatures');
 }
 
 const NO_OPTIONAL_LIGATURES: readonly OoxmlProperty[] = Object.freeze([

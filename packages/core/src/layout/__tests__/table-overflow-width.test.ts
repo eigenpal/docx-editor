@@ -48,7 +48,9 @@ for (const layout of ['fixed', 'autofit']) {
       const page = result.pages[0]!;
       const table = page.fragments.find((f) => f.kind === 'table')!;
       expect(table.box.width).toBeCloseTo(510.3, 6);
-      expect(table.box.x).toBeCloseTo(x, 6);
+      // Without a declared mode, a fixed left table aligns its first content edge with the
+      // text column (`fixedTableContentEdgeOrigin`), which moves its grid 0.5pt to the left.
+      expect(table.box.x).toBeCloseTo(layout === 'fixed' && alignment === 'left' ? -0.5 : x, 6);
       expect(table.rows[0]!.cells.map((c) => c.box.width)).toEqual([250.75, 259.55]);
       const lines = linesOf(result);
       expect(lines).toHaveLength(2);

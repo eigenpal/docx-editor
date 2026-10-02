@@ -795,13 +795,21 @@ describe('places anchors in story and cell context', () => {
         )
         .replace('</w:body>', '</w:tc></w:tr></w:tbl></w:body>');
       const part = load(source);
-      const options = { measurer, inlineDrawingLayout: layoutContext(part) };
-      const session = createLayoutSession();
-      const cold = layoutSemanticDocument(part, 1, options);
-      for (const revision of [1, 2]) {
-        const layout = layoutSemanticDocument(part, revision, { ...options, session });
-        expect(layout.pages).toEqual(cold.pages);
-        expect(layout.pages[0]!.anchoredDrawings![0]!.x).toBeCloseTo(12, 5);
+      // Mode 15 keeps the table at the text column, so the column starts after the 12pt
+      // padding. Without a declared mode, the fixed table aligns that content edge with the
+      // text column instead (`fixedTableContentEdgeOrigin`).
+      for (const [compatibilityMode, x] of [
+        [15, 12],
+        [undefined, 0],
+      ] as const) {
+        const options = { measurer, inlineDrawingLayout: layoutContext(part), compatibilityMode };
+        const session = createLayoutSession();
+        const cold = layoutSemanticDocument(part, 1, options);
+        for (const revision of [1, 2]) {
+          const layout = layoutSemanticDocument(part, revision, { ...options, session });
+          expect(layout.pages).toEqual(cold.pages);
+          expect(layout.pages[0]!.anchoredDrawings![0]!.x).toBeCloseTo(x, 5);
+        }
       }
     }
   });

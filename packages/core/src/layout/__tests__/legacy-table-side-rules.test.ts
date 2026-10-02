@@ -76,7 +76,7 @@ for (const mode of [undefined, 11, 12, 14]) {
 test('mode changes do not reuse the legacy side-rule projection', () => {
   const { table } = source(0.5);
   const legacy = read(table, 14);
-  expect(read(table, 16).rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
+  expect(read(table, 15)).not.toEqual(legacy);
   expect(read(table, 14)).toEqual(legacy);
 });
 
@@ -94,14 +94,13 @@ test('compound, unequal, separated, positioned and percentage tables retain thei
   expect(read(source().table, 12, 1).rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
 });
 
-// Mode 16 is above 15, the newest documented mode, so it is modern. A bordered one-cell
-// table rendered by Word at mode 14 starts its text at 72.24pt and at mode 16 at 72.48pt,
-// one device unit further in, and
-// this engine reproduces both. So 16 is NOT a legacy mode for side rules: it must not take
-// the centred path that modes 11, 12 and 14 do.
-test('mode 16 keeps the modern side-rule inset, as the rendered controls show', () => {
-  const { table } = source(0);
-  expect(read(table, 16).rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
+// Mode 16 is above 15, the newest documented mode, and lays out as mode 15. This bordered
+// one-cell table starts its text 0.48pt further in at modes 15 and 16 than at modes 12 and
+// 14, and at the same place in both pairs.
+test('mode 16 takes the mode 15 side-rule geometry', () => {
+  const { part, table } = source(0);
+  expect(read(table, 16)).toEqual(read(table, 15));
+  expect(layout(part, 16).pages).toEqual(layout(part, 15).pages);
   expect(read(table, 14).rows[0]!.cells[0]!.centeredSideRules).toBe(true);
 });
 
@@ -154,7 +153,7 @@ test('mode 15 keeps the full-stroke inset for shapes its controls do not cover',
   expect(
     read(source(0.5, CENTRED).table, 15, 1).rows[0]!.cells[0]!.centeredSideRules
   ).toBeUndefined();
-  expect(read(source(0.5, CENTRED).table, 16).rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
+  expect(read(source(0.5, CENTRED).table, 16).rows[0]!.cells[0]!.centeredSideRules).toBe(true);
   const { part } = source(0, '', 4, 'single', 'pct');
   const inset = layout(part, 15).pages[0]!.fragments[0]!;
   if (inset.kind !== 'table') throw new Error('Expected table');
@@ -191,12 +190,13 @@ test('mode 15 admits a directly disabled bidiVisual flag', () => {
   expect(read(table, 15).rows[0]!.cells[0]!.centeredSideRules).toBe(true);
 });
 
-test('a retained session relays a centred table when the mode changes', () => {
-  const { part } = source(0, CENTRED);
-  const session = createLayoutSession();
-  for (const mode of [16, 15, 16, 15])
-    expect(layout(part, mode, session).pages).toEqual(layout(part, mode).pages);
-  expect(layout(part, 15).pages).not.toEqual(layout(part, 16).pages);
+test('a retained session relays a side-ruled table when the mode changes', () => {
+  for (const { part } of [source(0, CENTRED), source(0)]) {
+    const session = createLayoutSession();
+    for (const mode of [14, 15, 16, 14, 15])
+      expect(layout(part, mode, session).pages).toEqual(layout(part, mode).pages);
+  }
+  expect(layout(source(0).part, 15).pages).not.toEqual(layout(source(0).part, 14).pages);
 });
 
 // A compound opposite edge stays outside the modern simple-side-rule subset.

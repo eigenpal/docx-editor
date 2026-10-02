@@ -274,9 +274,9 @@ test('a settled continuation admits its complete reference opening before later 
   );
   expect(holdOutReserveNeed(input)).toBe(0);
   expect(holdOutReserveNeed({ ...input, noteLayoutCache: new Map() })).toBe(0);
-  expect(
-    holdOutReserveNeed({ ...input, opts: { ...input.opts, compatibilityMode: 12 } })
-  ).toBeGreaterThan(0);
+  // The returning opening is priced the same way in every compatibility mode.
+  for (const compatibilityMode of [11, 12, 14, 15, 16])
+    expect(holdOutReserveNeed({ ...input, opts: { ...input.opts, compatibilityMode } })).toBe(0);
   const owner = input.nextPage!.fragments[0] as ParagraphFragmentRecord;
   for (const localName of ['keepLines', 'keepNext']) {
     const kept = {

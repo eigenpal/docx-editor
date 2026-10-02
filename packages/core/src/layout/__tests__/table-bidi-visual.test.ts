@@ -81,7 +81,7 @@ describe('w:bidiVisual table grid', () => {
   test.each(['0', 'false', 'off'])('explicit %s keeps LTR columns', (value) => {
     const t = tables(layout(table(undefined, `<w:bidiVisual w:val="${value}"/>`)))[0]!;
     expect(t.columnEdges).toEqual([0, 60, 150, 270]);
-    expect(t.rows[0]!.cells.map((c) => c.box.x)).toEqual([0, 60, 150]);
+    expect(t.rows[0]!.cells.map((c) => c.box.x - t.box.x)).toEqual([0, 60, 150]);
   });
 
   test('inherits table-style bidiVisual, permits direct false, and keeps firstCol styling logical', () => {

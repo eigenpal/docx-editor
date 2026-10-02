@@ -349,7 +349,7 @@ describe('manual page breaks inside table cells', () => {
         span.lineEndWhitespace ?? false,
       ]);
     expect(spans(result)).toEqual([
-      ['Alpha', 0.5, false],
+      ['Alpha', control.lines[0]!.spans[0]!.box.x, false],
       ['', control.lines[0]!.spans[1]!.box.x, false],
       ['Beta', control.lines[0]!.spans[2]!.box.x, false],
     ]);

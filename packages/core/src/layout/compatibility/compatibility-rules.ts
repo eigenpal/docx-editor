@@ -6,14 +6,14 @@
 // value) or `profile.has('ruleName')` (any rule, over a parsed settings part). It never
 // compares mode numbers itself; the `docx/no-raw-compatibility-mode` lint rule enforces that.
 //
-// The predicates encode the engine's behavior as it is, including the uneven ones. Some rules
-// treat an absent mode differently from 12, or a mode above 15 differently from 15.
-// `ABSENT_DIFFERS_FROM_WORD2007` and `NEWER_DIFFERS_FROM_WORD2013` list them, and the matrix
-// test keeps those lists exact, so a new rule cannot add such a difference unnoticed.
+// Word lays out a document without a declaration as mode 12, and a declaration above 15 as
+// mode 15. Every rule follows both: `absent` reads as `word2007`, and `newer` as `word2013`.
+// The matrix test enforces this for every rule, so a rule cannot treat them differently.
 //
 // No published specification says which modes change these layout behaviors; the specified
 // part is the OOXML construct each rule acts on. So every rule names that construct's section
-// as `source` and the captured layout controls that pin the mode dependence as `pinnedBy`.
+// as `source`, and the layout tests that pin its mode dependence as `pinnedBy`. Those tests
+// state positions and page breaks that Word produces for the same markup in each mode.
 //
 // See docs/architecture/compatibility-modes.md for the full tables and how to add a rule.
 
@@ -96,10 +96,13 @@ export const MODE_COMPATIBILITY_RULES = Object.freeze({
     ]
   ),
   fixedTableContentEdgeOrigin: mode(
-    ['word2010'],
+    LEGACY,
     'A collapsed fixed left table aligns its leading cell content edge with the text column',
     'ECMA-376 Part 1 §17.4.52 tblLayout',
-    ['layout/__tests__/legacy-fixed-table-content.test.ts']
+    [
+      'layout/__tests__/legacy-fixed-table-content.test.ts',
+      'layout/__tests__/modern-edge-aligned-side-rules.test.ts',
+    ]
   ),
   floatingTableContentOrigin: mode(
     LEGACY,
@@ -147,16 +150,13 @@ export const MODE_COMPATIBILITY_RULES = Object.freeze({
     ['layout/__tests__/legacy-table-side-rules.test.ts']
   ),
   modernGridLineSideRules: mode(
-    ['word2013'],
+    MODERN,
     'Side rules center on grid lines only for covered dxa/auto width shapes; edge-aligned grids move by half a rule',
     'ECMA-376 Part 1 §17.4.38 tblBorders',
-    ['layout/__tests__/modern-edge-aligned-side-rules.test.ts']
-  ),
-  noteHoldoutPricesReturningOpening: mode(
-    ['absent', 'word2010', 'word2013'],
-    'A note hold-out prices only the returning opening of a splittable continuation paragraph',
-    'ECMA-376 Part 1 §17.11 Footnotes and Endnotes',
-    ['layout/__tests__/footnote-holdout-frontier.test.ts']
+    [
+      'layout/__tests__/modern-edge-aligned-side-rules.test.ts',
+      'layout/__tests__/legacy-table-side-rules.test.ts',
+    ]
   ),
   noteTableCellKeeps: mode(
     MODERN,
@@ -169,12 +169,6 @@ export const MODE_COMPATIBILITY_RULES = Object.freeze({
     'A row with a page break does not start a page when the row before it keeps with it',
     'ECMA-376 Part 1 §17.3.1.15 keepNext',
     ['layout/__tests__/table-row-keep-chains.test.ts']
-  ),
-  splitNoteKeepsParagraphReference: mode(
-    ['absent', 'word2010', 'word2013'],
-    'A split note may keep its paragraph reference on the page instead of evicting it',
-    'ECMA-376 Part 1 §17.11 Footnotes and Endnotes',
-    ['layout/__tests__/footnote-legal-split.test.ts']
   ),
   tableParagraphWidowControl: mode(
     MODERN,
@@ -255,7 +249,7 @@ export const PROFILE_COMPATIBILITY_RULES = Object.freeze({
       return declared ?? MODERN_SET.has(facts.modeClass);
     },
     'Optional OpenType ligatures apply as run properties ask',
-    '[MS-DOCX] 2.3, enableOpenTypeFeatures',
+    '[MS-DOCX] enableOpenTypeFeatures',
     ['layout/__tests__/run-ligatures.test.ts']
   ),
   preserveExactLineBaseline: profile(
@@ -274,7 +268,7 @@ export const PROFILE_COMPATIBILITY_RULES = Object.freeze({
     '`overrideTableStyleFontSizeAndJustification` is on (`1`, `true` or `on`)',
     (facts) => facts.settings.overrideTableStyleFontSizeAndJustification === true,
     'Table style font size and justification apply over the default paragraph style',
-    '[MS-DOCX] 2.3, overrideTableStyleFontSizeAndJustification',
+    '[MS-DOCX] 2.3.1 overrideTableStyleFontSizeAndJustification',
     ['layout/__tests__/table-style-compatibility.test.ts']
   ),
 });
@@ -308,16 +302,3 @@ export function hasCompatibilityRule(
 ): boolean {
   return modeRuleApplies(rule, compatibilityModeClass(compatibilityMode));
 }
-
-/** Mode rules whose `absent` reading differs from `word2007`, the [MS-DOCX] default. */
-export const ABSENT_DIFFERS_FROM_WORD2007: readonly ModeCompatibilityRuleName[] = Object.freeze([
-  'noteHoldoutPricesReturningOpening',
-  'splitNoteKeepsParagraphReference',
-]);
-
-/** Mode rules whose `newer` reading differs from `word2013`. */
-export const NEWER_DIFFERS_FROM_WORD2013: readonly ModeCompatibilityRuleName[] = Object.freeze([
-  'modernGridLineSideRules',
-  'noteHoldoutPricesReturningOpening',
-  'splitNoteKeepsParagraphReference',
-]);

@@ -16,9 +16,12 @@
 //   "the running version", not a value Word writes. So Word 2013 and later write 15.
 //
 // Word 2010 ignores a declaration of 15 ([MS-DOCX] Appendix B note 13). No Microsoft source
-// defines 13 or anything above 15, but other producers write them. A value above 15 is a mode
-// newer than this engine knows, so it lays out as modern; 13 is unlisted and lays out with no
-// rule that names a mode (see `compatibility-rules.ts`).
+// defines 13 or anything above 15, but other producers write them. Word 16 for Mac lays out a
+// document with no declaration exactly as one that declares 12, and one that declares 16
+// exactly as one that declares 15, in table and footnote probe documents. Declarations of 17,
+// 99 and 9999 lay out as 15 in the table probes. Word reports a document that declares 13 as
+// unreadable content and offers to recover it. So a value above 15 lays out as 15 here, and 13 is unlisted and lays out with
+// no rule that names a mode (see `compatibility-rules.ts`).
 //
 // Sources:
 // - [MS-DOCX] 2.3.5 compatibilityMode:
