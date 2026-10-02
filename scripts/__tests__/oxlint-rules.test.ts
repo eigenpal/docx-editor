@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { parseJsonc } from '../lib/jsonc.mjs';
+import ts from 'typescript';
 
 const root = join(import.meta.dir, '..', '..');
 let workspace = '';
@@ -78,6 +78,20 @@ const FILES: Record<string, string> = {
     'export { ref, useState };',
     '',
   ].join('\n'),
+  // Vue adapter tests are checked for sinks too.
+  'packages/vue/src/__tests__/sample.test.ts': `${PRELUDE}\n${SINKS}\n`,
+  // A single-file component: the JavaScript plugin runs on its script block.
+  'packages/vue/src/Sample.vue': [
+    '<template><div /></template>',
+    '<script setup lang="ts">',
+    "document.body.innerHTML = '<b>x</b>';",
+    '</script>',
+    '',
+  ].join('\n'),
+  // In the engine lanes only `__tests__` is exempt, so a test beside the source is checked.
+  'packages/core/src/store/beside.test.ts': `${PRELUDE}\n${SINKS}\n`,
+  // Only root-level `*.config.ts` files are ignored.
+  'packages/core/src/editor/tailwind.config.ts': `${PRELUDE}\nel.innerHTML = '<b>x</b>';\n`,
   // The global cap.
   'packages/core/src/layout/long.ts': Array.from(
     { length: 1001 },
@@ -114,7 +128,10 @@ beforeAll(() => {
   // directory is a symlink that oxlint resolves, which would put every file outside them.
   workspace = realpathSync(mkdtempSync(join(tmpdir(), 'docx-oxlint-rules-')));
   // The real config, with its plugin path made absolute so it loads from the workspace.
-  const config = parseJsonc(readFileSync(join(root, '.oxlintrc.json'), 'utf8')) as {
+  const config = ts.parseConfigFileTextToJson(
+    '.oxlintrc.json',
+    readFileSync(join(root, '.oxlintrc.json'), 'utf8')
+  ).config as {
     jsPlugins: string[];
     $schema?: string;
   };
@@ -147,6 +164,10 @@ test('every banned shape is reported where the configuration applies it, and now
   expect(reports()).toEqual(
     [
       'packages/core/src/layout/long.ts:1001 eslint(max-lines)',
+      `packages/core/src/editor/tailwind.config.ts:6 ${sink}`,
+      ...sinkLines('packages/core/src/store/beside.test.ts', 6),
+      ...sinkLines('packages/vue/src/__tests__/sample.test.ts', 6),
+      `packages/vue/src/Sample.vue:3 ${sink}`,
       ...sinkLines(store, 6),
       `${store}:16 ${spread}`,
       `${store}:17 ${spread}`,

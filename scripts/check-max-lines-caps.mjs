@@ -18,7 +18,8 @@
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
-import { parseJsonc } from './lib/jsonc.mjs';
+import ts from 'typescript';
+import { disablesMaxLines } from './lib/max-lines-directives.mjs';
 
 // 150, not 100: with caps set ~100 over their file, a tighter slack made ONE deleted line
 // in a capped file a lint failure until the config moved too. 150 keeps the ratchet and
@@ -48,12 +49,6 @@ const BLANKET_DISABLES = new Map([
   ['packages/core/src/store/package/note-lifecycle.ts', 1320],
 ]);
 
-/**
- * A file-level `eslint-disable` or `oxlint-disable` naming max-lines (oxlint honors both).
- * `-next-line` is one statement, not a file.
- */
-const BLANKET_DISABLE = /\/\*\s*(?:eslint|oxlint)-disable\s(?![^*]*-next-line)[^*]*max-lines/;
-
 const SOURCE_FILE = /\.tsx?$/;
 const SKIP_DIRECTORIES = new Set(['node_modules', 'dist', 'dist-types', 'temp', '.turbo']);
 
@@ -69,7 +64,13 @@ function sourceFilesUnder(directory, found = []) {
 }
 
 const root = join(import.meta.dirname, '..');
-const configs = parseJsonc(readFileSync(join(root, '.oxlintrc.json'), 'utf8')).overrides ?? [];
+// TypeScript's JSON-with-comments reader: the config has comments and trailing commas.
+const { config, error } = ts.parseConfigFileTextToJson(
+  '.oxlintrc.json',
+  readFileSync(join(root, '.oxlintrc.json'), 'utf8')
+);
+if (error) throw new Error(ts.flattenDiagnosticMessageText(error.messageText, '\n'));
+const configs = config.overrides ?? [];
 
 const failures = [];
 let checked = 0;
@@ -102,7 +103,7 @@ for (const block of configs) {
 const seenBlanket = new Set();
 for (const absolute of sourceFilesUnder(join(root, 'packages'))) {
   const text = readFileSync(absolute, 'utf8');
-  if (!BLANKET_DISABLE.test(text)) continue;
+  if (!disablesMaxLines(text)) continue;
   const path = relative(root, absolute).split(sep).join('/');
   seenBlanket.add(path);
   const lines = text.split('\n').length - 1;

@@ -9,8 +9,9 @@
   "ignorePatterns": [
     "**/dist/**",
     "**/node_modules/**",
-    "*.config.js",
-    "*.config.ts",
+    // Root-level config files only, as in the ESLint configuration this replaces.
+    "/*.config.js",
+    "/*.config.ts",
     "packages/editor-api/compat/generated/**",
     // Third-party vendored code (Extend UI PDF viewer + shadcn primitives, MIT), not ours to lint.
     "examples/docx-to-pdf/src/vendor/**"
@@ -58,16 +59,26 @@
     // attacker-sized input — a rule repeated in source comments across both lanes
     // (table-widths.ts, drawing-projection.ts, tree-op-revisions.ts, ...). Tests spread bounded
     // literal fixtures; the rule guards the engine paths that see attacker-sized collections.
+    // In these lanes only `__tests__` is exempt, so a `*.test.ts` beside the source keeps the
+    // sink and keyframes checks too.
     {
       "files": ["packages/core/src/store/**/*.ts", "packages/core/src/layout/**/*.ts"],
-      "rules": { "docx/no-varargs-spread": "error" }
+      "rules": {
+        "docx/no-varargs-spread": "error",
+        "docx/no-html-sinks": "error",
+        "docx/no-global-keyframes": "error"
+      }
     },
     {
       "files": [
         "packages/core/src/store/**/__tests__/**",
         "packages/core/src/layout/**/__tests__/**"
       ],
-      "rules": { "docx/no-varargs-spread": "off" }
+      "rules": {
+        "docx/no-varargs-spread": "off",
+        "docx/no-html-sinks": "off",
+        "docx/no-global-keyframes": "off"
+      }
     },
 
     // Framework isolation: keep core/react/vue/editor-api packages from cross-importing each
