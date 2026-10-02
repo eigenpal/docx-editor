@@ -273,11 +273,11 @@ test('streams independent native suggestions and preserves accept and reject res
     );
     const parser = new WriterInputStream('edit_text');
     parser
-      .push(JSON.stringify({ edits }).slice(0, -2))
+      .push(JSON.stringify({ story: { kind: 'body' }, edits }).slice(0, -2))
       .forEach((input, index) =>
         stream.push({ toolCallId: 'edits', toolName: 'edit_text', index, input })
       );
-    const result = await stream.finish('edits', 'edit_text', { edits });
+    const result = await stream.finish('edits', 'edit_text', { story: { kind: 'body' }, edits });
     expect(result?.success, result?.output).toBe(true);
     expect(JSON.parse(result!.output).edited).toBe(2);
     const bytes = await runtime.save();

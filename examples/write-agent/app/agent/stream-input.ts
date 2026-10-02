@@ -60,6 +60,12 @@ export class WriterInputStream {
           if (char === '[' && this.depth === 1 && this.lastString === STREAM_ARRAYS[this.name]) {
             // Required metadata must precede the array. Otherwise execute the final input normally.
             this.metadata = JSON.parse(`${this.text.slice(0, this.offset)}[]}`);
+            // A later story field can change the target. Defaults are safe only
+            // when validating complete input, never while streaming its prefix.
+            if (this.name !== 'create_document' && !Object.hasOwn(this.metadata, 'story')) {
+              this.ended = true;
+              break;
+            }
             this.array = true;
           } else if (char === '{' && this.array && this.depth === 2) this.itemStart = this.offset;
           this.depth++;

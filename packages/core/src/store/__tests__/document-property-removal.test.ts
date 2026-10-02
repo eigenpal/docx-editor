@@ -40,3 +40,56 @@ test('property removal keeps the original package and unrelated parts for undo a
   if (!reopened.ok) throw new Error('Saved package failed to parse');
   expect(withoutDocumentProperties(reopened.package)).toBe(reopened.package);
 });
+
+for (const location of ['relationship', 'override'] as const) {
+  for (const [kind, whitespace] of [
+    ['xml', ' \t\r\n'],
+    ['nbsp', '\u00a0'],
+  ] as const) {
+    test(`metadata removal handles ${kind} whitespace in ${location}`, () => {
+      const files = unzipSync(fixture());
+      const name = location === 'relationship' ? '_rels/.rels' : '[Content_Types].xml';
+      const pattern =
+        location === 'relationship'
+          ? /<Relationship\b[^>]*Id="core"[^>]*\/>/
+          : /<Override\b[^>]*PartName="\/docProps\/core.xml"[^>]*\/>/;
+      files[name] = strToU8(
+        strFromU8(files[name]!).replace(pattern, (declaration) =>
+          declaration.replace(
+            '/>',
+            `>${whitespace}</${location === 'relationship' ? 'Relationship' : 'Override'}>`
+          )
+        )
+      );
+      const parsed = readOoxmlPackage(zipSync(files));
+      expect(parsed.ok).toBe(true);
+      if (!parsed.ok) return;
+      const before = writeOoxmlPackage(parsed.package);
+      const result = withoutDocumentProperties(parsed.package);
+      if (kind === 'nbsp') {
+        expect(result).toBeNull();
+        expect(writeOoxmlPackage(parsed.package)).toEqual(before);
+      } else {
+        expect(result).not.toBeNull();
+        expect(unzipSync(writeOoxmlPackage(result!))['docProps/core.xml']).toBeUndefined();
+      }
+    });
+  }
+}
+
+test('metadata removal refuses a companion relationship part with an extended declaration', () => {
+  const files = unzipSync(fixture());
+  files['docProps/_rels/core.xml.rels'] = strToU8(`<Relationships xmlns="${REL}"/>`);
+  files['[Content_Types].xml'] = strToU8(
+    strFromU8(files['[Content_Types].xml']!).replace(
+      '</Types>',
+      '<Override xmlns:x="urn:retained" x:keep="Retain" PartName="/docProps/_rels/core.xml.rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/></Types>'
+    )
+  );
+  const parsed = readOoxmlPackage(zipSync(files));
+  expect(parsed.ok).toBe(true);
+  if (!parsed.ok) return;
+  const before = writeOoxmlPackage(parsed.package);
+  expect(withoutDocumentProperties(parsed.package)).toBeNull();
+  expect(writeOoxmlPackage(parsed.package)).toEqual(before);
+});

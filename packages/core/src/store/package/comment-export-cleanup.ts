@@ -1,3 +1,4 @@
+import { canRemoveContentTypeOverrides, isXmlWhitespace } from './content-type-removal.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import type { OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 import { relsPartNameFor, resolveContentTypeOf, withoutPart } from './package-edit.ts';
@@ -54,7 +55,7 @@ function emptyCommentPart(pkg: OoxmlPackage, part: OoxmlPart): boolean {
     root.namespaceUri === expected.namespace &&
     root.localName === expected.root &&
     root.attributes.every((a) => a.namespaceUri === MC && a.localName === 'Ignorable') &&
-    root.children.every((child) => child.kind === 'textValue' && child.value.trim() === '')
+    root.children.every((child) => child.kind === 'textValue' && isXmlWhitespace(child.value))
   );
 }
 
@@ -66,7 +67,7 @@ function plainRelationship(node: OoxmlNode): boolean {
     node.attributes.every(
       (a) => a.namespaceUri === '' && ['Id', 'Type', 'Target', 'TargetMode'].includes(a.localName)
     ) &&
-    node.children.every((child) => child.kind === 'textValue' && child.value.trim() === '')
+    node.children.every((child) => child.kind === 'textValue' && isXmlWhitespace(child.value))
   );
 }
 
@@ -82,14 +83,19 @@ function plainRelationships(pkg: OoxmlPackage, owner: string): boolean {
     part.root.localName === 'Relationships' &&
     part.root.attributes.length === 0 &&
     part.root.children.every((node) =>
-      node.kind === 'textValue' ? node.value.trim() === '' : plainRelationship(node)
+      node.kind === 'textValue' ? isXmlWhitespace(node.value) : plainRelationship(node)
     )
   );
 }
 
 function removableRelationships(pkg: OoxmlPackage, candidates: readonly OoxmlPart[]): boolean {
   const selected = new Map(candidates.map((part) => [partNameKey(part.name), part]));
-  for (const part of candidates) if (!plainRelationships(pkg, part.name)) return false;
+  for (const part of candidates) {
+    // withoutPart removes companion relationships but only the primary declaration.
+    // Preserve explicit companion declarations and any extension data they carry.
+    if (pkg.contentTypes.overrides.has(partNameKey(relsPartNameFor(part.name)))) return false;
+    if (!plainRelationships(pkg, part.name)) return false;
+  }
   for (const [owner, records] of pkg.relationships) {
     const ownerSelected = selected.has(partNameKey(owner));
     for (const record of records) {
@@ -115,6 +121,11 @@ function removableRelationships(pkg: OoxmlPackage, candidates: readonly OoxmlPar
 export function commentExportPackage(pkg: OoxmlPackage): OoxmlPackage {
   const candidates = [...pkg.parts.values()].filter((part) => emptyCommentPart(pkg, part));
   if (candidates.length === 0 || !removableRelationships(pkg, candidates)) return pkg;
+
+  if (
+    !canRemoveContentTypeOverrides(pkg, new Set(candidates.map((part) => partNameKey(part.name))))
+  )
+    return pkg;
 
   // Preserve all parts if any marker remains, including malformed generic markers.
   // A bounded scan that cannot prove absence must not remove package structure.

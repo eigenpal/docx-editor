@@ -1,13 +1,8 @@
 import type { OoxmlPackage } from './ooxml-package.ts';
 import type { OoxmlPart } from './ooxml-tree.ts';
-import { readOoxmlPart } from './ooxml-tree.ts';
+import { canRemoveContentTypeOverrides, isXmlWhitespace } from './content-type-removal.ts';
 import { partNameKey, resolveInternalTarget } from './opc-names.ts';
-import {
-  contentTypesPartBytes,
-  relsPartNameFor,
-  resolveContentTypeOf,
-  withoutPart,
-} from './package-edit.ts';
+import { relsPartNameFor, resolveContentTypeOf, withoutPart } from './package-edit.ts';
 
 const PACKAGE_REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OFFICE_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -67,39 +62,7 @@ export function withoutDocumentProperties(pkg: OoxmlPackage): OoxmlPackage | nul
     selected.set(partNameKey(part.name), { part, relationship: kind.relationship });
   }
   if (selected.size === 0) return pkg;
-  // Removing a declaration must not remove unrelated extension data.
-  const contentTypes = contentTypesPartBytes(pkg);
-  if (!contentTypes) return null;
-  const parsedTypes = readOoxmlPart(new TextDecoder().decode(contentTypes.bytes), {
-    name: '/[Content_Types].xml',
-    contentType: 'application/xml',
-  });
-  const typesNamespace = 'http://schemas.openxmlformats.org/package/2006/content-types';
-  if (
-    !parsedTypes.ok ||
-    parsedTypes.part.root.namespaceUri !== typesNamespace ||
-    parsedTypes.part.root.localName !== 'Types'
-  )
-    return null;
-  for (const node of parsedTypes.part.root.children) {
-    if (
-      node.kind === 'textValue' ||
-      node.namespaceUri !== typesNamespace ||
-      node.localName !== 'Override'
-    )
-      continue;
-    const name = node.attributes.find(
-      (a) => a.namespaceUri === '' && a.localName === 'PartName'
-    )?.value;
-    if (name === undefined || !selected.has(partNameKey(name))) continue;
-    if (
-      node.attributes.some(
-        (a) => a.namespaceUri !== '' || !['PartName', 'ContentType'].includes(a.localName)
-      ) ||
-      node.children.some((child) => child.kind !== 'textValue' || child.value.trim() !== '')
-    )
-      return null;
-  }
+  if (!canRemoveContentTypeOverrides(pkg, new Set(selected.keys()))) return null;
 
   for (const [owner, records] of pkg.relationships) {
     for (const record of records) {
@@ -133,7 +96,7 @@ export function withoutDocumentProperties(pkg: OoxmlPackage): OoxmlPackage | nul
           (a) =>
             a.namespaceUri !== '' || !['Id', 'Type', 'Target', 'TargetMode'].includes(a.localName)
         ) ||
-        node.children.some((child) => child.kind !== 'textValue' || child.value.trim() !== '')
+        node.children.some((child) => child.kind !== 'textValue' || !isXmlWhitespace(child.value))
       )
         return null;
     }

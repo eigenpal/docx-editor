@@ -211,3 +211,122 @@ test('a wrong package content type prevents removal despite a cached comment MIM
   expect(commentExportPackage(pkg)).toBe(pkg);
   expect(unzipSync(writeOoxmlPackage(pkg))['word/comments.xml']).toBeDefined();
 });
+
+for (const extension of ['attribute', 'child'] as const) {
+  test(`comment export preserves targeted content-type ${extension} extensions`, () => {
+    const populated = loadCommentFixture({ body: '<w:p/>', comments: comments(record) });
+    const files = unzipSync(writeOoxmlPackage(populated));
+    const original = strFromU8(files['[Content_Types].xml']!);
+    files['[Content_Types].xml'] = strToU8(
+      original.replace(/<Override\b[^>]*PartName="\/word\/comments.xml"[^>]*\/>/, (declaration) =>
+        extension === 'attribute'
+          ? declaration.replace('<Override ', '<Override xmlns:x="urn:retained" x:keep="Retain" ')
+          : declaration.replace('/>', '><x:keep xmlns:x="urn:retained">Retain</x:keep></Override>')
+      )
+    );
+    expect(strFromU8(files['[Content_Types].xml']!)).toContain('Retain');
+    files['word/comments.xml'] = strToU8(comments(''));
+    const loaded = readOoxmlPackage(zipSync(files));
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    expect(commentExportPackage(loaded.package)).toBe(loaded.package);
+    const saved = writeOoxmlPackage(loaded.package);
+    const first = unzipSync(saved);
+    expect(first['word/comments.xml']).toBeDefined();
+    expect(strFromU8(first['[Content_Types].xml']!)).toContain('Retain');
+    const reopened = readOoxmlPackage(saved);
+    expect(reopened.ok).toBe(true);
+    if (!reopened.ok) return;
+    const second = unzipSync(writeOoxmlPackage(reopened.package));
+    expect(second['[Content_Types].xml']).toEqual(first['[Content_Types].xml']);
+    expect(second['word/comments.xml']).toEqual(first['word/comments.xml']);
+  });
+}
+
+for (const location of ['root', 'relationship', 'override'] as const) {
+  for (const [kind, whitespace] of [
+    ['xml', ' \t\r\n'],
+    ['nbsp', '\u00a0'],
+  ] as const) {
+    test(`comment export handles ${kind} whitespace in ${location}`, () => {
+      const populated = loadCommentFixture({ body: '<w:p/>', comments: comments(record) });
+      const files = unzipSync(writeOoxmlPackage(populated));
+      files['word/comments.xml'] = strToU8(comments(location === 'root' ? whitespace : ''));
+      if (location === 'override') {
+        files['[Content_Types].xml'] = strToU8(
+          strFromU8(files['[Content_Types].xml']!).replace(
+            /<Override\b[^>]*PartName="\/word\/comments.xml"[^>]*\/>/,
+            (declaration) => declaration.replace('/>', `>${whitespace}</Override>`)
+          )
+        );
+      }
+      if (location === 'relationship') {
+        const name = 'word/_rels/document.xml.rels';
+        const xml = strFromU8(files[name]!);
+        files[name] = strToU8(
+          xml.replace(/<Relationship\b[^>]*Target="comments.xml"[^>]*\/>/, (declaration) =>
+            declaration.replace('/>', `>${whitespace}</Relationship>`)
+          )
+        );
+      }
+      const parsed = readOoxmlPackage(zipSync(files));
+      expect(parsed.ok).toBe(true);
+      if (!parsed.ok) return;
+      const saved = writeOoxmlPackage(parsed.package);
+      const output = unzipSync(saved);
+      expect(!!output['word/comments.xml']).toBe(kind === 'nbsp');
+      const reopened = readOoxmlPackage(saved);
+      expect(reopened.ok).toBe(true);
+      if (reopened.ok)
+        expect(!!unzipSync(writeOoxmlPackage(reopened.package))['word/comments.xml']).toBe(
+          kind === 'nbsp'
+        );
+    });
+  }
+}
+
+test('canonical relationship-root NBSP prevents comment export cleanup', async () => {
+  const { replaceChildren } = await import('../package/ooxml-edit.ts');
+  const { withPart } = await import('../package/ooxml-package.ts');
+  const pkg = loadCommentFixture({ body: '<w:p/>', comments: comments('') });
+  const part = pkg.parts.get('/word/_rels/document.xml.rels')!;
+  const children = Array.from(part.root.children);
+  children.push({ kind: 'textValue', id: 'retained-whitespace', value: '\u00a0' });
+  const replaced = replaceChildren(part, part.root.id, children);
+  expect(replaced.ok).toBe(true);
+  if (!replaced.ok) return;
+  const changed = withPart(pkg, replaced.part);
+  expect(commentExportPackage(changed)).toBe(changed);
+});
+
+for (const extended of [false, true]) {
+  test(`comment export preserves companion relationship overrides${extended ? ' with extensions' : ''}`, () => {
+    const populated = loadCommentFixture({ body: '<w:p/>', comments: comments(record) });
+    const files = unzipSync(writeOoxmlPackage(populated));
+    files['word/comments.xml'] = strToU8(comments(''));
+    files['word/_rels/comments.xml.rels'] = strToU8(`<Relationships xmlns="${REL}"/>`);
+    const extension = extended ? ' xmlns:x="urn:retained" x:keep="Retain"' : '';
+    files['[Content_Types].xml'] = strToU8(
+      strFromU8(files['[Content_Types].xml']!).replace(
+        '</Types>',
+        `<Override PartName="/word/_rels/comments.xml.rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"${extension}/></Types>`
+      )
+    );
+    const parsed = readOoxmlPackage(zipSync(files));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(commentExportPackage(parsed.package)).toBe(parsed.package);
+    const saved = writeOoxmlPackage(parsed.package);
+    const output = unzipSync(saved);
+    expect(output['word/comments.xml']).toBeDefined();
+    expect(output['word/_rels/comments.xml.rels']).toBeDefined();
+    expect(strFromU8(output['[Content_Types].xml']!)).toContain('/word/_rels/comments.xml.rels');
+    if (extended) expect(strFromU8(output['[Content_Types].xml']!)).toContain('Retain');
+    const reopened = readOoxmlPackage(saved);
+    expect(reopened.ok).toBe(true);
+    if (!reopened.ok) return;
+    const second = unzipSync(writeOoxmlPackage(reopened.package));
+    expect(second['word/_rels/comments.xml.rels']).toEqual(output['word/_rels/comments.xml.rels']);
+    expect(second['[Content_Types].xml']).toEqual(output['[Content_Types].xml']);
+  });
+}
