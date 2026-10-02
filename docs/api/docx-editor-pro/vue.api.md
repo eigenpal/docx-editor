@@ -238,7 +238,7 @@ export interface CustomNodeChromeProps {
 
 // @public
 export const CustomNodeContextMenu: {
-    readonly docxRowPlacement: "start";
+    readonly docxRowPlacement: 'start';
     new (): {
         $props: CustomNodeContextMenuProps;
     };
@@ -338,9 +338,9 @@ export const DocxEditorCollaborationRoot: vue.DefineComponent<vue.ExtractPropTyp
     };
 }>, () => VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
-}> | VNode<vue.RendererNode, vue.RendererElement, {
+}>[] | VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
-}>[] | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+}> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     collaboration: {
         required: true;
         type: PropType<CollaborationRootSource>;
@@ -408,9 +408,9 @@ export const DocxEditorReview: {
         formatting: boolean;
         furniture: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
-        }> | VNode<vue.RendererNode, vue.RendererElement, {
+        }>[] | VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
-        }>[];
+        }>;
         gap: number;
         hidden: boolean;
         preset: boolean;
@@ -477,9 +477,9 @@ export const DocxEditorReview: {
         formatting: boolean;
         furniture: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
-        }> | VNode<vue.RendererNode, vue.RendererElement, {
+        }>[] | VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
-        }>[];
+        }>;
         gap: number;
         hidden: boolean;
         preset: boolean;
@@ -543,9 +543,9 @@ export const DocxEditorReview: {
     formatting: boolean;
     furniture: VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
-    }> | VNode<vue.RendererNode, vue.RendererElement, {
+    }>[] | VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
-    }>[];
+    }>;
     gap: number;
     hidden: boolean;
     preset: boolean;
@@ -644,9 +644,7 @@ export const DocxEditorReview: {
         asChild: BooleanConstructor;
         className: StringConstructor;
         hidden: BooleanConstructor;
-    }>, () => VNode<vue.RendererNode, vue.RendererElement, {
-        [key: string]: any;
-    }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
         asChild: BooleanConstructor;
         className: StringConstructor;
         hidden: BooleanConstructor;
@@ -748,9 +746,7 @@ export const DocxEditorReview: {
                 top: number;
             } | null>;
         };
-    }>, () => VNode<vue.RendererNode, vue.RendererElement, {
-        [key: string]: any;
-    }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
         className: StringConstructor;
         collapsed: {
             default: undefined;

@@ -34,7 +34,7 @@
     "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/fonts-cjk"
   },
   "devDependencies": {
-    "typescript": "^5.3.3"
+    "typescript7": "npm:typescript@^7.0.2"
   },
   "keywords": [
     "docx",

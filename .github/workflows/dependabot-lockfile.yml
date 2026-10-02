@@ -29,6 +29,7 @@ jobs:
   refresh-and-verify:
     if: github.actor == 'dependabot[bot]'
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 45
     steps:
       - name: Checkout PR branch
         uses: actions/checkout@v7
@@ -102,7 +103,7 @@ jobs:
         run: bun run build:packages
 
       - name: Install Chromium for editor acceptance
-        run: bunx playwright install --with-deps chromium
+        run: bash scripts/install-ci-chromium.sh
 
       - name: Editor acceptance tests (React and Vue)
         run: bun run test:e2e:acceptance

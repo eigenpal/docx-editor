@@ -85,6 +85,8 @@ While changesets are pending, the workflow updates the release PR without runnin
 
 The publish path runs lint, formatting, type checks, tests, parity, license, and translation checks. A separate job builds packages and demos, validates a consumer install, and generates third-party notices. Publishing uses those artifacts only after every required job succeeds.
 
+If no changesets are pending and every published package version is already on npm, the run is idle. The **Detect release mode** job lists the result, and every later job is skipped. A registry lookup that fails counts as an unpublished version, so the run takes the publish path.
+
 ### Check documentation before merging
 
 Match the pending changesets against the user guides, package READMEs, API snapshots, and `docs/site/data/word-features.ts`. Include usage instructions, upgrade steps, and unsupported cases for new behavior. Add Python release notes through the converter changeset, including the first Python release.
@@ -119,9 +121,9 @@ For Python changes, check all five platform jobs in **Python wheels**. A passing
 | Several PRs, ship together | All landed PRs aggregated into one release PR. Merge once, one coordinated release. |
 | Forgot a changeset on a merged PR | Open a follow-up PR against `main` with `.changeset/foo.md`; let the bot regenerate the release PR. |
 | Not ready to release yet | Don't merge the release PR. It keeps updating as new PRs land. |
-| Publish step crashed after PR merged | Re-run the workflow manually (`workflow_dispatch` is kept for this). Check npm for partial publication before retrying. For failures after successful publication, see [Recover post-release updates without publishing](#recover-post-release-updates-without-publishing). |
+| Publish step crashed after PR merged | Re-run the workflow manually (`workflow_dispatch` is kept for this). If every version reached npm, the re-run is idle. Check npm for partial publication before retrying. For failures after successful publication, see [Recover post-release updates without publishing](#recover-post-release-updates-without-publishing). |
 | Breaking public API change | Add a `major` changeset and document the migration before merging. |
-| No pending changesets | The workflow takes the publish path. It publishes package versions that are not on npm yet. |
+| No pending changesets | If a package version is not on npm yet, the workflow takes the publish path and publishes it. If every version is on npm, the run is idle and skips every job after **Detect release mode**. |
 
 ## Configure release automation
 

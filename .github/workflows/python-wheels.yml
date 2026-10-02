@@ -82,6 +82,9 @@ jobs:
           name: wheel-${{ matrix.tag }}
           path: python/docx-to-markdown/dist/*.whl
           if-no-files-found: error
+          # Consumed by the publish job in the same run; PR reviewers can still
+          # download them for a week.
+          retention-days: 7
 
   publish:
     # Runs even when a platform build failed, so the wheels that did build still ship.
@@ -159,6 +162,7 @@ jobs:
     if: always() && github.event_name == 'workflow_dispatch' && inputs.publish && needs.publish.result == 'failure'
     needs: [wheel, publish]
     runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 5
     permissions: {}
     steps:
       - name: Notify Slack

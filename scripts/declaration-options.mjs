@@ -1,4 +1,4 @@
-// Compiler options for the package declaration builds (tsup `dts.compilerOptions`).
+// Compiler options for the package declaration builds (scripts/build-declarations.mjs).
 //
 // Each package's tsconfig maps its sibling packages (`@docx-editor.dev/*`) to their
 // sources, for `bun run typecheck`. The declaration builds drop those mappings and read
@@ -12,7 +12,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
-import { packageName } from './build-core-declarations.mjs';
+import { packageName } from './lib/declaration-files.mjs';
 import { siblingsOf } from './check-built-siblings.mjs';
 
 /** @param {string | URL} configUrl the calling tsup config's `import.meta.url` */
@@ -28,5 +28,7 @@ export function declarationCompilerOptions(configUrl, extra = {}) {
       ([specifier]) => !siblings.has(packageName(specifier))
     )
   );
-  return { ...extra, paths };
+  // `paths` targets are relative to the config that defines them, which an `extends` base
+  // can move away from the package: TypeScript records that directory as `pathsBasePath`.
+  return { ...extra, paths, pathsBase: options.pathsBasePath ?? dirname(file) };
 }

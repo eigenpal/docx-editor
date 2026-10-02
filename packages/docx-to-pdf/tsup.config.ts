@@ -1,15 +1,17 @@
 import { defineConfig } from 'tsup';
-import { declarationCompilerOptions } from '../../scripts/declaration-options.mjs';
-export default defineConfig({
-  entry: ['src/index.ts'],
-  platform: 'node',
-  format: ['esm', 'cjs'],
-  // See scripts/declaration-options.mjs.
-  dts: {
-    banner: '/// <reference lib="dom" />',
-    compilerOptions: declarationCompilerOptions(import.meta.url),
-  },
-  clean: true,
-  metafile: true,
-  external: [/^@docx-editor\.dev\//, 'pdf-lib', 'fontkit'],
-});
+import { withDeclarations } from '../../scripts/build-declarations.mjs';
+export default defineConfig(
+  withDeclarations(import.meta.url, {
+    entry: ['src/index.ts'],
+    platform: 'node',
+    format: ['esm', 'cjs'],
+    declarations: {
+      banner: '/// <reference lib="dom" />',
+      // fontkit ships no types; this file declares the part the package uses.
+      ambient: ['src/fontkit.d.ts'],
+    },
+    clean: true,
+    metafile: true,
+    external: [/^@docx-editor\.dev\//, 'pdf-lib', 'fontkit'],
+  })
+);

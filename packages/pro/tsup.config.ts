@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type Options } from 'tsup';
-import { declarationCompilerOptions } from '../../scripts/declaration-options.mjs';
+import { withDeclarations } from '../../scripts/build-declarations.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -97,47 +97,42 @@ const shared = {
   ],
 };
 
-export default defineConfig([
-  {
-    ...shared,
-    entry: {
-      index: 'src/index.ts',
-      'react/index': 'src/react/index.ts',
-      'react/webrtc': 'src/react/webrtc.ts',
-      'react/hocuspocus': 'src/react/hocuspocus.ts',
-      'collaboration/index': 'src/collaboration/index.ts',
-      'collaboration/webrtc': 'src/collaboration/webrtc.ts',
-      'collaboration/hocuspocus': 'src/collaboration/hocuspocus.ts',
+export default defineConfig(
+  withDeclarations(import.meta.url, [
+    {
+      ...shared,
+      entry: {
+        index: 'src/index.ts',
+        'react/index': 'src/react/index.ts',
+        'react/webrtc': 'src/react/webrtc.ts',
+        'react/hocuspocus': 'src/react/hocuspocus.ts',
+        'collaboration/index': 'src/collaboration/index.ts',
+        'collaboration/webrtc': 'src/collaboration/webrtc.ts',
+        'collaboration/hocuspocus': 'src/collaboration/hocuspocus.ts',
+      },
+      // The one config in this array that may let tsup name the file. See
+      // `writeMetafileAs`.
+      metafile: true,
     },
-    // See scripts/declaration-options.mjs.
-    dts: { compilerOptions: declarationCompilerOptions(import.meta.url) },
-    // The one config in this array that may let tsup name the file. See
-    // `writeMetafileAs`.
-    metafile: true,
-  },
-  {
-    ...shared,
-    entry: {
-      'vue/index': 'src/vue/index.ts',
-      'vue/webrtc': 'src/vue/webrtc.ts',
-      'vue/hocuspocus': 'src/vue/hocuspocus.ts',
+    {
+      ...shared,
+      entry: {
+        'vue/index': 'src/vue/index.ts',
+        'vue/webrtc': 'src/vue/webrtc.ts',
+        'vue/hocuspocus': 'src/vue/hocuspocus.ts',
+      },
+      declarations: { compilerOptions: { jsx: 'preserve', jsxImportSource: 'vue' } },
+      // Off, so tsup does not write `dist/metafile-${format}.json` over the build above.
+      // The plugin writes `dist/metafile-vue-${format}.json` instead.
+      metafile: false,
+      esbuildPlugins: [writeMetafileAs('vue')],
+      esbuildOptions(options) {
+        options.jsx = 'automatic';
+        options.jsxImportSource = 'vue';
+        // Asks esbuild for the metafile that `writeMetafileAs` writes. tsup's own
+        // `metafile` option only decides whether TSUP writes one.
+        options.metafile = true;
+      },
     },
-    dts: {
-      compilerOptions: declarationCompilerOptions(import.meta.url, {
-        jsx: 'preserve',
-        jsxImportSource: 'vue',
-      }),
-    },
-    // Off, so tsup does not write `dist/metafile-${format}.json` over the build above.
-    // The plugin writes `dist/metafile-vue-${format}.json` instead.
-    metafile: false,
-    esbuildPlugins: [writeMetafileAs('vue')],
-    esbuildOptions(options) {
-      options.jsx = 'automatic';
-      options.jsxImportSource = 'vue';
-      // Asks esbuild for the metafile that `writeMetafileAs` writes. tsup's own
-      // `metafile` option only decides whether TSUP writes one.
-      options.metafile = true;
-    },
-  },
-]);
+  ])
+);

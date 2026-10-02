@@ -121,641 +121,641 @@ currentMixed?: ParagraphDialogMixed): ParagraphFormatUpdate | null;
 // @public
 export const CHROME_GROUPS: readonly [{
     readonly controls: readonly [{
-        readonly id: "undo";
-        readonly labelKey: "formattingBar.undoShortcut";
+        readonly id: 'undo';
+        readonly labelKey: 'formattingBar.undoShortcut';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "redo";
-        readonly labelKey: "formattingBar.redoShortcut";
+        readonly id: 'redo';
+        readonly labelKey: 'formattingBar.redoShortcut';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }];
-    readonly id: "history";
-    readonly labelKey: "formattingBar.groups.history";
+    readonly id: 'history';
+    readonly labelKey: 'formattingBar.groups.history';
 }, {
     readonly controls: readonly [{
-        readonly id: "level";
-        readonly labelKey: "formattingBar.groups.zoom";
+        readonly id: 'level';
+        readonly labelKey: 'formattingBar.groups.zoom';
         readonly paths: null;
-        readonly shape: "stepper";
+        readonly shape: 'stepper';
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
-        readonly valueKey: "zoom.zoomLevel";
-        readonly valueText: "100%";
+        readonly valueKey: 'zoom.zoomLevel';
+        readonly valueText: '100%';
     }];
-    readonly id: "zoom";
-    readonly labelKey: "formattingBar.groups.zoom";
+    readonly id: 'zoom';
+    readonly labelKey: 'formattingBar.groups.zoom';
 }, {
     readonly controls: readonly [{
-        readonly id: "style";
-        readonly labelKey: "styles.selectAriaLabel";
+        readonly id: 'style';
+        readonly labelKey: 'styles.selectAriaLabel';
         readonly paths: null;
-        readonly shape: "dropdown";
+        readonly shape: 'dropdown';
         readonly state: {
-            readonly kind: "value";
+            readonly kind: 'value';
         };
-        readonly valueKey: "styles.normalText";
+        readonly valueKey: 'styles.normalText';
     }];
-    readonly id: "styles";
-    readonly labelKey: "formattingBar.groups.styles";
+    readonly id: 'styles';
+    readonly labelKey: 'formattingBar.groups.styles';
 }, {
     readonly controls: readonly [{
-        readonly id: "family";
-        readonly labelKey: "font.selectAriaLabel";
+        readonly id: 'family';
+        readonly labelKey: 'font.selectAriaLabel';
         readonly paths: null;
-        readonly shape: "dropdown";
+        readonly shape: 'dropdown';
         readonly state: {
-            readonly kind: "value";
+            readonly kind: 'value';
         };
-        readonly valueKey: "font.sansSerif";
+        readonly valueKey: 'font.sansSerif';
     }, {
-        readonly id: "size";
-        readonly labelKey: "fontSize.listLabel";
+        readonly id: 'size';
+        readonly labelKey: 'fontSize.listLabel';
         readonly paths: null;
-        readonly shape: "stepper";
+        readonly shape: 'stepper';
         readonly state: {
-            readonly kind: "value";
+            readonly kind: 'value';
         };
-        readonly valueKey: "fontSize.label";
-        readonly valueText: "11";
+        readonly valueKey: 'fontSize.label';
+        readonly valueText: '11';
     }];
-    readonly id: "font";
-    readonly labelKey: "formattingBar.groups.font";
+    readonly id: 'font';
+    readonly labelKey: 'formattingBar.groups.font';
 }, {
     readonly controls: readonly [{
-        readonly id: "bold";
-        readonly labelKey: "formattingBar.boldShortcut";
+        readonly id: 'bold';
+        readonly labelKey: 'formattingBar.boldShortcut';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "italic";
-        readonly labelKey: "formattingBar.italicShortcut";
+        readonly id: 'italic';
+        readonly labelKey: 'formattingBar.italicShortcut';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "underline";
-        readonly labelKey: "formattingBar.underlineShortcut";
+        readonly id: 'underline';
+        readonly labelKey: 'formattingBar.underlineShortcut';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "strike";
-        readonly labelKey: "formattingBar.strikethrough";
+        readonly id: 'strike';
+        readonly labelKey: 'formattingBar.strikethrough';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "color";
-        readonly labelKey: "formattingBar.fontColor";
+        readonly id: 'color';
+        readonly labelKey: 'formattingBar.fontColor';
         readonly paths: readonly string[];
-        readonly shape: "colorSplit";
+        readonly shape: 'colorSplit';
         readonly state: {
-            readonly kind: "value";
+            readonly kind: 'value';
         };
-        readonly swatch: "#ff0000";
+        readonly swatch: '#ff0000';
     }, {
-        readonly id: "highlight";
-        readonly labelKey: "formattingBar.highlightColor";
+        readonly id: 'highlight';
+        readonly labelKey: 'formattingBar.highlightColor';
         readonly paths: readonly string[];
-        readonly shape: "colorSplit";
+        readonly shape: 'colorSplit';
         readonly state: {
-            readonly kind: "value";
+            readonly kind: 'value';
         };
-        readonly swatch: "#ffff00";
+        readonly swatch: '#ffff00';
     }, {
-        readonly id: "link";
-        readonly labelKey: "formattingBar.insertLinkShortcut";
+        readonly id: 'link';
+        readonly labelKey: 'formattingBar.insertLinkShortcut';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }];
-    readonly id: "text";
-    readonly labelKey: "formattingBar.groups.textFormatting";
+    readonly id: 'text';
+    readonly labelKey: 'formattingBar.groups.textFormatting';
 }, {
     readonly controls: readonly [{
-        readonly id: "super";
-        readonly labelKey: "formattingBar.superscript";
+        readonly id: 'super';
+        readonly labelKey: 'formattingBar.superscript';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "sub";
-        readonly labelKey: "formattingBar.subscript";
+        readonly id: 'sub';
+        readonly labelKey: 'formattingBar.subscript';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }];
-    readonly id: "script";
-    readonly labelKey: "formattingBar.groups.script";
+    readonly id: 'script';
+    readonly labelKey: 'formattingBar.groups.script';
 }, {
     readonly controls: readonly [{
-        readonly id: "left";
-        readonly labelKey: "alignment.alignLeft";
+        readonly id: 'left';
+        readonly labelKey: 'alignment.alignLeft';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "center";
-        readonly labelKey: "alignment.center";
+        readonly id: 'center';
+        readonly labelKey: 'alignment.center';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "right";
-        readonly labelKey: "alignment.alignRight";
+        readonly id: 'right';
+        readonly labelKey: 'alignment.alignRight';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "justify";
-        readonly labelKey: "alignment.justify";
+        readonly id: 'justify';
+        readonly labelKey: 'alignment.justify';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }];
-    readonly id: "alignment";
-    readonly labelKey: "formattingBar.groups.alignment";
-}, {
-    readonly contextual: true;
-    readonly controls: readonly [{
-        readonly id: "ltr";
-        readonly labelKey: "toolbar.leftToRight";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "rtl";
-        readonly labelKey: "toolbar.rightToLeft";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }];
-    readonly id: "direction";
-    readonly labelKey: "formattingBar.groups.direction";
-}, {
-    readonly controls: readonly [{
-        readonly id: "bullet";
-        readonly labelKey: "lists.bulletList";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "numbered";
-        readonly labelKey: "lists.numberedList";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "outdent";
-        readonly labelKey: "lists.decreaseIndent";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "indent";
-        readonly labelKey: "lists.increaseIndent";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "lineSpacing";
-        readonly labelKey: "lineSpacing.label";
-        readonly paths: readonly string[];
-        readonly shape: "dropdown";
-        readonly state: {
-            readonly kind: "command";
-        };
-    }];
-    readonly id: "list";
-    readonly labelKey: "formattingBar.groups.listFormatting";
-}, {
-    readonly controls: readonly [{
-        readonly id: "painter";
-        readonly labelKey: "formattingBar.formatPainterShortcut";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "clear";
-        readonly labelKey: "formattingBar.clearFormatting";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }];
-    readonly id: "format";
-    readonly labelKey: "formattingBar.groups.format";
-}, {
-    readonly controls: readonly [{
-        readonly defaultToolbar: false;
-        readonly id: "simpleMarkup";
-        readonly labelKey: "review.simpleMarkup";
-        readonly paths: readonly string[];
-        readonly shape: "icon";
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly defaultToolbar: false;
-        readonly id: "allMarkup";
-        readonly labelKey: "review.allMarkup";
-        readonly paths: readonly string[];
-        readonly shape: "icon";
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly defaultToolbar: false;
-        readonly id: "noMarkup";
-        readonly labelKey: "review.noMarkup";
-        readonly paths: readonly string[];
-        readonly shape: "icon";
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly defaultToolbar: false;
-        readonly id: "original";
-        readonly labelKey: "review.original";
-        readonly paths: readonly string[];
-        readonly shape: "icon";
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly defaultToolbar: false;
-        readonly id: "previousChange";
-        readonly labelKey: "review.previousChange";
-        readonly paths: readonly string[];
-        readonly shape: "icon";
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly defaultToolbar: false;
-        readonly id: "nextChange";
-        readonly labelKey: "review.nextChange";
-        readonly paths: readonly string[];
-        readonly shape: "icon";
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly defaultToolbar: false;
-        readonly id: "acceptAllChanges";
-        readonly labelKey: "review.acceptAllChanges";
-        readonly paths: readonly string[];
-        readonly shape: "icon";
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly defaultToolbar: false;
-        readonly id: "rejectAllChanges";
-        readonly labelKey: "review.rejectAllChanges";
-        readonly paths: readonly string[];
-        readonly shape: "icon";
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly defaultToolbar: false;
-        readonly id: "paragraphMarks";
-        readonly labelKey: "formattingBar.paragraphMarks";
-        readonly paths: readonly string[];
-        readonly shape: "icon";
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly defaultToolbar: false;
-        readonly id: "protectDocument";
-        readonly labelKey: "review.protectDocument";
-        readonly paths: readonly string[];
-        readonly shape: "icon";
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "comments";
-        readonly labelKey: "formattingBar.commentsAndChanges";
-        readonly paths: readonly string[];
-        readonly shape: "icon";
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly defaultToolbar: false;
-        readonly id: "authors";
-        readonly labelKey: "reviewers.label";
-        readonly paths: readonly string[];
-        readonly shape: "dropdown";
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "editingMode";
-        readonly labelKey: "editingMode.label";
-        readonly paths: readonly string[];
-        readonly shape: "dropdown";
-        readonly state: {
-            readonly kind: "command";
-        };
-        readonly valueKey: "editingMode.editing";
-    }];
-    readonly id: "review";
-    readonly labelKey: "formattingBar.commentsAndChanges";
+    readonly id: 'alignment';
+    readonly labelKey: 'formattingBar.groups.alignment';
 }, {
     readonly contextual: true;
     readonly controls: readonly [{
-        readonly id: "showAll";
-        readonly labelKey: "contentControl.showAll";
+        readonly id: 'ltr';
+        readonly labelKey: 'toolbar.leftToRight';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "formFill";
-        readonly labelKey: "contentControl.formFill";
+        readonly id: 'rtl';
+        readonly labelKey: 'toolbar.rightToLeft';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "inspector";
-        readonly labelKey: "contentControl.inspector";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "remove";
-        readonly labelKey: "contentControl.remove";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }];
-    readonly id: "contentControl";
-    readonly labelKey: "contentControl.group";
+    readonly id: 'direction';
+    readonly labelKey: 'formattingBar.groups.direction';
+}, {
+    readonly controls: readonly [{
+        readonly id: 'bullet';
+        readonly labelKey: 'lists.bulletList';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'numbered';
+        readonly labelKey: 'lists.numberedList';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'outdent';
+        readonly labelKey: 'lists.decreaseIndent';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'indent';
+        readonly labelKey: 'lists.increaseIndent';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'lineSpacing';
+        readonly labelKey: 'lineSpacing.label';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }];
+    readonly id: 'list';
+    readonly labelKey: 'formattingBar.groups.listFormatting';
+}, {
+    readonly controls: readonly [{
+        readonly id: 'painter';
+        readonly labelKey: 'formattingBar.formatPainterShortcut';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'clear';
+        readonly labelKey: 'formattingBar.clearFormatting';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }];
+    readonly id: 'format';
+    readonly labelKey: 'formattingBar.groups.format';
+}, {
+    readonly controls: readonly [{
+        readonly defaultToolbar: false;
+        readonly id: 'simpleMarkup';
+        readonly labelKey: 'review.simpleMarkup';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'allMarkup';
+        readonly labelKey: 'review.allMarkup';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'noMarkup';
+        readonly labelKey: 'review.noMarkup';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'original';
+        readonly labelKey: 'review.original';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'previousChange';
+        readonly labelKey: 'review.previousChange';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'nextChange';
+        readonly labelKey: 'review.nextChange';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'acceptAllChanges';
+        readonly labelKey: 'review.acceptAllChanges';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'rejectAllChanges';
+        readonly labelKey: 'review.rejectAllChanges';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'paragraphMarks';
+        readonly labelKey: 'formattingBar.paragraphMarks';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'protectDocument';
+        readonly labelKey: 'review.protectDocument';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'comments';
+        readonly labelKey: 'formattingBar.commentsAndChanges';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'authors';
+        readonly labelKey: 'reviewers.label';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'editingMode';
+        readonly labelKey: 'editingMode.label';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'command';
+        };
+        readonly valueKey: 'editingMode.editing';
+    }];
+    readonly id: 'review';
+    readonly labelKey: 'formattingBar.commentsAndChanges';
 }, {
     readonly contextual: true;
     readonly controls: readonly [{
-        readonly id: "insert";
-        readonly labelKey: "toolbar.image";
+        readonly id: 'showAll';
+        readonly labelKey: 'contentControl.showAll';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "properties";
-        readonly labelKey: "formattingBar.imagePropertiesShortcut";
+        readonly id: 'formFill';
+        readonly labelKey: 'contentControl.formFill';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "wrap";
-        readonly labelKey: "formattingBar.imageWrap";
+        readonly id: 'inspector';
+        readonly labelKey: 'contentControl.inspector';
         readonly paths: readonly string[];
-        readonly shape: "dropdown";
         readonly state: {
-            readonly kind: "value";
+            readonly kind: 'command';
         };
-        readonly valueKey: "imageWrap.inline";
     }, {
-        readonly id: "altText";
-        readonly labelKey: "formattingBar.altText";
+        readonly id: 'remove';
+        readonly labelKey: 'contentControl.remove';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }];
+    readonly id: 'contentControl';
+    readonly labelKey: 'contentControl.group';
+}, {
+    readonly contextual: true;
+    readonly controls: readonly [{
+        readonly id: 'insert';
+        readonly labelKey: 'toolbar.image';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'properties';
+        readonly labelKey: 'formattingBar.imagePropertiesShortcut';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'wrap';
+        readonly labelKey: 'formattingBar.imageWrap';
+        readonly paths: readonly string[];
+        readonly shape: 'dropdown';
+        readonly state: {
+            readonly kind: 'value';
+        };
+        readonly valueKey: 'imageWrap.inline';
+    }, {
+        readonly id: 'altText';
+        readonly labelKey: 'formattingBar.altText';
         readonly paths: null;
-        readonly shape: "dropdown";
+        readonly shape: 'dropdown';
         readonly state: {
-            readonly kind: "value";
+            readonly kind: 'value';
         };
-        readonly valueKey: "imageProperties.altText";
+        readonly valueKey: 'imageProperties.altText';
     }];
-    readonly id: "image";
-    readonly labelKey: "formattingBar.groups.image";
+    readonly id: 'image';
+    readonly labelKey: 'formattingBar.groups.image';
 }, {
     readonly contextual: true;
     readonly controls: readonly [{
-        readonly id: "insert";
-        readonly labelKey: "toolbar.table";
+        readonly id: 'insert';
+        readonly labelKey: 'toolbar.table';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "borderTarget";
-        readonly labelKey: "table.borders.tooltip";
+        readonly id: 'borderTarget';
+        readonly labelKey: 'table.borders.tooltip';
         readonly paths: readonly string[];
-        readonly shape: "dropdown";
+        readonly shape: 'dropdown';
         readonly state: {
-            readonly kind: "value";
+            readonly kind: 'value';
         };
     }, {
-        readonly id: "borderColor";
-        readonly labelKey: "table.borderColor";
+        readonly id: 'borderColor';
+        readonly labelKey: 'table.borderColor';
         readonly paths: readonly string[];
-        readonly shape: "colorSplit";
+        readonly shape: 'colorSplit';
         readonly state: {
-            readonly kind: "value";
+            readonly kind: 'value';
         };
-        readonly swatch: "#000000";
+        readonly swatch: '#000000';
     }, {
-        readonly id: "borderStyle";
-        readonly labelKey: "table.borders.styleAriaLabel";
+        readonly id: 'borderStyle';
+        readonly labelKey: 'table.borders.styleAriaLabel';
         readonly paths: readonly string[];
-        readonly shape: "dropdown";
+        readonly shape: 'dropdown';
         readonly state: {
-            readonly kind: "value";
-        };
-    }, {
-        readonly id: "borderWidth";
-        readonly labelKey: "table.borderWidth";
-        readonly paths: readonly string[];
-        readonly shape: "dropdown";
-        readonly state: {
-            readonly kind: "value";
+            readonly kind: 'value';
         };
     }, {
-        readonly id: "cellFill";
-        readonly labelKey: "table.cellFillColor";
+        readonly id: 'borderWidth';
+        readonly labelKey: 'table.borderWidth';
         readonly paths: readonly string[];
-        readonly shape: "colorSplit";
+        readonly shape: 'dropdown';
         readonly state: {
-            readonly kind: "value";
+            readonly kind: 'value';
         };
-        readonly swatch: "#ffffff";
+    }, {
+        readonly id: 'cellFill';
+        readonly labelKey: 'table.cellFillColor';
+        readonly paths: readonly string[];
+        readonly shape: 'colorSplit';
+        readonly state: {
+            readonly kind: 'value';
+        };
+        readonly swatch: '#ffffff';
     }];
-    readonly id: "table";
-    readonly labelKey: "formattingBar.groups.table";
+    readonly id: 'table';
+    readonly labelKey: 'formattingBar.groups.table';
 }, {
     readonly contextual: true;
     readonly controls: readonly [{
-        readonly id: "dialog";
-        readonly labelKey: "lineSpacing.options";
+        readonly id: 'dialog';
+        readonly labelKey: 'lineSpacing.options';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }];
-    readonly id: "paragraph";
-    readonly labelKey: "dialogs.paragraph.title";
+    readonly id: 'paragraph';
+    readonly labelKey: 'dialogs.paragraph.title';
 }, {
     readonly contextual: true;
     readonly controls: readonly [{
-        readonly id: "open";
-        readonly labelKey: "toolbar.open";
+        readonly id: 'open';
+        readonly labelKey: 'toolbar.open';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "load";
+            readonly kind: 'load';
         };
     }, {
-        readonly id: "save";
-        readonly labelKey: "toolbar.saveShortcut";
+        readonly id: 'save';
+        readonly labelKey: 'toolbar.saveShortcut';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "save";
+            readonly kind: 'save';
         };
     }, {
-        readonly id: "exportMarkdown";
-        readonly labelKey: "toolbar.exportMarkdown";
+        readonly id: 'exportMarkdown';
+        readonly labelKey: 'toolbar.exportMarkdown';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "export";
+            readonly kind: 'export';
         };
     }, {
-        readonly id: "exportPdf";
-        readonly labelKey: "toolbar.exportPdf";
+        readonly id: 'exportPdf';
+        readonly labelKey: 'toolbar.exportPdf';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "export";
+            readonly kind: 'export';
         };
     }, {
-        readonly id: "print";
-        readonly labelKey: "toolbar.print";
+        readonly id: 'print';
+        readonly labelKey: 'toolbar.print';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "export";
+            readonly kind: 'export';
         };
     }, {
-        readonly id: "pageSetup";
-        readonly labelKey: "toolbar.pageSetup";
+        readonly id: 'pageSetup';
+        readonly labelKey: 'toolbar.pageSetup';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }];
-    readonly id: "file";
-    readonly labelKey: "toolbar.file";
+    readonly id: 'file';
+    readonly labelKey: 'toolbar.file';
 }, {
     readonly contextual: true;
     readonly controls: readonly [{
-        readonly id: "textBox";
-        readonly labelKey: "toolbar.insertTextBox";
+        readonly id: 'textBox';
+        readonly labelKey: 'toolbar.insertTextBox';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "footnote";
-        readonly labelKey: "toolbar.insertFootnote";
+        readonly id: 'footnote';
+        readonly labelKey: 'toolbar.insertFootnote';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "endnote";
-        readonly labelKey: "toolbar.insertEndnote";
+        readonly id: 'endnote';
+        readonly labelKey: 'toolbar.insertEndnote';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "pageNumber";
-        readonly labelKey: "headerFooter.insertPageNumber";
+        readonly id: 'pageNumber';
+        readonly labelKey: 'headerFooter.insertPageNumber';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "totalPages";
-        readonly labelKey: "headerFooter.insertTotalPages";
+        readonly id: 'totalPages';
+        readonly labelKey: 'headerFooter.insertTotalPages';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "sectionPages";
-        readonly labelKey: "headerFooter.insertSectionPages";
+        readonly id: 'sectionPages';
+        readonly labelKey: 'headerFooter.insertSectionPages';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "pageXofY";
-        readonly labelKey: "headerFooter.insertPageXofY";
+        readonly id: 'pageXofY';
+        readonly labelKey: 'headerFooter.insertPageXofY';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "pageBreak";
-        readonly labelKey: "toolbar.pageBreak";
+        readonly id: 'pageBreak';
+        readonly labelKey: 'toolbar.pageBreak';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "sectionBreakNextPage";
-        readonly labelKey: "toolbar.sectionBreakNextPage";
+        readonly id: 'sectionBreakNextPage';
+        readonly labelKey: 'toolbar.sectionBreakNextPage';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "sectionBreakContinuous";
-        readonly labelKey: "toolbar.sectionBreakContinuous";
+        readonly id: 'sectionBreakContinuous';
+        readonly labelKey: 'toolbar.sectionBreakContinuous';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }, {
-        readonly id: "toc";
-        readonly labelKey: "toolbar.tableOfContents";
+        readonly id: 'toc';
+        readonly labelKey: 'toolbar.tableOfContents';
         readonly paths: readonly string[];
         readonly state: {
-            readonly kind: "command";
+            readonly kind: 'command';
         };
     }];
-    readonly id: "insert";
-    readonly labelKey: "toolbar.insert";
+    readonly id: 'insert';
+    readonly labelKey: 'toolbar.insert';
 }];
 
 // @public
@@ -2987,11 +2987,11 @@ export interface SurfaceParagraphFormat {
 
 // @public
 export const TAB_ALIGNMENT_LABELS: {
-    readonly bar: "dialogs.paragraph.tabAlignBar";
-    readonly center: "dialogs.paragraph.tabAlignCenter";
-    readonly decimal: "dialogs.paragraph.tabAlignDecimal";
-    readonly left: "dialogs.paragraph.tabAlignLeft";
-    readonly right: "dialogs.paragraph.tabAlignRight";
+    readonly bar: 'dialogs.paragraph.tabAlignBar';
+    readonly center: 'dialogs.paragraph.tabAlignCenter';
+    readonly decimal: 'dialogs.paragraph.tabAlignDecimal';
+    readonly left: 'dialogs.paragraph.tabAlignLeft';
+    readonly right: 'dialogs.paragraph.tabAlignRight';
 };
 
 // @public (undocumented)
@@ -3086,9 +3086,9 @@ export type TableInteractionLabelKey = 'table.insertRowBelow' | 'table.insertCol
 
 // @public
 export const TEXT_FORM_FORMATS: {
-    readonly date: readonly ["", "M/d/yyyy", "MM/dd/yyyy", "d/M/yyyy", "dd/MM/yyyy", "yyyy-MM-dd", "d MMMM yyyy", "MMMM d, yyyy"];
-    readonly number: readonly ["", "0", "0.00", "#,##0", "#,##0.00", "0%", "0.00%"];
-    readonly regular: readonly ["", "Uppercase", "Lowercase", "First capital", "Title case"];
+    readonly date: readonly ['', 'M/d/yyyy', 'MM/dd/yyyy', 'd/M/yyyy', 'dd/MM/yyyy', 'yyyy-MM-dd', 'd MMMM yyyy', 'MMMM d, yyyy'];
+    readonly number: readonly ['', '0', '0.00', '#,##0', '#,##0.00', '0%', '0.00%'];
+    readonly regular: readonly ['', 'Uppercase', 'Lowercase', 'First capital', 'Title case'];
 };
 
 // @public

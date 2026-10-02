@@ -15,5 +15,8 @@
     "@docx-editor.dev/editor-api": "workspace:*",
     "@docx-editor.dev/pro": "workspace:*",
     "fflate": "^0.8.2"
+  },
+  "devDependencies": {
+    "typescript7": "npm:typescript@^7.0.2"
   }
 }

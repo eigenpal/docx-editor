@@ -1,6 +1,6 @@
 name: Performance benchmark
 
-# Runs two benchmarks for PRs and each main push. PRs receive one
+# Runs two benchmarks for PRs and main pushes (docs-only changes skip it). PRs receive one
 # sticky comment with the before/after tables. Main runs retain artifacts:
 #   - the browser typing-latency bench (e2e/edit-browser.bench.spec.ts) — the
 #     UX number: keystroke handler and frame latency through the real editor;
@@ -22,11 +22,25 @@ name: Performance benchmark
 # HEAD browser runs (this is the only CI execution of that spec). A failing
 # BASELINE run only degrades the comment.
 
+# Documentation, changesets, and specs cannot change editing speed, so a change
+# that touches only those files skips the benchmark.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'openspec/**'
+      - '.changeset/**'
+      - '**/*.md'
+      - '**/*.mdx'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'openspec/**'
+      - '.changeset/**'
+      - '**/*.md'
+      - '**/*.mdx'
 
 # Least-privilege default; the bench job escalates pull-requests itself.
 permissions:
@@ -70,7 +84,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Install Playwright Chromium
-        run: bunx playwright install --with-deps chromium
+        run: bash scripts/install-ci-chromium.sh
 
       - name: Prepare baseline worktree
         id: baseline
@@ -105,7 +119,7 @@ jobs:
             # default sample count would silently differ from the head rounds'.
             if [ -f "$RUNNER_TEMP/base/e2e/edit-browser-bench.config.ts" ] && \
                grep -q EDIT_BROWSER_BENCH_RUNS "$RUNNER_TEMP/base/e2e/edit-browser.bench.spec.ts"; then
-              bunx playwright install --with-deps chromium || true
+              bash "$GITHUB_WORKSPACE/scripts/install-ci-chromium.sh" || true
               echo "ux=true" >> "$GITHUB_OUTPUT"
             fi
             echo "engine=true" >> "$GITHUB_OUTPUT"

@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { fileURLToPath } from 'node:url';
 import {
   declarationCandidates,
   packageName,
@@ -73,6 +74,7 @@ test('declaration builds drop sibling source paths and keep local aliases', () =
       '@docx-editor.dev/editor-api': ['../editor-api/src/index.ts'],
       '@docx-editor.dev/editor-api/browser': ['../editor-api/src/browser.ts'],
     },
+    pathsBase: fileURLToPath(new URL('../../packages/pro', import.meta.url)),
   });
   const editorApi = declarationCompilerOptions(
     new URL('../../packages/editor-api/tsup.config.ts', import.meta.url)

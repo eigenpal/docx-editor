@@ -34,7 +34,8 @@
     "@docx-editor.dev/core": "workspace:*",
     "@microsoft/api-extractor": "^7.50.0",
     "fflate": "^0.8.2",
-    "license-check-and-add": "^4.0.5"
+    "license-check-and-add": "^4.0.5",
+    "typescript7": "npm:typescript@^7.0.2"
   },
   "files": [
     "dist",

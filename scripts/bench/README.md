@@ -87,7 +87,7 @@ Types into one story only, and you measure nothing: each story part counts its o
 
 ### CI performance-benchmark comment
 
-`.github/workflows/bench.yml` runs two benchmarks on every PR, each twice: once on the PR merge ref (the PR merged into current `main`) and once on the `main` tip that merge ref was built against (using that commit's own copy of the scripts, in a separate worktree), so the delta isolates exactly what merging the PR changes:
+`.github/workflows/bench.yml` runs two benchmarks on every PR that changes more than documentation, changesets, or specs, each twice: once on the PR merge ref (the PR merged into current `main`) and once on the `main` tip that merge ref was built against (using that commit's own copy of the scripts, in a separate worktree), so the delta isolates exactly what merging the PR changes:
 
 - the browser typing-latency test from `e2e/edit-browser.bench.spec.ts` — keystroke handler and frame latency through the real adapter, review rail, and paginated DOM: the number a typing user feels;
 - `bench:edit --runs 10` — the headless engine pipeline with deterministic work counters.
@@ -141,16 +141,7 @@ The Playwright benchmark checks for regressions:
 - **Engine vs input bound** — the sum of layout/paint/selection medians must stay within `max(5× input-task median, 500 ms)`, catching cases where engine sub-steps dominate the input path without requiring a fixed wall-clock budget.
 - **Cross-scenario sanity** — wrap typing median must stay within `6×` single-character typing on the same fixture, preventing wrap-specific blowups while allowing hardware variance.
 - **Sustained typing** — the last ten edits may not more than double the first ten (`100%` median growth cap) for input task or frame latency; per-edit maxima are capped relative to the last window's `p95`. Post-GC heap growth after 180 edits stays below 50 MiB.
-- **Burst handler tails** — navigation scenarios keep the existing `< 25 ms` handler median gate
-  (the pre-index path was seconds). All burst scenarios require handler `p95 ≤ max(4× median,
-median + 40 ms)` and `maxFrameGapMs < 500 ms` so multi-second stalls fail even when medians look
-  fine. Arrow-up, word-left, line-start, and document-start run at 2 s instead of 5 s in the
-  default suite to keep total runtime reasonable while still asserting selection movement and
-  latency. Backspace scenarios use the same 2 s window from the paragraph midpoint so deletion
-  counts stay assertable without end-of-paragraph coalescing swallowing the whole paragraph.
-  The ordered-typing echo scenario stays opt-in via
-  `EDIT_BROWSER_BENCH_BURST_SCENARIO=editing-ordered-type` because it uses a 100 ms / 100 Hz
-  window rather than the default burst cadence.
+- **Burst handler tails** — navigation scenarios keep the existing `< 25 ms` handler median gate (the pre-index path was seconds). All burst scenarios require handler `p95 ≤ max(4× median, median + 40 ms)` and `maxFrameGapMs < 500 ms` so multi-second stalls fail even when medians look fine. Arrow-up, word-left, line-start, and document-start run at 2 s instead of 5 s in the default suite to keep total runtime reasonable while still asserting selection movement and latency. Backspace scenarios use the same 2 s window from the paragraph midpoint so deletion counts stay assertable without end-of-paragraph coalescing swallowing the whole paragraph. The ordered-typing echo scenario stays opt-in via `EDIT_BROWSER_BENCH_BURST_SCENARIO=editing-ordered-type` because it uses a 100 ms / 100 Hz window rather than the default burst cadence.
 - **Document state** — burst typing, suggesting typing, Backspace, and forward Delete assert exact paragraph text and caret offsets where the canonical tree changes; suggesting Backspace asserts unchanged canonical paragraph length with caret movement and undo availability because tracked deletions do not remove bytes until accepted. Editing Backspace runs from the paragraph midpoint and asserts the deleted character count matches processed events (rapid end-of-paragraph Backspace coalesces into larger deletes and remains a manual soak scenario).
 - **Injected-delay self-test** — unchanged: measured handler/input deltas must include at least `0.8×` the configured artificial delay in both latency and burst modes.
 
@@ -240,13 +231,13 @@ Two bounds keep the memos honest under adversarial input and long sessions: cach
 
 The trigger was a 500+ page document (a template repeated past 500 pages: 105 sections, ~8.4k blocks, ~17k paragraphs) where one Enter or Backspace re-laid the whole document (~1 s of layout per keypress in the browser) while plain typing stayed incremental. Medians of 3 runs, Apple Silicon, Bun 1.3.14, fixed measurer, `synthetic-massive-multisection.docx`.
 
-| Scenario                          | Before                          | After                            |
-| --------------------------------- | ------------------------------- | -------------------------------- |
-| `enter-split-middle`              | 587 ms, placed 8400/8400        | 7.5 ms, placed 5, reused 624     |
-| `backspace-join-middle`           | 576 ms, placed 8398/8398        | 7.3 ms, placed 3, reused 624     |
-| `enter-split-early`               | 590 ms, placed 8400/8400        | 7.8 ms, placed 16                |
-| `page-break-middle`               | (full relayout, +1 page)        | 11.6 ms, placed 43               |
-| `wrap-middle-text`                | 22 ms, cache cold every pass    | 9 ms, cache warm                 |
+| Scenario | Before | After |
+| --- | --- | --- |
+| `enter-split-middle` | 587 ms, placed 8400/8400 | 7.5 ms, placed 5, reused 624 |
+| `backspace-join-middle` | 576 ms, placed 8398/8398 | 7.3 ms, placed 3, reused 624 |
+| `enter-split-early` | 590 ms, placed 8400/8400 | 7.8 ms, placed 16 |
+| `page-break-middle` | (full relayout, +1 page) | 11.6 ms, placed 43 |
+| `wrap-middle-text` | 22 ms, cache cold every pass | 9 ms, cache warm |
 | Typing pass (17k-paragraph repro) | layout ~54 ms + transact ~16 ms | layout ~31 ms + transact ~1.6 ms |
 
 What the counters found, and what changed:
