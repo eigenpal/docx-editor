@@ -4,7 +4,7 @@ This guide covers setup, tests, and pull requests for the monorepo.
 
 ## Prerequisites
 
-- [Bun](https://bun.sh/) 1.3.11, the release workflow version.
+- [Bun](https://bun.sh/) 1.4.2, the release workflow version.
 - [Node.js](https://nodejs.org/) 24, the CI and release workflow version.
 
 These versions apply to repository development. Published packages declare their supported Node.js versions in their `engines` fields.

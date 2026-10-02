@@ -187,7 +187,7 @@
     "tsup": "^8.0.1",
     "typescript": "^6.0.3",
     "typescript7": "npm:typescript@^7.0.2",
-    "vite": "^8.0.10",
+    "vite": "^8.1.5",
     "vue": "^3.5.29"
   },
   "keywords": [
@@ -210,6 +210,9 @@
     "access": "public"
   },
   "overrides": {
+    "vite": {
+      "postcss": "8.5.26"
+    },
     "prosemirror-view": "1.41.8",
     "prosemirror-state": "1.4.4",
     "prosemirror-model": "1.25.4",

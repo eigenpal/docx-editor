@@ -33,6 +33,7 @@
       "@docx-editor.dev/pro": ["./packages/pro/src/index.ts"],
       "@docx-editor.dev/pro/*": ["./packages/pro/src/*"],
       "@docx-editor.dev/i18n": ["./packages/i18n/src/index.ts"],
+      "@docx-editor.dev/docx-to-markdown": ["./packages/docx-to-markdown/src/index.ts"],
       "@docx-editor.dev/editor-api": ["./packages/editor-api/src/index.ts"],
       "@docx-editor.dev/editor-api/*": ["./packages/editor-api/src/*"]
     }

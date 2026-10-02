@@ -150,6 +150,12 @@ jobs:
       - name: Build packages (publish reuses the dist/)
         run: bun run build:packages
 
+      - name: Root and example type check
+        run: bun run typecheck:root
+
+      - name: Example regression tests
+        run: bun test ./examples/shared/example-text.test.ts ./examples/vite/src/CollaborationDemo.test.tsx
+
       - name: Build demos and parity bundle
         run: bun run build
 

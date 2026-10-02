@@ -14,7 +14,7 @@ import {
   createCollaborationRoomId,
   validateRoomId,
 } from '@docx-editor.dev/pro/collaboration/webrtc';
-import type { UseWebrtcCollaborationConnectOptions } from '@docx-editor.dev/pro/react/webrtc';
+import type { UseWebrtcCollaborationReturn } from '@docx-editor.dev/pro/react/webrtc';
 import { DemoHeaderButton } from './DemoHeaderButton';
 
 const NAME_KEY = 'docx-editor-collaboration-name';
@@ -180,7 +180,7 @@ export function CollaborationCaretLabelDemo({
 export interface CollaborationControlProps {
   readonly session: CollaborationSession | null;
   readonly pending: boolean;
-  readonly connect: (options: UseWebrtcCollaborationConnectOptions) => Promise<void>;
+  readonly connect: UseWebrtcCollaborationReturn['connect'];
   readonly leave: (nextDocument: Uint8Array) => void;
 }
 
@@ -247,7 +247,7 @@ export function CollaborationControl({
       // Passed explicitly rather than left for the engine to read off the address bar, so the
       // URL only changes once a room actually exists.
       const secret = kind === 'create' ? createRoomSecret() : roomSecretFrom(roomInput);
-      await connect({
+      const failure = await connect({
         roomId,
         identity: {
           actorId: `${displayName}:${crypto.randomUUID()}`,
@@ -260,6 +260,10 @@ export function CollaborationControl({
             : { kind: 'join' },
         ...(secret ? { password: secret } : {}),
       });
+      if (failure) {
+        setError(failure.detail ?? strings.connectFailed);
+        return;
+      }
       const url = new URL(location.href);
       url.search = '';
       url.searchParams.set('room', roomId);

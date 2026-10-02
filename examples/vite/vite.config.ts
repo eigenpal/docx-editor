@@ -92,10 +92,25 @@ export default defineConfig(async (): Promise<UserConfig> => {
   // `dist/` (same code path a `npm install` consumer gets). Used by the parity
   // build so community members see the real installed experience.
   const usePublished = process.env.USE_PUBLISHED_PACKAGES === 'true';
+  const plugins: Plugin[] = [
+    ...react(),
+    canonicalFixturePlugin(),
+    pdfExportPlugin(),
+  ];
+
+  const css: UserConfig['css'] = {
+    postcss: {
+      plugins: [
+        tailwindcss({ config: path.join(monorepoRoot, 'tailwind.config.js') }),
+        autoprefixer(),
+        stripUnexpandedTailwind,
+      ],
+    },
+  };
 
   return {
     base: process.env.VITE_BASE_PATH ?? '/',
-    plugins: [react(), canonicalFixturePlugin(), pdfExportPlugin()],
+    plugins,
     root: __dirname,
     resolve: {
       alias: usePublished
@@ -202,19 +217,7 @@ export default defineConfig(async (): Promise<UserConfig> => {
             },
           ],
     },
-    css: {
-      postcss: {
-        // Two copies of postcss are installed, so `tailwindcss` and `autoprefixer` are typed
-        // against a different one than vite's `AcceptedPlugin`. Identical shapes, unrelated
-        // types. Deduplicating the dependency is the real fix; casting keeps that a dependency
-        // problem rather than a reason to leave this whole project unchecked.
-        plugins: [
-          tailwindcss({ config: path.join(monorepoRoot, 'tailwind.config.js') }),
-          autoprefixer(),
-          stripUnexpandedTailwind,
-        ] as UserConfig['css'] extends { postcss?: { plugins?: infer P } } ? P : never,
-      },
-    },
+    css,
     define: {
       __ENABLE_FRAMEWORK_SWITCHER__: JSON.stringify(
         process.env.ENABLE_FRAMEWORK_SWITCHER === 'true'

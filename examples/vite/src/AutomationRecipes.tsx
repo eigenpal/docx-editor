@@ -1,5 +1,6 @@
+import { exampleText as t } from '../../shared/example-text';
 import { useState } from 'react';
-import { useDocxEditor, useTranslation } from '@docx-editor.dev/react';
+import { useDocxEditor } from '@docx-editor.dev/react';
 import {
   DocxEditor as AutomationDocxEditor,
   isDocxEditorError,
@@ -37,7 +38,6 @@ function printable(value: unknown): string {
  * The editor, its selection, and its undo history remain owned by `DocxEditor.Root`.
  */
 export function AutomationRecipes() {
-  const { t } = useTranslation();
   const editor = useDocxEditor();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('the');

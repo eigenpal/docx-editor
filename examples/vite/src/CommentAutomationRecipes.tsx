@@ -1,5 +1,6 @@
+import { exampleText as t } from '../../shared/example-text';
 import { useState } from 'react';
-import { useDocxEditor, useEditorCommand, useTranslation } from '@docx-editor.dev/react';
+import { useDocxEditor, useEditorCommand } from '@docx-editor.dev/react';
 import {
   DocxEditor as AutomationDocxEditor,
   isDocxEditorError,
@@ -40,7 +41,6 @@ function dateText(value: Date | null): string | null {
  * shared catalog, while file-derived comment text is rendered only through React text nodes.
  */
 export function CommentAutomationRecipes() {
-  const { t } = useTranslation();
   const editor = useDocxEditor();
   const undo = useEditorCommand('history.undo');
   const [open, setOpen] = useState(false);
