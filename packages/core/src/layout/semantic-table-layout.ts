@@ -124,6 +124,7 @@ import { finalizeTableRows, shiftBlocks } from './table-fragment-finalize.ts';
 import { cellAnchorFlow, cellAnchorScope } from './cell-anchor-layout.ts';
 export { finalizeTableRows } from './table-fragment-finalize.ts';
 import type { RowVMergeLayoutOptions, VMergeRowHeights } from './table-vmerge-heights.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 
 export {
   createTableBorderOwnershipBudget,
@@ -640,11 +641,10 @@ function placeCellParagraph(
     if (!collapseHeight) probeY += skipBefore + pendingLine.height;
   }
   let lineEnd = lineStart + lineTops.length;
-  // Table paragraph widows are a modern compatibility behavior; legacy table flow
-  // ignores this property even when explicitly enabled on the paragraph.
+  // Legacy table flow ignores widow control even when the paragraph enables it.
   if (
     lineEnd < lines.length &&
-    (deps.compatibilityMode ?? 0) >= 15 &&
+    hasCompatibilityRule(deps.compatibilityMode, 'tableParagraphWidowControl') &&
     options?.applyWidowControl !== false
   ) {
     lineEnd = adjustedBreakIndex(

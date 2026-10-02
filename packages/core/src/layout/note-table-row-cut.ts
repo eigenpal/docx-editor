@@ -8,6 +8,7 @@
 
 import { adjustedBreakIndex, paragraphKeeps } from './pagination-keeps.ts';
 import type { TableCellFragmentRecord, TableRowFragmentRecord } from './semantic-records.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 
 /**
  * The lowest point the head of `row` must reach to keep the reference line of `owning` on this
@@ -26,7 +27,7 @@ export function referenceRowCut(
   lineBottom: number,
   compatibilityMode?: number
 ): number | null {
-  const cellKeeps = (compatibilityMode ?? 0) >= 15;
+  const cellKeeps = hasCompatibilityRule(compatibilityMode, 'noteTableCellKeeps');
   if (row.placesWhole === true && row.isContinuation !== true) return null;
   let head = lineBottom;
   let contentEnd = 0;

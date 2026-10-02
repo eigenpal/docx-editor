@@ -32,6 +32,7 @@ import { MAX_NOTE_KEEP_SCAN, paragraphKeeps } from './pagination-keeps.ts';
 import { tableRowHoldOutNeed } from './note-table-row-holdout.ts';
 import type { PageRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 import { PAGE_BREAK_CHAR, type OoxmlPart } from '@docx-editor.dev/core/store';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 
 /**
  * Bound the note-reserve recovery scan on the next page. This scan is separate from
@@ -286,9 +287,7 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
     paragraphSplitsAllowed &&
     !keeps.keepLines &&
     !keeps.keepNext &&
-    (args.opts.compatibilityMode === undefined ||
-      args.opts.compatibilityMode === 14 ||
-      args.opts.compatibilityMode === 15)
+    hasCompatibilityRule(args.opts.compatibilityMode, 'noteHoldoutPricesReturningOpening')
   ) {
     const openingBottom = noteReferenceOpeningBottom(nextBody, frontierRef, frontier);
     let demand = args.existingAreaHeight > 0 ? args.existingAreaHeight : args.plainSeparatorHeight;

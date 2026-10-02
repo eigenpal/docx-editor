@@ -81,6 +81,22 @@
       }
     },
 
+    // Library code branches on the Word compatibility mode only through the named rules in
+    // packages/core/src/layout/compatibility/, never by comparing mode numbers. The module itself
+    // classifies the numbers, and tests state modes as literal fixtures.
+    {
+      "files": ["packages/*/src/**/*.{ts,tsx,vue}"],
+      "rules": { "docx/no-raw-compatibility-mode": "error" }
+    },
+    {
+      "files": [
+        "packages/core/src/layout/compatibility/**",
+        "packages/*/src/**/__tests__/**",
+        "packages/*/src/**/*.test.{ts,tsx}"
+      ],
+      "rules": { "docx/no-raw-compatibility-mode": "off" }
+    },
+
     // Framework isolation: keep the React adapter, the Vue adapter (and pro's Vue entry), and
     // editor-api from importing each other's UI framework. `packages/core/src` has no block here,
     // as it had none in the ESLint configuration. Spec:

@@ -55,7 +55,7 @@ import { rowMinimumOpeningPt } from './table-row-minimum-fit.ts';
 import { rowBreaksPageBefore } from './table-row-page-break.ts';
 import { planHeaderGroup } from './table-header-vmerge.ts';
 import { measureKeptMergeRows } from './table-kept-merge-measure.ts';
-import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 
 /** Maximum rows measured for one table keep decision; paragraph lookahead is independent. */
 const MAX_TABLE_KEEP_ROWS = 256;
@@ -91,7 +91,7 @@ export function rowStartsPage(
   const previous = index > 0 ? structure.rows[index - 1] : undefined;
   return !(
     previous &&
-    isWord2013OrLaterMode(compatibilityMode) &&
+    hasCompatibilityRule(compatibilityMode, 'rowPageBreakYieldsToKeep') &&
     rowKeepsWithNext(previous, styleCascade)
   );
 }
@@ -448,7 +448,7 @@ function measureTableKeepOpening(
   ).heightPt;
   if (header > pageHeight + 0.001) return null;
   // Before Word 2013, header rows do not keep with the body rows, so the chain ends there.
-  const laterLayout = isWord2013OrLaterMode(at.compatibilityMode);
+  const laterLayout = hasCompatibilityRule(at.compatibilityMode, 'headerRowsKeepWithBody');
   if (headerRows.length > 0 && !laterLayout) return { height: header };
   const rows = structure.rows.slice(headerRows.length);
   const heights = new Map<number, number>();

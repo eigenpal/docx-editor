@@ -8,6 +8,7 @@ import { WML_NAMESPACE_URI, type OoxmlElement } from '@docx-editor.dev/core/stor
 import type { SemanticTableRow, TableAlignment } from './semantic-table.ts';
 import { MAX_TABLE_COLUMNS, type CellWidthClaim, type PreferredWidth } from './table-widths.ts';
 import { hasSupportedLegacyTableMargins } from './legacy-table-margins.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 
 const MAX_WIDTH_PT = 31_680 / 20;
 const EPSILON_PT = 0.001;
@@ -69,9 +70,9 @@ export function legacyTableContentWidth(input: {
   readonly cellSpacingPt: number;
   readonly floating: boolean;
 }): number | undefined {
-  const { compatibilityMode: mode, contentWidthPt, table, rows, columnCount } = input;
+  const { compatibilityMode, contentWidthPt, table, rows, columnCount } = input;
   if (
-    (mode !== undefined && mode !== 11 && mode !== 12 && mode !== 14) ||
+    !hasCompatibilityRule(compatibilityMode, 'legacyPercentTableContentWidth') ||
     input.depth !== 0 ||
     input.floating ||
     input.layoutFixed ||

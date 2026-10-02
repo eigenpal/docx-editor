@@ -22,7 +22,7 @@ import { characterHeaderPageToken } from './character-header-pages.ts';
 //
 // Scope stays furniture-only; body field projection remains deferred.
 
-import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import type { OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import { stableHash } from '../store/comparators/canonical.ts';
 import { canonicalOoxmlFingerprint } from '../store/package/ooxml-tree.ts';
@@ -491,7 +491,10 @@ export function layoutHeaderFooterStory(
     });
     // Before mode 15 Word runs header and footer text outside tables under their own logos;
     // the cells read it through `CellAnchorScope.anchorsWrapText`.
-    const anchorsWrapText = isWord2013OrLaterMode(inputs?.compatibilityMode);
+    const anchorsWrapText = hasCompatibilityRule(
+      inputs?.compatibilityMode,
+      'headerFooterAnchorsWrapText'
+    );
     const collect = (drawings: readonly AnchoredDrawingRecord[]) => {
       pendingAnchoredDrawings.push(...drawings);
     };

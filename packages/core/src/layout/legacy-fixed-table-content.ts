@@ -3,6 +3,7 @@ import type { SemanticTableRow } from './semantic-table.ts';
 import type { SideRuleTableShape } from './legacy-table-side-rules.ts';
 import { hasSupportedLegacyTableMargins } from './legacy-table-margins.ts';
 import { readTableIndentPt } from './table-widths.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 
 function hasUnsupportedRowGeometry(table: OoxmlElement): boolean {
   const pending = [...table.children];
@@ -51,7 +52,7 @@ export function legacyFixedTableContentOffset(
   shape: SideRuleTableShape
 ): number | undefined {
   if (
-    shape.compatibilityMode !== 14 ||
+    !hasCompatibilityRule(shape.compatibilityMode, 'fixedTableContentEdgeOrigin') ||
     shape.depth !== 0 ||
     shape.bidiVisual ||
     shape.floating ||

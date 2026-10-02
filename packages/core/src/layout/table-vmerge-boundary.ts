@@ -46,7 +46,7 @@ import type {
   SemanticTableStructure,
 } from './semantic-table.ts';
 import type { TableCellFragmentRecord, TableRowFragmentRecord } from './semantic-records.ts';
-import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { probeRowFragmentProgress } from './table-row-progress-probe.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
 import type { CellContentInsets } from './table-cell-geometry.ts';
@@ -173,7 +173,11 @@ function carriedRows(
  */
 export function deferMergedTextPastHeadRow(input: DeferMergedTextInput): DeferredMergedText | null {
   const { plan, rows, rowIndex, structure, left, top, contentBottom } = input;
-  if (!isWord2013OrLaterMode(input.compatibilityMode) || plan === null || top <= EPSILON_PT) {
+  if (
+    !hasCompatibilityRule(input.compatibilityMode, 'vMergeTextMovesPastHeadRow') ||
+    plan === null ||
+    top <= EPSILON_PT
+  ) {
     return null;
   }
   const row = rows[rowIndex];

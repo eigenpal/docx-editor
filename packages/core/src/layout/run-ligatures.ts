@@ -1,14 +1,9 @@
 import { combineStyleToggles } from './style-toggles.ts';
-import {
-  WML_NAMESPACE_URI,
-  type OoxmlProperty,
-  type OoxmlElement,
-} from '@docx-editor.dev/core/store';
-import { compatibilityModeFromSettings } from './document-compatibility-mode.ts';
+import type { OoxmlProperty, OoxmlElement } from '@docx-editor.dev/core/store';
+import { compatibilityProfileFromSettings } from './compatibility/compatibility-profile.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 
 const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
-const COMPATIBILITY_URI = 'http://schemas.microsoft.com/office/word';
 const VALUES = new Set([
   'none',
   'standard',
@@ -58,39 +53,13 @@ export function runLigatureFeatureKey(style: ResolvedRunStyle): string {
   return `${style.ligatures?.standard ? 1 : 0}${style.ligatures?.contextual ? 1 : 0}${style.ligatures?.historical ? 1 : 0}${style.ligatures?.discretionary ? 1 : 0}`;
 }
 
-/** Mode 15 and later opt in by default; an explicit enableOpenTypeFeatures flag overrides it. */
+/**
+ * Whether optional ligatures apply: the `optionalLigatures` rule in
+ * `compatibility/compatibility-rules.ts` (mode 15 and later by default; an explicit
+ * `enableOpenTypeFeatures` setting overrides the mode).
+ */
 export function optionalLigaturesEnabled(settings: OoxmlElement | null): boolean {
-  if (!settings || settings.namespaceUri !== WML_NAMESPACE_URI || settings.localName !== 'settings')
-    return false;
-  // Word 2019 and Microsoft 365 author mode 16 and keep the modern default; an absent mode is
-  // a legacy document.
-  const mode = compatibilityModeFromSettings(settings);
-  let result = mode !== undefined && mode >= 15;
-  let found = false;
-  for (const compat of settings?.children ?? []) {
-    if (
-      compat.kind === 'textValue' ||
-      compat.namespaceUri !== WML_NAMESPACE_URI ||
-      compat.localName !== 'compat'
-    )
-      continue;
-    for (const node of compat.children) {
-      if (
-        node.kind === 'textValue' ||
-        node.namespaceUri !== WML_NAMESPACE_URI ||
-        node.localName !== 'compatSetting'
-      )
-        continue;
-      const attr = (name: string) =>
-        node.attributes.find((a) => a.namespaceUri === WML_NAMESPACE_URI && a.localName === name)
-          ?.value;
-      if (attr('name') !== 'enableOpenTypeFeatures' || attr('uri') !== COMPATIBILITY_URI) continue;
-      if (found) return false;
-      found = true;
-      result = ['1', 'true', 'on'].includes(attr('val') ?? '');
-    }
-  }
-  return result;
+  return compatibilityProfileFromSettings(settings).has('optionalLigatures');
 }
 
 const NO_OPTIONAL_LIGATURES: readonly OoxmlProperty[] = Object.freeze([

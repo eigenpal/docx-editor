@@ -10,6 +10,7 @@ import type {
 import { isOutOfFlowFragment } from './fragment-flow.ts';
 import { paragraphKeeps } from './pagination-keeps.ts';
 import { tableReferenceRowBand } from './note-table-reference-band.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 
 /** Translate one paragraph fragment (and every box inside it) by `dy`. */
 export function shiftParagraphFragment(
@@ -238,7 +239,8 @@ export function noteReferenceLineBandPt(
   ref: { readonly paragraphId: string; readonly atomOffset: number },
   compatibilityMode?: number
 ): NoteReferenceLineBand {
-  const memos = referenceLineBandMemos[(compatibilityMode ?? 0) >= 15 ? 1 : 0]!;
+  const memos =
+    referenceLineBandMemos[hasCompatibilityRule(compatibilityMode, 'noteTableCellKeeps') ? 1 : 0]!;
   let perPage = memos.get(page.fragments);
   if (!perPage) {
     perPage = new WeakMap();

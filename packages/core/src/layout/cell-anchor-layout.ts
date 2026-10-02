@@ -8,7 +8,7 @@
 // absent, 12, 14, 15 and 16.
 
 import type { DrawingProjection } from '../store/package/drawing-projection.ts';
-import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import type { LayoutBox } from './semantic-records.ts';
 
 /** What decides how the anchors of one cell-flow paragraph lay out. */
@@ -74,7 +74,8 @@ export function anchorLaidOutInCell(
   projection: Pick<DrawingProjection, 'anchor' | 'position'>,
   scope: CellAnchorScope
 ): boolean {
-  if (!scope.inTableCell || isWord2013OrLaterMode(scope.compatibilityMode)) return true;
+  if (!scope.inTableCell || hasCompatibilityRule(scope.compatibilityMode, 'anchorsLayOutInCell'))
+    return true;
   const position = projection.position;
   if (position?.horizontal.relativeFrom === 'character') return true;
   if (position?.vertical.relativeFrom === 'line') return true;

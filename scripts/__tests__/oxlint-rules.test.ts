@@ -1,5 +1,6 @@
 // The lint gates that AGENTS.md relies on — the HTML-sink ban, global `@keyframes` names,
-// varargs spreads in the engine lanes, and framework isolation — must keep firing. The
+// varargs spreads in the engine lanes, raw compatibility-mode comparisons, and framework
+// isolation — must keep firing. The
 // repository has no violations, so a clean lint run cannot tell a working rule from one that
 // silently stopped running. oxlint's JavaScript plugins are alpha and outside semver, so this
 // test lints a fixture of every banned shape with the real `.oxlintrc.json`, at the paths its
@@ -35,6 +36,22 @@ const SPREADS = [
   'out.push(...items);',
   'out.splice(0, 0, ...items);',
   'Math.max(...items);',
+].join('\n');
+// Lines 1-4 declare; lines 5-10 are banned; lines 11-14 are allowed.
+const COMPAT_MODE = [
+  'declare const deps: { compatibilityMode?: number };',
+  'declare const compatibilityMode: number | undefined;',
+  'declare const mode: number;',
+  'declare const legacy: number[];',
+  'export const a = compatibilityMode !== undefined && compatibilityMode >= 15;',
+  'export const b = (deps.compatibilityMode ?? 0) >= 15;',
+  'export const c = 14 === mode;',
+  'export const d = [11, 12, 14].includes(mode);',
+  'export const e = deps.compatibilityMode !== 14;',
+  'switch (compatibilityMode) { default: }',
+  'export const ok = compatibilityMode === undefined;',
+  'export const ok2 = deps.compatibilityMode;',
+  'export const ok3 = mode === undefined || legacy.length > 0;',
 ].join('\n');
 const PRELUDE = [
   'declare const el: HTMLElement;',
@@ -97,6 +114,12 @@ const FILES: Record<string, string> = {
   'packages/core/src/store/beside.test.ts': `${PRELUDE}\n${SINKS}\n`,
   // Only root-level `*.config.ts` files are ignored.
   'packages/core/src/editor/tailwind.config.ts': `${PRELUDE}\nel.innerHTML = '<b>x</b>';\n`,
+  // Library code branches on the compatibility mode only through named rules; the
+  // compatibility module and tests may compare numbers.
+  'packages/core/src/layout/compat-sample.ts': `${COMPAT_MODE}\n`,
+  'packages/core/src/layout/compatibility/sample.ts': `${COMPAT_MODE}\n`,
+  'packages/core/src/layout/__tests__/compat-sample.test.ts': `${COMPAT_MODE}\n`,
+  'packages/react/src/compat-sample.ts': `${COMPAT_MODE}\n`,
   // The global cap.
   'packages/core/src/layout/long.ts': Array.from(
     { length: 1001 },
@@ -163,6 +186,9 @@ test('every banned shape is reported where the configuration applies it, and now
   const keyframes = 'docx(no-global-keyframes)';
   const spread = 'docx(no-varargs-spread)';
   const restrictedImport = 'eslint(no-restricted-imports)';
+  const rawMode = 'docx(no-raw-compatibility-mode)';
+  const rawModeLines = (file: string) =>
+    [5, 6, 7, 8, 9, 10].map((line) => `${file}:${line} ${rawMode}`);
   const sinkLines = (file: string, first: number) => [
     `${file}:${first} ${sink}`,
     `${file}:${first + 1} ${sink}`,
@@ -176,6 +202,8 @@ test('every banned shape is reported where the configuration applies it, and now
   expect(reports()).toEqual(
     [
       'packages/core/src/layout/long.ts:1001 eslint(max-lines)',
+      ...rawModeLines('packages/core/src/layout/compat-sample.ts'),
+      ...rawModeLines('packages/react/src/compat-sample.ts'),
       `packages/core/src/editor/tailwind.config.ts:6 ${sink}`,
       ...sinkLines('packages/core/src/store/beside.test.ts', 6),
       ...sinkLines('packages/vue/src/__tests__/sample.test.ts', 6),

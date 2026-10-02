@@ -54,6 +54,48 @@ const VARARGS_NEW_MSG =
   'document and throws on attacker-sized input. Pass the array itself ' +
   '(new Set(items), not new Set(...items)).';
 
+// Layout branches on the Word compatibility mode only through named rules
+// (packages/core/src/layout/compatibility/compatibility-rules.ts), so one registry says which
+// behavior depends on which mode. A raw comparison such as `compatibilityMode >= 15` or
+// `[11, 12, 14].includes(compatibilityMode)` bypasses it and is how quirky predicates spread.
+const RAW_COMPATIBILITY_MODE_MSG =
+  'Do not compare compatibilityMode (or a `mode` alias of it) with numbers. Register a named rule in ' +
+  'packages/core/src/layout/compatibility/compatibility-rules.ts and call ' +
+  "hasCompatibilityRule(compatibilityMode, 'ruleName'). See docs/architecture/compatibility-modes.md.";
+
+// A destructured alias is usually a local `mode` (`const { compatibilityMode: mode } = table`),
+// so that variable name counts too. A `mode` property (`stat.mode`) does not.
+const MODE_NAME = '/^(compatibilityMode|mode)$/';
+
+/** Selectors for an expression that reads the mode, directly or as `mode ?? n`. */
+function compatibilityModeOperands(side) {
+  return [
+    `[${side}.name=${MODE_NAME}]`,
+    `[${side}.property.name='compatibilityMode']`,
+    `[${side}.type='LogicalExpression'][${side}.left.name=${MODE_NAME}]`,
+    `[${side}.type='LogicalExpression'][${side}.left.property.name='compatibilityMode']`,
+  ];
+}
+
+const NUMERIC_COMPARISON = 'BinaryExpression[operator=/^([<>]=?|[!=]==?)$/]';
+const NUMERIC_LIST_INCLUDES =
+  "CallExpression[callee.property.name='includes'][callee.object.type='ArrayExpression']" +
+  "[callee.object.elements.0.type='Literal'][callee.object.elements.0.raw=/^[0-9]/]";
+const RAW_COMPATIBILITY_MODE_SELECTORS = [
+  ...compatibilityModeOperands('left').map(
+    (operand) => `${NUMERIC_COMPARISON}${operand}[right.type='Literal'][right.raw=/^[0-9]/]`
+  ),
+  ...compatibilityModeOperands('right').map(
+    (operand) => `${NUMERIC_COMPARISON}${operand}[left.type='Literal'][left.raw=/^[0-9]/]`
+  ),
+  // Any list may hold the mode itself; a list of numbers may hold it under the `mode` alias.
+  "CallExpression[callee.property.name='includes'][arguments.0.name='compatibilityMode']",
+  "CallExpression[callee.property.name='includes'][arguments.0.property.name='compatibilityMode']",
+  `${NUMERIC_LIST_INCLUDES}[arguments.0.name='mode']`,
+  "SwitchStatement[discriminant.name='compatibilityMode']",
+  "SwitchStatement[discriminant.property.name='compatibilityMode']",
+];
+
 export default {
   meta: { name: 'docx' },
   rules: {
@@ -105,5 +147,12 @@ export default {
       // `new Foo(...arr)` is not a CallExpression, so it needs its own selector.
       { selector: 'NewExpression > SpreadElement', message: VARARGS_NEW_MSG },
     ]),
+
+    'no-raw-compatibility-mode': selectorRule(
+      RAW_COMPATIBILITY_MODE_SELECTORS.map((selector) => ({
+        selector,
+        message: RAW_COMPATIBILITY_MODE_MSG,
+      }))
+    ),
   },
 };

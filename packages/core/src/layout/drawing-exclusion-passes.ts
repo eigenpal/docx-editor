@@ -1,4 +1,4 @@
-import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
 import { anchoredDrawingAtomsInParagraph } from './drawing-atom-walk.ts';
@@ -18,7 +18,7 @@ export function createDrawingExclusionPasses(
   // Modern layout seeds those dependencies before later fixed bands wrap earlier text.
   let previousAnchorsOnly = false;
   let seedForwardOnly = false;
-  if (drawings && isWord2013OrLaterMode(compatibilityMode))
+  if (drawings && hasCompatibilityRule(compatibilityMode, 'anchorOnlyParagraphSeeding'))
     for (const block of blocks) {
       const atoms =
         block.kind === 'paragraph' ? anchoredDrawingAtomsInParagraph(block, drawings) : [];

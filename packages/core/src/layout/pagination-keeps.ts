@@ -22,7 +22,7 @@
 // kept rows run to its end, the chain goes on through them into the content after the table.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
-import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { framedTokenJoin } from './layout-cache.ts';
 import { sha256FontBytes } from '../store/package/sha256.ts';
 import { createKeepRangeIndex, type KeepRange } from './pagination-keep-index.ts';
@@ -380,7 +380,7 @@ export interface KeepNextPlacement {
   /** Space before the head at the top of a fresh page. */
   readonly freshLead: number;
   readonly topExtent: number;
-  /** `w:compatSetting` `compatibilityMode`; 15 or more is Word 2013 and later layout. */
+  /** `w:compatSetting` `compatibilityMode`, read through `hasCompatibilityRule`. */
   readonly compatibilityMode: number | undefined;
 }
 
@@ -412,7 +412,8 @@ export function keepNextGroupNeed(look: KeepNextLookahead, at: KeepNextPlacement
   const fresh = plan(at.contentHeight - at.freshLead - at.topExtent);
   if (fresh === null) return null;
   if (fresh.height - at.pricedLead + at.freshLead + at.topExtent > at.contentHeight) return null;
-  if (!isWord2013OrLaterMode(at.compatibilityMode) || group.lastWhole < 0) return need;
+  if (!hasCompatibilityRule(at.compatibilityMode, 'keepNextGivesTailLines') || group.lastWhole < 0)
+    return need;
   return splitTailLines(look, group.lastWhole) > 0 ? null : need;
 }
 
@@ -434,7 +435,7 @@ export function keepNextTailLines(
   pageHeight: number,
   compatibilityMode: number | undefined
 ): number {
-  if (!isWord2013OrLaterMode(compatibilityMode)) return 0;
+  if (!hasCompatibilityRule(compatibilityMode, 'keepNextGivesTailLines')) return 0;
   look = { ...look, maxHeight: Math.max(room, pageHeight) };
   const plan = keepNextPlan(look, room);
   if (plan === null || plan.height <= room || plan.lastWhole !== look.start) return 0;

@@ -1,7 +1,7 @@
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
 import type { bodyAnchorFrameBase } from './body-flow-helpers.ts';
-import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import {
   anchoredDrawingAtomsInParagraph,
   drawingModelOffsetsInParagraph,
@@ -24,7 +24,11 @@ export function withOwnAnchorOnlyZones(
   displayMode: RevisionDisplayMode,
   revisionAuthorFilter?: RevisionAuthorFilter
 ): readonly ExclusionZone[] {
-  if (!drawings || paragraph.kind !== 'paragraph' || !isWord2013OrLaterMode(compatibilityMode))
+  if (
+    !drawings ||
+    paragraph.kind !== 'paragraph' ||
+    !hasCompatibilityRule(compatibilityMode, 'anchorOnlyParagraphWrapExclusion')
+  )
     return zones;
   const atoms = anchoredDrawingAtomsInParagraph(paragraph, drawings);
   if (!atoms.length || paragraphOffsetIndex(paragraph).length !== atoms.length) return zones;

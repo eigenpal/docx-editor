@@ -13,7 +13,7 @@
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { anchorLaidOutInCell, cellAnchorScope } from './cell-anchor-layout.ts';
-import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { exclusionZoneFromAnchoredDrawing, wrapProducesExclusion } from './drawing-exclusion.ts';
 import {
   anchoredDrawingAtomsInParagraph,
@@ -81,7 +81,7 @@ export function planOutOfCellFloats(
 ): OutOfCellFloatPlan | null {
   const layout = deps.inlineDrawingLayout;
   // From mode 15 no anchor is out of its cell, so there is nothing to walk.
-  if (!layout || isWord2013OrLaterMode(deps.compatibilityMode)) return null;
+  if (!layout || hasCompatibilityRule(deps.compatibilityMode, 'anchorsLayOutInCell')) return null;
   // Live: cells read it as they break, and `end` empties it.
   const paragraphs = new Set(outOfCellFloatParagraphs(structure, layout, deps));
   if (paragraphs.size === 0) return null;

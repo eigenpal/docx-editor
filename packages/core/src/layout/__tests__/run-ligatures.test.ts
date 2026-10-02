@@ -42,7 +42,7 @@ function settings(mode: number | undefined, enabled?: boolean) {
 }
 
 test('compatibility controls optional ligatures without suppressing required script features', () => {
-  // Mode 15 and later default on; Word 2019 and Microsoft 365 author 16.
+  // Mode 15 and every newer mode default on.
   for (const mode of [undefined, 11, 12, 14, 15, 16, 17]) {
     expect(optionalLigaturesEnabled(settings(mode))).toBe(mode !== undefined && mode >= 15);
     expect(optionalLigaturesEnabled(settings(mode, false))).toBe(false);

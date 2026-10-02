@@ -7,6 +7,7 @@ import { paragraphKeeps } from './pagination-keeps.ts';
 import { splitNoteFragments } from './note-splitting.ts';
 import { rowContinuesOn } from './note-table-reference-band.ts';
 import type { PageRecord } from './semantic-records.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 
 /**
  * Note lines a split head must place below a table row reference for the row to stay.
@@ -114,8 +115,7 @@ export function splitNoteKeepsParagraphReference(
   fullNoteColumn: number,
   compatibilityMode?: number
 ): boolean {
-  if (compatibilityMode !== undefined && compatibilityMode !== 14 && compatibilityMode !== 15)
-    return false;
+  if (!hasCompatibilityRule(compatibilityMode, 'splitNoteKeepsParagraphReference')) return false;
   // Splitting does not yet enforce keep-with-next across note paragraphs. Preserve
   // whole-note admission for those stories until their split boundaries support it.
   if (

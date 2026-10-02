@@ -30,7 +30,7 @@ import { probeRowFragmentProgress } from './table-row-progress-probe.ts';
 import { bottomToTopTextKeepsRowWhole } from './table-cell-text-direction.ts';
 import { keptRowGroup, rowsOpening, rowStartsPage, tableKeptRowSource } from './table-row-keeps.ts';
 import { rowMinimumMoves } from './table-row-minimum-fit.ts';
-import { isWord2013OrLaterMode } from './document-compatibility-mode.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import {
   prepareRepeatedHeaderBorderPlan,
   type RepeatedHeaderBorderPlan,
@@ -213,7 +213,7 @@ export function paginateTableInFlow(
     const fits = (top: number) => top + groupAt(top) <= contentHeight() + 0.001;
     clearance?.clear(clearance.fragment(headerRows.length, fits, groupAt));
   };
-  const laterLayout = isWord2013OrLaterMode(flow.compatibilityMode);
+  const laterLayout = hasCompatibilityRule(flow.compatibilityMode, 'headerRowsKeepWithBody');
   let repeatedPlan: RepeatedHeaderBorderPlan | undefined;
   let prepareRepeat: (() => RepeatedHeaderBorderPlan | null | undefined) | undefined;
   const rememberInsets = (record: TableRowFragmentRecord, deps: TableFlowDeps): void => {

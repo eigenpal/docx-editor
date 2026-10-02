@@ -1,5 +1,6 @@
 import type { SemanticTableCell, SemanticTableRow, TableAlignment } from './semantic-table.ts';
 import type { PreferredWidthType } from './table-widths.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 
 const SIMPLE_SIDE_STYLES = ['single', 'thick'];
 
@@ -150,7 +151,10 @@ function modernEdgeAlignedOffsetPt(
   rows: readonly SemanticTableRow[],
   table: SideRuleTableShape
 ): number | undefined {
-  if (table.compatibilityMode !== 15 || !MODERN_GRID_WIDTH_TYPES.includes(table.widthType))
+  if (
+    !hasCompatibilityRule(table.compatibilityMode, 'modernGridLineSideRules') ||
+    !MODERN_GRID_WIDTH_TYPES.includes(table.widthType)
+  )
     return undefined;
   if (table.alignment === 'center') return undefined;
   const rule = uniformSimpleSideRuleWidth(rows, table.columnWidthsPt.length);
@@ -188,8 +192,10 @@ export function withSharedGridLineSideRules(
   const { compatibilityMode: mode } = table;
   if (table.depth !== 0 || table.bidiVisual || table.floating || table.cellSpacingPt !== 0)
     return { rows };
-  const legacyMode = mode === undefined || [11, 12, 14].includes(mode);
-  const modernGridWidth = mode === 15 && MODERN_GRID_WIDTH_TYPES.includes(table.widthType);
+  const legacyMode = hasCompatibilityRule(mode, 'legacySharedGridLineSideRules');
+  const modernGridWidth =
+    hasCompatibilityRule(mode, 'modernGridLineSideRules') &&
+    MODERN_GRID_WIDTH_TYPES.includes(table.widthType);
   const modernCentred = modernGridWidth && table.alignment === 'center';
   const outerRuleOffsetPt = legacyMode ? undefined : modernEdgeAlignedOffsetPt(rows, table);
   if (!legacyMode && !modernCentred && outerRuleOffsetPt === undefined) return { rows };

@@ -1,12 +1,11 @@
 import { styleSeparatorMembersOf } from './style-separator-group.ts';
 import { applicationParagraphDefaults } from './application-paragraph-defaults.ts';
 import { applicationRunDefaults } from './application-run-defaults.ts';
-import { optionalLigaturesEnabled, applyLigatureCompatibility } from './run-ligatures.ts';
+import { applyLigatureCompatibility } from './run-ligatures.ts';
 import { numberingParagraphProperties } from './numbering-paragraph-properties.ts';
 import { numberingLevelRank } from './numbering-level-tier.ts';
-import { preserveExactLineBaseline } from './exact-line-baseline.ts';
-import { adjustLineHeightInTable, withLineGrid } from './line-grid.ts';
-import { adjacentParagraphSpacingSettings } from './adjacent-paragraph-spacing.ts';
+import { withLineGrid } from './line-grid.ts';
+import { compatibilityProfileFromSettings } from './compatibility/compatibility-profile.ts';
 // Layout-side paragraph style cascade (styles.xml → semantic layout).
 //
 // The canonical tree keeps `w:pStyle` / `w:rStyle` and direct `rPr`/`pPr` as authored. Layout
@@ -51,16 +50,12 @@ import {
 } from './paragraph-style.ts';
 import { paragraphShading } from './ooxml-shading.ts';
 import { cascadedTabStops, tabStopsFingerprint, type ResolvedTabStops } from './paragraph-tabs.ts';
-import { numberingTabSettings, withNumberingTabRule } from './numbering-tab-rule.ts';
-import { wrappedTableSettings } from './wrapped-table-rule.ts';
+import { withNumberingTabRule } from './numbering-tab-rule.ts';
 import { NO_THEME_FONTS, type ThemeFonts } from './run-style.ts';
 import { combineStyleToggles } from './style-toggles.ts';
 import { styleChain, styleIdFromProps } from './style-chain.ts';
 import { paragraphMarkRunProperties } from './paragraph-mark-run.ts';
-import {
-  strictTableStyleHierarchy,
-  legacyTableDefaultProperties,
-} from './table-style-compatibility.ts';
+import { legacyTableDefaultProperties } from './table-style-compatibility.ts';
 import {
   findParagraphProperties,
   findRunProperties,
@@ -456,17 +451,25 @@ export function buildStyleCascadeTable(
   settingsRoot: OoxmlElement | null = null
 ): StyleCascadeTable {
   const typography = cjkTypographyFromSettings(settingsRoot);
-  const ligaturesEnabled = optionalLigaturesEnabled(settingsRoot);
+  // One read of the compatibility profile; the cache token folds every rule it turns on.
+  const compatibility = compatibilityProfileFromSettings(settingsRoot);
+  const ligaturesEnabled = compatibility.has('optionalLigatures');
   const ligatureCompatibility = ligaturesEnabled ? {} : { disableOptionalLigatures: true as const };
-  const strictTableHierarchy = strictTableStyleHierarchy(settingsRoot);
+  const strictTableHierarchy = compatibility.has('strictTableStyleHierarchy');
   const settingsCompatibility = {
-    ...(preserveExactLineBaseline(settingsRoot)
+    ...(compatibility.has('preserveExactLineBaseline')
       ? { preserveExactLineBaseline: true as const }
       : {}),
-    ...(adjustLineHeightInTable(settingsRoot) ? { adjustLineHeightInTable: true as const } : {}),
-    ...numberingTabSettings(settingsRoot),
-    ...wrappedTableSettings(settingsRoot),
-    ...adjacentParagraphSpacingSettings(settingsRoot),
+    ...(compatibility.has('adjustLineHeightInTable')
+      ? { adjustLineHeightInTable: true as const }
+      : {}),
+    ...(compatibility.has('ignoreIndentAsNumberingTabStop')
+      ? { ignoreIndentAsNumberingTabStop: true as const }
+      : {}),
+    ...(compatibility.has('doNotBreakWrappedTables')
+      ? { doNotBreakWrappedTables: true as const }
+      : {}),
+    ...(compatibility.has('fixedParagraphSpacing') ? { fixedParagraphSpacing: true as const } : {}),
   };
   const styles = new Map<string, StyleDefinition>();
   const theme = themeCacheMaterial(themeFonts);

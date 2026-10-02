@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { readOoxmlPart, type HeadlessDocumentView } from '@docx-editor.dev/core/store';
-import { compatibilityModeFromSettings } from '../document-compatibility-mode.ts';
+import { compatibilityModeFromSettings } from '../compatibility/compatibility-mode.ts';
 import { createDocumentStyleDependencies } from '../document-style-deps.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -18,8 +18,7 @@ const setting = (mode: string) =>
 
 test('projects every explicitly authored Word compatibility mode', () => {
   // Including the ones no lane branches on. A document declaring 16 is modern; one declaring
-  // nothing is legacy. Reporting both as `undefined` made those indistinguishable and put
-  // legacy table geometry on every Word 2019 and Microsoft 365 document.
+  // nothing is legacy. Reporting both as `undefined` would make those indistinguishable.
   for (const mode of ['11', '12', '14', '15', '16', '13', '17', '9999']) {
     expect(compatibilityModeFromSettings(settings(`<w:compat>${setting(mode)}</w:compat>`))).toBe(
       Number(mode)

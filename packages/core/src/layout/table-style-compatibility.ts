@@ -1,32 +1,7 @@
-// MS-DOCX §2.3.1: legacy default-paragraph size/alignment exceptions inside tables.
-import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
-
-const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-
-/** Opt into the unmodified ISO style hierarchy; absent settings use legacy behavior. */
-export function strictTableStyleHierarchy(root: OoxmlElement | null): boolean {
-  let strict = false;
-  for (const compat of root?.children ?? []) {
-    if (compat.kind === 'textValue' || compat.namespaceUri !== W || compat.localName !== 'compat')
-      continue;
-    for (const setting of compat.children) {
-      if (
-        setting.kind === 'textValue' ||
-        setting.namespaceUri !== W ||
-        setting.localName !== 'compatSetting'
-      )
-        continue;
-      const attr = (name: string) =>
-        setting.attributes.find((a) => a.namespaceUri === W && a.localName === name)?.value;
-      if (
-        attr('name') === 'overrideTableStyleFontSizeAndJustification' &&
-        attr('uri') === 'http://schemas.microsoft.com/office/word'
-      )
-        strict = ['1', 'true', 'on'].includes(attr('val') ?? '');
-    }
-  }
-  return strict;
-}
+// Legacy default-paragraph size/alignment exceptions inside tables. The
+// `strictTableStyleHierarchy` compatibility rule (`overrideTableStyleFontSizeAndJustification`)
+// turns them off.
+import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 
 /**
  * Only the default paragraph style is filtered, never derived styles or direct formatting.

@@ -6,7 +6,8 @@
 // The setting lives in `settings.xml`, outside every paragraph's property chain, so the style
 // cascade reads it once and carries it; its cache token covers it.
 
-import { WML_NAMESPACE_URI, type OoxmlElement } from '@docx-editor.dev/core/store';
+import type { OoxmlElement } from '@docx-editor.dev/core/store';
+import { compatibilityProfileFromSettings } from './compatibility/compatibility-profile.ts';
 
 /** The settings-derived part of the paragraph spacing rules. */
 export interface AdjacentParagraphSpacingSettings {
@@ -17,31 +18,17 @@ export interface AdjacentParagraphSpacingSettings {
   readonly fixedParagraphSpacing?: true;
 }
 
-function wordChild(parent: OoxmlElement, localName: string): OoxmlElement | undefined {
-  for (const child of parent.children) {
-    if (child.kind === 'textValue') continue;
-    if (child.namespaceUri === WML_NAMESPACE_URI && child.localName === localName) return child;
-  }
-  return undefined;
-}
-
 /**
- * Read `w:settings/w:compat/w:doNotUseHTMLParagraphAutoSpacing`. An absent `w:val` means on;
- * `0`, `false` and `off` mean off, like every other `ST_OnOff` value.
+ * Read `w:settings/w:compat/w:doNotUseHTMLParagraphAutoSpacing` through the
+ * `fixedParagraphSpacing` compatibility rule. An absent `w:val` means on; `0`, `false` and
+ * `off` mean off.
  */
 export function adjacentParagraphSpacingSettings(
   settings: OoxmlElement | null
 ): AdjacentParagraphSpacingSettings {
-  if (!settings || settings.namespaceUri !== WML_NAMESPACE_URI) return {};
-  if (settings.localName !== 'settings') return {};
-  const compat = wordChild(settings, 'compat');
-  const element = compat && wordChild(compat, 'doNotUseHTMLParagraphAutoSpacing');
-  if (!element) return {};
-  const value = element.attributes.find(
-    (attribute) => attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === 'val'
-  )?.value;
-  const on = value === undefined || value === '1' || value === 'true' || value === 'on';
-  return on ? { fixedParagraphSpacing: true } : {};
+  return compatibilityProfileFromSettings(settings).has('fixedParagraphSpacing')
+    ? { fixedParagraphSpacing: true }
+    : {};
 }
 
 /**

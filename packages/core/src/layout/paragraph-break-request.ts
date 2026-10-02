@@ -17,6 +17,7 @@ import {
   type StyleCascadeTable,
 } from './style-cascade.ts';
 import { resolveCjkTypography } from './cjk-typography.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 
 /**
  * External values can change while the source paragraph retains its identity.
@@ -177,11 +178,9 @@ export function breakPreparedParagraph(request: ParagraphBreakRequest): readonly
     {
       ...request.flow,
       paragraphRtl: paragraphIsRtl(formatting.props),
-      // Modern justification is mode 15 and everything after it: Word 2019 and Microsoft 365
-      // author `compatibilityMode` 16. An absent mode stays legacy, as the table lane treats it.
+      // Modern justification is mode 15 and every newer mode. An absent mode stays legacy.
       justifySpaceShrink:
-        request.compatibilityMode !== undefined &&
-        request.compatibilityMode >= 15 &&
+        hasCompatibilityRule(request.compatibilityMode, 'justifiedSpaceShrink') &&
         paragraphAlignment(formatting.props) === 'both',
       lineSpacing: formatting.lineSpacing,
       typography: resolveCjkTypography(formatting.props, styleCascade?.typography),

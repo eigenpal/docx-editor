@@ -4,6 +4,7 @@ import type {
   TableFloatPosition,
 } from './semantic-table.ts';
 import { contentInsets } from './table-cell-geometry.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 
 /** Legacy numeric text anchors position the first cell's content, not its outer edge. */
 export function positionedTableOriginX(
@@ -17,7 +18,7 @@ export function positionedTableOriginX(
   const origin = tableFloatOriginX(float, width, frames);
   const first = structure.rows[0]?.cells[0];
   if (
-    (compatibilityMode !== undefined && ![11, 12, 14].includes(compatibilityMode)) ||
+    !hasCompatibilityRule(compatibilityMode, 'floatingTableContentOrigin') ||
     structure.bidiVisual ||
     structure.cellSpacingPt !== 0 ||
     float.horzAnchor !== 'text' ||
