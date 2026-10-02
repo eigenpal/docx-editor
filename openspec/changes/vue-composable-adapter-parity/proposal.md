@@ -123,7 +123,7 @@ one: the module auto-imports from the package root and points at
   `packages/react/src/index.ts` and the pre-v2 chrome files (deprecation tags only),
   `packages/nuxt/src/module.ts`, `scripts/parity/parity.contract.json`,
   `scripts/check-public-docs-surface.mjs`, `scripts/check-composable-parity.mjs` (new),
-  `package.json` scripts, `eslint.config.js`, `.github/workflows/ci.yml`,
+  `package.json` scripts, `.oxlintrc.json`, `.github/workflows/ci.yml`,
   `docs/site/content/vue/**`, `docs/site/content/meta.json`, `examples/vue/src/**`.
 - ONE additive `packages/core` change: `LOADING_SNAPSHOT` moves from
   `packages/react/src/editor/loading-snapshot.ts` into `core/editor`, because Vue cannot import a

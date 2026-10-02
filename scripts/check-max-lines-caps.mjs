@@ -51,7 +51,21 @@ const BLANKET_DISABLES = new Map([
 
 const SOURCE_FILE = /\.tsx?$/;
 const VUE_FILE = /\.vue$/;
-const SKIP_DIRECTORIES = new Set(['node_modules', 'dist', 'dist-types', 'temp', '.turbo']);
+// Build output and vendored code, which oxlint does not lint (see `ignorePatterns`).
+const SKIP_DIRECTORIES = new Set([
+  'node_modules',
+  'dist',
+  'dist-types',
+  'temp',
+  '.turbo',
+  'vendor',
+  '.next',
+  '.nuxt',
+  '.output',
+  '.astro',
+  'build',
+  'coverage',
+]);
 
 function sourceFilesUnder(directory, pattern = SOURCE_FILE, found = []) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -151,9 +165,24 @@ for (const path of BLANKET_DISABLES.keys()) {
 // `.vue` file can pass max-lines at any length. Hold the whole file to the cap here.
 const globalCap = capOf(configs.find((block) => block.files?.includes('**/*.{ts,tsx,vue}')) ?? {});
 if (globalCap === undefined) failures.push('no global max-lines cap for **/*.{ts,tsx,vue}');
+/** The directories `bun run lint` passes to oxlint that can hold `.vue` files. */
+function lintedDirectories() {
+  const children = (parent, child) =>
+    readdirSync(join(root, parent), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => join(root, parent, entry.name, child))
+      .filter((directory) => existsSync(directory));
+  return [
+    ...children('packages', 'src'),
+    ...children('examples', 'src'),
+    ...children('examples', 'app'),
+    join(root, 'examples', 'shared'),
+  ];
+}
+
 let vueChecked = 0;
-for (const directory of ['packages', 'examples']) {
-  for (const absolute of sourceFilesUnder(join(root, directory), VUE_FILE)) {
+for (const directory of lintedDirectories()) {
+  for (const absolute of sourceFilesUnder(directory, VUE_FILE)) {
     const path = relative(root, absolute).split(sep).join('/');
     const cap = fileCaps.get(path) ?? globalCap;
     const lines = readFileSync(absolute, 'utf8').split('\n').length - 1;

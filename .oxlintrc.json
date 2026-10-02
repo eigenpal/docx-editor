@@ -81,8 +81,9 @@
       }
     },
 
-    // Framework isolation: keep core/react/vue/editor-api packages from cross-importing each
-    // other's UI framework. Spec:
+    // Framework isolation: keep the React adapter, the Vue adapter (and pro's Vue entry), and
+    // editor-api from importing each other's UI framework. `packages/core/src` has no block here,
+    // as it had none in the ESLint configuration. Spec:
     //   openspec/changes/archive/2026-07-22-vue-editor-robust-implementation/specs/framework-isolation-lint/spec.md
     // `no-restricted-imports` covers static imports and `import(...)` alike (`*` and `/*` are
     // separate entries: a glob matches path-with-suffix, the bare specifier matches no-suffix).
@@ -102,6 +103,7 @@
               {
                 "group": [
                   "react",
+                  "react/*",
                   "react-dom",
                   "react-dom/*",
                   "@vitejs/plugin-react",
@@ -134,6 +136,7 @@
               {
                 "group": [
                   "vue",
+                  "vue/*",
                   "@vue/*",
                   "@vitejs/plugin-vue",
                   "@docx-editor.dev/vue",
@@ -159,12 +162,14 @@
               {
                 "group": [
                   "react",
+                  "react/*",
                   "react-dom",
                   "react-dom/*",
                   "@vitejs/plugin-react",
                   "@docx-editor.dev/react",
                   "@docx-editor.dev/react/*",
                   "vue",
+                  "vue/*",
                   "@vue/*",
                   "@vitejs/plugin-vue",
                   "@docx-editor.dev/vue",

@@ -286,7 +286,7 @@ Review points worth a second pair of eyes:
 
 - Line caps: `paginated-surface.ts` is at 6143 of 6150, `tree-op-apply.ts` at 3495 of 3495,
   `tree-op-content-controls.ts` at 1850 of 1850. Extract into a module; never raise a cap.
-  `scripts/check-eslint-max-lines-globs.mjs` runs inside `bun run lint`.
+  `scripts/check-max-lines-caps.mjs` runs inside `bun run lint`.
 - `bun run api:extract` re-emits stale snapshots unless `bun run build:packages` ran first.
 - Running `bun run test` while a build runs produces spurious `Cannot find module
 '@docx-editor.dev/i18n'` failures and perf-test timeouts. Rerun the files alone.

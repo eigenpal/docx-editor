@@ -57,6 +57,7 @@ const FILES: Record<string, string> = {
     "import { ref } from 'vue';",
     "export const load = () => import('@docx-editor.dev/vue');",
     'export { ref };',
+    "export * from 'vue/server-renderer';",
     '',
   ].join('\n'),
   'packages/vue/src/sample.ts': [
@@ -64,11 +65,13 @@ const FILES: Record<string, string> = {
     "import { createRoot } from 'react-dom/client';",
     "export const load = () => import('react-dom/client');",
     'export { useState, createRoot };',
+    "export { jsx } from 'react/jsx-runtime';",
     '',
   ].join('\n'),
   'packages/pro/src/vue/sample.ts': [
     "import { useState } from '@docx-editor.dev/react';",
     'export { useState };',
+    "export { jsx } from 'react/jsx-runtime';",
     '',
   ].join('\n'),
   'packages/editor-api/src/sample.ts': [
@@ -76,6 +79,8 @@ const FILES: Record<string, string> = {
     "import { useState } from 'react';",
     "export const load = () => import('vue');",
     'export { ref, useState };',
+    "export { renderToString } from 'vue/server-renderer';",
+    "export { jsx } from 'react/jsx-runtime';",
     '',
   ].join('\n'),
   // Vue adapter tests are checked for sinks too.
@@ -182,6 +187,11 @@ test('every banned shape is reported where the configuration applies it, and now
       'packages/editor-api/src/sample.ts:2 ' + restrictedImport,
       'packages/editor-api/src/sample.ts:3 ' + restrictedImport,
       'packages/pro/src/vue/sample.ts:1 ' + restrictedImport,
+      'packages/pro/src/vue/sample.ts:3 ' + restrictedImport,
+      'packages/editor-api/src/sample.ts:5 ' + restrictedImport,
+      'packages/editor-api/src/sample.ts:6 ' + restrictedImport,
+      'packages/react/src/sample.ts:4 ' + restrictedImport,
+      'packages/vue/src/sample.ts:5 ' + restrictedImport,
       ...sinkLines('packages/react/src/__tests__/sample.test.ts', 6),
       'packages/react/src/sample.ts:1 ' + restrictedImport,
       'packages/react/src/sample.ts:2 ' + restrictedImport,
