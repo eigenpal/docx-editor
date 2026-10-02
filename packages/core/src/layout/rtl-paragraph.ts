@@ -126,6 +126,7 @@ function withPictures(
   pictures: ReadonlyMap<number, FieldAwarePiece>
 ): FieldAwarePiece[] {
   if (pictures.size === 0) return items;
+  const starts = [...pictures.keys()].sort((left, right) => left - right);
   const result: FieldAwarePiece[] = [];
   for (const item of items) {
     let from = item.start;
@@ -134,9 +135,9 @@ function withPictures(
       const text = item.text.slice(from - item.start, to - item.start);
       result.push({ ...item, text, start: from, end: to });
     };
-    for (let at = item.start; at < item.end; at += 1) {
-      const picture = pictures.get(at);
-      if (!picture) continue;
+    for (const at of starts) {
+      if (at < item.start || at >= item.end) continue;
+      const picture = pictures.get(at)!;
       keep(at);
       result.push({ ...picture, style: { ...picture.style, shaping: item.style.shaping } });
       from = at + 1;

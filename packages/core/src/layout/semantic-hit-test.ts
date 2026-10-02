@@ -668,7 +668,8 @@ function offsetOnLine(
       rightmost.advanceEnd,
       x,
       context,
-      paragraphRtl
+      // Pictures with no bidi level were laid out left to right whatever the paragraph says.
+      paragraphRtl && line.drawings!.some((drawing) => drawing.bidiLevel !== undefined)
     );
     return beyond ?? gapOffset(line, spans, x, context);
   }

@@ -100,17 +100,22 @@ function drawingSpacerIdentity(node: Node | undefined): SemanticPosition | null 
 }
 
 /** The advance spacer of the picture at model offset `start`, when one is painted. */
-function drawingSpacerAt(searchRoot: Element, paragraphId: string, start: number): Element | null {
-  if (!Number.isInteger(start) || start < 0) return null;
+function drawingSpacerAt(searchRoot: Element, paragraphId: string, start?: number): Element | null {
+  if (start !== undefined && (!Number.isInteger(start) || start < 0)) return null;
   // The offset is a model integer, never document text, so it is safe in the selector. The
   // id is narrowed the same way `paragraphElements` does, and only when it is CSS-safe.
-  const byStart = `.docx-inline-drawing-advance[data-drawing-start="${start}"]`;
+  // Without a start, any spacer of the paragraph answers.
+  const byStart =
+    start === undefined
+      ? '.docx-inline-drawing-advance'
+      : `.docx-inline-drawing-advance[data-drawing-start="${start}"]`;
   const selector = CSS_STRING_UNSAFE.test(paragraphId)
     ? byStart
     : `${byStart}[data-drawing-paragraph-id="${paragraphId}"]`;
   for (const spacer of searchRoot.querySelectorAll(selector)) {
     const identity = drawingSpacerIdentity(spacer);
-    if (identity?.paragraphId === paragraphId && identity.offset === start) return spacer;
+    if (identity?.paragraphId === paragraphId && (start === undefined || identity.offset === start))
+      return spacer;
   }
   return null;
 }
@@ -295,6 +300,14 @@ export function positionFromDomPoint(
   // and after it, so it resolves as the line's child index on that side of it. A terminator
   // mark's seat stands after the line's content, so it resolves as the line's end.
   const seat = nearestElement?.closest<HTMLElement>('.docx-terminator-seat');
+  if (seat?.querySelector('.docx-line-break-mark') && seat.parentElement) {
+    const spans = [...seat.parentElement.querySelectorAll('[data-start]')].map(identityOf);
+    const last = spans.reduce<SpanIdentity | null>(
+      (found, span) => (span && (!found || span.start > found.start) ? span : found),
+      null
+    );
+    if (last) return { paragraphId: last.paragraphId, offset: last.start };
+  }
   const flowMarker = seat ?? (marker?.classList.contains('docx-wrap-advance') ? marker : null);
   if (flowMarker?.parentElement) {
     const index = [...flowMarker.parentElement.childNodes].indexOf(flowMarker);
@@ -482,9 +495,7 @@ function domPointFromPositionIn(
   // typed after the first landed in front of the one before it. Say "cannot", and the caller
   // keeps the model — which the engine's own painted caret draws from anyway.
   // A picture paints a place for its paragraph's content as text does.
-  painted ||= [...searchRoot.querySelectorAll('.docx-inline-drawing-advance')].some(
-    (spacer) => drawingSpacerIdentity(spacer)?.paragraphId === position.paragraphId
-  );
+  painted ||= drawingSpacerAt(searchRoot, position.paragraphId) !== null;
   if (painted) return null;
 
   // An EMPTY paragraph paints a line with no spans, so there is no text node to point at —

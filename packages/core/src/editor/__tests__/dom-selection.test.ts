@@ -466,6 +466,14 @@ describe('the position just after an inline picture', () => {
     }
   });
 
+  test('an endpoint on a line-break mark reads back before the break', () => {
+    const { root, paragraphId } = painted('<w:r><w:t>ab</w:t><w:br/><w:t>cd</w:t></w:r>', true);
+    const mark = root.querySelector('.docx-line-break-mark')!;
+    expect(positionFromDomPoint(mark, 0, root)).toEqual({ paragraphId, offset: 2 });
+    expect(positionFromDomPoint(mark.firstChild!, 1, root)).toEqual({ paragraphId, offset: 2 });
+    root.remove();
+  });
+
   test('an endpoint on the paragraph fragment resolves through the picture', () => {
     // A triple-click or a drag past the line end can report the fragment, whose children are
     // lines. Scanning those lines for text alone stepped over the picture at either end.
