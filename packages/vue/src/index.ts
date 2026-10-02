@@ -127,6 +127,7 @@ export {
   type OutlineHeading,
   type OutlineHeadingItem,
   type UseDocumentOutlineResult,
+  type DocumentSearchFindOptions,
   type DocumentSearchHighlight,
   type DocumentSearchNavigateOptions,
   type DocumentSearchOptions,

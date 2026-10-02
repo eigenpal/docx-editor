@@ -308,7 +308,7 @@ function Find() {
 }
 ```
 
-The `highlight` option is `'all'` (default), `'active'`, or `'none'`. If a component only reads results, pass `'none'`. For more information, see [Drive search from code](/docs/2.x/guides/navigation#drive-search-from-code).
+`find(query, { selectFirst: true })` searches and selects the first match, and `activeMatch` is the current match. The `highlight` option is `'all'` (default), `'active'`, or `'none'`. If a component only reads results, pass `'none'`. For more information, see [Search from code](/docs/2.x/guides/navigation#search-from-code).
 
 ## `useHighlights`
 

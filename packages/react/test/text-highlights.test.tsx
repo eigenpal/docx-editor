@@ -116,6 +116,16 @@ describe('useDocumentSearch highlights', () => {
     expect(marks(view.container, SEARCH_HIGHLIGHT_SET)).toHaveLength(0);
   });
 
+  test('a custom button searches, highlights, and selects the first match in one call', async () => {
+    const { view } = mount(<Probe />);
+    await act(async () => {
+      search.find('Supplier', { selectFirst: true });
+    });
+    expect(indexes(marks(view.container, SEARCH_HIGHLIGHT_SET))).toEqual([0, 1, 2]);
+    expect(activeIndexes(marks(view.container, SEARCH_HIGHLIGHT_SET))).toEqual([0]);
+    expect(search.activeMatch).toBe(search.matches[0]!);
+  });
+
   test("'active' marks only the current match and 'none' marks nothing", async () => {
     const { view } = mount(<Probe options={{ highlight: 'active' }} />);
     await runQuery('Supplier');

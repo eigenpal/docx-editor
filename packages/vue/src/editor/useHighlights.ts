@@ -6,19 +6,11 @@ import type {
   HighlightRange,
   HighlightResult,
 } from '@docx-editor.dev/core/contracts/editor';
+import { HIGHLIGHT_REFRESH_MS, type HighlightSource } from '@docx-editor.dev/core/editor';
 import type { MaybeRefOrGetter } from '../maybe-ref-or-getter';
 import { useDocxEditor } from './context';
 
-/**
- * Ranges for `useHighlights`: an array, or a function of the editor that the composable
- * calls again after document changes and when the reactive state it reads changes. @public
- */
-export type HighlightSource =
-  | readonly HighlightRange[]
-  | ((editor: Editor) => readonly HighlightRange[]);
-
-/** Milliseconds a function source waits after a document change before it runs again. @public */
-export const HIGHLIGHT_REFRESH_MS = 150;
+export { HIGHLIGHT_REFRESH_MS, type HighlightSource };
 
 /** Longest a function source waits while changes keep arriving, such as remote typing. */
 const HIGHLIGHT_REFRESH_MAX_WAIT_MS = 1000;

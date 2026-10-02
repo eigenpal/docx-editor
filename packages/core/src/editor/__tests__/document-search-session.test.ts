@@ -6,6 +6,7 @@ import {
   SEARCH_DEBOUNCE_MS,
   SEARCH_HIGHLIGHT_SET,
 } from '../document-search.ts';
+import { HIGHLIGHT_REFRESH_MS, watchHighlights } from '../watch-highlights.ts';
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {
@@ -189,5 +190,53 @@ describe('createDocumentSearch', () => {
     }
     // Results from one pass are valid highlight ranges.
     expect(editor.setHighlights('glossary', many.flat()).applied).toBe(4);
+  });
+
+  test('find with highlight and selectFirst searches, highlights, and selects in one call', () => {
+    const { editor, marks } = mount();
+    const search = createDocumentSearch(editor);
+    search.find('Supplier', { highlight: 'all', selectFirst: true });
+    expect(search.getState().activeIndex).toBe(0);
+    expect(search.getState().activeMatch).toBe(search.getState().matches[0]!);
+    expect(new Set(marks().map((mark) => mark.index))).toEqual(new Set([0, 1, 2]));
+    expect(
+      marks()
+        .filter((mark) => mark.active)
+        .map((mark) => mark.index)
+    ).toEqual([0]);
+    // The request lasts until clear() or the next find().
+    search.find('signs');
+    expect(marks()).toEqual([]);
+    search.find('Supplier', { highlight: 'active' });
+    search.next();
+    expect(marks().map((mark) => mark.index)).toEqual([0]);
+    search.clear();
+    expect(marks()).toEqual([]);
+  });
+
+  test('watchHighlights keeps a set current and stop removes it', async () => {
+    const { editor, host } = mount();
+    const results: number[] = [];
+    const watch = watchHighlights(
+      editor,
+      'glossary',
+      (instance) => instance.findMatches(['Supplier', 'signs']).flat(),
+      { onResult: (result) => results.push(result.applied) }
+    );
+    expect(watch.result).toEqual({ applied: 4, unavailable: 0 });
+    const count = () =>
+      host.querySelectorAll('[data-highlight-set="glossary"] .docx-text-highlight').length;
+    expect(count()).toBe(4);
+    const first = editor.findMatches('Supplier')[0]!;
+    const caret = { paragraphId: first.blockId, offset: 0 };
+    editor.exec({ type: 'setSelection', range: { anchor: caret, head: caret } });
+    editor.exec({ type: 'insertText', text: 'Supplier ' });
+    await wait(HIGHLIGHT_REFRESH_MS + 50);
+    expect(watch.result.applied).toBe(5);
+    expect(results).toEqual([4, 5]);
+    watch.update(editor.findMatches('signs'), { color: 'rgb(1, 2, 3)' });
+    expect(watch.result.applied).toBe(1);
+    watch.stop();
+    expect(count()).toBe(0);
   });
 });

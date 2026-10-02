@@ -11,6 +11,7 @@ import {
   SEARCH_HIGHLIGHT_SET,
   SEARCH_MATCH_LIMIT,
   type DocumentSearch,
+  type DocumentSearchFindOptions,
   type DocumentSearchHighlight,
   type DocumentSearchNavigateOptions,
   type DocumentSearchOptions,
@@ -25,6 +26,7 @@ export {
   SEARCH_HIGHLIGHT_PRIORITY,
   SEARCH_HIGHLIGHT_SET,
   SEARCH_MATCH_LIMIT,
+  type DocumentSearchFindOptions,
   type DocumentSearchHighlight,
   type DocumentSearchNavigateOptions,
   type DocumentSearchOptions,
@@ -37,6 +39,7 @@ const IDLE_STATE: DocumentSearchState = Object.freeze({
   matches: Object.freeze([]) as readonly TextMatch[],
   truncated: false,
   activeIndex: -1,
+  activeMatch: null,
   isPending: false,
 });
 
@@ -55,8 +58,11 @@ export interface UseDocumentSearchResult {
   readonly query: ComputedRef<string>;
   /** Update the typed query. The search runs after a short debounce. */
   readonly setQuery: (query: string) => void;
-  /** Search now, without a debounce, and return the matches. */
-  readonly find: (query: string, options?: DocumentSearchOptions) => readonly TextMatch[];
+  /**
+   * Search now and return the matches. `selectFirst` selects the first match; `highlight`
+   * highlights the results until `clear()`, even without this hook's own request.
+   */
+  readonly find: (query: string, options?: DocumentSearchFindOptions) => readonly TextMatch[];
   readonly matchCase: ComputedRef<boolean>;
   readonly setMatchCase: (value: boolean) => void;
   readonly wholeWord: ComputedRef<boolean>;
@@ -67,6 +73,8 @@ export interface UseDocumentSearchResult {
   readonly truncated: ComputedRef<boolean>;
   /** Index of the current match, or `-1` before any navigation. */
   readonly activeIndex: ComputedRef<number>;
+  /** The current match, or `null` before any navigation. */
+  readonly activeMatch: ComputedRef<TextMatch | null>;
   /**
    * Select a match by index and bring its page into view. Focus stays where it is, so a
    * search box keeps it. Returns false for an index without a match.
@@ -135,6 +143,7 @@ export function useDocumentSearch(
     matches: computed(() => state.value.matches),
     truncated: computed(() => state.value.truncated),
     activeIndex: computed(() => state.value.activeIndex),
+    activeMatch: computed(() => state.value.activeMatch),
     // No options: a handler such as `@click="search.next"` passes its event here.
     goTo: (index) => session.value?.goTo(index) ?? false,
     next: () => session.value?.next() ?? false,

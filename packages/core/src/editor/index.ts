@@ -415,6 +415,12 @@ export {
 } from './toolbar-values.ts';
 
 export { createDocumentRefresh, DocumentRefreshError } from './document-refresh.ts';
+export { HIGHLIGHT_REFRESH_MS, watchHighlights } from './watch-highlights.ts';
+export type {
+  HighlightSource,
+  HighlightWatch,
+  WatchHighlightsOptions,
+} from './watch-highlights.ts';
 export {
   createDocumentSearch,
   SEARCH_DEBOUNCE_MS,
@@ -424,6 +430,7 @@ export {
 } from './document-search.ts';
 export type {
   DocumentSearch,
+  DocumentSearchFindOptions,
   DocumentSearchHighlight,
   DocumentSearchNavigateOptions,
   DocumentSearchOptions,

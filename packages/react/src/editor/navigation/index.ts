@@ -37,6 +37,7 @@ export {
   SEARCH_HIGHLIGHT_PRIORITY,
   SEARCH_HIGHLIGHT_SET,
   SEARCH_MATCH_LIMIT,
+  type DocumentSearchFindOptions,
   type DocumentSearchHighlight,
   type DocumentSearchNavigateOptions,
   type DocumentSearchOptions,

@@ -19,6 +19,7 @@ import {
   SEARCH_HIGHLIGHT_PRIORITY,
   SEARCH_HIGHLIGHT_SET,
   SEARCH_MATCH_LIMIT,
+  type DocumentSearchFindOptions,
   type DocumentSearchHighlight,
   type DocumentSearchNavigateOptions,
   type DocumentSearchOptions,
@@ -31,6 +32,7 @@ export {
   SEARCH_HIGHLIGHT_PRIORITY,
   SEARCH_HIGHLIGHT_SET,
   SEARCH_MATCH_LIMIT,
+  type DocumentSearchFindOptions,
   type DocumentSearchHighlight,
   type DocumentSearchNavigateOptions,
   type DocumentSearchOptions,
@@ -43,6 +45,7 @@ const IDLE_STATE: DocumentSearchState = Object.freeze({
   matches: Object.freeze([]) as readonly TextMatch[],
   truncated: false,
   activeIndex: -1,
+  activeMatch: null,
   isPending: false,
 });
 const noSubscription = () => () => {};
@@ -63,8 +66,11 @@ export interface UseDocumentSearchResult {
   readonly query: string;
   /** Update the typed query. The search runs after a short debounce. */
   readonly setQuery: (query: string) => void;
-  /** Search now, without a debounce, and return the matches. */
-  readonly find: (query: string, options?: DocumentSearchOptions) => readonly TextMatch[];
+  /**
+   * Search now and return the matches. `selectFirst` selects the first match; `highlight`
+   * highlights the results until `clear()`, even without this hook's own request.
+   */
+  readonly find: (query: string, options?: DocumentSearchFindOptions) => readonly TextMatch[];
   readonly matchCase: boolean;
   readonly setMatchCase: (value: boolean) => void;
   readonly wholeWord: boolean;
@@ -79,6 +85,8 @@ export interface UseDocumentSearchResult {
   readonly truncated: boolean;
   /** Index of the match the caret was last sent to, or `-1` before any navigation. */
   readonly activeIndex: number;
+  /** The current match, or `null` before any navigation. */
+  readonly activeMatch: TextMatch | null;
   /**
    * Select a match by index and bring its page into view. Focus stays where it is, so a
    * search box keeps it. Returns false for an index without a match.
@@ -118,7 +126,7 @@ export function useDocumentSearch(options: UseDocumentSearchOptions = {}): UseDo
   const actions = useMemo(
     () => ({
       setQuery: (query: string) => search?.setQuery(query),
-      find: (query: string, findOptions?: DocumentSearchOptions) =>
+      find: (query: string, findOptions?: DocumentSearchFindOptions) =>
         search?.find(query, findOptions) ?? IDLE_STATE.matches,
       setMatchCase: (value: boolean) => search?.setMatchCase(value),
       setWholeWord: (value: boolean) => search?.setWholeWord(value),

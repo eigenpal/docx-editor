@@ -40,6 +40,7 @@ import { DocumentHandle } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentRefresh } from '@docx-editor.dev/core/editor';
 import { DocumentRefreshError } from '@docx-editor.dev/core/editor';
 import { DocumentRefreshState } from '@docx-editor.dev/core/editor';
+import { DocumentSearchFindOptions } from '@docx-editor.dev/core/editor';
 import { DocumentSearchHighlight } from '@docx-editor.dev/core/editor';
 import { DocumentSearchNavigateOptions } from '@docx-editor.dev/core/editor';
 import { DocumentSearchOptions } from '@docx-editor.dev/core/editor';
@@ -73,11 +74,13 @@ import { FontSourceSubstitution } from '@docx-editor.dev/core/contracts/editor';
 import { FontUrlSource } from '@docx-editor.dev/core/editor';
 import { ForwardRefExoticComponent } from 'react';
 import { generateRulerTicks } from '@docx-editor.dev/core/editor';
+import { HIGHLIGHT_REFRESH_MS } from '@docx-editor.dev/core/editor';
 import { HighlightHit } from '@docx-editor.dev/core/contracts/editor';
 import { HighlightOptions } from '@docx-editor.dev/core/contracts/editor';
 import { HighlightRange } from '@docx-editor.dev/core/contracts/editor';
 import { HighlightRect } from '@docx-editor.dev/core/contracts/editor';
 import { HighlightResult } from '@docx-editor.dev/core/contracts/editor';
+import { HighlightSource } from '@docx-editor.dev/core/editor';
 import { HistoryGroupBindingOptions } from '@docx-editor.dev/core/editor';
 import { HTMLAttributes } from 'react';
 import { ImageDecodePort } from '@docx-editor.dev/core/editor';
@@ -483,6 +486,8 @@ export { DocumentRefresh }
 export { DocumentRefreshError }
 
 export { DocumentRefreshState }
+
+export { DocumentSearchFindOptions }
 
 export { DocumentSearchHighlight }
 
@@ -1611,8 +1616,7 @@ export { generateRulerTicks }
 // @public
 export type HeaderFooterState = Exclude<ReturnType<Editor['getHeaderFooterState']>, null>;
 
-// @public
-export const HIGHLIGHT_REFRESH_MS = 150;
+export { HIGHLIGHT_REFRESH_MS }
 
 export { HighlightHit }
 
@@ -1624,8 +1628,7 @@ export { HighlightRect }
 
 export { HighlightResult }
 
-// @public
-export type HighlightSource = readonly HighlightRange[] | ((editor: Editor) => readonly HighlightRange[]);
+export { HighlightSource }
 
 // @public (undocumented)
 export function HorizontalRuler(input: HorizontalRulerProps): react__default.ReactElement;
@@ -2744,8 +2747,9 @@ export interface UseDocumentSearchOptions {
 // @public
 export interface UseDocumentSearchResult {
     readonly activeIndex: number;
+    readonly activeMatch: TextMatch | null;
     readonly clear: () => void;
-    readonly find: (query: string, options?: DocumentSearchOptions) => readonly TextMatch[];
+    readonly find: (query: string, options?: DocumentSearchFindOptions) => readonly TextMatch[];
     readonly goTo: (index: number) => boolean;
     readonly isPending: boolean;
     // (undocumented)

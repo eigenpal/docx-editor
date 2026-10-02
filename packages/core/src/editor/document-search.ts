@@ -37,6 +37,17 @@ export interface DocumentSearchNavigateOptions {
   readonly focus?: boolean;
 }
 
+/** Options for {@link DocumentSearch.find}. @public */
+export interface DocumentSearchFindOptions extends DocumentSearchOptions {
+  /**
+   * Highlight the results until `clear()` or the next `find()`: `'all'`, `'active'`, or
+   * `'none'`. Default: no request of its own, so highlights follow the Find pane and hooks.
+   */
+  readonly highlight?: DocumentSearchHighlight;
+  /** Select the first match and scroll to it. Default: `false`. */
+  readonly selectFirst?: boolean;
+}
+
 /** A snapshot of the shared search. The same object until something changes. @public */
 export interface DocumentSearchState {
   /** The query as typed. It can lead the searched query by one debounce. */
@@ -49,6 +60,8 @@ export interface DocumentSearchState {
   readonly truncated: boolean;
   /** Index of the current match, or `-1` before any navigation. */
   readonly activeIndex: number;
+  /** The current match, or `null` before any navigation. */
+  readonly activeMatch: TextMatch | null;
   /** A typed query is waiting for its debounce. */
   readonly isPending: boolean;
 }
@@ -62,8 +75,11 @@ export interface DocumentSearch {
   getState(): DocumentSearchState;
   /** Observe state changes. Returns an unsubscribe function. */
   subscribe(listener: () => void): () => void;
-  /** Search now, without a debounce, and return the matches. Clears the active match. */
-  find(query: string, options?: DocumentSearchOptions): readonly TextMatch[];
+  /**
+   * Search now, without a debounce, and return the matches. Clears the active match unless
+   * `selectFirst` selects one. `highlight` highlights the results until `clear()`.
+   */
+  find(query: string, options?: DocumentSearchFindOptions): readonly TextMatch[];
   /** Update the typed query. The search runs after {@link SEARCH_DEBOUNCE_MS} of quiet. */
   setQuery(query: string): void;
   setMatchCase(value: boolean): void;
@@ -137,9 +153,12 @@ export function createDocumentSearch(editor: Editor): DocumentSearch {
     matches: EMPTY_MATCHES,
     truncated: false,
     activeIndex: -1,
+    activeMatch: null,
     isPending: false,
   };
   let searched = '';
+  // The highlight request `find({ highlight })` holds, until `clear()` or the next `find()`.
+  const findRequest = {};
   let timer: ReturnType<typeof setTimeout> | undefined;
   const listeners = new Set<() => void>();
   const requests = new Map<object, DocumentSearchHighlight>();
@@ -175,6 +194,7 @@ export function createDocumentSearch(editor: Editor): DocumentSearch {
       merged.activeIndex = carriedActiveIndex(state, merged.matches);
     }
     merged.truncated = merged.matches.length >= SEARCH_MATCH_LIMIT;
+    merged.activeMatch = merged.matches[merged.activeIndex] ?? null;
     const changed = (Object.keys(merged) as (keyof DocumentSearchState)[]).some(
       (key) => merged[key] !== state[key]
     );
@@ -254,7 +274,15 @@ export function createDocumentSearch(editor: Editor): DocumentSearch {
       const matchCase = options.matchCase ?? state.matchCase;
       const wholeWord = options.wholeWord ?? state.wholeWord;
       const matches = derive(query, { matchCase, wholeWord });
+      if (options.highlight === undefined || options.highlight === 'none') {
+        requests.delete(findRequest);
+      } else {
+        requests.set(findRequest, options.highlight);
+      }
       commit({ query, matchCase, wholeWord, matches, activeIndex: -1, isPending: false });
+      // A request change with unchanged results still repaints.
+      paint();
+      if (options.selectFirst) session.goTo(0);
       return state.matches;
     },
     setQuery(query) {
@@ -286,6 +314,7 @@ export function createDocumentSearch(editor: Editor): DocumentSearch {
     clear() {
       cancelDebounce();
       searched = '';
+      requests.delete(findRequest);
       commit({ query: '', matches: EMPTY_MATCHES, activeIndex: -1, isPending: false });
     },
     showHighlights(mode) {

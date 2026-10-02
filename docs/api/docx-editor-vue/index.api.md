@@ -43,6 +43,7 @@ import { DocumentHandle } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentRefresh } from '@docx-editor.dev/core/editor';
 import { DocumentRefreshError } from '@docx-editor.dev/core/editor';
 import { DocumentRefreshState } from '@docx-editor.dev/core/editor';
+import { DocumentSearchFindOptions } from '@docx-editor.dev/core/editor';
 import { DocumentSearchHighlight } from '@docx-editor.dev/core/editor';
 import { DocumentSearchNavigateOptions } from '@docx-editor.dev/core/editor';
 import { DocumentSearchOptions } from '@docx-editor.dev/core/editor';
@@ -78,11 +79,13 @@ import { FontSourceSubstitution } from '@docx-editor.dev/core/contracts/editor';
 import { FontUrlSource } from '@docx-editor.dev/core/editor';
 import { FunctionalComponent } from 'vue';
 import { generateRulerTicks } from '@docx-editor.dev/core/editor';
+import { HIGHLIGHT_REFRESH_MS } from '@docx-editor.dev/core/editor';
 import { HighlightHit } from '@docx-editor.dev/core/contracts/editor';
 import { HighlightOptions } from '@docx-editor.dev/core/contracts/editor';
 import { HighlightRange } from '@docx-editor.dev/core/contracts/editor';
 import { HighlightRect } from '@docx-editor.dev/core/contracts/editor';
 import { HighlightResult } from '@docx-editor.dev/core/contracts/editor';
+import { HighlightSource } from '@docx-editor.dev/core/editor';
 import { HistoryGroupBindingOptions } from '@docx-editor.dev/core/editor';
 import { ImageDecodePort } from '@docx-editor.dev/core/editor';
 import { ImageWrapTarget } from '@docx-editor.dev/core/editor';
@@ -2220,6 +2223,8 @@ export { DocumentRefreshError }
 
 export { DocumentRefreshState }
 
+export { DocumentSearchFindOptions }
+
 export { DocumentSearchHighlight }
 
 export { DocumentSearchNavigateOptions }
@@ -4347,8 +4352,7 @@ export { generateRulerTicks }
 // @public (undocumented)
 export type HeaderFooterState = Exclude<ReturnType<Editor['getHeaderFooterState']>, null>;
 
-// @public
-export const HIGHLIGHT_REFRESH_MS = 150;
+export { HIGHLIGHT_REFRESH_MS }
 
 export { HighlightHit }
 
@@ -4360,8 +4364,7 @@ export { HighlightRect }
 
 export { HighlightResult }
 
-// @public
-export type HighlightSource = readonly HighlightRange[] | ((editor: Editor) => readonly HighlightRange[]);
+export { HighlightSource }
 
 // @public (undocumented)
 export const HorizontalRuler: vue.DefineComponent<vue.ExtractPropTypes<{
@@ -6391,8 +6394,9 @@ export interface UseDocumentSearchOptions {
 // @public
 export interface UseDocumentSearchResult {
     readonly activeIndex: ComputedRef<number>;
+    readonly activeMatch: ComputedRef<TextMatch | null>;
     readonly clear: () => void;
-    readonly find: (query: string, options?: DocumentSearchOptions) => readonly TextMatch[];
+    readonly find: (query: string, options?: DocumentSearchFindOptions) => readonly TextMatch[];
     readonly goTo: (index: number) => boolean;
     readonly isPending: ComputedRef<boolean>;
     // (undocumented)

@@ -1209,7 +1209,7 @@ export interface DocumentRefreshState {
 // @public
 export interface DocumentSearch {
     clear(): void;
-    find(query: string, options?: DocumentSearchOptions): readonly TextMatch[];
+    find(query: string, options?: DocumentSearchFindOptions): readonly TextMatch[];
     getState(): DocumentSearchState;
     goTo(index: number, options?: DocumentSearchNavigateOptions): boolean;
     next(options?: DocumentSearchNavigateOptions): boolean;
@@ -1222,6 +1222,12 @@ export interface DocumentSearch {
     setWholeWord(value: boolean): void;
     showHighlights(mode: DocumentSearchHighlight): () => void;
     subscribe(listener: () => void): () => void;
+}
+
+// @public
+export interface DocumentSearchFindOptions extends DocumentSearchOptions {
+    readonly highlight?: DocumentSearchHighlight;
+    readonly selectFirst?: boolean;
 }
 
 // @public
@@ -1243,6 +1249,7 @@ export interface DocumentSearchOptions {
 // @public
 export interface DocumentSearchState {
     readonly activeIndex: number;
+    readonly activeMatch: TextMatch | null;
     readonly isPending: boolean;
     // (undocumented)
     readonly matchCase: boolean;
@@ -1554,6 +1561,9 @@ export function generateRulerTicks(lengthPx: number, unit: RulerUnit): RulerTick
 export function handlePosition(handle: RulerIndentHandle, indent: RulerIndent, page: RulerPageMetrics): number;
 
 // @public
+export const HIGHLIGHT_REFRESH_MS = 150;
+
+// @public
 export interface HighlightHit<R extends HighlightRange = HighlightRange> {
     readonly active: boolean;
     readonly index: number;
@@ -1606,6 +1616,17 @@ export interface HighlightRect {
 export interface HighlightResult {
     readonly applied: number;
     readonly unavailable: number;
+}
+
+// @public
+export type HighlightSource = readonly HighlightRange[] | ((editor: Editor) => readonly HighlightRange[]);
+
+// @public
+export interface HighlightWatch {
+    refresh(): void;
+    readonly result: HighlightResult;
+    stop(): void;
+    update(source: HighlightSource, options?: HighlightOptions): void;
 }
 
 // @public
@@ -3429,6 +3450,14 @@ export function validateThemeModifier(value: unknown): value is number;
 
 // @public
 export type VectorImageMime = 'image/svg+xml';
+
+// @public
+export function watchHighlights(editor: Editor, name: string, source: HighlightSource, options?: WatchHighlightsOptions): HighlightWatch;
+
+// @public
+export interface WatchHighlightsOptions extends HighlightOptions {
+    readonly onResult?: (result: HighlightResult) => void;
+}
 
 // @public
 export function withTabStop(stops: readonly ParagraphTabStop[], stop: ParagraphTabStop): readonly ParagraphTabStop[];
