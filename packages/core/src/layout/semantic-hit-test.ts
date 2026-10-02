@@ -603,9 +603,6 @@ function segmentAtX(line: LineRecord, x: number): LineSegment {
  * Content that STARTS at an offset owns its caret: a picture there, or else a span. Only when
  * nothing starts there does the picture that ENDS there own it. This is the side a wrap jump
  * puts the caret on, and the text after a picture gets a caret of its own height.
- *
- * The END of a selected range is `upstream`: there the content that ends at the offset owns
- * it, so a band over a picture stops at the picture rather than past the jump after it.
  */
 export function drawingAtOffset(
   line: LineRecord,
@@ -613,24 +610,15 @@ export function drawingAtOffset(
   segment?: {
     readonly spans: readonly StyleSpanRecord[];
     readonly drawings: readonly InlineDrawingRecord[];
-  } | null,
-  upstream = false
+  } | null
 ): InlineDrawingRecord | null {
   const drawings = segment?.drawings ?? line.drawings ?? [];
   if (drawings.length === 0) return null;
+  const starting = drawings.find((drawing) => drawing.start === offset);
+  if (starting) return starting;
   const spans = segment?.spans ?? line.spans;
-  const starting = () => drawings.find((drawing) => drawing.start === offset);
-  const ending = () => drawings.find((drawing) => drawing.start + 1 === offset);
-  if (upstream) {
-    const picture = ending();
-    if (picture) return picture;
-    if (spans.some((span) => span.range.end === offset && span.range.start < offset)) return null;
-    return starting() ?? null;
-  }
-  const picture = starting();
-  if (picture) return picture;
   if (spans.some((span) => span.range.start === offset && span.range.end > offset)) return null;
-  return ending() ?? null;
+  return drawings.find((drawing) => drawing.start + 1 === offset) ?? null;
 }
 
 /**

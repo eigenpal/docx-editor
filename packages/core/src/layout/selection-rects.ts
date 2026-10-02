@@ -4,6 +4,7 @@
 // this answers "which pixels does this range cover". They meet at `segmentOverlap`, which is
 // the one part of both that has to know a line can carry more than one paragraph.
 
+import { lineContentEdges } from './pending-line.ts';
 import { lineSegments, logicalLineSegments, segmentOverlap } from './line-segments.ts';
 import { xWithinLine, rangeBandsWithinLine, mergeLineRangeBands } from './line-geometry.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
@@ -172,12 +173,9 @@ function rangeRects(
             // The paragraph mark follows the base-direction visual edge, even when
             // the final logical run has the opposite direction.
             let markX = xWithinLine(line, segment.end, measurer, segment);
-            if (segment.spans.some((span) => span.style.shaping !== undefined)) {
-              markX = rtl ? Infinity : -Infinity;
-              for (const span of segment.spans)
-                markX = rtl
-                  ? Math.min(markX, span.box.x)
-                  : Math.max(markX, span.box.x + span.box.width);
+            const edges = lineContentEdges(segment.spans, segment.drawings);
+            if (edges && segment.spans.some((span) => span.style.shaping !== undefined)) {
+              markX = rtl ? edges.left : edges.right;
             }
             bands.push({ x: rtl ? markX - width : markX, width });
           }

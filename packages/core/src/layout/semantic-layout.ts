@@ -26,7 +26,7 @@ import { tocIdsToken, tocVerdictFor, type TocIdSets } from './toc-id-sets.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
 import * as sectionPrep from './section-preparation.ts';
 import { resolveListAutoSpacing, listAutoSpacingFlowKeys } from './list-auto-spacing.ts';
-import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
+import { emptyParagraphStyleFields, markStyleOf } from './empty-paragraph-style.ts';
 import { frameOrigins, positionedFrameBottom } from './paragraph-frame.ts';
 import { ParagraphFrameFlow, paragraphFrameFlowKeys } from './paragraph-frame-flow.ts';
 // Semantic paragraph layout over the canonical tree (tasks 7.1, 7.3).
@@ -81,7 +81,6 @@ import {
   paragraphKeeps,
   KEEP_BREAK_RETRY_ALLOWANCE,
 } from './pagination-keeps.ts';
-import { DEFAULT_RUN_STYLE, resolveRunStyle } from './run-style.ts';
 import {
   prepareParagraphBreakInputs,
   bodyParagraphBreakKey,
@@ -2272,10 +2271,7 @@ function layoutBlocksPass(
     // Fit uses unsuppressed lead; top-of-page suppression applies after any flush below.
     if (!frame) {
       const lead = collapsedSpaceBefore(spacing.before, previousSpaceAfter);
-      const emptyStyle =
-        markRunProperties.length === 0
-          ? DEFAULT_RUN_STYLE
-          : resolveRunStyle(markRunProperties, styleCascade?.themeFonts);
+      const emptyStyle = markStyleOf(markRunProperties, styleCascade?.themeFonts);
       // Spacing-after never decides its own line's fit (§17.3.1.33): Word fits the LINE box,
       // and trailing space that crosses the page boundary clips at the break. Only the closing
       // border rule is real painted content below the last line, so only it joins the budget.

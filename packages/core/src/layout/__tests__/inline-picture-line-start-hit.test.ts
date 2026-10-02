@@ -201,3 +201,9 @@ describe('a picture beside a float that fits nowhere on the line', () => {
     expect(hit?.position.offset).toBe(first!.start + 1);
   });
 });
+
+test('a selection of the text before a picture stops at the text', () => {
+  const { line, picture } = pictureLine(`<w:r><w:t>abc</w:t>${drawing}<w:t>def</w:t></w:r>`);
+  const [band] = rangeBandsWithinLine(line, 0, picture.start);
+  expect(band!.x + band!.width).toBeCloseTo(picture.advanceStart, 5);
+});

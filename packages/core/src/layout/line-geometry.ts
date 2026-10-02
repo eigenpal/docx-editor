@@ -22,17 +22,13 @@ function xWithinLine(
   // segment that owns it. Given none, the line is its own segment, which is every ordinary
   // line and the path this function always took.
   const spans = segment ? segment.spans : line.spans;
-  // The content that starts at an offset owns it, or at a range end the content that ends
-  // there; see `drawingAtOffset`.
-  const picture = drawingAtOffset(line, offset, segment, upstream);
+  const ended = upstream ? upstreamX(line, spans, offset, measurer, segment) : null;
+  if (ended !== null) return ended;
+  // The content that starts at an offset owns it; see `drawingAtOffset`.
+  const picture = drawingAtOffset(line, offset, segment);
   if (picture) return pictureEdgeX(picture, offset > picture.start);
   let x = segment ? (segment.spans[0]?.box.x ?? line.contentX) : line.contentX;
-  let passed = false;
   for (const span of spans) {
-    // A range that ends where a float's jump begins stops before the jump.
-    if (upstream && passed && offset === span.range.start && (span.wrapAdvanceBefore ?? 0) > 0)
-      return x;
-    passed = true;
     if (offset <= span.range.start)
       return span.style.shaping ? spanOffsetX(span, span.range.start, measurer) : span.box.x;
     if (offset >= span.range.end) {
@@ -127,6 +123,32 @@ function selectionSpanEdges(
     }
   }
   return [spanOffsetX(span, from, measurer), spanOffsetX(span, to, measurer)];
+}
+
+/**
+ * The x of a range END at `offset`, where the content that ends there owns it: a band over a
+ * picture or a word stops at it rather than past a picture or a float's jump after it. A word
+ * whose next word justification moved keeps the stretched gap, which the next word owns.
+ * Null when nothing ends at `offset`, so the caret's own rule answers.
+ */
+function upstreamX(
+  line: LineRecord,
+  spans: readonly StyleSpanRecord[],
+  offset: number,
+  measurer: TextMeasurer | undefined,
+  segment: LineSegment | undefined
+): number | null {
+  const picture = (segment?.drawings ?? line.drawings ?? []).find(
+    (drawing) => drawing.start + 1 === offset
+  );
+  if (picture) return pictureEdgeX(picture, true);
+  const ending = spans.find((span) => span.range.end === offset && span.range.start < offset);
+  if (!ending) return null;
+  const next = spans.find((span) => span.range.start === offset && span.range.end > offset);
+  if (next && !((next.wrapAdvanceBefore ?? 0) > 0)) return null;
+  return ending.style.shaping
+    ? spanOffsetX(ending, offset, measurer)
+    : ending.box.x + ending.box.width;
 }
 
 /** A logical range can occupy several disjoint physical bands in a bidi line. */

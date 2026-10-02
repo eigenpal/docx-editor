@@ -1301,7 +1301,9 @@ function paintLine(
   let nextInlineDrawing = 0;
   // Shaped spans (bidi, or spaces compressed by justification) are placed relative to where
   // inline flow left them. That flow holds every drawing spacer as well as the spans before.
-  const bidi = line.spans.some((span) => span.style.shaping !== undefined);
+  const bidi =
+    line.spans.some((span) => span.style.shaping !== undefined) ||
+    (line.drawings ?? []).some((drawing) => (drawing.bidiLevel ?? 0) % 2 === 1);
   let logicalAdvance = 0;
   // How far the flow reaches; a picture's spacer reaches its far edge, past any jump before it.
   let flowRight = line.contentX;

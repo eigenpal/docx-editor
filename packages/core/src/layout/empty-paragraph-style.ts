@@ -38,7 +38,7 @@ const markStyles = new WeakMap<
   { readonly themeFonts: ThemeFonts | undefined; readonly style: ResolvedRunStyle }
 >();
 
-function markStyleOf(
+export function markStyleOf(
   properties: readonly OoxmlProperty[],
   themeFonts: ThemeFonts | undefined
 ): ResolvedRunStyle {

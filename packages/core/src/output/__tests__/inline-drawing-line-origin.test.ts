@@ -314,3 +314,15 @@ describe('the paragraph mark after an inline picture', () => {
     expect(mark.style.fontSize).toBe(`${24 * SCALE}px`);
   });
 });
+
+test('right-to-left pictures alone on a line keep one advance per spacer', () => {
+  // Model order runs right to left here, so a spacer measured from the flow so far would make
+  // the first picture's spacer span the whole line and the next one empty.
+  const { layout, line } = pictureLine(paragraph(`<w:r>${drawing}${drawing}</w:r>`, '<w:bidi/>'));
+  expect(line.drawings![0]!.advanceStart).toBeGreaterThan(line.drawings![1]!.advanceStart);
+  const host = document.createElement('div');
+  paintSemanticLayout(host, layout, { scale: SCALE });
+  for (const spacer of host.querySelectorAll<HTMLElement>('.docx-inline-drawing-advance')) {
+    expect(parseFloat(spacer.style.width) / SCALE).toBeCloseTo(PICTURE_WIDTH, 5);
+  }
+});
