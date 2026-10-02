@@ -410,6 +410,49 @@ describe('the position just after an inline picture', () => {
     expect(positionFromDomPoint(spacer, 1, root)).toEqual({ paragraphId, offset: 3 });
     root.remove();
   });
+
+  test('an endpoint on the paragraph fragment resolves through the picture', () => {
+    // A triple-click or a drag past the line end can report the fragment, whose children are
+    // lines. Scanning those lines for text alone stepped over the picture at either end.
+    const { root, paragraphId } = painted(`<w:r>${PICTURE}<w:t>cd</w:t></w:r>`);
+    const fragment = root.querySelector('.docx-line')!.parentElement!;
+    expect(positionFromDomPoint(fragment, 0, root)).toEqual({ paragraphId, offset: 0 });
+    root.remove();
+    const alone = painted(`<w:r>${PICTURE}</w:r>`);
+    const lone = alone.root.querySelector('.docx-line')!.parentElement!;
+    expect(positionFromDomPoint(lone, lone.childNodes.length, alone.root)).toEqual({
+      paragraphId: alone.paragraphId,
+      offset: 1,
+    });
+    alone.root.remove();
+  });
+});
+
+describe('a paragraph that paints nothing at its end offset', () => {
+  test('a range ending there is still written', () => {
+    // Only a floating picture: offset 1 has no painted place. The range keeps its highlight
+    // by ending at the line, as it always has, rather than failing as a whole.
+    const part = load(
+      `<w:document ${PICTURE_NAMESPACES}><w:body><w:p><w:r><w:drawing>` +
+        '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" behindDoc="0" ' +
+        'locked="0" allowOverlap="1" layoutInCell="1" relativeHeight="1">' +
+        '<wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:posOffset>0' +
+        '</wp:posOffset></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>0' +
+        '</wp:posOffset></wp:positionV><wp:extent cx="127000" cy="127000"/><wp:wrapNone/>' +
+        '<wp:docPr id="1" name="float"/></wp:anchor></w:drawing></w:r></w:p></w:body></w:document>'
+    );
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+      inlineDrawingLayout: layoutContext(part),
+    });
+    const root = document.createElement('div');
+    paintSemanticLayout(root, layout, { scale: 1 });
+    document.body.append(root);
+    const paragraphId = root.querySelector<HTMLElement>('.docx-line')!.dataset.paragraphId!;
+    const range = { anchor: { paragraphId, offset: 0 }, head: { paragraphId, offset: 1 } };
+    expect(applySelectionToDom(root, range, getSelection())).toBe(true);
+    root.remove();
+  });
 });
 
 test('a model position with CSS delimiters in its id is mapped without parsing them', () => {

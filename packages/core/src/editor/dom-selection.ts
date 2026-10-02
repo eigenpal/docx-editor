@@ -89,8 +89,10 @@ function drawingSpacerIdentity(node: Node | undefined): SemanticPosition | null 
 
 /** The advance spacer of the picture that ends just before `position`, when one is painted. */
 function drawingSpacerBefore(searchRoot: Element, position: SemanticPosition): Element | null {
-  if (position.offset < 1) return null;
-  for (const spacer of searchRoot.querySelectorAll('.docx-inline-drawing-advance')) {
+  if (!Number.isInteger(position.offset) || position.offset < 1) return null;
+  // The offset is a model integer, never document text, so it is safe in the selector.
+  const selector = `.docx-inline-drawing-advance[data-drawing-start="${position.offset - 1}"]`;
+  for (const spacer of searchRoot.querySelectorAll(selector)) {
     const identity = drawingSpacerIdentity(spacer);
     if (identity?.paragraphId === position.paragraphId && identity.offset === position.offset - 1) {
       return spacer;
@@ -165,19 +167,33 @@ export function spanSearchRoots(root: Element, preferredPageIndex?: number): rea
   return page && page !== root ? [page, root] : [root];
 }
 
-/** The first painted span at, above, or inside a node — whichever comes first in DOM order. */
-function spanAtOrInside(
-  node: Node,
-  last: boolean
-): { element: Element; identity: SpanIdentity } | null {
+/**
+ * The first (or, with `last`, the final) model boundary at, above, or inside a node, in DOM
+ * order: a painted span's start (or end), or an inline picture's position before (or after)
+ * it. The picture's advance spacer stands where the picture does in the line, so a line or a
+ * whole fragment holding a picture resolves through it rather than past it.
+ */
+function boundaryAtOrInside(node: Node, last: boolean): SemanticPosition | null {
+  const boundary = (identity: SpanIdentity): SemanticPosition => ({
+    paragraphId: identity.paragraphId,
+    offset: last ? identity.end : identity.start,
+  });
+  const beside = (picture: SemanticPosition): SemanticPosition =>
+    last ? { ...picture, offset: picture.offset + 1 } : picture;
   const own = spanFor(node);
-  if (own) return own;
+  if (own) return boundary(own.identity);
+  const ownPicture = drawingSpacerIdentity(node);
+  if (ownPicture) return beside(ownPicture);
   if (node.nodeType !== Node.ELEMENT_NODE) return null;
-  const spans = (node as Element).querySelectorAll('[data-paragraph-id][data-start]');
-  const ordered = last ? [...spans].reverse() : [...spans];
-  for (const span of ordered) {
-    const identity = identityOf(span);
-    if (identity) return { element: span, identity };
+  const found = (node as Element).querySelectorAll(
+    '[data-paragraph-id][data-start], .docx-inline-drawing-advance'
+  );
+  const ordered = last ? [...found].reverse() : [...found];
+  for (const element of ordered) {
+    const picture = drawingSpacerIdentity(element);
+    if (picture) return beside(picture);
+    const identity = identityOf(element);
+    if (identity) return boundary(identity);
   }
   return null;
 }
@@ -202,20 +218,13 @@ function spanAtOrInside(
 function positionFromChildIndex(container: Element, index: number): SemanticPosition | null {
   const children = [...container.childNodes];
   if (children.length === 0) return null;
-  // An inline picture's advance spacer stands where the picture does: an index before it
-  // points AT the picture, an index after it points just past it.
   for (let at = Math.max(0, index); at < children.length; at += 1) {
-    const picture = drawingSpacerIdentity(children[at]);
-    if (picture) return picture;
-    const found = spanAtOrInside(children[at]!, false);
-    if (found) return { paragraphId: found.identity.paragraphId, offset: found.identity.start };
+    const found = boundaryAtOrInside(children[at]!, false);
+    if (found) return found;
   }
   for (let at = Math.min(index, children.length) - 1; at >= 0; at -= 1) {
-    const picture = drawingSpacerIdentity(children[at]);
-    if (picture) return { paragraphId: picture.paragraphId, offset: picture.offset + 1 };
-    const found = spanAtOrInside(children[at]!, true);
-    if (!found) continue;
-    return { paragraphId: found.identity.paragraphId, offset: found.identity.end };
+    const found = boundaryAtOrInside(children[at]!, true);
+    if (found) return found;
   }
   return null;
 }
@@ -433,11 +442,6 @@ function domPointFromPositionIn(
   // typed after the first landed in front of the one before it. Say "cannot", and the caller
   // keeps the model — which the engine's own painted caret draws from anyway.
   if (painted) return null;
-
-  // The line's child index 0 reads back as the paragraph START, so it can stand only for
-  // offset 0. Writing it for any other offset moved the caret home, and the next character
-  // typed landed there.
-  if (position.offset !== 0) return null;
 
   // An EMPTY paragraph paints a line with no spans, so there is no text node to point at —
   // yet it still has exactly one caret position. Without this the caret vanished after every

@@ -744,13 +744,9 @@ function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContex
       // Before the first span, that gap is a wrap jump after a leading picture.
       const previous = spans[index - 1];
       if (!previous) {
-        // The caret for that offset draws at the picture's end, so the hit reports it there.
-        const picture = line.drawings?.find((drawing) => drawing.start + 1 === span.range.start);
-        return {
-          offset: span.range.start,
-          x: picture?.advanceEnd ?? span.box.x,
-          withinSpan: false,
-        };
+        // Report the x the caret for that offset draws at: the picture's end, not the text.
+        const caretX = caretBoxOnLine(line, span.range.start, context.measurer).x;
+        return { offset: span.range.start, x: caretX, withinSpan: false };
       }
       const previousRight = previous.box.x + previous.box.width;
       return x - previousRight <= span.box.x - x
