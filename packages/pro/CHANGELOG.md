@@ -1,5 +1,27 @@
 # @docx-editor.dev/pro
 
+## 2.25.0
+
+### Minor Changes
+
+- 5d02def: Support native rich text, paragraph, list, and table suggestions, date-picker creation, and safer collaborative editing through the document API.
+
+### Patch Changes
+
+- Updated dependencies [5d02def]
+- Updated dependencies [95fbca3]
+- Updated dependencies [e151687]
+- Updated dependencies [5d02def]
+- Updated dependencies [5d02def]
+- Updated dependencies [95fbca3]
+- Updated dependencies [7ac4f41]
+- Updated dependencies [f098ae6]
+- Updated dependencies [a13f6a7]
+- Updated dependencies [5d02def]
+  - @docx-editor.dev/core@2.25.0
+  - @docx-editor.dev/react@2.25.0
+  - @docx-editor.dev/vue@2.25.0
+
 ## 2.24.0
 
 ### Patch Changes

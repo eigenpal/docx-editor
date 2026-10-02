@@ -1,5 +1,30 @@
 # @docx-editor.dev/editor-api
 
+## 2.25.0
+
+### Minor Changes
+
+- 5d02def: Support body-scoped note collection reads.
+- 5d02def: Add document property reads and writes for author, title, subject, keywords, comments, and category.
+- 5d02def: Add read-only document last-author access and removal of standard document property parts outside collaboration.
+- 5d02def: Add row-relative table insertion and preserve unrelated merged headers during row insertion.
+- 5d02def: Support native suggestions for text and date controls outside collaboration, and create inert TOC fields. Preserve paragraph insertion order in the writer example.
+
+### Patch Changes
+
+- 5d02def: Fix writer example targeting for imported paragraphs without stored IDs. Clarify tool recovery and mode-specific capabilities.
+- Updated dependencies [5d02def]
+- Updated dependencies [95fbca3]
+- Updated dependencies [e151687]
+- Updated dependencies [5d02def]
+- Updated dependencies [5d02def]
+- Updated dependencies [95fbca3]
+- Updated dependencies [7ac4f41]
+- Updated dependencies [f098ae6]
+- Updated dependencies [a13f6a7]
+- Updated dependencies [5d02def]
+  - @docx-editor.dev/core@2.25.0
+
 ## 2.24.0
 
 ### Patch Changes

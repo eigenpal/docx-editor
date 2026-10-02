@@ -1,5 +1,25 @@
 # @docx-editor.dev/core
 
+## 2.25.0
+
+### Minor Changes
+
+- 5d02def: Report document refresh location diagnostics and processor review summaries, match paragraph IDs without case sensitivity, and reject malformed metadata before replacement.
+- 7ac4f41: Find highlights every match, and `useDocumentSearch()` and `createDocumentSearch()` search and highlight from code. Use `useHighlights`, `watchHighlights()`, or `setHighlights()` to highlight your own text ranges. Fixes #1042
+
+### Patch Changes
+
+- 5d02def: Remove unused empty comment parts when saving while preserving unknown metadata, live undo, and concurrent comment edits.
+- 95fbca3: Reduce page scans when painting text highlights in long documents.
+- e151687: Give every pasted paragraph a paragraph ID, and keep list numbering when you paste a list into a document that already has lists.
+- 5d02def: Preserve content in unsupported revision wrappers.
+- 95fbca3: Fix search results when single queries and query batches share an editor, and report exact search result limits.
+- f098ae6: The `@docx-editor.dev/i18n` type declarations are now valid when a project type-checks its dependencies with `skipLibCheck` turned off. Some declared types print in a different form, such as `DocumentOutline` as a `MemoExoticComponent`, with the same meaning.
+- a13f6a7: In viewing mode, clicks, drags, and caret keys no longer place a caret or select text, so the toolbar keeps its values and the pointer shows an arrow over text.
+- 5d02def: Fix successive writer edits and mixed paragraph insertion order, and reject control suggestions over pending paragraph revisions.
+- Updated dependencies [5d02def]
+  - @docx-editor.dev/i18n@2.25.0
+
 ## 2.24.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @docx-editor.dev/i18n
 
+## 2.25.0
+
+### Patch Changes
+
+- 5d02def: Remove accidentally included example-only messages from the locale catalogs.
+
 ## 2.24.0
 
 ### Minor Changes

@@ -1,5 +1,23 @@
 # @eigenpal/docx-js-editor
 
+## 2.25.0
+
+### Patch Changes
+
+- Updated dependencies [5d02def]
+- Updated dependencies [95fbca3]
+- Updated dependencies [e151687]
+- Updated dependencies [5d02def]
+- Updated dependencies [5d02def]
+- Updated dependencies [5d02def]
+- Updated dependencies [95fbca3]
+- Updated dependencies [7ac4f41]
+- Updated dependencies [f098ae6]
+- Updated dependencies [a13f6a7]
+- Updated dependencies [5d02def]
+  - @docx-editor.dev/core@2.25.0
+  - @docx-editor.dev/i18n@2.25.0
+
 ## 2.24.0
 
 ### Patch Changes
