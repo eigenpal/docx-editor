@@ -1,5 +1,11 @@
 # @docx-editor.dev/vue
 
+## 2.25.1
+
+### Patch Changes
+
+- @docx-editor.dev/i18n@2.25.1
+
 ## 2.25.0
 
 ### Patch Changes

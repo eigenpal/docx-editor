@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/vue",
-  "version": "2.25.0",
+  "version": "2.25.1",
   "description": "Vue 3 DOCX editor adapter for the @docx-editor.dev editor contract.",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -41,7 +41,7 @@
     "typescript7": "npm:typescript@^7.0.2"
   },
   "dependencies": {
-    "@docx-editor.dev/i18n": "^2.25.0"
+    "@docx-editor.dev/i18n": "^2.25.1"
   },
   "keywords": [
     "docx",

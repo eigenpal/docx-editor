@@ -1,5 +1,11 @@
 # @docx-editor.dev/docx-to-pdf
 
+## 2.25.1
+
+### Patch Changes
+
+- @docx-editor.dev/fonts@2.25.1
+
 ## 2.25.0
 
 ### Patch Changes

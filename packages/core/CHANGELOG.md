@@ -1,5 +1,13 @@
 # @docx-editor.dev/core
 
+## 2.25.1
+
+### Patch Changes
+
+- 42c6c26: Lay out documents that declare compatibility mode 16 or later as mode 15, align fixed table content in every legacy mode, and split footnotes below their references in every mode.
+- 03edc1d: Read decimal and unit-suffixed twips values in page, column, paragraph, tab, and table properties, so a document with decimal column widths no longer lays out one character per line, and keep stated column widths and gaps when they do not fit the page.
+- @docx-editor.dev/i18n@2.25.1
+
 ## 2.25.0
 
 ### Minor Changes
