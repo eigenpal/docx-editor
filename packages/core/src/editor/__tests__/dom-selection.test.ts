@@ -428,6 +428,30 @@ describe('the position just after an inline picture', () => {
   });
 });
 
+test('a picture spacer in an inert line is not a selection position', () => {
+  // A text box that is not being edited strips its lines' paragraph binding. A picture inside
+  // it must stay as inert as its text, or a drag past the body line lands in the text box.
+  const root = paintedLine([{ text: 'body', paragraphId: 'p1', start: 0 }]);
+  const line = root.querySelector<HTMLElement>('.docx-line')!;
+  line.dataset.paragraphId = 'p1';
+  const inert = document.createElement('div');
+  const spacer = document.createElement('span');
+  spacer.className = 'docx-inline-drawing-advance';
+  spacer.dataset.drawingParagraphId = 'textbox-p';
+  spacer.dataset.drawingStart = '0';
+  inert.append(spacer);
+  line.append(inert);
+  expect(positionFromDomPoint(line, line.childNodes.length, root)).toEqual({
+    paragraphId: 'p1',
+    offset: 4,
+  });
+  inert.dataset.paragraphId = 'textbox-p';
+  expect(positionFromDomPoint(line, line.childNodes.length, root)).toEqual({
+    paragraphId: 'textbox-p',
+    offset: 1,
+  });
+});
+
 describe('a paragraph that paints nothing at its end offset', () => {
   test('a range ending there is still written', () => {
     // Only a floating picture: offset 1 has no painted place. The range keeps its highlight

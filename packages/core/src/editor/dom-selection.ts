@@ -48,16 +48,29 @@ function offsetWithin(identity: SpanIdentity, within: number): number {
 const PARAGRAPH_ID = /^[^\s]{1,512}$/;
 const CSS_STRING_UNSAFE = /["\\\u0000-\u001f\u007f]/;
 
-function identityOf(element: Element): SpanIdentity | null {
-  const paragraphId = (element as HTMLElement).dataset?.paragraphId;
-  const rawStart = (element as HTMLElement).dataset?.start;
-  if (!paragraphId || rawStart === undefined) return null;
-  // BOTH values are re-validated. They round-trip through the DOM, where anything on the
-  // page could have rewritten them, and the id then flows into a tree op as the paragraph to
-  // mutate. `__proto__` as an id is refused here rather than relied on being refused later.
-  if (!/^\d{1,9}$/.test(rawStart)) return null;
+/**
+ * A paragraph id and a start offset read back from the DOM, or null when either is not one.
+ *
+ * BOTH values are re-validated. They round-trip through the DOM, where anything on the page
+ * could have rewritten them, and the id then flows into a tree op as the paragraph to mutate.
+ * `__proto__` as an id is refused here rather than relied on being refused later.
+ */
+function validatedPosition(
+  paragraphId: string | undefined,
+  rawStart: string | undefined
+): SemanticPosition | null {
+  if (!paragraphId || rawStart === undefined || !/^\d{1,9}$/.test(rawStart)) return null;
   if (!PARAGRAPH_ID.test(paragraphId) || paragraphId === '__proto__') return null;
-  const start = Number(rawStart);
+  return { paragraphId, offset: Number(rawStart) };
+}
+
+function identityOf(element: Element): SpanIdentity | null {
+  const position = validatedPosition(
+    (element as HTMLElement).dataset?.paragraphId,
+    (element as HTMLElement).dataset?.start
+  );
+  if (!position) return null;
+  const { paragraphId, offset: start } = position;
   // `data-end` is written with `data-start` by the same painter branch, and validated the same
   // way for the same reason. A span missing or misreporting it falls back to the painted
   // length, which is the pre-existing behaviour and correct for every 1:1 span.
@@ -74,17 +87,16 @@ function identityOf(element: Element): SpanIdentity | null {
  *
  * The spacer is inert furniture, but it sits in the line exactly where the picture does, so
  * the child index before it is the position before the picture and the index after it is the
- * position after. Validated like a span identity: the values round-trip through the DOM.
+ * position after. Validated like a span identity.
  */
 function drawingSpacerIdentity(node: Node | undefined): SemanticPosition | null {
   if (!node || node.nodeType !== Node.ELEMENT_NODE) return null;
   const element = node as HTMLElement;
   if (!element.classList.contains('docx-inline-drawing-advance')) return null;
-  const paragraphId = element.dataset.drawingParagraphId;
-  const rawStart = element.dataset.drawingStart;
-  if (!paragraphId || rawStart === undefined || !/^\d{1,9}$/.test(rawStart)) return null;
-  if (!PARAGRAPH_ID.test(paragraphId) || paragraphId === '__proto__') return null;
-  return { paragraphId, offset: Number(rawStart) };
+  // A spacer sits directly in its line. A line whose paragraph binding is stripped is inert,
+  // like a text box that is not being edited, and so is every picture position in it.
+  if ((element.parentElement as HTMLElement | null)?.dataset.paragraphId === undefined) return null;
+  return validatedPosition(element.dataset.drawingParagraphId, element.dataset.drawingStart);
 }
 
 /** The advance spacer of the picture that ends just before `position`, when one is painted. */

@@ -717,6 +717,9 @@ function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContex
           drawing,
         };
       }
+      // A picture after this span is decided at its own span, or as the line's end. Weighing
+      // it here sent a point in any gap before this span to that later picture.
+      if (drawing.advanceStart >= span.box.x + span.box.width) continue;
       if (
         drawing.start <= span.range.start &&
         drawing.hitBounds.x + drawing.hitBounds.width <= span.box.x
@@ -745,7 +748,10 @@ function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContex
       const previous = spans[index - 1];
       if (!previous) {
         // Report the x the caret for that offset draws at: the picture's end, not the text.
-        const caretX = caretBoxOnLine(line, span.range.start, context.measurer).x;
+        const segment = lineSegments(line).find(
+          (entry) => entry.paragraphId === span.range.paragraphId
+        );
+        const caretX = caretBoxOnLine(line, span.range.start, context.measurer, segment).x;
         return { offset: span.range.start, x: caretX, withinSpan: false };
       }
       const previousRight = previous.box.x + previous.box.width;

@@ -97,4 +97,14 @@ describe('a point in the float jump after a leading picture', () => {
     expect(hit?.position.offset).toBe(picture.start + 1);
     expect(hit?.caret.x).toBeCloseTo(picture.advanceEnd, 5);
   });
+
+  test('is not claimed by a later picture on the same line', () => {
+    // A picture after the text used to win any point left of it once the loop reached it.
+    const { layout, line, picture } = pictureLine(
+      `${floatAt120}<w:r>${drawing}<w:t>ab</w:t>${drawing}</w:r>`
+    );
+    expect(line.drawings).toHaveLength(2);
+    const hit = hitTestPage(layout, 0, { x: 110, y: picture.hitBounds.y + 1 });
+    expect(hit?.position.offset).toBe(picture.start + 1);
+  });
 });
