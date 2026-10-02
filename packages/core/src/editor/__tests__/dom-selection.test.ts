@@ -416,6 +416,29 @@ describe('the position just after an inline picture', () => {
     root.remove();
   });
 
+  test('a picture that opens a wrapped line keeps the caret before it on that line', () => {
+    // The text before the picture fills the first line and ends at the picture's offset.
+    const words = 'abcd '.repeat(15);
+    const { root, paragraphId } = painted(
+      `<w:r><w:t xml:space="preserve">${words}</w:t>${PICTURE}</w:r>`
+    );
+    const lines = root.querySelectorAll('.docx-line');
+    expect(lines.length).toBe(2);
+    const offset = words.length;
+    expect(roundTrip(root, { paragraphId, offset })).toEqual({ paragraphId, offset });
+    expect(lines[1]!.contains(getSelection()!.anchorNode)).toBe(true);
+    root.remove();
+  });
+
+  test('a position a paragraph of pictures cannot paint is not written at its start', () => {
+    // The hidden run after the picture paints nothing, so its end has no DOM place.
+    const hidden = '<w:r><w:rPr><w:vanish/></w:rPr><w:t>xyz</w:t></w:r>';
+    const { root, paragraphId } = painted(`<w:r>${PICTURE}</w:r>${hidden}`);
+    const end = { paragraphId, offset: 4 };
+    expect(applySelectionToDom(root, { anchor: end, head: end }, getSelection())).toBe(false);
+    root.remove();
+  });
+
   test('the caret after a picture reads back there when hidden text follows it', () => {
     // The hidden run paints nothing, so the next painted text starts three offsets later.
     const hidden = '<w:r><w:rPr><w:vanish/></w:rPr><w:t>xyz</w:t></w:r>';

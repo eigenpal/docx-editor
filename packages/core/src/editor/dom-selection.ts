@@ -449,12 +449,19 @@ function domPointFromPositionIn(
       fallback = point;
     }
   }
+  const opening = drawingSpacerAt(searchRoot, position.paragraphId, position.offset);
+  if (fallback && opening?.parentNode && !opening.parentNode.contains(fallback.node)) {
+    return {
+      node: opening.parentNode,
+      offset: [...opening.parentNode.childNodes].indexOf(opening),
+    };
+  }
   if (fallback) return fallback;
 
   // Beside an inline picture that no text holds: just before one that opens a line, or else
   // just after one that ends a line or stands alone. The line's child index past (or at) the
   // picture's advance spacer is that position, and `positionFromChildIndex` reads it back.
-  const before = drawingSpacerAt(searchRoot, position.paragraphId, position.offset);
+  const before = opening;
   const after = before
     ? null
     : drawingSpacerAt(searchRoot, position.paragraphId, position.offset - 1);
@@ -474,6 +481,10 @@ function domPointFromPositionIn(
   // browser caret went home, the next reader took that as the truth, and every character
   // typed after the first landed in front of the one before it. Say "cannot", and the caller
   // keeps the model — which the engine's own painted caret draws from anyway.
+  // A picture paints a place for its paragraph's content as text does.
+  painted ||= [...searchRoot.querySelectorAll('.docx-inline-drawing-advance')].some(
+    (spacer) => drawingSpacerIdentity(spacer)?.paragraphId === position.paragraphId
+  );
   if (painted) return null;
 
   // An EMPTY paragraph paints a line with no spans, so there is no text node to point at —

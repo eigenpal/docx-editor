@@ -46,7 +46,13 @@ export function paragraphGridOffsetX(visit: SemanticSpanVisit): number {
  * picture comes first. A line with no text has only that origin.
  */
 function textStartX(line: SemanticSpanVisit['line']): number {
+  const known = textStarts.get(line);
+  if (known !== undefined) return known;
   let x = Infinity;
   for (const span of line.spans) x = Math.min(x, span.box.x);
-  return Number.isFinite(x) ? x : line.contentX;
+  const start = Number.isFinite(x) ? x : line.contentX;
+  textStarts.set(line, start);
+  return start;
 }
+
+const textStarts = new WeakMap<SemanticSpanVisit['line'], number>();

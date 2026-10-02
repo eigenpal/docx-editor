@@ -32,10 +32,12 @@ export function lineTerminatorEdge(
 /**
  * Seat a terminator glyph (the pilcrow or the line-break arrow) on its painted line's baseline.
  *
- * The glyph sits in a zero-height seat placed at the terminator edge, at the line's published
- * baseline. With `font-size: 0` and `line-height: 0` the seat's own baseline is its top edge,
- * so the inline-block glyph inside it sits exactly on the line's baseline at its own size, with
- * no font metrics and no part in the line's flow. A right-to-left seat reads from its right
+ * The glyph sits in a seat placed at the terminator edge, out of the line's flow. With
+ * `line-height: 0` on the seat and the glyph, the seat's one line box runs from the glyph's
+ * box down to the shared baseline, and the seat's strut has `font-size: 0`, so nothing hangs
+ * below the baseline. The seat's bottom edge is the glyph's baseline whatever its font, so
+ * the seat's bottom is placed on the line's published baseline. A top-anchored seat drew the
+ * glyph a third of an em low: its line box starts at the glyph's box, not at the baseline. A right-to-left seat reads from its right
  * edge, so its glyph ends at the terminator edge rather than starting there.
  */
 export function seatTerminatorMark(
@@ -54,9 +56,8 @@ export function seatTerminatorMark(
   seat.setAttribute('contenteditable', 'false');
   seat.style.position = 'absolute';
   seat.style.left = `${(edge.x - line.contentX) * scale}px`;
-  seat.style.top = `${line.baseline * scale}px`;
+  seat.style.bottom = `${(line.box.height - line.baseline) * scale}px`;
   seat.style.width = '0';
-  seat.style.height = '0';
   seat.style.fontSize = '0';
   seat.style.lineHeight = '0';
   seat.style.whiteSpace = 'pre';

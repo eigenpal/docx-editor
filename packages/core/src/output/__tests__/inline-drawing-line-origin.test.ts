@@ -336,8 +336,11 @@ describe('the paragraph mark after an inline picture', () => {
     const mark = host.querySelector<HTMLElement>('.docx-paragraph-mark')!;
     const seat = mark.parentElement!;
     const line = linesOf(layout).at(-1)!;
-    // The seat's top is the line's baseline; a zero font size makes it the seat's baseline.
-    expect(parseFloat(seat.style.top)).toBeCloseTo(line.baseline * SCALE, 3);
+    // The seat's bottom is the line's baseline. Its line box ends at the glyph's baseline, and
+    // its zero-size strut hangs nothing below it.
+    expect(seat.style.top).toBe('');
+    expect(parseFloat(seat.style.bottom)).toBeCloseTo((line.box.height - line.baseline) * SCALE, 3);
+    expect(seat.style.lineHeight).toBe('0');
     expect(parseFloat(seat.style.fontSize)).toBe(0);
     expect(mark.style.verticalAlign).toBe('baseline');
     expect(mark.style.fontSize).toBe(`${24 * SCALE}px`);
