@@ -18,7 +18,7 @@ The mode is a `w:compatSetting` with `w:name="compatibilityMode"` and `w:uri="ht
 | 15 | Word 2013 and later | `modern` |
 | Above 15 | Not defined by Microsoft | `modern` |
 | 13 | Not defined | `unlisted`: no mode rule applies |
-| Duplicated or malformed | Refused | `legacy` |
+| Duplicated, malformed, below 11, or above 9999 | Refused | `legacy`, and `preserveExactLineBaseline` is off |
 
 [MS-DOCX] covers Word 2007 through Word LTSC 2024 and defines no value above 15, and the `WdCompatibilityMode` enumeration ends at `wdWord2013 = 15`. Word 16 for Mac lays out a document without a declaration exactly as one that declares 12, and a document that declares 16 exactly as one that declares 15. Declarations of 17, 99, and 9999 also lay out as 15. Word reports a document that declares 13 as unreadable content, so no rule applies to 13.
 
@@ -58,7 +58,7 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `fixedParagraphSpacing` | `w:doNotUseHTMLParagraphAutoSpacing` | Adjacent paragraph spacing adds up |
 | `ignoreIndentAsNumberingTabStop` | `w:doNotUseIndentAsNumberingTabStop` | A numbering tab ignores the hanging indent |
 | `optionalLigatures` | `enableOpenTypeFeatures`, else `modern` | Optional OpenType ligatures apply |
-| `preserveExactLineBaseline` | `w:noExtraLineSpacing` in `legacy` | An exact-height line keeps the face baseline |
+| `preserveExactLineBaseline` | `w:noExtraLineSpacing` in `legacy`, mode not refused | An exact-height line keeps the face baseline |
 | `strictTableStyleHierarchy` | `overrideTableStyleFontSizeAndJustification` | Table style size and justification win |
 
 Each rule in `compatibility-rules.ts` also names the specification section of the construct it acts on.

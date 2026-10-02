@@ -52,6 +52,8 @@ test('each mode rule applies in exactly its class', () => {
 });
 
 test('every rule says what it does and where the construct is specified', () => {
+  // `profile.has` tells the two registries apart by name, so no name may be in both.
+  expect(Object.keys(MODE_RULES).filter((name) => Object.hasOwn(PROFILE_RULES, name))).toEqual([]);
   for (const rule of [...Object.values(MODE_RULES), ...Object.values(PROFILE_RULES)]) {
     expect(rule.behavior.length).toBeGreaterThan(0);
     expect(rule.source.length).toBeGreaterThan(0);
