@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 /**
- * The per-file max-lines caps in eslint.config.js stay honest.
+ * The per-file max-lines caps in .oxlintrc.json stay honest.
  *
- * Three checks. The first two run over the imported config (imported, not regex-parsed, so a
- * config the linter would reject fails here too):
+ * Three checks. The first two run over the config's `overrides`:
  *
  * 1. Every non-glob `files` path exists — a cap for a deleted file is dead weight.
  * 2. Every per-file cap is a RATCHET, not a permanent ceiling: the cap must sit within
@@ -19,7 +18,7 @@
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { parseJsonc } from './lib/jsonc.mjs';
 
 // 150, not 100: with caps set ~100 over their file, a tighter slack made ONE deleted line
 // in a capped file a lint failure until the config moved too. 150 keeps the ratchet and
@@ -49,8 +48,11 @@ const BLANKET_DISABLES = new Map([
   ['packages/core/src/store/package/note-lifecycle.ts', 1320],
 ]);
 
-/** A file-level `eslint-disable` naming max-lines. `-next-line` is one statement, not a file. */
-const BLANKET_DISABLE = /\/\*\s*eslint-disable\s(?![^*]*-next-line)[^*]*max-lines/;
+/**
+ * A file-level `eslint-disable` or `oxlint-disable` naming max-lines (oxlint honors both).
+ * `-next-line` is one statement, not a file.
+ */
+const BLANKET_DISABLE = /\/\*\s*(?:eslint|oxlint)-disable\s(?![^*]*-next-line)[^*]*max-lines/;
 
 const SOURCE_FILE = /\.tsx?$/;
 const SKIP_DIRECTORIES = new Set(['node_modules', 'dist', 'dist-types', 'temp', '.turbo']);
@@ -67,7 +69,7 @@ function sourceFilesUnder(directory, found = []) {
 }
 
 const root = join(import.meta.dirname, '..');
-const configs = (await import(pathToFileURL(join(root, 'eslint.config.js')).href)).default;
+const configs = parseJsonc(readFileSync(join(root, '.oxlintrc.json'), 'utf8')).overrides ?? [];
 
 const failures = [];
 let checked = 0;
@@ -86,7 +88,7 @@ for (const block of configs) {
     checked += 1;
     const lines = readFileSync(absolute, 'utf8').split('\n').length - 1;
     if (lines > cap) {
-      // eslint reports this too; repeating it keeps this script self-contained.
+      // oxlint reports this too; repeating it keeps this script self-contained.
       failures.push(`over cap: ${path} is ${lines} lines, cap ${cap}`);
     } else if (cap - lines > SLACK && !SLACK_EXEMPT.has(path)) {
       failures.push(
@@ -108,7 +110,7 @@ for (const absolute of sourceFilesUnder(join(root, 'packages'))) {
   if (declared === undefined) {
     failures.push(
       `undeclared blanket disable: ${path} turns max-lines off for the whole file (${lines} lines). ` +
-        `Add it to BLANKET_DISABLES with its length, or give it a capped block in eslint.config.js`
+        `Add it to BLANKET_DISABLES with its length, or give it a capped block in .oxlintrc.json`
     );
     continue;
   }
@@ -134,12 +136,12 @@ for (const path of BLANKET_DISABLES.keys()) {
 }
 
 if (failures.length > 0) {
-  console.error('eslint.config.js max-lines caps are stale or broken:');
+  console.error('.oxlintrc.json max-lines caps are stale or broken:');
   for (const failure of failures) console.error(`  - ${failure}`);
   process.exit(1);
 }
 
 console.log(
-  `eslint max-lines caps: ${checked} file-specific paths present and within ${SLACK} lines of their cap; ` +
+  `max-lines caps: ${checked} file-specific paths present and within ${SLACK} lines of their cap; ` +
     `${blanketChecked} blanket disables at their declared length`
 );

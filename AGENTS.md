@@ -127,7 +127,7 @@ bun run i18n:validate
 openspec validate typed-ooxml-paragraph-editor --strict
 ```
 
-- `bun run lint`'s errors are the `max-lines` caps (1000 lines for most files, per-file caps up to 3500 for the handful already past it) and the `no-restricted-syntax` bans (HTML-from-strings sinks in `packages/*/src` non-test code, varargs array spread in `core/src/{store,layout}`). Nothing else catches the caps, so adding to a large file passes typecheck and the whole suite and fails CI. Extract; do not raise the cap — `scripts/check-eslint-max-lines-globs.mjs` also fails a cap that drifts more than 150 lines above its file. Lint covers `examples/*/src` as well as `packages/*/src` — the demos hit the same line caps.
+- `bun run lint` runs oxlint with `.oxlintrc.json`. Its errors are the `max-lines` caps (1000 lines for most files, per-file caps up to 3500 for the handful already past it) and the repository rules in `scripts/oxlint/docx-rules.mjs` (HTML-from-strings sinks in `packages/*/src` non-test code, global `@keyframes` names, varargs array spread in `core/src/{store,layout}`) plus the framework-isolation `no-restricted-imports`. Nothing else catches the caps, so adding to a large file passes typecheck and the whole suite and fails CI. Extract; do not raise the cap — `scripts/check-max-lines-caps.mjs` also fails a cap that drifts more than 150 lines above its file. `scripts/__tests__/oxlint-rules.test.ts` keeps the repository rules firing; extend it when you add one. Lint covers `examples/*/src` as well as `packages/*/src` — the demos hit the same line caps.
 - `bun run test` shards the suite one process per file across a worker pool (`scripts/test/run-parallel.mjs`, `--jobs N` to pin the width). That is also what CI runs. `bun test` still works and is the one to reach for when you want a single file, `-t`, or `--watch`; `bun run test:serial` is the whole suite the old way.
 - The pool is machine-aware, and must stay that way: the heavy OOXML-oracle files peak at multiple GiB each and slowest-first starts them together, which once froze a 48 GiB machine (fourteen workers, ~94 GiB footprint, WindowServer watchdog death). The runner caps width by installed memory, splits width and budget between concurrent runs on the machine (tmpdir registry), and gates dispatch on each file's measured peak footprint plus live memory pressure. `--jobs` pins the width but never lifts the gate. A single test file that needs more than a few GiB is a bug to file, not a budget to raise.
 - A file that leaves state on `document` can only be caught by the serial run — per-file processes hide it. Scope DOM queries to the container you mounted.
@@ -168,7 +168,7 @@ Audit these whenever you touch parsing, serialization, `output/semantic-paint*`,
 grep -rnE "innerHTML|outerHTML|insertAdjacentHTML|v-html|document\\.write|window\\.open\\(|\\.href\\s*=|font-family:.*\\$\\{" packages --include="*.ts" --include="*.tsx" --include="*.vue" | grep -viE "test|\\.spec\\."
 ```
 
-Fix sibling sinks when you fix one. The HTML sinks in that grep are also lint errors (`SECURITY_SINK_SELECTORS` in `eslint.config.js`), so a new one fails `bun run lint`; the grep still covers what the AST selectors cannot (`v-html`, raw `href` assignment, CSS interpolation).
+Fix sibling sinks when you fix one. The HTML sinks in that grep are also lint errors (`docx/no-html-sinks` in `scripts/oxlint/docx-rules.mjs`), so a new one fails `bun run lint`; the grep still covers what the AST selectors cannot (`v-html`, raw `href` assignment, CSS interpolation).
 
 ## i18n
 

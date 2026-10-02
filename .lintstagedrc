@@ -1,7 +1,7 @@
 {
   "*.{ts,tsx}": [
     "prettier --write",
-    "eslint --fix"
+    "oxlint --fix --report-unused-disable-directives-severity=warn"
   ],
   "*.{js,jsx,json,md,css}": [
     "prettier --write"

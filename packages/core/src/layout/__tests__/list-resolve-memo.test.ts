@@ -17,7 +17,6 @@ import { createSurfaceStyleDeps } from '../../editor/surface-pages.ts';
 import { storyBlocks } from '../story-roots.ts';
 import { createLayoutSession } from '../layout-session.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
-import { applyTreeOp } from '../../store/store/tree-ops.ts';
 import { mountPaginatedSurface } from '../../editor/paginated-surface.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

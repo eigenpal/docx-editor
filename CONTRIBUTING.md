@@ -46,7 +46,7 @@ Before submission, run the checks in [Make changes](#make-changes).
 
 ## Code style
 
-The project uses ESLint and Prettier. Pre-commit hooks run both checks.
+The project uses [oxlint](https://oxc.rs/docs/guide/usage/linter.html) and Prettier. Pre-commit hooks run both checks. The lint configuration is `.oxlintrc.json`, and repository-specific rules live in `scripts/oxlint/docx-rules.mjs`.
 
 ```bash
 # Manual lint/format
@@ -54,9 +54,9 @@ bun run lint:fix
 bun run format
 ```
 
-The pre-commit hook formats and lints staged files, then runs the full typecheck, parity, license, API, formatting, and lint checks. It prints the duration of each step. Local commits use TypeScript's incremental build information and content-based ESLint and Prettier caches; CI runs the uncached package commands. The first commit after creating or clearing these caches takes longer.
+The pre-commit hook formats and lints staged files, then runs the full typecheck, parity, license, API, formatting, and lint checks. It prints the duration of each step. Local commits use TypeScript's incremental build information and a content-based Prettier cache; CI runs the uncached package commands. oxlint needs no cache. The first commit after creating or clearing these caches takes longer.
 
-ESLint and Prettier caches live under the root `node_modules/.cache/precommit/`. TypeScript writes build information under each workspace's `node_modules/.cache/precommit/`, outside the source and license scans. To diagnose a suspected stale cache, run `bun run typecheck`, `bun run lint`, or `bun run format:check` without the hook's cache flags.
+The Prettier cache lives under the root `node_modules/.cache/precommit/`. TypeScript writes build information under each workspace's `node_modules/.cache/precommit/`, outside the source and license scans. To diagnose a suspected stale cache, run `bun run typecheck`, `bun run lint`, or `bun run format:check` without the hook's cache flags.
 
 ## Contributor license agreement
 
