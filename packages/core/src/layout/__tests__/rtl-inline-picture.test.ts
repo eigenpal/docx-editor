@@ -34,16 +34,16 @@ const hebrew = (text: string) =>
 const latin = (text: string) => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
 const CONTENT_RIGHT = 468;
 
-function lay(content: string, pPr = '<w:bidi/>') {
+function lay(content: string, pPr = '<w:bidi/>', before = '') {
   const part = load(
-    `<w:document ${NAMESPACES}><w:body><w:p><w:pPr>${pPr}</w:pPr>${content}</w:p>` +
+    `<w:document ${NAMESPACES}><w:body>${before}<w:p><w:pPr>${pPr}</w:pPr>${content}</w:p>` +
       '</w:body></w:document>'
   );
   const layout = layoutSemanticDocument(part, 1, {
     measurer: createFixedMeasurer(6, 14),
     inlineDrawingLayout: layoutContext(part),
   });
-  const line = linesOf(layout)[0]!;
+  const line = linesOf(layout).find((record) => record.drawings?.length)!;
   return { layout, line, drawing: line.drawings![0]! };
 }
 
@@ -104,4 +104,11 @@ test('a left-to-right paragraph keeps its picture in reading order beside Hebrew
   expect(drawing.bidiLevel).toBe(0);
   expect(spanAt(line, 0).box.x).toBeLessThan(drawing.advanceStart);
   expect(spanAt(line, 4).box.x).toBeCloseTo(drawing.advanceEnd, 5);
+});
+
+test('two pictures alone in a right-to-left paragraph read right to left', () => {
+  const { line } = lay(picture + picture);
+  const [first, second] = line.drawings!;
+  expect(first!.advanceEnd).toBeCloseTo(CONTENT_RIGHT, 5);
+  expect(second!.advanceEnd).toBeCloseTo(first!.advanceStart, 5);
 });

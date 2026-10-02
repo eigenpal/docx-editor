@@ -443,9 +443,10 @@ export function lineContentEdges(
  * which paint already fills, and a wrap exclusion the line stepped over to resume in the
  * next passage. Justification has not run yet, so nothing here can be confused with slack.
  *
- * Paint flows each span after the previous one and after a spacer for every inline drawing
- * between them, so the jump is whatever that flow leaves short of the span. A span with no
- * span before it flows from the line's leading drawing, when there is one.
+ * Paint flows each span after the previous one, and each inline drawing's spacer reaches the
+ * drawing's far edge (covering any jump before the drawing). So a span's jump is whatever is
+ * left between the far edge of the content before it and the span. A span with no content
+ * before it starts the line, so it has nothing to jump.
  */
 export function markPendingLineWrapAdvances(line: PendingLine): void {
   // Model order is the order paint flushes spacers in; one forward pass visits each once.
@@ -457,16 +458,12 @@ export function markPendingLineWrapAdvances(line: PendingLine): void {
   for (let index = 0; index < line.spans.length; index += 1) {
     const previous = line.spans[index - 1];
     const current = line.spans[index]!;
-    let flowEnd = previous ? previous.box.x + previous.box.width : Infinity;
-    let advances = 0;
+    let flowEnd = previous ? previous.box.x + previous.box.width : -Infinity;
     for (; next < drawings.length && drawings[next]!.start < current.range.start; next += 1) {
-      const drawing = drawings[next]!;
-      if (!previous) flowEnd = Math.min(flowEnd, drawing.advanceStart);
-      advances += Math.max(0, drawing.advanceEnd - drawing.advanceStart);
+      flowEnd = Math.max(flowEnd, drawings[next]!.advanceEnd);
     }
-    // The line's first content: nothing flows before it, so there is nothing to jump.
     if (!Number.isFinite(flowEnd)) continue;
-    const gap = current.box.x - (flowEnd + advances);
+    const gap = current.box.x - flowEnd;
     if (gap <= 0.001) continue;
     line.spans[index] = { ...current, wrapAdvanceBefore: gap };
   }

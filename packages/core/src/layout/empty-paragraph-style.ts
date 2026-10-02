@@ -1,6 +1,11 @@
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { LineRecord, ParagraphFragmentRecord } from './semantic-records.ts';
-import { DEFAULT_RUN_STYLE, resolveRunStyle, type ThemeFonts } from './run-style.ts';
+import {
+  DEFAULT_RUN_STYLE,
+  resolveRunStyle,
+  type ResolvedRunStyle,
+  type ThemeFonts,
+} from './run-style.ts';
 
 /**
  * The paragraph mark's resolved style, for the fragments that need it.
@@ -17,10 +22,30 @@ export function emptyParagraphStyleFields(
 ): Pick<ParagraphFragmentRecord, 'emptyParagraphStyle' | 'paragraphMarkStyle'> {
   const empty = !lines.some((line) => line.spans.length > 0 || (line.drawings?.length ?? 0) > 0);
   if (!empty && !paragraphEnd) return {};
-  const style =
-    properties.length === 0 ? DEFAULT_RUN_STYLE : resolveRunStyle(properties, themeFonts);
+  const style = markStyleOf(properties, themeFonts);
   return {
     ...(empty ? { emptyParagraphStyle: style } : {}),
     ...(paragraphEnd ? { paragraphMarkStyle: style } : {}),
   };
+}
+
+/**
+ * One resolved mark style per paragraph's mark properties and theme fonts. A relayout reaches
+ * every paragraph again with the same arrays, so it reuses the style instead of resolving it.
+ */
+const markStyles = new WeakMap<
+  readonly OoxmlProperty[],
+  { readonly themeFonts: ThemeFonts | undefined; readonly style: ResolvedRunStyle }
+>();
+
+function markStyleOf(
+  properties: readonly OoxmlProperty[],
+  themeFonts: ThemeFonts | undefined
+): ResolvedRunStyle {
+  if (properties.length === 0) return DEFAULT_RUN_STYLE;
+  const known = markStyles.get(properties);
+  if (known && known.themeFonts === themeFonts) return known.style;
+  const style = resolveRunStyle(properties, themeFonts);
+  markStyles.set(properties, { themeFonts, style });
+  return style;
 }

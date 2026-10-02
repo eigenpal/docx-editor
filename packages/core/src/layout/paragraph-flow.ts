@@ -1141,12 +1141,8 @@ export function breakParagraph(
       recordTopAndBottomAnchorLineTop(piece.start);
       const measure = measureInlineDrawing(piece.inlineDrawing.projection);
       const atomWidth = measure.totalWidth;
-      // Like a word, a picture that does not fit before a float resumes past it on this line
-      // (placement below makes that jump once the float is cleared; only probe it here).
-      const [penWidth, fits] = [line.width, () => line.width + atomWidth <= lineAvailable()];
-      const jumps = !fits() && tryAdvanceToNextPassage() && fits();
-      line.width = penWidth;
-      if (holdsContent() && !fits() && !jumps) closeLine();
+      // Placement below decides whether the picture fits: like a word, one that does not fit
+      // before a float resumes past it on this line, and closes the line only otherwise.
       exclusionProbe.setMetrics(
         {
           height: measure.lineContribution,

@@ -34,9 +34,9 @@ export function lineTerminatorEdge(
  *
  * The glyph joins the end of the line's inline flow as a zero-width inline-block, so the
  * browser sits it on the same baseline as the text and picture spacers, at its own size and
- * with no font metrics. `line-height: 0` keeps it from growing the line. The flow ends at the
- * line's right content edge, and `left` moves the glyph from there to the terminator edge. A
- * right-to-left glyph reads from the right of its zero-width box, so it ends at that edge.
+ * with no font metrics. `line-height: 0` keeps it from growing the line. The flow ends at
+ * `flowEnd`, which paint knows, and `left` moves the glyph from there to the terminator edge.
+ * A right-to-left glyph reads from the right of its zero-width box, so it ends at that edge.
  */
 export function seatTerminatorMark(
   glyph: HTMLElement,
@@ -44,10 +44,10 @@ export function seatTerminatorMark(
   line: LineRecord,
   paragraphRtl: boolean,
   fontSizePt: number,
-  scale: number
+  scale: number,
+  flowEnd: number
 ): void {
   const edge = lineTerminatorEdge(line, paragraphRtl);
-  const flowEnd = lineContentEdges(line.spans, line.drawings ?? [])?.right ?? line.contentX;
   glyph.style.position = 'relative';
   glyph.style.display = 'inline-block';
   glyph.style.width = '0';
@@ -68,6 +68,7 @@ export function paintManualLineBreak(
   document: Document,
   line: LineRecord,
   lineElement: HTMLElement,
+  flowEnd: number,
   scale: number,
   colors?: RevisionStyleContext,
   paragraphRtl = false
@@ -106,7 +107,7 @@ export function paintManualLineBreak(
     }
   }
   const size = last?.style.fontSizePt ?? DEFAULT_RUN_STYLE.fontSizePt;
-  seatTerminatorMark(glyph, lineElement, line, paragraphRtl, size, scale);
+  seatTerminatorMark(glyph, lineElement, line, paragraphRtl, size, scale, flowEnd);
   return glyph;
 }
 
@@ -122,7 +123,6 @@ export function paintManualLineBreak(
 export function paintParagraphMark(
   document: Document,
   revisions: readonly RevisionAttribution[],
-  scale: number,
   colors: RevisionStyleContext | undefined
 ): HTMLElement {
   // ONE glyph however many decisions stand on it: there is one pilcrow, and drawing a second

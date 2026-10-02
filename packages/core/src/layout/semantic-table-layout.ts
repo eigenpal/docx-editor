@@ -689,6 +689,7 @@ function placeCellParagraph(
     const content = alignLineWithPictures(
       placedSpans,
       placedDrawings,
+      rtl,
       (spans) =>
         alignSpans(
           spans,

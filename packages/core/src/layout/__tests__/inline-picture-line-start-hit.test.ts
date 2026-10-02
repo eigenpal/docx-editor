@@ -8,6 +8,7 @@
 import { describe, expect, test } from 'bun:test';
 import { createFixedMeasurer, layoutSemanticDocument, linesOf } from '../index.ts';
 import { hitTestPage } from '../semantic-hit-test.ts';
+import { rangeBandsWithinLine } from '../line-geometry.ts';
 import { layoutContext, load } from './anchored-drawing-test-fixtures.ts';
 
 const NAMESPACES =
@@ -90,7 +91,7 @@ describe('a point over a trailing picture but outside it', () => {
 describe('a point in the float jump after a leading picture', () => {
   // The jump sits between two pieces of content, so a point in it is the boundary between
   // them. That caret draws on the far side of the jump, at the content that starts there,
-  // with that content's height: Word reports the same x for it.
+  // with that content's height.
   test('is the boundary after the picture, drawn at the text after the jump', () => {
     const { layout, line, picture } = pictureLine(
       `${floatAt120}<w:r>${drawing}<w:t>abcd</w:t></w:r>`
@@ -140,6 +141,17 @@ describe('a picture that does not fit before a float', () => {
     expect(line.spans[0]!.box.x).toBeCloseTo(320, 5);
   });
 
+  test('a point before a later picture that jumped the float is the boundary before it', () => {
+    const { layout, line } = pictureLine(
+      `${flushFloat}<w:r><w:t>abcdefghijk</w:t>${drawing}</w:r>`
+    );
+    const picture = line.drawings![0]!;
+    expect(picture.advanceStart).toBeCloseTo(220, 5);
+    const hit = hitTestPage(layout, 0, { x: 90, y: picture.hitBounds.y + 1 });
+    expect(hit?.position.offset).toBe(picture.start);
+    expect(hit?.caret.x).toBeCloseTo(picture.advanceStart, 5);
+  });
+
   test('a point in the gap before the float is the boundary between the pictures', () => {
     const { layout, line, picture } = pictureLine(
       `${flushFloat}<w:r>${drawing}${drawing}<w:t>abcd</w:t></w:r>`
@@ -148,4 +160,14 @@ describe('a picture that does not fit before a float', () => {
     expect(hit?.position.offset).toBe(picture.start + 1);
     expect(hit?.caret.x).toBeCloseTo(line.drawings![1]!.advanceStart, 5);
   });
+});
+
+test('a selection of a picture before a float jump stops at the picture', () => {
+  // The caret just after the picture draws past the jump, with the text there, but the end of
+  // a selected range belongs to the picture that ends at it.
+  const { line, picture } = pictureLine(`${floatAt120}<w:r>${drawing}<w:t>abcd</w:t></w:r>`);
+  expect(line.spans[0]!.box.x).toBeCloseTo(220, 5);
+  const [band] = rangeBandsWithinLine(line, picture.start, picture.start + 1);
+  expect(band!.x).toBeCloseTo(picture.advanceStart, 5);
+  expect(band!.x + band!.width).toBeCloseTo(picture.advanceEnd, 5);
 });

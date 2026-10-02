@@ -15,17 +15,24 @@ function xWithinLine(
   line: LineRecord,
   offset: number,
   measurer?: TextMeasurer | undefined,
-  segment?: LineSegment
+  segment?: LineSegment,
+  upstream = false
 ): number {
   // An offset only means something in ONE paragraph, so a mixed line is walked through the
   // segment that owns it. Given none, the line is its own segment, which is every ordinary
   // line and the path this function always took.
   const spans = segment ? segment.spans : line.spans;
-  // The content that starts at an offset owns it; see `drawingAtOffset`.
-  const picture = drawingAtOffset(line, offset, segment);
+  // The content that starts at an offset owns it, or at a range end the content that ends
+  // there; see `drawingAtOffset`.
+  const picture = drawingAtOffset(line, offset, segment, upstream);
   if (picture) return pictureEdgeX(picture, offset > picture.start);
   let x = segment ? (segment.spans[0]?.box.x ?? line.contentX) : line.contentX;
+  let passed = false;
   for (const span of spans) {
+    // A range that ends where a float's jump begins stops before the jump.
+    if (upstream && passed && offset === span.range.start && (span.wrapAdvanceBefore ?? 0) > 0)
+      return x;
+    passed = true;
     if (offset <= span.range.start)
       return span.style.shaping ? spanOffsetX(span, span.range.start, measurer) : span.box.x;
     if (offset >= span.range.end) {
@@ -133,7 +140,7 @@ export function rangeBandsWithinLine(
   const spans = segment?.spans ?? line.spans;
   if (!spans.some((span) => span.style.shaping !== undefined)) {
     const a = xWithinLine(line, start, measurer, segment);
-    const b = xWithinLine(line, end, measurer, segment);
+    const b = xWithinLine(line, end, measurer, segment, end > start);
     return [{ x: Math.min(a, b), width: Math.abs(b - a) }];
   }
   const bands: LineRangeBand[] = [];

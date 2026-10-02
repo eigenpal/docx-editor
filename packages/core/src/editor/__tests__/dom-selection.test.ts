@@ -403,6 +403,16 @@ describe('the position just after an inline picture', () => {
     root.remove();
   });
 
+  test('a picture that opens a line of text keeps a caret before it', () => {
+    // No span starts at offset 0, so the caret there was not written at all: Home drew no
+    // native caret and a shift-extend from the paragraph start drew no highlight.
+    const { root, paragraphId } = painted(`<w:r>${PICTURE}<w:t>cd</w:t></w:r>`);
+    for (const offset of [0, 1, 2]) {
+      expect(roundTrip(root, { paragraphId, offset })).toEqual({ paragraphId, offset });
+    }
+    root.remove();
+  });
+
   test('an endpoint on the picture spacer itself reads back on that side of the picture', () => {
     const { root, paragraphId } = painted(`<w:r><w:t>ab</w:t>${PICTURE}<w:t>cd</w:t></w:r>`);
     const spacer = root.querySelector('.docx-inline-drawing-advance')!;

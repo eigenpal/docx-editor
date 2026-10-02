@@ -6,6 +6,9 @@ import { paintLegacyDropdown } from './semantic-paint-legacy-dropdown.ts';
 import { paintLegacyCheckbox } from './semantic-paint-legacy-checkbox.ts';
 import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
 import { DEFAULT_RUN_STYLE } from '../layout/run-style.ts';
+
+/** Where each painted line's inline flow ends, in line coordinates, for its terminator mark. */
+const lineFlowEnds = new WeakMap<HTMLElement, number>();
 import {
   paintParagraphMark,
   paintManualLineBreak,
@@ -1302,6 +1305,9 @@ function paintLine(
   // inline flow left them. That flow holds every drawing spacer as well as the spans before.
   const bidi = line.spans.some((span) => span.style.shaping !== undefined);
   let logicalAdvance = 0;
+  // Where the flow has reached, in line coordinates. A picture's spacer reaches its far edge,
+  // so it also covers a float's jump before the picture, which no span carries.
+  let flowRight = line.contentX;
   const appendDrawingAdvancesBefore = (paragraphId: string, modelOffset: number): void => {
     while (
       nextInlineDrawing < inlineDrawings.length &&
@@ -1310,7 +1316,10 @@ function paintLine(
           inlineDrawings[nextInlineDrawing]!.start < modelOffset))
     ) {
       const drawing = inlineDrawings[nextInlineDrawing]!;
-      const advance = Math.max(0, drawing.advanceEnd - drawing.advanceStart);
+      const advance = bidi
+        ? Math.max(0, drawing.advanceEnd - drawing.advanceStart)
+        : Math.max(0, drawing.advanceEnd - flowRight);
+      flowRight = Math.max(flowRight, drawing.advanceEnd);
       const spacer = document.createElement('span');
       spacer.className = 'docx-inline-drawing-advance';
       spacer.dataset.docxMarker = '';
@@ -1367,6 +1376,7 @@ function paintLine(
   for (const [spanIndex, span] of line.spans.entries()) {
     appendDrawingAdvancesBefore(span.range.paragraphId, span.range.start);
     if (!bidi) appendWrapAdvance(span);
+    flowRight = Math.max(flowRight, span.box.x + span.box.width);
     const band = Math.min(span.box.height + leading, line.box.height);
     const painted = span.noteSeparator
       ? paintNoteSeparatorSpan(document, span, line, scale)
@@ -1433,6 +1443,8 @@ function paintLine(
     lineSegments(line)[lineSegments(line).length - 1]?.paragraphId ?? line.range.paragraphId,
     Number.POSITIVE_INFINITY
   );
+  const flowEnd = bidi ? line.contentX + logicalAdvance : flowRight;
+  lineFlowEnds.set(element, flowEnd);
   // A span-less line (empty paragraph) has no inline content, and a browser will not
   // draw a caret at a position with no inline box to measure. The <br> is the anchor;
   // sizing it to the line keeps the caret the paragraph's font height, not the div's
@@ -1451,7 +1463,7 @@ function paintLine(
   });
   paintRunBorders(document, element, line, scale);
   if (ctx.showParagraphMarks && line.manualBreakAfter)
-    paintManualLineBreak(document, line, element, scale, ctx.revisionStyles, paragraphRtl);
+    paintManualLineBreak(document, line, element, flowEnd, scale, ctx.revisionStyles, paragraphRtl);
   const drawingCtx = drawingContextOf(asResolvedPaintContext(ctx));
   if (line.drawings && line.drawings.length > 0) {
     for (const painted of paintInlineDrawingsOnLine(
@@ -1602,12 +1614,7 @@ function paintFragment(
     (ctx.showParagraphMarks && fragment.paragraphEnd) ||
     (fragment.markRevisions && fragment.markRevisions.length > 0)
   ) {
-    const glyph = paintParagraphMark(
-      document,
-      fragment.markRevisions ?? [],
-      scale,
-      ctx.revisionStyles
-    );
+    const glyph = paintParagraphMark(document, fragment.markRevisions ?? [], ctx.revisionStyles);
     const last = fragment.lines[fragment.lines.length - 1];
     if (last && lastElement) {
       // On the last line's baseline after its content, at the mark's own size. No content
@@ -1617,7 +1624,9 @@ function paintFragment(
         markStyle?.fontSizePt ??
         last.spans.at(-1)?.style.fontSizePt ??
         DEFAULT_RUN_STYLE.fontSizePt;
-      seatTerminatorMark(glyph, lastElement, last, paragraphIsRtl(fragment.props), size, scale);
+      const flowEnd = lineFlowEnds.get(lastElement) ?? last.contentX;
+      const rtl = paragraphIsRtl(fragment.props);
+      seatTerminatorMark(glyph, lastElement, last, rtl, size, scale, flowEnd);
     }
   }
   // Layout owns border geometry. Side rules sit OUTSIDE the text column — Word draws them

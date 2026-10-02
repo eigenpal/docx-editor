@@ -99,20 +99,18 @@ function drawingSpacerIdentity(node: Node | undefined): SemanticPosition | null 
   return validatedPosition(element.dataset.drawingParagraphId, element.dataset.drawingStart);
 }
 
-/** The advance spacer of the picture that ends just before `position`, when one is painted. */
-function drawingSpacerBefore(searchRoot: Element, position: SemanticPosition): Element | null {
-  if (!Number.isInteger(position.offset) || position.offset < 1) return null;
+/** The advance spacer of the picture at model offset `start`, when one is painted. */
+function drawingSpacerAt(searchRoot: Element, paragraphId: string, start: number): Element | null {
+  if (!Number.isInteger(start) || start < 0) return null;
   // The offset is a model integer, never document text, so it is safe in the selector. The
   // id is narrowed the same way `paragraphElements` does, and only when it is CSS-safe.
-  const byStart = `.docx-inline-drawing-advance[data-drawing-start="${position.offset - 1}"]`;
-  const selector = CSS_STRING_UNSAFE.test(position.paragraphId)
+  const byStart = `.docx-inline-drawing-advance[data-drawing-start="${start}"]`;
+  const selector = CSS_STRING_UNSAFE.test(paragraphId)
     ? byStart
-    : `${byStart}[data-drawing-paragraph-id="${position.paragraphId}"]`;
+    : `${byStart}[data-drawing-paragraph-id="${paragraphId}"]`;
   for (const spacer of searchRoot.querySelectorAll(selector)) {
     const identity = drawingSpacerIdentity(spacer);
-    if (identity?.paragraphId === position.paragraphId && identity.offset === position.offset - 1) {
-      return spacer;
-    }
+    if (identity?.paragraphId === paragraphId && identity.offset === start) return spacer;
   }
   return null;
 }
@@ -445,14 +443,16 @@ function domPointFromPositionIn(
   }
   if (fallback) return fallback;
 
-  // Just after an inline picture that no text follows: a picture that ends a line, or one
-  // alone in its paragraph. The line's child index past the picture's advance spacer is that
-  // position, and `positionFromChildIndex` reads it back the same way.
-  const spacer = drawingSpacerBefore(searchRoot, position);
+  // Beside an inline picture that no text holds: just after one that ends a line or stands
+  // alone, or just before one that opens a line. The line's child index past (or at) the
+  // picture's advance spacer is that position, and `positionFromChildIndex` reads it back.
+  const after = drawingSpacerAt(searchRoot, position.paragraphId, position.offset - 1);
+  const before = after ? null : drawingSpacerAt(searchRoot, position.paragraphId, position.offset);
+  const spacer = after ?? before;
   if (spacer?.parentNode) {
     return {
       node: spacer.parentNode,
-      offset: [...spacer.parentNode.childNodes].indexOf(spacer) + 1,
+      offset: [...spacer.parentNode.childNodes].indexOf(spacer) + (after ? 1 : 0),
     };
   }
 

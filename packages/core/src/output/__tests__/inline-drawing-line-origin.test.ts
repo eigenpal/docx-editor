@@ -246,6 +246,35 @@ describe('the paragraph mark after an inline picture', () => {
     expect(markX(layout)).toBeCloseTo(last.box.x + last.box.width, 5);
   });
 
+  test('follows a picture that jumped a float, measured through the painted flow', () => {
+    // 66pt of text and a 100pt picture do not fit before the float at 120pt, so the picture
+    // jumps to 220pt. No span carries that jump: the picture's spacer must reach its far
+    // edge, or the mark seated at the end of the flow lands inside the float.
+    const { layout, line } = pictureLine(
+      paragraph(`${floatAt120}<w:r><w:t>abcdefghijk</w:t>${drawing}</w:r>`)
+    );
+    const picture = line.drawings![0]!;
+    expect(picture.advanceStart).toBeCloseTo(220, 5);
+    const host = document.createElement('div');
+    paintSemanticLayout(host, layout, { scale: SCALE, showParagraphMarks: true });
+    const element = host.querySelector<HTMLElement>(`[data-line-id="${line.id}"]`)!;
+    let flow = 0;
+    let spanIndex = 0;
+    for (const child of element.children) {
+      const item = child as HTMLElement;
+      if (item.classList.contains('docx-paragraph-mark')) {
+        expect(flow + parseFloat(item.style.left) / SCALE).toBeCloseTo(
+          picture.advanceEnd - line.contentX,
+          5
+        );
+        return;
+      }
+      if (item.classList.contains('layout-run')) flow += line.spans[spanIndex++]!.box.width;
+      else if (item.style.display === 'inline-block') flow += parseFloat(item.style.width) / SCALE;
+    }
+    throw new Error('no paragraph mark in the line');
+  });
+
   test("sits on the line's baseline at the paragraph mark's own size", () => {
     // A tall picture line has its baseline at the picture's foot. The mark joins the line's
     // inline flow, so it shares that baseline, and its size is the mark's, not the text's.
