@@ -1141,22 +1141,27 @@ export function breakParagraph(
       recordTopAndBottomAnchorLineTop(piece.start);
       const measure = measureInlineDrawing(piece.inlineDrawing.projection);
       const atomWidth = measure.totalWidth;
-      // A picture that does not fit before a float resumes past it, keeping the text before it.
-      const pictureMetrics = {
-        height: measure.lineContribution,
-        baseline: measure.lineContribution,
-      };
+      // A picture that does not fit before a float resumes past it (probed at the line's own
+      // metrics: the picture's would move its text), and the text before it stays put.
       let jumps = false;
       if (holdsContent() && line.width + atomWidth > lineAvailable()) {
-        exclusionProbe.setMetrics(pictureMetrics, atomWidth);
         const settledWidth = line.width;
         jumps = tryAdvanceToNextPassage() && line.width + atomWidth <= lineAvailable() + 0.001;
         line.width = settledWidth;
         if (!jumps) closeLine();
       }
-      exclusionProbe.setMetrics(pictureMetrics, atomWidth);
+      exclusionProbe.setMetrics(
+        { height: measure.lineContribution, baseline: measure.lineContribution },
+        atomWidth
+      );
+      const jumpedLine = line;
       if (!jumps) applyInlineObjectSkipIfNeeded(atomWidth, measure.lineContribution);
       if (!ensurePlacementWidth(atomWidth)) continue;
+      if (jumps && line !== jumpedLine) {
+        // Placement refused the jump at the picture's own height and closed the line.
+        applyInlineObjectSkipIfNeeded(atomWidth, measure.lineContribution);
+        if (!ensurePlacementWidth(atomWidth)) continue;
+      }
       const { extentTopY } = growLineMetricsForDrawing(piece.style, measure);
       const slotX = lineOrigin() + line.width;
       line.drawings.push(
@@ -1202,13 +1207,9 @@ export function breakParagraph(
       const closed = lines[lines.length - 1]!;
       closed.pageBreakAfter = true;
       firstLineOpen = carriesSlot && slotLine && holdsOnlyPageBreak(closed);
-      // NOT `trailingLineBreak`, unlike the hard break / column break above. An empty
-      // remainder publishes no line on the page the break opened: Word Online puts the
-      // following block flush at the top of that page, which `paragraph-spacing-borders`
-      // and `section-aware-pagination` pin against the comprehensive fixture. The caret
-      // after such a break therefore has nowhere to go on the new page, which is why the
-      // click that lands in the blank space beside the mark resolves BEFORE it — see
-      // `hitTestSemantic`.
+      // NOT `trailingLineBreak`: an empty remainder publishes no line on the page the break
+      // opened, so the following block sits at its top (`paragraph-spacing-borders` and
+      // `section-aware-pagination` pin it). A click beside the mark resolves BEFORE it.
       trailingLineBreak = false;
       continue;
     }

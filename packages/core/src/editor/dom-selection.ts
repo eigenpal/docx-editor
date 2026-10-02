@@ -305,7 +305,7 @@ export function positionFromDomPoint(
       if (!last || entry.identity!.start > last.identity!.start) last = entry;
     }
     if (last?.identity) {
-      const isBreak = /^\n?$/.test(last.run.textContent ?? '');
+      const isBreak = last.run.textContent === '\n';
       const { start, end } = last.identity;
       return { paragraphId: last.identity.paragraphId, offset: isBreak ? start : end };
     }
