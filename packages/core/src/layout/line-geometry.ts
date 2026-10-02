@@ -6,7 +6,8 @@
 
 import { segmentGraphemes, type GraphemeSegment } from './grapheme.ts';
 import { MAX_CARET_ADVANCE_UTF16 } from './shaped-caret-advances.ts';
-import { drawingAtOffset, pictureEdgeX, spanOffsetX } from './semantic-hit-test.ts';
+import { drawingAtOffset, pictureEdgeX } from './inline-picture-caret.ts';
+import { spanOffsetX } from './semantic-hit-test.ts';
 import type { LineSegment } from './line-segments.ts';
 import type { LineRecord, StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 

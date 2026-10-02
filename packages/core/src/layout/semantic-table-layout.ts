@@ -681,10 +681,7 @@ function placeCellParagraph(
       height: Math.max(0, maxBottom - top),
     });
     const placedDrawings = pendingLine.drawings.map((drawing) =>
-      clipInlineDrawingRecordToRegion(
-        Object.freeze({ ...shiftInlineDrawingRecord(drawing, penX, y), paragraphId }),
-        cellClip
-      )
+      Object.freeze({ ...shiftInlineDrawingRecord(drawing, penX, y), paragraphId })
     );
     const content = alignLineWithPictures(
       placedSpans,
@@ -706,7 +703,10 @@ function placeCellParagraph(
       (aligned) =>
         lineAlignOffset(placedSpans, aligned, alignment, lineAvailableWidth, pendingLine.width)
     );
-    const { spans: alignedSpans, drawings: alignedDrawings, offset: alignOffset } = content;
+    const { spans: alignedSpans, offset: alignOffset } = content;
+    const alignedDrawings = content.drawings.map((drawing) =>
+      clipInlineDrawingRecordToRegion(drawing, cellClip)
+    );
     rawRecords.push({
       id: deps.nextLineId(paragraphId, pendingLine.start, priorLineCount + lineIndex),
       range: { paragraphId, start: pendingLine.start, end: pendingLine.end },

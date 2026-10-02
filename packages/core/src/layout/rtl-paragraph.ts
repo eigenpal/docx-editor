@@ -69,13 +69,6 @@ export function bidiPieces(
   sourceBoundaries?: ReadonlySet<number>,
   pageBreaksIgnored = false
 ): readonly FieldAwarePiece[] {
-  const text = pieces.map((piece) => piece.text).join('');
-  if (
-    !rtl &&
-    !/[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufeff]/u.test(text) &&
-    !pieces.some((piece) => runIsRtl(piece.props))
-  )
-    return pieces;
   // An inline picture is its U+FFFC in the text (UAX #9 class ON), and it gets its own piece
   // back afterwards with the level it resolved to. Its run's own `w:rtl` does not place it: a
   // picture joins the direction of the runs on both sides of it when they agree, and takes
@@ -83,6 +76,13 @@ export function bidiPieces(
   const pictures = new Map<number, FieldAwarePiece>();
   const isPicture = (piece: FieldAwarePiece | undefined) =>
     piece?.inlineDrawing !== undefined && piece.text === PICTURE_CHAR;
+  const text = pieces.map((piece) => piece.text).join('');
+  if (
+    !rtl &&
+    !/[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufeff]/u.test(text) &&
+    !pieces.some((piece) => !isPicture(piece) && runIsRtl(piece.props))
+  )
+    return pieces;
   const resolvable = pieces.map((piece, index): FieldAwarePiece => {
     if (!isPicture(piece)) return piece;
     pictures.set(piece.start, piece);

@@ -2773,10 +2773,7 @@ function layoutBlocksPass(
         height: contentHeight(),
       });
       const placedDrawings = pendingLine.drawings.map((drawing) =>
-        clipInlineDrawingRecordToRegion(
-          Object.freeze({ ...shiftInlineDrawingRecord(drawing, penX, cursorY), paragraphId }),
-          pageClip
-        )
+        Object.freeze({ ...shiftInlineDrawingRecord(drawing, penX, cursorY), paragraphId })
       );
       const content = alignLineWithPictures(
         placedSpans,
@@ -2798,7 +2795,11 @@ function layoutBlocksPass(
         (aligned) =>
           lineAlignOffset(placedSpans, aligned, alignment, measure.available, measure.used)
       );
-      const { spans: alignedSpans, drawings: alignedDrawings, offset: alignOffset } = content;
+      const { spans: alignedSpans, offset: alignOffset } = content;
+      // Clip where alignment put each picture, not where the line's fill left it.
+      const alignedDrawings = content.drawings.map((drawing) =>
+        clipInlineDrawingRecordToRegion(drawing, pageClip)
+      );
       const record: LineRecord = {
         id: bodyLineId(paragraph.id, pendingLine.start, lineIndex),
         range: { paragraphId, start: pendingLine.start, end: pendingLine.end },

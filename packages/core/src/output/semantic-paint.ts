@@ -72,6 +72,7 @@ import {
 } from './semantic-paint-hf-chrome.ts';
 import { anchoredDrawingsOf } from '../layout/semantic-records.ts';
 import { lineSegments } from '../layout/line-segments.ts';
+import { pictureIsRtl } from '../layout/inline-picture-caret.ts';
 import { type AnchoredDrawingRecord } from '../layout/drawing-layout.ts';
 import { headerFooterAnchoredDrawingOrigin } from '../layout/header-footer-drawing-origin.ts';
 import {
@@ -1303,7 +1304,7 @@ function paintLine(
   // inline flow left them. That flow holds every drawing spacer as well as the spans before.
   const bidi =
     line.spans.some((span) => span.style.shaping !== undefined) ||
-    (line.drawings ?? []).some((drawing) => (drawing.bidiLevel ?? 0) % 2 === 1);
+    (line.drawings ?? []).some(pictureIsRtl);
   let logicalAdvance = 0;
   // How far the flow reaches; a picture's spacer reaches its far edge, past any jump before it.
   let flowRight = line.contentX;

@@ -129,3 +129,21 @@ test('a point beyond a leading picture at the right is the line start', () => {
   const hit = hitTestPage(layout, 0, { x: CONTENT_RIGHT + 20, y: line.box.y + 1 });
   expect(hit?.position.offset).toBe(0);
 });
+
+test("a picture's own run direction does not make a left-to-right paragraph bidi", () => {
+  const { line, drawing } = lay(
+    latin('ab ') + picture.replace('<w:r>', '<w:r><w:rPr><w:rtl/></w:rPr>') + latin(' cd'),
+    ''
+  );
+  expect(drawing.bidiLevel).toBeUndefined();
+  expect(line.spans.every((span) => span.style.shaping === undefined)).toBe(true);
+});
+
+test('a point past the logical end of a line beyond its last picture is the line end', () => {
+  // The hidden run after the picture paints nothing, but the line still ends after it.
+  const hidden = '<w:r><w:rPr><w:vanish/></w:rPr><w:t>x</w:t></w:r>';
+  const { layout, line, drawing } = lay(hebrew('שלום') + picture + hidden);
+  expect(drawing.advanceStart).toBeLessThan(spanAt(line, 0).box.x);
+  const hit = hitTestPage(layout, 0, { x: drawing.advanceStart - 20, y: line.box.y + 1 });
+  expect(hit?.position.offset).toBe(line.range.end);
+});

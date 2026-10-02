@@ -207,3 +207,15 @@ test('a selection of the text before a picture stops at the text', () => {
   const [band] = rangeBandsWithinLine(line, 0, picture.start);
   expect(band!.x + band!.width).toBeCloseTo(picture.advanceStart, 5);
 });
+
+test('a point before the start of a line of pictures only is the line start', () => {
+  // A hidden run before the picture paints nothing, but the line still starts before it.
+  const { layout, line, picture, y } = pictureLine(
+    '<w:pPr><w:jc w:val="center"/></w:pPr>' +
+      `<w:r><w:rPr><w:vanish/></w:rPr><w:t>x</w:t></w:r><w:r>${drawing}</w:r>`
+  );
+  expect(line.spans).toHaveLength(0);
+  expect(picture.start).toBe(1);
+  const hit = hitTestPage(layout, 0, { x: picture.advanceStart - 20, y });
+  expect(hit?.position.offset).toBe(line.range.start);
+});
