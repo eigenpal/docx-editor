@@ -138,7 +138,6 @@ export function paintParagraphMark(
     glyph.setAttribute('aria-hidden', 'true');
     glyph.contentEditable = 'false';
     glyph.textContent = '\u00b6';
-    glyph.style.position = 'absolute';
     glyph.style.pointerEvents = 'none';
     glyph.style.color = 'var(--doc-revision-format)';
     return glyph;
@@ -156,7 +155,6 @@ export function paintParagraphMark(
   glyph.dataset.revisionIds = revisions.map((revision) => revision.id).join(' ');
   glyph.dataset.revisionKinds = revisions.map((revision) => revision.kind).join(' ');
   glyph.textContent = '\u00b6';
-  glyph.style.position = 'absolute';
   glyph.style.pointerEvents = 'none';
   const removes = markRevisionRemovesMark(shown);
   // Under author colouring the glyph follows its author, like the spans beside it; the

@@ -1141,8 +1141,14 @@ export function breakParagraph(
       recordTopAndBottomAnchorLineTop(piece.start);
       const measure = measureInlineDrawing(piece.inlineDrawing.projection);
       const atomWidth = measure.totalWidth;
-      // Placement below decides whether the picture fits: like a word, one that does not fit
-      // before a float resumes past it on this line, and closes the line only otherwise.
+      // Like a word, a picture that does not fit before a float resumes past it, so the line
+      // closes only when no passage on it fits; the probe leaves the pen where it settled.
+      const fitsHere = line.width + atomWidth <= lineAvailable();
+      const settledWidth = line.width;
+      const jumps =
+        !fitsHere && tryAdvanceToNextPassage() && line.width + atomWidth <= lineAvailable();
+      line.width = settledWidth;
+      if (holdsContent() && !fitsHere && !jumps) closeLine();
       exclusionProbe.setMetrics(
         {
           height: measure.lineContribution,

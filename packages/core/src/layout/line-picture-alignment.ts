@@ -1,5 +1,4 @@
 import { shiftInlineDrawingRecord, type InlineDrawingRecord } from './drawing-layout.ts';
-import { alignDrawings } from './pending-line.ts';
 import type { StyleSpanRecord } from './semantic-records.ts';
 import { DEFAULT_RUN_STYLE } from './run-style.ts';
 
@@ -14,9 +13,10 @@ const OBJECT_REPLACEMENT = '￼';
  * right-to-left paragraph stands to the right of the text that follows it. Each picture moves
  * to where its stand-in landed, and the stand-ins leave the line again.
  *
- * A line with no shaped text and no resolved pictures keeps its logical order, so its
- * pictures move by the line's alignment offset alone. A line of pictures only in a
- * right-to-left paragraph still reorders, so its pictures read right to left.
+ * A line that needed no bidi resolution takes stand-ins without a level, so it keeps its
+ * logical order while alignment and justification still move each picture with the text
+ * around it. A line of pictures only in a right-to-left paragraph reorders, so its pictures
+ * read right to left.
  */
 export function alignLineWithPictures(
   placedSpans: readonly StyleSpanRecord[],
@@ -29,35 +29,33 @@ export function alignLineWithPictures(
   readonly drawings: readonly InlineDrawingRecord[];
   readonly offset: number;
 } {
+  if (placedDrawings.length === 0) {
+    const spans = align(placedSpans);
+    return { spans, offset: offsetOf(spans), drawings: placedDrawings };
+  }
   const template = placedSpans.find((span) => span.style.shaping);
   const resolved =
     template !== undefined || placedDrawings.some((drawing) => drawing.bidiLevel !== undefined);
-  if (!resolved || placedDrawings.length === 0) {
-    const spans = align(placedSpans);
-    const offset = offsetOf(spans);
-    return { spans, offset, drawings: alignDrawings(placedDrawings, offset) };
-  }
   const baseLevel = template?.style.shaping?.baseLevel ?? (paragraphRtl ? 1 : 0);
   const groupsByRun = template?.style.shaping?.runDirection !== undefined;
-  const templateStyle = template?.style ?? placedSpans[0]?.style ?? DEFAULT_RUN_STYLE;
+  const { shaping: _shaping, ...plainStyle } =
+    template?.style ?? placedSpans[0]?.style ?? DEFAULT_RUN_STYLE;
   const standIns = placedDrawings.map((drawing): StyleSpanRecord => {
     const level = drawing.bidiLevel ?? baseLevel;
     const direction = level % 2 ? ('rtl' as const) : ('ltr' as const);
+    const shaping = {
+      script: 'Zyyy',
+      direction,
+      level,
+      baseLevel,
+      // Lines that group text by run direction read a picture in its resolved direction.
+      ...(groupsByRun ? { runDirection: direction } : {}),
+    };
     return {
       range: { paragraphId: drawing.paragraphId, start: drawing.start, end: drawing.start + 1 },
       text: OBJECT_REPLACEMENT,
       props: [],
-      style: {
-        ...templateStyle,
-        shaping: {
-          script: 'Zyyy',
-          direction,
-          level,
-          baseLevel,
-          // Lines that group text by run direction read a picture in its resolved direction.
-          ...(groupsByRun ? { runDirection: direction } : {}),
-        },
-      },
+      style: resolved ? { ...plainStyle, shaping } : plainStyle,
       box: {
         x: drawing.advanceStart,
         y: drawing.y,

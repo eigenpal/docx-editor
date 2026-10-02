@@ -9,6 +9,7 @@
 import { describe, expect, test } from 'bun:test';
 import { createFixedMeasurer, layoutSemanticDocument, linesOf, type LineRecord } from '../index.ts';
 import { caretBoxOnLine, hitTestPage } from '../semantic-hit-test.ts';
+import { rangeBandsWithinLine } from '../line-geometry.ts';
 import { layoutContext, load } from './anchored-drawing-test-fixtures.ts';
 
 const NAMESPACES =
@@ -111,4 +112,12 @@ test('two pictures alone in a right-to-left paragraph read right to left', () =>
   const [first, second] = line.drawings!;
   expect(first!.advanceEnd).toBeCloseTo(CONTENT_RIGHT, 5);
   expect(second!.advanceEnd).toBeCloseTo(first!.advanceStart, 5);
+});
+
+test('a selection over a picture between right-to-left words covers the picture', () => {
+  const { line, drawing } = lay(hebrew('שלום') + picture + hebrew('עולם'));
+  const bands = rangeBandsWithinLine(line, drawing.start, drawing.start + 1);
+  expect(bands).toHaveLength(1);
+  expect(bands[0]!.x).toBeCloseTo(drawing.advanceStart, 5);
+  expect(bands[0]!.width).toBeCloseTo(drawing.advanceEnd - drawing.advanceStart, 5);
 });

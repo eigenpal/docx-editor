@@ -190,6 +190,42 @@ describe('a line that opens with an inline picture', () => {
     expectRunsAtLayout(shaped, shapedLine);
   });
 
+  test('a justified line moves a picture with the words around it', () => {
+    // Justification spreads slack after each space. A picture after a space moves with the
+    // words, so it neither overlaps the word before it nor leaves the word after it behind.
+    // 90pt of words, the 100pt picture, then words enough to fill and wrap the line.
+    const part = load(
+      `<w:document ${NAMESPACES}><w:body>` +
+        paragraph(
+          '<w:r><w:t xml:space="preserve">aaaa bbbb cccc </w:t>' +
+            drawing +
+            `<w:t xml:space="preserve"> ${'dddd '.repeat(30)}</w:t></w:r>`,
+          '<w:jc w:val="both"/>'
+        ) +
+        '</w:body></w:document>'
+    );
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+      inlineDrawingLayout: layoutContext(part),
+    });
+    const line = linesOf(layout).find((record) => (record.drawings?.length ?? 0) > 0)!;
+    expect(linesOf(layout).length).toBeGreaterThan(1);
+    const picture = line.drawings![0]!;
+    const before = line.spans.filter((span) => span.range.end <= picture.start).at(-1)!;
+    const after = line.spans.find((span) => span.range.start > picture.start);
+    expect(picture.advanceStart).toBeGreaterThan(before.box.x + before.box.width + 0.001);
+    if (after) expect(after.box.x).toBeCloseTo(picture.advanceEnd, 5);
+    // Paint flows the picture's spacer from the word before it to the picture's far edge, so
+    // the justification gap before the picture is inside it and the word after starts there.
+    const host = document.createElement('div');
+    paintSemanticLayout(host, layout, { scale: SCALE });
+    const spacer = host.querySelector<HTMLElement>('.docx-inline-drawing-advance')!;
+    expect(parseFloat(spacer.style.width) / SCALE).toBeCloseTo(
+      picture.advanceEnd - (before.box.x + before.box.width),
+      5
+    );
+  });
+
   test('a centered line centers the picture and the text as one unit', () => {
     const { line } = pictureLine(paragraph(`<w:r>${drawing}<w:t>abcd</w:t></w:r>`, center));
     const last = line.spans.at(-1)!;

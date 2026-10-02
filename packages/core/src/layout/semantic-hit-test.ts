@@ -617,6 +617,7 @@ export function drawingAtOffset(
   upstream = false
 ): InlineDrawingRecord | null {
   const drawings = segment?.drawings ?? line.drawings ?? [];
+  if (drawings.length === 0) return null;
   const spans = segment?.spans ?? line.spans;
   const starting = () => drawings.find((drawing) => drawing.start === offset);
   const ending = () => drawings.find((drawing) => drawing.start + 1 === offset);
@@ -684,7 +685,7 @@ function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContex
     if (hitBoundsContainDrawing(drawing, { x, y })) {
       return {
         offset: drawing.start,
-        x: drawing.hitBounds.x,
+        x: pictureEdgeX(drawing, false),
         withinSpan: true,
         drawing,
       };
@@ -707,7 +708,10 @@ function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContex
     if (rtl ? x < leftmost.advanceStart : x >= rightmost.advanceEnd) {
       return endOfLine(line, rtl ? leftmost.advanceStart : rightmost.advanceEnd, context);
     }
-    return pictureHit(x <= leftmost.advanceStart ? leftmost : rightmost, x, y);
+    if (x <= leftmost.advanceStart || x >= rightmost.advanceEnd) {
+      return pictureHit(x <= leftmost.advanceStart ? leftmost : rightmost, x, y);
+    }
+    return gapOffset(line, spans, x, context);
   }
   if (spans.length === 0) {
     // An empty paragraph still has a position to click into, and it is the line's ALIGNED

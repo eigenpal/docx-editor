@@ -7,8 +7,6 @@ import { paintLegacyCheckbox } from './semantic-paint-legacy-checkbox.ts';
 import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
 import { DEFAULT_RUN_STYLE } from '../layout/run-style.ts';
 
-/** Where each painted line's inline flow ends, in line coordinates, for its terminator mark. */
-const lineFlowEnds = new WeakMap<HTMLElement, number>();
 import {
   paintParagraphMark,
   paintManualLineBreak,
@@ -1195,6 +1193,9 @@ function paintHyperlinkAnchor(
   return element;
 }
 
+/** Where each painted line's inline flow ends, in line coordinates, for its terminator mark. */
+const lineFlowEnds = new WeakMap<HTMLElement, number>();
+
 /**
  * A line is ONE inline flow, not a row of absolutely positioned words.
  *
@@ -1305,8 +1306,7 @@ function paintLine(
   // inline flow left them. That flow holds every drawing spacer as well as the spans before.
   const bidi = line.spans.some((span) => span.style.shaping !== undefined);
   let logicalAdvance = 0;
-  // Where the flow has reached, in line coordinates. A picture's spacer reaches its far edge,
-  // so it also covers a float's jump before the picture, which no span carries.
+  // How far the flow reaches; a picture's spacer reaches its far edge, past any jump before it.
   let flowRight = line.contentX;
   const appendDrawingAdvancesBefore = (paragraphId: string, modelOffset: number): void => {
     while (

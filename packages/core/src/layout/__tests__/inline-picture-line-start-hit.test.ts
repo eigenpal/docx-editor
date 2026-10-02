@@ -171,3 +171,33 @@ test('a selection of a picture before a float jump stops at the picture', () => 
   expect(band!.x).toBeCloseTo(picture.advanceStart, 5);
   expect(band!.x + band!.width).toBeCloseTo(picture.advanceEnd, 5);
 });
+
+describe('a picture beside a float that fits nowhere on the line', () => {
+  const flushFloat = floatAt120.replaceAll('254000', '0');
+
+  test('leaves the text beside the float and opens the next line', () => {
+    // 66pt of text fits before the float. A 300pt picture fits in neither passage, so it
+    // opens the next line; the text line stays at the top beside the float.
+    const wide = drawing.replaceAll('1270000', '3810000');
+    const part = load(
+      `<w:document ${NAMESPACES}><w:body><w:p>${flushFloat}<w:r><w:t>abcdefghijk</w:t>${wide}</w:r></w:p></w:body></w:document>`
+    );
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+      inlineDrawingLayout: layoutContext(part),
+    });
+    const [text, pictureLine] = linesOf(layout);
+    expect(text!.box.y).toBeCloseTo(0, 5);
+    expect(text!.spans[0]!.box.x).toBeCloseTo(0, 5);
+    expect(text!.drawings ?? []).toHaveLength(0);
+    expect(pictureLine!.drawings).toHaveLength(1);
+  });
+
+  test('a point in the gap between pictures on a line of pictures only is their boundary', () => {
+    const { layout, line } = pictureLine(`${flushFloat}<w:r>${drawing}${drawing}${drawing}</w:r>`);
+    const [first, second] = line.drawings!;
+    expect(second!.advanceStart).toBeCloseTo(220, 5);
+    const hit = hitTestPage(layout, 0, { x: 110, y: first!.hitBounds.y + 1 });
+    expect(hit?.position.offset).toBe(first!.start + 1);
+  });
+});

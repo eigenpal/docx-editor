@@ -144,6 +144,11 @@ export function rangeBandsWithinLine(
     return [{ x: Math.min(a, b), width: Math.abs(b - a) }];
   }
   const bands: LineRangeBand[] = [];
+  // A picture reorders with the text on a shaped line, so it brings its own band.
+  for (const picture of segment?.drawings ?? line.drawings ?? []) {
+    if (picture.start < start || picture.start >= end) continue;
+    bands.push({ x: picture.advanceStart, width: picture.advanceEnd - picture.advanceStart });
+  }
   for (const span of spans) {
     const from = Math.max(start, span.range.start);
     const to = Math.min(end, span.range.end);
