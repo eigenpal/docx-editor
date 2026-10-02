@@ -288,8 +288,6 @@ export {
 
 export { indentTwips, MAX_PARAGRAPH_INDENT_TWIPS, paragraphIndent } from './paragraph-indent.ts';
 
-export { alignDrawings } from './pending-line.ts';
-
 /**
  * Measure and break one paragraph into pending lines at `available` width.
  * Cache hits skip measurement. Span x offsets are paragraph-relative, never page-relative.
@@ -1143,12 +1141,12 @@ export function breakParagraph(
       const atomWidth = measure.totalWidth;
       // Like a word, a picture that does not fit before a float resumes past it, so the line
       // closes only when no passage on it fits; the probe leaves the pen where it settled.
-      const fitsHere = line.width + atomWidth <= lineAvailable();
-      const settledWidth = line.width;
-      const jumps =
-        !fitsHere && tryAdvanceToNextPassage() && line.width + atomWidth <= lineAvailable();
-      line.width = settledWidth;
-      if (holdsContent() && !fitsHere && !jumps) closeLine();
+      if (holdsContent() && line.width + atomWidth > lineAvailable()) {
+        const settledWidth = line.width;
+        const jumps = tryAdvanceToNextPassage() && line.width + atomWidth <= lineAvailable();
+        line.width = settledWidth;
+        if (!jumps) closeLine();
+      }
       exclusionProbe.setMetrics(
         {
           height: measure.lineContribution,

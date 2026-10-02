@@ -67,7 +67,7 @@ const PARAGRAPH_FIELDS = {
   // them: paint kept drawing the attribution of a decision the document no longer records.
   paragraphEnd: 'hashed',
   emptyParagraphStyle: 'hashed',
-  paragraphMarkStyle: 'hashed',
+  paragraphMarkSizePt: 'hashed',
   markRevisions: 'hashed',
   // Derived from `markRevisions` at publish time by one shared function, so it cannot move
   // without the list moving first.

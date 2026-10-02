@@ -30,13 +30,13 @@ export function lineTerminatorEdge(
 }
 
 /**
- * Seat a terminator glyph (the pilcrow or the line-break arrow) in its painted line.
+ * Seat a terminator glyph (the pilcrow or the line-break arrow) on its painted line's baseline.
  *
- * The glyph joins the end of the line's inline flow as a zero-width inline-block, so the
- * browser sits it on the same baseline as the text and picture spacers, at its own size and
- * with no font metrics. `line-height: 0` keeps it from growing the line. The flow ends at
- * `flowEnd`, which paint knows, and `left` moves the glyph from there to the terminator edge.
- * A right-to-left glyph reads from the right of its zero-width box, so it ends at that edge.
+ * The glyph sits in a zero-height seat placed at the terminator edge, at the line's published
+ * baseline. With `font-size: 0` and `line-height: 0` the seat's own baseline is its top edge,
+ * so the inline-block glyph inside it sits exactly on the line's baseline at its own size, with
+ * no font metrics and no part in the line's flow. A right-to-left seat reads from its right
+ * edge, so its glyph ends at the terminator edge rather than starting there.
  */
 export function seatTerminatorMark(
   glyph: HTMLElement,
@@ -44,20 +44,28 @@ export function seatTerminatorMark(
   line: LineRecord,
   paragraphRtl: boolean,
   fontSizePt: number,
-  scale: number,
-  flowEnd: number
+  scale: number
 ): void {
   const edge = lineTerminatorEdge(line, paragraphRtl);
-  glyph.style.position = 'relative';
+  const seat = lineElement.ownerDocument.createElement('span');
+  seat.className = 'docx-terminator-seat';
+  seat.setAttribute('aria-hidden', 'true');
+  seat.setAttribute('contenteditable', 'false');
+  seat.style.position = 'absolute';
+  seat.style.left = `${(edge.x - line.contentX) * scale}px`;
+  seat.style.top = `${line.baseline * scale}px`;
+  seat.style.width = '0';
+  seat.style.height = '0';
+  seat.style.fontSize = '0';
+  seat.style.lineHeight = '0';
+  seat.style.whiteSpace = 'pre';
+  seat.style.pointerEvents = 'none';
+  if (edge.rtl) seat.style.direction = 'rtl';
   glyph.style.display = 'inline-block';
-  glyph.style.width = '0';
-  glyph.style.lineHeight = '0';
   glyph.style.verticalAlign = 'baseline';
   glyph.style.fontSize = `${fontSizePt * scale}px`;
-  glyph.style.left = `${(edge.x - flowEnd) * scale}px`;
-  if (edge.rtl) glyph.style.direction = 'rtl';
-  // Before an empty line's caret anchor, which would otherwise wrap the glyph to a new line.
-  lineElement.insertBefore(glyph, lineElement.querySelector(':scope > br'));
+  seat.append(glyph);
+  lineElement.append(seat);
 }
 
 /**
@@ -68,7 +76,6 @@ export function paintManualLineBreak(
   document: Document,
   line: LineRecord,
   lineElement: HTMLElement,
-  flowEnd: number,
   scale: number,
   colors?: RevisionStyleContext,
   paragraphRtl = false
@@ -107,7 +114,7 @@ export function paintManualLineBreak(
     }
   }
   const size = last?.style.fontSizePt ?? DEFAULT_RUN_STYLE.fontSizePt;
-  seatTerminatorMark(glyph, lineElement, line, paragraphRtl, size, scale, flowEnd);
+  seatTerminatorMark(glyph, lineElement, line, paragraphRtl, size, scale);
   return glyph;
 }
 

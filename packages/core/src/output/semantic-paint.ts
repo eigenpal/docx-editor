@@ -1193,9 +1193,6 @@ function paintHyperlinkAnchor(
   return element;
 }
 
-/** Where each painted line's inline flow ends, in line coordinates, for its terminator mark. */
-const lineFlowEnds = new WeakMap<HTMLElement, number>();
-
 /**
  * A line is ONE inline flow, not a row of absolutely positioned words.
  *
@@ -1443,8 +1440,6 @@ function paintLine(
     lineSegments(line)[lineSegments(line).length - 1]?.paragraphId ?? line.range.paragraphId,
     Number.POSITIVE_INFINITY
   );
-  const flowEnd = bidi ? line.contentX + logicalAdvance : flowRight;
-  lineFlowEnds.set(element, flowEnd);
   // A span-less line (empty paragraph) has no inline content, and a browser will not
   // draw a caret at a position with no inline box to measure. The <br> is the anchor;
   // sizing it to the line keeps the caret the paragraph's font height, not the div's
@@ -1463,7 +1458,7 @@ function paintLine(
   });
   paintRunBorders(document, element, line, scale);
   if (ctx.showParagraphMarks && line.manualBreakAfter)
-    paintManualLineBreak(document, line, element, flowEnd, scale, ctx.revisionStyles, paragraphRtl);
+    paintManualLineBreak(document, line, element, scale, ctx.revisionStyles, paragraphRtl);
   const drawingCtx = drawingContextOf(asResolvedPaintContext(ctx));
   if (line.drawings && line.drawings.length > 0) {
     for (const painted of paintInlineDrawingsOnLine(
@@ -1619,14 +1614,12 @@ function paintFragment(
     if (last && lastElement) {
       // On the last line's baseline after its content, at the mark's own size. No content
       // means an empty paragraph, whose mark sits at the ALIGNED origin, where the caret goes.
-      const markStyle = fragment.paragraphMarkStyle ?? fragment.emptyParagraphStyle;
       const size =
-        markStyle?.fontSizePt ??
+        fragment.paragraphMarkSizePt ??
+        fragment.emptyParagraphStyle?.fontSizePt ??
         last.spans.at(-1)?.style.fontSizePt ??
         DEFAULT_RUN_STYLE.fontSizePt;
-      const flowEnd = lineFlowEnds.get(lastElement) ?? last.contentX;
-      const rtl = paragraphIsRtl(fragment.props);
-      seatTerminatorMark(glyph, lastElement, last, rtl, size, scale, flowEnd);
+      seatTerminatorMark(glyph, lastElement, last, paragraphIsRtl(fragment.props), size, scale);
     }
   }
   // Layout owns border geometry. Side rules sit OUTSIDE the text column — Word draws them

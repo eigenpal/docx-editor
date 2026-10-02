@@ -250,20 +250,14 @@ describe('a line that opens with an inline picture', () => {
 
 describe('the paragraph mark after an inline picture', () => {
   /** The mark's x in points, in the same space as the line's records. */
-  /**
-   * The mark's x in points, in the same space as the line's records. It sits in its line's
-   * inline flow, which ends at the line's right content edge, and `left` moves it from there.
-   */
+  /** The mark's x in points, in the same space as the line's records. */
   function markX(layout: SemanticLayout): number {
     const host = document.createElement('div');
     paintSemanticLayout(host, layout, { scale: SCALE, showParagraphMarks: true });
     const line = linesOf(layout).at(-1)!;
-    const mark = host.querySelector<HTMLElement>('.docx-paragraph-mark')!;
-    expect(mark.parentElement?.dataset.lineId).toBe(line.id);
-    let flowEnd = line.contentX;
-    for (const span of line.spans) flowEnd = Math.max(flowEnd, span.box.x + span.box.width);
-    for (const picture of line.drawings ?? []) flowEnd = Math.max(flowEnd, picture.advanceEnd);
-    return flowEnd + parseFloat(mark.style.left) / SCALE;
+    const seat = host.querySelector<HTMLElement>('.docx-paragraph-mark')!.parentElement!;
+    expect(seat.parentElement?.dataset.lineId).toBe(line.id);
+    return line.contentX + parseFloat(seat.style.left) / SCALE;
   }
 
   for (const [name, body] of [
@@ -282,33 +276,24 @@ describe('the paragraph mark after an inline picture', () => {
     expect(markX(layout)).toBeCloseTo(last.box.x + last.box.width, 5);
   });
 
-  test('follows a picture that jumped a float, measured through the painted flow', () => {
+  test('follows a picture that jumped a float', () => {
     // 66pt of text and a 100pt picture do not fit before the float at 120pt, so the picture
-    // jumps to 220pt. No span carries that jump: the picture's spacer must reach its far
-    // edge, or the mark seated at the end of the flow lands inside the float.
+    // jumps to 220pt. The mark follows the picture there, not the text before the float, and
+    // the picture's spacer reaches its far edge so the flow beside it agrees.
     const { layout, line } = pictureLine(
       paragraph(`${floatAt120}<w:r><w:t>abcdefghijk</w:t>${drawing}</w:r>`)
     );
     const picture = line.drawings![0]!;
     expect(picture.advanceStart).toBeCloseTo(220, 5);
+    expect(markX(layout)).toBeCloseTo(picture.advanceEnd, 5);
     const host = document.createElement('div');
-    paintSemanticLayout(host, layout, { scale: SCALE, showParagraphMarks: true });
-    const element = host.querySelector<HTMLElement>(`[data-line-id="${line.id}"]`)!;
-    let flow = 0;
-    let spanIndex = 0;
-    for (const child of element.children) {
-      const item = child as HTMLElement;
-      if (item.classList.contains('docx-paragraph-mark')) {
-        expect(flow + parseFloat(item.style.left) / SCALE).toBeCloseTo(
-          picture.advanceEnd - line.contentX,
-          5
-        );
-        return;
-      }
-      if (item.classList.contains('layout-run')) flow += line.spans[spanIndex++]!.box.width;
-      else if (item.style.display === 'inline-block') flow += parseFloat(item.style.width) / SCALE;
-    }
-    throw new Error('no paragraph mark in the line');
+    paintSemanticLayout(host, layout, { scale: SCALE });
+    const spacer = host.querySelector<HTMLElement>('.docx-inline-drawing-advance')!;
+    const text = line.spans[0]!;
+    expect(parseFloat(spacer.style.width) / SCALE).toBeCloseTo(
+      picture.advanceEnd - (text.box.x + text.box.width),
+      5
+    );
   });
 
   test("sits on the line's baseline at the paragraph mark's own size", () => {
@@ -320,9 +305,12 @@ describe('the paragraph mark after an inline picture', () => {
     const host = document.createElement('div');
     paintSemanticLayout(host, layout, { scale: SCALE, showParagraphMarks: true });
     const mark = host.querySelector<HTMLElement>('.docx-paragraph-mark')!;
-    expect(mark.parentElement?.classList.contains('docx-line')).toBe(true);
+    const seat = mark.parentElement!;
+    const line = linesOf(layout).at(-1)!;
+    // The seat's top is the line's baseline; a zero font size makes it the seat's baseline.
+    expect(parseFloat(seat.style.top)).toBeCloseTo(line.baseline * SCALE, 3);
+    expect(parseFloat(seat.style.fontSize)).toBe(0);
     expect(mark.style.verticalAlign).toBe('baseline');
-    expect(mark.style.lineHeight).toBe('0');
     expect(mark.style.fontSize).toBe(`${24 * SCALE}px`);
   });
 });

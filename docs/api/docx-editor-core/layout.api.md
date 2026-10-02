@@ -2545,7 +2545,7 @@ export interface ParagraphFragmentRecord {
     readonly paragraphEnd?: true;
     // (undocumented)
     readonly paragraphId: string;
-    readonly paragraphMarkStyle?: ResolvedRunStyle;
+    readonly paragraphMarkSizePt?: number;
     readonly positionedFrame?: {
         readonly anchorId: string;
         readonly box: LayoutBox;

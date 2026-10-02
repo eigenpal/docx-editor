@@ -720,9 +720,17 @@ function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContex
   }
 
   const bidiSpan = nearestBidiSpan(spans, x);
-  // A picture on a shaped line has its own side to give, before the nearest text answers.
-  for (const drawing of bidiSpan ? (line.drawings ?? []) : []) {
-    if (x >= drawing.advanceStart && x < drawing.advanceEnd) return pictureHit(drawing, x, y);
+  // A picture on a shaped line has its own side to give, before the nearest text answers,
+  // and so does one at either end of the line for a point beyond it.
+  if (bidiSpan && line.drawings?.length) {
+    const edges = lineContentEdges(spans, line.drawings)!;
+    for (const drawing of line.drawings) {
+      const beyond =
+        (x < edges.left && drawing.advanceStart <= edges.left + 0.001) ||
+        (x >= edges.right && drawing.advanceEnd >= edges.right - 0.001);
+      const over = x >= drawing.advanceStart && x < drawing.advanceEnd;
+      if (over || beyond) return pictureHit(drawing, x, y);
+    }
   }
   if (bidiSpan) {
     const candidate = offsetWithinSpan(
@@ -783,6 +791,7 @@ function gapOffset(
     end: span.range.end,
     paragraphId: span.range.paragraphId,
     text: true,
+    rtl: (span.style.shaping?.level ?? 0) % 2 === 1,
   }));
   for (const picture of line.drawings ?? []) {
     pieces.push({
@@ -792,6 +801,7 @@ function gapOffset(
       end: picture.start + 1,
       paragraphId: picture.paragraphId,
       text: false,
+      rtl: (picture.bidiLevel ?? 0) % 2 === 1,
     });
   }
   let before: GapPiece | undefined;
@@ -805,9 +815,16 @@ function gapOffset(
       ? { offset: before.end, x: before.to, withinSpan: false }
       : { offset: after.start, x: after.from, withinSpan: false };
   }
+  // The boundary a gap stands for is the offset its two neighbours share. With one neighbour,
+  // or none shared, it is that piece's far side in reading order: the end of a left-to-right
+  // piece on the left of the gap, or the start of a right-to-left one.
+  const shared =
+    before && after
+      ? [before.start, before.end].find((offset) => offset === after.start || offset === after.end)
+      : undefined;
   const side = before
-    ? { offset: before.end, piece: before }
-    : after && { offset: after.start, piece: after };
+    ? { offset: shared ?? (before.rtl ? before.start : before.end), piece: before }
+    : after && { offset: after.rtl ? after.end : after.start, piece: after };
   if (!side) return { offset: line.range.start, x: line.contentX, withinSpan: false };
   const segment = lineSegments(line).find((entry) => entry.paragraphId === side.piece.paragraphId);
   const caretX = caretBoxOnLine(line, side.offset, context.measurer, segment).x;
@@ -822,6 +839,8 @@ interface GapPiece {
   readonly end: number;
   readonly paragraphId: string;
   readonly text: boolean;
+  /** Reads right to left, so its logical start is its right edge. */
+  readonly rtl: boolean;
 }
 
 function endOfLine(line: LineRecord, rightEdge: number, context: HitContext): LineOffset {

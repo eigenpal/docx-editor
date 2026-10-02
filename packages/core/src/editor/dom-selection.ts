@@ -232,6 +232,10 @@ function boundaryAtOrInside(node: Node, last: boolean): SemanticPosition | null 
 function positionFromChildIndex(container: Element, index: number): SemanticPosition | null {
   const children = [...container.childNodes];
   if (children.length === 0) return null;
+  // Written for the position after a picture, and so read back as exactly that, even when
+  // what follows paints nothing (a hidden run) and the next span starts further on.
+  const justAfter = drawingSpacerIdentity(children[index - 1]);
+  if (justAfter) return { paragraphId: justAfter.paragraphId, offset: justAfter.offset + 1 };
   for (let at = Math.max(0, index); at < children.length; at += 1) {
     const found = boundaryAtOrInside(children[at]!, false);
     if (found) return found;

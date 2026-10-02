@@ -121,3 +121,11 @@ test('a selection over a picture between right-to-left words covers the picture'
   expect(bands[0]!.x).toBeCloseTo(drawing.advanceStart, 5);
   expect(bands[0]!.width).toBeCloseTo(drawing.advanceEnd - drawing.advanceStart, 5);
 });
+
+test('a point beyond a leading picture at the right is the line start', () => {
+  // The picture is logically first, so the far right of the line is before it.
+  const { layout, line, drawing } = lay(picture + hebrew('שלום'));
+  expect(drawing.advanceEnd).toBeCloseTo(CONTENT_RIGHT, 5);
+  const hit = hitTestPage(layout, 0, { x: CONTENT_RIGHT + 20, y: line.box.y + 1 });
+  expect(hit?.position.offset).toBe(0);
+});

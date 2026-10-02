@@ -2,7 +2,8 @@ import { shiftInlineDrawingRecord, type InlineDrawingRecord } from './drawing-la
 import type { StyleSpanRecord } from './semantic-records.ts';
 import { DEFAULT_RUN_STYLE } from './run-style.ts';
 
-const OBJECT_REPLACEMENT = '￼';
+/** A picture's one model unit in text: U+FFFC OBJECT REPLACEMENT CHARACTER. */
+export const PICTURE_CHAR = '\ufffc';
 
 /**
  * Align a line's text and its inline pictures together.
@@ -53,7 +54,7 @@ export function alignLineWithPictures(
     };
     return {
       range: { paragraphId: drawing.paragraphId, start: drawing.start, end: drawing.start + 1 },
-      text: OBJECT_REPLACEMENT,
+      text: PICTURE_CHAR,
       props: [],
       style: resolved ? { ...plainStyle, shaping } : plainStyle,
       box: {
@@ -72,14 +73,14 @@ export function alignLineWithPictures(
   // already carry theirs; a stand-in carries the room left after the content before it.
   const merged = sorted.map((span, index) => {
     const previous = sorted[index - 1];
-    if (span.text !== OBJECT_REPLACEMENT || !previous) return span;
+    if (span.text !== PICTURE_CHAR || !previous) return span;
     const jump = span.box.x - (previous.box.x + previous.box.width);
     return jump > 0.001 ? { ...span, wrapAdvanceBefore: jump } : span;
   });
   const aligned = align(merged);
   const pictureStarts = new Set(placedDrawings.map((drawing) => drawing.start));
   const isStandIn = (span: StyleSpanRecord) =>
-    span.text === OBJECT_REPLACEMENT &&
+    span.text === PICTURE_CHAR &&
     span.range.end - span.range.start === 1 &&
     pictureStarts.has(span.range.start);
   const landed = new Map<number, number>();

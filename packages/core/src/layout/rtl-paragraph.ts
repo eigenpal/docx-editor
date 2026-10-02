@@ -1,6 +1,7 @@
 import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import { coalesceBidiPieces } from './bidi-piece-coalescing.ts';
 import { bidiAlgorithm } from './bidi.ts';
+import { PICTURE_CHAR } from './line-picture-alignment.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
 import { itemizeScriptFontSlots } from './script-itemization.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
@@ -81,7 +82,7 @@ export function bidiPieces(
   // the paragraph's direction otherwise, so one in a right-to-left paragraph reads with it.
   const pictures = new Map<number, FieldAwarePiece>();
   const isPicture = (piece: FieldAwarePiece | undefined) =>
-    piece?.inlineDrawing !== undefined && piece.text === OBJECT_REPLACEMENT;
+    piece?.inlineDrawing !== undefined && piece.text === PICTURE_CHAR;
   const resolvable = pieces.map((piece, index): FieldAwarePiece => {
     if (!isPicture(piece)) return piece;
     pictures.set(piece.start, piece);
@@ -118,8 +119,6 @@ export function bidiPieces(
     : resolvedItems(resolvable, rtl, sourceBoundaries);
   return items ? withJoiningContext(withPictures(items, pictures), ignored) : pieces;
 }
-
-const OBJECT_REPLACEMENT = '\ufffc';
 
 /** Put each picture's own piece back where its U+FFFC resolved, with that level. */
 function withPictures(

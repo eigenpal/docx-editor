@@ -415,8 +415,8 @@ export interface ParagraphFragmentRecord {
   readonly paragraphEnd?: true;
   /** Resolved paragraph-mark style when this fragment has no text or inline drawings. */
   readonly emptyParagraphStyle?: ResolvedRunStyle;
-  /** Resolved paragraph-mark style on the fragment that ends the paragraph; sizes the pilcrow. */
-  readonly paragraphMarkStyle?: ResolvedRunStyle;
+  /** Font size of the paragraph mark, on the fragment that ends the paragraph; sizes ¶. */
+  readonly paragraphMarkSizePt?: number;
   /** A fixed text frame clips its painted ink to this fragment's box; source ranges remain intact. */
   readonly clipToBox?: true;
   /**

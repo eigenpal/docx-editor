@@ -151,7 +151,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     shadingBox: 'layout-only',
     paragraphEnd: 'layout-only',
     emptyParagraphStyle: 'layout-only',
-    paragraphMarkStyle: 'layout-only',
+    paragraphMarkSizePt: 'layout-only',
     markRevisions: 'explicitly-omitted',
     markRevision: 'explicitly-omitted',
     markFormatRevision: 'explicitly-omitted',

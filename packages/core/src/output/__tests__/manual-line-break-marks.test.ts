@@ -34,11 +34,13 @@ test('manual breaks show one inert arrow each, including consecutive and trailin
     expect(mark.getAttribute('contenteditable')).toBe('false');
     expect(mark.hasAttribute('data-docx-marker')).toBe(true);
     expect(mark.style.userSelect).toBe('none');
-    // Seated in its line's inline flow, on the line's baseline, without widening the line.
-    expect(mark.parentElement?.classList.contains('docx-line')).toBe(true);
+    // Seated on its line's baseline in a zero-height seat outside the line's flow.
+    const seat = mark.parentElement!;
+    expect(seat.classList.contains('docx-terminator-seat')).toBe(true);
+    expect(seat.parentElement?.classList.contains('docx-line')).toBe(true);
+    expect(seat.style.position).toBe('absolute');
+    expect(parseFloat(seat.style.fontSize)).toBe(0);
     expect(mark.style.display).toBe('inline-block');
-    expect(mark.style.width).toBe('0px');
-    expect(mark.style.lineHeight).toBe('0');
     expect(mark.style.verticalAlign).toBe('baseline');
   }
   expect(serializeOoxmlPart(source)).toBe(before);
