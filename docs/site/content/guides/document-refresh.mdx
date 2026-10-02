@@ -169,7 +169,7 @@ Locations cover nonempty ranges within one body paragraph. A missing, ambiguous,
 
 ### Report unmatched locations
 
-Each unavailable change includes `diagnostic.code`. If you supplied a location, `diagnostic.location` preserves that requested location. A successful file replacement can include invalid locations. These diagnostics do not appear in `result.failures`, which contains processor operation IDs.
+Each unavailable change includes `diagnostic.code`. If you supplied a location, `diagnostic.location` preserves that requested location. Invalid locations do not reject an otherwise valid replacement file. These diagnostics stay separate from `result.failures`, which contains processor operation IDs.
 
 Inspect diagnostics before requesting highlights:
 
@@ -198,9 +198,9 @@ if (result.ok) {
 
 ### Present structural changes
 
-Supply `description` to describe a change without a highlight location. The controller accepts up to 1000 characters. It returns the summary unchanged. Render descriptions as text in your change list. Keep unavailable entries visible and enable navigation only for changes with `status: 'available'`.
+Supply `description` to describe a change without a highlight location. The controller accepts up to 1000 characters. It returns the summary unchanged. Render descriptions as text in your change list. Keep unavailable entries visible. Enable navigation only for changes with `status: 'available'`.
 
-A table or content control can use a surviving body paragraph location. Header, footer, style, and deletion summaries can appear without a location. The controller does not infer these summaries or provide structural Accept and Reject actions. Use native revisions when your workflow requires saved review decisions.
+A table or content control can use a surviving body paragraph location. Header, footer, style, and deletion summaries can appear without a location. The controller does not infer summaries. It does not provide structural Accept and Reject actions. Use native revisions when your workflow requires saved review decisions.
 
 If you omit `changes`, a registered review module supplies tracked revision locations. Tracked revisions already present at capture do not count as new changes. Their preservation does not require a review module. Review module use requires the EigenPal Pro License.
 

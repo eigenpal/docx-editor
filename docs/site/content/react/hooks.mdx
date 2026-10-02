@@ -308,7 +308,11 @@ function Find() {
 }
 ```
 
-`find(query, { selectFirst: true })` searches and selects the first match, and `activeMatch` is the current match. The `highlight` option is `'all'` (default), `'active'`, or `'none'`. If a component only reads results, pass `'none'`. The editor doesn't handle Ctrl+F or Cmd+F by default. To open **Find** with the shortcut, see [Open Find with Ctrl+F](/docs/2.x/guides/navigation#open-find-with-ctrlf). For more information, see [Search from code](/docs/2.x/guides/navigation#search-from-code).
+`find(query, { selectFirst: true })` searches and selects the first match. `activeMatch` reports the selected match. The `highlight` option accepts `'all'`, `'active'`, or `'none'`. It defaults to `'all'`. Use `'none'` for a component that only reads results. Another component can still request shared search highlights.
+
+`setQuery()` waits 150 milliseconds without query changes. `find()` searches immediately. `truncated` means the count is a minimum. The example displays `+` when the search reaches 2,000 matches.
+
+The editor leaves Ctrl+F and Cmd+F to browser search. For shortcut handling, see [Open Find with Ctrl+F](/docs/2.x/guides/navigation#open-find-with-ctrlf). For shared requests and result updates, see [Search from code](/docs/2.x/guides/navigation#search-from-code).
 
 ## `useHighlights`
 

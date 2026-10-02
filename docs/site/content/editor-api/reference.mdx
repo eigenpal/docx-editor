@@ -70,7 +70,7 @@ Font writes honor inherited complex-script properties. Font reads return authore
 | Object or type | Public members beyond inherited members | Guide |
 | --- | --- | --- |
 | `Field`, `FieldCollection` | Field `code`, `updateResult`, `delete`; collection `getFirst`, `getLast`, `getFirstOrNullObject`, `getLastOrNullObject` | [Fields and pagination](/docs/2.x/editor-api/fields) |
-| `FieldType`, `FieldTypeLiteral` | Office.js-compatible field vocabulary; authoring supports only the documented page-field subset | [Fields and pagination](/docs/2.x/editor-api/fields) |
+| `FieldType`, `FieldTypeLiteral` | Office.js-compatible field vocabulary; authoring supports `PAGE`, `NUMPAGES`, and the documented inert `TOC` subset | [Fields and pagination](/docs/2.x/editor-api/fields) |
 | `Section`, `SectionCollection` | Section `body`, `pageSetup`, `getHeader`, `getFooter`, `getNext`; collection `getFirst` | [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) |
 | `PageSetup` | `pageWidth`, `pageHeight`, `orientation`, `topMargin`, `bottomMargin`, `leftMargin`, `rightMargin` | [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) |
 | `HeaderFooterType`, `PageOrientation`, `BreakType` | Story variants, orientation, and break vocabulary | [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) |
@@ -81,7 +81,7 @@ Font writes honor inherited complex-script properties. Font reads return authore
 
 ## Comments and revisions
 
-`Document.changeTrackingMode = "TrackMineOnly"` tracks supported text, font, paragraph, and list edits. Table row tracking supports additions and partial deletions. Complete table insertion supports native row revisions. Column changes and page setup refuse while tracking. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control’s tag and title. Empty ranges, existing review markup, and other control structure changes refuse.
+`Document.changeTrackingMode = 'TrackMineOnly'` tracks supported text, font, paragraph, list, table, and content control edits. Column changes require an eligible complete proposed table. Page setup refuses while tracking. For supported operations and collaboration limits, see [Tracked changes](/docs/2.x/editor-api/revisions#supported-tracked-edits).
 
 | Object or type | Public members beyond inherited members | Guide |
 | --- | --- | --- |
@@ -96,12 +96,6 @@ Font writes honor inherited complex-script properties. Font reads return authore
 
 Host factories, runtime capabilities, input budgets, and collaboration setup are DocxEditor infrastructure. They do not represent Microsoft Office add-in APIs. Body-scoped bookmarks and revisions, document notes, typed control values, and nullable review dates include documented differences.
 
-## Next steps
-
-See [Office.js compatibility](/docs/2.x/editor-api/office-js-api) before migrating Office.js code. The generated reference remains the declaration authority; runtime notes and tests establish supported behavior.
-
-For integration patterns, see [Connect an agent to a document](/docs/2.x/build-a-docx-agent).
-
 ## External document refresh
 
 The refresh controller belongs to the browser host, outside the Office.js document model. `RefreshHighlightOptions` controls change selection and decoration. `NavigateToChangeOptions` controls scroll alignment, motion, padding, and focus. For more information, see [Document refresh API](/docs/2.x/guides/document-refresh).
@@ -110,7 +104,9 @@ The refresh controller belongs to the browser host, outside the Office.js docume
 
 ## Document properties
 
-`Document.properties` returns a `DocumentProperties` proxy. It exposes the string properties `author`, `title`, `subject`, `keywords`, `comments`, and `category`. Load each property before reading it. Assignments commit at `context.sync()`. Missing properties read as empty strings. An empty assignment clears that value. Writes preserve unrelated document properties and accept XML-safe strings up to 4096 UTF-16 code units. `TrackMineOnly` refuses these writes with `NotSupported`. Individual dates and custom properties are unsupported. `lastAuthor` reads `cp:lastModifiedBy` and has no setter.
+`Document.properties` returns a `DocumentProperties` proxy. It exposes the string properties `author`, `title`, `subject`, `keywords`, `comments`, and `category`. Load each property before reading it. Assignments commit at `context.sync()`. Missing properties read as empty strings. An empty assignment clears that value.
+
+Writes preserve unrelated document properties. Values must contain XML-safe text with at most 4096 UTF-16 code units. `TrackMineOnly` refuses these writes with `NotSupported`. Individual dates and custom properties are unsupported. `lastAuthor` reads `cp:lastModifiedBy` and has no setter.
 
 ```ts
 await runtime.run(async (context) => {
@@ -128,7 +124,9 @@ Collaborative writes require an existing core-properties part. If the input omit
 
 ### Remove document properties
 
-Call `document.removeDocumentInformation('DocumentProperties')` in a separate sync to remove standard core, extended, and custom property parts. This also removes last-author information and property relationships. It preserves document content, comments, revisions, and media. Ambiguous parts, incorrect roots or types, and unknown dependencies refuse with `NotSupported`. The method refuses all other `RemoveDocInfoType` modes, tracked writes, and collaboration. This subset does not anonymize text, cached field results, images, or review authors.
+Call `document.removeDocumentInformation('DocumentProperties')` to remove standard core, extended, and custom property parts. Keep this command as the only write in its sync. This also removes last-author information and property relationships. It preserves document content, comments, revisions, and media.
+
+Ambiguous parts, incorrect roots or types, and unknown dependencies refuse with `NotSupported`. The method refuses all other `RemoveDocInfoType` modes, tracked writes, and collaboration. This subset does not anonymize text, cached field results, images, or review authors.
 
 ```ts
 await runtime.run(async (context) => {
@@ -136,3 +134,9 @@ await runtime.run(async (context) => {
   await context.sync();
 });
 ```
+
+## Next steps
+
+See [Office.js compatibility](/docs/2.x/editor-api/office-js-api) before migrating Office.js code. The generated reference remains the declaration authority; runtime notes and tests establish supported behavior.
+
+For integration patterns, see [Connect an agent to a document](/docs/2.x/build-a-docx-agent).

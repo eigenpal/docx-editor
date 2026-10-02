@@ -5,7 +5,12 @@ import { docx } from './paginated-surface-fixtures.ts';
 import { createDocxEditor } from '../docx-editor.ts';
 import { mountAnchorEditor } from './scroll-to-anchor-fixture.ts';
 import { storyParityDocx } from './story-parity-fixture.ts';
-import { HIGHLIGHT_RANGE_LIMIT, HIGHLIGHT_SET_LIMIT } from '../text-highlights.ts';
+import {
+  createTextHighlights,
+  HIGHLIGHT_RANGE_LIMIT,
+  HIGHLIGHT_SET_LIMIT,
+} from '../text-highlights.ts';
+import type { SurfaceOverlayPainter } from '../surface-overlay-sheet.ts';
 import { createDocumentRefresh } from '../document-refresh.ts';
 import { refreshFixture, refreshMetadata } from './document-refresh-fixture.ts';
 
@@ -52,6 +57,51 @@ const indexes = (elements: readonly HTMLElement[]) =>
   );
 
 describe('setHighlights', () => {
+  test('scans uncached pages together and caches pages without rectangles', () => {
+    const { editor, host } = mount();
+    const actualSurface = editor.surface!;
+    const published = actualSurface.publishedLayout();
+    const pageCount = 32;
+    let indexReads = 0;
+    const pages = Array.from({ length: pageCount }, (_, index) => ({
+      ...published.pages[0]!,
+      fragments: index === 0 ? published.pages[0]!.fragments : [],
+      get index() {
+        indexReads += 1;
+        return index;
+      },
+    }));
+    const layout = { ...published, pages };
+    let painter: SurfaceOverlayPainter | null = null;
+    const surface = {
+      ...actualSurface,
+      publishedLayout: () => layout,
+      repaintHighlights: () => {},
+      setHighlightPainter(value: SurfaceOverlayPainter | null) {
+        painter = value;
+      },
+    };
+    const controller = createTextHighlights({
+      surface: () => surface,
+      container: () => host,
+      flushOpen: () => {},
+    });
+    controller.attach(surface);
+    controller.members.setHighlights('glossary', editor.findMatches('Supplier').slice(0, 1));
+    const layer = document.createElement('div');
+    const frame = { layer, layout, revision: layout.revision, scale: 1 };
+
+    indexReads = 0;
+    painter!(frame);
+    expect(indexReads).toBeLessThanOrEqual(pageCount * 4);
+    expect(layer.querySelectorAll('.docx-text-highlight')).toHaveLength(1);
+
+    indexReads = 0;
+    painter!({ ...frame, pages: new Set([0, 1]) });
+    expect(indexReads).toBeLessThanOrEqual(pageCount * 2);
+    expect(layer.querySelectorAll('.docx-text-highlight')).toHaveLength(1);
+  });
+
   test('marks every match and styles the active one, as view state only', () => {
     const { editor, marks, host } = mount();
     const matches = editor.findMatches('Supplier');

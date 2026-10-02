@@ -142,13 +142,30 @@ Use `isDocxEditorError(error)` and branch on `error.code`. `error.target` identi
 | Read the current mode | `document.load('changeTrackingMode')`, then sync and read the property |
 | Make an intentional permanent edit | Explicitly set `changeTrackingMode = 'Off'` |
 
-`Off` is the initial runtime mode. Browser tracked writes require the review module; this property does not change the editor UI mode. `TrackMineOnly` needs a configured author and persists for that host session. It does not change peers' editing modes or persist a document-wide policy. `TrackAll` fails with `NotSupported`. Browser UI modes remain controlled by the editor host. Tracked range edits support adjacent sibling paragraphs, including paragraphs within one cell. They refuse table and wrapper boundaries. Ranges across paragraphs refuse in collaboration. The runtime rejects targets that touch foreign pending revisions. Continuation can extend the runtime author’s text and paragraph proposals. The runtime rejects tracked deletion or replacement of simple fields containing nested fields or other result containers. Direct result runs remain supported. The runtime tracks font, paragraph-format, and paragraph-style edits as property revisions. Paragraph insertion tracks text and paragraph marks. List creation, membership, and level changes produce paragraph-property revisions. New proposed list definitions can change. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration. Established list definitions and page setup refuse. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control’s tag and title. Empty ranges, existing review markup, and other control structure changes refuse. Comments and revision decisions remain available. Never silently fall back to `Off` when an edit cannot be tracked.
+`Off` is the initial runtime mode. `TrackMineOnly` needs a configured author and persists for that runtime. It does not change peers' editing modes or save a document-wide policy. Browser tracked writes require the review module. The tracking property does not change the editor UI mode. `TrackAll` fails with `NotSupported`.
+
+| Tracked edit | Supported behavior |
+| --- | --- |
+| Range text | Insert, replace, or delete text; adjacent sibling paragraphs work outside collaboration |
+| Font and paragraphs | Track font, paragraph-format, and paragraph-style edits as property revisions |
+| Paragraph insertion | Track inserted text and paragraph marks |
+| Lists | Track creation, membership, and level changes; configure newly proposed definitions |
+| Tables | Track complete insertion, cell values, row additions, and partial row deletions |
+| Content controls | Wrap nonempty ordinary text in `PlainText`, `RichText`, or `DatePicker` controls outside collaboration |
+
+Tracked range edits refuse table and wrapper boundaries. Collaborative tracked range edits must remain within one paragraph. Targets that touch foreign pending revisions refuse. Continuation can extend the runtime author's text and paragraph proposals. Simple fields with nested fields or other result containers refuse tracked deletion and replacement. Direct result runs remain supported.
+
+An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require permanent edits. Tracked table and cell value replacement refuse in collaboration. Row deletion suggestions must leave a row without a pending deletion. Pending row or cell structure revisions refuse tracked row deletion with `NotImplemented`.
+
+Accept keeps a proposed content control. Reject restores the original formatted text. The author can set the pending control's `tag` and `title`. Empty ranges, existing review markup, and other control structure changes refuse.
+
+Established list definitions and page setup refuse tracked writes. Comments and revision decisions remain available. Never silently fall back to `Off` when an edit cannot be tracked.
 
 Standard `insertText('', 'Replace')` means deletion, and an empty insertion is a no-op. Agent tools should require nonempty insertion/replacement text and expose deletion as an explicit model decision. The shipped worker does this. The [compatibility manifest](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/compat/manifest.json) records measured members and behavioral differences.
 
 ## Insert table rows
 
-`TableRow.insertRows('Before', count, values)` and `'After'` support ordinary source rows beside unrelated merged headers. Merged source rows and crossing vertical merges refuse.
+`TableRow.insertRows('Before', count, values)` and `'After'` support ordinary source rows beside unrelated merged headers. Merged source rows and crossing vertical merges refuse. Keep each row insertion as the only write in its sync. Sync before editing returned rows. For more information, see [Tables and cells](https://docx-editor.dev/docs/2.x/editor-api/tables).
 
 ## Pictures and page fields
 
@@ -166,7 +183,9 @@ The workflow tests cover both hosts and save/reopen: `model-font-editing.test.ts
 
 ## Set document metadata
 
-Use `context.document.properties` for core metadata. The supported string properties are `author`, `title`, `subject`, `keywords`, `comments`, and `category`. Batch independent assignments, then call `context.sync()`. Load explicit property names before reading them. Metadata writes require tracking mode `Off`. Do not substitute revision author settings for document author metadata. Other document information and custom properties remain unchanged.
+Use `context.document.properties` for core metadata. The supported string properties are `author`, `title`, `subject`, `keywords`, `comments`, and `category`. Batch independent assignments, then call `context.sync()`. Load explicit property names before reading them. Metadata writes require tracking mode `Off`.
+
+Do not substitute revision author settings for document author metadata. Other document information and custom properties remain unchanged.
 
 Collaborative writes require an existing core-properties part. If the input omits this part, set properties before joining collaboration. Concurrent creation of this package part cannot merge safely.
 

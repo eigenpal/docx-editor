@@ -4,8 +4,7 @@
  * Rendered on docx-editor.dev at /docs/2.x/word-fidelity via the site's
  * <FeatureMatrix> / <FeatureBadge> components (the site syncs this file at
  * build time, same pipeline as docs/site/content). The `tier` field exists
- * so the same data can later drive plan gating and pricing pages; today
- * everything ships in `community`.
+ * so the same data can drive feature access and pricing pages.
  *
  * Status axes:
  * - editing:   can the user (or code driving the editor) change it in the editor?
@@ -609,9 +608,9 @@ export const wordFeatures: WordFeature[] = [
     editing: 'partial',
     rendering: 'full',
     roundTrip: 'full',
-    tier: 'community',
+    tier: 'premium',
     notes:
-      'Suggesting mode records image insertion and deletion. Review actions can accept or reject both changes. Image property edits are unavailable in suggesting mode.',
+      'Suggesting mode and review actions require the EigenPal Pro License. Opening and saving existing image revisions require no review module. Suggesting mode records image insertion and deletion. Review actions can accept or reject both changes. Image property edits are unavailable in suggesting mode.',
   },
   {
     id: 'images.textboxes',
@@ -860,9 +859,9 @@ export const wordFeatures: WordFeature[] = [
     editing: 'full',
     rendering: 'full',
     roundTrip: 'full',
-    tier: 'community',
+    tier: 'premium',
     notes:
-      'The document API authors tracked font, paragraph, and list-membership formatting, plus paragraph insertion, complete table insertion, table value replacement, and table row additions and partial deletions. Tracked ranges across paragraphs and table value replacement refuse in collaboration. Row deletion suggestions require a row without a pending deletion. A full revision model, including structural changes to paragraph breaks, paragraph properties, and table rows and cells. Paragraph marks stay hidden until Review → Show paragraph breaks is enabled, independently of revision selection. Tracked manual line-break marks use their revision color and decoration. The toggle also shows ordinary paragraph ends (¶) and manual line breaks (↵), without marking automatic line wraps, page breaks, or column breaks. Adjacent text and paragraph-break insertions or deletions by the same author form one decision. Break-only cards show the grouped break count. Formatting revisions stay in the page balloon by default, including proofing-language changes on empty paragraph marks; hosts can opt into sidebar cards. Change bars match Word: one rule per page, halfway into the left margin, continuous across adjacent changed lines and paragraphs, covering the paragraph spacing, and drawn for body, table, header, footer, footnote, endnote, and text-box changes, including paragraph-property and run-property changes and tracked table rows. All Markup draws a neutral gray hairline; Simple Markup shows the proposed text with a red, heavier bar beside every line a change touched, and a click on the bar switches between the two views. No Markup and Original draw no bar. Mirrored margins do not move the bar to the outside edge. A mark that one author inserted and another proposed removing carries both decisions. A tracked insert or delete around a field result paints as tracked, not as ordinary text. Tracked deletion and replacement refuse simple fields with nested fields or other result containers; direct result runs remain supported. Attribution is drawn in All Markup only, as in Word. The resolved views drop the attribution and merge the paragraphs the decision merges, so No Markup shows the document as accepting every change would leave it. Continuous insertions stay together across field wrappers and tracked paragraph breaks. Malformed revision wrappers and nonempty revision markers refuse resolution and retain their content. Review offers Next/Previous Change, atomic Accept/Reject All Changes across document stories, and Simple Markup/All Markup/No Markup/Original views. Original restores prior run and paragraph formatting; prior table, row, cell, and section formatting remains unsupported. The Reviewers menu can hide individual authors without mutating the DOCX. The setTrackedChangesFilter API accepts a predicate over complete revision items, so a host can combine author, date, kind, range, and other revision metadata. Excluded content, moves, paragraph marks, and table-row revisions can render as temporarily accepted or rejected without changing saved OOXML. Suggesting requires a configured author; an authorless request reports a configuration error and disables the Suggesting menu item. Suggesting mode records a formatting change rather than applying it outright: a run gets w:rPrChange, a paragraph mark gets w:pPr/w:rPr/w:rPrChange, and paragraph properties get w:pPrChange, so reject restores what the change replaced, and one press is one card however many runs it covers. Lists, indent level, tab stops, and table properties changed in the editor are applied without a record. A document that sets w:doNotTrackFormatting gets no formatting records. Painted markup follows Word’s by-author view by default — one color per author, matched by the review cards — and named authors can take a color, a background, class names, and an avatar of their own. The output opens cleanly in Word’s review pane.',
+      'Suggesting mode, review markup, and review actions require the EigenPal Pro License. Opening and saving existing revisions require no review module. The document API tracks text, fonts, paragraph formatting, list membership, and paragraph insertion. Table suggestions support complete insertion, value replacement, row additions, and partial row deletions. Eligible nonempty text can become a proposed text or date control outside collaboration. Tracked ranges across paragraphs and table or cell value replacement refuse in collaboration. Row deletion suggestions must leave a row without a pending deletion. Existing table properties and columns require permanent edits; eligible complete proposed tables support configuration. The editor offers Simple Markup, All Markup, No Markup, Original, author filters, and filtered bulk decisions. Hidden authors and unsupported changes remain pending during filtered bulk decisions. Original restores prior run and paragraph formatting; prior table, row, cell, and section formatting remains unsupported. Author filters change the display without changing saved revisions. Suggesting mode requires an author. Editor list, indent-level, tab-stop, and table-property changes remain untracked. Malformed revision wrappers refuse resolution and preserve their content.',
     docsLink: '/docs/2.x/pro/tracked-changes',
   },
   {
@@ -872,9 +871,9 @@ export const wordFeatures: WordFeature[] = [
     editing: 'full',
     rendering: 'full',
     roundTrip: 'full',
-    tier: 'community',
+    tier: 'premium',
     notes:
-      'Accept or reject one shown change in the sidebar, or through acceptReviewItem and rejectReviewItem. Reviewer visibility is view-only; hidden authors are excluded from the review item list and therefore from bulk operations over that list. The automation object model adds revision.accept(), revision.reject(), revisions.acceptAll(), and revisions.rejectAll(). The sidebar has no bulk control, so call the per-item command for every shown item.',
+      'Review actions require the EigenPal Pro License. Accept or reject one change with acceptReviewItem, rejectReviewItem, or the sidebar. The Review menu also resolves changes shown by active filters. Hidden authors and unsupported changes remain pending. The automation API supports individual decisions and strict or partial batches. Opening and saving existing revisions require no review module.',
     docsLink: '/docs/2.x/pro/tracked-changes',
   },
   {
@@ -884,9 +883,9 @@ export const wordFeatures: WordFeature[] = [
     editing: 'full',
     rendering: 'full',
     roundTrip: 'full',
-    tier: 'community',
+    tier: 'premium',
     notes:
-      'Threaded comments with replies and resolve/reopen in the review rail. React hosts use `@docx-editor.dev/pro/react`; Vue hosts use `@docx-editor.dev/pro/vue` with the same engine commands. Saving normalizes recognized empty comment parts when no markers or retained relationship dependencies remain.',
+      'Comment authoring and review controls require the EigenPal Pro License. Opening and saving existing comments require no review module. The review rail shows threads, replies, and resolution controls. React hosts use `@docx-editor.dev/pro/react`; Vue hosts use `@docx-editor.dev/pro/vue` with the same engine commands. Saving normalizes recognized empty comment parts when no markers or retained relationship dependencies remain.',
     docsLink: '/docs/2.x/pro/comments',
   },
   {
@@ -896,9 +895,9 @@ export const wordFeatures: WordFeature[] = [
     editing: 'full',
     rendering: 'full',
     roundTrip: 'full',
-    tier: 'community',
+    tier: 'premium',
     notes:
-      'The automation object model writes Word-native tracked changes. It works over DOCX bytes on a server, or over an editor open in a page.',
+      'The automation object model requires the EigenPal Pro License. It writes native tracked changes. It works over DOCX bytes on a server, or over an editor open in a page.',
     docsLink: '/docs/2.x/editor-api',
   },
   {
@@ -909,7 +908,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'Imported moves render distinctly from insert and delete, and they round-trip.',
+    notes:
+      'Imported moves survive save and reopen without a review module. Displaying move markup requires the review module and the EigenPal Pro License. Review actions require the module. Creating move revisions remains unsupported.',
   },
 
   // --- Fields, links & TOC ---------------------------------------------------
@@ -1220,9 +1220,9 @@ export const wordFeatures: WordFeature[] = [
     editing: 'full',
     rendering: 'full',
     roundTrip: 'full',
-    tier: 'community',
+    tier: 'premium',
     notes:
-      'A batching object model shaped after a documented subset of the Word JavaScript API. The server entry works over bytes and reports exceeded resource limits with typed errors. The browser entry works over an open editor. Core metadata supports author, title, subject, keywords, comments, and category reads and writes. The last saved author is read-only. Standard core, extended, and custom properties can be removed outside collaboration. Other document content remains unchanged. Metadata writes require tracking to be off. It ships no model integration, tool catalog, or MCP transport.',
+      'The automation object model requires the EigenPal Pro License. It follows a documented subset of the Word JavaScript API. The server entry works over bytes and reports exceeded resource limits with typed errors. The browser entry works over an open editor. Core metadata supports author, title, subject, keywords, comments, and category reads and writes. The last saved author is read-only. Collaborative metadata writes require an existing core-properties part. Standard core, extended, and custom properties can be removed outside collaboration. Removal is the only write in its sync. Other document content remains unchanged. Metadata writes require tracking to be off. It ships no model integration, tool catalog, or MCP transport.',
     docsLink: '/docs/2.x/editor-api',
   },
 ];

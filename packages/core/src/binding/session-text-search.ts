@@ -39,7 +39,8 @@ export function createSessionTextSearch(deps: {
     const many = typeof query !== 'string';
     const flags = `${options?.matchCase === true ? 'c' : ''}${options?.wholeWord === true ? 'w' : ''}`;
     const scope = `${options?.limit ?? ''}:${options?.stories ?? 'all'}`;
-    const key = `${flags}${scope}\u0000${many ? query.join('\u0001') : query}`;
+    // Preserve the query shape and array boundaries, including control characters.
+    const key = JSON.stringify([flags, scope, query]);
     if (cache?.revision !== revision) cache = { revision, results: new Map() };
     const cached = cache.results.get(key);
     if (cached) return cached;

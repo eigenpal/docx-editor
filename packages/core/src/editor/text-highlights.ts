@@ -492,17 +492,31 @@ export function createTextHighlights(deps: {
       byPage = new WeakMap();
       rectCache.set(set, byPage);
     }
-    let byParagraph: Map<string, ParagraphRange[]> | null = null;
-    const rects: KeyedParagraphRect[] = [];
+    const visiblePages: PageRecord[] = [];
+    const missingPages = new Map<
+      number,
+      { readonly page: PageRecord; readonly rects: KeyedParagraphRect[] }
+    >();
     for (const page of layout.pages) {
       if (frame.pages && !frame.pages.has(page.index)) continue;
-      let pageRects = byPage.get(page);
-      if (!pageRects) {
-        byParagraph ??= liveRangesByParagraph(set);
-        pageRects = paragraphRangeRects(layout, byParagraph, new Set([page.index]), frame.measurer);
-        byPage.set(page, pageRects);
+      visiblePages.push(page);
+      if (!byPage.has(page)) missingPages.set(page.index, { page, rects: [] });
+    }
+    if (missingPages.size > 0) {
+      const missingRects = paragraphRangeRects(
+        layout,
+        liveRangesByParagraph(set),
+        new Set(missingPages.keys()),
+        frame.measurer
+      );
+      for (const rect of missingRects) missingPages.get(rect.pageIndex)!.rects.push(rect);
+      for (const { page, rects } of missingPages.values()) byPage.set(page, rects);
+    }
+    const rects: KeyedParagraphRect[] = [];
+    for (const page of visiblePages) {
+      for (const rect of byPage.get(page)!) {
+        rects.push(rect);
       }
-      for (const rect of pageRects) rects.push(rect);
     }
     // The active range paints last in its set, so a neighbour never covers it.
     if (set.activeIndex >= 0) {

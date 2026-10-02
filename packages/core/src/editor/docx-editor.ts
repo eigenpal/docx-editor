@@ -19,6 +19,7 @@ import { formattingCommandActive } from './docx-editor-active.ts';
 import { createEditorScrolling } from './docx-editor-scroll.ts';
 import { createAnchorNavigation } from './docx-editor-anchor-navigation.ts';
 import { createTextHighlights } from './text-highlights.ts';
+import { captureSearchResult } from './document-search-result.ts';
 import { createDocumentProtectionCommands } from './docx-editor-protection.ts';
 
 import {
@@ -2110,11 +2111,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         ...(surface ? { stories: searchStoriesForSurface(surface, editingMode) } : {}),
       };
       if (typeof query === 'string') {
-        return highlights.noteMatches(surface?.session.findText(query, scan).matches ?? []);
+        return captureSearchResult(surface?.session.findText(query, scan), highlights.noteMatches);
       }
       // Many terms in one walk of the document.
       const results = surface?.session.findText(query, scan);
-      return query.map((_, index) => highlights.noteMatches(results?.[index]?.matches ?? []));
+      return query.map((_, index) => captureSearchResult(results?.[index], highlights.noteMatches));
     }) as DocxEditorInstance['findMatches'],
 
     // Selection uses the match's model address and then reveals its paragraph.

@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Highlight painting scans every layout page separately for each uncached visible page.",
+  "after": "Highlight painting scans uncached visible pages together and caches empty page results.",
+  "reason": "The change computes local highlight rectangles without document writes, shared operations, or synchronization changes.",
+  "tests": [
+    "packages/core/src/editor/__tests__/text-highlights.test.ts",
+    "e2e/edit-browser.bench.spec.ts"
+  ],
+  "changeset": "highlight-page-scan",
+  "migration": null
+}

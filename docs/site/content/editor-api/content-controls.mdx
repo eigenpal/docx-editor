@@ -1,6 +1,6 @@
 ---
 title: 'Content controls'
-description: 'Discover controls, fill typed values, edit metadata and locks, create text controls, and handle XML-bound content.'
+description: 'Discover controls, fill typed values, edit metadata and locks, create text and date controls, and handle XML-bound content.'
 category: 'Editing API'
 order: 61
 ---
@@ -46,6 +46,8 @@ await runtime.run(async (context) => {
 
 Use the loaded `subtype` to choose an operation. It uses DOCX terms such as `plainText`, `dropDownList`, and `checkbox`. A control's text is not always its semantic value. Writing the text `true` does not set a checkbox's state. The runtime rejects unsupported values or control structures.
 
+`ContentControl.insertText()` supports text-like controls. Date, checkbox, and other typed controls refuse with `NotSupported`. Use the editor's calendar or the documented `setValue()` extension to set a date.
+
 `insertText(text, location)` accepts `Replace`, `Start`, or `End` and returns a `Range`. Replacement uses the control's value path, including placeholder and temporary-wrapper handling. Sync before using that returned range. `text`, `placeholderShown`, and `temporary` are loaded read-only properties.
 
 For an existing placeholder, prefer replacing the control value. For untracked range edits, a range covering the complete prompt can also replace it. The runtime returns `NotSupported` if a replacement would consume prompt text outside its target or an insertion starts away from the prompt start. The first insertion at the prompt start consumes the placeholder text.
@@ -61,7 +63,7 @@ For an existing placeholder, prefer replacing the control value. For untracked r
 
 The runtime combines lock assignments on the same proxy. Changing one lock preserves the other without loading it first. Effective ancestor locks and binding checks still apply; lock setters do not bypass protection. `ContentControlLockState` exports `unlocked`, `sdtLocked`, `contentLocked`, and `sdtContentLocked` as vocabulary. There is no public combined `lock` property taking that alias.
 
-## Create a text control
+## Create a text or date control
 
 `Range.insertContentControl(type?)` supports `RichText`, `PlainText`, and `DatePicker`; the default is `RichText`. The range must be an eligible single-paragraph span. Sync creation before setting metadata:
 
@@ -79,13 +81,15 @@ await runtime.run(async (context) => {
 });
 ```
 
+Use `DatePicker` for calendar dates such as an effective date. Creation preserves the selected text. The editor opens a calendar for this control. Typed date-format configuration remains unsupported.
+
 `ContentControlType` includes other Word values, but the runtime rejects those creation modes. The exported `ContentControlSubtype` vocabulary does not expand `insertContentControl()` support. Picture controls, repeating-section editing, and typed Office.js subtype objects are unavailable. Use a prepared template for existing eligible list and checkbox controls.
 
 ## Suggest a control
 
-TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control’s tag and title. Empty ranges, existing review markup, and other control structure changes refuse.
+`TrackMineOnly` can wrap nonempty ordinary text in `PlainText`, `RichText`, or `DatePicker` controls outside collaboration. Accept keeps the control. Reject restores the original formatted text. The author can set the pending control's `tag` and `title`. Empty ranges, existing review markup, and other control structure changes refuse.
 
-Set `document.changeTrackingMode = "TrackMineOnly"` before the creation sample. Keep the same `insertContentControl()` call and sync boundaries. Creation saves a native deletion and insertion pair. One review decision resolves both halves.
+Set `context.document.changeTrackingMode = 'TrackMineOnly'` before `insertContentControl()` in the creation sample. Keep the same `insertContentControl()` call and sync boundaries. Creation saves a native deletion and insertion pair. One review decision resolves both halves.
 
 ## Address or remove control content
 
@@ -96,7 +100,3 @@ Do not delete a binding or wrapper to force a failed template write. Read again 
 ## Next steps
 
 See [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors), and [Office.js compatibility](/docs/2.x/editor-api/office-js-api).
-
-Use `DatePicker` for calendar dates such as an effective date. Creation preserves the selected placeholder text. The editor opens a calendar for this control. Typed date-format configuration remains unsupported.
-
-`ContentControl.insertText()` supports text-like controls. Date, checkbox, and other typed controls refuse with `NotSupported`. Use the editor's calendar to select a date.

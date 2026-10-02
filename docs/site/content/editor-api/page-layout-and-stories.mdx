@@ -80,7 +80,7 @@ Read affected sections again after a section break changes their structure. Do n
 
 ## Read footnotes and endnotes
 
-`Document.footnotes` and `Document.endnotes` are DocxEditor extensions. Each returns `NoteItemCollection`, which exposes `items` and `getFirst()`. A `NoteItem` has loaded `type` and `text`, plus its own `body`. `NoteItemType` is `Footnote` or `Endnote`. `NoteItem.text` reads the same plain text as the note body's text.
+`Body.footnotes` and `Body.endnotes` return distinct referenced notes in reference order. Each returns `NoteItemCollection`, which exposes `items` and `getFirst()`. A table-cell body includes only its own references. A `NoteItem` exposes loaded `type` and `text`, plus its own `body`. `NoteItemType` is `Footnote` or `Endnote`. `NoteItem.text` reads the same plain text as the note body's text.
 
 Read note text in two batches:
 
@@ -95,16 +95,12 @@ const notes = await runtime.run(async (context) => {
 });
 ```
 
-`NoteItem.getNext()` advances within the same note kind. It fails with `ItemNotFound` after the last note. Use `note.body` for supported structured reading and editing within that note story.
+`NoteItem.getNext()` advances within the same note kind. It fails with `ItemNotFound` after the last note. Use `note.body` for supported structured reading and editing within that note story. Separate writes to different notes with `context.sync()`.
 
 `NoteItem.delete()` removes the note and its references. Run note deletion alone in its sync. Sync all pending reads or writes before queuing note deletion. Note creation and reference-number formatting are not exposed by this subset.
+
+The legacy `Document.footnotes` and `Document.endnotes` accessors enumerate note parts. They are DocxEditor extensions, outside the Office.js document model.
 
 ## Next steps
 
 See [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Comments](/docs/2.x/editor-api/comments), and [API member directory](/docs/2.x/editor-api/reference).
-
-## Read notes referenced by a body
-
-`Body.footnotes` and `Body.endnotes` return distinct referenced notes in reference order. A table-cell body includes only its own references. Load `items`, then load each note's `text` or use its `body` for edits. Separate writes to different notes with `context.sync()`.
-
-The legacy `Document.footnotes` and `Document.endnotes` aliases enumerate note parts. They are not Office.js members. Note creation remains unsupported.

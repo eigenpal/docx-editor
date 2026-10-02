@@ -287,7 +287,7 @@ If the highlight must start after the target is visible, keep the default `'inst
 
 ## Find and select text
 
-`findMatches(query, options)` returns every match in document order. It searches the body, headers, footers, footnotes, endnotes, table cells, and selectable text boxes. Set `matchCase` or `wholeWord` to narrow the search:
+`findMatches(query, options)` returns up to 2,000 matches in document order. In editing mode, it searches supported body, header, footer, note, table, and text-box stories. Viewing mode restricts search to body stories, including tables and selectable body text boxes. Set `matchCase` or `wholeWord` to narrow the search:
 
 ```ts
 const matches = editor.findMatches('Supplier', { matchCase: true, wholeWord: true });
@@ -317,7 +317,7 @@ Matches refer to positions in the open document. After the document changes, sea
 
 ## Search and highlight
 
-The **Find** tab highlights every match while it is open, and the active match in a second color. Enter and Shift+Enter move between matches. To highlight only the active match, or none, set `searchHighlight`:
+The **Find** tab highlights every match while it is open. It uses a second color for the active match. Enter and Shift+Enter move between matches. Set `searchHighlight` to highlight only the active match or hide highlights:
 
 ```tsx
 <DocxEditor.Navigation searchHighlight="active" />
@@ -409,7 +409,13 @@ search.subscribe(() => {
 | `selectFirst` | Selects the first match. |
 | `highlight` | `'all'`, `'active'`, or `'none'`. Highlights the results until `clear()`. |
 
-`useDocumentSearch()` highlights results by default. If a component only reads results, pass `useDocumentSearch({ highlight: 'none' })`.
+`useDocumentSearch()` requests highlights while its component remains mounted. It highlights all results by default. If a component only reads results, pass `useDocumentSearch({ highlight: 'none' })`.
+
+Highlight requests share the search session. With multiple requests, `'all'` takes precedence over `'active'`. A `'none'` request does not hide another component's highlights. `find()` replaces its previous highlight request. `clear()` removes that request and empties the results.
+
+`setQuery()` searches after 150 milliseconds without query changes. `isPending` reports the wait. Document edits refresh results after 150 milliseconds without edits, with a maximum wait of one second. Navigation refreshes pending document changes before selecting a match. Results contain up to 2,000 matches. When `truncated` is `true`, display the count as a minimum, such as `2000+`.
+
+Viewing mode permits body search navigation and programmatic selection. It keeps the caret hidden. Pointer actions and caret keys preserve the selection in viewing mode.
 
 ### Open Find with Ctrl+F
 
@@ -445,7 +451,7 @@ function NavigationWithFindShortcut() {
 
 Highlight your own ranges, such as glossary terms or review findings, as a named set. Each set is independent of the others and of search.
 
-To keep a set current as the document changes, pass a function. It runs again after edits:
+Pass a function to recompute ranges after document changes. It runs after 150 milliseconds without edits. Continuous edits trigger it within one second. Document loads run it immediately:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -510,7 +516,7 @@ editor.clearHighlights('findings'); // Or clearHighlights() for every set.
 | `className` | None | CSS classes for every highlight. |
 | `priority` | `0` | Integer from `-1000` to `1000`. Higher sets paint on top. |
 
-`setHighlights()` returns `{ applied, unavailable }`. Invalid input throws `TypeError` or `RangeError` and changes nothing. For ranges you compute yourself, pass `blockId`, `start`, and `length`. If you compute them outside the editor, add `expectedText`.
+`setHighlights()` returns `{ applied, unavailable }`. Invalid input throws `TypeError` or `RangeError` and preserves the existing set. For custom ranges, pass `blockId`, `start`, and `length`. `start` and `length` count UTF-16 units in paragraph text. For ranges computed outside the editor, add `expectedText` to prevent highlights over changed text.
 
 ### Style highlights
 
@@ -620,7 +626,8 @@ Without React or Vue, call `editor.getHighlightsAt(clientX, clientY)` from a `po
 
 - A highlight moves with its text when you edit before it. An edit inside a range hides it; undo shows it again.
 - Highlights don't change the document, selection, or undo history, and they aren't saved or shared with collaborators.
-- Loading, refreshing, or recovering the document removes all highlights. `useHighlights` and `watchHighlights` apply them again.
+- Loading, refreshing, or recovering the document removes all highlights.
+- Function sources recompute ranges after replacement. Fixed arrays apply again after refresh or recovery, but require replacement after ordinary loads.
 - Ranges can be in the body, tables, headers, footers, notes, and text boxes in the body.
 - Up to 32 sets can exist. A set highlights up to 10,000 ranges and counts the rest as unavailable.
 - The set name `search` is reserved for search.

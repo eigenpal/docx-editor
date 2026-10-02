@@ -9,6 +9,7 @@
 // Framework-free. The adapters wrap it in `useSyncExternalStore` and a shallow ref.
 
 import type { Editor, TextMatch } from '../contracts/editor.ts';
+import { searchResultTruncated } from './document-search-result.ts';
 
 /** Milliseconds of quiet before a typed query runs. @public */
 export const SEARCH_DEBOUNCE_MS = 150;
@@ -193,7 +194,8 @@ export function createDocumentSearch(editor: Editor): DocumentSearch {
     if (merged.matches !== state.matches && next.activeIndex === undefined) {
       merged.activeIndex = carriedActiveIndex(state, merged.matches);
     }
-    merged.truncated = merged.matches.length >= SEARCH_MATCH_LIMIT;
+    merged.truncated =
+      searchResultTruncated(merged.matches) ?? merged.matches.length >= SEARCH_MATCH_LIMIT;
     merged.activeMatch = merged.matches[merged.activeIndex] ?? null;
     const changed = (Object.keys(merged) as (keyof DocumentSearchState)[]).some(
       (key) => merged[key] !== state[key]

@@ -11,7 +11,7 @@ Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `
 
 ## Configure review writes
 
-Supply a nonempty `author` when creating the runtime for comment creation and replies. The API does not obtain an identity from a signed-in Office account. Browser review writes also require the Pro review module, an editable mode, and an attached writable document. The server runtime supplies its own Pro-licensed review implementation.
+Supply a nonempty `author` when creating the runtime for comment creation and replies. The API does not obtain an identity from a signed-in Office account. Browser review writes also require the Pro review module, an editable mode, and an attached writable document. The server runtime supplies its review implementation under the EigenPal Pro License.
 
 These conditions are dynamic; there is no static comment-write capability flag. Handle `NotSupported`, `NotImplemented`, and other typed errors from the call or `sync()`. Do not assume that a successful read permits a write.
 

@@ -16,8 +16,8 @@ afterEach(() => {
 const p = (text: string) => `<w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function mount() {
-  const mounted = mountAnchorEditor(docx(p('Supplier pays Supplier.') + p('The Supplier signs.')));
+function mount(bytes = docx(p('Supplier pays Supplier.') + p('The Supplier signs.'))) {
+  const mounted = mountAnchorEditor(bytes);
   cleanups.push(mounted.destroy);
   const marks = () =>
     [
@@ -32,6 +32,42 @@ function mount() {
 }
 
 describe('createDocumentSearch', () => {
+  test('reports truncation only when built-in search finds further matches', () => {
+    for (const count of [1999, 2000, 2001]) {
+      const { editor } = mount(docx(p('x'.repeat(count))));
+      const search = createDocumentSearch(editor);
+      expect(search.find('x')).toHaveLength(Math.min(count, 2000));
+      expect(search.getState().truncated).toBe(count > 2000);
+      search.clear();
+      expect(search.getState().truncated).toBe(false);
+    }
+  });
+
+  test('updates exact-limit truncation after an edit and undo', () => {
+    const { editor } = mount(docx(p('x'.repeat(2000))));
+    const search = createDocumentSearch(editor);
+    search.find('x');
+    expect(search.getState().truncated).toBe(false);
+    expect(editor.exec({ type: 'insertText', text: 'x' }).ok).toBe(true);
+    search.next();
+    expect(search.getState().truncated).toBe(true);
+    expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+    search.next();
+    expect(search.getState().truncated).toBe(false);
+  });
+
+  test('keeps conservative truncation for custom editors without scan metadata', () => {
+    const { editor } = mount(docx(p('x'.repeat(2000))));
+    const matches = editor.findMatches('x').slice();
+    const custom = {
+      ...editor,
+      findMatches: (() => matches) as typeof editor.findMatches,
+    };
+    const search = createDocumentSearch(custom);
+    search.find('x');
+    expect(search.getState().truncated).toBe(true);
+  });
+
   test('returns one session per editor', () => {
     const { editor } = mount();
     expect(createDocumentSearch(editor)).toBe(createDocumentSearch(editor));

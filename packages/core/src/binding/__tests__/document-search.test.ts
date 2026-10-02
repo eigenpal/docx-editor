@@ -52,6 +52,41 @@ const cell = (...blocks: string[]) => `<w:tc>${blocks.join('')}</w:tc>`;
 const row = (...cells: string[]) => `<w:tr>${cells.join('')}</w:tr>`;
 const table = (...rows: string[]) => `<w:tbl>${rows.join('')}</w:tbl>`;
 
+describe('session search cache', () => {
+  test('keeps single and batch result shapes separate in either call order', () => {
+    for (const batchFirst of [false, true]) {
+      const session = open(docx(para(run('Supplier signs'))));
+      if (batchFirst) session.findText(['Supplier']);
+      else session.findText('Supplier');
+
+      const single = session.findText('Supplier');
+      const batch = session.findText(['Supplier']);
+      expect(single.matches).toHaveLength(1);
+      expect(Array.isArray(batch)).toBe(true);
+      expect(batch).toHaveLength(1);
+      expect(batch[0]).toEqual(single);
+      expect(session.findText('Supplier')).toBe(single);
+      expect(session.findText(['Supplier'])).toBe(batch);
+    }
+  });
+
+  test('keeps query array boundaries separate from query characters', () => {
+    const session = open(docx(para(run('Supplier signs'))));
+    const separate = session.findText(['Supplier', 'signs']);
+    const joined = session.findText(['Supplier\u0001signs']);
+    expect(separate).toHaveLength(2);
+    expect(separate.map((result) => result.matches.length)).toEqual([1, 1]);
+    expect(joined).toHaveLength(1);
+    expect(joined[0]!.matches).toEqual([]);
+  });
+
+  test('keeps empty batches separate from batches with an empty query', () => {
+    const session = open(docx(para(run('Supplier signs'))));
+    expect(session.findText([])).toEqual([]);
+    expect(session.findText([''])).toEqual([{ matches: [], truncated: false }]);
+  });
+});
+
 const complexField = (instruction: string, result: string) =>
   '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
   `<w:r><w:instrText xml:space="preserve">${instruction}</w:instrText></w:r>` +

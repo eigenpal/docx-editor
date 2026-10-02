@@ -26,11 +26,18 @@ Open `http://localhost:5177`.
 
 ## How it works
 
-`runRefreshJob()` captures the document, submits its bytes, checks response identity, applies cumulative results, and finishes the submission. It stops after a refused replacement, except for late results. It finishes the submission after transport failures. Cancellation stops the network request and invalidates pending controller work.
+`runRefreshJob()` captures the document and submits its bytes.
+It verifies the response's `documentId` and `submissionId` before applying each cumulative result.
+It stops after a refusal, except for `out-of-order` results.
+Its `finally` block finishes the submission after completion or transport failure.
+Cancellation stops the network request and invalidates pending controller work.
 
 The server generates controlled sample files. It discards uploaded bytes and does not edit arbitrary documents. Reset after manual edits. A production processor must edit the captured file and preserve earlier successful changes.
 
-The review list includes processor descriptions and location diagnostics. These summaries do not create revisions. Highlights mark body paragraphs and remain outside saved content.
+The review list includes processor descriptions and location diagnostics.
+An invalid location does not reject a valid replacement file.
+Keep unavailable summaries visible. Enable **Show change** only for available locations.
+These summaries do not create revisions. Highlights remain outside saved content.
 
 Each accepted file resets selection and undo history. Refresh refuses collaborative sessions. Use the document API for agent edits that require native suggestions or collaboration.
 

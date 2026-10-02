@@ -190,6 +190,33 @@ test('browser editing latency is measurable and structurally stable', async ({
 
   for (const scenario of scenarios) reports.push(await measureScenario(scenario));
 
+  if (INJECTED_DELAY_MS === 0) {
+    const highlighted = await page.evaluate(() => {
+      const editor = window.__DOCX_EDITOR_E2E__!.getEditor()!;
+      const matches = editor.findMatches('Synthetic');
+      const result = editor.setHighlights('typing-benchmark', matches, { activeIndex: 1599 });
+      return { matches: matches.length, ...result };
+    });
+    expect(highlighted).toEqual({ matches: 2000, applied: 2000, unavailable: 0 });
+    try {
+      for (const mode of ['edit', 'suggest'] as const) {
+        reports.push(
+          await measureScenario({ name: `highlighted-${mode}-character`, mode, text: 'X' })
+        );
+        await expect(page.locator('[data-highlight-set="typing-benchmark"]')).toHaveCount(1);
+        expect(
+          await page
+            .locator('[data-highlight-set="typing-benchmark"] .docx-text-highlight--active')
+            .count()
+        ).toBeGreaterThan(0);
+      }
+    } finally {
+      await page.evaluate(() =>
+        window.__DOCX_EDITOR_E2E__!.getEditor()!.clearHighlights('typing-benchmark')
+      );
+    }
+  }
+
   for (const report of reports) assertScenarioLatencyGates(report);
   assertCrossScenarioLatencyGates(reports);
 

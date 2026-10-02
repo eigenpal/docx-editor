@@ -39,7 +39,26 @@ The runtime's tracking setting does not change the browser editor UI mode. Read 
 
 ## Supported tracked edits
 
-Tracked range edits support adjacent sibling paragraphs. They refuse table and wrapper boundaries. Ranges across paragraphs refuse in collaboration. The runtime rejects targets that touch foreign pending revisions. Continuation can extend the runtime author’s text and paragraph proposals. Appends can follow the author’s pending deletion at the paragraph tail. Other deletion boundaries refuse. A pending row insertion or deletion blocks tracked text edits throughout that row, including nested tables. While tracking changes, the runtime tracks fonts, paragraph formatting, and paragraph styles. Paragraph insertion tracks text and paragraph marks. List creation, membership, and level changes produce paragraph-property revisions. New proposed list definitions can change; established list definitions refuse. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration. It rejects pictures, page setup, and unsupported structural edits. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control’s tag and title. Empty ranges, existing review markup, and other control structure changes refuse. Comments and supported revision decisions remain available.
+`TrackMineOnly` supports these edits:
+
+| Edit | Supported behavior |
+| --- | --- |
+| Range text | Insert, replace, or delete text; adjacent sibling paragraphs work outside collaboration |
+| Font and paragraph formatting | Record property revisions, including paragraph styles |
+| Paragraph insertion | Track text and paragraph marks; reject removes both |
+| Lists | Track creation, membership, and level changes; configure newly proposed definitions |
+| Tables | Track complete insertion, cell values, row additions, and partial row deletions |
+| Content controls | Wrap nonempty ordinary text in `PlainText`, `RichText`, or `DatePicker` controls outside collaboration |
+
+Tracked ranges refuse table and wrapper boundaries. Collaborative tracked ranges must remain within one paragraph. Targets that touch foreign pending revisions refuse. Insertions can continue the runtime author's text, paragraph, and formatting proposals.
+
+Appends can follow the author's pending deletion at the paragraph tail. Other deletion boundaries refuse. Structural and move revisions also block continuation.
+
+A pending row insertion or deletion blocks tracked text edits throughout that row, including nested tables. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require permanent edits. Tracked table and cell value replacement refuse in collaboration. See [Tables and cells](/docs/2.x/editor-api/tables#row-suggestions) for row deletion limits.
+
+Accept keeps a proposed content control. Reject restores the original formatted text. The author can set the pending control's `tag` and `title`. Empty ranges, existing review markup, and other control structure changes refuse.
+
+Established list definitions, pictures, page setup, and unsupported structural edits refuse. Comments and supported revision decisions remain available.
 
 Never turn tracking off automatically to make an unsupported operation succeed. Report the limit or ask your application to choose a separately authorized permanent edit. For a multi-stage review, each successful sync becomes a separately committed suggestion. A later refusal does not roll back earlier suggestions.
 
@@ -217,5 +236,3 @@ bunx playwright test --config e2e/editor-smoke.config.ts bulk-review.interaction
 ## Next steps
 
 See the [server agent guide](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/OFFICE_JS_GUIDE.md), [Collaboration](/docs/2.x/pro/collaboration#let-a-server-agent-propose-redlines), and [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).
-
-`Paragraph.insertParagraph()` and range paragraph insertion track both the inserted text and its paragraph break. Reject removes both. Insertion can continue the runtime author’s text, paragraph, and formatting proposals. Foreign, structural, and move revisions refuse.

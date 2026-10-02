@@ -34,6 +34,12 @@ const bytes = new Uint8Array(await response.arrayBuffer());
 
 For regional date input, pass `locale="en-GB"` for day/month input or `locale="pl-PL"` for Polish dates such as `01.02.2030`. The same prop works on `DocxEditor.Root`. It preserves dates already in the document. Use `i18n` separately to customize UI strings; see [date input behavior](/docs/2.x/guides/fields) for details.
 
+## Viewing mode
+
+Set `mode="view"` to display the document without content edits. Clicks, drags, repeated clicks, and caret keys preserve the selection. The editor hides the caret and uses the arrow pointer over text. Toolbar values remain tied to the preserved selection.
+
+Links, equation previews, and **Show/Hide** remain available. Search and programmatic selection can still move the selection. Search highlights remain visible without a caret.
+
 ## Modules
 
 The `modules` prop registers capability modules during construction. [`@docx-editor.dev/pro`](/docs/2.x/pro) uses modules for tracked changes, comments, and custom nodes.
