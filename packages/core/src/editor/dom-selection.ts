@@ -291,13 +291,23 @@ export function positionFromDomPoint(
   // mark's seat stands after the line's content, so it resolves as the line's end.
   const seat = nearestElement?.closest<HTMLElement>('.docx-terminator-seat');
   if (seat?.querySelector('.docx-line-break-mark') && seat.parentElement) {
-    // The line's last run in reading order: the break's own run starts at the break, and
-    // any other run ends there.
-    const run = [...seat.parentElement.querySelectorAll('.layout-run[data-start]')].at(-1);
-    const last = run ? identityOf(run) : null;
-    if (last) {
-      const isBreak = /^\n?$/.test(run!.textContent ?? '');
-      return { paragraphId: last.paragraphId, offset: isBreak ? last.start : last.end };
+    // The line's logical last run, in the paragraph its last run paints (a join line paints
+    // two), and not a run of a text box drawn in it. The break's own run starts at the
+    // break, and any other run ends there.
+    const line = seat.parentElement;
+    const runs = [...line.querySelectorAll('.layout-run[data-start]')]
+      .filter((run) => run.closest('.docx-line') === line)
+      .map((run) => ({ run, identity: identityOf(run) }));
+    const paragraphId = runs.at(-1)?.identity?.paragraphId;
+    let last: (typeof runs)[number] | undefined;
+    for (const entry of runs) {
+      if (entry.identity?.paragraphId !== paragraphId) continue;
+      if (!last || entry.identity!.start > last.identity!.start) last = entry;
+    }
+    if (last?.identity) {
+      const isBreak = /^\n?$/.test(last.run.textContent ?? '');
+      const { start, end } = last.identity;
+      return { paragraphId: last.identity.paragraphId, offset: isBreak ? start : end };
     }
   }
   const flowMarker = seat ?? (marker?.classList.contains('docx-wrap-advance') ? marker : null);

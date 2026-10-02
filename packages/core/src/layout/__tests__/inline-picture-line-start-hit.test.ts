@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { createFixedMeasurer, layoutSemanticDocument, linesOf } from '../index.ts';
-import { hitTestPage } from '../semantic-hit-test.ts';
+import { caretBoxOnLine, hitTestPage } from '../semantic-hit-test.ts';
 import { rangeBandsWithinLine } from '../line-geometry.ts';
 import { layoutContext, load } from './anchored-drawing-test-fixtures.ts';
 
@@ -230,4 +230,13 @@ test('a point before the start of a line of pictures only is the line start', ()
   expect(picture.start).toBe(1);
   const hit = hitTestPage(layout, 0, { x: picture.advanceStart - 20, y });
   expect(hit?.position.offset).toBe(line.range.start);
+});
+
+test('the caret after a picture between two words is drawn after the picture', () => {
+  // The text after the picture starts at the picture's end, so it owns that caret; the word
+  // before the picture ends one offset earlier and must not answer for it.
+  const { line, picture } = pictureLine(`<w:r><w:t>ab</w:t>${drawing}<w:t>cd</w:t></w:r>`);
+  const measurer = createFixedMeasurer(6, 14);
+  expect(caretBoxOnLine(line, picture.start, measurer).x).toBeCloseTo(picture.advanceStart, 5);
+  expect(caretBoxOnLine(line, picture.start + 1, measurer).x).toBeCloseTo(picture.advanceEnd, 5);
 });

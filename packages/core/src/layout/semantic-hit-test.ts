@@ -750,9 +750,8 @@ function beyondLine(
   rtl: boolean
 ): LineOffset | null {
   if (x > left && x < right) return null;
-  if (!rtl && x >= right) return endOfLine(line, right, context);
-  // `endOfLine` measures a trailing space from a span's left, which is left to right only.
-  const offset = rtl && x <= left ? lineEndOffset(context.layout, line) : line.range.start;
+  const atEnd = rtl ? x <= left : x >= right;
+  const offset = atEnd ? lineEndOffset(context.layout, line) : line.range.start;
   // The offset counts in the line's own paragraph; a join line's other one has its own.
   const segment = lineSegments(line).find((entry) => entry.paragraphId === line.range.paragraphId);
   return {
@@ -1105,6 +1104,11 @@ export function caretBoxOnLine(
       chosen = span;
     } else if (offset > span.range.end) {
       chosen = span;
+    } else if (offset === span.range.start && chosen.range.end !== offset) {
+      // Nothing ends here (a picture or hidden text came before), so the text that starts
+      // here owns the caret rather than the span before the gap.
+      chosen = span;
+      break;
     }
   }
   const x = spanOffsetX(chosen, offset, measurer);

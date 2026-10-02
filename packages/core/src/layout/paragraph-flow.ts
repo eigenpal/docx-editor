@@ -1142,20 +1142,19 @@ export function breakParagraph(
       const measure = measureInlineDrawing(piece.inlineDrawing.projection);
       const atomWidth = measure.totalWidth;
       // A picture that does not fit before a float resumes past it, keeping the text before it.
+      const pictureMetrics = {
+        height: measure.lineContribution,
+        baseline: measure.lineContribution,
+      };
       let jumps = false;
       if (holdsContent() && line.width + atomWidth > lineAvailable()) {
+        exclusionProbe.setMetrics(pictureMetrics, atomWidth);
         const settledWidth = line.width;
         jumps = tryAdvanceToNextPassage() && line.width + atomWidth <= lineAvailable() + 0.001;
         line.width = settledWidth;
         if (!jumps) closeLine();
       }
-      exclusionProbe.setMetrics(
-        {
-          height: measure.lineContribution,
-          baseline: measure.lineContribution,
-        },
-        atomWidth
-      );
+      exclusionProbe.setMetrics(pictureMetrics, atomWidth);
       if (!jumps) applyInlineObjectSkipIfNeeded(atomWidth, measure.lineContribution);
       if (!ensurePlacementWidth(atomWidth)) continue;
       const { extentTopY } = growLineMetricsForDrawing(piece.style, measure);

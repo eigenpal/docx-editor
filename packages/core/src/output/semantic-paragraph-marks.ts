@@ -56,7 +56,7 @@ export function seatTerminatorMark(
   seat.setAttribute('contenteditable', 'false');
   seat.style.position = 'absolute';
   seat.style.left = `${(edge.x - line.contentX) * scale}px`;
-  seat.style.bottom = `${(line.box.height - line.baseline) * scale}px`;
+  seat.style.bottom = `${Math.max(0, line.box.height - line.baseline) * scale}px`;
   seat.style.width = '0';
   seat.style.fontSize = '0';
   seat.style.lineHeight = '0';
