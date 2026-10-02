@@ -1,5 +1,6 @@
 import { RELATIONSHIPS_NAMESPACE_URI, WML_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
 import { isStandardVmlTemplate } from './legacy-vml-templates.ts';
+import { readTwipsMeasure } from '../units.ts';
 import {
   attribute as a,
   boundedVml,
@@ -44,8 +45,12 @@ export function embeddedObjectPreview(node: OoxmlElement): OoxmlElement | null {
       !OBJECT_ATTRIBUTES.some(([ns, name]) => attr.namespaceUri === ns && attr.localName === name)
     )
       return null;
-    const pattern = attr.localName === 'anchorId' ? /^[\da-f]{1,8}$/i : /^\d{1,7}$/;
-    if (!pattern.test(attr.value)) return null;
+    if (attr.localName === 'anchorId') {
+      if (!/^[\da-f]{1,8}$/i.test(attr.value)) return null;
+    } else {
+      const size = readTwipsMeasure(attr.value);
+      if (size === null || size < 0 || size > 9_999_999) return null;
+    }
   }
   for (const child of node.children) if (!element(child) && child.value.trim()) return null;
   const list = children(node);

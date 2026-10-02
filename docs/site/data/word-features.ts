@@ -784,7 +784,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      "Section w:cols count, gap, separator, and equal or unequal widths paginate into columns. An explicit column break leaves the break paragraph's empty remainder at the top of the next column. Continuous multi-column sections balance. Column editing chrome is not exposed.",
+      "Section w:cols count, gap, separator, and equal or unequal widths paginate into columns. Decimal and unit-suffixed widths and gaps truncate to whole twips. A w:col without a gap has no gap, and one without a width spans the text area. Widths and gaps that do not fit the page are kept, so later columns can extend past the page edge. Equal columns narrow to a minimum of 0.01 inch and keep their gaps. If a w:col width or gap cannot be used, or there are fewer w:col elements than columns, the section uses equal columns. An explicit column break leaves the break paragraph's empty remainder at the top of the next column. Continuous multi-column sections balance. Column editing chrome is not exposed.",
   },
   {
     id: 'layout.page-borders',

@@ -1,3 +1,4 @@
+import { readTwipsMeasure } from '@docx-editor.dev/core/store';
 import {
   WML_NAMESPACE_URI,
   type OoxmlElement,
@@ -25,8 +26,9 @@ function one(node: OoxmlElement, name: string): OoxmlElement | undefined {
   return matches.length === 1 && isW(matches[0]!, name) ? matches[0] : undefined;
 }
 function twips(value: string | undefined): number | undefined {
-  if (value === undefined || !/^\d{1,5}$/.test(value)) return undefined;
-  const pt = Number(value) / 20;
+  const measure = readTwipsMeasure(value);
+  if (measure === null || measure < 0 || measure > 99_999) return undefined;
+  const pt = measure / 20;
   return pt <= MAX_PT ? pt : undefined;
 }
 

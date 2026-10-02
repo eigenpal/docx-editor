@@ -49,6 +49,7 @@ import {
   patchTcPrChild,
   patchTrPrChild,
 } from './tree-op-table-properties.ts';
+import { readTwipsMeasure } from '../units.ts';
 import { paragraphIdsWithin } from './tree-op-blocks.ts';
 import { fromEdit, TEXT_DEPS } from './tree-op-nodes.ts';
 import { isWmlElement, wmlAttributeValue, wmlChildNamed } from './tree-op-table-shared.ts';
@@ -881,9 +882,9 @@ function readTcWidthTwipsForGrid(cell: OoxmlTableCellNode): string | undefined {
   if (!tcW) return undefined;
   const rawType = wmlAttributeValue(tcW, 'type');
   if (rawType !== undefined && rawType !== 'dxa') return undefined;
-  const rawW = wmlAttributeValue(tcW, 'w');
-  if (!rawW || !/^\d{1,9}$/.test(rawW)) return undefined;
-  return rawW;
+  const width = readTwipsMeasure(wmlAttributeValue(tcW, 'w'));
+  // Written back as whole twips, so a decimal width does not carry into a new grid column.
+  return width !== null && width >= 0 ? String(width) : undefined;
 }
 
 type InsertTableColumnOp = Extract<TableColumnDocOp, { op: 'insertTableColumn' }>;
@@ -969,8 +970,8 @@ function referenceGridWidthTwips(
 ): string | undefined {
   const gridColumn = topology.gridColumns[columnIndex];
   if (gridColumn) {
-    const width = wmlAttributeValue(gridColumn, 'w');
-    return width && /^\d{1,9}$/.test(width) ? width : undefined;
+    const width = readTwipsMeasure(wmlAttributeValue(gridColumn, 'w'));
+    return width !== null && width >= 0 ? String(width) : undefined;
   }
   return readTcWidthTwipsForGrid(topology.rows[0]!.cells[columnIndex]!);
 }
@@ -1395,11 +1396,8 @@ function ownTableWidthTwips(op: object, key: string): number | null {
 }
 
 function readGridColWidthTwips(column: OoxmlElement): number | null {
-  const raw = wmlAttributeValue(column, 'w');
-  if (!raw || !/^\d{1,9}$/.test(raw)) return null;
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 0) return null;
-  return value;
+  const value = readTwipsMeasure(wmlAttributeValue(column, 'w'));
+  return value !== null && value >= 0 ? value : null;
 }
 
 function gridColWithWidth(

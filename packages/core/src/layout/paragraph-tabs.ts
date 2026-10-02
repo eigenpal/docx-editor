@@ -9,7 +9,7 @@
 // Hostile authored values are dropped or clamped; stop count is capped; nothing from the
 // file is used as a loop bound or allocation size.
 
-import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
+import { readTwipsMeasure, type OoxmlElement, type OoxmlNode } from '@docx-editor.dev/core/store';
 
 /** Soft ceiling matching Word's practical custom-tab UI limit. */
 export const MAX_TAB_STOPS = 64;
@@ -144,10 +144,8 @@ function childNamed(parent: OoxmlElement, localName: string): OoxmlElement | und
 }
 
 function integerTwips(raw: string | undefined): number | null {
-  if (raw === undefined) return null;
-  // Up to 9 digits so oversized values reach the clamp; longer strings are garbage.
-  if (!/^-?\d{1,9}$/.test(raw)) return null;
-  return Number(raw);
+  // Up to 9 integer digits so oversized values reach the clamp; longer strings are garbage.
+  return readTwipsMeasure(raw);
 }
 
 function clampPositionTwips(twips: number): number | null {

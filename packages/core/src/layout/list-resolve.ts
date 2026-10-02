@@ -1,3 +1,4 @@
+import { readTwipsMeasure } from '@docx-editor.dev/core/store';
 import { styleSeparatorMembersOf } from './style-separator-group.ts';
 import { markerMeasureToken } from './list-marker-measure-key.ts';
 import {
@@ -312,9 +313,11 @@ function firstLineOffsetOf(
     // so an `w:ind` stating either replaces both. `w:firstLine` is read SIGNED because Word
     // keeps a negative value as a hang. A bare `w:left` states neither and leaves them alone.
     if (h === undefined && f === undefined) continue;
+    const hanging = readTwipsMeasure(h);
+    const firstLine = readTwipsMeasure(f);
     found = {
-      hanging: h !== undefined && /^\d{1,9}$/.test(h) ? clampIndentPt(Number(h) / 20) : 0,
-      firstLine: f !== undefined && /^-?\d{1,9}$/.test(f) ? clampIndentPt(Number(f) / 20) : 0,
+      hanging: hanging !== null && hanging >= 0 ? clampIndentPt(hanging / 20) : 0,
+      firstLine: firstLine !== null ? clampIndentPt(firstLine / 20) : 0,
     };
   }
   return found;

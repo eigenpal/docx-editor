@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Most readers skipped decimal twips values, so tab stops, grid widths, indents and page geometry with a decimal value read as absent. Tab stop edits carried a decimal stop through unchanged.",
+  "after": "Decimal and unit-suffixed twips values read as whole twips. Tab stop and table edits that rewrite such a value write the whole number.",
+  "reason": "Shared operations and the stored format are unchanged. Edits write integer twips, which released participants already read. Reading a decimal value changes only the local layout projection.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-decimal-twips.test.ts"],
+  "changeset": "decimal-twips-columns",
+  "migration": null
+}

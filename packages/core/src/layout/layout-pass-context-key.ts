@@ -48,7 +48,7 @@ export function layoutPassContextKey(
   inputs: LayoutPassContextInputs
 ): (notesReserveKey: string) => string {
   const { geometry, columns, columnRegionBottom, continuedInsets } = inputs;
-  const columnsContext = `|cols:${columns.widths.join(',')};${columns.gaps.join(',')};${columns.separator ? 1 : 0}${columnRegionBottom !== undefined ? `;bal:${columnRegionBottom}` : ''}`;
+  const columnsContext = `|cols:${columns.widths.join(',')};${columns.gaps.join(',')};${columns.lefts.join(',')};${columns.separator ? 1 : 0}${columnRegionBottom !== undefined ? `;bal:${columnRegionBottom}` : ''}`;
   // The host sheet's box is an INPUT to this section's flow, so a host whose own variant moved
   // must not let this section resume a flow measured against the box it used to have. The
   // host's furniture wrap zones are an input too. Their token embeds part names from the file,

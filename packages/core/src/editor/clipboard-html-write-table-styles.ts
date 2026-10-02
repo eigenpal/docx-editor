@@ -1,15 +1,13 @@
 import { WML_NAMESPACE_URI, type OoxmlElement } from '../store/package/ooxml-tree.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
+import { readTwipsMeasure } from '../store/units.ts';
 import { wordBorderCss } from './clipboard-html-word-elements.ts';
 import { tableSide } from './clipboard-table-direction.ts';
 import { wmlChild } from './clipboard-html-write-tree.ts';
 
-function intAttribute(element: OoxmlElement | null, name: string): number | null {
+function twipsAttribute(element: OoxmlElement | null, name: string): number | null {
   if (element === null) return null;
-  const raw = attributeValueOf(element, name, WML_NAMESPACE_URI);
-  if (raw === undefined || !/^-?\d{1,9}$/.test(raw)) return null;
-  const value = Number.parseInt(raw, 10);
-  return Number.isSafeInteger(value) ? value : null;
+  return readTwipsMeasure(attributeValueOf(element, name, WML_NAMESPACE_URI));
 }
 
 function colorAttribute(element: OoxmlElement | null, name: string): string | null {
@@ -198,7 +196,7 @@ export function wordTableCellCss(
   if (vAlign === 'center') rules.push('vertical-align:middle');
   else if (vAlign === 'bottom' || vAlign === 'top') rules.push(`vertical-align:${vAlign}`);
   const tcW = wmlChild(tcPr, 'tcW');
-  const width = intAttribute(tcW, 'w');
+  const width = twipsAttribute(tcW, 'w');
   const widthType = tcW === null ? undefined : attributeValueOf(tcW, 'type', WML_NAMESPACE_URI);
   if (width !== null && width > 0 && (widthType === undefined || widthType === 'dxa')) {
     rules.push(`width:${pointsFromTwips(width)}`);
@@ -213,7 +211,7 @@ export function wordTableCellCss(
         .map((container) => wmlChild(container, edge) ?? wmlChild(container, relative))
         .find((value) => value !== null) ??
       null;
-    const value = intAttribute(margin, 'w');
+    const value = twipsAttribute(margin, 'w');
     const type = margin === null ? undefined : attributeValueOf(margin, 'type', WML_NAMESPACE_URI);
     if (value !== null && value >= 0 && (type === undefined || type === 'dxa')) {
       rules.push(`padding-${tableSide(edge, rtl)}:${pointsFromTwips(value)}`);

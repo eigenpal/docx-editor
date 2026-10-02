@@ -4,7 +4,11 @@
 // box when a complete authored grid independently confirms it. Other legacy table
 // placements (nonzero indent, RTL, floating, nested, separated cells) retain
 // the existing algorithm until their geometry has independent coverage.
-import { WML_NAMESPACE_URI, type OoxmlElement } from '@docx-editor.dev/core/store';
+import {
+  readTwipsMeasure,
+  WML_NAMESPACE_URI,
+  type OoxmlElement,
+} from '@docx-editor.dev/core/store';
 import type { SemanticTableRow, TableAlignment } from './semantic-table.ts';
 import { MAX_TABLE_COLUMNS, type CellWidthClaim, type PreferredWidth } from './table-widths.ts';
 import { hasSupportedLegacyTableMargins } from './legacy-table-margins.ts';
@@ -27,9 +31,9 @@ export function legacyRoundedCellClaims(
     if (claim.span !== 1 || claim.preferred.type !== 'pct') return claim;
     const units = claim.preferred.value * 50;
     if (Math.abs(units - Math.round(units)) > 1e-8) return claim;
-    const raw = attr(gridCols[claim.start], 'w');
-    if (raw === undefined || !/^\d{1,9}$/.test(raw)) return claim;
-    const gridWidth = Number(raw) / 20;
+    const raw = readTwipsMeasure(attr(gridCols[claim.start], 'w'));
+    if (raw === null || raw < 0) return claim;
+    const gridWidth = raw / 20;
     const delta = (tableWidthPt * claim.preferred.value) / 100 - gridWidth;
     return delta > 0 && delta <= tolerance + EPSILON_PT
       ? { ...claim, preferred: { type: 'dxa', value: gridWidth } }
@@ -102,7 +106,8 @@ export function legacyTableContentWidth(input: {
     rawWidth === undefined ||
     ((!/^\d{1,4}$/.test(rawWidth) || Number(rawWidth) > 5000) &&
       (!/^\d{1,3}(?:\.\d+)?%$/.test(rawWidth) || Number(rawWidth.slice(0, -1)) > 100)) ||
-    (stated('tblInd') && (attr(indent, 'type') !== 'dxa' || attr(indent, 'w') !== '0')) ||
+    (stated('tblInd') &&
+      (attr(indent, 'type') !== 'dxa' || readTwipsMeasure(attr(indent, 'w')) !== 0)) ||
     (stated('tblLayout') && attr(layout, 'type') !== 'autofit')
   )
     return undefined;
@@ -167,9 +172,9 @@ export function legacyTableContentWidth(input: {
   for (const col of grid.children) {
     if (col.kind === 'textValue') continue;
     if (col.localName !== 'gridCol' || col.namespaceUri !== WML_NAMESPACE_URI) return undefined;
-    const raw = attr(col, 'w');
-    if (raw === undefined || !/^\d{1,9}$/.test(raw)) return undefined;
-    const pt = Number(raw) / 20;
+    const raw = readTwipsMeasure(attr(col, 'w'));
+    if (raw === null || raw < 0) return undefined;
+    const pt = raw / 20;
     if (pt < 1 || pt > MAX_WIDTH_PT || ++count > MAX_TABLE_COLUMNS) return undefined;
     total += pt;
   }

@@ -208,8 +208,14 @@ describe('w:defaultTabStop is read from settings.xml and bounded', () => {
     expect(defaultTabIntervalFromSettings(loadSettings(''))).toBe(DEFAULT_TAB_INTERVAL_PT);
   });
 
+  test('a decimal interval truncates to whole twips', () => {
+    expect(defaultTabIntervalFromSettings(loadSettings('<w:defaultTabStop w:val="720.9"/>'))).toBe(
+      36
+    );
+  });
+
   test('hostile values fall back rather than entering layout arithmetic', () => {
-    for (const val of ['0', '-720', '1e3', '7.5', 'NaN', '999999999', '31681', '']) {
+    for (const val of ['0', '0.4', '-720', '1e3', '7.5e1', 'NaN', '999999999', '31681', '']) {
       expect(
         defaultTabIntervalFromSettings(loadSettings(`<w:defaultTabStop w:val="${val}"/>`))
       ).toBe(DEFAULT_TAB_INTERVAL_PT);

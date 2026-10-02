@@ -176,7 +176,6 @@ describe('readTableIndentPt', () => {
       'w:w="- 200"',
       'w:w=" -200"',
       'w:w="-200 "',
-      'w:w="-1.5"',
       'w:w="-1e5"',
       'w:w="NaN"',
       'w:w="Infinity"',
@@ -191,6 +190,12 @@ describe('readTableIndentPt', () => {
     ]) {
       expect(read(attributes)).toBeUndefined();
     }
+  });
+
+  test('a decimal twips value truncates toward zero', () => {
+    expect(read('w:w="-720.6"')).toBe(-36);
+    expect(read('w:w="1443.74" w:type="dxa"')).toBe(72.15);
+    expect(read('w:w="-0.4"')).toBe(0);
   });
 
   test('clamps to the bound in both directions', () => {

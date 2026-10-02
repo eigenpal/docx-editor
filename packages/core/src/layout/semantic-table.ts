@@ -11,6 +11,7 @@ import { withRowMinimumContentInsets } from './table-row-minimum-insets.ts';
 // Width reconciliation lives in `table-widths.ts`: settling one column depends on every cell
 // covering it across every row, not any one node visited here.
 import {
+  readTwipsMeasure,
   flattenContentControls,
   WML_NAMESPACE_URI,
   type OoxmlElement,
@@ -411,9 +412,8 @@ function readRowHeight(rowProperties: OoxmlElement | undefined): TableRowHeight 
   if (rule === 'auto') return AUTO_ROW_HEIGHT;
 
   const rawVal = attributeValue(node, 'val');
-  if (rawVal === undefined || !/^\d{1,9}$/.test(rawVal)) return AUTO_ROW_HEIGHT;
-  const twips = Number(rawVal);
-  if (!Number.isFinite(twips) || twips <= 0) return AUTO_ROW_HEIGHT;
+  const twips = readTwipsMeasure(rawVal);
+  if (twips === null || twips <= 0) return AUTO_ROW_HEIGHT;
   const valuePt = Math.min(twips / 20, MAX_TABLE_ROW_HEIGHT_PT);
   if (!(valuePt > 0)) return AUTO_ROW_HEIGHT;
 

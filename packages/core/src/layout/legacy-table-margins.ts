@@ -1,4 +1,8 @@
-import { WML_NAMESPACE_URI, type OoxmlElement } from '@docx-editor.dev/core/store';
+import {
+  readTwipsMeasure,
+  WML_NAMESPACE_URI,
+  type OoxmlElement,
+} from '@docx-editor.dev/core/store';
 
 // The ordinary margin reader is deliberately permissive. Its fallback values alone are
 // insufficient evidence for a NEW negative table origin. Validate this lane's sources,
@@ -19,11 +23,12 @@ function validMarginBox(box: OoxmlElement): boolean {
     seen.add(name);
     const widths = side.attributes.filter((item) => item.localName === 'w');
     const types = side.attributes.filter((item) => item.localName === 'type');
+    const width = widths.length === 1 ? readTwipsMeasure(widths[0]!.value) : null;
     if (
-      widths.length !== 1 ||
+      width === null ||
       widths[0]!.namespaceUri !== WML_NAMESPACE_URI ||
-      !/^\d{1,9}$/.test(widths[0]!.value) ||
-      Number(widths[0]!.value) > 31_680
+      width < 0 ||
+      width > 31_680
     )
       return false;
     // Absent CT_TblWidth type is dxa; unsupported units do not prove an outer margin.

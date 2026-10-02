@@ -10,6 +10,7 @@
 // inheritance is a separate layer (the style resolver); this is the direct-formatting half,
 // which is what the D8 boundary covers.
 
+import { readTwipsMeasure } from '@docx-editor.dev/core/store';
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { eastAsianDefaultFamily, themeFontFamilyOf } from '../store/package/theme-font-scheme.ts';
 import { resolveOoxmlShadingFill } from './ooxml-shading.ts';
@@ -393,8 +394,11 @@ export function resolveRunStyle(
         // Twips, signed. Inside `w:rPr` this is CHARACTER spacing; the identically named
         // child of `w:pPr` is paragraph spacing, which is why the two are resolved by
         // different functions rather than one shared reader.
-        const twips = integer(property.attributes?.val, true);
-        if (twips !== null) style.characterSpacingPt = twips / 20;
+        const twips = readTwipsMeasure(property.attributes?.val);
+        // Seven digits, as every other run measurement here: a larger value is not spacing.
+        if (twips !== null && Math.abs(twips) <= 9_999_999) {
+          style.characterSpacingPt = twips / 20;
+        }
         break;
       }
       case 'w': {

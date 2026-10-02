@@ -1,3 +1,4 @@
+import { readTwipsMeasure } from '@docx-editor.dev/core/store';
 import {
   WML_NAMESPACE_URI as W,
   type OoxmlElement,
@@ -93,8 +94,9 @@ function frameCount(part: OoxmlPart): number | null {
 
 function points(value: string | undefined, fallback?: number): number | null {
   if (value === undefined) return fallback ?? null;
-  if (!/^\d{1,5}$/.test(value)) return null;
-  const result = Number(value) / 20;
+  const twips = readTwipsMeasure(value);
+  if (twips === null || twips < 0 || twips > 99_999) return null;
+  const result = twips / 20;
   return result <= MAX_COORDINATE_PT ? result : null;
 }
 

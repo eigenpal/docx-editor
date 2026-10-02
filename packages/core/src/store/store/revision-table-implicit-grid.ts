@@ -1,3 +1,4 @@
+import { readTwipsMeasure } from '../units.ts';
 import { WML_NAMESPACE_URI, type OoxmlElement } from '../package/ooxml-tree.ts';
 import { tableChildren, replaceTableChildren } from './revision-table-children.ts';
 import { recordedProperties } from './tree-op-tracked-properties.ts';
@@ -71,7 +72,7 @@ export function restoreImplicitRowGrid(
   )
     return rebuilt;
   if (grid.children.some((n) => n.kind !== 'textValue' && !cols.includes(n))) return rebuilt;
-  const widths = cols.map((c) => Number(attr(c, 'w')));
+  const widths = cols.map((c) => readTwipsMeasure(attr(c, 'w')) ?? Number.NaN);
   if (widths.some((w) => !Number.isFinite(w) || w <= 0)) return rebuilt;
   const positions = [0];
   for (const width of widths) positions.push(positions.at(-1)! + width);

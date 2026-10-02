@@ -5,7 +5,7 @@
 
 import type { ExecResult } from '../contracts/editor.ts';
 import type { SemanticLayout, SemanticSelection } from '@docx-editor.dev/core/layout';
-import type { OoxmlElement } from '@docx-editor.dev/core/store';
+import { readTwipsMeasure, type OoxmlElement } from '@docx-editor.dev/core/store';
 import { readEditableTableTopology } from '../store/store/tree-op-table-topology.ts';
 import { wmlAttributeValue } from '../store/store/tree-op-table-shared.ts';
 import { MIN_TABLE_COLUMN_WIDTH_TWIPS } from '../store/store/table-constraints.ts';
@@ -107,9 +107,7 @@ interface LastPointerSheet {
 }
 
 function gridWidthTwips(element: OoxmlElement): number {
-  const raw = wmlAttributeValue(element, 'w');
-  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN;
-  return Number.isFinite(parsed) ? parsed : 0;
+  return readTwipsMeasure(wmlAttributeValue(element, 'w')) ?? 0;
 }
 
 function clientToSheet(

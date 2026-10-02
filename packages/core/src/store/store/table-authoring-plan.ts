@@ -10,6 +10,7 @@ import type {
 } from '../package/ooxml-tree.ts';
 import { safeRowInsertion } from './table-authoring-row-insertion.ts';
 import { readEditableTableTopology } from './tree-op-table-topology.ts';
+import { readTwipsMeasure } from '../units.ts';
 import { wmlAttributeValue, wmlChildNamed } from './tree-op-table-shared.ts';
 import { applyTreeOp, type TreeDocOp, type TreeOpEffect } from './tree-ops.ts';
 interface AutomationStoryReads {
@@ -139,14 +140,15 @@ export function tableCellRead(
     if (index < 0) continue;
     const cell = cells[index]!;
     const grid = result.topology.gridColumns[index];
-    const width = prop(cell, 'tcPr', 'tcW', 'w') ?? (grid && wmlAttributeValue(grid, 'w')) ?? '0';
+    const width = readTwipsMeasure(
+      prop(cell, 'tcPr', 'tcW', 'w') ?? (grid && wmlAttributeValue(grid, 'w'))
+    );
     const align = prop(cell, 'tcPr', 'vAlign');
     return {
       nodeId: cellId,
       tableId,
       value: cellText(cell),
-      columnWidth:
-        /^\d{1,7}$/.test(width) && Number.isFinite(Number(width)) ? Number(width) / 20 : 0,
+      columnWidth: width !== null && width >= 0 && width <= 9_999_999 ? width / 20 : 0,
       shadingColor: (() => {
         const fill = prop(cell, 'tcPr', 'shd', 'fill');
         return fill && /^[0-9a-fA-F]{6}$/.test(fill) ? `#${fill.toUpperCase()}` : (fill ?? 'auto');
@@ -381,7 +383,9 @@ export function planTableMutation(
         alignment: mutation.verticalAlignment.toLowerCase() as 'top' | 'center' | 'bottom',
       });
     if (!error && mutation.columnWidth !== undefined) {
-      const widths = current.gridColumns.map((c) => Number(wmlAttributeValue(c, 'w') ?? '0'));
+      const widths = current.gridColumns.map(
+        (c) => readTwipsMeasure(wmlAttributeValue(c, 'w')) ?? 0
+      );
       widths[index] = Math.round(mutation.columnWidth * 20);
       error = apply({ op: 'setTableProperties', tableId, columnWidthsTwips: widths });
     }

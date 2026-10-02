@@ -22,7 +22,7 @@
 // a bounded share of what is left rather than zero, and no fit may scale a table below one
 // point per column — a zero-width column is unrecoverable downstream.
 
-import type { OoxmlElement } from '@docx-editor.dev/core/store';
+import { readTwipsMeasure, type OoxmlElement } from '@docx-editor.dev/core/store';
 import { MAX_TABLE_COLUMNS } from '../store/store/table-constraints.ts';
 
 export { MAX_TABLE_COLUMNS };
@@ -62,15 +62,8 @@ export const AUTO_PREFERRED_WIDTH: PreferredWidth = Object.freeze({ type: 'auto'
 /** Widest a `pct` preference may resolve to, so `w:w="999999"` cannot inflate a table. */
 const MAX_PREFERRED_PERCENT = 100;
 
-/** Points per unit for `ST_UniversalMeasure`'s suffixes (`pi` is a synonym for `pc`). */
-const MEASURE_UNIT_PT: Readonly<Record<string, number>> = Object.freeze({
-  mm: 72 / 25.4,
-  cm: 72 / 2.54,
-  in: 72,
-  pt: 1,
-  pc: 12,
-  pi: 12,
-});
+/** A width stated without a unit: its type says whether it is twips or fiftieths of a percent. */
+const UNITLESS = /^[+-]?\d{0,9}(?:\.\d{0,32})?$/;
 
 function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undefined {
   for (const child of node.children) {
@@ -87,7 +80,8 @@ function attributeValue(node: OoxmlElement, localName: string): string | undefin
  * Bounded reader for `ST_MeasurementOrPercent` — the union `w:w` actually admits. Word
  * writes the plain twips form, but `ST_UniversalMeasure` (`2.5in`, `72pt`) and
  * `ST_Percentage` (`33.3%`, the form 17.4.71's own example uses) are equally valid, and
- * dropping them silently loses geometry a conformant producer stated.
+ * dropping them silently loses geometry a conformant producer stated. Lengths go through
+ * `readTwipsMeasure`, so a decimal (`9026.0`) truncates to whole twips.
  *
  * Every branch is anchored with a bounded quantifier: these run over attacker-controlled
  * attribute values and must not backtrack.
@@ -98,21 +92,14 @@ function readMeasurementOrPercent(
   | { readonly kind: 'length'; readonly pt: number }
   | { readonly kind: 'percent'; readonly percent: number }
   | null {
-  if (/^\d{1,9}$/.test(raw)) {
-    const pt = Number(raw) / 20;
-    return Number.isFinite(pt) ? { kind: 'length', pt } : null;
-  }
   const percent = /^(\d{1,7}(?:\.\d{1,4})?)%$/.exec(raw);
   if (percent) {
     const value = Number(percent[1]);
     return Number.isFinite(value) ? { kind: 'percent', percent: value } : null;
   }
-  const universal = /^(\d{1,9}(?:\.\d{1,4})?)(mm|cm|in|pt|pc|pi)$/.exec(raw);
-  if (universal) {
-    const pt = Number(universal[1]) * MEASURE_UNIT_PT[universal[2]!]!;
-    return Number.isFinite(pt) ? { kind: 'length', pt } : null;
-  }
-  return null;
+  const twips = readTwipsMeasure(raw);
+  // A width is unsigned: a negative one is no length at all.
+  return twips !== null && twips >= 0 ? { kind: 'length', pt: twips / 20 } : null;
 }
 
 /**
@@ -141,9 +128,10 @@ export function readPreferredWidth(node: OoxmlElement | undefined): PreferredWid
 
   // A bare number carries no unit of its own, so the type decides how to read it. A stated
   // `%` or `in` DOES carry one, and 17.4.87 says that statement overrides the type.
-  const bare = /^\d{1,9}$/.test(raw);
+  const bare = UNITLESS.test(raw);
   if (measure.kind === 'percent' || (bare && rawType === 'pct')) {
-    const percent = measure.kind === 'percent' ? measure.percent : Number(raw) / 50;
+    // A bare `pct` value is fiftieths of a percent, read as whole units like any other.
+    const percent = measure.kind === 'percent' ? measure.percent : (measure.pt * 20) / 50;
     if (!Number.isFinite(percent) || percent <= 0) return AUTO_PREFERRED_WIDTH;
     return { type: 'pct', value: Math.min(percent, MAX_PREFERRED_PERCENT) };
   }
@@ -186,16 +174,10 @@ export function readTableIndentPt(
   if (type !== undefined && type !== 'dxa' && type !== 'pct') return undefined;
   const raw = attributeValue(node, 'w');
   if (raw === undefined) return undefined;
-  let pt: number;
-  if (/^[-+]?\d{1,9}$/.test(raw)) {
-    if (type === 'pct') return undefined;
-    pt = Number(raw) / 20;
-  } else {
-    const universal = /^([-+]?\d{1,9}(?:\.\d{1,4})?)(mm|cm|in|pt|pc|pi)$/.exec(raw);
-    if (!universal) return undefined;
-    pt = Math.abs(Number(universal[1])) * MEASURE_UNIT_PT[universal[2]!]!;
-  }
-  if (!Number.isFinite(pt)) return undefined;
+  if (type === 'pct' && UNITLESS.test(raw)) return undefined;
+  const twips = readTwipsMeasure(raw);
+  if (twips === null) return undefined;
+  const pt = twips / 20;
   // `+ 0` turns a stated `-0` into zero.
   return Math.max(-limit, Math.min(pt, limit)) + 0;
 }

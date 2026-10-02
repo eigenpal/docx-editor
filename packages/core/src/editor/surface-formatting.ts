@@ -31,6 +31,7 @@ import {
   directParagraphMarkProperties,
   findNode,
   propertyContainer,
+  readTwipsMeasure,
   runAddressRanges,
   type FormattingDisplayMode,
   type FormattingRevisionAuthorFilter,
@@ -733,8 +734,8 @@ export function formattingAt(
     cascadedParagraphAttributes(properties, 'spacing') ?? undefined;
   const lineSpacingTextOf = (properties: readonly SurfaceProperty[]): string => {
     const attributes = spacing(properties);
-    const line = Number(attributes?.line);
-    if (!Number.isFinite(line)) return '';
+    const line = readTwipsMeasure(attributes?.line);
+    if (line === null) return '';
     // `w:lineRule` defaults to `auto` (17.3.1.33), which is Word's "Multiple".
     const rule = attributes?.lineRule ?? 'auto';
     if (rule === 'auto') return `multiple:${Math.round((line / 240) * 100) / 100}`;
@@ -759,8 +760,8 @@ export function formattingAt(
     properties: readonly SurfaceProperty[],
     attribute: 'before' | 'after'
   ): number | null => {
-    const raw = Number(spacing(properties)?.[attribute]);
-    return Number.isFinite(raw) ? Math.round((raw / 20) * 100) / 100 : null;
+    const raw = readTwipsMeasure(spacing(properties)?.[attribute]);
+    return raw === null ? null : Math.round((raw / 20) * 100) / 100;
   };
   const spacePt = (attribute: 'before' | 'after') =>
     paragraphValue((properties) => spacePtOf(properties, attribute));

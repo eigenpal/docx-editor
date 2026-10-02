@@ -40,6 +40,7 @@ import type {
   TreeOpResult,
 } from './tree-op-types.ts';
 import { ownProposedMark, withPropertyChangeRecord } from './tree-op-tracked-properties.ts';
+import { readTwipsMeasure } from '../units.ts';
 import { build } from './tree-op-tracked.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import {
@@ -344,24 +345,25 @@ export function applySetParagraphTabStops(
   const existingTabs = (existing?.children ?? []).filter(
     (child) => child.kind !== 'textValue' && child.localName === 'tab'
   );
+  // The position the reader reports: a decimal `w:pos` truncates to whole twips.
   const positionOf = (child: (typeof existingTabs)[number]): number =>
-    Math.round(Number(attributeValueOf(child, 'pos')));
+    readTwipsMeasure(attributeValueOf(child, 'pos')) ?? Number.NaN;
   /**
    * A `w:tab` this write cannot re-author, because the reader that feeds it never saw it.
    *
-   * A `clear` is never opaque even at a fractional position: it is regenerated below from
-   * `standingClears`, and counting it here too emitted the same suppression twice — once
-   * carried through at `1440.5` and once regenerated at `1441`, inventing a clear the
-   * document never had at a position an inherited stop might occupy.
+   * A `clear` is never opaque even at an unreadable position: it is regenerated below from
+   * `standingClears`, and counting it here too emitted the same suppression twice, inventing
+   * a clear the document never had at a position an inherited stop might occupy.
    */
   const isOpaque = (child: (typeof existingTabs)[number]): boolean =>
     attributeValueOf(child, 'val') !== 'clear' &&
     (OPAQUE_TAB_VALUES.has(attributeValueOf(child, 'val') ?? '') ||
-      !Number.isInteger(Number(attributeValueOf(child, 'pos'))));
+      !Number.isFinite(positionOf(child)));
   // `w:bar` and `w:num` are not caret stops — a bar tab draws a vertical rule and `num` is
-  // a legacy list artefact — and a fractional `w:pos` is legal but rounded away on read. The
+  // a legacy list artefact — and a `w:pos` that is not a measurement is skipped on read. The
   // reader reports none of them and an editor cannot name them, so a wholesale replace would
   // delete, on the next unrelated tab edit, markup the user never saw. Carry them through.
+  // A decimal `w:pos` is not opaque: the reader reports it at its truncated position.
   const opaque = existingTabs.filter((child) => isOpaque(child) && !kept.has(positionOf(child)));
   // Clears the paragraph ALREADY carries. These are state, not something to re-derive: a
   // cleared stop is by definition absent from what is in force, so nothing downstream can
@@ -451,7 +453,9 @@ export function applySetParagraphTabStops(
     'tabs',
     [],
     [...authoredChildren, ...carried.map((child) => cloneWithNewIds(child, nextId))].sort(
-      (a, b) => Number(attributeValueOf(a, 'pos') ?? 0) - Number(attributeValueOf(b, 'pos') ?? 0)
+      (a, b) =>
+        (readTwipsMeasure(attributeValueOf(a, 'pos')) ?? 0) -
+        (readTwipsMeasure(attributeValueOf(b, 'pos')) ?? 0)
     )
   );
   if (existing) return fromEdit(replaceNode(part, existing.id, tabs, options), effect);

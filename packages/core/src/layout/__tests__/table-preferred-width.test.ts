@@ -116,11 +116,22 @@ describe('w:tcW is read onto the cell', () => {
   test('a hostile w:tcW is rejected the way every sibling geometry read rejects one', () => {
     const structure = structureOf(
       `<w:tbl><w:tblPr/>${grid(2340, 2340)}` +
-        `<w:tr>${cell(tcW('999999999'))}${cell(tcW('12.5'))}</w:tr></w:tbl>`
+        `<w:tr>${cell(tcW('999999999'))}${cell(tcW('1e3'))}</w:tr></w:tbl>`
     );
     expect(structure.rows[0]!.cells[0]!.preferredWidth.value).toBeLessThanOrEqual(31_680 / 20);
-    // A bare decimal is neither twips nor a universal measure: rejected outright.
+    // An exponent is not a twips measure: rejected outright.
     expect(structure.rows[0]!.cells[1]!.preferredWidth.type).toBe('auto');
+  });
+
+  test('a decimal w:tcW truncates to whole twips', () => {
+    const structure = structureOf(
+      `<w:tbl><w:tblPr/>${grid(2340, 2340)}` +
+        `<w:tr>${cell(tcW('1443.74'))}${cell(tcW('9026.0'))}</w:tr></w:tbl>`
+    );
+    expect(structure.rows[0]!.cells.map((entry) => entry.preferredWidth)).toEqual([
+      { type: 'dxa', value: 72.15 },
+      { type: 'dxa', value: 451.3 },
+    ]);
   });
 });
 

@@ -12,6 +12,7 @@ import {
   escapeAttr,
   isElement,
   parseIntValue,
+  parseTwipsValue,
   ptFromTwips,
   wmlChild,
   wmlVal,
@@ -255,7 +256,7 @@ export function renderHtmlTable(
 
   const tableRules = ['border-collapse:collapse'];
   const tableWidth = wmlChild(ownTblPr, 'tblW');
-  const width = parseIntValue(attrOf(tableWidth, 'w', WML_NAMESPACE_URI));
+  const width = parseTwipsValue(attrOf(tableWidth, 'w', WML_NAMESPACE_URI));
   if (width !== null && width > 0 && attrOf(tableWidth, 'type', WML_NAMESPACE_URI) === 'dxa') {
     tableRules.push(`width:${ptFromTwips(width)}`);
   }
@@ -285,7 +286,7 @@ export function renderHtmlTable(
     }
     const rowIndex = item.row;
     const height = wmlChild(wmlChild(rows[rowIndex] ?? null, 'trPr'), 'trHeight');
-    const heightValue = parseIntValue(attrOf(height, 'val', WML_NAMESPACE_URI));
+    const heightValue = parseTwipsValue(attrOf(height, 'val', WML_NAMESPACE_URI));
     const rowCss = wordTableRowCss(heightValue, attrOf(height, 'hRule', WML_NAMESPACE_URI));
     const rowStyle = rowCss === '' ? '' : ` style="${rowCss}"`;
     out += `<tr${rowStyle}>`;

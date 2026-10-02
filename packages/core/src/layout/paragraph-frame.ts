@@ -1,4 +1,8 @@
-import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
+import {
+  readTwipsMeasure,
+  type OoxmlElement,
+  type OoxmlProperty,
+} from '@docx-editor.dev/core/store';
 import { shiftInlineDrawingRecord, type InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { isLegacyVmlAtom } from '../store/package/legacy-vml-projection.ts';
 import { isRunLevelMcAlternateContent } from '../store/package/drawing-projection.ts';
@@ -44,8 +48,9 @@ export interface ParagraphFrame {
 }
 
 function coordinate(value: string | undefined): number | null {
-  if (value === undefined || !/^-?\d{1,8}$/.test(value)) return null;
-  const points = Number(value) / 20;
+  const twips = readTwipsMeasure(value);
+  if (twips === null || Math.abs(twips) > 99_999_999) return null;
+  const points = twips / 20;
   return Math.abs(points) <= MAX_FRAME_PT ? points : null;
 }
 

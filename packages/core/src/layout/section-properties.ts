@@ -17,6 +17,7 @@
 
 import {
   readOnOffChild,
+  readTwipsMeasure,
   // Aliased: this file's own `twips` is the bounded attribute parser below.
   twips as asTwips,
   twipsToPoints,
@@ -178,25 +179,22 @@ export const DEFAULT_SECTION_PROPERTIES: SectionProperties = Object.freeze({
  * bounded only by memory, so an out-of-range value falls back rather than being honoured.
  */
 function twips(raw: string | undefined, fallback: number, max = 31680 * 2): number {
-  if (raw === undefined || !/^-?\d{1,7}$/.test(raw)) return fallback;
-  const value = Number(raw);
-  if (!Number.isFinite(value) || value <= 0 || value > max) return fallback;
+  const value = readTwipsMeasure(raw);
+  if (value === null || value <= 0 || value > max) return fallback;
   return value;
 }
 
 /** Margins may legitimately be negative (content bleeding into the margin) but not absurd. */
 function marginTwips(raw: string | undefined, fallback: number): number {
-  if (raw === undefined || !/^-?\d{1,7}$/.test(raw)) return fallback;
-  const value = Number(raw);
-  if (!Number.isFinite(value) || Math.abs(value) > 31680) return fallback;
+  const value = readTwipsMeasure(raw);
+  if (value === null || Math.abs(value) > 31680) return fallback;
   return value;
 }
 
 /** Column gaps may be zero; unlike page dimensions they are not required to be positive. */
 function nonNegativeTwips(raw: string | undefined, fallback: number, max = 31680): number {
-  if (raw === undefined || !/^\d{1,7}$/.test(raw)) return fallback;
-  const value = Number(raw);
-  if (!Number.isFinite(value) || value < 0 || value > max) return fallback;
+  const value = readTwipsMeasure(raw);
+  if (value === null || value < 0 || value > max) return fallback;
   return value;
 }
 
@@ -233,30 +231,43 @@ function columnCount(cols: OoxmlNode | undefined): number {
   return Math.max(1, Math.min(12, Number(raw)));
 }
 
+/**
+ * Explicit `w:col` geometry, or no definitions when the set cannot be used.
+ *
+ * - Only the first `count` children count; extra children are ignored.
+ * - An absent `w:w` spans the section's content width, so the next column starts past it.
+ * - An absent `w:space` is no gap. It does NOT inherit `w:cols/@w:space`, which applies only
+ *   to equal-width columns.
+ * - The final column's `w:space` is ignored.
+ * - A zero or very narrow width is kept: the column is that narrow.
+ *
+ * A width or gap that is not a measurement, is negative, or is out of range makes the whole set
+ * unusable, and so does a set with fewer children than `count`. Layout then falls back to equal
+ * columns. Keeping the readable widths and inventing the rest would move every later column to
+ * an arbitrary position.
+ */
 function columnDefinitions(
   cols: OoxmlNode | undefined,
   count: number,
-  fallbackGapTwips: number
+  contentWidthTwips: number
 ): readonly SectionColumnDefinition[] {
   if (!cols || cols.kind === 'textValue') return [];
   const definitions: SectionColumnDefinition[] = [];
   for (const child of cols.children ?? []) {
-    if (
-      definitions.length >= count ||
-      child.kind === 'textValue' ||
-      !('localName' in child) ||
-      child.localName !== 'col'
-    ) {
+    if (definitions.length >= count) break;
+    if (child.kind === 'textValue' || !('localName' in child) || child.localName !== 'col') {
       continue;
     }
-    const index = definitions.length;
-    definitions.push({
-      widthTwips: twips(attribute(child, 'w'), 1, 31680),
-      gapTwips:
-        index === count - 1 ? 0 : nonNegativeTwips(attribute(child, 'space'), fallbackGapTwips),
-    });
+    const rawWidth = attribute(child, 'w');
+    const widthTwips =
+      rawWidth === undefined ? contentWidthTwips : nonNegativeTwips(rawWidth, -1, 31680);
+    const last = definitions.length === count - 1;
+    const rawGap = attribute(child, 'space');
+    const gapTwips = last || rawGap === undefined ? 0 : nonNegativeTwips(rawGap, -1);
+    if (widthTwips < 0 || gapTwips < 0) return [];
+    definitions.push({ widthTwips, gapTwips });
   }
-  return definitions;
+  return definitions.length === count ? definitions : [];
 }
 
 function breakTypeOf(sectPr: OoxmlNode | undefined): SectionBreakType {
@@ -345,7 +356,12 @@ function parseSectionPropertiesUncached(sectPr: OoxmlNode): SectionProperties {
   const defaults = DEFAULT_SECTION_PROPERTIES;
   const grid = childNamed(sectPr, 'docGrid');
   const gridType = grid ? attribute(grid, 'type') : undefined;
-  const gridPitch = grid ? nonNegativeTwips(attribute(grid, 'linePitch'), 0) : 0;
+  // `w:linePitch` is `ST_DecimalNumber`, not a twips measure: only an integer is a pitch.
+  const rawPitch = grid ? attribute(grid, 'linePitch') : undefined;
+  const gridPitch =
+    rawPitch !== undefined && /^\d{1,7}$/.test(rawPitch) && Number(rawPitch) <= 31680
+      ? Number(rawPitch)
+      : 0;
 
   const orientation = pgSz ? attribute(pgSz, 'orient') : undefined;
   const width = pgSz
@@ -363,6 +379,23 @@ function parseSectionPropertiesUncached(sectPr: OoxmlNode): SectionProperties {
     : defaults.columns.gapTwips;
   const equalWidth = cols ? onOffAttribute(cols, 'equalWidth', true) : true;
 
+  const margins: SectionMargins = {
+    topTwips: pgMar ? marginTwips(attribute(pgMar, 'top'), 1440) : defaults.margins.topTwips,
+    rightTwips: pgMar ? marginTwips(attribute(pgMar, 'right'), 1440) : defaults.margins.rightTwips,
+    bottomTwips: pgMar
+      ? marginTwips(attribute(pgMar, 'bottom'), 1440)
+      : defaults.margins.bottomTwips,
+    leftTwips: pgMar ? marginTwips(attribute(pgMar, 'left'), 1440) : defaults.margins.leftTwips,
+    headerTwips: pgMar
+      ? marginTwips(attribute(pgMar, 'header'), 720)
+      : defaults.margins.headerTwips,
+    footerTwips: pgMar
+      ? marginTwips(attribute(pgMar, 'footer'), 720)
+      : defaults.margins.footerTwips,
+    gutterTwips: pgMar ? marginTwips(attribute(pgMar, 'gutter'), 0) : defaults.margins.gutterTwips,
+  };
+  const contentWidthTwips = width - margins.leftTwips - margins.rightTwips - margins.gutterTwips;
+
   return {
     // Every grid type but `default` has a line pitch (ST_DocGrid); an absent type is no grid.
     ...((gridType === 'lines' || gridType === 'linesAndChars' || gridType === 'snapToChars') &&
@@ -370,32 +403,14 @@ function parseSectionPropertiesUncached(sectPr: OoxmlNode): SectionProperties {
       ? { gridLinePitchTwips: gridPitch }
       : {}),
     pageSize: { widthTwips: width, heightTwips: height },
-    margins: {
-      topTwips: pgMar ? marginTwips(attribute(pgMar, 'top'), 1440) : defaults.margins.topTwips,
-      rightTwips: pgMar
-        ? marginTwips(attribute(pgMar, 'right'), 1440)
-        : defaults.margins.rightTwips,
-      bottomTwips: pgMar
-        ? marginTwips(attribute(pgMar, 'bottom'), 1440)
-        : defaults.margins.bottomTwips,
-      leftTwips: pgMar ? marginTwips(attribute(pgMar, 'left'), 1440) : defaults.margins.leftTwips,
-      headerTwips: pgMar
-        ? marginTwips(attribute(pgMar, 'header'), 720)
-        : defaults.margins.headerTwips,
-      footerTwips: pgMar
-        ? marginTwips(attribute(pgMar, 'footer'), 720)
-        : defaults.margins.footerTwips,
-      gutterTwips: pgMar
-        ? marginTwips(attribute(pgMar, 'gutter'), 0)
-        : defaults.margins.gutterTwips,
-    },
+    margins,
     columns: {
       // A column count of zero or a hostile number would divide the content width to nothing.
       count,
       gapTwips,
       equalWidth,
       separator: cols ? onOffAttribute(cols, 'sep', false) : false,
-      definitions: equalWidth ? [] : columnDefinitions(cols, count, gapTwips),
+      definitions: equalWidth ? [] : columnDefinitions(cols, count, contentWidthTwips),
     },
     // Render-truthful: Word writes swapped dimensions AND the attribute, but a file may
     // carry only one. Width exceeding height IS a landscape page whatever the attribute

@@ -1,6 +1,7 @@
 import type { ReviewRevisionItem } from './review-items.ts';
 // Formatting details for the review queue; language names belong to localized chrome.
 import { WML_NAMESPACE_URI, type OoxmlElement } from '../package/ooxml-tree.ts';
+import { readTwipsMeasure } from '../units.ts';
 import type { RevisionSite } from './tree-op-revisions.ts';
 
 export function changedLanguages(site: RevisionSite): string[] {
@@ -83,7 +84,7 @@ export function changedFormatting(site: RevisionSite): ReviewFormattingChange[] 
         return raw === '0' || raw === 'false' || raw === 'off' ? 'false' : 'true';
       if (raw === undefined) return null;
       if (spec.kind === 'halfPoints' || spec.kind === 'twips') {
-        const numeric = Number(raw);
+        const numeric = spec.kind === 'twips' ? (readTwipsMeasure(raw) ?? Number.NaN) : Number(raw);
         return Number.isFinite(numeric)
           ? String(numeric / (spec.kind === 'halfPoints' ? 2 : 20))
           : raw;

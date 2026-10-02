@@ -206,7 +206,7 @@ describe('terminal empty text-table anchors', () => {
       fixture(table().replace(/<w:tblpPr[^>]+\/>/, '<w:tblpPr/>')),
       fixture(table().replace(/<w:tblpPr[^>]+\/>/, '<w:tblpPr w:horzAnchor="margin"/>')),
       fixture(table().replace('w:vertAnchor="text"', 'w:vertAnchor="unknown"')),
-      fixture(table().replace('w:tblpY="231"', 'w:tblpY="1.5"')),
+      fixture(table().replace('w:tblpY="231"', 'w:tblpY="1.5e2"')),
       fixture(table(230, 'w:tblpYSpec="unknown"')),
       fixture(table(230, 'w:topFromText="120"')),
       fixture(table(230, 'w:bottomFromText="720"')),

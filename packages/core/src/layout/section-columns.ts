@@ -10,13 +10,23 @@ export interface ResolvedSectionColumns {
   readonly separator: boolean;
 }
 
-const MIN_COLUMN_WIDTH_PT = 1;
+/**
+ * Narrowest column text flows into: 0.01 inch. Equal columns whose gaps leave less than this
+ * keep their gaps and shrink to this width, so later columns move past the page edge.
+ */
+const MIN_COLUMN_WIDTH_PT = 0.72;
 
 /**
  * Resolve bounded OOXML column declarations into content-box-relative point geometry.
  *
- * Incomplete unequal-width declarations fall back as a unit. Mixing authored and invented
- * widths would move every later column to an arbitrary x position and can overlap content.
+ * Stated geometry is kept even when it does not fit. Unequal columns wider than the content
+ * box are not scaled down, and equal columns keep their stated gap. Later columns may then
+ * start or end past the page edge; squeezing them to fit would rewrap every line in them.
+ *
+ * An unequal column narrower than {@link MIN_COLUMN_WIDTH_PT} still starts the next column at
+ * its stated width; only the width text flows into is raised to the minimum.
+ *
+ * Incomplete unequal-width declarations fall back as a unit (the parser drops them).
  */
 export function resolveSectionColumns(
   columns: SectionColumns,
@@ -25,51 +35,35 @@ export function resolveSectionColumns(
   const width = Math.max(MIN_COLUMN_WIDTH_PT, contentWidth);
   const count = Math.max(1, Math.min(12, Math.floor(columns.count)));
   const definitions = columns.definitions ?? [];
-  const completeUnequal =
-    columns.equalWidth === false &&
-    definitions.length === count &&
-    definitions.every((definition) => definition.widthTwips > 0);
+  const unequal = columns.equalWidth === false && definitions.length === count;
 
-  let widths: number[];
+  let stated: number[];
   let gaps: number[];
-  if (completeUnequal) {
-    widths = definitions.map((definition) =>
-      Math.max(MIN_COLUMN_WIDTH_PT, twipsToPoints(twips(definition.widthTwips)))
+  if (unequal) {
+    stated = definitions.map((definition) =>
+      Math.max(0, twipsToPoints(twips(definition.widthTwips)))
     );
     gaps = definitions
       .slice(0, -1)
       .map((definition) => Math.max(0, twipsToPoints(twips(definition.gapTwips))));
-    const gapTotal = gaps.reduce((sum, gap) => sum + gap, 0);
-    const availableForWidths = Math.max(count * MIN_COLUMN_WIDTH_PT, width - gapTotal);
-    const statedWidth = widths.reduce((sum, columnWidth) => sum + columnWidth, 0);
-    if (statedWidth > availableForWidths) {
-      const scale = availableForWidths / statedWidth;
-      widths = widths.map((columnWidth) => Math.max(MIN_COLUMN_WIDTH_PT, columnWidth * scale));
-    }
   } else {
-    const requestedGap = Math.max(0, twipsToPoints(twips(columns.gapTwips)));
-    const gap = Math.min(
-      requestedGap,
-      Math.max(0, (width - count * MIN_COLUMN_WIDTH_PT) / (count - 1 || 1))
-    );
-    gaps = Array.from({ length: Math.max(0, count - 1) }, () => gap);
-    const columnWidth = Math.max(
-      MIN_COLUMN_WIDTH_PT,
-      (width - gaps.reduce((sum, value) => sum + value, 0)) / count
-    );
-    widths = Array.from({ length: count }, () => columnWidth);
+    const gap = Math.max(0, twipsToPoints(twips(columns.gapTwips)));
+    gaps = Array.from({ length: count - 1 }, () => gap);
+    // Equal columns position past their clamped width, unlike stated unequal widths.
+    const columnWidth = Math.max(MIN_COLUMN_WIDTH_PT, (width - gap * (count - 1)) / count);
+    stated = Array.from({ length: count }, () => columnWidth);
   }
 
   const lefts: number[] = [];
   let left = 0;
   for (let index = 0; index < count; index += 1) {
     lefts.push(left);
-    left += widths[index]! + (gaps[index] ?? 0);
+    left += Math.max(0, stated[index]!) + (gaps[index] ?? 0);
   }
 
   return {
     count,
-    widths,
+    widths: stated.map((columnWidth) => Math.max(MIN_COLUMN_WIDTH_PT, columnWidth)),
     gaps,
     lefts,
     separator: columns.separator === true && count > 1,
@@ -82,8 +76,10 @@ export function columnSeparatorBoxes(
   top: number,
   usedBottom: number
 ): LayoutBox[] {
+  // Centered between the stated column end and the next column's start: a column narrower than
+  // the minimum flow width still ends where its stated width says.
   return columns.gaps.map((gap, index) => ({
-    x: columns.lefts[index]! + columns.widths[index]! + gap / 2 - 0.375,
+    x: columns.lefts[index + 1]! - gap / 2 - 0.375,
     y: top,
     width: 0.75,
     height: Math.max(0, usedBottom - top),

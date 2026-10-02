@@ -12,6 +12,7 @@
 // flow, and so does a band where the frame meets the anchor's text, a table, a drawing or a
 // paragraph border or shading.
 
+import { readTwipsMeasure } from '@docx-editor.dev/core/store';
 import {
   WML_NAMESPACE_URI,
   type OoxmlElement,
@@ -105,19 +106,20 @@ function readFrameProperties(frame: OoxmlElement): Pick<HeaderPageFrame, 'align'
     return null;
   const wrap = attr(frame, 'wrap');
   const align = attr(frame, 'xAlign') as FrameAlignment | undefined;
-  const y = attr(frame, 'y') ?? '0';
+  const y = readTwipsMeasure(attr(frame, 'y') ?? '0');
   if (
     (wrap !== 'around' && wrap !== 'none') ||
     attr(frame, 'vAnchor') !== 'text' ||
     attr(frame, 'hAnchor') !== 'margin' ||
     !align ||
     !ALIGNMENTS.includes(align) ||
-    !/^\d{1,4}$/.test(y) ||
-    Number(y) > MAX_FRAME_Y_TWIPS
+    y === null ||
+    y < 0 ||
+    y > MAX_FRAME_Y_TWIPS
   )
     return null;
   // `around` and `none` place the frame the same way; neither moves the text in its band.
-  return { align, y: Number(y) / 20 };
+  return { align, y: y / 20 };
 }
 
 /** Recognize the supported frame in a header part, or null to keep the ordinary flow. */

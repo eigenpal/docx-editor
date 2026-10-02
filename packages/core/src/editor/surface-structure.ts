@@ -7,7 +7,7 @@
 // composition root.
 
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import type { TreeDocOp, StoryScope } from '@docx-editor.dev/core/store';
+import { readTwipsMeasure, type TreeDocOp, type StoryScope } from '@docx-editor.dev/core/store';
 import {
   enumerateDocumentSections,
   paragraphsInCells,
@@ -447,8 +447,8 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       const stated = property.attributes?.left ?? property.attributes?.start;
       if (stated !== undefined) raw = stated;
     }
-    if (!raw || !/^-?\d{1,7}$/.test(raw)) return 0;
-    return Number(raw);
+    const twips = readTwipsMeasure(raw);
+    return twips === null || Math.abs(twips) > 9_999_999 ? 0 : twips;
   }
 
   return {

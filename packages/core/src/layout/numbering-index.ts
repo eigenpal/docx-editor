@@ -6,7 +6,7 @@ import { withNumberingParagraphProperties } from './numbering-paragraph-properti
 
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
-import { WML_NAMESPACE_URI } from '@docx-editor.dev/core/store';
+import { readTwipsMeasure, WML_NAMESPACE_URI } from '@docx-editor.dev/core/store';
 import { propertiesOfRunContainer } from './field-projection.ts';
 import {
   readNumberingPictureBullets,
@@ -197,6 +197,12 @@ function integerAttr(raw: string | undefined, allowNegative = false): number | n
   return Number(raw);
 }
 
+/** An unsigned twips attribute: a negative value is not a measurement. */
+function unsignedTwips(raw: string | undefined): number | null {
+  const value = readTwipsMeasure(raw);
+  return value !== null && value >= 0 ? value : null;
+}
+
 function clampNonNegativePt(twips: number): number {
   const pt = twips / 20;
   if (!Number.isFinite(pt) || pt <= 0) return 0;
@@ -226,18 +232,18 @@ function parseIndent(pPr: OoxmlElement | undefined): NumberingLevelIndent {
   if (!ind) return empty;
   const authored: { left?: number; right?: number; start?: number; end?: number } = {};
   for (const side of ['left', 'right', 'start', 'end'] as const) {
-    const value = integerAttr(attr(ind, side), true);
+    const value = readTwipsMeasure(attr(ind, side));
     if (value !== null) authored[side] = clampSignedPt(value);
   }
-  const leftTwips = integerAttr(attr(ind, 'left') ?? attr(ind, 'start'), true);
-  const rightTwips = integerAttr(attr(ind, 'right') ?? attr(ind, 'end'), true);
+  const leftTwips = readTwipsMeasure(attr(ind, 'left') ?? attr(ind, 'start'));
+  const rightTwips = readTwipsMeasure(attr(ind, 'right') ?? attr(ind, 'end'));
   // `w:hanging` is unsigned in the schema, and a negative one is meaningless: the hanging
   // slot cannot be to the RIGHT of the text it hangs from.
-  const hangingTwips = integerAttr(attr(ind, 'hanging'));
+  const hangingTwips = unsignedTwips(attr(ind, 'hanging'));
   // `w:firstLine` is declared unsigned, but Word's model keeps ONE signed first-line indent
   // where negative means hanging — which is why the two attributes are mutually exclusive.
   // A negative one is therefore read as authored rather than flattened to zero.
-  const firstLineTwips = integerAttr(attr(ind, 'firstLine'), true);
+  const firstLineTwips = readTwipsMeasure(attr(ind, 'firstLine'));
   return {
     ...(authored.start !== undefined || authored.end !== undefined ? { authored } : {}),
     left: leftTwips === null ? 0 : clampSignedPt(leftTwips),

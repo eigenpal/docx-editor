@@ -7,6 +7,7 @@ import { tableChildren, replaceTableChildren } from './revision-table-children.t
 import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from '../package/ooxml-tree.ts';
 import { isWmlNamed } from './tree-op-tracked.ts';
 import { revisionAttribute } from './revision-table-plan.ts';
+import { readTwipsMeasure } from '../units.ts';
 
 function elements(node: OoxmlElement): OoxmlElement[] {
   const result: OoxmlElement[] = [];
@@ -19,6 +20,11 @@ function child(node: OoxmlElement, name: string): OoxmlElement | undefined {
 function number(node: OoxmlElement | undefined, name: string, fallback: number): number {
   const value = node && Number(revisionAttribute(node, name));
   return value !== undefined && Number.isFinite(value) && value > 0 ? value : fallback;
+}
+/** A positive `w:w` in whole units: a decimal truncates, as every width reader reads it. */
+function positiveWidth(node: OoxmlElement | undefined, fallback: number): number {
+  const value = readTwipsMeasure(node && revisionAttribute(node, 'w'));
+  return value !== null && value > 0 ? value : fallback;
 }
 function element(
   source: OoxmlElement,
@@ -232,7 +238,7 @@ export function rebuildRevisionTable(
       if (removed.has(cell.id)) {
         const span = number(pr && child(pr, 'gridSpan'), 'val', 1);
         const widthNode = pr && child(pr, 'tcW');
-        const width = number(widthNode, 'w', 0);
+        const width = positiveWidth(widthNode, 0);
         const type = widthNode && revisionAttribute(widthNode, 'type');
         if (previous) {
           const existing = additions.get(previous) ?? { span: 0, width: 0, type };
@@ -283,7 +289,7 @@ export function rebuildRevisionTable(
         historicalWidth &&
         width &&
         revisionAttribute(historicalWidth, 'type') === extra.type
-          ? Math.max(0, number(width, 'w', 0) - number(historicalWidth, 'w', 0))
+          ? Math.max(0, positiveWidth(width, 0) - positiveWidth(historicalWidth, 0))
           : 0;
       return patch(
         c,
@@ -296,7 +302,7 @@ export function rebuildRevisionTable(
             ? {
                 tcW: {
                   type: extra.type,
-                  w: String(number(width, 'w', 0) + Math.max(0, extra.width - absorbedWidth)),
+                  w: String(positiveWidth(width, 0) + Math.max(0, extra.width - absorbedWidth)),
                 },
               }
             : {}),
@@ -435,7 +441,9 @@ export function compactRevisionGrid(table: OoxmlElement, mint: () => string): Oo
       columns[sorted[i]!]!,
       'gridCol',
       {
-        w: String(columns.slice(sorted[i], end).reduce((sum, col) => sum + number(col, 'w', 0), 0)),
+        w: String(
+          columns.slice(sorted[i], end).reduce((sum, col) => sum + positiveWidth(col, 0), 0)
+        ),
       },
       mint
     )

@@ -1,5 +1,5 @@
 // Bounded positioning and text-distance properties for top-level floating tables.
-import type { OoxmlElement } from '@docx-editor.dev/core/store';
+import { readTwipsMeasure, type OoxmlElement } from '@docx-editor.dev/core/store';
 /**
  * `w:tblpPr/@w:horzAnchor` (17.4.58) and `@w:vertAnchor` (17.4.66): the box a floated
  * table's offsets are measured from. Absent means `text` for both.
@@ -62,9 +62,8 @@ function readFloatAnchor(raw: string | undefined): TableFloatAnchor | undefined 
 }
 
 function readSignedTwipsPt(raw: string | undefined, encodedOffset = false): number | undefined {
-  if (raw === undefined || !/^-?\d{1,9}$/.test(raw)) return undefined;
-  const twips = Number(raw);
-  if (!Number.isFinite(twips)) return undefined;
+  const twips = readTwipsMeasure(raw);
+  if (twips === null) return undefined;
   // Numeric table positions carry a one-twip storage bias (MS-OE376 2.1.163e).
   // Text clearances use ordinary twips, and an absent position has no bias.
   const pt = (twips - (encodedOffset ? 1 : 0)) / 20;

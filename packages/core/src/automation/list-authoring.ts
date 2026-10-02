@@ -4,6 +4,7 @@ import { createNodeIdAllocator, replaceNode } from '../store/package/ooxml-edit.
 import { withPart, type OoxmlPackage } from '../store/package/ooxml-package.ts';
 import { readOoxmlPart, type OoxmlElement, type OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { WML_NAMESPACE_URI as W } from '../store/package/ooxml-shared.ts';
+import { readTwipsMeasure } from '../store/units.ts';
 
 export type AutomationListBullet =
   | 'Custom'
@@ -364,9 +365,10 @@ export function formatAutomationListLevel(
         (a) =>
           a.namespaceUri !== W || !['left', 'start', 'firstLine', 'hanging'].includes(a.localName)
       ) ?? [];
+    // The authored value is re-read as whole twips, never copied into the markup below.
     const left =
       format.textIndent === undefined
-        ? (attr(oldIndent ?? base, 'left') ?? '0')
+        ? String(readTwipsMeasure(attr(oldIndent ?? base, 'left')) ?? 0)
         : String(Math.round(format.textIndent * 20));
     const relative = format.bulletNumberPictureIndent;
     const first =

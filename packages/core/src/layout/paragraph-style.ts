@@ -5,6 +5,7 @@
 // guessed — a wrong before-spacing moves every subsequent page break.
 
 import {
+  readTwipsMeasure,
   twips,
   twipsToPoints,
   type OoxmlElement,
@@ -246,7 +247,7 @@ function clampNonNegative(value: number, max: number): number {
 
 /** Authored twips attribute to clamped spacing points, through the one conversion pair. */
 function spacingPoints(raw: string | undefined): number {
-  const authored = integer(raw, true);
+  const authored = readTwipsMeasure(raw);
   if (authored === null) return 0;
   return clampNonNegative(twipsToPoints(twips(authored)), MAX_PARAGRAPH_SPACING_PT);
 }
@@ -402,7 +403,7 @@ export function paragraphLineSpacing(props: readonly OoxmlProperty[]): Paragraph
     }
     const authoredLine = property.attributes?.line;
     if (authoredLine !== undefined) {
-      const twips = integer(authoredLine, true);
+      const twips = readTwipsMeasure(authoredLine);
       if (twips !== null) line = twips;
     }
   }

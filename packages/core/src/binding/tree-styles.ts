@@ -10,7 +10,7 @@
 // declaration from a validated token or produces nothing, so a crafted attribute cannot
 // close the declaration and start its own.
 
-import type { OoxmlProperty } from '@docx-editor.dev/core/store';
+import { readTwipsMeasure, type OoxmlProperty } from '@docx-editor.dev/core/store';
 
 /** `w:val` of a property, or undefined. */
 function val(property: OoxmlProperty): string | undefined {
@@ -25,7 +25,6 @@ function isOn(property: OoxmlProperty): boolean {
 
 const HEX_COLOR = /^[0-9A-Fa-f]{6}$/;
 const UNSIGNED = /^\d{1,6}$/;
-const SIGNED = /^-?\d{1,6}$/;
 
 /** `auto` resolves to the reader's default rather than a colour of its own. */
 function colorValue(raw: string | undefined): string | null {
@@ -85,11 +84,17 @@ function fontFamily(raw: string | undefined): string | null {
   return `"${raw}"`;
 }
 
+/** A twips attribute as whole twips, within the six-digit range this lane projects. */
+function twipsOf(raw: string | undefined, allowNegative = false): number | null {
+  const value = readTwipsMeasure(raw);
+  if (value === null || Math.abs(value) > 999_999 || (!allowNegative && value < 0)) return null;
+  return value;
+}
+
 /** Twips (1/20 pt) to a CSS `pt` length. */
 function twipsToPt(raw: string | undefined, allowNegative = false): string | null {
-  if (raw === undefined) return null;
-  if (!(allowNegative ? SIGNED : UNSIGNED).test(raw)) return null;
-  return `${Number(raw) / 20}pt`;
+  const value = twipsOf(raw, allowNegative);
+  return value === null ? null : `${value / 20}pt`;
 }
 
 /**
@@ -219,13 +224,13 @@ export function paragraphPropsToCss(props: readonly OoxmlProperty[]): string {
         const after = twipsToPt(property.attributes?.after);
         if (before) declarations.push(`margin-top:${before}`);
         if (after) declarations.push(`margin-bottom:${after}`);
-        const line = property.attributes?.line;
+        const line = twipsOf(property.attributes?.line);
         const rule = property.attributes?.lineRule;
-        if (line !== undefined && UNSIGNED.test(line) && rule !== 'exact' && rule !== 'atLeast') {
+        if (line !== null && rule !== 'exact' && rule !== 'atLeast') {
           // `auto` line spacing is in 240ths of a line.
-          declarations.push(`line-height:${(Number(line) / 240).toFixed(3)}`);
-        } else if (line !== undefined && UNSIGNED.test(line)) {
-          declarations.push(`line-height:${Number(line) / 20}pt`);
+          declarations.push(`line-height:${(line / 240).toFixed(3)}`);
+        } else if (line !== null) {
+          declarations.push(`line-height:${line / 20}pt`);
         }
         break;
       }

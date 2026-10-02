@@ -45,7 +45,7 @@ import {
 } from '../store/store/tree-op-nodes.ts';
 import { paragraphStyleName, styleIdFor, type AutomationStyleIndex } from './styles.ts';
 import type { OoxmlProperty } from '../store/store/tree-ops.ts';
-import { points, pointsToTwips, twips, twipsToPoints } from '../store/units.ts';
+import { points, pointsToTwips, readTwipsMeasure, twips, twipsToPoints } from '../store/units.ts';
 
 /** Widest value `w:ind`/`w:spacing` will be authored with, in twips — 22 inches of slack. */
 const MAX_TWIPS = 31680;
@@ -202,10 +202,8 @@ function pointsFromHalfPoints(value: string | null): number | null {
 }
 
 function pointsFromTwips(value: string | null): number | null {
-  if (value === null) return null;
-  const parsed = Number(value.trim());
-  if (!Number.isFinite(parsed)) return null;
-  return twipsToPoints(twips(parsed));
+  const parsed = readTwipsMeasure(value ?? undefined);
+  return parsed === null ? null : twipsToPoints(twips(parsed));
 }
 
 /** One value if every voice agrees on it, else null. An empty set of voices agrees on nothing. */

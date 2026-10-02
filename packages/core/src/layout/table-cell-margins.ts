@@ -6,6 +6,7 @@
 // override merges over the table's. Layout reads the answer; the table structure lane owns
 // the order the sources are consulted in.
 
+import { readTwipsMeasure } from '@docx-editor.dev/core/store';
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
 
 /** File-local element/attribute lookups, the same two `semantic-table.ts` keeps. */
@@ -63,9 +64,8 @@ export const DEFAULT_CELL_MARGINS: CellMarginsPt = {
 function twipsSide(node: OoxmlElement | undefined): number | undefined {
   if (!node) return undefined;
   const raw = attributeValue(node, 'w');
-  if (raw === undefined || !/^\d{1,9}$/.test(raw)) return undefined;
-  const twips = Number(raw);
-  if (!Number.isFinite(twips) || twips < 0) return undefined;
+  const twips = readTwipsMeasure(raw);
+  if (twips === null || twips < 0) return undefined;
   const pt = twips / 20;
   return pt > MAX_CELL_MARGIN_PT ? MAX_CELL_MARGIN_PT : pt;
 }

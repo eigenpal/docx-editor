@@ -1,4 +1,4 @@
-import type { OoxmlElement } from '@docx-editor.dev/core/store';
+import { readTwipsMeasure, type OoxmlElement } from '@docx-editor.dev/core/store';
 import { breakPreparedParagraph } from './paragraph-break-request.ts';
 import {
   readParagraphFrame,
@@ -13,9 +13,9 @@ import type { ParagraphLayoutInputs, StyleCascadeTable } from './style-cascade.t
 
 function ignoredFrameMeasureIsValid(raw: string | undefined, signed: boolean): boolean {
   if (raw === undefined) return true;
-  const pattern = signed ? /^-?\d{1,8}$/ : /^\d{1,8}$/;
-  if (!pattern.test(raw)) return false;
-  const points = Number(raw) / 20;
+  const twips = readTwipsMeasure(raw);
+  if (twips === null || (!signed && twips < 0)) return false;
+  const points = twips / 20;
   return Number.isFinite(points) && Math.abs(points) <= 1584;
 }
 

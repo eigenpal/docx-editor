@@ -2,7 +2,7 @@
 
 import { WML_NAMESPACE_URI, type OoxmlElement } from '../store/package/ooxml-tree.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
-import { isElement, parseIntValue, ptFromTwips, wmlVal } from './clipboard-html-write-tree.ts';
+import { isElement, parseTwipsValue, ptFromTwips, wmlVal } from './clipboard-html-write-tree.ts';
 
 /** The `tab-stops` rule for a paragraph's `w:tabs`, or null when it states no usable stop. */
 export function wordTabStopsCss(tabs: OoxmlElement | undefined | null): string | null {
@@ -11,7 +11,7 @@ export function wordTabStopsCss(tabs: OoxmlElement | undefined | null): string |
   for (const child of tabs.children) {
     if (!isElement(child) || child.localName !== 'tab') continue;
     const val = wmlVal(child);
-    const pos = parseIntValue(attributeValueOf(child, 'pos', WML_NAMESPACE_URI));
+    const pos = parseTwipsValue(attributeValueOf(child, 'pos', WML_NAMESPACE_URI));
     if (
       pos === null ||
       pos < 0 ||

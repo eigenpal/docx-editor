@@ -3489,6 +3489,9 @@ export function readOoxmlPart(xml: string, metadata: OoxmlPartMetadata, limits?:
 // @public
 export function readTrackingSettings(settingsRoot: OoxmlNode | null | undefined): DocumentTrackingSettings;
 
+// @internal
+export function readTwipsMeasure(raw: string | undefined): number | null;
+
 // @public
 export function readViewSettings(settingsRoot: OoxmlNode | null | undefined): DocumentViewSettings;
 

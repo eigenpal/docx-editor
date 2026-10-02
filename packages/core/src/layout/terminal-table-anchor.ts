@@ -1,6 +1,10 @@
 // A text-relative table anchors to the next regular paragraph (17.4.57).
 // Only a terminal, empty anchor is handled here. Other text still needs wrapping.
-import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
+import {
+  readTwipsMeasure,
+  type OoxmlElement,
+  type OoxmlProperty,
+} from '@docx-editor.dev/core/store';
 import { framedTokenJoin } from './layout-cache.ts';
 import { readTableStructure, type TableAnchorFrames } from './semantic-table.ts';
 import { positionedTableOriginX } from './table-origin.ts';
@@ -166,14 +170,16 @@ function supportedPosition(table: OoxmlElement): boolean {
     } else if (attr.localName === 'tblpXSpec') {
       if (!['left', 'center', 'right', 'inside', 'outside'].includes(attr.value)) return false;
     } else if (attr.localName === 'tblpX' || attr.localName === 'tblpY') {
-      if (!/^-?\d+$/.test(attr.value) || Math.abs(Number(attr.value)) > 31680) return false;
+      const offset = readTwipsMeasure(attr.value);
+      if (offset === null || Math.abs(offset) > 31680) return false;
     } else if (
       ['leftFromText', 'rightFromText', 'topFromText', 'bottomFromText'].includes(attr.localName)
     ) {
-      if (!/^\d+$/.test(attr.value) || Number(attr.value) > 31680) return false;
+      const clearance = readTwipsMeasure(attr.value);
+      if (clearance === null || clearance < 0 || clearance > 31680) return false;
       if (
         (attr.localName === 'topFromText' || attr.localName === 'bottomFromText') &&
-        Number(attr.value) !== 0
+        clearance !== 0
       )
         return false;
     } else return false;

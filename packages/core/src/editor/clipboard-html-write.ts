@@ -51,6 +51,7 @@ import {
   findDescendant,
   isElement,
   parseIntValue,
+  parseTwipsValue,
   ptFromTwips,
   textUnder,
   wmlChild,
@@ -189,7 +190,7 @@ function runCssOf(layers: RunPropertyLayers): RunCss {
 
   const color = cssHexColor(foldAttribute(sources, 'color', 'val'));
   if (color) rules.push(`color:${color}`);
-  const spacing = parseIntValue(foldAttribute(sources, 'spacing', 'val'));
+  const spacing = parseTwipsValue(foldAttribute(sources, 'spacing', 'val'));
   if (spacing !== null) rules.push(`letter-spacing:${Math.round((spacing / 20) * 100) / 100}pt`);
 
   // Highlight wins over shading when both are present.
@@ -243,11 +244,11 @@ function paragraphCssOf(
       `text-align:${rtl && align !== 'center' && align !== 'justify' ? (align === 'left' ? 'right' : 'left') : align}`
     );
 
-  const before = parseIntValue(foldAttribute(sources, 'spacing', 'before'));
+  const before = parseTwipsValue(foldAttribute(sources, 'spacing', 'before'));
   if (before !== null && before >= 0) rules.push(`margin-top:${ptFromTwips(before)}`);
-  const after = parseIntValue(foldAttribute(sources, 'spacing', 'after'));
+  const after = parseTwipsValue(foldAttribute(sources, 'spacing', 'after'));
   if (after !== null && after >= 0) rules.push(`margin-bottom:${ptFromTwips(after)}`);
-  const line = parseIntValue(foldAttribute(sources, 'spacing', 'line'));
+  const line = parseTwipsValue(foldAttribute(sources, 'spacing', 'line'));
   const lineRule = foldAttribute(sources, 'spacing', 'lineRule');
   rules.push(...wordLineSpacingCss(line, lineRule));
 
@@ -261,16 +262,16 @@ function paragraphCssOf(
   for (const source of sources) {
     const ind = wmlChild(source, 'ind');
     if (!ind) continue;
-    const leftValue = parseIntValue(
+    const leftValue = parseTwipsValue(
       attrOf(ind, 'left', WML_NAMESPACE_URI) ?? attrOf(ind, 'start', WML_NAMESPACE_URI)
     );
     if (leftValue !== null) left = leftValue;
-    const rightValue = parseIntValue(
+    const rightValue = parseTwipsValue(
       attrOf(ind, 'right', WML_NAMESPACE_URI) ?? attrOf(ind, 'end', WML_NAMESPACE_URI)
     );
     if (rightValue !== null) right = rightValue;
-    const hangingValue = parseIntValue(attrOf(ind, 'hanging', WML_NAMESPACE_URI));
-    const firstLineValue = parseIntValue(attrOf(ind, 'firstLine', WML_NAMESPACE_URI));
+    const hangingValue = parseTwipsValue(attrOf(ind, 'hanging', WML_NAMESPACE_URI));
+    const firstLineValue = parseTwipsValue(attrOf(ind, 'firstLine', WML_NAMESPACE_URI));
     if (hangingValue !== null) {
       hanging = hangingValue;
       firstLine = null;
