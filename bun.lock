@@ -480,9 +480,9 @@
     },
     "packages/core": {
       "name": "@docx-editor.dev/core",
-      "version": "2.25.0",
+      "version": "2.25.1",
       "dependencies": {
-        "@docx-editor.dev/i18n": "^2.25.0",
+        "@docx-editor.dev/i18n": "^2.25.1",
         "bidi-js": "1.1.0",
         "emf-converter": "2.0.2",
         "fast-xml-parser": "^5.10.1",
@@ -514,9 +514,9 @@
     },
     "packages/docx-to-markdown": {
       "name": "@docx-editor.dev/docx-to-markdown",
-      "version": "2.25.0",
+      "version": "2.25.1",
       "dependencies": {
-        "@docx-editor.dev/fonts": "~2.25.0",
+        "@docx-editor.dev/fonts": "~2.25.1",
         "fflate": "^0.8.2",
       },
       "devDependencies": {
@@ -532,9 +532,9 @@
     },
     "packages/docx-to-pdf": {
       "name": "@docx-editor.dev/docx-to-pdf",
-      "version": "2.25.0",
+      "version": "2.25.1",
       "dependencies": {
-        "@docx-editor.dev/fonts": "~2.25.0",
+        "@docx-editor.dev/fonts": "~2.25.1",
         "fontkit": "2.0.4",
         "pdf-lib": "1.17.1",
       },
@@ -557,7 +557,7 @@
     },
     "packages/editor-api": {
       "name": "@docx-editor.dev/editor-api",
-      "version": "2.25.0",
+      "version": "2.25.1",
       "devDependencies": {
         "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/pro": "workspace:*",
@@ -572,7 +572,7 @@
     },
     "packages/fonts": {
       "name": "@docx-editor.dev/fonts",
-      "version": "2.25.0",
+      "version": "2.25.1",
       "devDependencies": {
         "@docx-editor.dev/core": "workspace:*",
         "@happy-dom/global-registrator": "^20.8.3",
@@ -582,14 +582,14 @@
     },
     "packages/fonts-cjk": {
       "name": "@docx-editor.dev/fonts-cjk",
-      "version": "2.25.0",
+      "version": "2.25.1",
       "devDependencies": {
         "typescript7": "npm:typescript@^7.0.2",
       },
     },
     "packages/i18n": {
       "name": "@docx-editor.dev/i18n",
-      "version": "2.25.0",
+      "version": "2.25.1",
       "devDependencies": {
         "tsup": "^8.0.1",
         "typescript7": "npm:typescript@^7.0.2",
@@ -624,7 +624,7 @@
     },
     "packages/pro": {
       "name": "@docx-editor.dev/pro",
-      "version": "2.25.0",
+      "version": "2.25.1",
       "dependencies": {
         "y-protocols": "^1.0.7",
       },
@@ -671,9 +671,9 @@
     },
     "packages/react": {
       "name": "@docx-editor.dev/react",
-      "version": "2.25.0",
+      "version": "2.25.1",
       "dependencies": {
-        "@docx-editor.dev/i18n": "^2.25.0",
+        "@docx-editor.dev/i18n": "^2.25.1",
         "@radix-ui/react-select": "^2.3.3",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
@@ -695,9 +695,9 @@
     },
     "packages/vue": {
       "name": "@docx-editor.dev/vue",
-      "version": "2.25.0",
+      "version": "2.25.1",
       "dependencies": {
-        "@docx-editor.dev/i18n": "^2.25.0",
+        "@docx-editor.dev/i18n": "^2.25.1",
       },
       "devDependencies": {
         "@docx-editor.dev/core": "workspace:*",

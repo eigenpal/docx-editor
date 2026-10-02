@@ -1,5 +1,7 @@
 # @docx-editor.dev/pro
 
+## 2.25.1
+
 ## 2.25.0
 
 ### Minor Changes
