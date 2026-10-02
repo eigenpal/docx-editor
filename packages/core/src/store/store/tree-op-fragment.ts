@@ -7,12 +7,11 @@
 // host's original mark on the trailing merge. A single-paragraph fragment whose source
 // mark was not covered splices inline and leaves host properties untouched.
 
-import {
-  WML_NAMESPACE_URI,
-  type OoxmlElement,
-  type OoxmlNode,
-  type OoxmlParagraphNode,
-  type OoxmlPart,
+import type {
+  OoxmlElement,
+  OoxmlNode,
+  OoxmlParagraphNode,
+  OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import {
   carryIndexToRebuiltRoot,
@@ -22,8 +21,8 @@ import {
   replaceChildren,
   type EditOptions,
 } from '../package/ooxml-edit.ts';
-import { mintParaId, mintedParagraphIdentityAttributes, usedParaIds } from '../package/para-id.ts';
-import { W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
+import { usedParaIds, w14PrefixInScopeAt, withFreshParaIds } from '../package/para-id.ts';
+import { actorScopedSeed } from '../package/actor-scoped-ids.ts';
 import {
   cloneWithNewIds,
   paragraphPropertiesNodeOf,
@@ -97,49 +96,6 @@ export function validateInsertFragment(
     if (refused) return refused;
   }
   return rejectContentEdit(part, paragraph as OoxmlParagraphNode, op.offset, op.offset);
-}
-
-/** Fresh `w14:paraId`/`w14:textId` on every cloned paragraph, deterministic per seat. */
-export function withFreshParaIds(
-  node: OoxmlNode,
-  used: Set<string>,
-  seedBase: string,
-  counter: { value: number }
-): OoxmlNode {
-  if (node.kind === 'textValue') return node;
-  const element: OoxmlElement = node;
-  let attributes = element.attributes;
-  if (element.localName === 'p' && element.namespaceUri === WML_NAMESPACE_URI) {
-    const identity = element.attributes.find(
-      (attribute) =>
-        attribute.namespaceUri === W14_NAMESPACE_URI && attribute.localName === 'paraId'
-    );
-    // Re-mint whenever a `w14:paraId` is present, valid or not: a crafted fragment can
-    // carry a syntactically INVALID id shared across paragraphs, which would plant
-    // duplicate identities in the host. A fresh valid id replaces it either way.
-    if (identity) {
-      const minted = mintParaId(`${seedBase}:${counter.value}`, used);
-      counter.value += 1;
-      used.add(minted);
-      const kept = element.attributes.filter(
-        (attribute) =>
-          !(
-            attribute.namespaceUri === W14_NAMESPACE_URI &&
-            (attribute.localName === 'paraId' || attribute.localName === 'textId')
-          )
-      );
-      attributes = [
-        ...kept,
-        ...mintedParagraphIdentityAttributes(identity.prefix ?? 'w14', minted),
-      ] as typeof element.attributes;
-    }
-  }
-  const children = element.children.map((child) =>
-    withFreshParaIds(child, used, seedBase, counter)
-  );
-  const childrenChanged = children.some((child, index) => child !== element.children[index]);
-  if (attributes === element.attributes && !childrenChanged) return node;
-  return { ...element, attributes, children } as OoxmlNode;
 }
 
 /**
@@ -245,12 +201,15 @@ export function applyInsertFragment(
   const nextId = createNodeIdAllocator(hostPart, 'paste');
   const paraIds = new Set(usedParaIds(hostPart.root as OoxmlElement));
   const counter = { value: 0 };
+  // The clones land beside the host paragraph (or inside it), so its scope decides the prefix.
+  const hostPrefix = w14PrefixInScopeAt(hostPart, host);
   const blocks = op.blocks.map((block, index) =>
     withFreshParaIds(
       cloneWithNewIds(block, nextId),
       paraIds,
-      `${op.paragraphId}:${op.offset}:${index}`,
-      counter
+      actorScopedSeed(`${op.paragraphId}:${op.offset}:${index}`),
+      counter,
+      hostPrefix
     )
   );
 

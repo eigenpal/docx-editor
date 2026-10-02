@@ -19,9 +19,9 @@ import { createNodeIdAllocator, replaceChildren } from '../package/ooxml-edit.ts
 import type { OoxmlPackage } from '../package/ooxml-package.ts';
 import { WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
-import { usedParaIds } from '../package/para-id.ts';
+import { usedParaIds, w14PrefixInScopeAt, withFreshParaIds } from '../package/para-id.ts';
+import { actorScopedSeed } from '../package/actor-scoped-ids.ts';
 import { editedProperties, promptFor, textRun, wmlElement } from './tree-op-content-controls.ts';
-import { withFreshParaIds } from './tree-op-fragment.ts';
 import {
   cloneWithNewIds,
   contentControlContentOf,
@@ -124,14 +124,16 @@ export function materializeGlossaryPlaceholders(pkg: OoxmlPackage, part: OoxmlPa
   let current = part;
   for (const [index, target] of targets.entries()) {
     const block = blockNamed(target.docPart);
+    const hostPrefix = w14PrefixInScopeAt(part, target.control);
     let children: readonly OoxmlNode[] | null = null;
     if (block) {
       const cloned = block.blocks.map((entry, position) =>
         withFreshParaIds(
           cloneWithNewIds(entry, nextId),
           paraIds,
-          `${target.control.id}:placeholder:${index}:${position}`,
-          counter
+          actorScopedSeed(`${target.control.id}:placeholder:${index}:${position}`),
+          counter,
+          hostPrefix
         )
       );
       children = target.inline ? inlineChildrenOf(cloned) : cloned;
@@ -140,7 +142,15 @@ export function materializeGlossaryPlaceholders(pkg: OoxmlPackage, part: OoxmlPa
       const run = textRun(nextId, promptFor(target.kind), placeholderRunProperties(nextId));
       children = target.inline
         ? [run]
-        : [wmlElement(nextId, 'p', { kind: 'paragraph' as OoxmlNode['kind'], children: [run] })];
+        : [
+            withFreshParaIds(
+              wmlElement(nextId, 'p', { kind: 'paragraph' as OoxmlNode['kind'], children: [run] }),
+              paraIds,
+              actorScopedSeed(`${target.control.id}:placeholder:${index}`),
+              counter,
+              hostPrefix
+            ),
+          ];
     }
     const properties = editedProperties(
       contentControlPropertiesOf(target.control),

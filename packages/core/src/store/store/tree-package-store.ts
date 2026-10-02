@@ -948,7 +948,12 @@ export class TreePackageStore {
 
   /**
    * Promote a story transaction that wrote package bytes to one package undo pointer.
-   * Used by image intents and note-reference cascade.
+   * Used by the image and fragment-paste intents.
+   *
+   * The caller grafts {@link currentPackage} onto the story store BEFORE its transaction, so
+   * the committed package carries every shell write and installs as it stands, like
+   * `transact`: re-merging the live shell put the pre-transaction `numbering.xml` back over
+   * the one the transaction wrote, and a pasted list referenced missing definitions.
    */
   promoteStoryTransactionToPackageUnit(
     beforePackage: OoxmlPackage,
@@ -957,7 +962,7 @@ export class TreePackageStore {
     /** Unused: the restore is unconditional now. Kept so the public signature stands. */
     _beforeDepth?: number
   ): TreeModelChange {
-    this.installPackageSnapshotInternal(store.package);
+    this.installPackageSnapshotInternal(store.package, false);
     // Unconditional: a frame that MERGED into an open group left the depth unchanged and
     // the top entry rewritten; the package unit owns it now either way.
     store.restoreHistoryStacks(checkpoint);

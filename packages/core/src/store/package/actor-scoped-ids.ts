@@ -87,6 +87,19 @@ export function resolveAllocationActor(actorId?: string): string | undefined {
 }
 
 /**
+ * A hash seed scoped to the transaction's actor.
+ *
+ * Deterministic mints (`mintParaId`) seed from structure — the paragraph and offset a paste
+ * lands at — and two replicas pasting at one position from one snapshot compute the same
+ * seed, so they would mint the same identity for different paragraphs. The actor keeps the
+ * seeds apart. Without one the seed is unchanged, so a solo document mints what it always did.
+ */
+export function actorScopedSeed(seed: string, actorId?: string): string {
+  const actor = resolveAllocationActor(actorId);
+  return actor === undefined ? seed : `${actor}|${seed}`;
+}
+
+/**
  * Next unused id in `actorId`'s residue class.
  *
  * Walks `stripe, stripe+N, stripe+2N, …` and skips ids already in `used`. Past the ceiling

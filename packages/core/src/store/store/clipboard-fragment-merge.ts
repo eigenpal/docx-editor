@@ -45,7 +45,6 @@ import {
   isElementNode,
   isWml,
   materializeDefaults,
-  nodeSignature,
   styleSignature,
   stylesInfoOf,
   walkAll,
@@ -66,6 +65,7 @@ import {
   withoutDanglingNoteReferences,
 } from './clipboard-fragment-closure.ts';
 import { mintFragmentUniqueIds } from './clipboard-fragment-unique-ids.ts';
+import { planNumberingImport } from './clipboard-fragment-numbering.ts';
 
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const HYPERLINK_REL = `${R_NS}/hyperlink`;
@@ -273,124 +273,12 @@ export function mergeFragmentIntoPackage(
   // pass below compares definitions AFTER applying this map, so a repeated paste of the
   // same payload recognizes its own earlier imports instead of minting `…Pasted` copies.
   // ------------------------------------------------------------------
-  const fragmentNumberingPart = relatedPart(
-    fragment,
-    fragment.mainDocumentPart,
-    NUMBERING_REL,
-    '/word/numbering.xml'
+  const numbering = planNumberingImport(
+    relatedPart(fragment, fragment.mainDocumentPart, NUMBERING_REL, '/word/numbering.xml'),
+    relatedPart(pkg, pkg.mainDocumentPart, NUMBERING_REL, '/word/numbering.xml')
   );
-  const numIdMap = new Map<string, string>();
-  const numsToImport: OoxmlElement[] = [];
-  const abstractsToImport: OoxmlElement[] = [];
-
-  if (fragmentNumberingPart && isElementNode(fragmentNumberingPart.root)) {
-    const fragmentAbstracts = new Map<string, OoxmlElement>();
-    const fragmentNums: OoxmlElement[] = [];
-    for (const child of fragmentNumberingPart.root.children) {
-      if (!isElementNode(child)) continue;
-      if (isWml(child, 'abstractNum')) {
-        const id = attributeValueOf(child, 'abstractNumId');
-        if (id) fragmentAbstracts.set(id, child);
-      } else if (isWml(child, 'num')) {
-        fragmentNums.push(child);
-      }
-    }
-
-    const targetNumberingPart = relatedPart(
-      pkg,
-      pkg.mainDocumentPart,
-      NUMBERING_REL,
-      '/word/numbering.xml'
-    );
-
-    const targetNumSignatures = new Map<string, string>();
-    const targetAbstractById = new Map<string, OoxmlElement>();
-    if (targetNumberingPart && isElementNode(targetNumberingPart.root)) {
-      for (const child of targetNumberingPart.root.children) {
-        if (!isElementNode(child)) continue;
-        if (isWml(child, 'abstractNum')) {
-          const id = attributeValueOf(child, 'abstractNumId');
-          if (id) targetAbstractById.set(id, child);
-        }
-      }
-      for (const child of targetNumberingPart.root.children) {
-        if (!isElementNode(child) || !isWml(child, 'num')) continue;
-        const numId = attributeValueOf(child, 'numId');
-        if (!numId) continue;
-        const abstractRef = child.children.find((inner) => isWml(inner, 'abstractNumId'));
-        const abstractId = abstractRef ? attributeValueOf(abstractRef, 'val') : undefined;
-        const abstract = abstractId ? targetAbstractById.get(abstractId) : undefined;
-        targetNumSignatures.set(
-          `${abstract ? styleSignature(abstract) : 'none'}::${child.children
-            .filter((inner) => isWml(inner, 'lvlOverride'))
-            .map(nodeSignature)
-            .join('')}`,
-          numId
-        );
-      }
-    }
-
-    let nextAbstractId =
-      (targetNumberingPart
-        ? maxNumericAttribute(targetNumberingPart.root, (node) =>
-            node.kind !== 'textValue' && isWml(node, 'abstractNum')
-              ? attributeValueOf(node, 'abstractNumId')
-              : undefined
-          )
-        : 0) + 1;
-    let nextNumId =
-      (targetNumberingPart
-        ? maxNumericAttribute(targetNumberingPart.root, (node) =>
-            node.kind !== 'textValue' && isWml(node, 'num')
-              ? attributeValueOf(node, 'numId')
-              : undefined
-          )
-        : 0) + 1;
-
-    const abstractIdMap = new Map<string, string>();
-    for (const num of fragmentNums) {
-      const numId = attributeValueOf(num, 'numId');
-      if (!numId) continue;
-      const abstractRef = num.children.find((inner) => isWml(inner, 'abstractNumId'));
-      const abstractId = abstractRef ? attributeValueOf(abstractRef, 'val') : undefined;
-      const abstract = abstractId ? fragmentAbstracts.get(abstractId) : undefined;
-      const signature = `${abstract ? styleSignature(abstract) : 'none'}::${num.children
-        .filter((inner) => isWml(inner, 'lvlOverride'))
-        .map(nodeSignature)
-        .join('')}`;
-      const reusable = targetNumSignatures.get(signature);
-      if (reusable !== undefined) {
-        numIdMap.set(numId, reusable);
-        continue;
-      }
-      let mappedAbstract = abstractId ? abstractIdMap.get(abstractId) : undefined;
-      if (mappedAbstract === undefined && abstract && abstractId) {
-        mappedAbstract = String(nextAbstractId++);
-        abstractIdMap.set(abstractId, mappedAbstract);
-        abstractsToImport.push(
-          withRewrittenAttribute(abstract, WML_NAMESPACE_URI, 'abstractNumId', mappedAbstract)
-        );
-      }
-      const freshNumId = String(nextNumId++);
-      numIdMap.set(numId, freshNumId);
-      let imported = withRewrittenAttribute(num, WML_NAMESPACE_URI, 'numId', freshNumId);
-      if (mappedAbstract !== undefined) {
-        const children = imported.children.map((inner) =>
-          isWml(inner, 'abstractNumId')
-            ? withRewrittenAttribute(
-                inner as OoxmlElement,
-                WML_NAMESPACE_URI,
-                'val',
-                mappedAbstract!
-              )
-            : inner
-        );
-        imported = { ...imported, children } as OoxmlElement;
-      }
-      numsToImport.push(imported);
-      targetNumSignatures.set(signature, freshNumId);
-    }
-  }
+  if (!numbering) return { ok: false, reason: 'merge-refused' };
+  const { numIdMap, numsToImport, abstractsToImport } = numbering;
 
   // ------------------------------------------------------------------
   // Styles: reuse by fingerprint, else import under fresh id + unique name.

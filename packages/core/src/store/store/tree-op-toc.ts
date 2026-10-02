@@ -36,6 +36,8 @@ import {
   parentOf,
 } from './tree-op-nodes.ts';
 import { isValidXmlText } from '../package/sinks.ts';
+import { usedParaIds, w14PrefixInScopeAt, withFreshParaIds } from '../package/para-id.ts';
+import { actorScopedSeed } from '../package/actor-scoped-ids.ts';
 import { nextBookmarkId } from './tree-op-bookmark-ids.ts';
 import type { TreeDocOp, TreeOpEffect, TreeOpRejection, TreeOpResult } from './tree-op-types.ts';
 
@@ -295,9 +297,23 @@ function replaceResultParagraphs(
     }
   }
   const mint = createNodeIdAllocator(part);
+  // Built paragraphs carry no identity; mint one each so a refreshed TOC stays addressable.
+  const paraIds = new Set(usedParaIds(part.root));
+  const identity = { value: 0 };
+  const hostPrefix = w14PrefixInScopeAt(part, container);
+  const withIdentity = (node: OoxmlNode): OoxmlNode =>
+    withFreshParaIds(
+      node,
+      paraIds,
+      actorScopedSeed(`${toc.containerId}:toc`),
+      identity,
+      hostPrefix
+    );
   const newEntries = entries.map((entry) => {
     const styleId = `TOC${Math.min(entry.level + 1, 9)}`;
-    return buildTocEntryParagraph(mint, entry, toc.instruction, propertiesByStyle.get(styleId));
+    return withIdentity(
+      buildTocEntryParagraph(mint, entry, toc.instruction, propertiesByStyle.get(styleId))
+    );
   });
   const begin = container.children[beginIdx] as OoxmlElement;
   const end = container.children[endIdx] as OoxmlElement;
@@ -306,14 +322,10 @@ function replaceResultParagraphs(
   // One paragraph/run may own both markers. Its two halves cannot share node ids.
   let suffix = beginIdx === endIdx ? cloneWithNewIds(suffixSlice, mint) : suffixSlice;
   if (beginIdx === endIdx && suffix.kind !== 'textValue') {
-    // Paragraph identities cannot occur twice in the saved document. The section
-    // mark belongs to the final half, just as it does after an ordinary split.
-    suffix = {
-      ...suffix,
-      attributes: suffix.attributes.filter(
-        (attr) => attr.localName !== 'paraId' && attr.localName !== 'textId'
-      ),
-    } as OoxmlNode;
+    // Paragraph identities cannot occur twice in the saved document, so the cloned half
+    // takes a fresh one. The section mark belongs to the final half, just as it does after
+    // an ordinary split.
+    suffix = withIdentity(suffix);
     prefix = {
       ...prefix,
       children: prefix.children.map((child) =>
@@ -385,7 +397,13 @@ export function applyInsertToc(
   const index = parent.children.findIndex((child) => child.id === paragraph.id);
   if (index < 0) return { ok: false, reason: 'tree-invariant' };
   const mint = createNodeIdAllocator(current);
-  const control = buildTocContentControl(mint, op.entries, instruction, op.alias);
+  const control = withFreshParaIds(
+    buildTocContentControl(mint, op.entries, instruction, op.alias),
+    new Set(usedParaIds(current.root)),
+    actorScopedSeed(`${op.beforeParagraphId}:toc`),
+    { value: 0 },
+    w14PrefixInScopeAt(current, parent)
+  );
   const inserted = insertChildren(current, parent.id, index, [control], options);
   return fromEdit(inserted, {
     dirty: [parent.id, ...op.entries.map((entry) => entry.headingParagraphId)],

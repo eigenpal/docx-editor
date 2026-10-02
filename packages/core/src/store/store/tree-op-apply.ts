@@ -77,6 +77,7 @@ import {
   w14PrefixInScopeAt,
   fnv1a32,
 } from '../package/para-id.ts';
+import { actorScopedSeed } from '../package/actor-scoped-ids.ts';
 import {
   TEXT_DEPS,
   attributeValueOf,
@@ -2601,7 +2602,7 @@ function applySplit(
     attributes: identity
       ? mintedParagraphIdentityAttributes(
           identity.prefix,
-          mintParaId(`${identity.headId}:${offset}`, usedParaIds(part.root))
+          mintParaId(actorScopedSeed(`${identity.headId}:${offset}`), usedParaIds(part.root))
         )
       : [],
     children: (() => {
@@ -2941,7 +2942,7 @@ function applySplitMany(
   if (identity) {
     const used = new Set(usedParaIds(part.root));
     for (let piece = pieceCount - 1; piece >= 1; piece -= 1) {
-      const value = mintParaId(`${identity.headId}:${offsets[piece - 1]!}`, used);
+      const value = mintParaId(actorScopedSeed(`${identity.headId}:${offsets[piece - 1]!}`), used);
       used.add(value);
       tailIdentityAttributes[piece] = mintedParagraphIdentityAttributes(identity.prefix, value);
     }

@@ -189,6 +189,8 @@ function commitPackageImage(
   const ownerPartName = story.partName;
   const beforePackage = store.currentPackage();
   const checkpoint = storyStore.checkpoint();
+  // Start from the coordinator's truth; the promotion below installs the result as it stands.
+  storyStore.graftPackage(() => store.currentPackage());
   let drawingNodeId: string | null = null;
   let staleEpoch = false;
   let commitBlocked = false;
