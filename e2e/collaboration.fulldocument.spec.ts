@@ -96,6 +96,10 @@ async function joinRoom(page: Page, invite: string, name: string): Promise<void>
   );
   await dialog.getByRole('button', { name: 'Join room' }).click();
   await expect(dialog).toHaveCount(0, { timeout: 45_000 });
+  const connected = page.getByRole('dialog', { name: 'Collaboration room' });
+  await expect(connected).toBeVisible({ timeout: 45_000 });
+  await connected.getByRole('button', { name: 'Done' }).click();
+  await expect(connected).toHaveCount(0);
 }
 
 async function expectParticipantCount(page: Page, count: number, timeout = 20_000): Promise<void> {
