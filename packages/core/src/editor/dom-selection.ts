@@ -102,8 +102,12 @@ function drawingSpacerIdentity(node: Node | undefined): SemanticPosition | null 
 /** The advance spacer of the picture that ends just before `position`, when one is painted. */
 function drawingSpacerBefore(searchRoot: Element, position: SemanticPosition): Element | null {
   if (!Number.isInteger(position.offset) || position.offset < 1) return null;
-  // The offset is a model integer, never document text, so it is safe in the selector.
-  const selector = `.docx-inline-drawing-advance[data-drawing-start="${position.offset - 1}"]`;
+  // The offset is a model integer, never document text, so it is safe in the selector. The
+  // id is narrowed the same way `paragraphElements` does, and only when it is CSS-safe.
+  const byStart = `.docx-inline-drawing-advance[data-drawing-start="${position.offset - 1}"]`;
+  const selector = CSS_STRING_UNSAFE.test(position.paragraphId)
+    ? byStart
+    : `${byStart}[data-drawing-paragraph-id="${position.paragraphId}"]`;
   for (const spacer of searchRoot.querySelectorAll(selector)) {
     const identity = drawingSpacerIdentity(spacer);
     if (identity?.paragraphId === position.paragraphId && identity.offset === position.offset - 1) {
@@ -285,6 +289,13 @@ export function positionFromDomPoint(
   // it is the picture's own place in the line.
   const picture = drawingSpacerIdentity(marker ?? undefined);
   if (picture) return offset > 0 ? { ...picture, offset: picture.offset + 1 } : picture;
+  // A float's wrap jump spacer is mid-line as well: it is the gap between the content before
+  // and after it, so it resolves as the line's child index on that side of it.
+  if (marker?.classList.contains('docx-wrap-advance') && marker.parentElement) {
+    const index = [...marker.parentElement.childNodes].indexOf(marker);
+    const resolved = positionFromChildIndex(marker.parentElement, index + (offset > 0 ? 1 : 0));
+    if (resolved) return resolved;
+  }
   if (marker) return marker.parentElement ? paragraphStartAt(marker.parentElement) : null;
 
   // A TAB LEADER has no such answer: it is drawn across the advance of a tab in the MIDDLE

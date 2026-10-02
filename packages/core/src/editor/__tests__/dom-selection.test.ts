@@ -428,6 +428,22 @@ describe('the position just after an inline picture', () => {
   });
 });
 
+test("an endpoint on a float's wrap jump spacer reads back beside it, not at the line start", () => {
+  const root = paintedLine([
+    { text: 'ab', paragraphId: 'p1', start: 0 },
+    { text: 'cd', paragraphId: 'p1', start: 2 },
+  ]);
+  const line = root.querySelector<HTMLElement>('.docx-line')!;
+  line.dataset.paragraphId = 'p1';
+  const jump = document.createElement('span');
+  jump.className = 'docx-wrap-advance';
+  jump.dataset.docxMarker = '';
+  line.insertBefore(jump, line.lastChild);
+  for (const offset of [0, 1]) {
+    expect(positionFromDomPoint(jump, offset, root)).toEqual({ paragraphId: 'p1', offset: 2 });
+  }
+});
+
 test('a picture spacer in an inert line is not a selection position', () => {
   // A text box that is not being edited strips its lines' paragraph binding. A picture inside
   // it must stay as inert as its text, or a drag past the body line lands in the text box.
