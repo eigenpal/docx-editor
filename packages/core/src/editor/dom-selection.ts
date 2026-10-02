@@ -297,14 +297,17 @@ export function positionFromDomPoint(
     const line = seat.parentElement;
     const runs = [...line.querySelectorAll('.layout-run[data-start]')]
       .filter((run) => run.closest('.docx-line') === line)
-      .map((run) => ({ run, identity: identityOf(run) }));
-    const paragraphId = runs.at(-1)?.identity?.paragraphId;
+      .flatMap((run) => {
+        const identity = identityOf(run);
+        return identity ? [{ run, identity }] : [];
+      });
+    const paragraphId = runs.at(-1)?.identity.paragraphId;
     let last: (typeof runs)[number] | undefined;
     for (const entry of runs) {
-      if (entry.identity?.paragraphId !== paragraphId) continue;
-      if (!last || entry.identity!.start > last.identity!.start) last = entry;
+      if (entry.identity.paragraphId !== paragraphId) continue;
+      if (!last || entry.identity.start > last.identity.start) last = entry;
     }
-    if (last?.identity) {
+    if (last) {
       const isBreak = last.run.textContent === '\n';
       const { start, end } = last.identity;
       return { paragraphId: last.identity.paragraphId, offset: isBreak ? start : end };

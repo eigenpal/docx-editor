@@ -1104,7 +1104,10 @@ export function caretBoxOnLine(
       chosen = span;
     } else if (offset > span.range.end) {
       chosen = span;
-    } else if (offset === span.range.start && chosen.range.end !== offset) {
+    } else if (
+      offset === span.range.start &&
+      !spans.some((other) => other.range.end === offset && other.range.start < offset)
+    ) {
       // Nothing ends here (a picture or hidden text came before), so the text that starts
       // here owns the caret rather than the span before the gap.
       chosen = span;

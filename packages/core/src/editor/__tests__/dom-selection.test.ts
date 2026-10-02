@@ -594,3 +594,32 @@ describe('selection equality', () => {
     ).toBe(false);
   });
 });
+
+test('an endpoint on a line-break mark in an inert text box line resolves without throwing', () => {
+  // An inert text box keeps its runs' `data-start` but drops their paragraph ids.
+  const root = document.createElement('div');
+  const line = document.createElement('div');
+  line.className = 'docx-line';
+  for (const [start, text] of [
+    [0, 'ab'],
+    [2, 'cd'],
+    [4, '\n'],
+  ] as const) {
+    const run = document.createElement('span');
+    run.className = 'layout-run';
+    run.dataset.start = String(start);
+    run.dataset.end = String(start + text.length);
+    run.textContent = text;
+    line.append(run);
+  }
+  const seat = document.createElement('span');
+  seat.className = 'docx-terminator-seat';
+  seat.dataset.docxMarker = '';
+  const mark = document.createElement('span');
+  mark.className = 'docx-line-break-mark';
+  mark.textContent = '↵';
+  seat.append(mark);
+  line.append(seat);
+  root.append(line);
+  expect(() => positionFromDomPoint(mark, 0, root)).not.toThrow();
+});
