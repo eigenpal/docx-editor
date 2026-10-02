@@ -1141,11 +1141,11 @@ export function breakParagraph(
       recordTopAndBottomAnchorLineTop(piece.start);
       const measure = measureInlineDrawing(piece.inlineDrawing.projection);
       const atomWidth = measure.totalWidth;
-      // Like a word, a picture that does not fit before a float resumes past it when it fits.
+      // A picture that does not fit before a float resumes past it, keeping the text before it.
+      let jumps = false;
       if (holdsContent() && line.width + atomWidth > lineAvailable()) {
         const settledWidth = line.width;
-        const jumps =
-          tryAdvanceToNextPassage() && line.width + atomWidth <= lineAvailable() + 0.001;
+        jumps = tryAdvanceToNextPassage() && line.width + atomWidth <= lineAvailable() + 0.001;
         line.width = settledWidth;
         if (!jumps) closeLine();
       }
@@ -1156,7 +1156,7 @@ export function breakParagraph(
         },
         atomWidth
       );
-      applyInlineObjectSkipIfNeeded(atomWidth, measure.lineContribution);
+      if (!jumps) applyInlineObjectSkipIfNeeded(atomWidth, measure.lineContribution);
       if (!ensurePlacementWidth(atomWidth)) continue;
       const { extentTopY } = growLineMetricsForDrawing(piece.style, measure);
       const slotX = lineOrigin() + line.width;

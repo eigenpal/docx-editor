@@ -141,6 +141,18 @@ describe('a picture that does not fit before a float', () => {
     expect(line.spans[0]!.box.x).toBeCloseTo(320, 5);
   });
 
+  test('keeps the text before a wide picture beside the float when the picture jumps it', () => {
+    // 90pt of text and a 200pt picture fit no one passage together, but each fits its own.
+    const wide = drawing.replaceAll('1270000', '2540000');
+    const { layout, line } = pictureLine(
+      `${flushFloat}<w:r><w:t>abcdefghijklmno</w:t>${wide}</w:r>`
+    );
+    expect(linesOf(layout)).toHaveLength(1);
+    expect(line.box.y).toBeCloseTo(0, 5);
+    expect(line.spans[0]!.box.x).toBeCloseTo(0, 5);
+    expect(line.drawings![0]!.advanceStart).toBeCloseTo(220, 5);
+  });
+
   test('a point before a later picture that jumped the float is the boundary before it', () => {
     const { layout, line } = pictureLine(
       `${flushFloat}<w:r><w:t>abcdefghijk</w:t>${drawing}</w:r>`

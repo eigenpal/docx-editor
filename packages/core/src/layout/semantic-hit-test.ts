@@ -753,7 +753,13 @@ function beyondLine(
   if (!rtl && x >= right) return endOfLine(line, right, context);
   // `endOfLine` measures a trailing space from a span's left, which is left to right only.
   const offset = rtl && x <= left ? lineEndOffset(context.layout, line) : line.range.start;
-  return { offset, x: caretBoxOnLine(line, offset, context.measurer).x, withinSpan: false };
+  // The offset counts in the line's own paragraph; a join line's other one has its own.
+  const segment = lineSegments(line).find((entry) => entry.paragraphId === line.range.paragraphId);
+  return {
+    offset,
+    x: caretBoxOnLine(line, offset, context.measurer, segment).x,
+    withinSpan: false,
+  };
 }
 
 /**
