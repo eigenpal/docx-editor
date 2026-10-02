@@ -429,14 +429,19 @@ export function lineContentX(
  * span before it flows from the line's leading drawing, when there is one.
  */
 export function markPendingLineWrapAdvances(line: PendingLine): void {
+  // Model order is the order paint flushes spacers in; one forward pass visits each once.
+  const drawings =
+    line.drawings.length > 1
+      ? [...line.drawings].sort((left, right) => left.start - right.start)
+      : line.drawings;
+  let next = 0;
   for (let index = 0; index < line.spans.length; index += 1) {
     const previous = line.spans[index - 1];
     const current = line.spans[index]!;
     let flowEnd = previous ? previous.box.x + previous.box.width : Infinity;
     let advances = 0;
-    for (const drawing of line.drawings) {
-      if (drawing.start >= current.range.start) continue;
-      if (previous && drawing.start < previous.range.end) continue;
+    for (; next < drawings.length && drawings[next]!.start < current.range.start; next += 1) {
+      const drawing = drawings[next]!;
       if (!previous) flowEnd = Math.min(flowEnd, drawing.advanceStart);
       advances += Math.max(0, drawing.advanceEnd - drawing.advanceStart);
     }

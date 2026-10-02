@@ -69,6 +69,36 @@ function identityOf(element: Element): SpanIdentity | null {
   return { paragraphId, start, end };
 }
 
+/**
+ * The model position of the inline picture an advance spacer reserves, or null.
+ *
+ * The spacer is inert furniture, but it sits in the line exactly where the picture does, so
+ * the child index before it is the position before the picture and the index after it is the
+ * position after. Validated like a span identity: the values round-trip through the DOM.
+ */
+function drawingSpacerIdentity(node: Node | undefined): SemanticPosition | null {
+  if (!node || node.nodeType !== Node.ELEMENT_NODE) return null;
+  const element = node as HTMLElement;
+  if (!element.classList.contains('docx-inline-drawing-advance')) return null;
+  const paragraphId = element.dataset.drawingParagraphId;
+  const rawStart = element.dataset.drawingStart;
+  if (!paragraphId || rawStart === undefined || !/^\d{1,9}$/.test(rawStart)) return null;
+  if (!PARAGRAPH_ID.test(paragraphId) || paragraphId === '__proto__') return null;
+  return { paragraphId, offset: Number(rawStart) };
+}
+
+/** The advance spacer of the picture that ends just before `position`, when one is painted. */
+function drawingSpacerBefore(searchRoot: Element, position: SemanticPosition): Element | null {
+  if (position.offset < 1) return null;
+  for (const spacer of searchRoot.querySelectorAll('.docx-inline-drawing-advance')) {
+    const identity = drawingSpacerIdentity(spacer);
+    if (identity?.paragraphId === position.paragraphId && identity.offset === position.offset - 1) {
+      return spacer;
+    }
+  }
+  return null;
+}
+
 export function paragraphElements(
   root: Element,
   paragraphId: string,
@@ -172,11 +202,17 @@ function spanAtOrInside(
 function positionFromChildIndex(container: Element, index: number): SemanticPosition | null {
   const children = [...container.childNodes];
   if (children.length === 0) return null;
+  // An inline picture's advance spacer stands where the picture does: an index before it
+  // points AT the picture, an index after it points just past it.
   for (let at = Math.max(0, index); at < children.length; at += 1) {
+    const picture = drawingSpacerIdentity(children[at]);
+    if (picture) return picture;
     const found = spanAtOrInside(children[at]!, false);
     if (found) return { paragraphId: found.identity.paragraphId, offset: found.identity.start };
   }
   for (let at = Math.min(index, children.length) - 1; at >= 0; at -= 1) {
+    const picture = drawingSpacerIdentity(children[at]);
+    if (picture) return { paragraphId: picture.paragraphId, offset: picture.offset + 1 };
     const found = spanAtOrInside(children[at]!, true);
     if (!found) continue;
     return { paragraphId: found.identity.paragraphId, offset: found.identity.end };
@@ -224,6 +260,10 @@ export function positionFromDomPoint(
   // The engine's painted caret shares this attribute but hangs off the page content box, so
   // it has no owning paragraph and still resolves to nothing, which is what it should do.
   const marker = nearestElement?.closest('[data-docx-marker]');
+  // A picture's advance spacer shares the attribute, but it is not at the paragraph start:
+  // it is the picture's own place in the line.
+  const picture = drawingSpacerIdentity(marker ?? undefined);
+  if (picture) return offset > 0 ? { ...picture, offset: picture.offset + 1 } : picture;
   if (marker) return marker.parentElement ? paragraphStartAt(marker.parentElement) : null;
 
   // A TAB LEADER has no such answer: it is drawn across the advance of a tab in the MIDDLE
@@ -373,6 +413,17 @@ function domPointFromPositionIn(
   }
   if (fallback) return fallback;
 
+  // Just after an inline picture that no text follows: a picture that ends a line, or one
+  // alone in its paragraph. The line's child index past the picture's advance spacer is that
+  // position, and `positionFromChildIndex` reads it back the same way.
+  const spacer = drawingSpacerBefore(searchRoot, position);
+  if (spacer?.parentNode) {
+    return {
+      node: spacer.parentNode,
+      offset: [...spacer.parentNode.childNodes].indexOf(spacer) + 1,
+    };
+  }
+
   // A paragraph that DID paint text and still has no place for this offset is a position
   // this DOM cannot express — an offset inside a hidden run (`w:vanish` advances offsets and
   // paints nothing), a caret past what the current paint covers, a span whose text node the
@@ -384,9 +435,8 @@ function domPointFromPositionIn(
   if (painted) return null;
 
   // The line's child index 0 reads back as the paragraph START, so it can stand only for
-  // offset 0. A paragraph that paints no text can still hold other offsets: the position
-  // after an inline picture on its own line. Writing index 0 for it moved the caret to before
-  // the picture, so the next character typed landed in front of it.
+  // offset 0. Writing it for any other offset moved the caret home, and the next character
+  // typed landed there.
   if (position.offset !== 0) return null;
 
   // An EMPTY paragraph paints a line with no spans, so there is no text node to point at —

@@ -76,7 +76,8 @@ function pictureLine(body: string): { layout: SemanticLayout; line: LineRecord }
  * Where inline flow puts each painted run, in points from the line's `contentX`.
  *
  * Paint opens the line element at `contentX` in its container's coordinates, and runs and
- * spacers flow left to right from there. A run advances the flow by its laid-out width.
+ * spacers flow left to right from there. A run advances the flow by its laid-out width, and a
+ * shaped run is shifted from its flow position by its relative `left`.
  */
 function paintedRunOffsets(layout: SemanticLayout, line: LineRecord): number[] {
   const host = document.createElement('div');
@@ -92,11 +93,34 @@ function paintedRunOffsets(layout: SemanticLayout, line: LineRecord): number[] {
       flow += parseFloat(child.style.width) / SCALE;
       continue;
     }
-    offsets.push(flow);
+    const shift = child.style.position === 'relative' ? parseFloat(child.style.left) / SCALE : 0;
+    offsets.push(flow + shift);
     flow += line.spans[offsets.length - 1]!.box.width;
   }
   expect(offsets).toHaveLength(line.spans.length);
   return offsets;
+}
+
+/** `layout` with every span on every paragraph line marked as left-to-right shaped text. */
+function withShapedSpans(layout: SemanticLayout): SemanticLayout {
+  const shaping = { script: 'Latn', direction: 'ltr', level: 0, baseLevel: 0 } as const;
+  return {
+    ...layout,
+    pages: layout.pages.map((page) => ({
+      ...page,
+      fragments: page.fragments.map((fragment) =>
+        fragment.kind !== 'paragraph'
+          ? fragment
+          : {
+              ...fragment,
+              lines: fragment.lines.map((line) => ({
+                ...line,
+                spans: line.spans.map((span) => ({ ...span, style: { ...span.style, shaping } })),
+              })),
+            }
+      ),
+    })),
+  };
 }
 
 function expectRunsAtLayout(layout: SemanticLayout, line: LineRecord): void {
@@ -148,6 +172,19 @@ describe('a line that opens with an inline picture', () => {
     expect(line.spans[0]!.box.x).toBeCloseTo(picture.advanceEnd, 5);
     expect(line.contentX).toBeCloseTo(picture.advanceStart, 5);
     expectRunsAtLayout(layout, line);
+  });
+
+  test('shaped runs count the picture spacer in the flow they are placed from', () => {
+    // Shaped runs take a relative offset from where inline flow left them, and that flow
+    // holds the picture's spacer. Layout keeps shaping off lines with inline pictures today,
+    // so the shaping is stamped on here to hold paint to the same geometry anyway.
+    const { layout, line } = pictureLine(
+      paragraph(`<w:r><w:t xml:space="preserve">ab </w:t>${drawing}<w:t>cd</w:t></w:r>`)
+    );
+    const shaped = withShapedSpans(layout);
+    const shapedLine = linesOf(shaped).find((candidate) => candidate.id === line.id)!;
+    expect(shapedLine.spans.every((span) => span.style.shaping !== undefined)).toBe(true);
+    expectRunsAtLayout(shaped, shapedLine);
   });
 
   test('a centered line centers the picture and the text as one unit', () => {

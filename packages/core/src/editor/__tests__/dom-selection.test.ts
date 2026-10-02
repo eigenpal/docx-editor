@@ -349,11 +349,11 @@ describe('the empty-paragraph caret', () => {
   });
 });
 
-describe('a paragraph that holds only an inline picture', () => {
-  /** A painted page whose one paragraph is a 100pt inline picture and nothing else. */
-  function paintedPictureParagraph(): { root: HTMLElement; paragraphId: string } {
+describe('the position just after an inline picture', () => {
+  /** A painted page whose one paragraph is `content`, with a 100pt inline picture in it. */
+  function painted(content: string): { root: HTMLElement; paragraphId: string } {
     const part = load(
-      `<w:document ${PICTURE_NAMESPACES}><w:body><w:p><w:r>${PICTURE}</w:r></w:p></w:body></w:document>`
+      `<w:document ${PICTURE_NAMESPACES}><w:body><w:p>${content}</w:p></w:body></w:document>`
     );
     const layout = layoutSemanticDocument(part, 1, {
       measurer: createFixedMeasurer(6, 14),
@@ -361,32 +361,53 @@ describe('a paragraph that holds only an inline picture', () => {
     });
     const root = document.createElement('div');
     paintSemanticLayout(root, layout, { scale: 1 });
-    const line = root.querySelector<HTMLElement>('.docx-line')!;
-    expect(line.querySelector('[data-start]')).toBeNull();
-    return { root, paragraphId: line.dataset.paragraphId! };
+    document.body.append(root);
+    return {
+      root,
+      paragraphId: root.querySelector<HTMLElement>('.docx-line')!.dataset.paragraphId!,
+    };
   }
 
-  test('the caret after the picture is not written as the paragraph start', () => {
-    // The line's child index 0 reads back as offset 0. Writing it for the position after
-    // the picture moved the caret in front of the picture, and typing landed there.
-    const { root, paragraphId } = paintedPictureParagraph();
-    document.body.append(root);
-    const after = { paragraphId, offset: 1 };
-    getSelection()!.removeAllRanges();
-    expect(applySelectionToDom(root, { anchor: after, head: after }, getSelection())).toBe(false);
-    expect(getSelection()!.rangeCount).toBe(0);
+  /** Write `position` as a caret and read the browser's selection back. */
+  function roundTrip(root: HTMLElement, position: { paragraphId: string; offset: number }) {
+    expect(applySelectionToDom(root, { anchor: position, head: position }, getSelection())).toBe(
+      true
+    );
+    const selection = getSelection()!;
+    return positionFromDomPoint(selection.anchorNode!, selection.anchorOffset, root);
+  }
+
+  test('a picture alone in its paragraph keeps a caret on each side', () => {
+    // Its line paints no text. Writing the caret after the picture as the line's child index
+    // 0 read back as the paragraph start, so typing landed in front of the picture.
+    const { root, paragraphId } = painted(`<w:r>${PICTURE}</w:r>`);
+    expect(root.querySelector('.docx-line [data-start]')).toBeNull();
+    for (const offset of [0, 1])
+      expect(roundTrip(root, { paragraphId, offset })).toEqual({ paragraphId, offset });
     root.remove();
   });
 
-  test('the caret before the picture still targets the line', () => {
-    const { root, paragraphId } = paintedPictureParagraph();
-    document.body.append(root);
-    const before = { paragraphId, offset: 0 };
-    expect(applySelectionToDom(root, { anchor: before, head: before }, getSelection())).toBe(true);
-    const selection = getSelection()!;
-    expect(positionFromDomPoint(selection.anchorNode!, selection.anchorOffset, root)).toEqual(
-      before
-    );
+  test('a range that ends after a lone picture is written whole', () => {
+    // Select All ending in such a paragraph: refusing that end drew no highlight at all.
+    const { root, paragraphId } = painted(`<w:r>${PICTURE}</w:r>`);
+    const range = { anchor: { paragraphId, offset: 0 }, head: { paragraphId, offset: 1 } };
+    expect(applySelectionToDom(root, range, getSelection())).toBe(true);
+    expect(semanticSelectionFromDom(root, getSelection())).toEqual(range);
+    root.remove();
+  });
+
+  test('a picture that ends a line of text keeps a caret after it', () => {
+    const { root, paragraphId } = painted(`<w:r><w:t>ab</w:t>${PICTURE}</w:r>`);
+    for (const offset of [2, 3])
+      expect(roundTrip(root, { paragraphId, offset })).toEqual({ paragraphId, offset });
+    root.remove();
+  });
+
+  test('an endpoint on the picture spacer itself reads back on that side of the picture', () => {
+    const { root, paragraphId } = painted(`<w:r><w:t>ab</w:t>${PICTURE}<w:t>cd</w:t></w:r>`);
+    const spacer = root.querySelector('.docx-inline-drawing-advance')!;
+    expect(positionFromDomPoint(spacer, 0, root)).toEqual({ paragraphId, offset: 2 });
+    expect(positionFromDomPoint(spacer, 1, root)).toEqual({ paragraphId, offset: 3 });
     root.remove();
   });
 });

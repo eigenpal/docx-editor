@@ -1298,6 +1298,10 @@ function paintLine(
       rankOf(left.paragraphId) - rankOf(right.paragraphId) || left.start - right.start
   );
   let nextInlineDrawing = 0;
+  // Shaped spans (bidi, or spaces compressed by justification) are placed relative to where
+  // inline flow left them. That flow holds every drawing spacer as well as the spans before.
+  const bidi = line.spans.some((span) => span.style.shaping !== undefined);
+  let logicalAdvance = 0;
   const appendDrawingAdvancesBefore = (paragraphId: string, modelOffset: number): void => {
     while (
       nextInlineDrawing < inlineDrawings.length &&
@@ -1310,6 +1314,10 @@ function paintLine(
       const spacer = document.createElement('span');
       spacer.className = 'docx-inline-drawing-advance';
       spacer.dataset.docxMarker = '';
+      // The picture's model position, so a selection can be written just after it and read
+      // back: a picture alone in its paragraph paints no text to hold that caret.
+      spacer.dataset.drawingParagraphId = drawing.paragraphId;
+      spacer.dataset.drawingStart = String(drawing.start);
       spacer.setAttribute('contenteditable', 'false');
       spacer.setAttribute('aria-hidden', 'true');
       spacer.style.display = 'inline-block';
@@ -1322,6 +1330,7 @@ function paintLine(
       spacer.style.pointerEvents = 'none';
       spacer.style.verticalAlign = 'baseline';
       element.append(spacer);
+      logicalAdvance += advance;
       nextInlineDrawing += 1;
       anchor = null;
       anchorLinkId = null;
@@ -1353,8 +1362,6 @@ function paintLine(
 
   // Each boundary's gap is computed ONCE and carried into the next iteration, so a gap is
   // painted exactly once — as a stretch or as a margin, never both, never neither.
-  const bidi = line.spans.some((span) => span.style.shaping !== undefined);
-  let logicalAdvance = 0;
   let pendingGap = 0;
   let previousSpanAbsorbedGap = false;
   for (const [spanIndex, span] of line.spans.entries()) {

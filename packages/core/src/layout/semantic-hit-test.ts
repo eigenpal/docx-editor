@@ -690,8 +690,10 @@ function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContex
   // point over that picture's advance is decided by the drawing checks below.
   if (x <= line.contentX) return { offset: line.range.start, x: line.contentX, withinSpan: false };
 
+  // The line ends at its last content, which can be an inline picture after the text.
   const last = spans[spans.length - 1]!;
-  const rightEdge = last.box.x + last.box.width;
+  let rightEdge = last.box.x + last.box.width;
+  for (const drawing of line.drawings ?? []) rightEdge = Math.max(rightEdge, drawing.advanceEnd);
   if (x >= rightEdge) return endOfLine(line, rightEdge, context);
 
   // Text owns its published box. Check every text box before looking at drawing gaps:
@@ -741,7 +743,15 @@ function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContex
       // the line and inside no span. Take the nearer edge rather than inventing a position.
       // Before the first span, that gap is a wrap jump after a leading picture.
       const previous = spans[index - 1];
-      if (!previous) return { offset: span.range.start, x: span.box.x, withinSpan: false };
+      if (!previous) {
+        // The caret for that offset draws at the picture's end, so the hit reports it there.
+        const picture = line.drawings?.find((drawing) => drawing.start + 1 === span.range.start);
+        return {
+          offset: span.range.start,
+          x: picture?.advanceEnd ?? span.box.x,
+          withinSpan: false,
+        };
+      }
       const previousRight = previous.box.x + previous.box.width;
       return x - previousRight <= span.box.x - x
         ? { offset: previous.range.end, x: previousRight, withinSpan: false }
