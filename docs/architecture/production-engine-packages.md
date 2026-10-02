@@ -55,7 +55,7 @@ Those four vocabularies are gated at the variant level because a new member intr
 
 The one escape is an explicit, reasoned entry in `COLLABORATION_UNCOVERED` (`store/store/collaboration-coverage-contract.ts`): the gate accepts a declared reason in place of a fixture, so an action that genuinely cannot cross the collaboration boundary is recorded and reviewed, never dropped silently. When you add an editing capability, add its fixture, or add its reason.
 
-**Layout branches on Word compatibility modes only through named rules.** `layout/compatibility/` reads the mode and every compatibility option once, and registers each mode- or option-dependent behavior as a named rule. Layout code asks for a rule by name and never compares mode numbers; the `docx/no-raw-compatibility-mode` lint rule enforces this. For the modes, options, rules, and how to add a rule, see [Compatibility modes](compatibility-modes.md).
+**Layout branches on Word compatibility modes only through named rules.** `layout/compatibility/` reads the mode and the compatibility options layout uses once, and registers each mode- or option-dependent behavior as a named rule. Layout code asks for a rule by name and never compares mode numbers; the `docx/no-raw-compatibility-mode` lint rule enforces this. For the modes, options, rules, and how to add a rule, see [Compatibility modes](compatibility-modes.md).
 
 ## Guards must fail loudly
 

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { readOoxmlPart, type HeadlessDocumentView } from '@docx-editor.dev/core/store';
-import { compatibilityModeFromSettings } from '../compatibility/compatibility-mode.ts';
+import { compatibilityModeFromSettings } from '../compatibility/compatibility-profile.ts';
 import { createDocumentStyleDependencies } from '../document-style-deps.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

@@ -3,7 +3,7 @@
 import type { HeadlessDocumentView, OoxmlElement } from '@docx-editor.dev/core/store';
 import { buildNumberingIndex, type NumberingIndex } from './numbering-index.ts';
 import { defaultTabIntervalFromSettings } from './paragraph-tabs.ts';
-import { compatibilityModeFromSettings } from './compatibility/compatibility-mode.ts';
+import { compatibilityModeFromSettings } from './compatibility/compatibility-profile.ts';
 import { buildStyleCascadeTable, type StyleCascadeTable } from './style-cascade.ts';
 
 /** Memoized style inputs shared by every story in one document view. @public */

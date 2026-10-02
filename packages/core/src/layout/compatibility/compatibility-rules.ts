@@ -1,304 +1,176 @@
-// The registry of layout behaviors that depend on the Word compatibility mode or on a
-// compatibility option. Every branch the engine takes on either is a named rule here, so one
-// file says which behavior depends on which mode or option, and why.
-//
-// Layout asks `hasCompatibilityRule(mode, 'ruleName')` (mode rules, over the threaded mode
-// value) or `profile.has('ruleName')` (any rule, over a parsed settings part). It never
-// compares mode numbers itself; the `docx/no-raw-compatibility-mode` lint rule enforces that.
-//
-// Word lays out a document without a declaration as mode 12, and a declaration above 15 as
-// mode 15. Every rule follows both: `absent` reads as `word2007`, and `newer` as `word2013`.
-// The matrix test enforces this for every rule, so a rule cannot treat them differently.
-//
-// No published specification says which modes change these layout behaviors; the specified
-// part is the OOXML construct each rule acts on. So every rule names that construct's section
-// as `source`, and the layout tests that pin its mode dependence as `pinnedBy`. Those tests
-// state positions and page breaks that Word produces for the same markup in each mode.
-//
-// See docs/architecture/compatibility-modes.md for the full tables and how to add a rule.
+// Every layout behavior that depends on the Word compatibility mode or on a compatibility
+// option, as a named rule. Layout asks `hasCompatibilityRule(compatibilityMode, 'name')` or
+// `profile.has('name')` and never compares mode numbers itself; the
+// `docx/no-raw-compatibility-mode` lint rule enforces that. See
+// docs/architecture/compatibility-modes.md.
 
-import { compatibilityModeClass, type CompatibilityModeClass } from './compatibility-mode.ts';
-import type { CompatibilityProfileFacts } from './compatibility-profile.ts';
-import type { LegacyCompatOption, WordCompatSettingName } from './compatibility-settings.ts';
+import type { CompatibilityProfile } from './compatibility-profile.ts';
 
-interface RuleDocumentation {
-  /** One line: what layout does when the rule applies. */
+/**
+ * How a mode value lays out.
+ *
+ * - `legacy`: no declaration, 11, 12 or 14. Word lays out a document without a declaration
+ *   as one that declares 12, the [MS-DOCX] default.
+ * - `modern`: 15 and every value above it. Word lays out 16, 17, 99 and 9999 as 15.
+ * - `unlisted`: any other value, such as 13, which Word reports as unreadable content. No
+ *   rule applies.
+ */
+export type CompatibilityModeClass = 'legacy' | 'modern' | 'unlisted';
+
+/** The class of a threaded mode value; `undefined` is an absent or refused declaration. */
+export function compatibilityModeClass(value: number | undefined): CompatibilityModeClass {
+  if (value === undefined || value === 11 || value === 12 || value === 14) return 'legacy';
+  return value >= 15 ? 'modern' : 'unlisted';
+}
+
+interface Rule {
+  /** What layout does when the rule applies. */
   readonly behavior: string;
   /** The specification section of the construct the rule acts on. */
   readonly source: string;
-  /** Test files, relative to `packages/core/src`, that fail when the rule is inverted. */
-  readonly pinnedBy: readonly string[];
 }
 
-/** A rule that depends only on the compatibility mode. */
-export interface ModeCompatibilityRule extends RuleDocumentation {
-  readonly kind: 'mode';
-  /** The mode classes the behavior applies in. */
-  readonly modes: readonly CompatibilityModeClass[];
+interface ModeRule extends Rule {
+  readonly mode: 'legacy' | 'modern';
 }
 
-/** A rule that also depends on compatibility options, so it needs the parsed settings. */
-export interface ProfileCompatibilityRule extends RuleDocumentation {
-  readonly kind: 'profile';
-  /** Plain-language form of `applies`, for the documentation table. */
-  readonly condition: string;
-  /** The options `applies` reads. */
-  readonly reads: readonly (LegacyCompatOption | WordCompatSettingName)[];
-  readonly applies: (facts: CompatibilityProfileFacts) => boolean;
+interface ProfileRule extends Rule {
+  readonly applies: (profile: CompatibilityProfile) => boolean;
 }
 
-const MODERN: readonly CompatibilityModeClass[] = Object.freeze(['word2013', 'newer']);
-const LEGACY: readonly CompatibilityModeClass[] = Object.freeze([
-  'absent',
-  'word2003',
-  'word2007',
-  'word2010',
-]);
-const LEGACY_SET: ReadonlySet<CompatibilityModeClass> = new Set(LEGACY);
-const MODERN_SET: ReadonlySet<CompatibilityModeClass> = new Set(MODERN);
+const modern = (behavior: string, source: string): ModeRule => ({
+  mode: 'modern',
+  behavior,
+  source,
+});
+const legacy = (behavior: string, source: string): ModeRule => ({
+  mode: 'legacy',
+  behavior,
+  source,
+});
 
-function mode(
-  modes: readonly CompatibilityModeClass[],
-  behavior: string,
-  source: string,
-  pinnedBy: readonly string[]
-): ModeCompatibilityRule {
-  return Object.freeze({
-    kind: 'mode',
-    modes: Object.freeze([...modes]),
-    behavior,
-    source,
-    pinnedBy: Object.freeze([...pinnedBy]),
-  });
-}
-
-/** Every mode rule, by name. */
-export const MODE_COMPATIBILITY_RULES = Object.freeze({
-  anchorOnlyParagraphSeeding: mode(
-    MODERN,
+/** Rules that depend only on the mode. */
+export const MODE_RULES = {
+  anchorOnlyParagraphSeeding: modern(
     'Seed the pages of consecutive anchor-only paragraphs before later bands wrap earlier text',
-    'ECMA-376 Part 1 §20.4.2.3 anchor',
-    ['layout/__tests__/empty-anchor-pagination.test.ts']
+    'ECMA-376 Part 1 §20.4.2.3 anchor'
   ),
-  anchorOnlyParagraphWrapExclusion: mode(
-    MODERN,
+  anchorOnlyParagraphWrapExclusion: modern(
     'An anchor-only paragraph wraps around its own anchors before it is placed',
-    'ECMA-376 Part 1 §20.4.2.3 anchor',
-    ['layout/__tests__/empty-anchor-pagination.test.ts']
+    'ECMA-376 Part 1 §20.4.2.3 anchor'
   ),
-  anchorsLayOutInCell: mode(
-    MODERN,
+  anchorsLayOutInCell: modern(
     'Every anchored object in a table cell lays out in its cell; none is out of cell',
-    'ECMA-376 Part 1 §20.4.2.3 anchor (layoutInCell)',
-    [
-      'layout/__tests__/layout-in-cell-exclusion.test.ts',
-      'layout/__tests__/table-out-of-cell-floats.test.ts',
-    ]
+    'ECMA-376 Part 1 §20.4.2.3 anchor (layoutInCell)'
   ),
-  fixedTableContentEdgeOrigin: mode(
-    LEGACY,
+  fixedTableContentEdgeOrigin: legacy(
     'A collapsed fixed left table aligns its leading cell content edge with the text column',
-    'ECMA-376 Part 1 §17.4.52 tblLayout',
-    [
-      'layout/__tests__/legacy-fixed-table-content.test.ts',
-      'layout/__tests__/modern-edge-aligned-side-rules.test.ts',
-    ]
+    'ECMA-376 Part 1 §17.4.52 tblLayout'
   ),
-  floatingTableContentOrigin: mode(
-    LEGACY,
+  floatingTableContentOrigin: legacy(
     'A floating table with a numeric text anchor positions its first cell content, not its outer edge',
-    'ECMA-376 Part 1 §17.4.57 tblpPr',
-    ['layout/__tests__/legacy-table-float-origin.test.ts']
+    'ECMA-376 Part 1 §17.4.57 tblpPr'
   ),
-  headerFooterAnchorsWrapText: mode(
-    MODERN,
+  headerFooterAnchorsWrapText: modern(
     'Header and footer text outside tables wraps around anchored objects',
-    'ECMA-376 Part 1 §20.4.2.3 anchor',
-    ['output/__tests__/header-margin-anchor.test.ts']
+    'ECMA-376 Part 1 §20.4.2.3 anchor'
   ),
-  headerRowsKeepWithBody: mode(
-    MODERN,
+  headerRowsKeepWithBody: modern(
     'Header rows keep with the opening body rows; the table starts on the next page if both do not fit',
-    'ECMA-376 Part 1 §17.4.49 tblHeader',
-    [
-      'layout/__tests__/table-row-keep-chains.test.ts',
-      'layout/__tests__/table-row-keep-next.test.ts',
-    ]
+    'ECMA-376 Part 1 §17.4.49 tblHeader'
   ),
-  justifiedSpaceShrink: mode(
-    MODERN,
+  justifiedSpaceShrink: modern(
     'Justified lines may shrink spaces to fit one more word',
-    'ECMA-376 Part 1 §17.3.1.13 jc',
-    ['layout/__tests__/paragraph-space-shrink.test.ts']
+    'ECMA-376 Part 1 §17.3.1.13 jc'
   ),
-  keepNextGivesTailLines: mode(
-    MODERN,
+  keepNextGivesTailLines: modern(
     'A keep-with-next paragraph that fits whole gives its last lines to the next page with its successor',
-    'ECMA-376 Part 1 §17.3.1.15 keepNext',
-    ['layout/__tests__/keep-next-natural-split.test.ts']
+    'ECMA-376 Part 1 §17.3.1.15 keepNext'
   ),
-  legacyPercentTableContentWidth: mode(
-    LEGACY,
+  legacyPercentTableContentWidth: legacy(
     'A top-level percent-width table resolves its width against the legacy content width',
-    'ECMA-376 Part 1 §17.4.63 tblW',
-    ['layout/__tests__/legacy-table-content-width.test.ts']
+    'ECMA-376 Part 1 §17.4.63 tblW'
   ),
-  legacySharedGridLineSideRules: mode(
-    LEGACY,
+  legacySharedGridLineSideRules: legacy(
     'Collapsed side rules center on shared grid lines for every simple top-level table',
-    'ECMA-376 Part 1 §17.4.38 tblBorders',
-    ['layout/__tests__/legacy-table-side-rules.test.ts']
+    'ECMA-376 Part 1 §17.4.38 tblBorders'
   ),
-  modernGridLineSideRules: mode(
-    MODERN,
-    'Side rules center on grid lines only for covered dxa/auto width shapes; edge-aligned grids move by half a rule',
-    'ECMA-376 Part 1 §17.4.38 tblBorders',
-    [
-      'layout/__tests__/modern-edge-aligned-side-rules.test.ts',
-      'layout/__tests__/legacy-table-side-rules.test.ts',
-    ]
+  modernGridLineSideRules: modern(
+    'Side rules center on grid lines for covered dxa/auto width shapes; edge-aligned grids move by half a rule',
+    'ECMA-376 Part 1 §17.4.38 tblBorders'
   ),
-  noteTableCellKeeps: mode(
-    MODERN,
+  noteTableCellKeeps: modern(
     'Note reference bands in table rows honor cell widow control and keep-lines cuts',
-    'ECMA-376 Part 1 §17.11 Footnotes and Endnotes',
-    ['layout/__tests__/footnote-table-row-bands.test.ts']
+    'ECMA-376 Part 1 §17.11 Footnotes and Endnotes'
   ),
-  rowPageBreakYieldsToKeep: mode(
-    MODERN,
+  rowPageBreakYieldsToKeep: modern(
     'A row with a page break does not start a page when the row before it keeps with it',
-    'ECMA-376 Part 1 §17.3.1.15 keepNext',
-    ['layout/__tests__/table-row-keep-chains.test.ts']
+    'ECMA-376 Part 1 §17.3.1.15 keepNext'
   ),
-  tableParagraphWidowControl: mode(
-    MODERN,
+  tableParagraphWidowControl: modern(
     'Paragraphs that split inside table cells apply widow and orphan control',
-    'ECMA-376 Part 1 §17.3.1.44 widowControl',
-    ['layout/__tests__/table-paragraph-widows.test.ts']
+    'ECMA-376 Part 1 §17.3.1.44 widowControl'
   ),
-  vMergeTextMovesPastHeadRow: mode(
-    MODERN,
+  vMergeTextMovesPastHeadRow: modern(
     'Merged cell text moves whole into the next row when the head row cannot hold it',
-    'ECMA-376 Part 1 §17.4.84 vMerge',
-    ['layout/__tests__/table-vmerge-head-row-boundary.test.ts']
+    'ECMA-376 Part 1 §17.4.84 vMerge'
   ),
-});
+} as const satisfies Record<string, ModeRule>;
 
-/** The name of a mode rule. */
-export type ModeCompatibilityRuleName = keyof typeof MODE_COMPATIBILITY_RULES;
-
-function profile(
-  reads: readonly (LegacyCompatOption | WordCompatSettingName)[],
-  condition: string,
-  applies: (facts: CompatibilityProfileFacts) => boolean,
-  behavior: string,
-  source: string,
-  pinnedBy: readonly string[]
-): ProfileCompatibilityRule {
-  return Object.freeze({
-    kind: 'profile',
-    reads: Object.freeze([...reads]),
-    condition,
-    applies,
-    behavior,
-    source,
-    pinnedBy: Object.freeze([...pinnedBy]),
-  });
-}
-
-/** Every rule that reads compatibility options, by name. */
-export const PROFILE_COMPATIBILITY_RULES = Object.freeze({
-  adjustLineHeightInTable: profile(
-    ['adjustLineHeightInTable'],
-    '`w:adjustLineHeightInTable` is on (any value but `0`, `false`, `off`)',
-    (facts) => facts.legacy.adjustLineHeightInTable === true,
-    'Paragraphs in table cells snap to the section line grid',
-    'ECMA-376 Part 1 §17.15.3.1',
-    ['layout/__tests__/line-grid.test.ts']
-  ),
-  doNotBreakWrappedTables: profile(
-    ['doNotBreakWrappedTables'],
-    '`w:doNotBreakWrappedTables` is on; only its first occurrence in the first `w:compat` counts',
-    (facts) => facts.legacy.doNotBreakWrappedTables === true,
-    'A floating table that fits a full page does not break across pages',
-    'ECMA-376 Part 4 §14.8.3.10',
-    ['layout/__tests__/floating-table-page-break.test.ts']
-  ),
-  fixedParagraphSpacing: profile(
-    ['doNotUseHTMLParagraphAutoSpacing'],
-    '`w:doNotUseHTMLParagraphAutoSpacing` is on; only its first occurrence in the first `w:compat` counts',
-    (facts) => facts.legacy.doNotUseHTMLParagraphAutoSpacing === true,
-    'Adjacent paragraph spacing adds up, and automatic spacing is a fixed 5pt before and 10pt after',
-    'ECMA-376 Part 4 §14.8.3.15',
-    ['layout/__tests__/adjacent-paragraph-spacing.test.ts']
-  ),
-  ignoreIndentAsNumberingTabStop: profile(
-    ['doNotUseIndentAsNumberingTabStop'],
-    '`w:doNotUseIndentAsNumberingTabStop` is on; only its first occurrence in the first `w:compat` counts',
-    (facts) => facts.legacy.doNotUseIndentAsNumberingTabStop === true,
-    'A numbering suffix tab ignores the hanging indent as a tab stop',
-    'ECMA-376 Part 4 §14.8.3.16',
-    ['layout/__tests__/list-numbering-tab-stop.test.ts']
-  ),
-  optionalLigatures: profile(
-    ['enableOpenTypeFeatures'],
-    '`enableOpenTypeFeatures` is on; without it, the mode is `word2013` or `newer`. A duplicated `enableOpenTypeFeatures` turns the rule off',
-    (facts) => {
-      const declared = facts.settings.enableOpenTypeFeatures;
-      if (declared === 'ambiguous') return false;
-      return declared ?? MODERN_SET.has(facts.modeClass);
+/** Rules that read compatibility options, so they need the parsed settings. */
+export const PROFILE_RULES = {
+  adjustLineHeightInTable: {
+    behavior: 'Paragraphs in table cells snap to the section line grid',
+    source: 'ECMA-376 Part 1 §17.15.3.1 adjustLineHeightInTable',
+    applies: (p) => p.legacy.adjustLineHeightInTable === true,
+  },
+  doNotBreakWrappedTables: {
+    behavior: 'A floating table that fits a full page does not break across pages',
+    source: 'ECMA-376 Part 4 §14.8.3.10 doNotBreakWrappedTables',
+    applies: (p) => p.legacy.doNotBreakWrappedTables === true,
+  },
+  fixedParagraphSpacing: {
+    behavior:
+      'Adjacent paragraph spacing adds up, and automatic spacing is a fixed 5pt before and 10pt after',
+    source: 'ECMA-376 Part 4 §14.8.3.15 doNotUseHTMLParagraphAutoSpacing',
+    applies: (p) => p.legacy.doNotUseHTMLParagraphAutoSpacing === true,
+  },
+  ignoreIndentAsNumberingTabStop: {
+    behavior: 'A numbering suffix tab ignores the hanging indent as a tab stop',
+    source: 'ECMA-376 Part 4 §14.8.3.16 doNotUseIndentAsNumberingTabStop',
+    applies: (p) => p.legacy.doNotUseIndentAsNumberingTabStop === true,
+  },
+  optionalLigatures: {
+    behavior:
+      'Optional OpenType ligatures apply: as `enableOpenTypeFeatures` says, else in modern modes. A duplicated setting turns them off',
+    source: '[MS-DOCX] enableOpenTypeFeatures',
+    applies: (p) => {
+      const declared = p.settings.enableOpenTypeFeatures;
+      return declared === 'ambiguous' ? false : (declared ?? p.modeClass === 'modern');
     },
-    'Optional OpenType ligatures apply as run properties ask',
-    '[MS-DOCX] enableOpenTypeFeatures',
-    ['layout/__tests__/run-ligatures.test.ts']
-  ),
-  preserveExactLineBaseline: profile(
-    ['noExtraLineSpacing'],
-    '`w:noExtraLineSpacing` is on, the mode is `absent`, `word2003`, `word2007` or `word2010`, and the mode declaration is not refused',
-    (facts) =>
-      facts.mode.kind !== 'refused' &&
-      LEGACY_SET.has(facts.modeClass) &&
-      facts.legacy.noExtraLineSpacing === true,
-    'An exact-height line keeps the face baseline instead of centering content',
-    'ECMA-376 Part 4 §14.8.3.28',
-    ['layout/__tests__/exact-line-baseline.test.ts']
-  ),
-  strictTableStyleHierarchy: profile(
-    ['overrideTableStyleFontSizeAndJustification'],
-    '`overrideTableStyleFontSizeAndJustification` is on (`1`, `true` or `on`)',
-    (facts) => facts.settings.overrideTableStyleFontSizeAndJustification === true,
-    'Table style font size and justification apply over the default paragraph style',
-    '[MS-DOCX] 2.3.1 overrideTableStyleFontSizeAndJustification',
-    ['layout/__tests__/table-style-compatibility.test.ts']
-  ),
-});
+  },
+  preserveExactLineBaseline: {
+    behavior:
+      'With `w:noExtraLineSpacing` in a legacy mode that was not refused, an exact-height line keeps the face baseline',
+    source: 'ECMA-376 Part 4 §14.8.3.28 noExtraLineSpacing',
+    applies: (p) =>
+      !p.modeRefused && p.modeClass === 'legacy' && p.legacy.noExtraLineSpacing === true,
+  },
+  strictTableStyleHierarchy: {
+    behavior: 'Table style font size and justification apply over the default paragraph style',
+    source: '[MS-DOCX] 2.3.1 overrideTableStyleFontSizeAndJustification',
+    applies: (p) => p.settings.overrideTableStyleFontSizeAndJustification === true,
+  },
+} as const satisfies Record<string, ProfileRule>;
 
-/** The name of a rule that needs the parsed settings. */
-export type ProfileCompatibilityRuleName = keyof typeof PROFILE_COMPATIBILITY_RULES;
+export type ModeRuleName = keyof typeof MODE_RULES;
+/** Any registered rule. A typo or an unregistered rule fails typecheck. */
+export type CompatibilityRuleName = ModeRuleName | keyof typeof PROFILE_RULES;
 
-/** The name of any registered rule. A typo or an unregistered rule fails typecheck. */
-export type CompatibilityRuleName = ModeCompatibilityRuleName | ProfileCompatibilityRuleName;
-
-/** The classes each mode rule applies in. Built once; lookups are constant time. */
-const MODE_RULE_TABLE: ReadonlyMap<string, ReadonlySet<CompatibilityModeClass>> = new Map(
-  Object.entries(MODE_COMPATIBILITY_RULES).map(([name, rule]) => [name, new Set(rule.modes)])
-);
-
-/** Whether a mode rule applies to a mode class. */
-export function modeRuleApplies(
-  rule: ModeCompatibilityRuleName,
-  modeClass: CompatibilityModeClass
-): boolean {
-  return MODE_RULE_TABLE.get(rule)?.has(modeClass) === true;
-}
-
-/**
- * Whether a mode rule applies to the threaded mode value (`compatibilityMode` in layout
- * options). `undefined` is an absent or refused declaration.
- */
+/** Whether a mode rule applies to the threaded `compatibilityMode` value. */
 export function hasCompatibilityRule(
   compatibilityMode: number | undefined,
-  rule: ModeCompatibilityRuleName
+  rule: ModeRuleName
 ): boolean {
-  return modeRuleApplies(rule, compatibilityModeClass(compatibilityMode));
+  return MODE_RULES[rule].mode === compatibilityModeClass(compatibilityMode);
 }
