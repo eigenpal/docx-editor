@@ -23,7 +23,7 @@ The mode is a `w:compatSetting` in `settings.xml` with `w:name="compatibilityMod
 | 15 | `word2013` | ISO/IEC 29500 and every [MS-DOCX] extension | `wdWord2013` |
 | 16 and above | `newer` | Not defined by any Microsoft source | None |
 
-Current Word writes 15. [MS-DOCX] covers Word 2007 through Word LTSC 2024 and documents no value above 15, and the `WdCompatibilityMode` enumeration ends at `wdWord2013 = 15`. Its `wdCurrent = 65535` is an object model alias for the running version, not a file value. Word 2010 ignores a declaration of 15.
+Word 2013 and later write 15. [MS-DOCX] covers Word 2007 through Word LTSC 2024 and documents no value above 15, and the `WdCompatibilityMode` enumeration ends at `wdWord2013 = 15`. Its `wdCurrent = 65535` is an object model alias for the running version, not a file value. Word 2010 ignores a declaration of 15.
 
 The engine handles each declaration as follows:
 
@@ -99,7 +99,7 @@ The profile reads every cataloged option, including options no rule consults yet
 - **Repeat.** `last` takes the last occurrence in any `w:compat`. `first-compat-first` takes only the first occurrence in the first `w:compat`. `refuse-duplicates` makes a repeated setting ambiguous.
 - **Value.** `on-or-missing` is on for a missing value or `1`, `true`, `on`. `not-off` is off only for `0`, `false`, `off`. `explicit-on` is on only for `1`, `true`, `on`.
 
-The readings of consulted options keep the behavior of the readers they replaced. They are not uniform yet.
+The readings of consulted options keep the behavior of the readers they replaced. They are not uniform.
 
 <!-- compatibility-options:start -->
 

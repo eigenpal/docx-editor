@@ -13,7 +13,7 @@
 //   Appendix B lists Word 2013, 2016, 2019, 2021 and LTSC 2024, and documents no value above
 //   15. The Word object model's `WdCompatibilityMode` also ends at `wdWord2013 = 15`
 //   ("Default. All Word features are enabled"); its `wdCurrent = 65535` is an API alias for
-//   "the running version", not a value Word writes. So current Word writes 15.
+//   "the running version", not a value Word writes. So Word 2013 and later write 15.
 //
 // Word 2010 ignores a declaration of 15 ([MS-DOCX] Appendix B note 13). No Microsoft source
 // defines 13 or anything above 15, but other producers write them. A value above 15 is a mode
