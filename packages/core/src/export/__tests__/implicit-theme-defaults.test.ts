@@ -108,16 +108,20 @@ test('an unresolved authored Latin theme reference retains the host fallback', (
 });
 
 test('formatting defaults preserve explicit document and inherited style fonts', () => {
-  for (const styleRoot of [
-    null,
-    styles(),
-    styles(
-      '<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="CJK"/></w:rPr></w:rPrDefault></w:docDefaults>'
-    ),
-  ]) {
+  // An omitted rPrDefault also takes the application size; an authored one without w:sz does not.
+  for (const [styleRoot, fontSizeHalfPoints] of [
+    [null, 24],
+    [styles(), 24],
+    [
+      styles(
+        '<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="CJK"/></w:rPr></w:rPrDefault></w:docDefaults>'
+      ),
+      null,
+    ],
+  ] as const) {
     expect(createRunDefaultsResolver(styleRoot, theme)(null)).toEqual({
       fontFamily: 'Body Face',
-      fontSizeHalfPoints: null,
+      fontSizeHalfPoints,
     });
   }
   const styleRoot = styles(

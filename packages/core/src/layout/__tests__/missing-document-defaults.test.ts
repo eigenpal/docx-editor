@@ -62,6 +62,9 @@ test.each(cases)(
     }).pages[0]!.fragments[0]!;
     if (first.kind !== 'paragraph') throw new Error('paragraph expected');
     expect(first.spacing.after).toBe(after);
+    // The fixed measurer's 12pt line describes 11pt text; an omitted pPrDefault adds 278/240.
+    const single = (12 * size) / 11;
+    expect(first.lines[0]!.box.height).toBeCloseTo(after === 8 ? (single * 278) / 240 : single, 6);
   }
 );
 

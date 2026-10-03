@@ -15,6 +15,13 @@ import {
 } from '../package/ooxml-tree.ts';
 import { W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import { attributeValueOf } from './tree-op-nodes.ts';
+import { propertyElement } from './tree-op-properties.ts';
+import type { OoxmlProperty } from './tree-op-types.ts';
+import {
+  APPLICATION_PARAGRAPH_PROPERTIES,
+  APPLICATION_RUN_PROPERTIES,
+  omittedDocDefaults,
+} from '../package/application-doc-defaults.ts';
 
 export function isElementNode(node: OoxmlNode): node is OoxmlElement {
   return node.kind !== 'textValue';
@@ -125,6 +132,22 @@ function defaultsContainer(
     out.set(prop.localName, prop);
   }
   return out;
+}
+
+/** The styles part root a side carries, or `null` when it has none. */
+function stylesRootOf(styles: StylesInfo): OoxmlElement | null {
+  const root = styles.part?.root;
+  return root && isElementNode(root) ? root : null;
+}
+
+/** The application's properties for an omitted default half, as property nodes. */
+function applicationDefaults(properties: readonly OoxmlProperty[]): Map<string, OoxmlNode> {
+  return new Map(
+    properties.map((property) => [
+      property.localName,
+      propertyElement(property, `fragment#application-${property.localName}`),
+    ])
+  );
 }
 
 /** Follow `w:basedOn` chains checking whether any style in the chain defines `localName`. */
@@ -265,10 +288,23 @@ export function materializeDefaults(
   fragmentStyles: StylesInfo,
   targetStyles: StylesInfo
 ): readonly OoxmlNode[] {
-  const fragmentRun = defaultsContainer(fragmentStyles.docDefaults, 'rPrDefault', 'rPr');
-  const targetRun = defaultsContainer(targetStyles.docDefaults, 'rPrDefault', 'rPr');
-  const fragmentPara = defaultsContainer(fragmentStyles.docDefaults, 'pPrDefault', 'pPr');
-  const targetPara = defaultsContainer(targetStyles.docDefaults, 'pPrDefault', 'pPr');
+  // A fragment without a styles part (external HTML) has no defaults of its own, so only a
+  // carried styles part, or the target, resolves the application's defaults for an omission.
+  const fragmentRoot = stylesRootOf(fragmentStyles);
+  const fragmentOmits = fragmentRoot ? omittedDocDefaults(fragmentRoot) : null;
+  const targetOmits = omittedDocDefaults(stylesRootOf(targetStyles));
+  const fragmentRun = fragmentOmits?.run
+    ? applicationDefaults(APPLICATION_RUN_PROPERTIES)
+    : defaultsContainer(fragmentStyles.docDefaults, 'rPrDefault', 'rPr');
+  const targetRun = targetOmits.run
+    ? applicationDefaults(APPLICATION_RUN_PROPERTIES)
+    : defaultsContainer(targetStyles.docDefaults, 'rPrDefault', 'rPr');
+  const fragmentPara = fragmentOmits?.paragraph
+    ? applicationDefaults(APPLICATION_PARAGRAPH_PROPERTIES)
+    : defaultsContainer(fragmentStyles.docDefaults, 'pPrDefault', 'pPr');
+  const targetPara = targetOmits.paragraph
+    ? applicationDefaults(APPLICATION_PARAGRAPH_PROPERTIES)
+    : defaultsContainer(targetStyles.docDefaults, 'pPrDefault', 'pPr');
 
   // Fold each side's default paragraph style over its docDefaults, the way the cascade
   // does, so "the default look" is one property set PER DOCUMENT. Folding only the

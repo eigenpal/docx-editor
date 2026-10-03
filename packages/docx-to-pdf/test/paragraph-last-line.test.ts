@@ -5,39 +5,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { createFontSource } from '@docx-editor.dev/core/editor';
 import { exportPdf } from '../src/index.ts';
-import { docx as fixtureDocx } from './fixture.ts';
-
-// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
-const FORMAT_DOC_DEFAULTS =
-  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
-
-/** The shared fixture package, given a styles part that pins the format defaults. */
-function docx(body: string, extras: Record<string, string | Uint8Array> = {}): Uint8Array {
-  const files = unzipSync(fixtureDocx(body, extras));
-  files['word/styles.xml'] ??= strToU8(
-    '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
-      `${FORMAT_DOC_DEFAULTS}</w:styles>`
-  );
-  files['[Content_Types].xml'] = strToU8(
-    strFromU8(files['[Content_Types].xml']!).replace(
-      '</Types>',
-      '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>'
-    )
-  );
-  const rels = files['word/_rels/document.xml.rels'];
-  const stylesRel =
-    '<Relationship Id="rIdFormatStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>';
-  files['word/_rels/document.xml.rels'] = strToU8(
-    rels
-      ? strFromU8(rels).replace('</Relationships>', `${stylesRel}</Relationships>`)
-      : `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${stylesRel}</Relationships>`
-  );
-  return zipSync(files);
-}
+import { FORMAT_DOC_DEFAULTS, formatDefaultsDocx as docx } from './fixture.ts';
 
 const GRID = 0.24;
 const FAMILY = 'DejaVu Sans';

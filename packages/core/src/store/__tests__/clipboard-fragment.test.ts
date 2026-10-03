@@ -528,6 +528,40 @@ describe('clipboard fragment round trip', () => {
     expect(defaultFlags.length).toBe(1);
   });
 
+  test('omitted source defaults materialize as the application defaults the source painted', () => {
+    // The source styles part carries a paragraph style but no docDefaults, so the source
+    // painted 12pt with 8pt after. The target authors 10pt with no spacing.
+    const sourceStyles =
+      `<w:styles xmlns:w="${W}">` +
+      '<w:style w:type="paragraph" w:styleId="Body"><w:name w:val="Body"/></w:style>' +
+      '</w:styles>';
+    const body = '<w:p><w:pPr><w:pStyle w:val="Body"/></w:pPr><w:r><w:t>carried</w:t></w:r></w:p>';
+    const targetStyles =
+      `<w:styles xmlns:w="${W}"><w:docDefaults>` +
+      '<w:rPrDefault><w:rPr><w:sz w:val="20"/></w:rPr></w:rPrDefault><w:pPrDefault/>' +
+      '</w:docDefaults></w:styles>';
+    const paste = (source: OoxmlPackage): string => {
+      const extracted = extractFragmentPackage(source, fullBodyCoverage(source));
+      if (!extracted.ok) throw new Error('extract failed');
+      const store = openStore(buildPackage('<w:p/>', { 'word/styles.xml': targetStyles }));
+      const main = store.currentPackage().mainDocumentPart;
+      const hostId = paragraphIdsUnder(bodyOf(store.currentPackage().parts.get(main)!))[0]!;
+      const pasted = store.applyFragmentPaste(
+        { kind: 'body' },
+        { paragraphId: hostId, offset: 0, fragmentBytes: extracted.bytes, lastMarkCovered: true }
+      );
+      expect(pasted.ok).toBe(true);
+      return serializeOoxmlPart(store.currentPackage().parts.get(main)!);
+    };
+    const stamped = paste(buildPackage(body, { 'word/styles.xml': sourceStyles }));
+    expect(stamped).toContain('<w:sz w:val="24"/>');
+    expect(stamped).toContain('w:after="160"');
+    // A fragment without a styles part (external content) has no defaults to carry.
+    const bare = paste(buildPackage('<w:p><w:r><w:t>carried</w:t></w:r></w:p>'));
+    expect(bare).not.toContain('<w:sz');
+    expect(bare).not.toContain('w:after="160"');
+  });
+
   test('materialization never stamps over a value the travelling style chain defines', () => {
     // Source: docDefaults sz=20, Heading1 sz=32, a Heading1 paragraph with an unstyled
     // run. Target: a DIFFERENT Heading1 (forcing a Heading1Pasted remap) and other

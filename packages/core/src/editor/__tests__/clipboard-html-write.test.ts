@@ -31,6 +31,10 @@ interface FragmentInput {
   readonly media?: Readonly<Record<string, Uint8Array>>;
 }
 
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
+
 function fragment(input: FragmentInput): Uint8Array {
   const entries = new Map<string, Uint8Array>();
   const overrides = [
@@ -119,6 +123,18 @@ const count = (haystack: string, needle: string): number => haystack.split(needl
 describe('interopHtmlFromFragment', () => {
   test('unreadable bytes produce the empty string', () => {
     expect(interopHtmlFromFragment(new Uint8Array([1, 2, 3, 4]))).toBe('');
+  });
+
+  test('omitted defaults copy as the application defaults; no styles part copies none', () => {
+    const body = '<w:p><w:r><w:t>plain</w:t></w:r></w:p>';
+    const styled = interopHtmlFromFragment(
+      fragment({ body, styles: '<w:style w:type="paragraph" w:styleId="Body"/>' })
+    );
+    expect(styled).toContain('font-size:12pt');
+    expect(styled).toContain('margin-bottom:8pt');
+    const bare = interopHtmlFromFragment(fragment({ body }));
+    expect(bare).not.toContain('font-size');
+    expect(bare).not.toContain('margin-bottom');
   });
 
   test('a formatted run carries its resolved inline CSS', () => {
@@ -268,6 +284,7 @@ describe('interopHtmlFromFragment', () => {
     const html = interopHtmlFromFragment(
       fragment({
         styles:
+          FORMAT_DOC_DEFAULTS +
           '<w:style w:type="paragraph" w:styleId="ListParagraph">' +
           '<w:name w:val="List Paragraph"/></w:style>',
         numbering:

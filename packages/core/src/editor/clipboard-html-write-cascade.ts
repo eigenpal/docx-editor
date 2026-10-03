@@ -7,6 +7,13 @@ import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import { relationshipsOf } from '../store/package/package-edit.ts';
 import { resolveInternalTarget } from '../store/package/opc-names.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
+import { propertyElement } from '../store/store/tree-op-properties.ts';
+import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
+import {
+  APPLICATION_PARAGRAPH_PROPERTIES,
+  APPLICATION_RUN_PROPERTIES,
+  omittedDocDefaults,
+} from '../store/package/application-doc-defaults.ts';
 import { MAX_STYLE_BASED_ON_DEPTH, MAX_STYLE_DEFINITIONS } from '../layout/style-cascade.ts';
 import { isElement, wmlChild, wmlVal } from './clipboard-html-write-tree.ts';
 
@@ -41,6 +48,25 @@ export function relatedPart(
   return part && isElement(part.root) ? part.root : null;
 }
 
+/** A property container holding the application's properties for an omitted default half. */
+function applicationContainer(
+  localName: 'rPr' | 'pPr',
+  properties: readonly OoxmlProperty[]
+): OoxmlElement {
+  return {
+    id: `application-${localName}-default`,
+    kind: localName === 'rPr' ? 'runProperties' : 'paragraphProperties',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName,
+    prefix: 'w',
+    namespaceBindings: [],
+    attributes: [],
+    children: properties.map((property) =>
+      propertyElement(property, `application-${localName}-${property.localName}`)
+    ),
+  } as unknown as OoxmlElement;
+}
+
 export function styleIndexOf(pkg: OoxmlPackage): StyleIndex {
   const root = relatedPart(pkg, STYLES_REL, '/word/styles.xml');
   const byId = new Map<string, OoxmlElement>();
@@ -49,6 +75,12 @@ export function styleIndexOf(pkg: OoxmlPackage): StyleIndex {
   let defaultParagraphStyleId: string | null = null;
   let defaultCharacterStyleId: string | null = null;
   let defaultTableStyleId: string | null = null;
+  // Omitted halves resolve to the application's defaults, which the page paints. A fragment
+  // without a styles part carries no defaults at all, so it keeps the receiver's.
+  const omitted = root ? omittedDocDefaults(root) : { run: false, paragraph: false };
+  if (omitted.run) docDefaultsRPr = applicationContainer('rPr', APPLICATION_RUN_PROPERTIES);
+  if (omitted.paragraph)
+    docDefaultsPPr = applicationContainer('pPr', APPLICATION_PARAGRAPH_PROPERTIES);
   if (!root) {
     return {
       byId,
@@ -66,8 +98,8 @@ export function styleIndexOf(pkg: OoxmlPackage): StyleIndex {
   for (const child of root.children) {
     if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
     if (child.localName === 'docDefaults') {
-      docDefaultsRPr = wmlChild(wmlChild(child, 'rPrDefault'), 'rPr');
-      docDefaultsPPr = wmlChild(wmlChild(child, 'pPrDefault'), 'pPr');
+      if (!omitted.run) docDefaultsRPr = wmlChild(wmlChild(child, 'rPrDefault'), 'rPr');
+      if (!omitted.paragraph) docDefaultsPPr = wmlChild(wmlChild(child, 'pPrDefault'), 'pPr');
       continue;
     }
     if (child.localName !== 'style') continue;
