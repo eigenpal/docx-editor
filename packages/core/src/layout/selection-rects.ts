@@ -74,6 +74,8 @@ export function selectionMarkRects(
 interface ParagraphTerminal {
   end: number;
   start: number;
+  /** Lines that draw one field cut across them share a range; the last one is terminal. */
+  lineId: string;
 }
 
 const paragraphTerminalsCache = new WeakMap<
@@ -95,9 +97,10 @@ function paragraphTerminals(layout: SemanticLayout): ReadonlyMap<string, Paragra
           if (
             !previous ||
             segment.end > previous.end ||
-            (segment.end === previous.end && segment.start > previous.start)
+            (segment.end === previous.end && segment.start >= previous.start)
           ) {
-            terminals.set(segment.paragraphId, { end: segment.end, start: segment.start });
+            const { end, start } = segment;
+            terminals.set(segment.paragraphId, { end, start, lineId: line.id });
           }
         }
   paragraphTerminalsCache.set(layout, terminals);
@@ -154,8 +157,8 @@ function rangeRects(
             paragraphIndex !== undefined &&
             paragraphIndex >= fromIndex &&
             paragraphIndex < toIndex &&
-            terminal?.end === segment.end &&
-            terminal.start === segment.start &&
+            terminal?.lineId === line.id &&
+            terminal.end === segment.end &&
             segmentIndex === segments.length - 1;
           if ((!includeText || !overlap) && !markSelected) continue;
           const bands =

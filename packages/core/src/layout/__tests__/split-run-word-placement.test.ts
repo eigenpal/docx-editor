@@ -217,8 +217,9 @@ describe('a word that moves to a line where only its ink fits', () => {
 });
 
 describe('a word of pieces that cannot be chopped', () => {
-  const fields = (count: number) =>
-    '<w:fldSimple w:instr=" PAGE "><w:r><w:t>1</w:t></w:r></w:fldSimple>'.repeat(count);
+  // A body page number with no cached result is a placeholder that finalize rewrites per
+  // page, so it is never cut. A cached result is ordinary text and may be.
+  const fields = (count: number) => '<w:fldSimple w:instr=" PAGE "/>'.repeat(count);
   /** A square float anchored in the paragraph before the fields, 150 pt to 250 pt. */
   const earlierFloat = `${float(150, 100)}</w:p><w:p>`;
 
@@ -264,5 +265,18 @@ describe('a word of pieces that cannot be chopped', () => {
       const before = spans[index - 1]!.box;
       expect(round(spans[index]!.box.x)).toBe(round(before.x + before.width));
     }
+  });
+
+  test('cached field results wrap like the same text in runs beside a float', () => {
+    const lines = (content: string) => {
+      const p = layout({ prefix: earlierFloat, text: '' }, content).pages[0]!.fragments[1]!;
+      if (p.kind !== 'paragraph') throw new Error('Expected paragraph');
+      return p.lines.map((line) => [
+        round(line.spans[0]!.box.x),
+        line.spans.map((span) => span.text).join(''),
+      ]);
+    };
+    const cached = '<w:fldSimple w:instr=" PAGE "><w:r><w:t>1</w:t></w:r></w:fldSimple>';
+    expect(lines(cached.repeat(60))).toEqual(lines(run('1'.repeat(60))));
   });
 });
