@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import type { TableFragmentRecord } from '../semantic-records.ts';
+import { revisionAuthorFilter } from '../revision-projection.ts';
 import { widenAutofitColumns } from '../table-autofit-widths.ts';
 import { elevenPointDefaults } from './fixtures/eleven-point-defaults.ts';
 
@@ -62,7 +63,7 @@ describe('autofit layout', () => {
     `<w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr><w:p>${run('cd')}</w:p></w:tc>` +
     '</w:tr></w:tbl>';
   const lines = (body: string) => columns(body).lines;
-  const columns = (body: string) => {
+  const columns = (body: string, extra: Record<string, unknown> = {}) => {
     const read = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
       name: '/word/document.xml',
       contentType: 'app/xml',
@@ -72,6 +73,7 @@ describe('autofit layout', () => {
       measurer: createFixedMeasurer(6, 12),
       styleCascade: elevenPointDefaults(),
       geometry: { width: 300, height: 400, margin: { top: 0, bottom: 0, left: 0, right: 0 } },
+      ...extra,
     });
     const fragment = result.pages[0]!.fragments.find(
       (candidate): candidate is TableFragmentRecord => candidate.kind === 'table'
@@ -177,5 +179,47 @@ describe('autofit layout', () => {
       `<w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr><w:p>${run('ABCDEFGHIJ')}</w:p></w:tc>` +
       '</w:tr></w:tbl>';
     expect(columns(half).box.width).toBeCloseTo(150, 6);
+  });
+
+  test('an inline picture keeps its column from giving its width away', () => {
+    // A 55 pt picture in the first column, a 60 pt word in the second.
+    const picture =
+      '<w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">' +
+      '<wp:extent cx="698500" cy="127000"/><wp:docPr id="1" name="p"/></wp:inline></w:drawing></w:r>';
+    const body = table('', run('ABCDEFGHIJ')).replace(
+      `<w:p>${run('ab')}</w:p>`,
+      `<w:p>${picture}</w:p>`
+    );
+    expect(columns(body).widths[0]).toBeGreaterThanOrEqual(55);
+  });
+
+  test('text a hidden author deleted sets no minimum', () => {
+    const deleted =
+      '<w:del w:id="1" w:author="B" w:date="2026-01-01T00:00:00Z"><w:r><w:delText>ABCDEFGHIJ</w:delText></w:r></w:del>' +
+      run('ab');
+    const filter = { revisionAuthorFilter: revisionAuthorFilter(['B']) };
+    expect(columns(table('', deleted), filter).widths).toEqual([60, 30, 30]);
+  });
+
+  test('a table wider than the text column keeps its own width while widening', () => {
+    const wide =
+      '<w:tbl><w:tblPr><w:tblW w:w="7000" w:type="dxa"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/>' +
+      '<w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="1000"/><w:gridCol w:w="3000"/></w:tblGrid><w:tr>' +
+      `<w:tc><w:tcPr><w:tcW w:w="3000" w:type="dxa"/></w:tcPr><w:p>${run('ab')}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="1000" w:type="dxa"/></w:tcPr><w:p>${run('A'.repeat(10))}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="3000" w:type="dxa"/></w:tcPr><w:p>${run('cd')}</w:p></w:tc>` +
+      '</w:tr></w:tbl>';
+    expect(columns(wide).box.width).toBeCloseTo(350, 6);
+  });
+
+  test('a leading tab uses up the first-line indent', () => {
+    const tabbed = `<w:pPr><w:ind w:firstLine="720"/></w:pPr><w:r><w:tab/></w:r>${run('ABCDEFGHIJ')}`;
+    expect(columns(table('', tabbed)).widths[1]).toBe(60);
+  });
+
+  test('a run that holds only a dash ends the word before it', () => {
+    const dashed = `${run('ABCDEFG')}<w:r><w:rPr><w:b/></w:rPr><w:t>-</w:t></w:r>${run('HIJ')}`;
+    expect(columns(table('', dashed)).widths[1]).toBe(48);
   });
 });

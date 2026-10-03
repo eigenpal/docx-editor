@@ -6,7 +6,7 @@ import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
 import { BREAK_AFTER_DASH, wordBoundaries } from './cjk-line-break.ts';
 import { piecesOfParagraphForDisplay } from './field-projection-display.ts';
 import type { ResolvedListItem } from './list-resolve.ts';
-import type { RevisionDisplayMode } from './revision-projection.ts';
+import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import { displayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import type { TextMeasurer } from './semantic-records.ts';
@@ -29,6 +29,30 @@ export interface TableAutofitContext {
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
 }
 
+/** The view a structure was read in: the cascade, display mode, and author filter. */
+export interface AutofitView {
+  readonly styleCascade: StyleCascadeTable | undefined;
+  readonly displayMode: RevisionDisplayMode;
+  readonly authorFilter: RevisionAuthorFilter | undefined;
+}
+
+/**
+ * The last widths per measurer and base structure. A base structure is built for one view, so
+ * it stands for the view. Keyed by the measurer first, never holding it in a value, for the
+ * same reason as {@link paragraphMinimums}.
+ */
+const widthMemos = new WeakMap<
+  TextMeasurer,
+  WeakMap<
+    SemanticTableStructure,
+    {
+      readonly listItems: ReadonlyMap<string, ResolvedListItem> | undefined;
+      readonly contentWidthPt: number;
+      readonly widths: readonly number[];
+    }
+  >
+>();
+
 /** Below this a column is already as wide as its content needs. */
 const WIDTH_EPSILON_PT = 0.01;
 /** No column collapses below a hairline, whatever its content. */
@@ -39,6 +63,7 @@ interface MinimumInputs {
   readonly styleCascade: StyleCascadeTable | undefined;
   readonly tableCellStyle: SemanticTableCell['styleFormatting'] | undefined;
   readonly displayMode: RevisionDisplayMode;
+  readonly authorFilter: RevisionAuthorFilter | undefined;
   readonly listItem: ResolvedListItem | undefined;
 }
 
@@ -59,6 +84,7 @@ function sameInputs(a: MinimumKey, b: MinimumInputs): boolean {
     a.styleCascade === b.styleCascade &&
     a.tableCellStyle === b.tableCellStyle &&
     a.displayMode === b.displayMode &&
+    a.authorFilter === b.authorFilter &&
     a.listItem === b.listItem
   );
 }
@@ -98,7 +124,12 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
     displayMode,
     undefined,
     undefined,
-    styleCascade?.themeFonts
+    styleCascade?.themeFonts,
+    undefined,
+    undefined,
+    false,
+    undefined,
+    inputs.authorFilter
   );
   const { left, right, firstLine } = layoutInputs.indent;
   let widest = 0;
@@ -130,7 +161,9 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
       from = to;
       if (candidate.length === 0) continue;
       if (candidate === '\t') {
+        // A tab uses up the first-line indent, whatever follows it.
         close();
+        first = false;
         continue;
       }
       // Measured as line breaking measures it, so the advance comes from the same cache;
@@ -141,18 +174,62 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
       // A space or a dash ends the segment, including a dash that ends its run; a plain run
       // seam does not.
       const endsInDash =
-        to === piece.text.length && candidate.length > 1 && BREAK_AFTER_DASH.has(candidate.at(-1)!);
+        to === piece.text.length &&
+        BREAK_AFTER_DASH.has(candidate.at(-1)!) &&
+        segment > measure(candidate.at(-1)!) + WIDTH_EPSILON_PT;
       if (ink.length < candidate.length || to < piece.text.length || endsInDash) close();
     }
   }
   close();
+  widest = Math.max(widest, inlinePictureWidthPt(paragraph));
   const width = widest + Math.max(0, left) + Math.max(0, right);
-  const { styleCascade: cascade, tableCellStyle, listItem } = inputs;
+  const { styleCascade: cascade, tableCellStyle, listItem, authorFilter } = inputs;
   byParagraph.set(paragraph, {
-    inputs: { styleCascade: cascade, tableCellStyle, displayMode, listItem },
+    inputs: { styleCascade: cascade, tableCellStyle, displayMode, authorFilter, listItem },
     width,
   });
   return width;
+}
+
+const EMU_PER_PT = 12700;
+/** Bounds the subtree walk; a paragraph this large is not a picture row. */
+const MAX_PICTURE_SCAN_NODES = 10_000;
+
+function emuAttributePt(node: OoxmlElement, name: string): number {
+  const raw = node.attributes.find((attribute) => attribute.localName === name)?.value;
+  const emu = raw === undefined ? NaN : Number(raw);
+  return Number.isFinite(emu) && emu > 0 ? emu / EMU_PER_PT : 0;
+}
+
+/**
+ * The widest inline picture in a paragraph, with its side distances. A picture is one
+ * unbreakable box; anchored drawings float and set no minimum.
+ */
+function inlinePictureWidthPt(paragraph: OoxmlElement): number {
+  let widest = 0;
+  let visited = 0;
+  const pending: OoxmlElement[] = [paragraph];
+  while (pending.length > 0 && visited < MAX_PICTURE_SCAN_NODES) {
+    const node = pending.pop()!;
+    visited += 1;
+    if (node.localName === 'anchor') continue;
+    if (node.localName === 'inline') {
+      const extent = node.children.find(
+        (child) => 'localName' in child && child.localName === 'extent'
+      ) as OoxmlElement | undefined;
+      if (extent) {
+        const width =
+          emuAttributePt(extent, 'cx') +
+          emuAttributePt(node, 'distL') +
+          emuAttributePt(node, 'distR');
+        widest = Math.max(widest, width);
+      }
+      continue;
+    }
+    for (const child of node.children)
+      if ('localName' in child && 'children' in child) pending.push(child as OoxmlElement);
+  }
+  return widest;
 }
 
 /** A nested table needs at least the width its own grid states. */
@@ -170,9 +247,9 @@ function nestedTableMinimumPt(table: OoxmlElement): number {
 export function autofitColumnMinimumsPt(
   structure: SemanticTableStructure,
   context: TableAutofitContext,
-  styleCascade: StyleCascadeTable | undefined,
-  displayMode: RevisionDisplayMode
+  view: AutofitView
 ): number[] {
+  const { styleCascade, displayMode, authorFilter } = view;
   const columnCount = structure.columnWidthsPt.length;
   const minimums = new Array<number>(columnCount).fill(0);
   const collapsed = structure.cellSpacingPt === 0;
@@ -191,6 +268,7 @@ export function autofitColumnMinimumsPt(
           styleCascade,
           tableCellStyle: cell.styleFormatting,
           displayMode,
+          authorFilter,
           listItem: context.listItems?.get(block.id),
         });
         content = Math.max(content, width);
@@ -228,7 +306,7 @@ export function widenAutofitColumns(
   }
   if (deficit <= WIDTH_EPSILON_PT) return widths;
   const grown = widths.map((width, index) => Math.max(width, minimums[index]!));
-  const need = grown.reduce((sum, width) => sum + width, 0) - Math.min(targetPt, availablePt);
+  const need = grown.reduce((sum, width) => sum + width, 0) - targetPt;
   if (need <= WIDTH_EPSILON_PT) return grown;
   const slack = widths.map((width, index) =>
     minimums[index]! > width ? 0 : width - minimums[index]!
@@ -264,15 +342,19 @@ export function autofitColumnWidthsPt(
   structure: SemanticTableStructure,
   contentWidthPt: number,
   context: TableAutofitContext,
-  styleCascade: StyleCascadeTable | undefined,
-  displayMode: RevisionDisplayMode
+  view: AutofitView
 ): readonly number[] {
-  const minimums = autofitColumnMinimumsPt(structure, context, styleCascade, displayMode);
+  let byStructure = widthMemos.get(context.measurer);
+  if (!byStructure) widthMemos.set(context.measurer, (byStructure = new WeakMap()));
+  const memo = byStructure.get(structure);
+  if (memo && memo.listItems === context.listItems && memo.contentWidthPt === contentWidthPt)
+    return memo.widths;
+  const minimums = autofitColumnMinimumsPt(structure, context, view);
   // The table indent moves a leading-aligned table into the text column's room.
   const leading = structure.bidiVisual ? 'right' : 'left';
   const indent = structure.alignment === leading ? Math.max(0, structure.indentPt) : 0;
   const availablePt = Math.max(0, contentWidthPt - indent);
-  return widenAutofitColumns(
+  const widths = widenAutofitColumns(
     structure.columnWidthsPt,
     minimums,
     autofitTargetPt(
@@ -282,4 +364,10 @@ export function autofitColumnWidthsPt(
     ),
     availablePt
   );
+  byStructure.set(structure, {
+    listItems: context.listItems,
+    contentWidthPt,
+    widths,
+  });
+  return widths;
 }

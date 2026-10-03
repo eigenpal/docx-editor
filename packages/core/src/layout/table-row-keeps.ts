@@ -45,7 +45,6 @@ import { propertiesOf } from './paragraph-flow.ts';
 import { paragraphKeeps, type TableKeepOpening } from './pagination-keeps.ts';
 import { cascadeParagraphFormatting, type StyleCascadeTable } from './style-cascade.ts';
 import { findParagraphProperties } from './style-definition-reader.ts';
-import type { TextMeasurer } from './semantic-records.ts';
 import {
   initialCellCursors,
   measureRowHeight,
@@ -346,14 +345,12 @@ export interface TableKeepFlow {
   readonly displayMode: RevisionDisplayMode;
   readonly authorFilter: RevisionAuthorFilter | undefined;
   readonly compatibilityMode: number | undefined;
-  /** Widens autofit columns as placement does, so a kept table is priced at its laid-out size. */
-  readonly measurer?: TextMeasurer;
 }
 
 /** A body flow block: a table is priced, anything else is not. */
 type FlowBlock = { readonly kind: string; readonly table?: OoxmlElement } | undefined;
 
-const structureOf = (table: OoxmlElement, at: TableKeepFlow) =>
+const structureOf = (table: OoxmlElement, at: TableKeepFlow, deps?: TableFlowDeps) =>
   readTableStructure(
     table,
     at.width,
@@ -362,7 +359,8 @@ const structureOf = (table: OoxmlElement, at: TableKeepFlow) =>
     at.displayMode,
     at.authorFilter,
     at.compatibilityMode,
-    at.measurer ? { measurer: at.measurer } : undefined
+    // Priced at the widths placement lays it out at: the same autofit inputs.
+    deps ? { measurer: deps.measurer, listItems: deps.listItems } : undefined
   );
 
 /** Whether a body table's last row keeps with the body content after the table. */
@@ -432,7 +430,7 @@ function measureTableKeepOpening(
   pageHeight: number,
   deps: TableFlowDeps
 ): TableKeepOpening | null {
-  const structure = structureOf(table, at);
+  const structure = structureOf(table, at, deps);
   if (!structure || structure.float || structure.rows.length === 0) return null;
   if (rowBreaksPage(structure.rows[0]!, at.styleCascade)) return { breaksPage: true, height: 0 };
   const measure = (row: SemanticTableRow, rowDeps: TableFlowDeps): number =>
@@ -505,7 +503,6 @@ export function tableKeepFlow(
     readonly displayMode?: RevisionDisplayMode;
     readonly revisionAuthorFilter?: RevisionAuthorFilter;
     readonly compatibilityMode?: number;
-    readonly measurer?: TextMeasurer;
   },
   width: number,
   styleCascade: StyleCascadeTable | undefined
@@ -516,7 +513,6 @@ export function tableKeepFlow(
     displayMode: options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
     authorFilter: options.revisionAuthorFilter,
     compatibilityMode: options.compatibilityMode,
-    ...(options.measurer ? { measurer: options.measurer } : {}),
   };
   return {
     endsKept: (block) => tableEndsKept(block, flow),

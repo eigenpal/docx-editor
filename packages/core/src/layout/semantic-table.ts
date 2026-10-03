@@ -501,7 +501,11 @@ export function readTableStructure(
   }
   if (!autofit || !base || base.layoutFixed) return base;
   // Most tables already hold their content: they come back as the shared base structure.
-  const widths = autofitColumnWidthsPt(base, contentWidthPt, autofit, styleCascade, displayMode);
+  const widths = autofitColumnWidthsPt(base, contentWidthPt, autofit, {
+    styleCascade,
+    displayMode,
+    authorFilter,
+  });
   if (widths === base.columnWidthsPt) return base;
   const widened = widenedStructureMemos.get(base);
   if (widened && widened.widths.every((width, index) => width === widths[index]))
