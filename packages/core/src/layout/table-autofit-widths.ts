@@ -162,6 +162,8 @@ export interface AutofitView {
   readonly styleCascade: StyleCascadeTable | undefined;
   readonly displayMode: RevisionDisplayMode;
   readonly authorFilter: RevisionAuthorFilter | undefined;
+  /** Reads a nested table in the same view, one level deeper; null past the nesting limit. */
+  readonly readNested?: (table: OoxmlElement) => SemanticTableStructure | null;
 }
 
 /** Below this a column is already as wide as its content needs. */
@@ -298,6 +300,9 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
     }
     segment = 0;
   };
+  // Spaces that open a line are placed before its first word, so they count toward it.
+  let lineStart = true;
+  let lead = 0;
   let layoutEquation: ReturnType<typeof createEquationLayouter> | undefined;
   // A dash that ends a run breaks only if the next run does not open with another dash.
   let dashPending = false;
@@ -315,6 +320,8 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
       // A break ends the first line, and with it the first-line indent.
       close();
       first = false;
+      lineStart = true;
+      lead = 0;
       continue;
     }
     // A picture or an equation is one box with a break opportunity on each side.
@@ -350,6 +357,15 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
       // Measured as line breaking measures it, so the advance comes from the same cache;
       // the trailing spaces it hangs are priced on their own.
       const ink = withoutTrailingSpaces(candidate);
+      if (lineStart && ink.length === 0) {
+        lead += measure(candidate);
+        continue;
+      }
+      if (lineStart && ink.length > 0) {
+        segment += lead;
+        lineStart = false;
+        lead = 0;
+      }
       if (ink.length === candidate.length) segment += measure(candidate);
       else if (ink.length > 0) segment += measure(candidate) - measure(candidate.slice(ink.length));
       // A space or a dash ends the segment, including a dash that ends its run; a plain run
@@ -365,9 +381,21 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
 }
 
 /** A nested table needs at least the width its own grid states. */
-function nestedTableMinimumPt(table: OoxmlElement): number {
+function nestedTableMinimumPt(
+  table: OoxmlElement,
+  context: TableAutofitContext,
+  view: AutofitView
+): number {
   let width = 0;
   for (const column of gridColumnWidthsPt(gridColumnElements(table))) width += column ?? 0;
+  // A nested autofit table needs its own columns' minimums too, or its words split one
+  // level down while the outer table has room.
+  const nested = view.readNested?.(table);
+  if (nested && !nested.layoutFixed) {
+    let minimums = 0;
+    for (const minimum of autofitColumnMinimumsPt(nested, context, view)) minimums += minimum;
+    width = Math.max(width, minimums + Math.max(0, nested.indentPt));
+  }
   return width;
 }
 
@@ -393,7 +421,8 @@ export function autofitColumnMinimumsPt(
       if (cell.gridColumn < 0 || cell.gridColumn >= columnCount) continue;
       let content = -1;
       for (const block of cell.blocks) {
-        if (block.kind === 'table') content = Math.max(content, nestedTableMinimumPt(block));
+        if (block.kind === 'table')
+          content = Math.max(content, nestedTableMinimumPt(block, context, view));
         if (block.kind !== 'paragraph') continue;
         const width = paragraphMinimumWidthPt(block, {
           context,
@@ -448,7 +477,8 @@ export function widenAutofitColumns(
   if (need <= totalSlack) {
     return grown.map((width, index) => width - (need * slack[index]!) / totalSlack);
   }
-  const floor = minimums.map((minimum) => Math.max(minimum, MIN_COLUMN_PT));
+  // A zero minimum is a column nothing occupies (a w:gridBefore band): it stays zero.
+  const floor = minimums.map((minimum) => (minimum > 0 ? Math.max(minimum, MIN_COLUMN_PT) : 0));
   const needed = floor.reduce((sum, value) => sum + value, 0);
   // Never narrower than the table already was: an indent can leave the text column no room.
   const room = Math.max(
@@ -476,12 +506,28 @@ export function autofitTargetPt(
  * A structure's physical column widths after autofit widening, or the structure's own array
  * by identity when every column already holds its content.
  */
+/**
+ * Widths per context and structure. A context belongs to one pass of one flow, during which
+ * no token can change, so the memo is exact; it dies with the pass.
+ */
+const passWidths = new WeakMap<
+  TableAutofitContext,
+  WeakMap<
+    SemanticTableStructure,
+    { readonly contentWidthPt: number; readonly widths: readonly number[] }
+  >
+>();
+
 export function autofitColumnWidthsPt(
   structure: SemanticTableStructure,
   contentWidthPt: number,
   context: TableAutofitContext,
   view: AutofitView
 ): readonly number[] {
+  let byStructure = passWidths.get(context);
+  if (!byStructure) passWidths.set(context, (byStructure = new WeakMap()));
+  const known = byStructure.get(structure);
+  if (known && known.contentWidthPt === contentWidthPt) return known.widths;
   const minimums = autofitColumnMinimumsPt(structure, context, view);
   // The table indent moves a leading-aligned table into the text column's room.
   const leading = structure.bidiVisual ? 'right' : 'left';
@@ -497,5 +543,6 @@ export function autofitColumnWidthsPt(
     ),
     availablePt
   );
+  byStructure.set(structure, { contentWidthPt, widths });
   return widths;
 }

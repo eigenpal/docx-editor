@@ -361,4 +361,40 @@ describe('autofit layout', () => {
     const content = `${run('ABCDE')}${anchored}${run('FGHIJ')}`;
     expect(columns(table('', content), { drawings: true }).widths).toEqual([38.18, 60, 21.82]);
   });
+
+  test('a nested autofit table passes its own word minimum to the outer column', () => {
+    const nested =
+      '<w:tbl><w:tblPr><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/>' +
+      '</w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="600"/></w:tblGrid>' +
+      `<w:tr><w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr><w:p>${run('ABCDEFGHIJ')}</w:p></w:tc></w:tr></w:tbl>`;
+    const outer =
+      '<w:tbl><w:tblPr><w:tblW w:w="2400" w:type="dxa"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/>' +
+      '<w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="600"/><w:gridCol w:w="1800"/></w:tblGrid><w:tr>' +
+      `<w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr>${nested}<w:p/></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="1800" w:type="dxa"/></w:tcPr><w:p>${run('ab')}</w:p></w:tc>` +
+      '</w:tr></w:tbl>';
+    expect(columns(outer).widths[0]).toBe(60);
+  });
+
+  test('spaces that open a line count toward its first word', () => {
+    const lead = columns(table('', run('  ABCDEFGHIJ')));
+    expect(lead.widths[1]).toBe(72);
+    expect(lead.lines[1]).toBe(1);
+  });
+
+  test('an empty grid band gains no width when the table scales down', () => {
+    const banded =
+      '<w:tbl><w:tblPr><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/>' +
+      '</w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="0"/><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid>' +
+      '<w:tr><w:trPr><w:gridBefore w:val="1"/></w:trPr>' +
+      `<w:tc><w:tcPr><w:tcW w:w="3000" w:type="dxa"/></w:tcPr><w:p>${run('A'.repeat(30))}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="3000" w:type="dxa"/></w:tcPr><w:p>${run('B'.repeat(30))}</w:p></w:tc>` +
+      '</w:tr></w:tbl>';
+    // The band keeps the hairline the grid reader gives it; it gains nothing from scaling.
+    const { widths, box } = columns(banded);
+    expect(widths[0]).toBe(widths[1]!);
+    expect(box.width).toBeCloseTo(300, 6);
+    expect(300 - widths[0]! - widths[1]!).toBeLessThanOrEqual(1);
+  });
 });

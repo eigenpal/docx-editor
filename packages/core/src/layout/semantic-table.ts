@@ -505,6 +505,16 @@ export function readTableStructure(
     styleCascade,
     displayMode,
     authorFilter,
+    readNested: (nested) =>
+      readTableStructure(
+        nested,
+        contentWidthPt,
+        depth + 1,
+        styleCascade,
+        displayMode,
+        authorFilter,
+        compatibilityMode
+      ),
   });
   if (widths === base.columnWidthsPt) return base;
   const widened = widenedStructureMemos.get(base);
