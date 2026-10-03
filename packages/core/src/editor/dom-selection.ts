@@ -99,15 +99,26 @@ function drawingSpacerIdentity(node: Node | undefined): SemanticPosition | null 
   return validatedPosition(element.dataset.drawingParagraphId, element.dataset.drawingStart);
 }
 
-/** The painted advance spacers of a paragraph's inline pictures, from one query. */
-function drawingSpacersOf(searchRoot: Element, paragraphId: string): Element[] {
+/**
+ * A paragraph's painted spans and its inline pictures' advance spacers, from ONE walk of the
+ * search root: selection writes run on every keystroke, and two queries walked it twice.
+ */
+function paragraphSpansAndSpacers(
+  searchRoot: Element,
+  paragraphId: string
+): { readonly spans: readonly Element[]; readonly spacers: readonly Element[] } {
   // The id is narrowed the same way `paragraphElements` does, and only when it is CSS-safe.
   const selector = CSS_STRING_UNSAFE.test(paragraphId)
-    ? '.docx-inline-drawing-advance'
-    : `.docx-inline-drawing-advance[data-drawing-paragraph-id="${paragraphId}"]`;
-  return [...searchRoot.querySelectorAll(selector)].filter(
-    (spacer) => drawingSpacerIdentity(spacer)?.paragraphId === paragraphId
-  );
+    ? '[data-paragraph-id][data-start], .docx-inline-drawing-advance'
+    : `[data-paragraph-id="${paragraphId}"][data-start], ` +
+      `.docx-inline-drawing-advance[data-drawing-paragraph-id="${paragraphId}"]`;
+  const spans: Element[] = [];
+  const spacers: Element[] = [];
+  for (const element of searchRoot.querySelectorAll(selector)) {
+    if (!element.classList.contains('docx-inline-drawing-advance')) spans.push(element);
+    else if (drawingSpacerIdentity(element)?.paragraphId === paragraphId) spacers.push(element);
+  }
+  return { spans, spacers };
 }
 
 export function paragraphElements(
@@ -438,7 +449,7 @@ function domPointFromPositionIn(
   searchRoot: Element,
   position: SemanticPosition
 ): { node: Node; offset: number } | null {
-  const spans = paragraphElements(searchRoot, position.paragraphId, '[data-start]');
+  const { spans, spacers } = paragraphSpansAndSpacers(searchRoot, position.paragraphId);
   let fallback: { node: Node; offset: number } | null = null;
   let painted = false;
   for (const span of spans) {
@@ -478,7 +489,6 @@ function domPointFromPositionIn(
       fallback = point;
     }
   }
-  const spacers = drawingSpacersOf(searchRoot, position.paragraphId);
   const spacerAt = (start: number) =>
     spacers.find((spacer) => drawingSpacerIdentity(spacer)?.offset === start) ?? null;
   const opening = spacerAt(position.offset);

@@ -1,3 +1,4 @@
+import { beyondLine, gapOffset } from './line-edge-hit.ts';
 import { drawingAtOffset, pictureEdgeX, pictureIsRtl } from './inline-picture-caret.ts';
 import { bidiPrefixWidth } from './shaped-caret-advances.ts';
 import { nearestBidiSpan, paragraphIsRtl } from './rtl-paragraph.ts';
@@ -670,8 +671,8 @@ function offsetOnLine(
       rightmost.advanceEnd,
       x,
       context,
-      // Pictures with no bidi level were laid out left to right whatever the paragraph says.
-      paragraphRtl && line.drawings!.some((drawing) => drawing.bidiLevel !== undefined)
+      paragraphRtl,
+      { left: leftmost, right: rightmost }
     );
     return beyond ?? gapOffset(line, spans, x, context);
   }
@@ -682,23 +683,24 @@ function offsetOnLine(
   }
 
   const bidiSpan = nearestBidiSpan(spans, x);
-  // A picture on a shaped line has its own side to give before the nearest text answers.
-  // Beyond a picture at either end of the line, the line's own start or end answers.
+  // A picture on a shaped line has its own side to give before the nearest text answers, and
+  // so does a point beyond either end of the line; see `beyondLine`.
   if (bidiSpan && line.drawings?.length) {
     for (const drawing of line.drawings) {
       if (x >= drawing.advanceStart && x < drawing.advanceEnd) return pictureHit(drawing, x, y);
     }
     const edges = lineContentEdges(spans, line.drawings)!;
     const pictureAt = (edge: number) =>
-      line.drawings!.some(
+      line.drawings!.find(
         (drawing) =>
           Math.abs(drawing.advanceStart - edge) < 0.001 ||
           Math.abs(drawing.advanceEnd - edge) < 0.001
       );
-    if ((x < edges.left && pictureAt(edges.left)) || (x >= edges.right && pictureAt(edges.right))) {
-      const beyond = beyondLine(line, edges.left, edges.right, x, context, paragraphRtl);
-      if (beyond) return beyond;
-    }
+    const beyond = beyondLine(line, edges.left, edges.right, x, context, paragraphRtl, {
+      left: pictureAt(edges.left),
+      right: pictureAt(edges.right),
+    });
+    if (beyond) return beyond;
   }
   if (bidiSpan) {
     const candidate = offsetWithinSpan(
@@ -736,106 +738,6 @@ function offsetOnLine(
     if (x >= drawing.advanceStart && x < drawing.advanceEnd) return pictureHit(drawing, x, y);
   }
   return gapOffset(line, spans, x, context);
-}
-
-/**
- * A point beyond either end of a line's content means the line's own start or end, by the
- * paragraph's direction: past its logical end the end, before its logical start the start.
- * Null for a point between the ends.
- */
-function beyondLine(
-  line: LineRecord,
-  left: number,
-  right: number,
-  x: number,
-  context: HitContext,
-  rtl: boolean
-): LineOffset | null {
-  if (x > left && x < right) return null;
-  const atEnd = rtl ? x <= left : x >= right;
-  // A join line ends in its last paragraph and starts in its first, each counting its own.
-  const segments = lineSegments(line);
-  const segment = atEnd ? segments.at(-1) : segments[0];
-  const owned = lineForSegment(line, segment);
-  const offset = atEnd ? lineEndOffset(context.layout, owned) : owned.range.start;
-  return {
-    offset,
-    x: caretBoxOnLine(line, offset, context.measurer, segment).x,
-    withinSpan: false,
-  };
-}
-
-/**
- * A point in a gap between two pieces of a line's content.
- *
- * Between two text spans the gap is slack a justified line spread, so the nearer edge answers.
- * Beside a picture it is room a float's wrap jump or a margin left, and the point means the
- * boundary between the two pieces: just after the content on its left. The caret for that
- * offset draws where the content that starts there draws it, past any jump.
- */
-function gapOffset(
-  line: LineRecord,
-  spans: readonly StyleSpanRecord[],
-  x: number,
-  context: HitContext
-): LineOffset {
-  const pieces: GapPiece[] = spans.map((span) => ({
-    from: span.box.x,
-    to: span.box.x + span.box.width,
-    start: span.range.start,
-    end: span.range.end,
-    paragraphId: span.range.paragraphId,
-    text: true,
-    rtl: span.style.shaping?.direction === 'rtl',
-  }));
-  for (const picture of line.drawings ?? []) {
-    pieces.push({
-      from: picture.advanceStart,
-      to: picture.advanceEnd,
-      start: picture.start,
-      end: picture.start + 1,
-      paragraphId: picture.paragraphId,
-      text: false,
-      rtl: pictureIsRtl(picture),
-    });
-  }
-  let before: GapPiece | undefined;
-  let after: GapPiece | undefined;
-  for (const piece of pieces) {
-    if (piece.to <= x && (!before || piece.to > before.to)) before = piece;
-    if (piece.from > x && (!after || piece.from < after.from)) after = piece;
-  }
-  if (before?.text && after?.text) {
-    return x - before.to <= after.from - x
-      ? { offset: before.end, x: before.to, withinSpan: false }
-      : { offset: after.start, x: after.from, withinSpan: false };
-  }
-  // The boundary a gap stands for is the offset its two neighbours share. With one neighbour,
-  // or none shared, it is that piece's far side in reading order: the end of a left-to-right
-  // piece on the left of the gap, or the start of a right-to-left one.
-  const shared =
-    before && after && before.paragraphId === after.paragraphId
-      ? [before.start, before.end].find((offset) => offset === after.start || offset === after.end)
-      : undefined;
-  const side = before
-    ? { offset: shared ?? (before.rtl ? before.start : before.end), piece: before }
-    : after && { offset: after.rtl ? after.end : after.start, piece: after };
-  if (!side) return { offset: line.range.start, x: line.contentX, withinSpan: false };
-  const segment = lineSegments(line).find((entry) => entry.paragraphId === side.piece.paragraphId);
-  const caretX = caretBoxOnLine(line, side.offset, context.measurer, segment).x;
-  return { offset: side.offset, x: caretX, withinSpan: false };
-}
-
-/** A span or an inline picture, by its advance and its model range, for {@link gapOffset}. */
-interface GapPiece {
-  readonly from: number;
-  readonly to: number;
-  readonly start: number;
-  readonly end: number;
-  readonly paragraphId: string;
-  readonly text: boolean;
-  /** Reads right to left, so its logical start is its right edge. */
-  readonly rtl: boolean;
 }
 
 function endOfLine(line: LineRecord, rightEdge: number, context: HitContext): LineOffset {

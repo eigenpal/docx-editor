@@ -69,10 +69,12 @@ export function bidiPieces(
   sourceBoundaries?: ReadonlySet<number>,
   pageBreaksIgnored = false
 ): readonly FieldAwarePiece[] {
-  // An inline picture is its U+FFFC in the text (UAX #9 class ON), and it gets its own piece
-  // back afterwards with the level it resolved to. Its run's own `w:rtl` does not place it: a
-  // picture joins the direction of the runs on both sides of it when they agree, and takes
-  // the paragraph's direction otherwise, so one in a right-to-left paragraph reads with it.
+  // An inline picture is its U+FFFC in the text, and it gets its own piece back afterwards with
+  // the level it resolved to. Its run's own `w:rtl` does not place it; the nearest text with
+  // letters or digits on each side does (spaces and other neutral runs are passed over). Between
+  // two runs of one direction it takes that direction, and between two directions the
+  // paragraph's. With no such text after it, it reads with the text before it; with none before
+  // it, it reads in the paragraph's direction.
   const pictures = new Map<number, FieldAwarePiece>();
   const isPicture = (piece: FieldAwarePiece | undefined) =>
     piece?.inlineDrawing !== undefined && piece.text === PICTURE_CHAR;
@@ -89,11 +91,20 @@ export function bidiPieces(
     const { projected: _projected, inlineDrawing: _picture, ...plain } = piece;
     const side = (step: number) => {
       let at = index + step;
-      while (isPicture(pieces[at])) at += step;
+      while (pieces[at] && (isPicture(pieces[at]) || !STRONG_TEXT.test(pieces[at]!.text)))
+        at += step;
       return pieces[at] ? runIsRtl(pieces[at]!.props) : undefined;
     };
     const before = side(-1);
-    const direction = before !== undefined && before === side(1) ? before : rtl;
+    const after = side(1);
+    const direction =
+      after === undefined
+        ? (before ?? rtl)
+        : before === undefined
+          ? rtl
+          : before === after
+            ? before
+            : rtl;
     const props = piece.props.filter((prop) => prop.localName !== 'rtl');
     return { ...plain, props: direction ? [...props, { localName: 'rtl' }] : props };
   });
@@ -148,6 +159,9 @@ function withPictures(
 }
 
 const isPageBreak = (piece: FieldAwarePiece | undefined) => piece?.text === PAGE_BREAK_CHAR;
+
+/** Text that decides a neighbouring picture's direction: any letter or digit. */
+const STRONG_TEXT = /[\p{L}\p{N}]/u;
 
 /**
  * Resolve the pieces as though every page break were absent, then put the breaks back.

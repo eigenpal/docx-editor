@@ -148,9 +148,10 @@ test('a point past the logical end of a line beyond its last picture is the line
   expect(hit?.position.offset).toBe(line.range.end);
 });
 
-test('in a right-to-left paragraph, left of a line of left-to-right pictures is its end', () => {
+test('in a right-to-left paragraph, either side of a line of left-to-right pictures is its end', () => {
   // Five pictures between two long left-to-right words: they resolve left to right, and the
-  // second line holds only pictures. Its logical end is still on the paragraph's left.
+  // second line holds only pictures. Its left is the paragraph's end side, and its right is
+  // just after the last picture, which is the line's last content.
   const word = (letter: string) => latin(letter.repeat(70));
   const { layout, line } = lay(word('x') + picture.repeat(5) + word('y'));
   expect(line.spans).toHaveLength(0);
@@ -159,7 +160,39 @@ test('in a right-to-left paragraph, left of a line of left-to-right pictures is 
   const right = Math.max(...line.drawings!.map((drawing) => drawing.advanceEnd));
   const y = line.box.y + 1;
   expect(hitTestPage(layout, 0, { x: left - 10, y })?.position.offset).toBe(line.range.end);
-  expect(hitTestPage(layout, 0, { x: right + 10, y })?.position.offset).toBe(line.range.start);
+  expect(hitTestPage(layout, 0, { x: right + 10, y })?.position.offset).toBe(line.range.end);
+});
+
+describe('a picture at the end of a paragraph reads with the text before it', () => {
+  test('after left-to-right text in a right-to-left paragraph, it stands to the right', () => {
+    const { line, drawing } = lay(latin('abc def') + picture);
+    expect((drawing.bidiLevel ?? 0) % 2).toBe(0);
+    expect(drawing.advanceEnd).toBeCloseTo(CONTENT_RIGHT, 5);
+    expect(spanAt(line, 4).box.x + spanAt(line, 4).box.width).toBeCloseTo(drawing.advanceStart, 5);
+  });
+
+  test('after Hebrew text in a left-to-right paragraph, it stands to the left', () => {
+    const { line, drawing } = lay(hebrew('שלום עולם') + picture, '');
+    expect((drawing.bidiLevel ?? 0) % 2).toBe(1);
+    expect(drawing.advanceStart).toBeCloseTo(line.contentX, 5);
+  });
+
+  test('a space after it does not decide its direction', () => {
+    const { line, drawing } = lay(latin('abc def') + picture + hebrew(' '));
+    expect((drawing.bidiLevel ?? 0) % 2).toBe(0);
+    expect(spanAt(line, 4).box.x + spanAt(line, 4).box.width).toBeCloseTo(drawing.advanceStart, 5);
+  });
+
+  test('right of it is just after it, and left of the line is the line end', () => {
+    // The right of a right-to-left paragraph is its start side, so the picture there answers.
+    // The trailing space after the picture keeps the line's end past it.
+    const { layout, line, drawing } = lay(latin('abc def') + picture + hebrew(' '));
+    const y = line.box.y + 1;
+    const right = hitTestPage(layout, 0, { x: drawing.advanceEnd + 10, y })!;
+    expect(right.position.offset).toBe(drawing.start + 1);
+    const left = hitTestPage(layout, 0, { x: line.contentX - 10, y })!;
+    expect(left.position.offset).toBe(line.range.end);
+  });
 });
 
 test('a click beside a picture draws its caret where the caret for that offset is drawn', () => {
