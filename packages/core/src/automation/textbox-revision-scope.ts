@@ -5,18 +5,34 @@
 // A text box is its own story, the way `Body.text` and `search` already treat it, so its changes
 // are listed and decided through `Shape.body` and are left out of the owner's.
 //
-// The VML fallback copy of a box (`mc:Fallback`) is a shadow of the DrawingML story: export
-// rewrites it from that story (`textbox-fallback-export.ts`), so its sites belong to no story.
+// Only a story `Shape.body` can reach is indexed: a floating DrawingML shape on the branch layout
+// selects (`storyOfDrawing`, the rule the shape listing uses). Its VML fallback copy is a shadow
+// of that story, rewritten from it on export (`textbox-fallback-export.ts`), so the copy's sites
+// map to the same story. A legacy VML-only box, an inline box, or a fallback branch that layout
+// paints is no reachable story, so its changes stay with the owner.
 
-import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
-import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
+import {
+  isMcAlternateContent,
+  namespaceScopeForNode,
+  resolveRunLevelMcAtom,
+} from '../store/package/drawing-projection.ts';
+import { emptyNamespaceScope } from '../store/package/drawing-projection-walk.ts';
+import { MC_NAMESPACE_URI, WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
+import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
+import { storyOfDrawing } from './shapes.ts';
 
-/** Node ids inside a text box story, each mapped to the outermost `w:txbxContent` holding it. */
-export type TextboxSiteIndex = ReadonlyMap<string, string>;
+/** Where the reachable text box stories of a part are. */
+export interface TextboxSiteIndex {
+  /** Node ids inside a story or its VML copy, each mapped to the story's root id. */
+  readonly story: ReadonlyMap<string, string>;
+  /** The node ids of that map that sit in a VML copy. */
+  readonly copy: ReadonlySet<string>;
+}
 
 const MAX_DEPTH = 256;
+const MAX_NODES = 1 << 22;
 const cache = new WeakMap<OoxmlNode, TextboxSiteIndex>();
-const EMPTY: TextboxSiteIndex = new Map();
+const EMPTY: TextboxSiteIndex = { story: new Map(), copy: new Set() };
 
 function isTextboxContent(node: OoxmlNode): boolean {
   return (
@@ -26,22 +42,91 @@ function isTextboxContent(node: OoxmlNode): boolean {
   );
 }
 
-/** Every node id under a `w:txbxContent` in the part, DrawingML and VML copies alike. */
+/** The single `w:txbxContent` under an `mc:Fallback` branch, or null. */
+function fallbackCopyOf(alternate: OoxmlElement): OoxmlElement | null {
+  const fallback = alternate.children.find(
+    (child) =>
+      child.kind !== 'textValue' &&
+      child.namespaceUri === MC_NAMESPACE_URI &&
+      child.localName === 'Fallback'
+  );
+  if (!fallback || fallback.kind === 'textValue') return null;
+  let found: OoxmlElement | null = null;
+  const stack: { node: OoxmlNode; depth: number }[] = [{ node: fallback, depth: 0 }];
+  while (stack.length > 0) {
+    const { node, depth } = stack.pop()!;
+    if (node.kind === 'textValue' || depth > MAX_DEPTH) continue;
+    if (isTextboxContent(node)) {
+      if (found) return null;
+      found = node as OoxmlElement;
+      continue;
+    }
+    for (const child of node.children) stack.push({ node: child, depth: depth + 1 });
+  }
+  return found;
+}
+
+/** Map every node of a subtree to `rootId`. False when the walk runs past its bounds. */
+function indexSubtree(
+  subtree: OoxmlNode,
+  rootId: string,
+  index: Map<string, string>,
+  budget: { left: number },
+  copy?: Set<string>
+): boolean {
+  const stack: { node: OoxmlNode; depth: number }[] = [{ node: subtree, depth: 0 }];
+  while (stack.length > 0) {
+    const { node, depth } = stack.pop()!;
+    if (--budget.left < 0 || depth > MAX_DEPTH) return false;
+    if (node.kind === 'textValue') continue;
+    index.set(node.id, rootId);
+    copy?.add(node.id);
+    for (const child of node.children) stack.push({ node: child, depth: depth + 1 });
+  }
+  return true;
+}
+
+/**
+ * Every node id inside a text box story `Shape.body` reaches, mapped to the story's root id.
+ * A box inside a box belongs to the outer story. A part past the walk bounds has no index, so
+ * its revisions are read and decided part-wide as they were before text box stories.
+ */
 export function textboxSiteIndex(part: OoxmlPart): TextboxSiteIndex {
   const cached = cache.get(part.root);
   if (cached) return cached;
   const index = new Map<string, string>();
-  const stack: { node: OoxmlNode; root: string | null; depth: number }[] = [
-    { node: part.root, root: null, depth: 0 },
+  const copies = new Set<string>();
+  const budget = { left: MAX_NODES };
+  let complete = true;
+  const stack: { node: OoxmlNode; scope: ReadonlyMap<string, string>; depth: number }[] = [
+    { node: part.root, scope: emptyNamespaceScope(), depth: 0 },
   ];
-  while (stack.length > 0) {
-    const { node, root, depth } = stack.pop()!;
-    if (node.kind === 'textValue' || depth > MAX_DEPTH) continue;
-    const owner = root ?? (isTextboxContent(node) ? node.id : null);
-    if (owner !== null) index.set(node.id, owner);
-    for (const child of node.children) stack.push({ node: child, root: owner, depth: depth + 1 });
+  while (stack.length > 0 && complete) {
+    const { node, scope: inherited, depth } = stack.pop()!;
+    if (node.kind === 'textValue') continue;
+    if (--budget.left < 0 || depth > MAX_DEPTH) {
+      complete = false;
+      break;
+    }
+    const scope = namespaceScopeForNode(inherited, node);
+    const alternate = isMcAlternateContent(node) ? node : null;
+    const drawing =
+      node.kind === 'drawing' ||
+      (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'drawing')
+        ? node
+        : alternate
+          ? resolveRunLevelMcAtom(alternate, scope).drawing
+          : null;
+    const root = drawing ? storyOfDrawing(drawing) : null;
+    if (root) {
+      complete = indexSubtree(root, root.id, index, budget);
+      const copy = alternate ? fallbackCopyOf(alternate) : null;
+      if (complete && copy) complete = indexSubtree(copy, root.id, index, budget, copies);
+      continue;
+    }
+    for (const child of node.children) stack.push({ node: child, scope, depth: depth + 1 });
   }
-  const answer = index.size === 0 ? EMPTY : index;
+  const answer = !complete || index.size === 0 ? EMPTY : { story: index, copy: copies };
   cache.set(part.root, answer);
   return answer;
 }
@@ -50,7 +135,8 @@ export function textboxSiteIndex(part: OoxmlPart): TextboxSiteIndex {
  * Whether a revision decision belongs to a story, by where its sites are.
  *
  * `textboxRootId` names the story's own `w:txbxContent`, or is null for the part's owning story.
- * A decision with no sites is answered by `fallback`, the story's range-based membership.
+ * A decision with no sites is answered by `fallback`, the story's range-based membership. A
+ * decision only the VML copy still holds is in no story: export rewrites that copy.
  */
 export function sitesInStory(
   index: TextboxSiteIndex,
@@ -59,6 +145,9 @@ export function sitesInStory(
   fallback: () => boolean
 ): boolean {
   if (siteIds.length === 0) return textboxRootId === null && fallback();
-  if (textboxRootId === null) return siteIds.every((id) => !index.has(id)) && fallback();
-  return siteIds.every((id) => index.get(id) === textboxRootId);
+  if (textboxRootId === null) return siteIds.every((id) => !index.story.has(id)) && fallback();
+  return (
+    siteIds.every((id) => index.story.get(id) === textboxRootId) &&
+    siteIds.some((id) => !index.copy.has(id))
+  );
 }

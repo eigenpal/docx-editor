@@ -116,6 +116,12 @@ function shapeOf(drawing: OoxmlElement): ShapeOf | 'malformed' | null {
   return { read: { id: Number(rawId), name, type }, root };
 }
 
+/** The text story a floating shape's drawing holds, or null when it holds none or is inline. */
+export function storyOfDrawing(drawing: OoxmlElement): OoxmlElement | null {
+  const found = shapeOf(drawing);
+  return found && found !== 'malformed' ? found.root : null;
+}
+
 /**
  * The floating shapes a story's paragraphs anchor, in reading order.
  *

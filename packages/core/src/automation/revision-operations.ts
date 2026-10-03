@@ -18,6 +18,9 @@ import { storyOfHandle } from './spans.ts';
 import { revisionItemsInStory } from './review.ts';
 import { textboxSiteIndex } from './textbox-revision-scope.ts';
 
+/** The store's bound on one decision's explicit site list (`tree-op-validate.ts`). */
+const MAX_SITES_PER_OP = 50_000;
+
 type CollectionDecision = Extract<
   AutomationOperation,
   { readonly op: 'acceptAllRevisions' | 'rejectAllRevisions' }
@@ -84,17 +87,30 @@ export function revisionCollectionOps(
     collectRevisionSites({ ...reads.part, root: reads.root }).length === 0
   )
     return [];
-  const accept = operation.op === 'acceptAllRevisions';
+  const op = operation.op;
   const index = textboxSiteIndex(reads.part);
-  let scope: { readonly scopeRootId?: string; readonly siteNodeIds?: readonly string[] } = {};
-  if (sharesItsPart(reads.story)) scope = { scopeRootId: reads.root.id };
-  else if (index.size > 0) {
-    const sites = collectRevisionSites(reads.part).map((site) => site.node.id);
-    const own = sites.filter((id) => !index.has(id));
-    if (own.length === 0) return [];
-    if (own.length < sites.length) scope = { siteNodeIds: own };
+  const sites = () => collectRevisionSites(reads.part).map((site) => site.node.id);
+  // The store takes a bounded site list per op; one transaction still makes it one decision.
+  const chunked = (ids: readonly string[]): TreeDocOp[] => {
+    const ops: TreeDocOp[] = [];
+    for (let start = 0; start < ids.length; start += MAX_SITES_PER_OP) {
+      ops.push({ op, siteNodeIds: ids.slice(start, start + MAX_SITES_PER_OP) });
+    }
+    return ops;
+  };
+  if (reads.story.kind === 'textbox') {
+    // The VML copy carries the same changes; deciding them together keeps the copies alike.
+    const root = reads.root.id;
+    const copy = index.copy.size
+      ? sites().filter((id) => index.copy.has(id) && index.story.get(id) === root)
+      : [];
+    return [{ op, scopeRootId: root }, ...chunked(copy)];
   }
-  return [accept ? { op: 'acceptAllRevisions', ...scope } : { op: 'rejectAllRevisions', ...scope }];
+  if (sharesItsPart(reads.story)) return [{ op, scopeRootId: reads.root.id }];
+  if (index.story.size === 0) return [{ op }];
+  const all = sites();
+  const own = all.filter((id) => !index.story.has(id));
+  return own.length === all.length ? [{ op }] : chunked(own);
 }
 
 /** Resolve handles once, then plan the selected sites together. Unknown host handles fail closed. */
@@ -123,7 +139,7 @@ export function revisionBatchPlan(
   if (
     keys === undefined &&
     !sharesItsPart(target.reads.story) &&
-    textboxSiteIndex(target.reads.part).size > 0
+    textboxSiteIndex(target.reads.part).story.size > 0
   )
     keys = revisionItemsInStory(target.reads).map(reviewItemKey);
   for (const handle of operation.revisions ?? []) {

@@ -305,6 +305,41 @@ describe('shapes and text-box stories', () => {
     }
   });
 
+  test('a change in both copies of a box is one change of the box', () => {
+    // The text closes its run so a tracked insertion sits in both the DrawingML and VML copies.
+    const tracked =
+      'Boxed</w:t></w:r><w:ins w:id="9" w:author="A" w:date="2024-01-01T00:00:00Z">' +
+      '<w:r><w:t>X</w:t></w:r></w:ins><w:r><w:t>';
+    const target = open(docx(`<w:p><w:r><w:t>Body</w:t></w:r>${textbox(1, tracked)}</w:p>`));
+    const { body } = roots(target);
+    const [box] = shapesOf(target, { body });
+    const boxBody = handleAt(
+      target.execute({ operations: [{ op: 'getShapeBody', shape: box! }] }),
+      0
+    );
+    const count = (story: AutomationHandle) =>
+      handlesAt(target.execute({ operations: [{ op: 'getRevisions', body: story }] }), 0).length;
+    expect([count(body), count(boxBody)]).toEqual([0, 1]);
+    expect(
+      target.execute({ operations: [decide('acceptAllRevisions', boxBody)] }).results[0]?.status
+    ).toBe('ok');
+    expect(count(boxBody)).toBe(0);
+    expect(savedMainXml(target)).not.toContain('<w:ins');
+  });
+
+  test('a legacy VML text box stays part of its owner story', () => {
+    const legacy =
+      '<w:r><w:pict xmlns:v="urn:schemas-microsoft-com:vml"><v:shape style="width:3in;height:36pt">' +
+      '<v:textbox><w:txbxContent><w:p><w:ins w:id="7" w:author="A" w:date="2024-01-01T00:00:00Z">' +
+      '<w:r><w:t>Old</w:t></w:r></w:ins></w:p></w:txbxContent></v:textbox></v:shape></w:pict></w:r>';
+    const target = open(docx(`<w:p><w:r><w:t>Body</w:t></w:r>${legacy}</w:p>`));
+    const { body } = roots(target);
+    expect(
+      target.execute({ operations: [decide('acceptAllRevisions', body)] }).results[0]?.status
+    ).toBe('ok');
+    expect(savedMainXml(target)).not.toContain('<w:ins');
+  });
+
   test('duplicate shape ids make the story’s shapes unaddressable', () => {
     const target = open(docx(`<w:p>${textbox(5, 'one')}</w:p><w:p>${textbox(5, 'two')}</w:p>`));
     const { body } = roots(target);
