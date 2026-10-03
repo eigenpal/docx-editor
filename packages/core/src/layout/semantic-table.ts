@@ -78,7 +78,11 @@ import { legacyRoundedCellClaims, legacyTableContentWidth } from './legacy-table
 import { legacyFixedTableContentOffset } from './legacy-fixed-table-content.ts';
 import { withLegacyTableSideRules } from './legacy-table-side-rules.ts';
 import { conditionalTypesFor, readTableLook } from './table-conditional-formats.ts';
-import { autofitColumnWidthsPt, type TableAutofitContext } from './table-autofit-widths.ts';
+import {
+  autofitColumnWidthsPt,
+  narrowNestedReader,
+  type TableAutofitContext,
+} from './table-autofit-widths.ts';
 export { tableOriginX, tableFloatOriginX } from './table-origin.ts';
 // Cell padding is its own unit (`table-cell-margins.ts`); re-exported here because this is
 // where the published table surface lives.
@@ -510,16 +514,13 @@ export function readTableStructure(
     displayMode,
     authorFilter,
     depth,
-    readNested: (nested, nestedWidthPt, nestedDepth) =>
-      readTableStructure(
-        nested,
-        nestedWidthPt,
-        nestedDepth,
-        styleCascade,
-        displayMode,
-        authorFilter,
-        compatibilityMode
-      ),
+    readNested: narrowNestedReader(
+      readTableStructure,
+      styleCascade,
+      displayMode,
+      authorFilter,
+      compatibilityMode
+    ),
   });
   if (widths === base.columnWidthsPt) return base;
   const widthsKey = widths.join(',');

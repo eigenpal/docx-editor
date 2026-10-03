@@ -170,14 +170,10 @@ export interface AutofitView {
   /** How deep the table being measured sits; nested tables read one level deeper. */
   readonly depth?: number;
   /**
-   * Reads a nested table in the same view at the width its cell gives it and at its own
-   * depth; null past the nesting limit, where layout paints nothing either.
+   * Reads a nested table in the same view in the narrowest cell, at its own depth; null past
+   * the nesting limit, where layout paints nothing either. See {@link narrowNestedReader}.
    */
-  readonly readNested?: (
-    table: OoxmlElement,
-    contentWidthPt: number,
-    depth: number
-  ) => SemanticTableStructure | null;
+  readonly readNested?: (table: OoxmlElement, depth: number) => SemanticTableStructure | null;
 }
 
 /** Below this a column is already as wide as its content needs. */
@@ -429,31 +425,90 @@ function widenedCellInsets(
 /** The width a nested table needs from the column that holds it. */
 function nestedTableMinimumPt(
   table: OoxmlElement,
-  cellContentWidthPt: number,
   context: TableAutofitContext,
   view: AutofitView
 ): number {
-  const depth = (view.depth ?? 0) + 1;
-  const nested = view.readNested?.(table, cellContentWidthPt, depth);
-  if (!nested) {
-    // Unreadable here (or past the nesting limit): the authored grid is the only evidence.
+  if (!view.readNested) {
     let grid = 0;
     for (const column of gridColumnWidthsPt(gridColumnElements(table))) grid += column ?? 0;
     return grid;
   }
-  // A leading-aligned nested table starts its indent into the cell, fixed or autofit.
-  const leading = nested.bidiVisual ? 'right' : 'left';
-  const indent = nested.alignment === leading ? Math.max(0, nested.indentPt) : 0;
+  const depth = (view.depth ?? 0) + 1;
+  const nested = view.readNested(table, depth);
+  // Past the nesting limit layout paints nothing, so nothing needs room.
+  if (!nested) return 0;
+  // What the table paints at in the narrowest cell: a stated absolute width keeps it, a
+  // cell-relative width shrinks with the cell, and the same resolver decides both.
   let width = 0;
-  if (nested.layoutFixed) {
-    // A fixed table paints at its resolved width, whatever the cell gives it.
-    for (const column of nested.columnWidthsPt) width += column;
-  } else {
-    // An autofit table needs only its own columns' minimums; its words stay whole.
-    for (const minimum of autofitColumnMinimumsPt(nested, context, { ...view, depth }))
-      width += minimum;
+  for (const column of nested.columnWidthsPt) width += column;
+  if (!nested.layoutFixed) {
+    // An autofit table also keeps its own words whole, in the geometry it widens into.
+    const ifWidened: number[] = [];
+    autofitColumnMinimumsPt(nested, context, { ...view, depth }, ifWidened);
+    let minimums = 0;
+    for (const minimum of ifWidened) minimums += minimum;
+    width = Math.max(width, minimums);
   }
-  return width + indent;
+  return width + leadingIndentPt(nested);
+}
+
+/** The table indent, which moves only a table aligned to its leading edge. */
+function leadingIndentPt(structure: SemanticTableStructure): number {
+  const leading = structure.bidiVisual ? 'right' : 'left';
+  return structure.alignment === leading ? Math.max(0, structure.indentPt) : 0;
+}
+
+/** The narrowest cell a nested table can be given. */
+const NARROW_CELL_PT = 1;
+
+type StructureReader = (
+  table: OoxmlElement,
+  contentWidthPt: number,
+  depth: number,
+  styleCascade?: StyleCascadeTable,
+  displayMode?: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter,
+  compatibilityMode?: number
+) => SemanticTableStructure | null;
+
+/** One narrow read per nested node and view, apart from the cell-width read layout memoizes. */
+const narrowReads = new WeakMap<
+  object,
+  {
+    readonly key: string;
+    readonly styleCascade: StyleCascadeTable | undefined;
+    readonly structure: SemanticTableStructure | null;
+  }
+>();
+
+/**
+ * A nested-table reader for {@link AutofitView.readNested}: the nested structure in the
+ * narrowest cell, memoized per node apart from the cell-width structure layout reads, so the
+ * two never evict each other.
+ */
+export function narrowNestedReader(
+  read: StructureReader,
+  styleCascade: StyleCascadeTable | undefined,
+  displayMode: RevisionDisplayMode,
+  authorFilter: RevisionAuthorFilter | undefined,
+  compatibilityMode: number | undefined
+): (table: OoxmlElement, depth: number) => SemanticTableStructure | null {
+  return (table, depth) => {
+    const key = `${depth}|${displayMode}|${authorFilter?.cacheKey ?? ''}|${compatibilityMode ?? ''}`;
+    const memo = narrowReads.get(table);
+    if (memo && memo.key === key && memo.styleCascade === styleCascade) return memo.structure;
+    const structure = read(
+      table,
+      NARROW_CELL_PT,
+      depth,
+      styleCascade,
+      displayMode,
+      authorFilter,
+      compatibilityMode
+    );
+    narrowReads.set(table, { key, styleCascade, structure });
+    return structure;
+  };
 }
 
 /**
@@ -481,20 +536,9 @@ export function autofitColumnMinimumsPt(
       if (cell.gridColumn < 0 || cell.gridColumn >= columnCount) continue;
       let content = -1;
       const insets = cellContentInsets(cell, collapsed);
-      // The width the cell flow lays a nested table out at, so both reads share one memo.
-      const cellContentWidthPt = Math.max(
-        1,
-        structure.columnWidthsPt[cell.gridColumn]! -
-          insets.left -
-          insets.right -
-          structure.cellSpacingPt
-      );
       for (const block of cell.blocks) {
         if (block.kind === 'table')
-          content = Math.max(
-            content,
-            nestedTableMinimumPt(block, cellContentWidthPt, context, view)
-          );
+          content = Math.max(content, nestedTableMinimumPt(block, context, view));
         if (block.kind !== 'paragraph') continue;
         const width = paragraphMinimumWidthPt(block, {
           context,
@@ -620,9 +664,7 @@ export function autofitColumnWidthsPt(
   }
   const minimums = ifWidened;
   // The table indent moves a leading-aligned table into the text column's room.
-  const leading = structure.bidiVisual ? 'right' : 'left';
-  const indent = structure.alignment === leading ? Math.max(0, structure.indentPt) : 0;
-  const availablePt = Math.max(0, contentWidthPt - indent);
+  const availablePt = Math.max(0, contentWidthPt - leadingIndentPt(structure));
   const widths = widenAutofitColumns(
     structure.columnWidthsPt,
     minimums,

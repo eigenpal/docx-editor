@@ -559,4 +559,28 @@ describe('autofit layout', () => {
       `<w:tr><w:tc><w:tcPr><w:tcW w:w="1200" w:type="dxa"/></w:tcPr><w:p>${run('n')}</w:p></w:tc></w:tr></w:tbl>`;
     expect(columns(outerWith(nested, run('A'.repeat(30)))).widths[0]).toBeGreaterThanOrEqual(60);
   });
+
+  const halfAndHalf = (nested: string, second: string) =>
+    '<w:tbl><w:tblPr><w:tblW w:w="2400" w:type="dxa"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/>' +
+    '<w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+    '<w:tblGrid><w:gridCol w:w="1200"/><w:gridCol w:w="1200"/></w:tblGrid><w:tr>' +
+    `<w:tc><w:tcPr><w:tcW w:w="1200" w:type="dxa"/></w:tcPr>${nested}<w:p/></w:tc>` +
+    `<w:tc><w:tcPr><w:tcW w:w="1200" w:type="dxa"/></w:tcPr><w:p>${second}</w:p></w:tc>` +
+    '</w:tr></w:tbl>';
+  const twoCellNested = (properties: string) =>
+    `<w:tbl><w:tblPr>${properties}</w:tblPr><w:tblGrid><w:gridCol w:w="600"/><w:gridCol w:w="600"/></w:tblGrid><w:tr>` +
+    `<w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr><w:p>${run('ab')}</w:p></w:tc>` +
+    `<w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr><w:p>${run('cd')}</w:p></w:tc>` +
+    '</w:tr></w:tbl>';
+
+  test('a nested autofit table with an absolute width keeps the outer column wide enough', () => {
+    const nested = twoCellNested('<w:tblW w:w="1200" w:type="dxa"/>');
+    expect(columns(halfAndHalf(nested, run('A'.repeat(15)))).widths[0]).toBeGreaterThanOrEqual(60);
+  });
+
+  test('a nested percentage table gives its width up with its cell', () => {
+    const nested = twoCellNested('<w:tblW w:w="5000" w:type="pct"/><w:tblLayout w:type="fixed"/>');
+    const { box } = columns(halfAndHalf(nested, run('A'.repeat(15))));
+    expect(box.width).toBeCloseTo(120, 6);
+  });
 });
