@@ -709,11 +709,12 @@ export function paginateTableInFlow(
     // Ordinary rows may break between lines, but their first fragment must have room
     // to start every cell. Otherwise a short label can be orphaned on the previous
     // page while its taller neighboring cell has not started. Probe before publishing.
+    // A breaking positioned table moves such a row too, minimum height included.
     if (
       startsPage ||
       forceBreak ||
       keptMoves ||
-      (breaksPages &&
+      ((breaksPages || pinnedBreak !== undefined) &&
         !heldByOpenSpan &&
         rowMinimumMoves(row, rowDeps(), structure.cellSpacingPt, {
           top: flow.cursorY,

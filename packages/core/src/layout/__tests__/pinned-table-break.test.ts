@@ -198,6 +198,20 @@ describe('a page-positioned table taller than the room below it', () => {
     expect(first).toEqual([0, 48, 600]);
   });
 
+  test('moves a row whose minimum height does not fit to the next page', () => {
+    // Four 150pt rows fit the room below the cursor, so the table starts at 720 - 600 = 120.
+    // The first fragment ends at the bottom margin: the fourth row moves whole, 150pt kept.
+    const atLeast = '<w:trHeight w:val="3000" w:hRule="atLeast"/>';
+    const layout = layoutOf(
+      lead + table({ tblpPr: PAGE, rows: 5, lines: 2, trPr: atLeast }) + tail
+    );
+    expect(shape(layout)).toEqual([
+      [0, 120, 450],
+      [1, 0, 300],
+    ]);
+    expect(paragraphAt(layout, 'tail')).toEqual({ pageIndex: 1, y: 300 });
+  });
+
   test('legacy modes run the first fragment to the page edge', () => {
     const layout = layoutOf(lead + table({ tblpPr: PAGE }) + tail, { compatibilityMode: 14 });
     expect(shape(layout)[0]).toEqual([0, 96, 624]);
