@@ -161,3 +161,15 @@ test('in a right-to-left paragraph, left of a line of left-to-right pictures is 
   expect(hitTestPage(layout, 0, { x: left - 10, y })?.position.offset).toBe(line.range.end);
   expect(hitTestPage(layout, 0, { x: right + 10, y })?.position.offset).toBe(line.range.start);
 });
+
+test('a click beside a picture draws its caret where the caret for that offset is drawn', () => {
+  // A right-to-left word before a picture in a left-to-right paragraph: the word's logical
+  // end is its left edge, but the offset after it is the picture's start, which owns it.
+  const { layout, line } = lay(hebrew('אבג דהו') + picture, '');
+  const measurer = createFixedMeasurer(6, 14);
+  const y = line.box.y + 1;
+  for (const x of [-5, 5, 30, 200]) {
+    const hit = hitTestPage(layout, 0, { x, y })!;
+    expect(hit.caret.x).toBeCloseTo(caretBoxOnLine(line, hit.position.offset, measurer).x, 5);
+  }
+});

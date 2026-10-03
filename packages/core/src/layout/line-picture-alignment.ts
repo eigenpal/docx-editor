@@ -71,25 +71,33 @@ export function alignLineWithPictures(
   );
   // A float's jump before a picture splits the line into passages, which reorder apart. Spans
   // already carry theirs; a stand-in carries the room left after the content before it.
+  const own = new Set<StyleSpanRecord>(standIns);
   const merged = sorted.map((span, index) => {
     const previous = sorted[index - 1];
-    if (span.text !== PICTURE_CHAR || !previous) return span;
+    if (!own.has(span) || !previous) return span;
     const jump = span.box.x - (previous.box.x + previous.box.width);
     return jump > 0.001 ? { ...span, wrapAdvanceBefore: jump } : span;
   });
   const aligned = align(merged);
-  const pictureStarts = new Set(placedDrawings.map((drawing) => drawing.start));
+  // A note or field atom is U+FFFC too, so a stand-in is known by its picture's paragraph and
+  // offset; alignment may rebuild the span object itself.
+  const key = (paragraphId: string, start: number) => `${paragraphId}:${start}`;
+  const pictureKeys = new Set(
+    placedDrawings.map((drawing) => key(drawing.paragraphId, drawing.start))
+  );
   const isStandIn = (span: StyleSpanRecord) =>
     span.text === PICTURE_CHAR &&
     span.range.end - span.range.start === 1 &&
-    pictureStarts.has(span.range.start);
-  const landed = new Map<number, number>();
-  for (const span of aligned) if (isStandIn(span)) landed.set(span.range.start, span.box.x);
+    pictureKeys.has(key(span.range.paragraphId, span.range.start));
+  const landed = new Map<string, number>();
+  for (const span of aligned)
+    if (isStandIn(span)) landed.set(key(span.range.paragraphId, span.range.start), span.box.x);
   const spans = aligned.filter((span) => !isStandIn(span));
   const drawings = placedDrawings.map((drawing) =>
     shiftInlineDrawingRecord(
       drawing,
-      (landed.get(drawing.start) ?? drawing.advanceStart) - drawing.advanceStart,
+      (landed.get(key(drawing.paragraphId, drawing.start)) ?? drawing.advanceStart) -
+        drawing.advanceStart,
       0
     )
   );

@@ -492,8 +492,10 @@ function resolveParagraph(
   const offset = Math.min(Math.max(resolved.offset, segment.start), segment.end);
   const position: SemanticPosition = { paragraphId: segment.paragraphId, offset };
   const box = caretBoxOnLine(line, offset, context.measurer, segment);
+  // Beside a picture the side a point resolves to and the caret drawn for that offset can be
+  // apart (a float's jump, or a bidi boundary); the caret drawn for the offset is the answer.
   const caretBox = clipParagraphBox(
-    { ...box, x: resolved.x, width: 0 },
+    { ...box, x: line.drawings?.length ? box.x : resolved.x, width: 0 },
     fragment.clipToBox ? fragment.box : undefined
   );
   if (!caretBox) return null;
