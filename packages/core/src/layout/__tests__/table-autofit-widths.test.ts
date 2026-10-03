@@ -448,4 +448,24 @@ describe('autofit layout', () => {
     const tabbed = `<w:r><w:tab/></w:r>${run('      ABCDEFGHIJ')}`;
     expect(columns(table('', tabbed)).widths[1]).toBe(60);
   });
+
+  test('a word that widens a ruled table stays whole when the rules move', () => {
+    const ruled = (letters: number) =>
+      '<w:tbl><w:tblPr><w:tblBorders><w:top w:val="single" w:sz="8"/><w:left w:val="single" w:sz="8"/>' +
+      '<w:bottom w:val="single" w:sz="8"/><w:right w:val="single" w:sz="8"/>' +
+      '<w:insideH w:val="single" w:sz="8"/><w:insideV w:val="single" w:sz="8"/></w:tblBorders>' +
+      '<w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="1200"/><w:gridCol w:w="600"/><w:gridCol w:w="600"/></w:tblGrid><w:tr>' +
+      `<w:tc><w:tcPr><w:tcW w:w="1200" w:type="dxa"/></w:tcPr><w:p>${run('ab')}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr><w:p>${run('A'.repeat(letters))}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr><w:p>${run('cd')}</w:p></w:tc>` +
+      '</w:tr></w:tbl>';
+    for (const letters of [20, 35, 38, 40])
+      expect(columns(ruled(letters), { compatibilityMode: 15 }).lines[1]).toBe(1);
+  });
+
+  test('a run ending in an em space ends its word', () => {
+    const spaced = `${run('ABCDEFGHIJ\u2003')}<w:r><w:rPr><w:b/></w:rPr><w:t>KLMNOPQRST</w:t></w:r>`;
+    expect(columns(table('', spaced)).widths[1]).toBeLessThan(70);
+  });
 });

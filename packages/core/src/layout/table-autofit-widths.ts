@@ -175,6 +175,9 @@ export interface AutofitView {
   ) => SemanticTableStructure | null;
 }
 
+/** A run that ends in a breaking space other than U+0020 also ends its word. */
+const BREAKING_SPACE_END = /[\u1680\u2000-\u2006\u2008-\u200a\u205f\u3000]$/u;
+
 /** Below this a column is already as wide as its content needs. */
 const WIDTH_EPSILON_PT = 0.01;
 /** No column collapses below a hairline, whatever its content. */
@@ -342,7 +345,7 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
         : undefined;
     if (atomWidth !== undefined) {
       close();
-      segment = atomWidth;
+      segment = (lineStart ? lead : 0) + atomWidth;
       close();
       lineStart = false;
       lead = 0;
@@ -385,7 +388,12 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
       else if (ink.length > 0) segment += measure(candidate) - measure(candidate.slice(ink.length));
       // A space or a dash ends the segment, including a dash that ends its run; a plain run
       // seam does not.
-      if (ink.length < candidate.length || to < piece.text.length) close();
+      if (
+        ink.length < candidate.length ||
+        to < piece.text.length ||
+        BREAKING_SPACE_END.test(candidate)
+      )
+        close();
       else dashPending = BREAK_AFTER_DASH.has(candidate.at(-1)!);
     }
   }
@@ -393,6 +401,22 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
   const width = widest + Math.max(0, left) + Math.max(0, right);
   if (key) byParagraph.set(paragraph, { key, width });
   return width;
+}
+
+/**
+ * The cell's horizontal insets after widening. A narrow table may share its grid lines or
+ * keep legacy content alignment, and widening can end either; the larger insets of the two
+ * geometries keep the word that widened the column whole in both.
+ */
+function widenedCellInsets(cell: SemanticTableCell, collapsed: boolean) {
+  const current = cellContentInsets(cell, collapsed);
+  if (!cell.centeredSideRules && !cell.legacyContentAlignment) return current;
+  const { centeredSideRules: _centered, legacyContentAlignment: _legacy, ...plain } = cell;
+  const fullStroke = cellContentInsets(plain, collapsed);
+  return {
+    left: Math.max(current.left, fullStroke.left),
+    right: Math.max(current.right, fullStroke.right),
+  };
 }
 
 /** A nested table needs at least the width its own grid states. */
@@ -438,7 +462,7 @@ export function autofitColumnMinimumsPt(
         continue;
       if (cell.gridColumn < 0 || cell.gridColumn >= columnCount) continue;
       let content = -1;
-      const insets = cellContentInsets(cell, collapsed);
+      const insets = widenedCellInsets(cell, collapsed);
       const cellContentWidthPt = Math.max(
         0,
         structure.columnWidthsPt[cell.gridColumn]! - insets.left - insets.right
