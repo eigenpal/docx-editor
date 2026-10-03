@@ -51,13 +51,8 @@ const NEITHER: OmittedDocDefaults = Object.freeze({ run: false, paragraph: false
 export function omittedDocDefaults(stylesRoot: OoxmlElement | null): OmittedDocDefaults {
   if (!stylesRoot) return BOTH;
   if (stylesRoot.namespaceUri !== WML_NAMESPACE_URI) return NEITHER;
-  const defaults = stylesRoot.children.find(
-    (child): child is OoxmlElement =>
-      child.kind !== 'textValue' &&
-      child.namespaceUri === WML_NAMESPACE_URI &&
-      child.localName === 'docDefaults'
-  );
-  if (!defaults || defaults.kind === 'textValue') return BOTH;
+  const defaults = firstDocDefaults(stylesRoot);
+  if (!defaults) return BOTH;
   const has = (localName: string): boolean =>
     defaults.children.some(
       (child) =>
@@ -67,24 +62,6 @@ export function omittedDocDefaults(stylesRoot: OoxmlElement | null): OmittedDocD
     );
   return { run: !has('rPrDefault'), paragraph: !has('pPrDefault') };
 }
-
-/**
- * What a document with an authored run half paints for the profile's run properties when that
- * half leaves them out: no kerning and 10pt in both size lanes.
- */
-export const FORMAT_RUN_BASELINE: readonly OoxmlProperty[] = Object.freeze([
-  Object.freeze({ localName: 'kern', attributes: Object.freeze({ val: '0' }) }),
-  Object.freeze({ localName: 'sz', attributes: Object.freeze({ val: '20' }) }),
-  Object.freeze({ localName: 'szCs', attributes: Object.freeze({ val: '20' }) }),
-]);
-
-/** The `w:spacing` attributes a paragraph paints when nothing in its cascade states them. */
-export const FORMAT_SPACING_BASELINE: Readonly<Record<string, string>> = Object.freeze({
-  before: '0',
-  after: '0',
-  line: '240',
-  lineRule: 'auto',
-});
 
 function wmlElement(
   kind: string,
@@ -121,16 +98,27 @@ export function applicationDefaultsContainer(
   );
 }
 
+/** The `w:docDefaults` layout reads: the first one, as `readDocDefaults` does. */
+function firstDocDefaults(stylesRoot: OoxmlElement): OoxmlElement | undefined {
+  const found = stylesRoot.children.find(
+    (child) =>
+      child.kind !== 'textValue' &&
+      child.namespaceUri === WML_NAMESPACE_URI &&
+      child.localName === 'docDefaults'
+  );
+  return found && found.kind !== 'textValue' ? (found as OoxmlElement) : undefined;
+}
+
 /**
- * `w:docDefaults` with every omitted half stated as the application's properties, so a copy of
- * the document carries what it painted. Returns the authored element unchanged when it omits
- * nothing, and `null` when there is nothing to state.
+ * The `w:docDefaults` layout reads, with every omitted half stated as the application's
+ * properties, so a copy of the document carries what it painted. `null` when a styles root
+ * outside the WordprocessingML namespace supplies nothing.
  */
 export function explicitDocDefaults(
   stylesRoot: OoxmlElement | null,
-  authored: OoxmlElement | null,
   idPrefix: string
 ): OoxmlElement | null {
+  const authored = stylesRoot ? (firstDocDefaults(stylesRoot) ?? null) : null;
   const omitted = omittedDocDefaults(stylesRoot);
   if (!omitted.run && !omitted.paragraph) return authored;
   const stated: OoxmlNode[] = [];

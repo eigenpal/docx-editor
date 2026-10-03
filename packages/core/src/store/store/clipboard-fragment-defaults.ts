@@ -20,8 +20,6 @@ import type { OoxmlProperty } from './tree-op-types.ts';
 import {
   APPLICATION_PARAGRAPH_PROPERTIES,
   APPLICATION_RUN_PROPERTIES,
-  FORMAT_RUN_BASELINE,
-  FORMAT_SPACING_BASELINE,
   omittedDocDefaults,
 } from '../package/application-doc-defaults.ts';
 
@@ -177,48 +175,6 @@ function chainDefines(
   return false;
 }
 
-const SPACING_ATTRIBUTES = new Set(Object.keys(FORMAT_SPACING_BASELINE));
-
-/** The `w:spacing` attributes a style chain states; the cascade merges them one by one. */
-function chainSpacingAttributes(styles: StylesInfo, startId: string | undefined): Set<string> {
-  const stated = new Set<string>();
-  let id = startId;
-  for (let hop = 0; hop < 16 && id; hop += 1) {
-    const style = styles.byId.get(id);
-    if (!style) break;
-    const spacing = propertyContainerOf(style, 'pPr')?.children.find((child) =>
-      isWml(child, 'spacing')
-    );
-    if (spacing && isElementNode(spacing))
-      for (const attribute of spacing.attributes)
-        if (SPACING_ATTRIBUTES.has(attribute.localName)) stated.add(attribute.localName);
-    const basedOn = style.children.find((child) => isWml(child, 'basedOn'));
-    id = basedOn ? attributeValueOf(basedOn, 'val') : undefined;
-  }
-  return stated;
-}
-
-/** The spacing a document paints for a paragraph that states none: defaults, then `Normal`. */
-function defaultSpacing(
-  styles: StylesInfo,
-  defaults: ReadonlyMap<string, OoxmlNode>
-): Map<string, string> {
-  const spacing = new Map(Object.entries(FORMAT_SPACING_BASELINE));
-  const apply = (node: OoxmlNode | undefined): void => {
-    if (!node || !isElementNode(node)) return;
-    for (const attribute of node.attributes)
-      if (SPACING_ATTRIBUTES.has(attribute.localName))
-        spacing.set(attribute.localName, attribute.value);
-  };
-  apply(defaults.get('spacing'));
-  const id = defaultStyleIdOf(styles, 'paragraph');
-  const style = id ? styles.byId.get(id) : undefined;
-  apply(
-    style ? propertyContainerOf(style, 'pPr')?.children.find((c) => isWml(c, 'spacing')) : undefined
-  );
-  return spacing;
-}
-
 function defaultStyleIdOf(styles: StylesInfo, type: 'paragraph' | 'character'): string | undefined {
   for (const style of styles.styles) {
     if (attributeValueOf(style, 'type') !== type) continue;
@@ -350,10 +306,6 @@ export function materializeDefaults(
     ? applicationDefaults(APPLICATION_PARAGRAPH_PROPERTIES)
     : defaultsContainer(targetStyles.docDefaults, 'pPrDefault', 'pPr');
 
-  // Spacing merges attribute by attribute in the cascade, so it is compared that way too.
-  const fragmentSpacing = fragmentRoot ? defaultSpacing(fragmentStyles, fragmentPara) : null;
-  const targetSpacing = defaultSpacing(targetStyles, targetPara);
-
   // Fold each side's default paragraph style over its docDefaults, the way the cascade
   // does, so "the default look" is one property set PER DOCUMENT. Folding only the
   // fragment side made a target whose `Normal` overrides docDefaults look identical to
@@ -390,19 +342,6 @@ export function materializeDefaults(
     targetPara as Map<string, OoxmlNode>
   );
 
-  // A side that states no size or kerning paints the format baseline. Stating it makes a 10pt
-  // source keep its size in a 12pt target. Content without defaults of its own states none.
-  const withBaseline = (run: Map<string, OoxmlNode>): void => {
-    for (const property of FORMAT_RUN_BASELINE)
-      if (!run.has(property.localName))
-        run.set(
-          property.localName,
-          propertyElement(property, `fragment#baseline-${property.localName}`)
-        );
-  };
-  if (fragmentRoot) withBaseline(fragmentRun as Map<string, OoxmlNode>);
-  withBaseline(targetRun as Map<string, OoxmlNode>);
-
   const runDiffers = new Map<string, OoxmlNode>();
   for (const [localName, prop] of fragmentRun) {
     const other = targetRun.get(localName);
@@ -410,14 +349,11 @@ export function materializeDefaults(
   }
   const paraDiffers = new Map<string, OoxmlNode>();
   for (const [localName, prop] of fragmentPara) {
-    if (localName === 'sectPr' || localName === 'spacing') continue;
+    if (localName === 'sectPr') continue;
     const other = targetPara.get(localName);
     if (!other || nodeSignature(other) !== nodeSignature(prop)) paraDiffers.set(localName, prop);
   }
-  const spacingDiffers = new Map<string, string>();
-  for (const [name, value] of fragmentSpacing ?? [])
-    if (targetSpacing.get(name) !== value) spacingDiffers.set(name, value);
-  if (runDiffers.size === 0 && paraDiffers.size === 0 && spacingDiffers.size === 0) return blocks;
+  if (runDiffers.size === 0 && paraDiffers.size === 0) return blocks;
 
   let stamp = 0;
   const freshId = (): string => `fragment#materialized-${stamp++}`;
@@ -522,36 +458,7 @@ export function materializeDefaults(
         : node;
     };
 
-    // Spacing attributes neither the travelling chain nor the paragraph states take the
-    // source's values; a direct `w:spacing` gains them instead of getting a second element.
-    let base = paragraph;
-    if (spacingDiffers.size > 0) {
-      const stated = chainSpacingAttributes(fragmentStyles, pStyleId);
-      const direct = pPr?.children.find((child) => isWml(child, 'spacing'));
-      if (direct && isElementNode(direct))
-        for (const attribute of direct.attributes) stated.add(attribute.localName);
-      const missing: Record<string, string> = {};
-      for (const [name, value] of spacingDiffers) if (!stated.has(name)) missing[name] = value;
-      if (Object.keys(missing).length > 0) {
-        const addition = propertyElement({ localName: 'spacing', attributes: missing }, freshId());
-        if (pPr && direct && isElementNode(direct) && isElementNode(addition)) {
-          const merged = {
-            ...direct,
-            attributes: [...direct.attributes, ...addition.attributes],
-          } as OoxmlElement;
-          const nextPPr = {
-            ...pPr,
-            children: pPr.children.map((child) => (child === direct ? merged : child)),
-          } as OoxmlElement;
-          base = {
-            ...paragraph,
-            children: paragraph.children.map((child) => (child === pPr ? nextPPr : child)),
-          } as OoxmlElement;
-        } else paraAdditions.push(addition);
-      }
-    }
-
-    const stamped = stampRuns(withContainer(base, 'pPr', paraAdditions)) as OoxmlElement;
+    const stamped = stampRuns(withContainer(paragraph, 'pPr', paraAdditions)) as OoxmlElement;
     return stamped;
   };
 

@@ -1,5 +1,5 @@
-// Default formatting travels with a copy as what the source painted: omitted defaults as the
-// application's values, authored defaults with the format baseline where they say nothing.
+// Omitted default formatting travels with a copy as the application's values the source painted.
+// Content without a styles part of its own, such as external HTML, carries no defaults.
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import type { OoxmlPackage } from '../package/ooxml-package.ts';
@@ -56,34 +56,6 @@ describe('omitted and format defaults travel as what the source painted', () => 
       expect(xml).toContain('<w:sz w:val="24"/>');
       expect(xml).toContain('w:after="160"');
     }
-  });
-
-  test('a 10pt source keeps its size and spacing in a target that omits its defaults', () => {
-    const xml = pasteInto(
-      null,
-      copied(buildPackage(plain, { 'word/styles.xml': authoredTenPoint }))
-    );
-    expect(xml).toContain('<w:sz w:val="20"/>');
-    expect(xml).toContain('w:after="0"');
-    expect(xml).toContain('w:line="240"');
-  });
-
-  test('a travelling style that states part of the spacing gains only the rest', () => {
-    const source = buildPackage(
-      '<w:p><w:pPr><w:pStyle w:val="Head"/></w:pPr><w:r><w:t>carried</w:t></w:r></w:p>',
-      {
-        'word/styles.xml': styles(
-          '<w:style w:type="paragraph" w:styleId="Head"><w:pPr>' +
-            '<w:spacing w:before="240"/></w:pPr></w:style>'
-        ),
-      }
-    );
-    const xml = pasteInto(authoredTenPoint, copied(source));
-    const spacing = xml.match(/<w:spacing [^>]*\/>/g) ?? [];
-    expect(spacing).toHaveLength(1);
-    expect(spacing[0]).toContain('w:after="160"');
-    expect(spacing[0]).toContain('w:line="278"');
-    expect(spacing[0]).not.toContain('w:before');
   });
 
   test('external content without a styles part stamps nothing', () => {
