@@ -2,6 +2,7 @@ import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store
 import { coalesceBidiPieces } from './bidi-piece-coalescing.ts';
 import { bidiAlgorithm } from './bidi.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
+import { isCollapsibleLineEndWhitespace } from './line-end-whitespace.ts';
 import { itemizeScriptFontSlots } from './script-itemization.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import { measureDisplayText } from './run-style.ts';
@@ -406,15 +407,35 @@ function bidiOrder(
   start: number,
   end: number,
   rtl: boolean,
-  pageBreaksIgnored: boolean
+  pageBreaksIgnored: boolean,
+  spacesKeepLevel = false
 ): number[] {
   for (
     let index = lineEndWhitespaceStart(spans, start, end, pageBreaksIgnored);
     index < end;
     index++
-  )
-    levels[index] = rtl ? 1 : 0;
+  ) {
+    if (spacesKeepLevel && isCollapsibleLineEndWhitespace(spans[index]!.text)) continue;
+    levels[index] =
+      spacesKeepLevel && index > start && breakAfterSpaces(spans, index)
+        ? levels[index - 1]!
+        : rtl
+          ? 1
+          : 0;
+  }
   return visualOrderOfLevels(levels, start, end);
+}
+
+/** Whether `spans[index]` is a zero-width line or page break after line-end spaces. */
+function breakAfterSpaces(spans: readonly StyleSpanRecord[], index: number): boolean {
+  let before = index;
+  while (
+    before > 0 &&
+    spans[before]!.box.width === 0 &&
+    (spans[before]!.text === '\n' || spans[before]!.text === PAGE_BREAK_CHAR)
+  )
+    before--;
+  return before < index && isCollapsibleLineEndWhitespace(spans[before]!.text);
 }
 
 /** UAX #9 L2 over `levels[start, end)`: the source indices in visual (left-to-right) order. */
@@ -471,11 +492,20 @@ export function reorderBidiSpans(
     for (const index of bidiOrder(spans, levels, 0, spans.length, paragraphRtl, pageBreaksIgnored))
       order.push(index);
   } else {
-    // L1 puts line-ending whitespace back in the paragraph context, outside
-    // the run-direction group whose visible text precedes it.
+    // L1 puts line-ending tabs and breaks back in the paragraph context, outside the
+    // run-direction group whose visible text precedes them. Line-ending spaces keep their
+    // run's group and their resolved level, so they stay beside the text they follow.
     const trailing = lineEndWhitespaceStart(spans, 0, spans.length, pageBreaksIgnored);
-    const directionAt = (index: number) =>
-      index >= trailing ? paragraphRtl : spans[index]!.style.shaping?.runDirection === 'rtl';
+    const directionAt = (index: number): boolean => {
+      // A break after the spaces stays beside them, so the caret before it does too.
+      if (index >= trailing && breakAfterSpaces(spans, index)) return directionAt(index - 1);
+      return index >= trailing &&
+        !isCollapsibleLineEndWhitespace(spans[index]!.text) &&
+        // An ignored page break is absent: it keeps the direction of the text beside it.
+        !(pageBreaksIgnored && spans[index]!.text === PAGE_BREAK_CHAR)
+        ? paragraphRtl
+        : spans[index]!.style.shaping?.runDirection === 'rtl';
+    };
     const groups: Array<{ start: number; end: number; rtl: boolean }> = [];
     for (let start = 0; start < spans.length; ) {
       const direction = directionAt(start);
@@ -494,7 +524,8 @@ export function reorderBidiSpans(
         group.start,
         group.end,
         group.rtl,
-        pageBreaksIgnored
+        pageBreaksIgnored,
+        true
       ))
         order.push(index);
     }
