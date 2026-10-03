@@ -2136,8 +2136,7 @@ function layoutBlocksPass(
           page: pages.length,
           width: Math.min(...columns.widths),
           frames: anchorFrames(),
-          top: cursorY,
-          bottom: contentHeight(),
+          verticalFrames: tableVerticalFrames(cursorY),
         })
       ) {
         positionedFlow.add(pendingFloatIds, entry.table.id);

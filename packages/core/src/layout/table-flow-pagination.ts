@@ -41,6 +41,7 @@ import { planHeaderGroup, type HeaderGroupPlan } from './table-header-vmerge.ts'
 import { createMergedTextCarry, deferMergedTextPastHeadRow } from './table-vmerge-boundary.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import { readTableStructure, tableOriginX, type SemanticTableRow } from './semantic-table.ts';
+import { pinnedBreakAtCursor, withSplittableRows } from './table-pinned-break.ts';
 import { tableFloatOriginY } from './table-float-position.ts';
 import { shiftTableFragment } from './table-fragment-finalize.ts';
 import { planOutOfCellFloats } from './table-out-of-cell-floats.ts';
@@ -85,7 +86,7 @@ export function paginateTableInFlow(
     publishFragment,
   } = flow;
   const regionWidth = columnWidth();
-  const structure = readTableStructure(
+  const authored = readTableStructure(
     table,
     regionWidth,
     0,
@@ -94,8 +95,16 @@ export function paginateTableInFlow(
     revisionAuthorFilter,
     flow.compatibilityMode
   );
-  if (!structure || structure.rows.length === 0) return { outOfFlow: false };
+  if (!authored || authored.rows.length === 0) return { outOfFlow: false };
+  // A page- or margin-positioned table that reaches below the bottom margin breaks across
+  // pages in the body flow instead of keeping its sheet position (`table-pinned-break.ts`).
+  const pinnedBreak = flow.positionTextTable
+    ? undefined
+    : pinnedBreakAtCursor(table, authored, flow);
+  const structure = pinnedBreak ? withSplittableRows(authored) : authored;
+  if (pinnedBreak) flow.cursorY = pinnedBreak.top;
   const outOfFlow =
+    pinnedBreak === undefined &&
     structure.float !== undefined &&
     (structure.float.vertAnchor !== 'text' || flow.positionTextTable === true) &&
     structure.float.ySpec !== 'inline';
@@ -110,9 +119,11 @@ export function paginateTableInFlow(
   }
   const bodyCursorY = flow.cursorY;
   const verticalFrames = outOfFlow ? verticalAnchorFrames() : undefined;
+  // A breaking positioned table's first fragment is bounded by `firstBottom` (`table-pinned-break.ts`).
+  let firstFragmentBottom = pinnedBreak?.firstBottom;
   const contentHeight = outOfFlow
     ? (): number => POSITIONED_TABLE_LAYOUT_BOTTOM_PT
-    : flowContentHeight;
+    : (): number => firstFragmentBottom ?? flowContentHeight();
   // `w:tblInd` / `w:jc` place the table inside the text column, `w:tblpPr` against a wider
   // anchor box; every row and the fragment box share the one origin so cell geometry and
   // the reported box cannot drift apart.
@@ -221,6 +232,7 @@ export function paginateTableInFlow(
   };
   const closeTableFragment = (): void => {
     bandTop = 0;
+    firstFragmentBottom = undefined;
     // Every close is a break or the table's end: rows past it are on another sheet. The end
     // waits for this fragment's finalize, which republishes its floats through the pin.
     if (rows.length === 0) {
@@ -954,6 +966,11 @@ export function paginateTableInFlow(
   }
   closeTableFragment();
   if (outOfFlow) flow.cursorY = bodyCursorY;
+  else if (pinnedBreak)
+    flow.cursorY = Math.min(
+      flow.cursorY + (structure.float?.distances?.bottom ?? 0),
+      flow.contentHeight()
+    );
   return { outOfFlow };
 }
 

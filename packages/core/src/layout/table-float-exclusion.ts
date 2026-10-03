@@ -29,6 +29,7 @@ import {
   type TableAnchorFrames,
 } from './semantic-table.ts';
 import { positionedTableOriginX } from './table-origin.ts';
+import { pinnedTableBreak } from './table-pinned-break.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 
@@ -287,9 +288,16 @@ export interface FloatAdmissionFlow {
   /** The narrowest column. The table must fit whichever column its anchor reaches. */
   readonly width: number;
   readonly frames: TableAnchorFrames;
-  readonly top: number;
-  readonly bottom: number;
+  /**
+   * Vertical frames on this page. The text frame starts at the body cursor and ends at the
+   * bottom of the page content box.
+   */
+  readonly verticalFrames: TableVerticalAnchorFrames;
 }
+
+const flowTop = (flow: FloatAdmissionFlow): number => flow.verticalFrames.text.top;
+const flowBottom = (flow: FloatAdmissionFlow): number =>
+  flow.verticalFrames.text.top + flow.verticalFrames.text.height;
 
 /**
  * True when a positioned table waits for its anchor paragraph and is placed there whole.
@@ -307,11 +315,41 @@ export function admitsAtAnchor(
   flow: FloatAdmissionFlow
 ): boolean {
   if (hasEarlierCellExclusions(table, flow.zones, deps, flow.page)) return false;
+  if (breaksAcrossPages(table, deps, flow)) return false;
   const band = floatingTableBand(table, flow.width, deps);
-  if (band > flow.bottom) return false;
+  if (band > flowBottom(flow)) return false;
   if (deps.styleCascade?.doNotBreakWrappedTables) return true;
   return (
-    band <= flow.bottom - flow.top || !flow.allowBreak || !breaksAtPageBottom(table, deps, flow)
+    band <= flowBottom(flow) - flowTop(flow) ||
+    !flow.allowBreak ||
+    !breaksAtPageBottom(table, deps, flow)
+  );
+}
+
+/** A page- or margin-positioned table that reaches below the bottom margin breaks in flow. */
+function breaksAcrossPages(
+  table: OoxmlElement,
+  deps: TableFlowDeps,
+  flow: FloatAdmissionFlow
+): boolean {
+  const structure = readTableStructure(
+    table,
+    flow.width,
+    0,
+    deps.styleCascade,
+    deps.displayMode,
+    deps.revisionAuthorFilter,
+    deps.compatibilityMode
+  );
+  if (!structure?.float || structure.float.vertAnchor === 'text') return false;
+  return (
+    pinnedTableBreak(table, structure, deps, {
+      top: flowTop(flow),
+      bottom: flowBottom(flow),
+      frames: flow.frames,
+      verticalFrames: flow.verticalFrames,
+      width: flow.width,
+    }) !== undefined
   );
 }
 
@@ -343,7 +381,7 @@ function breaksAtPageBottom(
   )
     return false;
   // The opening rows are the header prefix, which moves as one group, and the first body row.
-  let top = flow.top + float.yPt;
+  let top = flowTop(flow) + float.yPt;
   for (const [index, row] of structure.rows.entries()) {
     top += measureRowHeight(
       row,
@@ -353,7 +391,7 @@ function breaksAtPageBottom(
       index === 0 ? firstRowContentDeps(structure, row, deps) : deps,
       structure.cellSpacingPt
     );
-    if (top > flow.bottom + 0.001) return false;
+    if (top > flowBottom(flow) + 0.001) return false;
     if (!row.isHeader) return true;
   }
   return false;
