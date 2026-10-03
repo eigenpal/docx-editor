@@ -9,6 +9,7 @@
 // The revision tag is carried, not computed here: `DocumentStore` owns revisions, and an
 // index that invented its own would let a stale projection claim to be current.
 
+import { hyphenTextOf } from './hyphen-text.ts';
 import { hardBreakText } from './hard-break.ts';
 import {
   contentControlContentOf,
@@ -98,7 +99,7 @@ function runText(node: OoxmlNode): string {
   if (node.kind === 'textValue') return node.value;
   if (node.kind === 'tab') return '\t';
   if (node.kind === 'hardBreak') return hardBreakText(node);
-  if (node.kind === 'generic') return '';
+  if (node.kind === 'generic') return hyphenTextOf(node) ?? '';
   if (node.kind === 'runProperties' || node.kind === 'paragraphProperties') return '';
   if (node.kind === 'hyperlink' || isContentControl(node)) {
     let text = '';

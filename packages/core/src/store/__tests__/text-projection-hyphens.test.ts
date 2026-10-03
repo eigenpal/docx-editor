@@ -1,8 +1,8 @@
-// Hyphen elements in read text (issue #1071).
+// Hyphen elements in paragraph text (issue #1071).
 //
-// `w:noBreakHyphen` reads as U+001E and `w:softHyphen` as U+001F, at their model offsets.
-// Model text is unchanged. Search matches a typed hyphen against a non-breaking hyphen and
-// ignores an optional hyphen.
+// `w:noBreakHyphen` is one character, U+001E, and `w:softHyphen` is U+001F, at their own
+// model offsets. Search matches a typed hyphen against a non-breaking hyphen and ignores an
+// optional hyphen.
 
 import { describe, expect, test } from 'bun:test';
 import {
@@ -53,37 +53,34 @@ const ISSUE =
   '<w:p><w:r><w:t xml:space="preserve">the then</w:t><w:noBreakHyphen/>' +
   '<w:t>applicable rate</w:t><w:softHyphen/><w:t>s</w:t></w:r></w:p>';
 
-describe('hyphen elements in read text', () => {
-  test('read text shows both hyphens; model text is unchanged', () => {
+describe('hyphen elements in paragraph text', () => {
+  test('each hyphen is one character of model text', () => {
     const { raw, projected } = project(ISSUE);
-    expect(raw).toBe('the thenapplicable rates');
-    expect(projected.text).toBe(`the then${NBH}applicable rate${SHY}s`);
-  });
-
-  test('a range spanning a hyphen reads it; a range ending at it does not', () => {
-    const { projected } = project(ISSUE);
-    expect(projected.sliceRaw(4, 8)).toBe('then');
-    expect(projected.sliceRaw(8, 18)).toBe('applicable');
-    expect(projected.sliceRaw(4, 18)).toBe(`then${NBH}applicable`);
-    expect(projected.sliceRaw(0, 24)).toBe(projected.text);
+    expect(raw).toBe(`the then${NBH}applicable rate${SHY}s`);
+    expect(projected.text).toBe(raw);
   });
 
   test('search matches a typed hyphen and ignores an optional hyphen', () => {
     const { projected } = project(ISSUE);
-    const one = (query: string) => projected.findOccurrences(query, 10).matches;
-    expect(one('then-applicable')).toMatchObject([
-      { start: 4, length: 15, rawStart: 4, rawEnd: 18 },
+    const found = (query: string) => projected.findOccurrences(query, 10).matches;
+    expect(found('then-applicable')).toMatchObject([
+      { start: 4, length: 15, rawStart: 4, rawEnd: 19 },
     ]);
-    expect(one(`then${NBH}applicable`)).toHaveLength(1);
-    expect(one('thenapplicable')).toHaveLength(0);
-    expect(one('rates')).toMatchObject([{ start: 20, length: 6, rawStart: 19, rawEnd: 24 }]);
-    expect(one(`rate${SHY}s`)).toHaveLength(1);
-    expect(one(SHY)).toHaveLength(0);
+    expect(found(`then${NBH}applicable`)).toHaveLength(1);
+    expect(found('thenapplicable')).toHaveLength(0);
+    expect(found('-')).toMatchObject([{ start: 8, length: 1, rawStart: 8, rawEnd: 9 }]);
+    expect(found('rates')).toMatchObject([{ start: 20, length: 6, rawStart: 20, rawEnd: 26 }]);
+    expect(found(`rate${SHY}s`)).toHaveLength(1);
+    expect(found(SHY)).toHaveLength(0);
   });
 
-  test('whole-word search treats a non-breaking hyphen as a word boundary', () => {
+  test('whole-word search joins a word across an optional hyphen', () => {
     const { projected } = project(ISSUE);
-    expect(projected.findOccurrences('then', 10, { wholeWord: true }).matches).toHaveLength(1);
+    const whole = (query: string) =>
+      projected.findOccurrences(query, 10, { wholeWord: true }).matches;
+    expect(whole('then')).toHaveLength(1);
+    expect(whole('rate')).toHaveLength(0);
+    expect(whole('rates')).toHaveLength(1);
   });
 
   test('a hyphen in a pending insertion is absent from the original view', () => {
@@ -93,23 +90,25 @@ describe('hyphen elements in read text', () => {
     const part = load(body);
     const paragraph = firstParagraph(part);
     const raw = paragraphTextOf(part, paragraph.id) ?? '';
+    expect(raw).toBe(`co${NBH}signer`);
     expect(projectParagraphText(paragraph, raw, 'allMarkup').text).toBe(`co${NBH}signer`);
     expect(projectParagraphText(paragraph, raw, 'original').text).toBe('co');
-    expect(projectParagraphText(paragraph, raw, 'model').text).toBe('cosigner');
   });
 
-  test('a hyphen in a field result reads inside the result and maps to its run', () => {
+  test('a hyphen in a field result reads inside the result', () => {
     const body =
       '<w:p><w:fldSimple w:instr=" REF ref "><w:r><w:t>1</w:t><w:noBreakHyphen/>' +
       '<w:t>A</w:t></w:r></w:fldSimple><w:r><w:t> end</w:t></w:r></w:p>';
     const { projected } = project(body);
     expect(projected.text).toBe(`1${NBH}A end`);
-    expect(projected.resultRunAddressAt(2)?.offset).toBe(1);
-    expect(projected.resultRunAddressAt(0)?.offset).toBe(0);
+    expect(projected.resultRunAddressAt(2)?.offset).toBe(2);
   });
 
-  test('a paragraph with no hyphen keeps the identity projection', () => {
-    const { raw, projected } = project('<w:p><w:r><w:t>plain</w:t></w:r></w:p>');
-    expect(projected.text).toBe(raw);
+  test('a hyphen in a text box is not the anchoring paragraph text', () => {
+    const body =
+      '<w:p><w:r><w:t>Cover</w:t></w:r><w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"/></w:drawing></w:r></w:p>';
+    const { raw } = project(body);
+    expect(raw.startsWith('Cover')).toBe(true);
+    expect(raw).not.toContain(NBH);
   });
 });

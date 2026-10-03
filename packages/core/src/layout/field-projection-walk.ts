@@ -39,7 +39,7 @@ import { projectSimpleFieldResult } from './field-simple-result.ts';
 import { createNestedPageTracker } from './field-nested-page.ts';
 import {
   modelTextOfRunChild,
-  nonBreakingHyphenOf,
+  hyphenDisplayOf,
   runPropertiesOf,
   type RunPropertyCascader,
 } from './field-run-text.ts';
@@ -393,13 +393,6 @@ export function unmergedPiecesOfParagraphForDisplay(
       );
       return;
     }
-    // The preserved OOXML hyphen has no canonical text offset, like w:sym.
-    // Project its glyph before measurement without inventing an editable model character.
-    if (nonBreakingHyphenOf(grand)) {
-      if (!style.hidden && revisionsVisible(revisions, displayMode, authorFilter))
-        push('\u2011', props, style, true, offset, offset);
-      return;
-    }
     // A `w:ptab` advances the line but occupies NO model offset, so it is pushed with a
     // zero-width range and the offset does not move.
     const positional = positionalTabOf(grand);
@@ -429,9 +422,13 @@ export function unmergedPiecesOfParagraphForDisplay(
     const resolvedAway = !revisionsVisible(revisions, displayMode, authorFilter);
     const suppressed = style.hidden || resolvedAway || (grand.kind === 'deletedText' && !deleted);
     if (resolvedAway && !style.hidden) recordRemoved(offset, offset + text.length, revisions);
+    // A hyphen element is one model character that paints its own glyph (`hyphenDisplayOf`).
+    const hyphen = hyphenDisplayOf(grand);
+    const measured = hyphen?.measureText !== undefined;
     if (!suppressed) {
-      push(text, props, style, false, offset, offset + text.length, {
+      push(hyphen?.text ?? text, props, style, measured, offset, offset + text.length, {
         ...(grand.kind === 'hardBreak' ? { breakKind: hardBreakKind(grand) } : {}),
+        ...(measured ? { measureText: hyphen.measureText } : {}),
       });
     }
     // Deleted characters are recorded whether or not they were laid out. They occupy model
@@ -682,9 +679,9 @@ export function unmergedPiecesOfParagraphForDisplay(
         // Editable field results can carry positional tabs. Preserve their layout
         // metadata while keeping their zero-width canonical model range.
         const positional = pending.atomic ? null : positionalTabOf(grand);
-        const hyphen = nonBreakingHyphenOf(grand);
-        const text = positional ? '\t' : hyphen ? '\u2011' : modelTextOfRunChild(grand);
-        const modelWidth = positional || hyphen ? 0 : text.length;
+        const hyphen = hyphenDisplayOf(grand);
+        const text = positional ? '\t' : (hyphen?.text ?? modelTextOfRunChild(grand));
+        const modelWidth = positional ? 0 : text.length;
         if (text.length === 0) continue;
 
         // A field can be tracked as a whole — Word writes a deleted hyperlink as `w:del`

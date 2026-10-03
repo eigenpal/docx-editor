@@ -25,7 +25,7 @@ test('a deletion across a hyphen converges and survives undo, redo, and reconnec
   const { alice, bob } = await harness.pair(bytes);
   const before = body(alice);
   const paragraphId = harness.paragraphIdAt(alice, 0);
-  harness.apply(alice, [{ op: 'deleteText', paragraphId, start: 5, end: 18 }]);
+  harness.apply(alice, [{ op: 'deleteText', paragraphId, start: 5, end: 19 }]);
   harness.expectConverged(alice, bob);
   expect(body(bob)).not.toContain('noBreakHyphen');
   expect(body(bob)).toContain('softHyphen');
@@ -41,11 +41,29 @@ test('a deletion across a hyphen converges and survives undo, redo, and reconnec
   harness.expectConverged(alice, rejoined);
 });
 
+test.each([8, 9, 12])(
+  'a concurrent insertion at offset %i inside the deleted range converges',
+  async (offset) => {
+    const { alice, bob, pause, resume } = await harness.pair(bytes);
+    pause();
+    harness.apply(alice, [
+      { op: 'deleteText', paragraphId: harness.paragraphIdAt(alice, 0), start: 5, end: 19 },
+    ]);
+    harness.apply(bob, [
+      { op: 'insertText', paragraphId: harness.paragraphIdAt(bob, 0), offset, text: 'Z' },
+    ]);
+    resume();
+    harness.expectConverged(alice, bob);
+    expect(body(alice)).not.toContain('noBreakHyphen');
+    expect(body(alice)).toContain('Z');
+  }
+);
+
 test('a concurrent edit in another part of the paragraph keeps both changes', async () => {
   const { alice, bob, pause, resume } = await harness.pair(bytes);
   pause();
   harness.apply(alice, [
-    { op: 'deleteText', paragraphId: harness.paragraphIdAt(alice, 0), start: 5, end: 18 },
+    { op: 'deleteText', paragraphId: harness.paragraphIdAt(alice, 0), start: 5, end: 19 },
   ]);
   harness.apply(bob, [
     { op: 'insertText', paragraphId: harness.paragraphIdAt(bob, 0), offset: 0, text: 'At ' },

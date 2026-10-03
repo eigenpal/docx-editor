@@ -4,6 +4,7 @@
 // its line budget. Every walk here is node/depth/character capped — the inputs are
 // attacker-controlled OOXML.
 
+import { hyphenDisplayOf } from './field-run-text.ts';
 import {
   isFldSimple,
   WML_NAMESPACE_URI,
@@ -115,6 +116,8 @@ export function bookmarkRangeText(paragraph: OoxmlElement, name: string): string
           }
         } else if (grand.kind === 'tab') {
           append('\t');
+        } else if (hyphenDisplayOf(grand)) {
+          append(hyphenDisplayOf(grand)!.text);
         }
       }
       return;

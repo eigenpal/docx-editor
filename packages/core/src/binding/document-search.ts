@@ -250,7 +250,12 @@ function resultRunAddressAt(
 
 /** Bound and flatten one file-derived string on its way out of this module. */
 function bounded(raw: string, max: number): string {
-  return raw.replace(CONTROL_CHARS_ALL, ' ').slice(0, max);
+  // A non-breaking hyphen shows as one; an optional hyphen shows nothing.
+  return raw
+    .replace(/\u001e/g, '\u2011')
+    .replace(/\u001f/g, '')
+    .replace(CONTROL_CHARS_ALL, ' ')
+    .slice(0, max);
 }
 
 /** Most queries one multi-term search accepts. Queries are host input, so they are bounded. */

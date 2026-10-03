@@ -7,6 +7,11 @@
 
 import { hardBreakText, type OoxmlNode, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import { runTextOutlineProperty } from './run-text-outline.ts';
+import {
+  hyphenTextOf,
+  NON_BREAKING_HYPHEN_TEXT,
+  OPTIONAL_HYPHEN_TEXT,
+} from '../store/package/hyphen-text.ts';
 import { runLigaturesValue } from './run-ligatures.ts';
 
 /** Optional per-run merge of inherited + direct `rPr` (character styles, defaults). */
@@ -27,16 +32,20 @@ export function modelTextOfRunChild(grand: OoxmlNode): string {
   }
   if (grand.kind === 'tab') return '\t';
   if (grand.kind === 'hardBreak') return hardBreakText(grand);
-  return '';
+  return hyphenTextOf(grand) ?? '';
 }
 
-/** Only the WordprocessingML element is a displayed nonbreaking hyphen. */
-export function nonBreakingHyphenOf(node: OoxmlNode): boolean {
-  return (
-    node.kind !== 'textValue' &&
-    node.localName === 'noBreakHyphen' &&
-    node.namespaceUri === 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
-  );
+/**
+ * How a hyphen element paints: a non-breaking hyphen as U+2011, an optional hyphen as U+00AD,
+ * which measures nothing and shows only where a line breaks. Null for any other node.
+ */
+export function hyphenDisplayOf(
+  node: OoxmlNode
+): { readonly text: string; readonly measureText?: string } | null {
+  const model = hyphenTextOf(node);
+  if (model === NON_BREAKING_HYPHEN_TEXT) return { text: '\u2011' };
+  if (model === OPTIONAL_HYPHEN_TEXT) return { text: '\u00ad', measureText: '' };
+  return null;
 }
 
 export function propertiesOfRunContainer(container: OoxmlNode | undefined): OoxmlProperty[] {

@@ -7,6 +7,7 @@
 // boundary, and this writer is a pure string builder — no DOM APIs, no insertion sinks.
 // Every file-derived value is escaped or allowlist-validated before it reaches the output.
 
+import { hyphenDisplayOf } from '../layout/field-run-text.ts';
 import { readOoxmlPackage, type OoxmlPackage } from '../store/package/ooxml-package.ts';
 import { resolveContentType } from '../store/package/content-types.ts';
 import {
@@ -591,6 +592,8 @@ function renderRun(
         break;
       // deletedText only appears under deletions; noteReference has no HTML mapping in v1.
       default:
+        // A non-breaking hyphen copies as U+2011 and an optional hyphen as U+00AD.
+        inner += hyphenDisplayOf(child)?.text ?? '';
         break;
     }
   }

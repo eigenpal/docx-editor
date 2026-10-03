@@ -1,9 +1,9 @@
 {
   "impact": "compatible",
   "fields": [],
-  "before": "deleteText removed text on either side of a w:sym, w:noBreakHyphen or w:softHyphen but left the element, because it has no model offset width. Read text and search left both hyphens out.",
-  "after": "A deletion whose range spans one of these elements removes it, or strikes it inside the w:del when tracked. Read text shows the hyphens as U+001E and U+001F; model offsets are unchanged.",
-  "reason": "The deletion removes or wraps existing nodes inside the same transaction, through the existing journal, so it replicates and undoes as one change. No stored field, operation shape, identity, or model offset changes. Read text and search are local projections and are not shared state. Released participants apply the replicated tree as before.",
+  "before": "w:noBreakHyphen and w:softHyphen had no model offset width. Paragraph text, search, and selection skipped them, and deleting text across one or a w:sym left it between the remaining text.",
+  "after": "Each hyphen element is one model character (U+001E or U+001F), so it reads, searches, selects, and deletes like a tab. A deletion that spans a w:sym removes it, or strikes it when tracked.",
+  "reason": "Shared state is unchanged: hyphens stay generic tree nodes with the same identities and journal operations, and text effects address textValue positions, which do not count them. Deletions remove or wrap existing nodes inside one transaction, so they replicate and undo as one change. Model offsets do count each hyphen now. In a room that mixes released and current participants, a remote caret placed after a hyphen in the same paragraph shows one position off; presence is ephemeral and the saved room is unaffected. Experimental per-paragraph text collaboration carries hyphens as characters; inserting one there reaches remote participants as text, as tabs already do.",
   "tests": [
     "packages/pro/src/collaboration/__tests__/document-inline-characters.test.ts",
     "packages/core/src/store/__tests__/inline-character-deletion.test.ts",

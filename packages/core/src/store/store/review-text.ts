@@ -1,3 +1,4 @@
+import { hyphenTextOf } from '../package/hyphen-text.ts';
 import type { OoxmlNode } from '../package/ooxml-tree.ts';
 import { hardBreakText } from '../package/hard-break.ts';
 import { isInstrText } from '../package/field-nodes.ts';
@@ -37,6 +38,8 @@ export function textUnder(node: OoxmlNode): string {
   // model counts for them.
   if (node.kind === 'tab') return '\t';
   if (node.kind === 'hardBreak') return hardBreakText(node);
+  const hyphen = hyphenTextOf(node);
+  if (hyphen !== null) return hyphen;
   // A field's instruction is CODE, not content: it measures nothing in the offset model,
   // and a tracked page field would otherwise present its ` PAGE ` source as inserted
   // words. `isInstrText` covers all three spellings — the typed kind, the parse-demoted
