@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Keep the text of right-to-left paragraph lines inside the margins when a line ends in spaces: the spaces stand at the line's left end and no longer push the text past the right margin. Fixes #1061
+Place the trailing spaces of mixed-direction lines beside the text they follow, so right-to-left paragraph lines no longer run past the right margin, and spaces whose direction differs from their run or paragraph take room on the line instead of hanging. Fixes #1061
