@@ -6,6 +6,7 @@ import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import { justifyCjkSpans } from './cjk-justify.ts';
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
+import { isCollapsibleLineEndWhitespace } from './line-end-whitespace.ts';
 
 const OVERFLOW_TOLERANCE_PT = 0.001;
 
@@ -296,22 +297,101 @@ export function alignSpans(
   lastLineShrinks = false
 ): readonly StyleSpanRecord[] {
   const effective = alignment === 'both' && isLastLine && paragraphRtl ? 'right' : alignment;
-  return reorderBidiSpans(
-    alignLogicalSpans(
-      splitBidiTrailingWhitespace(spans, measurer),
-      measurer,
-      indentLeft,
-      available,
-      effective,
-      isLastLine,
-      lineUsedWidth,
+  const split = splitBidiTrailingWhitespace(spans, measurer);
+  const hangFrom = paragraphRtl ? rtlHangingWhitespaceStart(split) : split.length;
+  if (hangFrom === split.length) {
+    return reorderBidiSpans(
+      alignLogicalSpans(
+        split,
+        measurer,
+        indentLeft,
+        available,
+        effective,
+        isLastLine,
+        lineUsedWidth,
+        paragraphRtl,
+        pageBreaksIgnored,
+        lastLineShrinks
+      ),
       paragraphRtl,
-      pageBreaksIgnored,
-      lastLineShrinks
-    ),
+      pageBreaksIgnored
+    );
+  }
+  // Bidi reordering moves a right-to-left line's trailing spaces to its left end, so they
+  // hang off that end instead of the right one: the visible text aligns without them, and
+  // keeps that place when the spaces move. Aligning them at the right and then reordering
+  // pushed the text past the right margin by their width.
+  const content = split.slice(0, hangFrom);
+  const hangingWidth = split.slice(hangFrom).reduce((width, span) => width + span.box.width, 0);
+  const aligned = alignLogicalSpans(
+    content,
+    measurer,
+    indentLeft,
+    available,
+    effective,
+    isLastLine,
+    lineUsedWidth === undefined ? undefined : Math.max(0, lineUsedWidth - hangingWidth),
     paragraphRtl,
-    pageBreaksIgnored
+    pageBreaksIgnored,
+    lastLineShrinks
   );
+  // CJK justification may split the content into more spans, so count them after alignment.
+  const count = aligned.length;
+  const end = (span: StyleSpanRecord) => span.box.x + span.box.width;
+  const moved = end(aligned[count - 1]!) - end(content[hangFrom - 1]!);
+  const hanging = split
+    .slice(hangFrom)
+    .map((span) => ({ ...span, box: { ...span.box, x: span.box.x + moved } }));
+  const reordered = reorderBidiSpans([...aligned, ...hanging], paragraphRtl, pageBreaksIgnored);
+  // Exclusion passages reorder on their own, and only the last one holds the line's end.
+  // CJK justification leaves a line with passages unsplit, so these indexes match `content`.
+  let passageStart = count - 1;
+  while (passageStart > 0 && !((aligned[passageStart]!.wrapAdvanceBefore ?? 0) > 0)) passageStart--;
+  let alignedStart = Infinity;
+  let reorderedStart = Infinity;
+  for (let index = passageStart; index < count; index++) {
+    alignedStart = Math.min(alignedStart, aligned[index]!.box.x);
+    reorderedStart = Math.min(reorderedStart, reordered[index]!.box.x);
+  }
+  const shift = alignedStart - reorderedStart;
+  // Like trailing spaces at a right edge, the hanging spaces stop at the line's left edge,
+  // or at the start of the passage that holds them.
+  const leftEdge = Math.min(
+    passageStart === 0 ? indentLeft : content[passageStart]!.box.x,
+    alignedStart
+  );
+  return reordered.map((span, index) => {
+    if (index < passageStart) return span;
+    const x = span.box.x + shift;
+    if (index < count || x >= leftEdge) {
+      return shift === 0 ? span : { ...span, box: { ...span.box, x } };
+    }
+    const width = Math.max(0, x + span.box.width - leftEdge);
+    const clipped = { ...span, box: { ...span.box, x: leftEdge, width } };
+    // Paint clips a space's ink to its box only when the span says it hangs.
+    return isCollapsibleLineEndWhitespace(span.text)
+      ? { ...clipped, lineEndWhitespace: true as const }
+      : clipped;
+  });
+}
+
+/**
+ * Where the trailing spaces that a right-to-left line hangs off its left end start: spaces,
+ * and zero-width line and page breaks, after the line's last visible content. Bidi
+ * reordering moves them there. Returns `spans.length` when the line has none, or when it has
+ * no visible content.
+ */
+function rtlHangingWhitespaceStart(spans: readonly StyleSpanRecord[]): number {
+  if (!spans.some((span) => span.style.shaping)) return spans.length;
+  let start = spans.length;
+  while (
+    start > 0 &&
+    (isCollapsibleLineEndWhitespace(spans[start - 1]!.text) ||
+      ((spans[start - 1]!.text === '\n' || spans[start - 1]!.text === PAGE_BREAK_CHAR) &&
+        spans[start - 1]!.box.width === 0))
+  )
+    start--;
+  return start === 0 ? spans.length : start;
 }
 
 /**
