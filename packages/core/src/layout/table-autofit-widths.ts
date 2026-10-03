@@ -24,7 +24,7 @@ import { sha256FontBytes } from '../store/package/sha256.ts';
 import { piecesOfParagraphForDisplay } from './field-projection-display.ts';
 import type { ResolvedListItem } from './list-resolve.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
-import { displayText } from './run-style.ts';
+import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import type { SemanticTableCell, SemanticTableStructure } from './semantic-table.ts';
@@ -308,13 +308,17 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
     bidiSourceBoundaries(paragraph),
     true
   );
-  const { left, right, firstLine } = layoutInputs.indent;
+  const { left, right, firstLine, hanging } = layoutInputs.indent;
+  // Where each line starts: the first one shifted by its first-line indent or hanging. A list
+  // item's hanging slot belongs to its marker; its text starts back at the left indent.
+  const listItem = context.listItems?.get(paragraph.id);
+  const firstShift = listItem ? Math.max(0, firstLine) : hanging > 0 ? -hanging : firstLine;
   let widest = 0;
   let segment = 0;
   let first = true;
   const close = (): void => {
     if (segment > 0) {
-      const width = segment + (first ? Math.max(0, firstLine) : 0);
+      const width = segment + Math.max(0, left + (first ? firstShift : 0));
       if (width > widest) widest = width;
       first = false;
     }
@@ -362,7 +366,7 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
     // A run that opens with a breaking space breaks before it, as the line breaker does.
     if (STARTS_WITH_BREAKING_SPACE.test(piece.text)) close();
     const style = styleForFontSlot(piece.style, piece.fontSlot);
-    const measure = (text: string): number => measurer.measure(displayText(text, style), style);
+    const measure = (text: string): number => measureDisplayText(text, style, measurer);
     if (piece.measureText !== undefined) {
       segment += lead + measure(piece.measureText);
       lineStart = false;
@@ -408,7 +412,7 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
     }
   }
   close();
-  const width = widest + Math.max(0, left) + Math.max(0, right);
+  const width = widest + Math.max(0, right);
   if (key) byParagraph.set(paragraph, { key, width });
   return width;
 }
@@ -460,7 +464,8 @@ function nestedTableMinimumPt(
 /** The table indent, which moves only a table aligned to its leading edge. */
 function leadingIndentPt(structure: SemanticTableStructure): number {
   const leading = structure.bidiVisual ? 'right' : 'left';
-  return structure.alignment === leading ? Math.max(0, structure.indentPt) : 0;
+  // A negative indent moves a top-level table into the margin, which adds room.
+  return structure.alignment === leading ? structure.indentPt : 0;
 }
 
 /** The narrowest cell a nested table can be given. */
@@ -621,8 +626,11 @@ export function widenAutofitColumns(
 export function autofitTargetPt(
   tableWidth: PreferredWidth,
   totalPt: number,
-  availablePt: number
+  availablePt: number,
+  legacyContentAlignment = false
 ): number {
+  // A legacy content-aligned table already spans the text column plus its outer margins.
+  if (legacyContentAlignment) return totalPt;
   if (tableWidth.type === 'dxa' && tableWidth.value > 0) return totalPt;
   if (tableWidth.type === 'pct' && tableWidth.value > 0)
     return (availablePt * tableWidth.value) / 100;
@@ -668,16 +676,17 @@ export function autofitColumnWidthsPt(
     return structure.columnWidthsPt;
   }
   const minimums = ifWidened;
-  // The table indent moves a leading-aligned table into the text column's room.
-  const availablePt = Math.max(0, contentWidthPt - leadingIndentPt(structure));
+  // The table indent moves a leading-aligned table into the text column's room; a legacy
+  // content-aligned table owns the room its own width already spans.
+  const totalPt = structure.columnWidthsPt.reduce((sum, width) => sum + width, 0);
+  const legacy = structure.legacyContentAlignment === true;
+  const availablePt = legacy
+    ? Math.max(totalPt, contentWidthPt)
+    : Math.max(0, contentWidthPt - leadingIndentPt(structure));
   const widths = widenAutofitColumns(
     structure.columnWidthsPt,
     minimums,
-    autofitTargetPt(
-      structure.tableWidth,
-      structure.columnWidthsPt.reduce((sum, width) => sum + width, 0),
-      availablePt
-    ),
+    autofitTargetPt(structure.tableWidth, totalPt, availablePt, legacy),
     availablePt
   );
   byStructure.set(structure, { contentWidthPt, widths });
