@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Word clipboard equations pasted as fallback pictures or loose text.",
+  "after": "Word clipboard equations paste as canonical m:oMath atoms through the existing fragment paste.",
+  "reason": "The projection emits existing OMML equation atoms into the clipboard fragment. Fragment paste, equation operations, and the collaboration format are unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/clipboard-html-equations.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-paste-equation.test.ts"
+  ],
+  "changeset": "word-clipboard-equations",
+  "migration": null
+}

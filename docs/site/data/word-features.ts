@@ -1168,7 +1168,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Copy writes plain text and HTML with an embedded document fragment. Pasting that fragment restores styles, lists, tables, links, images, footnotes, and endnotes. External HTML does not restore notes. Sections, headers, footers, and comments do not travel on the clipboard. Suggesting mode and non-body scopes use plain-text paste.',
+      'Copy writes plain text and HTML with an embedded document fragment. Pasting that fragment restores styles, lists, tables, links, images, footnotes, and endnotes. Pasted Microsoft Word HTML restores footnotes, endnotes, and Office Math equations; each equation lands as an editable inline equation instead of its fallback picture. Display equations paste as inline equations, and MathML equations keep their fallback picture. Sections, headers, footers, and comments do not travel on the clipboard. Suggesting mode and non-body scopes use plain-text paste.',
   },
   {
     id: 'collab.undo-redo',
