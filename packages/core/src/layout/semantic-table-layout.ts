@@ -539,6 +539,7 @@ function placeCellParagraph(
     legacyLineStart: options?.lineStart ?? 0,
     held: options?.heldBreak,
     top,
+    cellWidth: cellBoxWidth,
     zones: pageZones,
     inlineDrawingLayout: deps.inlineDrawingLayout,
     heldKey: () => keyFrom(0, false),
@@ -1138,7 +1139,8 @@ function flowBlocksInBoxBounded(
         inTableCell,
         lineStart: lineIndex,
         startOffset,
-        heldBreak,
+        // Only the cursor's own paragraph continues; every later block starts fresh.
+        heldBreak: blockIndex === cursor.blockIndex ? heldBreak : undefined,
         applyWidowControl,
         aloneOnPage: !fitted && deps.rowAtPageStart !== false,
         fragmentIndex: paragraphFragmentIndex,
@@ -1201,6 +1203,10 @@ function flowBlocksInBoxBounded(
       blockIndex,
       lineIndex,
       startOffset,
+      // A continued paragraph that placed nothing here keeps its break for the next page.
+      ...(heldBreak && blockIndex === cursor.blockIndex && startOffset !== undefined
+        ? { heldBreak }
+        : {}),
       ...(nestedTable ? { nestedTable } : {}),
       previousSpaceAfter,
       paragraphFragmentIndex,

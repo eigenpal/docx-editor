@@ -1,6 +1,6 @@
-import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
-import { anchoredDrawingAtomsInParagraph } from './drawing-atom-walk.ts';
+import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
 import type { ExclusionZone } from './drawing-exclusion.ts';
+import { anchorsAnyDrawing } from './drawing-placement-exclusion.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import type { PendingLine } from './paragraph-flow.ts';
 
@@ -15,37 +15,34 @@ export interface HeldCellBreak {
   readonly base: number;
 }
 
-/** Per drawing context: whether a paragraph anchors a drawing. Nodes are immutable per revision. */
-const anchorsByContext = new WeakMap<InlineDrawingLayoutContext, WeakMap<OoxmlNode, boolean>>();
-
-function anchorsDrawing(paragraph: OoxmlNode, context: InlineDrawingLayoutContext): boolean {
-  let byParagraph = anchorsByContext.get(context);
-  if (!byParagraph) {
-    byParagraph = new WeakMap();
-    anchorsByContext.set(context, byParagraph);
-  }
-  let anchors = byParagraph.get(paragraph);
-  if (anchors === undefined) {
-    anchors = anchoredDrawingAtomsInParagraph(paragraph, context).length > 0;
-    byParagraph.set(paragraph, anchors);
-  }
-  return anchors;
-}
-
 /**
  * Whether the paragraph's line breaks on this page are independent of where it sits: no
- * exclusion band reaches below its top, and it anchors no drawing of its own. A band above it,
- * such as a header logo's, wraps nothing it holds.
+ * exclusion band that can reach its lines lies below its top, and it anchors no drawing of its
+ * own. A band above it, such as a header logo's, wraps nothing it holds; nor does a band beside
+ * the cell that lets text pass on both sides.
  */
 function positionFree(
-  paragraph: OoxmlNode,
+  paragraph: OoxmlElement,
   top: number,
+  cellWidth: number,
   zones: readonly ExclusionZone[],
   inlineDrawingLayout: InlineDrawingLayoutContext | undefined
 ): boolean {
-  for (const zone of zones)
-    if (zone.verticalBand.y + zone.verticalBand.height > top - 0.001) return false;
-  return inlineDrawingLayout === undefined || !anchorsDrawing(paragraph, inlineDrawingLayout);
+  for (const zone of zones) {
+    const band = zone.verticalBand;
+    if (band.y + band.height <= top - 0.001) continue;
+    const { mode, textSide, contentBounds, wrapDistances } = zone.input;
+    if (mode !== 'topAndBottom' && textSide === 'bothSides') {
+      const left = Math.min(band.x, contentBounds.x - wrapDistances.left);
+      const right = Math.max(
+        band.x + band.width,
+        contentBounds.x + contentBounds.width + wrapDistances.right
+      );
+      if (right <= 0.001 || left >= cellWidth - 0.001) continue;
+    }
+    return false;
+  }
+  return !anchorsAnyDrawing(paragraph, inlineDrawingLayout);
 }
 
 /**
@@ -58,7 +55,7 @@ function positionFree(
  * line ids and the returned cursor count in. `carry` gives the break the next page receives.
  */
 export function cellParagraphLines(input: {
-  readonly paragraph: OoxmlNode;
+  readonly paragraph: OoxmlElement;
   readonly startOffset: number;
   /** Lines already placed, for a model-offset continuation; undefined otherwise. */
   readonly continuedAfter: number | undefined;
@@ -66,6 +63,7 @@ export function cellParagraphLines(input: {
   readonly legacyLineStart: number;
   readonly held: HeldCellBreak | undefined;
   readonly top: number;
+  readonly cellWidth: number;
   readonly zones: readonly ExclusionZone[];
   readonly inlineDrawingLayout: InlineDrawingLayoutContext | undefined;
   readonly heldKey: () => string;
@@ -76,10 +74,15 @@ export function cellParagraphLines(input: {
   readonly priorLineCount: number;
   readonly carry: () => HeldCellBreak | undefined;
 } {
-  const free = positionFree(input.paragraph, input.top, input.zones, input.inlineDrawingLayout);
-  const key = free ? input.heldKey() : '';
+  const free = positionFree(
+    input.paragraph,
+    input.top,
+    input.cellWidth,
+    input.zones,
+    input.inlineDrawingLayout
+  );
   const { held, continuedAfter } = input;
-  if (free && held && continuedAfter !== undefined && held.key === key) {
+  if (free && held && continuedAfter !== undefined && held.key === input.heldKey()) {
     // Index 0 of a whole break owns the first-line indent and list marker; never a continuation.
     const index = continuedAfter - held.base;
     if (index > 0 && held.lines[index]?.start === input.startOffset) {
@@ -92,6 +95,6 @@ export function cellParagraphLines(input: {
     lines,
     lineStart: continuedAfter !== undefined ? 0 : input.legacyLineStart,
     priorLineCount: base,
-    carry: () => (free ? { key, lines, base } : undefined),
+    carry: () => (free ? { key: input.heldKey(), lines, base } : undefined),
   };
 }

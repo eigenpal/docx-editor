@@ -28,6 +28,22 @@ export function anchorsTopAndBottomDrawing(
   return value;
 }
 
+const anyAnchorMemo = new WeakMap<OoxmlElement, boolean>();
+
+/** True when the paragraph anchors any drawing, whose own band then moves with the paragraph. */
+export function anchorsAnyDrawing(
+  paragraph: OoxmlElement,
+  context: InlineDrawingLayoutContext | undefined
+): boolean {
+  if (!context) return false;
+  let value = anyAnchorMemo.get(paragraph);
+  if (value === undefined) {
+    value = anchoredDrawingAtomsInParagraph(paragraph, context).length > 0;
+    anyAnchorMemo.set(paragraph, value);
+  }
+  return value;
+}
+
 /** Placeholder lines preceding a floating atom do not inherit its placement skip. */
 export function anchorLineSkipsExclusion(
   paragraph: OoxmlElement,

@@ -3,6 +3,7 @@ import { readOoxmlPart, type OoxmlNode } from '../../store/package/ooxml-tree.ts
 import { cellParagraphLines, type HeldCellBreak } from '../cell-continuation-lines.ts';
 import type { ExclusionZone } from '../drawing-exclusion.ts';
 import type { PendingLine } from '../paragraph-flow.ts';
+import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import type { TableFragmentRecord, TextMeasurer } from '../semantic-records.ts';
 
@@ -20,7 +21,12 @@ function cellTable(content: string, twips: number, paragraphProps = '', header =
   );
 }
 
-function layout(body: string, height: number, measurer: TextMeasurer = createFixedMeasurer()) {
+function layout(
+  body: string,
+  height: number,
+  measurer: TextMeasurer = createFixedMeasurer(),
+  cached = false
+) {
   const read = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
     name: '/word/document.xml',
     contentType: 'app/xml',
@@ -28,6 +34,7 @@ function layout(body: string, height: number, measurer: TextMeasurer = createFix
   if (!read.ok) throw new Error(read.reason);
   return layoutSemanticDocument(read.part, 1, {
     measurer,
+    ...(cached ? { cache: createParagraphLayoutCache<readonly PendingLine[]>() } : {}),
     geometry: { width: 400, height, margin: { top: 20, bottom: 20, left: 20, right: 20 } },
   });
 }
@@ -59,8 +66,13 @@ function cellLines(result: ReturnType<typeof layout>): string[] {
 const alternatingRuns = (count: number) =>
   '<w:r><w:rPr><w:b/></w:rPr><w:t>1</w:t></w:r><w:r><w:t>1</w:t></w:r>'.repeat(count / 2);
 
-for (const header of [false, true]) {
-  test(`a cell paragraph split across pages costs time linear in its length${header ? ' under a repeated header row' : ''}`, () => {
+for (const [header, cached] of [
+  [false, false],
+  [true, false],
+  [false, true],
+  [true, true],
+] as const) {
+  test(`a cell paragraph split across pages costs time linear in its length${header ? ' under a repeated header row' : ''}${cached ? ' with a paragraph cache' : ''}`, () => {
     const calls = (count: number) => {
       const base = createFixedMeasurer();
       let made = 0;
@@ -71,7 +83,12 @@ for (const header of [false, true]) {
           return base.lineMetrics(...args);
         },
       };
-      const result = layout(cellTable(alternatingRuns(count), 400, '', header), 400, measurer);
+      const result = layout(
+        cellTable(alternatingRuns(count), 400, '', header),
+        400,
+        measurer,
+        cached
+      );
       expect(result.pages.length).toBeGreaterThan(count / 100);
       return made;
     };
@@ -89,9 +106,13 @@ const cases: Record<string, string> = {
   'right-to-left': '<w:pPr><w:bidi/><w:ind w:start="300" w:hanging="300"/></w:pPr>',
 };
 for (const [name, props] of Object.entries(cases))
-  for (const header of [false, true])
-    test(`a continued ${name} cell paragraph keeps the lines of its whole break${header ? ' under a repeated header row' : ''}`, () => {
-      const split = layout(cellTable(plain, 1600, props, header), 200);
+  for (const [header, cached] of [
+    [false, false],
+    [true, false],
+    [true, true],
+  ] as const)
+    test(`a continued ${name} cell paragraph keeps the lines of its whole break${header ? ' under a repeated header row' : ''}${cached ? ' with a paragraph cache' : ''}`, () => {
+      const split = layout(cellTable(plain, 1600, props, header), 200, undefined, cached);
       const whole = layout(cellTable(plain, 1600, props, header), 4000);
       expect(split.pages.length).toBeGreaterThan(2);
       expect(whole.pages).toHaveLength(1);
@@ -100,8 +121,22 @@ for (const [name, props] of Object.entries(cases))
 
 const line = (start: number, end: number) => ({ start, end }) as unknown as PendingLine;
 const paragraph = { kind: 'paragraph' } as unknown as OoxmlNode;
-const zoneAt = (y: number, height: number) =>
-  ({ verticalBand: { x: 0, y, width: 50, height } }) as unknown as ExclusionZone;
+const zoneAt = (
+  y: number,
+  height: number,
+  x = 0,
+  mode: 'square' | 'topAndBottom' = 'square',
+  textSide: 'bothSides' | 'left' = 'bothSides'
+) =>
+  ({
+    verticalBand: { x, y, width: 50, height },
+    input: {
+      mode,
+      textSide,
+      contentBounds: { x, y, width: 50, height },
+      wrapDistances: { top: 0, right: 9, bottom: 0, left: 9 },
+    },
+  }) as unknown as ExclusionZone;
 function linesFor(held: HeldCellBreak | undefined, continuedAfter: number, startOffset: number) {
   const rest = [line(startOffset, startOffset + 3)];
   return (zones: readonly ExclusionZone[] = [], key = 'k') =>
@@ -112,6 +147,7 @@ function linesFor(held: HeldCellBreak | undefined, continuedAfter: number, start
       legacyLineStart: 0,
       held,
       top: 100,
+      cellWidth: 200,
       zones,
       inlineDrawingLayout: undefined,
       heldKey: () => key,
@@ -146,12 +182,19 @@ test('a page that breaks its own remainder carries it on to the next page', () =
   expect(next.priorLineCount).toBe(4);
 });
 
-test('only an exclusion band that reaches below the paragraph top stops the reuse', () => {
+test('only an exclusion band that can reach the paragraph stops the reuse', () => {
   const whole = [line(0, 5), line(5, 9), line(9, 12)];
   const held = { key: 'k', lines: whole, base: 0 };
-  // A header logo's band ends above the paragraph, so the held break still holds.
-  expect(linesFor(held, 1, 5)([zoneAt(0, 60)]).lines).toBe(whole);
-  const crossed = linesFor(held, 1, 5)([zoneAt(150, 40)]);
-  expect(crossed.lines).not.toBe(whole);
-  expect(crossed.carry()).toBeUndefined();
+  const reuses = (zone: ExclusionZone) => linesFor(held, 1, 5)([zone]).lines === whole;
+  // A header logo's band ends above the paragraph.
+  expect(reuses(zoneAt(0, 60))).toBe(true);
+  // A band beside the cell, wider than its wrap distance away, that text passes on both sides.
+  expect(reuses(zoneAt(150, 40, 260))).toBe(true);
+  expect(reuses(zoneAt(150, 40, -70))).toBe(true);
+  // A band over the cell, within its wrap distance, top and bottom, or one-sided: no reuse.
+  expect(reuses(zoneAt(150, 40, 20))).toBe(false);
+  expect(reuses(zoneAt(150, 40, 205))).toBe(false);
+  expect(reuses(zoneAt(150, 40, 260, 'topAndBottom'))).toBe(false);
+  expect(reuses(zoneAt(150, 40, 260, 'square', 'left'))).toBe(false);
+  expect(linesFor(held, 1, 5)([zoneAt(150, 40)]).carry()).toBeUndefined();
 });
