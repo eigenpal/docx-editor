@@ -4311,6 +4311,7 @@ export type TableAlignment = 'left' | 'center' | 'right';
 
 // @public
 export interface TableAutofitContext {
+    readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
     // (undocumented)
     readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
     // (undocumented)

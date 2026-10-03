@@ -29,6 +29,7 @@
 // - A first cell that opens with a nested table.
 // - Nested tables and positioned (`w:tblpPr`) tables never keep their rows.
 
+import { autofitContextOf } from './table-autofit-widths.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import {
   readTableStructure,
@@ -360,7 +361,7 @@ const structureOf = (table: OoxmlElement, at: TableKeepFlow, deps?: TableFlowDep
     at.authorFilter,
     at.compatibilityMode,
     // Priced at the widths placement lays it out at: the same autofit inputs.
-    deps ? { measurer: deps.measurer, listItems: deps.listItems } : undefined
+    deps ? autofitContextOf(deps) : undefined
   );
 
 /** Whether a body table's last row keeps with the body content after the table. */

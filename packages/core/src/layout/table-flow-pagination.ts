@@ -10,6 +10,7 @@
 // row publishes into. Everything the paginator needs to mutate is on that object, so the
 // story loop keeps ownership of the cursor and this module keeps the row rules.
 
+import { autofitContextOf } from './table-autofit-widths.ts';
 import { positionedTableOriginX } from './table-origin.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import {
@@ -93,7 +94,7 @@ export function paginateTableInFlow(
     displayMode,
     revisionAuthorFilter,
     flow.compatibilityMode,
-    { measurer: flowDeps.measurer, listItems: flowDeps.listItems }
+    autofitContextOf(flowDeps)
   );
   if (!structure || structure.rows.length === 0) return { outOfFlow: false };
   const outOfFlow =

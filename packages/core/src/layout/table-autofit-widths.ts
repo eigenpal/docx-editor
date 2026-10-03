@@ -4,6 +4,8 @@
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
 import { BREAK_AFTER_DASH, wordBoundaries } from './cjk-line-break.ts';
+import { measureInlineDrawing, type InlineDrawingLayoutContext } from './drawing-layout.ts';
+import { createEquationLayouter } from './equation-layout.ts';
 import { piecesOfParagraphForDisplay } from './field-projection-display.ts';
 import type { ResolvedListItem } from './list-resolve.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
@@ -27,6 +29,21 @@ import { withoutTrailingSpaces } from './trailing-spaces.ts';
 export interface TableAutofitContext {
   readonly measurer: TextMeasurer;
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
+  /** Resolves inline pictures, so a picture column keeps the width the picture paints at. */
+  readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
+}
+
+/** The autofit inputs a table flow already carries, so every reader widens alike. */
+export function autofitContextOf(deps: {
+  readonly measurer: TextMeasurer;
+  readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
+  readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
+}): TableAutofitContext {
+  return {
+    measurer: deps.measurer,
+    ...(deps.listItems ? { listItems: deps.listItems } : {}),
+    ...(deps.inlineDrawingLayout ? { inlineDrawingLayout: deps.inlineDrawingLayout } : {}),
+  };
 }
 
 /** The view a structure was read in: the cascade, display mode, and author filter. */
@@ -47,6 +64,7 @@ const widthMemos = new WeakMap<
     SemanticTableStructure,
     {
       readonly listItems: ReadonlyMap<string, ResolvedListItem> | undefined;
+      readonly inlineDrawingLayout: InlineDrawingLayoutContext | undefined;
       readonly contentWidthPt: number;
       readonly widths: readonly number[];
     }
@@ -65,6 +83,7 @@ interface MinimumInputs {
   readonly displayMode: RevisionDisplayMode;
   readonly authorFilter: RevisionAuthorFilter | undefined;
   readonly listItem: ResolvedListItem | undefined;
+  readonly inlineDrawingLayout: InlineDrawingLayoutContext | undefined;
 }
 
 /**
@@ -79,10 +98,26 @@ const paragraphMinimums = new WeakMap<
 
 type MinimumKey = Omit<MinimumInputs, 'measurer'>;
 
+/**
+ * A table style's cell formatting, by content. A structure read builds new formatting objects
+ * for every cell, so identity would miss the cache on every edit of a styled table.
+ */
+const cellStyleKeys = new WeakMap<object, string>();
+function cellStyleKey(style: SemanticTableCell['styleFormatting'] | undefined): string {
+  if (!style) return '';
+  let key = cellStyleKeys.get(style);
+  if (key === undefined) {
+    key = JSON.stringify([style.paragraphProperties, style.runProperties]);
+    cellStyleKeys.set(style, key);
+  }
+  return key;
+}
+
 function sameInputs(a: MinimumKey, b: MinimumInputs): boolean {
   return (
     a.styleCascade === b.styleCascade &&
-    a.tableCellStyle === b.tableCellStyle &&
+    cellStyleKey(a.tableCellStyle) === cellStyleKey(b.tableCellStyle) &&
+    a.inlineDrawingLayout === b.inlineDrawingLayout &&
     a.displayMode === b.displayMode &&
     a.authorFilter === b.authorFilter &&
     a.listItem === b.listItem
@@ -123,7 +158,7 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
     undefined,
     displayMode,
     undefined,
-    undefined,
+    inputs.inlineDrawingLayout,
     styleCascade?.themeFonts,
     undefined,
     undefined,
@@ -143,9 +178,29 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
     }
     segment = 0;
   };
+  let layoutEquation: ReturnType<typeof createEquationLayouter> | undefined;
+  // A dash that ends a run breaks only if the next run does not open with another dash.
+  let dashPending = false;
   for (const piece of pieces) {
     if (piece.style.hidden) continue;
+    if (dashPending && !BREAK_AFTER_DASH.has(piece.text[0] ?? '')) close();
+    dashPending = false;
     if (piece.text === '\n' || piece.text === PAGE_BREAK_CHAR) {
+      // A break ends the first line, and with it the first-line indent.
+      close();
+      first = false;
+      continue;
+    }
+    // A picture or an equation is one box with a break opportunity on each side.
+    const atomWidth = piece.inlineDrawing
+      ? measureInlineDrawing(piece.inlineDrawing.projection).totalWidth
+      : piece.equation
+        ? (layoutEquation ??= createEquationLayouter(measurer))(piece.equation, piece.style)
+            .geometry.box.width
+        : undefined;
+    if (atomWidth !== undefined) {
+      close();
+      segment = atomWidth;
       close();
       continue;
     }
@@ -173,63 +228,25 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
       else if (ink.length > 0) segment += measure(candidate) - measure(candidate.slice(ink.length));
       // A space or a dash ends the segment, including a dash that ends its run; a plain run
       // seam does not.
-      const endsInDash =
-        to === piece.text.length &&
-        BREAK_AFTER_DASH.has(candidate.at(-1)!) &&
-        segment > measure(candidate.at(-1)!) + WIDTH_EPSILON_PT;
-      if (ink.length < candidate.length || to < piece.text.length || endsInDash) close();
+      if (ink.length < candidate.length || to < piece.text.length) close();
+      else dashPending = BREAK_AFTER_DASH.has(candidate.at(-1)!);
     }
   }
   close();
-  widest = Math.max(widest, inlinePictureWidthPt(paragraph));
   const width = widest + Math.max(0, left) + Math.max(0, right);
   const { styleCascade: cascade, tableCellStyle, listItem, authorFilter } = inputs;
   byParagraph.set(paragraph, {
-    inputs: { styleCascade: cascade, tableCellStyle, displayMode, authorFilter, listItem },
+    inputs: {
+      styleCascade: cascade,
+      tableCellStyle,
+      displayMode,
+      authorFilter,
+      listItem,
+      inlineDrawingLayout: inputs.inlineDrawingLayout,
+    },
     width,
   });
   return width;
-}
-
-const EMU_PER_PT = 12700;
-/** Bounds the subtree walk; a paragraph this large is not a picture row. */
-const MAX_PICTURE_SCAN_NODES = 10_000;
-
-function emuAttributePt(node: OoxmlElement, name: string): number {
-  const raw = node.attributes.find((attribute) => attribute.localName === name)?.value;
-  const emu = raw === undefined ? NaN : Number(raw);
-  return Number.isFinite(emu) && emu > 0 ? emu / EMU_PER_PT : 0;
-}
-
-/**
- * The widest inline picture in a paragraph, with its side distances. A picture is one
- * unbreakable box; anchored drawings float and set no minimum.
- */
-function inlinePictureWidthPt(paragraph: OoxmlElement): number {
-  let widest = 0;
-  let visited = 0;
-  const pending: OoxmlElement[] = [paragraph];
-  while (pending.length > 0 && visited < MAX_PICTURE_SCAN_NODES) {
-    const node = pending.pop()!;
-    visited += 1;
-    if (node.localName === 'anchor') continue;
-    if (node.localName === 'inline') {
-      const extent = node.children.find(
-        (child) => 'localName' in child && child.localName === 'extent'
-      ) as OoxmlElement | undefined;
-      if (extent) {
-        const width =
-          emuAttributePt(extent, 'cx') +
-          emuAttributePt(node, 'distL') +
-          emuAttributePt(node, 'distR');
-        widest = Math.max(widest, width);
-      }
-      continue;
-    }
-    for (const child of node.children)
-      if ('localName' in child && 'children' in child) pending.push(child as OoxmlElement);
-  }
-  return widest;
 }
 
 /** A nested table needs at least the width its own grid states. */
@@ -270,6 +287,7 @@ export function autofitColumnMinimumsPt(
           displayMode,
           authorFilter,
           listItem: context.listItems?.get(block.id),
+          inlineDrawingLayout: context.inlineDrawingLayout,
         });
         content = Math.max(content, width);
       }
@@ -279,6 +297,9 @@ export function autofitColumnMinimumsPt(
       if (needed > minimums[cell.gridColumn]!) minimums[cell.gridColumn] = needed;
     }
   }
+  // A column only spanning cells cover has no minimum of its own; it keeps its width.
+  for (const [column, minimum] of minimums.entries())
+    if (minimum === 0) minimums[column] = structure.columnWidthsPt[column]!;
   return minimums;
 }
 
@@ -317,8 +338,13 @@ export function widenAutofitColumns(
   }
   const floor = minimums.map((minimum) => Math.max(minimum, MIN_COLUMN_PT));
   const needed = floor.reduce((sum, value) => sum + value, 0);
-  if (!Number.isFinite(availablePt) || needed <= availablePt) return floor;
-  const scale = availablePt / needed;
+  // Never narrower than the table already was: an indent can leave the text column no room.
+  const room = Math.max(
+    availablePt,
+    widths.reduce((sum, width) => sum + width, 0)
+  );
+  if (!Number.isFinite(room) || needed <= room) return floor;
+  const scale = room / needed;
   return floor.map((width) => width * scale);
 }
 
@@ -347,7 +373,12 @@ export function autofitColumnWidthsPt(
   let byStructure = widthMemos.get(context.measurer);
   if (!byStructure) widthMemos.set(context.measurer, (byStructure = new WeakMap()));
   const memo = byStructure.get(structure);
-  if (memo && memo.listItems === context.listItems && memo.contentWidthPt === contentWidthPt)
+  if (
+    memo &&
+    memo.listItems === context.listItems &&
+    memo.inlineDrawingLayout === context.inlineDrawingLayout &&
+    memo.contentWidthPt === contentWidthPt
+  )
     return memo.widths;
   const minimums = autofitColumnMinimumsPt(structure, context, view);
   // The table indent moves a leading-aligned table into the text column's room.
@@ -366,6 +397,7 @@ export function autofitColumnWidthsPt(
   );
   byStructure.set(structure, {
     listItems: context.listItems,
+    inlineDrawingLayout: context.inlineDrawingLayout,
     contentWidthPt,
     widths,
   });

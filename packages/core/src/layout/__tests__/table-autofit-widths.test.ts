@@ -4,6 +4,7 @@ import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.
 import type { TableFragmentRecord } from '../semantic-records.ts';
 import { revisionAuthorFilter } from '../revision-projection.ts';
 import { widenAutofitColumns } from '../table-autofit-widths.ts';
+import { layoutContext } from './anchored-drawing-test-fixtures.ts';
 import { elevenPointDefaults } from './fixtures/eleven-point-defaults.ts';
 
 const round = (widths: readonly number[]) => widths.map((width) => Math.round(width * 10) / 10);
@@ -52,7 +53,14 @@ describe('widenAutofitColumns', () => {
 });
 
 describe('autofit layout', () => {
-  const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const NAMESPACES = [
+    'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"',
+    'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"',
+    'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"',
+    'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"',
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"',
+    'xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"',
+  ].join(' ');
   const run = (text: string) => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
   const table = (layout: string, middle: string, extraCell = '') =>
     `<w:tbl><w:tblPr><w:tblW w:w="2400" w:type="dxa"/>${layout}<w:tblCellMar><w:left w:w="0" w:type="dxa"/>` +
@@ -64,7 +72,7 @@ describe('autofit layout', () => {
     '</w:tr></w:tbl>';
   const lines = (body: string) => columns(body).lines;
   const columns = (body: string, extra: Record<string, unknown> = {}) => {
-    const read = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
+    const read = readOoxmlPart(`<w:document ${NAMESPACES}><w:body>${body}</w:body></w:document>`, {
       name: '/word/document.xml',
       contentType: 'app/xml',
     });
@@ -73,6 +81,7 @@ describe('autofit layout', () => {
       measurer: createFixedMeasurer(6, 12),
       styleCascade: elevenPointDefaults(),
       geometry: { width: 300, height: 400, margin: { top: 0, bottom: 0, left: 0, right: 0 } },
+      ...(extra.drawings ? { inlineDrawingLayout: layoutContext(read.part) } : {}),
       ...extra,
     });
     const fragment = result.pages[0]!.fragments.find(
@@ -181,16 +190,27 @@ describe('autofit layout', () => {
     expect(columns(half).box.width).toBeCloseTo(150, 6);
   });
 
-  test('an inline picture keeps its column from giving its width away', () => {
-    // A 55 pt picture in the first column, a 60 pt word in the second.
-    const picture =
-      '<w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">' +
-      '<wp:extent cx="698500" cy="127000"/><wp:docPr id="1" name="p"/></wp:inline></w:drawing></w:r>';
-    const body = table('', run('ABCDEFGHIJ')).replace(
-      `<w:p>${run('ab')}</w:p>`,
-      `<w:p>${picture}</w:p>`
-    );
-    expect(columns(body).widths[0]).toBeGreaterThanOrEqual(55);
+  const picture = (effectEmu = 0) =>
+    '<w:r><w:drawing><wp:inline distL="114300" distR="114300">' +
+    `<wp:extent cx="698500" cy="127000"/><wp:effectExtent l="${effectEmu}" t="0" r="${effectEmu}" b="0"/>` +
+    '<wp:docPr id="1" name="p"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+    '<pic:pic><pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr>' +
+    '<pic:blipFill><a:blip r:embed="rId1"/></pic:blipFill><pic:spPr><a:xfrm><a:ext cx="698500" cy="127000"/></a:xfrm>' +
+    '<a:prstGeom prst="rect"/></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
+  const withPicture = (content: string) =>
+    table('', run('ABCDEFGHIJ')).replace(`<w:p>${run('ab')}</w:p>`, `<w:p>${content}</w:p>`);
+
+  test('an inline picture keeps the width it paints at, effect extents included', () => {
+    // 55 pt picture: its column keeps 55 pt; side distances do not count for an inline one.
+    expect(columns(withPicture(picture()), { drawings: true }).widths[0]).toBeCloseTo(55, 6);
+    // 10 pt of effect extent on each side paints it 75 pt wide.
+    expect(columns(withPicture(picture(127000)), { drawings: true }).widths[0]).toBeCloseTo(75, 6);
+  });
+
+  test('a picture a hidden author deleted sets no minimum', () => {
+    const deleted = `<w:del w:id="1" w:author="B" w:date="2026-01-01T00:00:00Z">${picture()}</w:del>${run('ab')}`;
+    const view = { drawings: true, revisionAuthorFilter: revisionAuthorFilter(['B']) };
+    expect(columns(withPicture(deleted), view).widths[0]).toBeLessThan(55);
   });
 
   test('text a hidden author deleted sets no minimum', () => {
@@ -221,5 +241,44 @@ describe('autofit layout', () => {
   test('a run that holds only a dash ends the word before it', () => {
     const dashed = `${run('ABCDEFG')}<w:r><w:rPr><w:b/></w:rPr><w:t>-</w:t></w:r>${run('HIJ')}`;
     expect(columns(table('', dashed)).widths[1]).toBe(48);
+  });
+
+  test('a hard break ends the first-line indent', () => {
+    const broken = `<w:pPr><w:ind w:firstLine="720"/></w:pPr><w:r><w:br/></w:r>${run('ABCDEFGHIJ')}`;
+    expect(columns(table('', broken)).widths[1]).toBe(60);
+  });
+
+  test('a dash run seam breaks where line breaking does', () => {
+    // A dash before another dash does not break; a lone dash after a space is its own word.
+    expect(
+      columns(table('', `${run('ABCDE-')}<w:r><w:rPr><w:b/></w:rPr><w:t>-FGHIJ</w:t></w:r>`))
+        .widths[1]
+    ).toBe(72);
+    expect(
+      columns(table('', `${run('ABCDEFGH -')}<w:r><w:rPr><w:b/></w:rPr><w:t>IJKLMNOP</w:t></w:r>`))
+        .widths[1]
+    ).toBe(48);
+  });
+
+  test('an indent that fills the text column settles at the minimums, not hairlines', () => {
+    const crowded =
+      '<w:tbl><w:tblPr><w:tblInd w:w="6000" w:type="dxa"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/>' +
+      '<w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="1200"/><w:gridCol w:w="600"/><w:gridCol w:w="600"/></w:tblGrid><w:tr>' +
+      `<w:tc><w:tcPr><w:tcW w:w="1200" w:type="dxa"/></w:tcPr><w:p>${run('ab')}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr><w:p>${run('ABCDEFGHIJ')}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr><w:p>${run('cd')}</w:p></w:tc>` +
+      '</w:tr></w:tbl>';
+    // With no room left, every column settles at its minimum and every word stays whole.
+    const { widths, lines } = columns(crowded);
+    expect(widths).toEqual([12, 60, 12]);
+    expect(lines).toEqual([1, 1, 1]);
+  });
+
+  test('an inline equation keeps its column as wide as it paints', () => {
+    const equation = '<m:oMath><m:r><m:t>abcdefghijklmnop</m:t></m:r></m:oMath>';
+    const fragment = columns(table('', equation));
+    expect(fragment.widths[1]).toBeGreaterThan(30);
+    expect(fragment.lines[1]).toBe(1);
   });
 });
