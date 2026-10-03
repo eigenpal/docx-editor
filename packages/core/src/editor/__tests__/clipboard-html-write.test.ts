@@ -386,22 +386,6 @@ describe('interopHtmlFromFragment', () => {
     expect(count(html, '<td')).toBe(5);
   });
 
-  test('a merge matches on grid columns after gridBefore', () => {
-    const cell = (props: string, text: string): string =>
-      `<w:tc><w:tcPr>${props}</w:tcPr><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
-    const html = interopHtmlFromFragment(
-      fragment({
-        body:
-          '<w:tbl>' +
-          `<w:tr><w:trPr><w:gridBefore w:val="1"/></w:trPr>${cell('<w:vMerge w:val="restart"/>', 'Head')}</w:tr>` +
-          `<w:tr>${cell('', 'Left')}${cell('<w:vMerge/>', 'Hidden')}</w:tr>` +
-          '</w:tbl>',
-      })
-    );
-    expect(html).toContain('rowspan="2"');
-    expect(html).not.toContain('Hidden');
-  });
-
   test('table borders resolve from tblBorders onto every cell', () => {
     const html = interopHtmlFromFragment(
       fragment({

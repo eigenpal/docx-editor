@@ -7,12 +7,10 @@
 // on past it, and loses `w:vMerge` when it was the chain's last row. Its own content stays,
 // and no row further down changes. Layout reads a continuation by the same rule.
 //
-// Rows and cells inside `w:sdt` or `w:customXml` wrappers count where they stand, so the
-// repair sees the same grid as layout does.
+// Rows and cells inside content controls count where they stand, as they do for layout.
 
 import {
   findNode,
-  parentNodeOf,
   removeNode,
   replaceNode,
   type EditOptions,
@@ -27,7 +25,8 @@ import {
   type OoxmlTableRowNode,
 } from '../package/ooxml-tree.ts';
 import { wmlFreshNamespaceContextAt } from '../package/wml-namespace.ts';
-import { isWmlElement, wmlChildNamed } from './tree-op-table-shared.ts';
+import { flattenContentControls } from '../package/content-control-nodes.ts';
+import { tableAncestorOf, wmlChildNamed } from './tree-op-table-shared.ts';
 import {
   buildCellGridSlots,
   gridIntervalsMatchExactly,
@@ -52,49 +51,25 @@ export type VerticalMergeHeadRepairPlan =
 
 const NO_REPAIRS: VerticalMergeHeadRepairPlan = { ok: true, repairs: [] };
 
-/** Ceiling on nodes walked per table or row; exhausting it refuses, fail-closed. */
-const WRAPPER_SCAN_NODES = 1 << 16;
-
-function isWrapper(node: OoxmlNode): node is OoxmlElement {
-  if (node.kind === 'contentControl' || node.kind === 'contentControlContent') return true;
-  return (
-    isWmlElement(node, 'customXml') || isWmlElement(node, 'sdt') || isWmlElement(node, 'sdtContent')
-  );
-}
-
 interface Flattened<T> {
   readonly items: readonly T[];
-  /** A wrapper hid a row or cell the walk could not type, or the walk ran out of budget. */
+  /** Something other than a content control hides a row or cell the walk cannot type. */
   readonly unreadable: boolean;
 }
 
 /**
- * Typed descendants of `root` in document order, reached through wrappers only. Anything else
- * holding a row or cell the canonical tree did not type marks the result unreadable.
+ * Typed rows or cells of `root` in document order. Content controls unwrap as they do for
+ * layout, so both read the same grid; any other element holding a row or cell, such as
+ * `w:customXml`, marks the result unreadable.
  */
 function flatten<T extends OoxmlNode>(root: OoxmlElement, want: 'row' | 'cell'): Flattened<T> {
   const kind = want === 'row' ? 'tableRow' : 'tableCell';
   const items: T[] = [];
-  const stack: OoxmlNode[] = [];
-  for (let index = root.children.length - 1; index >= 0; index -= 1) {
-    stack.push(root.children[index]!);
-  }
-  let budget = WRAPPER_SCAN_NODES;
-  while (stack.length > 0) {
-    budget -= 1;
-    if (budget < 0) return { items, unreadable: true };
-    const node = stack.pop()!;
-    if (node.kind === kind) {
-      items.push(node as T);
-      continue;
+  for (const node of flattenContentControls(root.children)) {
+    if (node.kind === kind) items.push(node as T);
+    else if (node.kind !== 'textValue' && subtreeHolds(node, want)) {
+      return { items, unreadable: true };
     }
-    if (isWrapper(node)) {
-      for (let index = node.children.length - 1; index >= 0; index -= 1) {
-        stack.push(node.children[index]!);
-      }
-      continue;
-    }
-    if (node.kind !== 'textValue' && subtreeHolds(node, want)) return { items, unreadable: true };
   }
   return { items, unreadable: false };
 }
@@ -109,12 +84,6 @@ function readRow(row: OoxmlTableRowNode): ReadRow | null {
   const cells = flatten<OoxmlElement>(row, 'cell');
   if (cells.unreadable) return null;
   return { row, cells: cells.items, slots: buildCellGridSlots(row, cells.items) };
-}
-
-function tableOf(part: OoxmlPart, rowId: string): OoxmlElement | null {
-  let current = parentNodeOf(part, rowId);
-  while (current && current.kind !== 'table') current = parentNodeOf(part, current.id);
-  return current;
 }
 
 function sameInterval(a: GridCellSlot, b: GridCellSlot): boolean {
@@ -132,15 +101,17 @@ export function planVerticalMergeHeadRepairs(
 ): VerticalMergeHeadRepairPlan {
   const target = findNode(part, rowId);
   if (!target || target.kind !== 'tableRow' || !rowHasVerticalMerge(target)) return NO_REPAIRS;
-  const table = tableOf(part, rowId);
+  const removed = readRow(target);
+  if (!removed) return { ok: false, reason: 'row-hides-cell' };
+  const heads = removed.slots.filter((slot) => slot.vMergeKind === 'restart');
+  if (heads.length === 0) return NO_REPAIRS;
+  const table = tableAncestorOf(part, rowId);
   if (!table) return NO_REPAIRS;
   const rows = flatten<OoxmlTableRowNode>(table, 'row');
   const index = rows.items.findIndex((row) => row.id === rowId);
-  const removed = readRow(target);
-  if (rows.unreadable || index === -1 || !removed) return { ok: false, reason: 'row-hides-cell' };
-  const heads = removed.slots.filter((slot) => slot.vMergeKind === 'restart');
+  if (rows.unreadable || index === -1) return { ok: false, reason: 'row-hides-cell' };
   const belowRow = rows.items[index + 1];
-  if (heads.length === 0 || !belowRow) return NO_REPAIRS;
+  if (!belowRow) return NO_REPAIRS;
 
   const below = readRow(belowRow);
   if (!below) return { ok: false, reason: 'row-hides-cell' };

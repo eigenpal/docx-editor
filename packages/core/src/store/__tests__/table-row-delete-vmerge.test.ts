@@ -252,10 +252,10 @@ describe.each(['deleteTableRow', 'deleteBlock'] as const)('%s across vertical me
       TABLE(
         2,
         HEADER,
-        `<w:customXml w:element="rows"><w:sdt><w:sdtContent>` +
+        `<w:sdt><w:sdtContent>` +
           ROW(CELL('Lead'), CELL('USD 50')) +
           ROW(CELL('Supplier', 'restart'), CELL('USD 100')) +
-          `</w:sdtContent></w:sdt></w:customXml>`,
+          `</w:sdtContent></w:sdt>`,
         ROW(CELL('', 'continue'), CELL('USD 200')),
         ROW(CELL('', 'continue'), CELL('USD 300'))
       )
@@ -287,13 +287,16 @@ describe.each(['deleteTableRow', 'deleteBlock'] as const)('%s across vertical me
     ]);
   });
 
-  test('refuses without mutation when an unknown element hides the row below', () => {
+  test.each([
+    ['an unknown element', (row: string) => `<x:wrap xmlns:x="urn:example">${row}</x:wrap>`],
+    ['custom XML', (row: string) => `<w:customXml w:element="row">${row}</w:customXml>`],
+  ])('refuses without mutation when %s hides the row below', (_name, wrap) => {
     const part = load(
       TABLE(
         2,
         HEADER,
         ROW(CELL('Supplier', 'restart'), CELL('USD 100')),
-        `<x:wrap xmlns:x="urn:example">${ROW(CELL('', 'continue'), CELL('USD 200'))}</x:wrap>`
+        wrap(ROW(CELL('', 'continue'), CELL('USD 200')))
       )
     );
     const before = serializeOoxmlPart(part);
@@ -304,6 +307,25 @@ describe.each(['deleteTableRow', 'deleteBlock'] as const)('%s across vertical me
     expect(validateTreeOp(part, op)).toBe('row-hides-cell');
     expect(applyTreeOp(part, op)).toMatchObject({ ok: false, reason: 'row-hides-cell' });
     expect(serializeOoxmlPart(part)).toBe(before);
+  });
+
+  test('a row holding only continuations deletes beside an unreadable row', () => {
+    const part = load(
+      TABLE(
+        2,
+        HEADER,
+        ROW(CELL('Supplier', 'restart'), CELL('USD 100')),
+        ROW(CELL('', 'continue'), CELL('USD 200')),
+        ROW(CELL('', 'continue'), CELL('USD 300')),
+        `<w:customXml w:element="row">${ROW(CELL('Other'), CELL('USD 400'))}</w:customXml>`
+      )
+    );
+    expect(rows(removeRow(part, 2, via))).toEqual([
+      ['-:Party', '-:Amount'],
+      ['restart:Supplier', '-:USD 100'],
+      ['continue:', '-:USD 300'],
+      ['-:Other', '-:USD 400'],
+    ]);
   });
 
   test('a merge-free row with a wrapped neighbour still deletes', () => {

@@ -110,6 +110,7 @@ import {
   sdtPrChild,
 } from './tree-op-nodes.ts';
 import { paragraphIdsWithin, survivingCaretAfterBlockRemoval } from './tree-op-blocks.ts';
+import { tableAncestorOf } from './tree-op-table-shared.ts';
 import {
   planVerticalMergeHeadRepairs,
   verticalMergeHeadRepairDirtyIds,
@@ -2999,18 +3000,6 @@ function applySplitMany(
  * consumer scoping work by node id has to invalidate the paragraphs, and the block id alone
  * would leave a layout cache holding entries for paragraphs that no longer exist.
  */
-function tableAncestorOf(part: OoxmlPart, nodeId: string): OoxmlElement | null {
-  let current: string | null = nodeId;
-  while (current) {
-    const node = findNode(part, current);
-    if (!node || node.kind === 'textValue') return null;
-    if (node.kind === 'table') return node;
-    const parent = parentOf(part, current);
-    current = parent?.id ?? null;
-  }
-  return null;
-}
-
 function emptyCellParagraph(
   part: OoxmlPart,
   anchorTable: OoxmlElement,
