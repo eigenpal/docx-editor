@@ -186,6 +186,18 @@ describe('a page-positioned table taller than the room below it', () => {
     expect(first!.fragment.box.y).toBeGreaterThanOrEqual(24);
   });
 
+  test('starts high enough for a nested table row, which moves whole, to open the table', () => {
+    // A 600pt nested row opens the first cell. Its whole height bounds the start: 648 - 600.
+    const nested = table({ tblpPr: '', lines: 50 });
+    const outer = table({
+      tblpPr: '<w:tblpPr w:vertAnchor="page" w:horzAnchor="margin" w:tblpY="9001"/>',
+      rows: 2,
+      lines: 60,
+    }).replace('</w:tcPr>', `</w:tcPr>${nested}`);
+    const [first] = shape(layoutOf(lead + outer + tail));
+    expect(first).toEqual([0, 48, 600]);
+  });
+
   test('legacy modes run the first fragment to the page edge', () => {
     const layout = layoutOf(lead + table({ tblpPr: PAGE }) + tail, { compatibilityMode: 14 });
     expect(shape(layout)[0]).toEqual([0, 96, 624]);

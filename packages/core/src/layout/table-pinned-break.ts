@@ -26,7 +26,8 @@
 // - A table whose authored top is already in the bottom margin.
 // - Multi-column sections, and `w:doNotBreakWrappedTables`.
 // Further differences: following text resumes below the last row even beside a narrow table,
-// and `inside`/`outside` alignment resolve as top/bottom.
+// `inside`/`outside` alignment resolve as top/bottom, and a nested table row moves whole, as it
+// does in every table, instead of splitting at line boundaries.
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import type { TableFragmentRecord, TableRowFragmentRecord } from './semantic-records.ts';
@@ -121,12 +122,15 @@ function probeTable(
   return fragment;
 }
 
-/** Bottoms of every line in a row's cells, nested tables included, in probe coordinates. */
+/**
+ * Bottoms of the pieces a row can break between, in probe coordinates: each line, and each
+ * nested table row as a whole, since the paginator never splits a nested row.
+ */
 function lineBottoms(row: TableRowFragmentRecord, out: number[]): number[] {
   for (const cell of row.cells) {
     for (const block of cell.blocks) {
       if (block.kind === 'table') {
-        for (const nested of block.rows) lineBottoms(nested, out);
+        for (const nested of block.rows) out.push(nested.box.y + nested.box.height);
         continue;
       }
       for (const line of block.lines) out.push(line.box.y + line.box.height);
