@@ -64,9 +64,26 @@ export function holdsHyphenCharacter(text: string): boolean {
  * are allowed, up to {@link MAX_INSERTED_HYPHENS}, because they become hyphen elements.
  */
 export function isInsertableText(text: string): boolean {
-  if (!holdsHyphenCharacter(text)) return isValidXmlText(text);
-  const hyphens = text.match(ALL_HYPHEN_CHARACTERS)?.length ?? 0;
-  return hyphens <= MAX_INSERTED_HYPHENS && isValidXmlText(text.replace(ALL_HYPHEN_CHARACTERS, ''));
+  return areInsertableTexts([text]);
+}
+
+/**
+ * {@link isInsertableText} for texts one operation writes together: the hyphen cap covers them
+ * all. Each piece between hyphens must be valid on its own, since each becomes its own `w:t`,
+ * so a hyphen cannot split a surrogate pair.
+ */
+export function areInsertableTexts(texts: readonly string[]): boolean {
+  let hyphens = 0;
+  for (const text of texts) {
+    if (!holdsHyphenCharacter(text)) {
+      if (!isValidXmlText(text)) return false;
+      continue;
+    }
+    hyphens += text.match(ALL_HYPHEN_CHARACTERS)?.length ?? 0;
+    if (hyphens > MAX_INSERTED_HYPHENS) return false;
+    if (!text.split(ALL_HYPHEN_CHARACTERS).every((piece) => isValidXmlText(piece))) return false;
+  }
+  return true;
 }
 
 /** A builder for one inserted run child. */

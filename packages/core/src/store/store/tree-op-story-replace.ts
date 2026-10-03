@@ -4,7 +4,7 @@
 // section-ending paragraphs and content-control wrappers. A fresh-document write must remove
 // those blocks, while a body must retain its final `w:sectPr` page setup.
 
-import { isInsertableText, textWithHyphens } from './tree-op-inline-elements.ts';
+import { areInsertableTexts, textWithHyphens } from './tree-op-inline-elements.ts';
 import { createNodeIdAllocator, findNode, replaceChildren } from '../package/ooxml-edit.ts';
 import {
   mintParaId,
@@ -42,7 +42,7 @@ export function validateReplaceStoryBlocks(
   ) {
     return 'invalidArgs';
   }
-  return paragraphs.every((text) => typeof text === 'string' && isInsertableText(text))
+  return paragraphs.every((text) => typeof text === 'string') && areInsertableTexts(paragraphs)
     ? null
     : 'invalid-text';
 }

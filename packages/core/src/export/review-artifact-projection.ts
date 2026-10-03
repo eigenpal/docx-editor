@@ -1,5 +1,6 @@
 // Normalize comments and tracked changes onto the exact layout/package revision being published.
 
+import { withDisplayedHyphens } from '../store/package/hyphen-text.ts';
 import {
   commentBodyText,
   commentInitials,
@@ -523,8 +524,8 @@ function artifactOf(
       ...(item.markDirection ? { markDirection: item.markDirection } : {}),
       author: item.author,
       ...(item.date !== undefined ? { date: item.date } : {}),
-      text: item.text,
-      replacedText: item.replacedText,
+      text: withDisplayedHyphens(item.text),
+      replacedText: withDisplayedHyphens(item.replacedText),
       nesting: item.nesting,
       ...(item.replacedRangeCount !== undefined
         ? { replacedRangeCount: item.replacedRangeCount }

@@ -1,4 +1,4 @@
-import { isInsertableText } from '../store/store/tree-op-inline-elements.ts';
+import { areInsertableTexts } from '../store/store/tree-op-inline-elements.ts';
 import { planDocumentProperties } from './plan-document-properties.ts';
 import { referencedNoteIds } from './note-references.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
@@ -774,10 +774,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       !Array.isArray(paragraphs) ||
       paragraphs.length < 1 ||
       paragraphs.length > 10_000 ||
-      paragraphs.some(
-        (text) =>
-          typeof text !== 'string' || PARAGRAPH_BREAKING.test(text) || !isInsertableText(text)
-      )
+      paragraphs.some((text) => typeof text !== 'string' || PARAGRAPH_BREAKING.test(text)) ||
+      !areInsertableTexts(paragraphs)
     ) {
       return refuse(
         'unsupported-content',

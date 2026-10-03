@@ -1,4 +1,5 @@
 export { formsProtectionCommandRefusal } from './forms-protection-command.ts';
+import { withDisplayedHyphens } from '../package/hyphen-text.ts';
 import { isInsertableText, textWithHyphens } from './tree-op-inline-elements.ts';
 import {
   checkboxContent,
@@ -1387,7 +1388,8 @@ function planValue(
       return {
         text: value.text,
         showingPlaceholder: false,
-        ...(properties.type === 'comboBox' ? { lastValue: value.text } : {}),
+        // An attribute cannot hold U+001E or U+001F, so it keeps the hyphens as they are seen.
+        ...(properties.type === 'comboBox' ? { lastValue: withDisplayedHyphens(value.text) } : {}),
       };
     }
     case 'listItem': {

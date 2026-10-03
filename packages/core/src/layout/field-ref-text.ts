@@ -118,7 +118,8 @@ export function bookmarkRangeText(paragraph: OoxmlElement, name: string): string
           append('\t');
         } else {
           const hyphen = hyphenDisplayOf(grand);
-          if (hyphen) append(hyphen.text);
+          // A REF result is measured as one string, where an optional hyphen shows nothing.
+          if (hyphen) append(hyphen.measureText ?? hyphen.text);
         }
       }
       return;

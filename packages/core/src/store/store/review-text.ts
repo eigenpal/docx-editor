@@ -1,4 +1,4 @@
-import { hyphenTextOf } from '../package/hyphen-text.ts';
+import { hyphenDisplayText, hyphenTextOf } from '../package/hyphen-text.ts';
 import type { OoxmlNode } from '../package/ooxml-tree.ts';
 import { hardBreakText } from '../package/hard-break.ts';
 import { isInstrText } from '../package/field-nodes.ts';
@@ -10,6 +10,12 @@ export function commentBodyText(comment: CommentRecord): string {
   const visit = (node: OoxmlNode): void => {
     if (node.kind === 'textValue') {
       parts.push(node.value);
+      return;
+    }
+    // The same hyphen a revision card shows (`withDisplayedHyphens`).
+    const hyphen = hyphenDisplayText(node);
+    if (hyphen !== null) {
+      if (hyphen !== '\u00ad') parts.push(hyphen);
       return;
     }
     for (const child of node.children) visit(child);

@@ -372,7 +372,8 @@ function scanParagraphRefs(paragraph: OoxmlElement): ParagraphRefScan {
           } else if (grand.kind === 'tab' && pending.cached.length < MAX_REF_TEXT_CHARS) {
             pending.cached += ' ';
           } else if (pending.cached.length < MAX_REF_TEXT_CHARS) {
-            pending.cached += hyphenDisplayOf(grand)?.text ?? '';
+            const hyphen = hyphenDisplayOf(grand);
+            pending.cached += hyphen ? (hyphen.measureText ?? hyphen.text) : '';
           }
         }
       }

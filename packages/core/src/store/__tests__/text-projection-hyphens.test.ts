@@ -17,7 +17,7 @@ import { serializeOoxmlPart } from '../package/ooxml-tree.ts';
 import { collectDocumentOutline } from '../../binding/document-outline.ts';
 import { buildTocEntryParagraph } from '../package/toc-build.ts';
 import { parseTocInstruction } from '../package/index.ts';
-import { MAX_INSERTED_HYPHENS } from '../store/tree-op-inline-elements.ts';
+import { areInsertableTexts, MAX_INSERTED_HYPHENS } from '../store/tree-op-inline-elements.ts';
 import { validateTreeOp } from '../store/tree-ops.ts';
 import { projectVisibleParagraphText } from '../store/text-projection.ts';
 import { projectParagraphText } from '../../automation/text-projection.ts';
@@ -214,5 +214,46 @@ describe('hyphen elements in paragraph text', () => {
       }) as const;
     expect(validateTreeOp(part, op(MAX_INSERTED_HYPHENS))).toBeNull();
     expect(validateTreeOp(part, op(MAX_INSERTED_HYPHENS + 1))).toBe('invalid-text');
+  });
+
+  test('a hyphen may not split a surrogate pair, and the cap covers a whole write', () => {
+    expect(areInsertableTexts([`a${NBH}b`])).toBe(true);
+    expect(areInsertableTexts([`\ud83d${NBH}\ude00`])).toBe(false);
+    const half = NBH.repeat(MAX_INSERTED_HYPHENS / 2);
+    expect(areInsertableTexts([half, half])).toBe(true);
+    expect(areInsertableTexts([half, half, NBH])).toBe(false);
+  });
+
+  test('combo box and string values keep hyphens and write valid XML', () => {
+    for (const [type, value] of [
+      [
+        '<w:comboBox><w:listItem w:displayText="A" w:value="A"/></w:comboBox>',
+        { kind: 'text', text: `co${NBH}op` },
+      ],
+      ['<w:text/>', `co${NBH}op`],
+    ] as const) {
+      const part = load(
+        `<w:p><w:sdt><w:sdtPr><w:id w:val="9"/>${type}</w:sdtPr><w:sdtContent><w:r><w:t>x</w:t>` +
+          '</w:r></w:sdtContent></w:sdt></w:p>'
+      );
+      const control = (function find(node: OoxmlNode): OoxmlNode | null {
+        if (node.kind === 'textValue') return null;
+        if (node.kind === 'contentControl') return node;
+        for (const child of node.children) {
+          const hit = find(child);
+          if (hit) return hit;
+        }
+        return null;
+      })(part.root)!;
+      const result = applyTreeOp(part, {
+        op: 'setContentControlValue',
+        controlId: control.id,
+        value,
+      } as never);
+      if (!result.ok) throw new Error(`${type}: ${result.reason}`);
+      const xml = serializeOoxmlPart(result.part);
+      expect(xml).toContain('<w:noBreakHyphen/>');
+      expect(xml).not.toMatch(/[\u001e\u001f]/);
+    }
   });
 });

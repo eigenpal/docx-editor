@@ -18,7 +18,12 @@ import { removeCoveredTextFormDefinitions } from './text-form-field-deletion.ts'
 // validation live in sibling tree-op-* modules; tree-ops.ts re-exports the public surface.
 /* eslint-disable max-lines -- pre-existing size; furniture lifecycle only adds union narrowing */
 
-import { simpleElement, textElement, textWithHyphenBuilders } from './tree-op-inline-elements.ts';
+import {
+  simpleElement,
+  textElement,
+  textWithHyphenBuilders,
+  textWithHyphens,
+} from './tree-op-inline-elements.ts';
 import { characterStyleElement, emptyParagraphRunProperties } from './mark-character-style-run.ts';
 import { withFreshIds } from '../package/hf-lifecycle-shell.ts';
 import {
@@ -2083,7 +2088,9 @@ function applySetContentControlValue(
       (properties) =>
         runElement(
           nextId,
-          properties ? [properties, textElement(nextId, display)] : [textElement(nextId, display)]
+          properties
+            ? [properties, ...textWithHyphens(nextId, display)]
+            : textWithHyphens(nextId, display)
         ),
       nextId,
       inline
