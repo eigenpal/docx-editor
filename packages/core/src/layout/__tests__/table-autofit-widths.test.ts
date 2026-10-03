@@ -52,7 +52,7 @@ describe('widenAutofitColumns', () => {
 
   test('scales every minimum down when together they exceed the text column', () => {
     const widths = widenAutofitColumns([150, 150, 150], [301.4, 301.4, 34], 450, 451.3);
-    expect(round(widths)).toEqual([213.6, 213.6, 24.1]);
+    expect(round(widths)).toEqual([213.5, 213.5, 24.3]);
     expect(widths.reduce((sum, width) => sum + width, 0)).toBeCloseTo(451.3, 6);
   });
 });
@@ -396,5 +396,56 @@ describe('autofit layout', () => {
     expect(widths[0]).toBe(widths[1]!);
     expect(box.width).toBeCloseTo(300, 6);
     expect(300 - widths[0]! - widths[1]!).toBeLessThanOrEqual(1);
+  });
+
+  test('an empty zero-inset column keeps a hairline when the minimums overflow', () => {
+    const crowded =
+      '<w:tbl><w:tblPr><w:tblW w:w="2400" w:type="dxa"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/>' +
+      '<w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="800"/><w:gridCol w:w="800"/><w:gridCol w:w="800"/></w:tblGrid><w:tr>' +
+      `<w:tc><w:tcPr><w:tcW w:w="800" w:type="dxa"/></w:tcPr><w:p>${run('A'.repeat(30))}</w:p></w:tc>` +
+      '<w:tc><w:tcPr><w:tcW w:w="800" w:type="dxa"/></w:tcPr><w:p/></w:tc>' +
+      `<w:tc><w:tcPr><w:tcW w:w="800" w:type="dxa"/></w:tcPr><w:p>${run('B'.repeat(30))}</w:p></w:tc>` +
+      '</w:tr></w:tbl>';
+    const { widths, box } = columns(crowded);
+    expect(widths[1]).toBeGreaterThan(0.5);
+    expect(widths.reduce((sum, width) => sum + width, 0)).toBeCloseTo(box.width, 6);
+  });
+
+  test('a nested percentage table resolves against its cell, not the page', () => {
+    const nested =
+      '<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="300"/><w:gridCol w:w="300"/></w:tblGrid>' +
+      `<w:tr><w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr><w:p>${run('ab')}</w:p></w:tc></w:tr></w:tbl>`;
+    const outer =
+      '<w:tbl><w:tblPr><w:tblW w:w="2400" w:type="dxa"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/>' +
+      '<w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="600"/><w:gridCol w:w="1800"/></w:tblGrid><w:tr>' +
+      `<w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr>${nested}<w:p/></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="1800" w:type="dxa"/></w:tcPr><w:p>${run('cd')}</w:p></w:tc>` +
+      '</w:tr></w:tbl>';
+    expect(columns(outer).widths).toEqual([30, 90]);
+  });
+
+  test('a word nested past the nesting limit sets no minimum', () => {
+    let inner = `<w:p>${run('ABCDEFGHIJ')}</w:p>`;
+    for (let level = 0; level < 30; level += 1)
+      inner =
+        '<w:tbl><w:tblPr><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/>' +
+        '</w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="600"/></w:tblGrid>' +
+        `<w:tr><w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr>${inner}<w:p/></w:tc></w:tr></w:tbl>`;
+    const outer =
+      '<w:tbl><w:tblPr><w:tblW w:w="2400" w:type="dxa"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/>' +
+      '<w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="600"/><w:gridCol w:w="1800"/></w:tblGrid><w:tr>' +
+      `<w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr>${inner}<w:p/></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="1800" w:type="dxa"/></w:tcPr><w:p>${run('cd')}</w:p></w:tc>` +
+      '</w:tr></w:tbl>';
+    expect(columns(outer).widths).toEqual([30, 90]);
+  });
+
+  test('spaces after a tab do not count toward the next word', () => {
+    const tabbed = `<w:r><w:tab/></w:r>${run('      ABCDEFGHIJ')}`;
+    expect(columns(table('', tabbed)).widths[1]).toBe(60);
   });
 });

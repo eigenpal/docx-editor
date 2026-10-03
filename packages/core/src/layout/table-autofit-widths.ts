@@ -162,8 +162,17 @@ export interface AutofitView {
   readonly styleCascade: StyleCascadeTable | undefined;
   readonly displayMode: RevisionDisplayMode;
   readonly authorFilter: RevisionAuthorFilter | undefined;
-  /** Reads a nested table in the same view, one level deeper; null past the nesting limit. */
-  readonly readNested?: (table: OoxmlElement) => SemanticTableStructure | null;
+  /** How deep the table being measured sits; nested tables read one level deeper. */
+  readonly depth?: number;
+  /**
+   * Reads a nested table in the same view at the width its cell gives it and at its own
+   * depth; null past the nesting limit, where layout paints nothing either.
+   */
+  readonly readNested?: (
+    table: OoxmlElement,
+    contentWidthPt: number,
+    depth: number
+  ) => SemanticTableStructure | null;
 }
 
 /** Below this a column is already as wide as its content needs. */
@@ -335,12 +344,16 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
       close();
       segment = atomWidth;
       close();
+      lineStart = false;
+      lead = 0;
       continue;
     }
     const style = styleForFontSlot(piece.style, piece.fontSlot);
     const measure = (text: string): number => measurer.measure(displayText(text, style), style);
     if (piece.measureText !== undefined) {
-      segment += measure(piece.measureText);
+      segment += lead + measure(piece.measureText);
+      lineStart = false;
+      lead = 0;
       continue;
     }
     let from = 0;
@@ -349,9 +362,11 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
       from = to;
       if (candidate.length === 0) continue;
       if (candidate === '\t') {
-        // A tab uses up the first-line indent, whatever follows it.
+        // A tab uses up the first-line indent, and spaces after it no longer open the line.
         close();
         first = false;
+        lineStart = false;
+        lead = 0;
         continue;
       }
       // Measured as line breaking measures it, so the advance comes from the same cache;
@@ -383,6 +398,7 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
 /** A nested table needs at least the width its own grid states. */
 function nestedTableMinimumPt(
   table: OoxmlElement,
+  cellContentWidthPt: number,
   context: TableAutofitContext,
   view: AutofitView
 ): number {
@@ -390,10 +406,12 @@ function nestedTableMinimumPt(
   for (const column of gridColumnWidthsPt(gridColumnElements(table))) width += column ?? 0;
   // A nested autofit table needs its own columns' minimums too, or its words split one
   // level down while the outer table has room.
-  const nested = view.readNested?.(table);
+  const depth = (view.depth ?? 0) + 1;
+  const nested = view.readNested?.(table, cellContentWidthPt, depth);
   if (nested && !nested.layoutFixed) {
     let minimums = 0;
-    for (const minimum of autofitColumnMinimumsPt(nested, context, view)) minimums += minimum;
+    for (const minimum of autofitColumnMinimumsPt(nested, context, { ...view, depth }))
+      minimums += minimum;
     width = Math.max(width, minimums + Math.max(0, nested.indentPt));
   }
   return width;
@@ -420,9 +438,17 @@ export function autofitColumnMinimumsPt(
         continue;
       if (cell.gridColumn < 0 || cell.gridColumn >= columnCount) continue;
       let content = -1;
+      const insets = cellContentInsets(cell, collapsed);
+      const cellContentWidthPt = Math.max(
+        0,
+        structure.columnWidthsPt[cell.gridColumn]! - insets.left - insets.right
+      );
       for (const block of cell.blocks) {
         if (block.kind === 'table')
-          content = Math.max(content, nestedTableMinimumPt(block, context, view));
+          content = Math.max(
+            content,
+            nestedTableMinimumPt(block, cellContentWidthPt, context, view)
+          );
         if (block.kind !== 'paragraph') continue;
         const width = paragraphMinimumWidthPt(block, {
           context,
@@ -432,7 +458,6 @@ export function autofitColumnMinimumsPt(
         content = Math.max(content, width);
       }
       if (content < 0) continue;
-      const insets = cellContentInsets(cell, collapsed);
       const needed = content + insets.left + insets.right + structure.cellSpacingPt;
       if (needed > minimums[cell.gridColumn]!) minimums[cell.gridColumn] = needed;
     }
@@ -477,8 +502,8 @@ export function widenAutofitColumns(
   if (need <= totalSlack) {
     return grown.map((width, index) => width - (need * slack[index]!) / totalSlack);
   }
-  // A zero minimum is a column nothing occupies (a w:gridBefore band): it stays zero.
-  const floor = minimums.map((minimum) => (minimum > 0 ? Math.max(minimum, MIN_COLUMN_PT) : 0));
+  // Every column keeps a hairline: a zero-width column would give its cell no box at all.
+  const floor = minimums.map((minimum) => Math.max(minimum, MIN_COLUMN_PT));
   const needed = floor.reduce((sum, value) => sum + value, 0);
   // Never narrower than the table already was: an indent can leave the text column no room.
   const room = Math.max(
@@ -486,8 +511,10 @@ export function widenAutofitColumns(
     widths.reduce((sum, width) => sum + width, 0)
   );
   if (!Number.isFinite(room) || needed <= room) return floor;
-  const scale = room / needed;
-  return floor.map((width) => width * scale);
+  // Scale only what each column holds above its hairline, so every hairline survives whole.
+  const hairlines = floor.length * MIN_COLUMN_PT;
+  const scale = Math.max(0, room - hairlines) / Math.max(needed - hairlines, WIDTH_EPSILON_PT);
+  return floor.map((width) => MIN_COLUMN_PT + (width - MIN_COLUMN_PT) * scale);
 }
 
 /** The total an autofit table settles at once a column has to widen, in points. */
@@ -503,10 +530,6 @@ export function autofitTargetPt(
 }
 
 /**
- * A structure's physical column widths after autofit widening, or the structure's own array
- * by identity when every column already holds its content.
- */
-/**
  * Widths per context and structure. A context belongs to one pass of one flow, during which
  * no token can change, so the memo is exact; it dies with the pass.
  */
@@ -518,6 +541,10 @@ const passWidths = new WeakMap<
   >
 >();
 
+/**
+ * A structure's physical column widths after autofit widening, or the structure's own array
+ * by identity when every column already holds its content.
+ */
 export function autofitColumnWidthsPt(
   structure: SemanticTableStructure,
   contentWidthPt: number,

@@ -505,11 +505,12 @@ export function readTableStructure(
     styleCascade,
     displayMode,
     authorFilter,
-    readNested: (nested) =>
+    depth,
+    readNested: (nested, nestedWidthPt, nestedDepth) =>
       readTableStructure(
         nested,
-        contentWidthPt,
-        depth + 1,
+        nestedWidthPt,
+        nestedDepth,
         styleCascade,
         displayMode,
         authorFilter,
