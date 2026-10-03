@@ -28,6 +28,7 @@ import {
   W14_NAMESPACE_URI,
 } from '../package/ooxml-shared.ts';
 import { linearMathToOmml } from '../package/omml-equation.ts';
+import { equationsOfAtom, isOmmlDisplay } from '../package/omml-display.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlAttribute,
@@ -326,7 +327,14 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
       impact: 'text-local',
     };
     if (op.op === 'removeMathEquation') {
-      return fromEdit(removeNode(part, equation.id, options), effect);
+      // The last equation of a display takes its `m:oMathPara` with it: an empty display
+      // is invalid OMML and would leave an invisible atom in the paragraph.
+      const display = parentOf(part, equation.id);
+      const target =
+        display && isOmmlDisplay(display) && equationsOfAtom(display).length === 1
+          ? display.id
+          : equation.id;
+      return fromEdit(removeNode(part, target, options), effect);
     }
     const generated = linearMathToOmml(op.linear, createNodeIdAllocator(part));
     if (!generated.ok) return { ok: false, reason: 'invalid-property-value' };

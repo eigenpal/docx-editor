@@ -29,6 +29,8 @@ import {
   nextInlineContainerDepth,
 } from '../store/package/ooxml-shared.ts';
 import { clipboardBase64Of } from './clipboard-html-base64.ts';
+import { equationHtml } from './clipboard-html-write-equations.ts';
+import { isOmmlEquationAtom } from '../store/package/omml-display.ts';
 import {
   foldAttribute,
   lastProperty,
@@ -669,7 +671,9 @@ function renderInline(
         advanceFieldState(child, fields, depth);
         break;
       case 'generic':
-        if (isInlineRunContainer(child)) {
+        if (isOmmlEquationAtom(child)) {
+          out += equationHtml(child);
+        } else if (isInlineRunContainer(child)) {
           out += renderInline(ctx, child.children, paragraphPPr, fields, depth + 1);
         } else {
           const content = contentControlContentOf(child);

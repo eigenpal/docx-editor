@@ -1,3 +1,4 @@
+import { equationPlainText } from './surface-equations.ts';
 import { selectionContainsClipboardObject } from './clipboard-object-selection.ts';
 import { partOfNodeId } from './surface-scope.ts';
 // Copy, cut and paste for the paginated surface (paginated-surface seam).
@@ -256,7 +257,11 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
       });
     }
     const { from, to } = deps.orderedRange();
-    const text = selectedTextIn(deps.layout(), from, to, deps.paragraphOrder());
+    const textPart = session.part();
+    // Plain text spells each equation in its linear form instead of U+FFFC.
+    const text = selectedTextIn(deps.layout(), from, to, deps.paragraphOrder(), (id, offset) =>
+      textPart ? equationPlainText(textPart, id, offset) : null
+    );
     const scope = deps.storyScope();
     const collapsed = from.paragraphId === to.paragraphId && from.offset === to.offset;
     if (collapsed || scope.kind !== 'body') return { text, html: null };

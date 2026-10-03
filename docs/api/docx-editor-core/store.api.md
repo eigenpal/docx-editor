@@ -1160,6 +1160,11 @@ export function directParagraphMarkProperties(part: OoxmlPart, paragraphId: stri
 export function directParagraphProperties(part: OoxmlPart, paragraphId: string): readonly OoxmlProperty[];
 
 // @public
+export function displayMathAlignment(paragraph: {
+    readonly children: readonly OoxmlNode[];
+}): 'left' | 'center' | 'right' | null;
+
+// @public
 export interface DocumentProperties {
     readonly company?: string;
     readonly creator?: string;
@@ -1346,6 +1351,9 @@ export type EquationExpression = {
 
 // @public
 export function equationExpressionToLinearMath(expression: EquationExpression): string;
+
+// @public
+export function equationsOfAtom(node: OoxmlNode): readonly OoxmlGenericElementNode[];
 
 // @public
 export function escapeCssString(value: string): string;
@@ -2122,6 +2130,12 @@ export function isNoteReferenceNode(node: OoxmlNode): node is OoxmlNoteReference
 
 // @public
 export function isNoteRefNode(node: OoxmlNode): node is OoxmlNoteRefNode;
+
+// @public
+export function isOmmlDisplay(node: OoxmlNode): node is OoxmlGenericElementNode;
+
+// @public
+export function isOmmlEquationAtom(node: OoxmlNode): node is OoxmlGenericElementNode;
 
 // @public
 export function isPageBreakNode(node: OoxmlNode): node is OoxmlHardBreakNode;
@@ -3455,6 +3469,12 @@ export function projectDrawing(drawing: OoxmlDrawingNode, context: Readonly<{
     resolveStyleMatrixReference?: ShapeStyleMatrixResolver;
     supportedMcRequires: ReadonlySet<string>;
 }>): DrawingProjection | null;
+
+// @public
+export function projectOmmlAtom(node: OoxmlNode): OmmlEquationProjection | null;
+
+// @public
+export function projectOmmlDisplay(node: OoxmlNode): OmmlEquationProjection | null;
 
 // @public
 export function projectOmmlEquation(node: OoxmlNode, limits?: OmmlLimits): OmmlEquationProjection | null;
