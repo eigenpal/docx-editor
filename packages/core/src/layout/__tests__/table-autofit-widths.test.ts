@@ -336,5 +336,19 @@ describe('autofit layout', () => {
     const first = measured;
     pass();
     expect(measured).toBe(first);
+    // A new producer (renumbered note marks, another view) measures again.
+    autofitColumnWidthsPt(
+      base,
+      300,
+      autofitContextOf({ measurer, producer: 'another-pass' }),
+      view
+    );
+    expect(measured).toBeGreaterThan(first);
+  });
+
+  test('an empty spacer column with no insets gives its width up', () => {
+    const spacer = table('', run('ABCDEFGHIJ')).replace(`<w:p>${run('ab')}</w:p>`, '<w:p/>');
+    // Slack 60 and 18 pt give the 30 pt in proportion.
+    expect(columns(spacer).widths).toEqual([36.92, 60, 23.08]);
   });
 });

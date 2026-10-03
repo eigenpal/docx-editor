@@ -12,6 +12,8 @@ import type { BodyPageFieldContext } from './field-page-furniture.ts';
 import type { FieldPageContext } from './field-projection.ts';
 import type { RefFieldContext } from './field-ref.ts';
 import type { NoteMarkContext } from './note-projection.ts';
+import type { TocLinkRanges } from './toc-link-formatting.ts';
+import { sha256FontBytes } from '../store/package/sha256.ts';
 import { piecesOfParagraphForDisplay } from './field-projection-display.ts';
 import type { ResolvedListItem } from './list-resolve.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
@@ -55,13 +57,22 @@ export interface TableAutofitContext {
  * @public
  */
 export interface AutofitFieldContext {
+  /** The page a header or footer paints on, for its PAGE and NUMPAGES results. */
   readonly pageContext?: FieldPageContext;
+  /** Footnote and endnote reference marks, as numbered for this pass. Treated as immutable. */
   readonly noteMarks?: NoteMarkContext;
+  /** Package properties that AUTHOR, TITLE, and similar fields paint. */
   readonly documentProperties?: DocumentProperties;
+  /** Body page-field placeholders; `false` paints cached results instead. */
   readonly bodyPageFields?: BodyPageFieldContext | false;
+  /** Refreshed cross-reference results. */
   readonly refFields?: RefFieldContext;
+  /** Paint field instructions instead of results. */
   readonly showFieldCodes?: boolean;
+  /** Field-code ranges by paragraph id, when instructions are shown. */
   readonly fieldCodeRanges?: FieldCodeRanges;
+  /** Table-of-contents link styling by paragraph id. */
+  readonly tocLinkStyleRanges?: TocLinkRanges;
 }
 
 /** What a table flow carries that autofit reads. */
@@ -72,12 +83,30 @@ interface AutofitFlowDeps extends AutofitFieldContext {
   readonly drawingTokenForParagraph?: (paragraph: OoxmlElement) => string;
   readonly projectionTokenForParagraph?: (paragraph: OoxmlElement) => string;
   readonly drawingLayoutToken?: string;
+  /** The pass producer the break cache keys on: note marks, display mode, author filter. */
+  readonly producer?: string;
 }
 
 /** One context per flow deps object, so every reader in a pass shares it. */
 const flowContexts = new WeakMap<object, TableAutofitContext>();
 
 const mapsAsEntries = (_key: string, value: unknown) => (value instanceof Map ? [...value] : value);
+
+/**
+ * A fixed-width digest of a value object, once per object. File-controlled property text can
+ * run to kilobytes, and the token joins every paragraph's cache key.
+ */
+const valueDigests = new WeakMap<object, string>();
+const digestEncoder = new TextEncoder();
+function valueDigest(value: object | undefined): string {
+  if (!value) return '';
+  let digest = valueDigests.get(value);
+  if (digest === undefined) {
+    digest = sha256FontBytes(digestEncoder.encode(JSON.stringify(value, mapsAsEntries)));
+    valueDigests.set(value, digest);
+  }
+  return digest;
+}
 
 /** The autofit inputs a table flow already carries, so every reader widens alike. */
 export function autofitContextOf(deps: AutofitFlowDeps): TableAutofitContext {
@@ -91,19 +120,20 @@ export function autofitContextOf(deps: AutofitFlowDeps): TableAutofitContext {
     ...(deps.refFields ? { refFields: deps.refFields } : {}),
     ...(deps.showFieldCodes ? { showFieldCodes: true } : {}),
     ...(deps.fieldCodeRanges ? { fieldCodeRanges: deps.fieldCodeRanges } : {}),
+    ...(deps.tocLinkStyleRanges ? { tocLinkStyleRanges: deps.tocLinkStyleRanges } : {}),
   };
   // Values, not identities: a pass builds these objects afresh and the cache must survive it.
-  const passToken = JSON.stringify(
-    [
-      deps.bodyPageFields ? (deps.bodyPageFields.format ?? '') : null,
-      deps.pageContext ?? null,
-      deps.documentProperties ?? null,
-      deps.showFieldCodes === true,
-      deps.refFields?.valuesToken ?? '',
-      deps.drawingLayoutToken ?? '',
-    ],
-    mapsAsEntries
-  );
+  // Every part is compact: the producer is a digest, the value objects are digested.
+  const passToken = [
+    deps.producer ?? '',
+    deps.bodyPageFields ? `body:${deps.bodyPageFields.format ?? ''}` : '',
+    valueDigest(deps.pageContext),
+    valueDigest(deps.documentProperties),
+    deps.showFieldCodes === true ? 'codes' : '',
+    deps.refFields?.valuesToken ?? '',
+    deps.drawingLayoutToken ?? '',
+    deps.inlineDrawingLayout ? 'drawings' : '',
+  ].join('\0');
   const context: TableAutofitContext = {
     measurer: deps.measurer,
     ...(deps.listItems ? { listItems: deps.listItems } : {}),
@@ -243,7 +273,8 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
     fields?.refFields,
     view.authorFilter,
     fields?.showFieldCodes,
-    fields?.fieldCodeRanges?.get(paragraph.id)
+    fields?.fieldCodeRanges?.get(paragraph.id),
+    fields?.tocLinkStyleRanges?.get(paragraph.id)
   );
   const { left, right, firstLine } = layoutInputs.indent;
   let widest = 0;
@@ -337,7 +368,8 @@ export function autofitColumnMinimumsPt(
   view: AutofitView
 ): number[] {
   const columnCount = structure.columnWidthsPt.length;
-  const minimums = new Array<number>(columnCount).fill(0);
+  // -1 marks a column no single-column cell measured; a measured empty column may be 0.
+  const minimums = new Array<number>(columnCount).fill(-1);
   const collapsed = structure.cellSpacingPt === 0;
   for (const row of structure.rows) {
     for (const cell of row.cells) {
@@ -364,7 +396,7 @@ export function autofitColumnMinimumsPt(
   }
   // A column only spanning cells cover has no minimum of its own; it keeps its width.
   for (const [column, minimum] of minimums.entries())
-    if (minimum === 0) minimums[column] = structure.columnWidthsPt[column]!;
+    if (minimum < 0) minimums[column] = structure.columnWidthsPt[column]!;
   return minimums;
 }
 

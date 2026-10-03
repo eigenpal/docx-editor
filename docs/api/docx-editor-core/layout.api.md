@@ -77,20 +77,14 @@ export const AUTO_PREFERRED_WIDTH: PreferredWidth;
 
 // @public
 export interface AutofitFieldContext {
-    // (undocumented)
     readonly bodyPageFields?: BodyPageFieldContext | false;
-    // (undocumented)
     readonly documentProperties?: DocumentProperties;
-    // (undocumented)
     readonly fieldCodeRanges?: FieldCodeRanges;
-    // (undocumented)
     readonly noteMarks?: NoteMarkContext;
-    // (undocumented)
     readonly pageContext?: FieldPageContext;
-    // (undocumented)
     readonly refFields?: RefFieldContext;
-    // (undocumented)
     readonly showFieldCodes?: boolean;
+    readonly tocLinkStyleRanges?: TocLinkRanges;
 }
 
 // @public (undocumented)
