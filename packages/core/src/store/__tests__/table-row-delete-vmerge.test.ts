@@ -372,6 +372,23 @@ describe.each(['deleteTableRow', 'deleteBlock'] as const)('%s across vertical me
     expect(rows(removeRow(part, 1, via))).toEqual([['restart:Wide'], ['-:', '-:y']]);
   });
 
+  test('a continuation that joins the merge above needs no later row', () => {
+    const part = load(
+      TABLE(
+        2,
+        HEADER,
+        ROW(CELL('A', 'restart'), CELL('1')),
+        ROW(CELL('C', 'restart'), CELL('3')),
+        ROW(CELL('D', 'continue'), CELL('4')),
+        `<w:customXml w:element="row">${ROW(CELL('Other'), CELL('5'))}</w:customXml>`
+      )
+    );
+    expect(rows(removeRow(part, 2, via)).slice(1, 3)).toEqual([
+      ['restart:A', '-:1'],
+      ['continue:D', '-:4'],
+    ]);
+  });
+
   test('a merge-free row with a wrapped neighbour still deletes', () => {
     const part = load(
       TABLE(

@@ -63,7 +63,7 @@ import {
 import {
   planVerticalMergeHeadRepairs,
   verticalMergeHeadRepairDirtyIds,
-  verticalMergeHeadRepairEdits,
+  rowRemovalEdits,
 } from './tree-op-table-vmerge-removal.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import {
@@ -874,10 +874,8 @@ export function applyDeleteTableRow(
     impact: 'flow-structural',
     caret: { paragraphId: caretParagraphId },
   };
-  const edits = [
-    ...verticalMergeHeadRepairEdits(repairs.repairs, options),
-    (current: OoxmlPart) => removeNode(current, op.rowId, options),
-  ];
+  if (repairs.repairs.length === 0) return fromEdit(removeNode(part, op.rowId, options), effect);
+  const edits = rowRemovalEdits(repairs.repairs, op.rowId, options);
   return fromEdit(applyEdits(part, edits, options), effect);
 }
 

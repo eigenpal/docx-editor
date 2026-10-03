@@ -2,7 +2,7 @@
 //
 // A `w:vMerge w:val="restart"` cell leaves with its row, content included. The cell below it
 // at the same grid interval is then a continuation under a new neighbour. If that neighbour
-// has a merged cell starting at the same grid column, the continuation joins it and nothing
+// has a merged cell on the same grid interval, the continuation joins it and nothing
 // changes. Otherwise it continues nothing: it becomes the new `restart` when the chain goes
 // on past it, and loses `w:vMerge` when it was the chain's last row. Its own content stays,
 // and no row further down changes. Layout reads a continuation by the same rule.
@@ -108,7 +108,7 @@ export function planVerticalMergeHeadRepairs(
   if (index === -1 || !removed) return { ok: false, reason: 'row-hides-cell' };
   const heads = removed.slots.filter((slot) => slot.vMergeKind === 'restart');
   if (index + 1 >= rows.length) return NO_REPAIRS;
-  const below = readRow(rows[index + 1]!);
+  const below = readRow(rows[index + 1] ?? null);
   if (!below) return { ok: false, reason: 'row-hides-cell' };
   const candidates = below.slots.flatMap((slot, cellIndex) =>
     slot.vMergeKind === 'continue' && heads.some((head) => sameInterval(head, slot))
@@ -117,23 +117,29 @@ export function planVerticalMergeHeadRepairs(
   );
   if (candidates.length === 0) return NO_REPAIRS;
 
-  const above = index > 0 ? readRow(rows[index - 1]!) : null;
-  const next = index + 2 < rows.length ? readRow(rows[index + 2]!) : null;
-  if ((index > 0 && !above) || (index + 2 < rows.length && !next)) {
-    return { ok: false, reason: 'row-hides-cell' };
-  }
+  // Each neighbour is read only when a candidate needs it, and must then be readable.
+  const neighbour = (offset: number): ReadRow | 'none' | 'unreadable' => {
+    const at = index + offset;
+    if (at < 0 || at >= rows.length) return 'none';
+    return readRow(rows[at] ?? null) ?? 'unreadable';
+  };
+  const above = neighbour(-1);
+  if (above === 'unreadable') return { ok: false, reason: 'row-hides-cell' };
+  let next: ReadRow | 'none' | 'unreadable' | undefined;
 
   const repairs: VerticalMergeHeadRepair[] = [];
   for (const { slot, cell } of candidates) {
     // A merged cell above on the same grid interval takes the continuation over. The exact
     // interval is what the store's merge chains match on, so the result stays a valid chain.
-    const joins = above?.slots.some(
-      (other) => other.vMergeKind !== 'none' && sameInterval(slot, other)
-    );
+    const joins =
+      above !== 'none' &&
+      above.slots.some((other) => other.vMergeKind !== 'none' && sameInterval(slot, other));
     if (joins) continue;
-    const continues = next?.slots.some(
-      (other) => other.vMergeKind === 'continue' && sameInterval(slot, other)
-    );
+    next ??= neighbour(2);
+    if (next === 'unreadable') return { ok: false, reason: 'row-hides-cell' };
+    const continues =
+      next !== 'none' &&
+      next.slots.some((other) => other.vMergeKind === 'continue' && sameInterval(slot, other));
     repairs.push({
       rowId: below.row.id,
       cellId: cell.id,
@@ -159,18 +165,26 @@ function restartMarker(part: OoxmlPart, marker: OoxmlElement): OoxmlElement {
   return { ...marker, attributes: [...kept, val] } as OoxmlElement;
 }
 
-/** One edit per repair, to run in the same write that removes the row. */
-export function verticalMergeHeadRepairEdits(
+/**
+ * One edit per repair, then the row's own removal, as steps for `applyEdits`. The steps defer
+ * validation, because `applyEdits` validates the final part once.
+ */
+export function rowRemovalEdits(
   repairs: readonly VerticalMergeHeadRepair[],
+  rowId: string,
   options?: EditOptions
 ): ((current: OoxmlPart) => OoxmlEditResult)[] {
-  return repairs.map(
-    ({ marker, becomes }) =>
-      (current) =>
-        becomes === 'restart'
-          ? replaceNode(current, marker.id, restartMarker(current, marker), options)
-          : removeNode(current, marker.id, options)
-  );
+  const step: EditOptions = { ...options, deferValidation: true };
+  return [
+    ...repairs.map(
+      ({ marker, becomes }) =>
+        (current: OoxmlPart) =>
+          becomes === 'restart'
+            ? replaceNode(current, marker.id, restartMarker(current, marker), step)
+            : removeNode(current, marker.id, step)
+    ),
+    (current: OoxmlPart) => removeNode(current, rowId, step),
+  ];
 }
 
 /** Ids a repair touches, for the op's `dirty` list. */

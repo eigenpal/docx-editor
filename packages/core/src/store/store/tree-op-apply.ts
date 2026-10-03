@@ -114,7 +114,7 @@ import { tableAncestorOf } from './tree-op-table-shared.ts';
 import {
   planVerticalMergeHeadRepairs,
   verticalMergeHeadRepairDirtyIds,
-  verticalMergeHeadRepairEdits,
+  rowRemovalEdits,
 } from './tree-op-table-vmerge-removal.ts';
 import {
   PARAGRAPH_VOCABULARY,
@@ -3046,12 +3046,11 @@ function applyDeleteBlock(part: OoxmlPart, blockId: string, options?: EditOption
     impact: 'flow-structural',
     caret: { paragraphId: caretParagraphId },
   };
-  if (block.kind === 'tableRow') {
+  const repairs = block.kind === 'tableRow' ? planVerticalMergeHeadRepairs(part, blockId) : null;
+  if (repairs && !repairs.ok) return { ok: false, reason: repairs.reason };
+  if (repairs?.ok && repairs.repairs.length > 0) {
     // A row taking a merge's `restart` cell with it hands the merge to the row below.
-    const repairs = planVerticalMergeHeadRepairs(part, blockId);
-    if (!repairs.ok) return { ok: false, reason: repairs.reason };
-    const edits = verticalMergeHeadRepairEdits(repairs.repairs, options);
-    edits.push((current) => removeNode(current, blockId, options));
+    const edits = rowRemovalEdits(repairs.repairs, blockId, options);
     const dirty = verticalMergeHeadRepairDirtyIds(repairs.repairs);
     return fromEdit(applyEdits(part, edits, options), { ...effect, dirty });
   }
