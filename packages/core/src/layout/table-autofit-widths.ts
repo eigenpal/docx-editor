@@ -45,10 +45,15 @@ export interface TableAutofitContext {
   readonly fields?: AutofitFieldContext;
   /**
    * A token that changes whenever a paragraph's projected text can change: the same tokens
-   * the paragraph break cache keys on. Without it, minimums are not cached.
+   * the paragraph break cache keys on. Minimums are cached only when this and
+   * {@link TableAutofitContext.passToken} are both given.
    */
   readonly paragraphToken?: (paragraph: OoxmlElement) => string;
-  /** A token over everything else the pass projects with. */
+  /**
+   * A token over every other input the minimum reads: the list items, the drawing context,
+   * and every member of {@link TableAutofitContext.fields}. It must change when any of them
+   * changes.
+   */
   readonly passToken?: string;
 }
 
@@ -174,9 +179,11 @@ interface MinimumInputs {
 interface MinimumKey {
   readonly styleCascade: StyleCascadeTable | undefined;
   readonly displayMode: RevisionDisplayMode;
-  readonly authorFilter: RevisionAuthorFilter | undefined;
+  readonly authorFilter: string;
   readonly cellStyle: string;
-  readonly token: string;
+  /** Shared by every paragraph of a pass, so it usually compares by pointer. */
+  readonly passToken: string;
+  readonly paragraphToken: string;
 }
 
 /**
@@ -207,13 +214,15 @@ function cellStyleKey(style: SemanticTableCell['styleFormatting'] | undefined): 
 
 function minimumKey(paragraph: OoxmlElement, inputs: MinimumInputs): MinimumKey | null {
   const { context, view } = inputs;
-  if (!context.paragraphToken) return null;
+  // Both tokens or no cache: a paragraph token alone cannot see the pass inputs change.
+  if (!context.paragraphToken || context.passToken === undefined) return null;
   return {
     styleCascade: view.styleCascade,
     displayMode: view.displayMode,
-    authorFilter: view.authorFilter,
+    authorFilter: view.authorFilter?.cacheKey ?? '',
     cellStyle: cellStyleKey(inputs.tableCellStyle),
-    token: `${context.passToken ?? ''}\0${context.paragraphToken(paragraph)}`,
+    passToken: context.passToken,
+    paragraphToken: context.paragraphToken(paragraph),
   };
 }
 
@@ -223,7 +232,8 @@ function sameKey(a: MinimumKey, b: MinimumKey): boolean {
     a.displayMode === b.displayMode &&
     a.authorFilter === b.authorFilter &&
     a.cellStyle === b.cellStyle &&
-    a.token === b.token
+    a.passToken === b.passToken &&
+    a.paragraphToken === b.paragraphToken
   );
 }
 
@@ -293,6 +303,10 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
   let dashPending = false;
   for (const piece of pieces) {
     if (piece.style.hidden) continue;
+    // A drawing that is not an inline atom (anchored, hidden, unresolved) takes no width in
+    // the line, exactly as the line breaker skips its placeholder.
+    if (piece.projected && !piece.inlineDrawing && !piece.equation && piece.text === '\uFFFC')
+      continue;
     if (dashPending && !BREAK_AFTER_DASH.has(piece.text[0] ?? '')) close();
     dashPending = false;
     // A table cell lays out as though page breaks were absent: the words around one join.
@@ -426,8 +440,9 @@ export function widenAutofitColumns(
   const grown = widths.map((width, index) => Math.max(width, minimums[index]!));
   const need = grown.reduce((sum, width) => sum + width, 0) - targetPt;
   if (need <= WIDTH_EPSILON_PT) return grown;
+  // No column gives up its last hairline.
   const slack = widths.map((width, index) =>
-    minimums[index]! > width ? 0 : width - minimums[index]!
+    Math.max(0, width - Math.max(minimums[index]!, MIN_COLUMN_PT))
   );
   const totalSlack = slack.reduce((sum, value) => sum + value, 0);
   if (need <= totalSlack) {

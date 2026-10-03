@@ -348,7 +348,17 @@ describe('autofit layout', () => {
 
   test('an empty spacer column with no insets gives its width up', () => {
     const spacer = table('', run('ABCDEFGHIJ')).replace(`<w:p>${run('ab')}</w:p>`, '<w:p/>');
-    // Slack 60 and 18 pt give the 30 pt in proportion.
-    expect(columns(spacer).widths).toEqual([36.92, 60, 23.08]);
+    // Slack 59 and 18 pt (each keeps its hairline) give the 30 pt in proportion.
+    expect(columns(spacer).widths).toEqual([37.01, 60, 22.99]);
+  });
+
+  test('an anchored drawing in a word takes no width', () => {
+    const anchored =
+      '<w:r><w:drawing><wp:anchor simplePos="0" relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1">' +
+      '<wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>' +
+      '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
+      '<wp:extent cx="127000" cy="127000"/><wp:wrapNone/><wp:docPr id="2" name="a"/></wp:anchor></w:drawing></w:r>';
+    const content = `${run('ABCDE')}${anchored}${run('FGHIJ')}`;
+    expect(columns(table('', content), { drawings: true }).widths).toEqual([38.18, 60, 21.82]);
   });
 });
