@@ -50,11 +50,7 @@ import {
   withDrawingContext,
   type ParagraphLayoutCache,
 } from './layout-cache.ts';
-import {
-  continuedCellLines,
-  settleCellBreak,
-  type CellBreakMemo,
-} from './cell-continuation-lines.ts';
+import { cellParagraphLines, type HeldCellBreak } from './cell-continuation-lines.ts';
 import {
   initialCellCursor,
   initialCellCursors,
@@ -334,8 +330,6 @@ export interface TableFlowDeps {
    * cache retention can name a table's cell entries without laying the table out.
    */
   readonly onCellBreakKey?: (key: string) => void;
-  /** Held whole breaks of cell paragraphs continued across pages; one per layout pass. */
-  readonly cellBreakMemo?: CellBreakMemo;
 }
 
 function sumCols(cols: readonly number[], from: number, to: number): number {
@@ -368,6 +362,8 @@ function placeCellParagraph(
   readonly spaceAfter: number;
   readonly nextLineIndex: number;
   readonly nextStartOffset: number;
+  /** The break the page that continues this paragraph indexes; see `cellParagraphLines`. */
+  readonly heldBreak?: HeldCellBreak;
   readonly complete: boolean;
   readonly fitted: boolean;
 } {
@@ -469,7 +465,8 @@ function placeCellParagraph(
   // the wrapped break of the one that does not.
   const exclusionToken = exclusionLayoutToken(pageZones);
   const positionedExclusionToken = positionedParagraphExclusionToken(exclusionToken, top);
-  const keyFrom = (offset: number): string =>
+  // `positioned` false names the break apart from where the paragraph sits, for a held break.
+  const keyFrom = (offset: number, positioned = true): string =>
     keyFor({
       paragraph,
       properties: breakProperties,
@@ -485,7 +482,9 @@ function placeCellParagraph(
         deps.inlineDrawingLayout !== undefined
       ),
       projectionToken: `${deps.projectionTokenForParagraph?.(paragraph) ?? ''}|inTableCell:${options?.inTableCell === true}|cellEndMark:${options?.cellEndMark === true}|from:${offset}|rowsClear:${anchorScope.rowsClearOutOfCellFloats}`,
-      ...(positionedExclusionToken ? { exclusionToken: positionedExclusionToken } : {}),
+      ...(positioned && positionedExclusionToken
+        ? { exclusionToken: positionedExclusionToken }
+        : {}),
     });
   const breakRemainder = (): readonly PendingLine[] => {
     const key = keyFrom(startOffset);
@@ -533,24 +532,19 @@ function placeCellParagraph(
       },
     });
   };
-  const continuation = {
-    memo: deps.cellBreakMemo,
-    pageZones: pageZones.length > 0,
-    inlineDrawingLayout: deps.inlineDrawingLayout,
-  };
-  // A model-offset continuation places from `from`: 0 in its own remainder break, or its index
-  // in the held whole break. Line ids and the returned cursor count from the paragraph start.
-  const { lines: brokenLines, from } = continuedCellLines(
+  const placement = cellParagraphLines({
     paragraph,
     startOffset,
-    options?.startOffset !== undefined ? (options?.lineStart ?? 0) : 0,
-    continuation,
-    keyFrom,
-    breakRemainder
-  );
-
-  const lineStart = options?.startOffset !== undefined ? from : (options?.lineStart ?? 0);
-  const priorLineCount = options?.startOffset !== undefined ? (options?.lineStart ?? 0) - from : 0;
+    continuedAfter: options?.startOffset !== undefined ? (options?.lineStart ?? 0) : undefined,
+    legacyLineStart: options?.lineStart ?? 0,
+    held: options?.heldBreak,
+    top,
+    zones: pageZones,
+    inlineDrawingLayout: deps.inlineDrawingLayout,
+    heldKey: () => keyFrom(0, false),
+    breakRemainder,
+  });
+  const { lines: brokenLines, lineStart, priorLineCount } = placement;
   const fragmentIndex = options?.fragmentIndex ?? 0;
   const maxBottom = options?.maxBottom ?? Number.POSITIVE_INFINITY;
   const includeAfter = options?.includeAfter ?? true;
@@ -587,7 +581,8 @@ function placeCellParagraph(
       ),
     deps.measurer,
     layoutInputs.lineSpacing,
-    listItem
+    // The marker belongs to the paragraph's first line, whichever break the page places.
+    priorLineCount === 0 ? listItem : undefined
   );
   const collapseHeight = (options?.collapseHeight ?? false) && !publishesPlacedGlyphs();
 
@@ -750,7 +745,6 @@ function placeCellParagraph(
   }
 
   const complete = nextLineIndex >= lines.length;
-  settleCellBreak(paragraph, startOffset, complete, continuation, keyFrom, brokenLines);
   const linesTop = rawRecords[0]!.box.y;
   const linesBottom = y;
   // Every `w:pBdr` edge, in the paint order body flow publishes: open, close, sides, bar.
@@ -997,6 +991,7 @@ function placeCellParagraph(
     spaceAfter: deps.styleCascade?.fixedParagraphSpacing ? 0 : appliedAfter,
     nextLineIndex: priorLineCount + nextLineIndex,
     nextStartOffset: lines[nextLineIndex]?.start ?? lines.at(-1)!.end,
+    ...(complete ? {} : { heldBreak: placement.carry() }),
     complete,
     fitted: true,
   };
@@ -1063,6 +1058,7 @@ function flowBlocksInBoxBounded(
   let blockIndex = cursor.blockIndex;
   let lineIndex = cursor.lineIndex;
   let startOffset = cursor.startOffset;
+  const heldBreak = cursor.heldBreak;
   let nestedTable = cursor.nestedTable;
   let paragraphFragmentIndex = cursor.paragraphFragmentIndex;
   let fitted = false;
@@ -1142,6 +1138,7 @@ function flowBlocksInBoxBounded(
         inTableCell,
         lineStart: lineIndex,
         startOffset,
+        heldBreak,
         applyWidowControl,
         aloneOnPage: !fitted && deps.rowAtPageStart !== false,
         fragmentIndex: paragraphFragmentIndex,
@@ -1185,6 +1182,7 @@ function flowBlocksInBoxBounded(
           blockIndex,
           lineIndex: placed.nextLineIndex,
           startOffset: placed.nextStartOffset,
+          ...(placed.heldBreak ? { heldBreak: placed.heldBreak } : {}),
           previousSpaceAfter: 0,
           paragraphFragmentIndex: paragraphFragmentIndex + 1,
           precededByEmittedTable: lastEmittedTable,

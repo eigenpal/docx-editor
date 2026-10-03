@@ -1,3 +1,4 @@
+import type { HeldCellBreak } from './cell-continuation-lines.ts';
 import type { SemanticTableRow } from './semantic-table.ts';
 
 /**
@@ -9,6 +10,8 @@ export interface CellPlaceCursor {
   readonly lineIndex: number;
   /** Resume by model position when the next page changes line wrapping. */
   readonly startOffset?: number;
+  /** The continued paragraph's line break, which the next page indexes instead of re-breaking. */
+  readonly heldBreak?: HeldCellBreak;
   /** Row-boundary continuation of the nested table at blockIndex. */
   readonly nestedTable?: { readonly nextRowIndex: number; readonly fragmentIndex: number };
   readonly previousSpaceAfter: number;

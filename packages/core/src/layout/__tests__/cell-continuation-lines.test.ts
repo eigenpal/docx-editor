@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlNode } from '../../store/package/ooxml-tree.ts';
-import { continuedCellLines, type CellBreakMemo } from '../cell-continuation-lines.ts';
+import { cellParagraphLines, type HeldCellBreak } from '../cell-continuation-lines.ts';
+import type { ExclusionZone } from '../drawing-exclusion.ts';
 import type { PendingLine } from '../paragraph-flow.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import type { TableFragmentRecord, TextMeasurer } from '../semantic-records.ts';
@@ -97,19 +98,60 @@ for (const [name, props] of Object.entries(cases))
       expect(cellLines(split)).toEqual(cellLines(whole));
     });
 
+const line = (start: number, end: number) => ({ start, end }) as unknown as PendingLine;
+const paragraph = { kind: 'paragraph' } as unknown as OoxmlNode;
+const zoneAt = (y: number, height: number) =>
+  ({ verticalBand: { x: 0, y, width: 50, height } }) as unknown as ExclusionZone;
+function linesFor(held: HeldCellBreak | undefined, continuedAfter: number, startOffset: number) {
+  const rest = [line(startOffset, startOffset + 3)];
+  return (zones: readonly ExclusionZone[] = [], key = 'k') =>
+    cellParagraphLines({
+      paragraph,
+      startOffset,
+      continuedAfter,
+      legacyLineStart: 0,
+      held,
+      top: 100,
+      zones,
+      inlineDrawingLayout: undefined,
+      heldKey: () => key,
+      breakRemainder: () => rest,
+    });
+}
+
 test('a continuation picks its line by index, not by the first line with its start', () => {
-  const line = (start: number, end: number) => ({ start, end }) as unknown as PendingLine;
   // A layout-owned piece wrapped over three lines: the last two start at its end.
   const whole = [line(0, 5), line(5, 9), line(9, 9), line(9, 12)];
-  const paragraph = { kind: 'paragraph' } as unknown as OoxmlNode;
-  const memo: CellBreakMemo = new WeakMap([[paragraph, { key: 'k', lines: whole }]]);
-  const scope = { memo, pageZones: false, inlineDrawingLayout: undefined };
-  const rest = () => [line(9, 12)];
-  expect(continuedCellLines(paragraph, 9, 3, scope, () => 'k', rest)).toEqual({
-    lines: whole,
-    from: 3,
-  });
+  const held = { key: 'k', lines: whole, base: 0 };
+  const hit = linesFor(held, 3, 9)();
+  expect(hit.lines).toBe(whole);
+  expect(hit.lineStart).toBe(3);
+  expect(hit.priorLineCount).toBe(0);
   // A stale cursor, or another key, breaks the remainder instead.
-  expect(continuedCellLines(paragraph, 9, 1, scope, () => 'k', rest).from).toBe(0);
-  expect(continuedCellLines(paragraph, 9, 3, scope, () => 'other', rest).from).toBe(0);
+  expect(linesFor(held, 1, 9)().lines).not.toBe(whole);
+  expect(linesFor(held, 3, 9)([], 'other').lines).not.toBe(whole);
+});
+
+test('a page that breaks its own remainder carries it on to the next page', () => {
+  const miss = linesFor(undefined, 4, 20)();
+  expect(miss.lineStart).toBe(0);
+  expect(miss.priorLineCount).toBe(4);
+  const carried = miss.carry()!;
+  expect(carried.base).toBe(4);
+  // The next page continues after one more line and indexes that remainder break.
+  const remainder = [line(20, 23), line(23, 27), line(27, 30)];
+  const next = linesFor({ ...carried, lines: remainder }, 5, 23)();
+  expect(next.lines).toBe(remainder);
+  expect(next.lineStart).toBe(1);
+  expect(next.priorLineCount).toBe(4);
+});
+
+test('only an exclusion band that reaches below the paragraph top stops the reuse', () => {
+  const whole = [line(0, 5), line(5, 9), line(9, 12)];
+  const held = { key: 'k', lines: whole, base: 0 };
+  // A header logo's band ends above the paragraph, so the held break still holds.
+  expect(linesFor(held, 1, 5)([zoneAt(0, 60)]).lines).toBe(whole);
+  const crossed = linesFor(held, 1, 5)([zoneAt(150, 40)]);
+  expect(crossed.lines).not.toBe(whole);
+  expect(crossed.carry()).toBeUndefined();
 });

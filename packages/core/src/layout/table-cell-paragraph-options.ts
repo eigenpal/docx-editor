@@ -1,4 +1,5 @@
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
+import type { HeldCellBreak } from './cell-continuation-lines.ts';
 import type { TableCellStyleFormatting } from './style-cascade.ts';
 
 /** Placement context for a cell paragraph, including its structural end marker. */
@@ -12,6 +13,8 @@ export interface CellParagraphPlacementOptions {
   readonly lineStart?: number;
   /** Unplaced model suffix; line indices alone do not survive a changed wrap band. */
   readonly startOffset?: number;
+  /** The break the cursor carries from the page before; indexed instead of breaking again. */
+  readonly heldBreak?: HeldCellBreak;
   readonly fragmentIndex?: number;
   readonly maxBottom?: number;
   /** False for fixed-height or rotated cells, whose bottom is a clip boundary. */
