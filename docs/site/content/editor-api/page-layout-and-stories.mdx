@@ -105,7 +105,9 @@ The legacy `Document.footnotes` and `Document.endnotes` accessors enumerate note
 
 `Body.shapes` and `Paragraph.shapes` return the floating shapes that the body or paragraph anchors, in reading order. Each returns `ShapeCollection`, which exposes `items`, `getFirst()`, `getFirstOrNullObject()`, and `getByTypes(types)`. A `Shape` exposes read-only `id`, `name`, and `type`. `ShapeType` values are `TextBox`, `GeometricShape`, `Picture`, `Group`, `Canvas`, and `Unsupported`.
 
-A text box's `body` is its own story. Read, search, and edit it with the same `Body` members as the main story. The main body's `text` and `search` do not include text box content. Other shape types refuse `body` with `InvalidArgument`.
+A text box's `body` is its own story. Read, search, and edit it with the same `Body` members as the main story. The main body's `text` and `search` do not include text box content. A geometric shape that holds text also has a `body`. A shape without its own text, such as a picture or a linked text box, refuses `body` with `InvalidArgument`.
+
+Shapes in the body, headers, and footers have a `body`. Shapes in notes and in text boxes are listed, but their `body` refuses with `InvalidArgument`.
 
 The following example replaces a client name inside a text box:
 

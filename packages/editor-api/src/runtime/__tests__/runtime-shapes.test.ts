@@ -100,6 +100,25 @@ describe('text boxes through the host', () => {
     }
   });
 
+  test('chained type filters narrow to the types both name', async () => {
+    const runtime = await DocxEditor.createServer(BYTES);
+    try {
+      const counts = await runtime.run(async (context) => {
+        const shapes = context.document.body.shapes;
+        const both = shapes.getByTypes([ShapeType.textBox, ShapeType.picture]);
+        const kept = both.getByTypes([ShapeType.textBox]);
+        const none = both.getByTypes([ShapeType.geometricShape]);
+        kept.load('items');
+        none.load('items');
+        await context.sync();
+        return [kept.items.length, none.items.length];
+      });
+      expect(counts).toEqual([1, 0]);
+    } finally {
+      runtime.dispose();
+    }
+  });
+
   test('a paragraph lists the shapes it anchors', async () => {
     const runtime = await DocxEditor.createServer(BYTES);
     try {

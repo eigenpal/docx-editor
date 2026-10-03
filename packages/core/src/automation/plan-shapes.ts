@@ -109,8 +109,12 @@ export function planShapes(
     const { id, name, type } = found.shape;
     return query({ kind: 'shape', shape: { id, name, type } });
   }
-  if (found.shape.type !== 'TextBox')
-    return refuse('unsupported-content', 'only a text box has a body', found.shape.type);
+  if (!found.shape.textboxRoot)
+    return refuse(
+      'unsupported-content',
+      'that shape holds no text story of its own',
+      found.shape.type
+    );
   if (!isShapeOwnerStory(found.owner))
     return refuse(
       'unsupported-content',

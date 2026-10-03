@@ -1,3 +1,4 @@
+import { sharesItsPart } from './stories.ts';
 import { ordinaryMoveRanges } from '../store/store/revision-move-ranges.ts';
 import { collectRevisionSites } from '../store/store/tree-op-revisions.ts';
 import {
@@ -81,7 +82,7 @@ export function revisionCollectionOps(
   )
     return [];
   const accept = operation.op === 'acceptAllRevisions';
-  const scope = reads.story.kind === 'note' ? { scopeRootId: reads.root.id } : {};
+  const scope = sharesItsPart(reads.story) ? { scopeRootId: reads.root.id } : {};
   return [accept ? { op: 'acceptAllRevisions', ...scope } : { op: 'rejectAllRevisions', ...scope }];
 }
 
@@ -125,7 +126,7 @@ export function revisionBatchPlan(
     target.reads.part,
     operation.action,
     keys,
-    target.reads.story.kind === 'note' ? target.reads.root : undefined
+    sharesItsPart(target.reads.story) ? target.reads.root : undefined
   );
   return { ok: true as const, reads: target.reads, ...plan };
 }
@@ -141,7 +142,7 @@ export function revisionBatchAnswer(
   if (!target.ok) throw new Error('resolved story disappeared');
   const { part, root, story } = target.reads;
   const remaining = revisionItemsOf(
-    story.kind === 'note' && root.kind !== 'textValue' ? { ...part, root } : part
+    sharesItsPart(story) && root.kind !== 'textValue' ? { ...part, root } : part
   ).length;
   return { kind: 'revisionBatch', result: { ...result, remaining } };
 }
@@ -198,7 +199,7 @@ export function revisionItemOps(
       reads.part,
       action,
       [reviewItemKey(item)],
-      reads.story.kind === 'note' ? reads.root : undefined
+      sharesItsPart(reads.story) ? reads.root : undefined
     );
     return decision.result.skipped.length ? [] : decision.ops;
   }

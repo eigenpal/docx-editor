@@ -176,7 +176,9 @@ export class ShapeCollection extends ItemCollection<Shape> {
     const label = `${this.path.label}.getByTypes`;
     if (!Array.isArray(types) || types.some((type) => !SHAPE_TYPES.has(type)))
       fail({ code: 'InvalidArgument', target: label });
-    return ShapeCollection.of(this.context, label, this.path, this.#owner, [...types]);
+    // Chained filters narrow: a shape must match every filter on the way down.
+    const narrowed = this.#types ? this.#types.filter((type) => types.includes(type)) : [...types];
+    return ShapeCollection.of(this.context, label, this.path, this.#owner, narrowed);
   }
 
   /** @internal */

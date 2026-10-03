@@ -15,6 +15,7 @@
 // (`revisionKind: structural` and `readOnly: false`), and refuse atomically when any `readOnly`
 // item remains.
 
+import { sharesItsPart } from './stories.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
 import {
@@ -31,7 +32,6 @@ import type {
 } from '../store/store/review-items.ts';
 import { commentPartNameOf, commentsExtendedPartNameOf } from '../store/store/comment-writes.ts';
 import type { AutomationStoryReads } from './reads.ts';
-import type { AutomationStoryId } from './stories.ts';
 
 /**
  * Word's own name for a kind of change.
@@ -62,9 +62,6 @@ export type AutomationRevisionType = (typeof REVISION_TYPES)[keyof typeof REVISI
  * exactly one question — what to do with a review item the part holds but nothing in it locates —
  * and getting it wrong is how a note ends up reviewing its neighbour.
  */
-function sharesItsPart(story: AutomationStoryId): boolean {
-  return story.kind === 'note';
-}
 
 /**
  * Whether an item anchored at these ranges is the addressed story's.

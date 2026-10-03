@@ -39,15 +39,20 @@ function anchor(id: number, name: string, graphic: string): string {
   );
 }
 
-function textbox(id: number, text: string): string {
+function textbox(
+  id: number,
+  text: string,
+  { requires = 'wps', flag = ' txBox="1"' }: { requires?: string; flag?: string } = {}
+): string {
   const story = `<w:txbxContent><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:txbxContent>`;
   const graphic =
     '<a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">' +
-    '<wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="2743200" ' +
+    `<wps:wsp><wps:cNvSpPr${flag}/><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="2743200" ` +
     'cy="457200"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></wps:spPr>' +
     `<wps:txbx>${story}</wps:txbx><wps:bodyPr/></wps:wsp></a:graphicData>`;
   return (
-    `<w:r><mc:AlternateContent ${DRAWING_NS}><mc:Choice Requires="wps"><w:drawing>` +
+    `<w:r><mc:AlternateContent ${DRAWING_NS} xmlns:x99="urn:example:unsupported">` +
+    `<mc:Choice Requires="${requires}"><w:drawing>` +
     `${anchor(id, `Text Box ${id}`, graphic)}</w:drawing></mc:Choice><mc:Fallback><w:pict>` +
     `<v:shape id="Text Box ${id}" type="#_x0000_t202" style="width:3in;height:36pt"><v:textbox>` +
     `${story}</v:textbox></v:shape></w:pict></mc:Fallback></mc:AlternateContent></w:r>`
@@ -149,6 +154,73 @@ describe('shapes and text-box stories', () => {
     expect(
       errorAt(target.execute({ operations: [{ op: 'getShapeBody', shape: rectangleShape! }] }), 0)
     ).toBe('unsupported-content');
+  });
+
+  test('a geometric shape with text is not a text box but has a body', () => {
+    const target = open(docx(`<w:p>${textbox(4, 'Label', { flag: '' })}</w:p>`));
+    const { body } = roots(target);
+    const [shape] = shapesOf(target, { body });
+    expect(shapeRead(target, shape!)).toEqual({
+      id: 4,
+      name: 'Text Box 4',
+      type: 'GeometricShape',
+    });
+    const story = handleAt(
+      target.execute({ operations: [{ op: 'getShapeBody', shape: shape! }] }),
+      0
+    );
+    expect(storyText(target, story)).toBe('Label');
+  });
+
+  test('a shape id takes the whole unsigned 32-bit range', () => {
+    const target = open(docx(`<w:p>${textbox(4294967295, 'Wide')}</w:p>`));
+    const { body } = roots(target);
+    const [shape] = shapesOf(target, { body });
+    expect(shapeRead(target, shape!).id).toBe(4294967295);
+  });
+
+  test('a box whose DrawingML branch is not selected is not listed', () => {
+    // `Requires` names a namespace this engine does not support, so the VML fallback is painted.
+    const target = open(docx(`<w:p>${textbox(6, 'Legacy', { requires: 'x99' })}</w:p>`));
+    const { body } = roots(target);
+    expect(shapesOf(target, { body })).toHaveLength(0);
+  });
+
+  test('a paragraph in a text box resolves to the text box story', () => {
+    const target = host();
+    const { body } = roots(target);
+    const [box] = shapesOf(target, { body });
+    const boxBody = handleAt(
+      target.execute({ operations: [{ op: 'getShapeBody', shape: box! }] }),
+      0
+    );
+    const [paragraph] = handlesAt(
+      target.execute({ operations: [{ op: 'getParagraphs', body: boxBody }] }),
+      0
+    );
+    // A paragraph handle edits its own story: the box changes, the anchoring paragraph does not.
+    const inserted = target.execute({
+      operations: [
+        { op: 'insertParagraph', anchor: { paragraph: paragraph! }, where: 'after', text: 'Two' },
+      ],
+    });
+    expect(inserted.results[0]?.status).toBe('ok');
+    expect(paragraphTexts(target, boxBody)).toEqual(['Client: Acme Holdings', 'Two']);
+    expect(paragraphTexts(target, body)).toEqual(['Cover', 'Terms']);
+  });
+
+  test('a search match never spans a floating shape', () => {
+    const target = open(
+      docx(`<w:p><w:r><w:t>ab</w:t></w:r>${textbox(1, 'x')}<w:r><w:t>cd</w:t></w:r></w:p>`)
+    );
+    const { body } = roots(target);
+    const find = (text: string) =>
+      spansAt(target.execute({ operations: [{ op: 'search', scope: { body }, text }] }), 0);
+    // A match across the anchor would select the shape, and a replace would delete it.
+    expect(find('abcd')).toHaveLength(0);
+    expect(find('ab')).toHaveLength(1);
+    expect(find('cd')).toHaveLength(1);
+    expect(paragraphTexts(target, body)).toEqual(['abcd']);
   });
 
   test('duplicate shape ids make the story’s shapes unaddressable', () => {

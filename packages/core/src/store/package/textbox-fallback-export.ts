@@ -6,10 +6,20 @@
 // only the DrawingML copy, so an export snapshot copies it over the fallback wherever the two
 // differ. A file whose copies already agree is written back unchanged.
 //
+// Only a wrapper whose selected branch is the DrawingML one is synced. When `mc:Choice/@Requires`
+// names a namespace this engine does not support, layout paints the fallback and edits change it,
+// so the fallback is the live copy and stays as it is.
+//
 // The decision reads canonical content only, never peer-local state, so every participant in a
 // collaboration session saves the same bytes for the same document.
 
 import { runWithoutJournalCapture } from './canonical-primitive-capture.ts';
+import { resolveRunLevelMcAtom } from './drawing-projection.ts';
+import {
+  emptyNamespaceScope,
+  isMcAlternateContent,
+  namespaceScopeForNode,
+} from './drawing-projection-walk.ts';
 import { createNodeIdAllocator, replaceNode } from './ooxml-edit.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { MC_NAMESPACE_URI, WML_NAMESPACE_URI } from './ooxml-shared.ts';
@@ -103,16 +113,27 @@ function staleFallbacks(part: OoxmlPart): [OoxmlElement, OoxmlElement][] {
   const pairs: [OoxmlElement, OoxmlElement][] = [];
   let nextId: (() => string) | null = null;
   let visits = 0;
-  const stack: OoxmlNode[] = [part.root];
+  const stack: { node: OoxmlNode; scope: ReadonlyMap<string, string> }[] = [
+    { node: part.root, scope: emptyNamespaceScope() },
+  ];
   while (stack.length > 0) {
     if (++visits > MAX_SCANNED_NODES) return [];
-    const node = stack.pop()!;
+    const { node, scope: inherited } = stack.pop()!;
     if (node.kind === 'textValue') continue;
-    if (!isNamed(node, MC_NAMESPACE_URI, 'AlternateContent')) {
-      for (const child of node.children) stack.push(child);
+    const scope = namespaceScopeForNode(inherited, node);
+    if (!isMcAlternateContent(node)) {
+      for (const child of node.children) stack.push({ node: child, scope });
       continue;
     }
-    const choice = node.children.find((child) => isNamed(child, MC_NAMESPACE_URI, 'Choice'));
+    // The branch layout paints is the one edits change; only a selected `mc:Choice` drawing is.
+    const selected = resolveRunLevelMcAtom(node, scope).drawing;
+    const choice = node.children.find(
+      (child) =>
+        isNamed(child, MC_NAMESPACE_URI, 'Choice') &&
+        child.kind !== 'textValue' &&
+        selected !== null &&
+        child.children.some((branchChild) => branchChild.id === selected.id)
+    );
     const fallback = node.children.find((child) => isNamed(child, MC_NAMESPACE_URI, 'Fallback'));
     if (!choice || !fallback || choice.kind === 'textValue' || fallback.kind === 'textValue') {
       continue;

@@ -26,6 +26,8 @@ export interface VisiblePiece {
   readonly rawEnd: number;
   /** Result-run intervals for a simple-field expansion. */
   readonly resultRuns?: readonly FieldResultRunBoundary[];
+  /** A floating drawing: no text, and a search match must not span it. */
+  readonly floatingObject?: true;
 }
 
 /** One paragraph projection with lossless links to model offsets. */
@@ -85,6 +87,16 @@ function positionedPieces(pieces: readonly VisiblePiece[]): PositionedPiece[] {
         rawStart: piece.rawStart,
         rawEnd: piece.rawEnd,
         resultRuns: piece.resultRuns,
+        projectedStart: projected,
+        projectedEnd,
+        expansion: piece.text.length !== piece.rawEnd - piece.rawStart,
+      });
+    } else if (piece.floatingObject) {
+      result.push({
+        text: piece.text,
+        rawStart: piece.rawStart,
+        rawEnd: piece.rawEnd,
+        floatingObject: true,
         projectedStart: projected,
         projectedEnd,
         expansion: piece.text.length !== piece.rawEnd - piece.rawStart,
@@ -197,6 +209,18 @@ export function projectionFromPieces(pieces: readonly VisiblePiece[]): Projected
       while (cursor >= 0) {
         const end = cursor + needle.length;
         if (end > to) return { matches, truncated: false };
+        // A floating drawing reads as nothing but still occupies the model range. A match across
+        // it would select the drawing too, and replacing the match would delete it.
+        const crossesHiddenObject = positioned.some(
+          (piece) =>
+            piece.floatingObject === true &&
+            piece.projectedStart > cursor &&
+            piece.projectedStart < end
+        );
+        if (crossesHiddenObject) {
+          cursor = haystack.indexOf(needle, cursor + 1);
+          continue;
+        }
         if (!wholeWord || isWholeWord(text, cursor, end)) {
           const first = positioned.find(
             (piece) => cursor >= piece.projectedStart && cursor < piece.projectedEnd
@@ -288,7 +312,12 @@ export function visibleParagraphPieces(
             rawEnd: segment.start,
           });
         }
-        pieces.push({ text: '', rawStart: segment.start, rawEnd: segment.end });
+        pieces.push({
+          text: '',
+          rawStart: segment.start,
+          rawEnd: segment.end,
+          floatingObject: true,
+        });
         rawStart = segment.end;
       }
       continue;

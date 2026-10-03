@@ -358,7 +358,7 @@ export function documentReads(pkg: OoxmlPackage): AutomationPackageReads {
           return node ? [node] : [];
         })
       : [];
-    const listing = reads ? shapesInParagraphs(paragraphs) : NO_SHAPES;
+    const listing = reads ? shapesInParagraphs(reads.part, paragraphs) : NO_SHAPES;
     shapesCache.set(key, listing);
     return listing;
   };
@@ -509,15 +509,15 @@ export function documentReads(pkg: OoxmlPackage): AutomationPackageReads {
   const storyOf = (paragraphId: string): AutomationStoryId | null => {
     const body = story(BODY_STORY);
     if (body?.has(paragraphId)) return BODY_STORY;
-    const inBodyBox = textboxStoryOf({ kind: 'body' }, paragraphId);
-    if (inBodyBox) return inBodyBox;
+    // Every plain story is asked first: a text box probe lists its owner's shapes.
+    const owners: AutomationShapeOwnerStory[] = [{ kind: 'body' }];
     for (const [index] of resolution().entries()) {
       for (const kind of ['header', 'footer'] as const) {
         for (const variant of HEADER_FOOTER_VARIANTS) {
           const id: AutomationShapeOwnerStory = { kind, sectionIndex: index, variant };
-          if (story(id)?.has(paragraphId)) return id;
-          const inBox = story(id) ? textboxStoryOf(id, paragraphId) : null;
-          if (inBox) return inBox;
+          if (!story(id)) continue;
+          if (story(id)!.has(paragraphId)) return id;
+          owners.push(id);
         }
       }
     }
@@ -528,6 +528,10 @@ export function documentReads(pkg: OoxmlPackage): AutomationPackageReads {
         const id: AutomationStoryId = { kind: 'note', noteKind, noteId };
         if (story(id)?.has(paragraphId)) return id;
       }
+    }
+    for (const owner of owners) {
+      const inBox = textboxStoryOf(owner, paragraphId);
+      if (inBox) return inBox;
     }
     return null;
   };

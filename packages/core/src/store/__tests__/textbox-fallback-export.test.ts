@@ -18,14 +18,16 @@ const NS =
   'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ' +
   'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
   'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" ' +
-  'xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office"';
+  'xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" ' +
+  'xmlns:x99="urn:example:unsupported"';
 
 const story = (text: string) =>
   `<w:txbxContent><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:txbxContent>`;
 
-function docx(modern: string, legacy: string): Uint8Array {
+function docx(modern: string, legacy: string, requires = 'wps'): Uint8Array {
   const box =
-    '<mc:AlternateContent><mc:Choice Requires="wps"><w:drawing><wp:anchor distT="0" distB="0" ' +
+    `<mc:AlternateContent><mc:Choice Requires="${requires}"><w:drawing>` +
+    '<wp:anchor distT="0" distB="0" ' +
     'distL="0" distR="0" simplePos="0" relativeHeight="1" behindDoc="0" locked="0" ' +
     'layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH ' +
     'relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH><wp:positionV ' +
@@ -120,6 +122,15 @@ describe('text box fallback stories on save', () => {
     expect(strFromU8(unzipSync(writeOoxmlPackage(again.package))['word/document.xml']!)).toBe(
       strFromU8(unzipSync(saved)['word/document.xml']!)
     );
+  });
+
+  test('a fallback that layout selects is the live copy and is kept', () => {
+    const loaded = readOoxmlPackage(docx('Ignored', 'Painted', 'x99'));
+    if (!loaded.ok) throw new Error(loaded.reason);
+    expect(storyTexts(writeOoxmlPackage(loaded.package))).toEqual({
+      modern: 'Ignored',
+      legacy: 'Painted',
+    });
   });
 
   test('the live package keeps its own fallback; only the export changes', () => {

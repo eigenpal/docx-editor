@@ -116,3 +116,11 @@ export function isStoryId(value: unknown): value is AutomationStoryId {
     HEADER_FOOTER_VARIANTS.includes(candidate.variant as HeaderFooterVariant)
   );
 }
+
+/**
+ * Whether a story is one root among several in its part: a note in the notes part, or a text
+ * box in its owner's part. Part-wide work for such a story must be scoped to its own root.
+ */
+export function sharesItsPart(story: AutomationStoryId): boolean {
+  return story.kind === 'note' || story.kind === 'textbox';
+}
