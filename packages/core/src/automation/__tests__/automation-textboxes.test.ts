@@ -358,6 +358,32 @@ describe('shapes and text-box stories', () => {
     }
   });
 
+  test('a box outside the story paragraphs stays with the owner story', () => {
+    const tracked = (text: string, id: number) =>
+      `Boxed</w:t></w:r><w:ins w:id="${id}" w:author="A" w:date="2024-01-01T00:00:00Z">` +
+      `<w:r><w:t>${text}</w:t></w:r></w:ins><w:r><w:t>`;
+    // A row inside block custom XML is not one of the body's paragraphs, so its box is unlisted.
+    const unlisted =
+      '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:customXml w:element="row">' +
+      `<w:tr><w:tc><w:p>${textbox(1, tracked('Hidden', 8))}</w:p></w:tc></w:tr></w:customXml></w:tbl>`;
+    const target = open(docx(`<w:p>${textbox(1, tracked('Shown', 9))}</w:p>${unlisted}`));
+    const { body } = roots(target);
+    const [box] = shapesOf(target, { body });
+    const boxBody = handleAt(
+      target.execute({ operations: [{ op: 'getShapeBody', shape: box! }] }),
+      0
+    );
+    expect(
+      handlesAt(target.execute({ operations: [{ op: 'getRevisions', body: boxBody }] }), 0)
+    ).toHaveLength(1);
+    expect(
+      target.execute({ operations: [decide('acceptAllRevisions', body)] }).results[0]?.status
+    ).toBe('ok');
+    const xml = savedMainXml(target);
+    expect(xml).toContain('Shown</w:t></w:r></w:ins>');
+    expect(xml).not.toContain('Hidden</w:t></w:r></w:ins>');
+  });
+
   test('duplicate shape ids make the story’s shapes unaddressable', () => {
     const target = open(docx(`<w:p>${textbox(5, 'one')}</w:p><w:p>${textbox(5, 'two')}</w:p>`));
     const { body } = roots(target);

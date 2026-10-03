@@ -13,6 +13,7 @@
 
 import { MC_NAMESPACE_URI, WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
+import { bodyStoryRoot, storyParagraphs } from '../store/package/story-blocks.ts';
 import { shapesInParagraphs } from './shapes.ts';
 
 /** Where the reachable text box stories of a part are. */
@@ -80,25 +81,6 @@ function indexSubtree(
   return true;
 }
 
-/** The part's own paragraphs: every `w:p` outside another paragraph, as a story lists them. */
-function ownerParagraphs(part: OoxmlPart, budget: { left: number }): OoxmlNode[] | null {
-  const paragraphs: OoxmlNode[] = [];
-  const stack: { node: OoxmlNode; depth: number }[] = [{ node: part.root, depth: 0 }];
-  while (stack.length > 0) {
-    const { node, depth } = stack.pop()!;
-    if (node.kind === 'textValue') continue;
-    if (--budget.left < 0 || depth > MAX_DEPTH) return null;
-    if (node.kind === 'paragraph') {
-      paragraphs.push(node);
-      continue;
-    }
-    for (let index = node.children.length - 1; index >= 0; index -= 1) {
-      stack.push({ node: node.children[index]!, depth: depth + 1 });
-    }
-  }
-  return paragraphs;
-}
-
 /**
  * Every node id inside a text box story `Shape.body` reaches, mapped to the story's root id.
  *
@@ -110,12 +92,13 @@ export function textboxSiteIndex(part: OoxmlPart): TextboxSiteIndex {
   const cached = cache.get(part.root);
   if (cached) return cached;
   const budget = { left: MAX_NODES };
-  const paragraphs = ownerParagraphs(part, budget);
-  const listing = paragraphs ? shapesInParagraphs(part, paragraphs) : null;
+  // The owner story's own paragraphs, by the walk its reads use: the body of the main part, or
+  // the whole `w:hdr` / `w:ftr` of a header or footer part.
+  const listing = shapesInParagraphs(part, storyParagraphs(bodyStoryRoot(part) ?? part.root));
   const index = new Map<string, string>();
   const copies = new Set<string>();
-  let complete = listing?.ok === true;
-  for (const shape of listing?.ok ? listing.shapes : []) {
+  let complete = listing.ok;
+  for (const shape of listing.ok ? listing.shapes : []) {
     if (!complete) break;
     const root = shape.textboxRoot;
     if (!root) continue;
