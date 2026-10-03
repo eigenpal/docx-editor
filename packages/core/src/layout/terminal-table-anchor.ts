@@ -282,7 +282,7 @@ export function placeTerminalTextTables(
       input.displayMode,
       input.authorFilter,
       input.deps.compatibilityMode,
-      input.deps.measurer
+      { measurer: input.deps.measurer, listItems: input.deps.listItems }
     )
   );
   const placements: { left: number; top: number; right: number; bottom: number }[] = [];

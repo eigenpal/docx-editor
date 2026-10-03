@@ -362,7 +362,7 @@ const structureOf = (table: OoxmlElement, at: TableKeepFlow) =>
     at.displayMode,
     at.authorFilter,
     at.compatibilityMode,
-    at.measurer
+    at.measurer ? { measurer: at.measurer } : undefined
   );
 
 /** Whether a body table's last row keeps with the body content after the table. */

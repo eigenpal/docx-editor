@@ -2800,7 +2800,7 @@ export function readTableBorders(tblPr: OoxmlElement | undefined): TableBorderBo
 // @public
 export function readTableStructure(table: OoxmlNode, contentWidthPt: number, depth: number, styleCascade?: StyleCascadeTable,
 displayMode?: RevisionDisplayMode, authorFilter?: RevisionAuthorFilter, compatibilityMode?: number,
-measurer?: TextMeasurer): SemanticTableStructure | null;
+autofit?: TableAutofitContext): SemanticTableStructure | null;
 
 // @public
 export interface RefFieldContext {
@@ -4308,6 +4308,14 @@ export function tabLeaderPattern(startPt: number, widthPt: number, advancePt: nu
 
 // @public
 export type TableAlignment = 'left' | 'center' | 'right';
+
+// @public
+export interface TableAutofitContext {
+    // (undocumented)
+    readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
+    // (undocumented)
+    readonly measurer: TextMeasurer;
+}
 
 // @public
 export interface TableBorderBox {

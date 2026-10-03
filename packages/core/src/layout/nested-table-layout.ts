@@ -45,7 +45,7 @@ export function emitNestedTable(
     deps.displayMode,
     deps.revisionAuthorFilter,
     deps.compatibilityMode,
-    deps.measurer
+    { measurer: deps.measurer, listItems: deps.listItems }
   );
   if (!structure || structure.rows.length === 0) return null;
   const startRowIndex = continuation?.nextRowIndex ?? 0;
