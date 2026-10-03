@@ -100,6 +100,20 @@ test('a hanging indent starts the first word left of the indent', () => {
   expect(cell.width).toBeCloseTo(word, 6);
 });
 
+test('a right-to-left hanging indent starts the first word at the leading edge too', () => {
+  const hanging =
+    '<w:pPr><w:bidi/><w:ind w:start="720" w:hanging="720"/></w:pPr>' + run('ABCDEFGHIJ');
+  const cell = middle(tableOf(hanging, 600), fixed)[1]!;
+  const word = cell.lines[0]!.spans.reduce((sum, span) => sum + span.box.width, 0);
+  expect(cell.lines).toHaveLength(1);
+  expect(cell.width).toBeCloseTo(word, 6);
+});
+
+test('an empty indented paragraph keeps its indent as a minimum', () => {
+  const empty = '<w:pPr><w:ind w:left="1440"/></w:pPr>';
+  expect(middle(tableOf(empty, 400), fixed)[1]!.width).toBeCloseTo(72, 6);
+});
+
 test('a full-width legacy percentage table keeps its width when a column widens', () => {
   const legacy = (word: string) =>
     '<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/><w:tblLayout w:type="autofit"/>' +

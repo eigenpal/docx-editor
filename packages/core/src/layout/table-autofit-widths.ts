@@ -318,7 +318,8 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
   let first = true;
   const close = (): void => {
     if (segment > 0) {
-      const width = segment + Math.max(0, left + (first ? firstShift : 0));
+      // Indents are physical sides; the first-line shift moves whichever one leads.
+      const width = segment + Math.max(0, left + right + (first ? firstShift : 0));
       if (width > widest) widest = width;
       first = false;
     }
@@ -412,7 +413,8 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
     }
   }
   close();
-  const width = widest + Math.max(0, right);
+  // An empty paragraph still keeps its indents (a list item's marker slot).
+  const width = widest > 0 ? widest : Math.max(0, left + right);
   if (key) byParagraph.set(paragraph, { key, width });
   return width;
 }
@@ -464,7 +466,9 @@ function nestedTableMinimumPt(
 /** The table indent, which moves only a table aligned to its leading edge. */
 function leadingIndentPt(structure: SemanticTableStructure): number {
   const leading = structure.bidiVisual ? 'right' : 'left';
-  // A negative indent moves a top-level table into the margin, which adds room.
+  // A negative indent moves a top-level table into the margin, which adds room. A floating
+  // table is placed by its own position, so its indent moves nothing.
+  if (structure.float) return 0;
   return structure.alignment === leading ? structure.indentPt : 0;
 }
 
@@ -627,13 +631,15 @@ export function autofitTargetPt(
   tableWidth: PreferredWidth,
   totalPt: number,
   availablePt: number,
-  legacyContentAlignment = false
+  legacyContentAlignment = false,
+  /** What a percentage is a share of: the text column, as the width resolver reads it. */
+  percentBasisPt = availablePt
 ): number {
   // A legacy content-aligned table already spans the text column plus its outer margins.
   if (legacyContentAlignment) return totalPt;
   if (tableWidth.type === 'dxa' && tableWidth.value > 0) return totalPt;
   if (tableWidth.type === 'pct' && tableWidth.value > 0)
-    return (availablePt * tableWidth.value) / 100;
+    return Math.min(availablePt, (percentBasisPt * tableWidth.value) / 100);
   return availablePt;
 }
 
@@ -686,7 +692,7 @@ export function autofitColumnWidthsPt(
   const widths = widenAutofitColumns(
     structure.columnWidthsPt,
     minimums,
-    autofitTargetPt(structure.tableWidth, totalPt, availablePt, legacy),
+    autofitTargetPt(structure.tableWidth, totalPt, availablePt, legacy, contentWidthPt),
     availablePt
   );
   byStructure.set(structure, { contentWidthPt, widths });
