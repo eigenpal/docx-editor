@@ -1359,7 +1359,8 @@ export function breakParagraph(
         });
         line.width += width;
         growLineMetricsForText(line, metrics, '\t', faceStyle);
-        line.end = layoutOwned ? piece.end : piece.start + boundary;
+        if (layoutOwned) coverPieceRange(line, piece);
+        else line.end = piece.start + boundary;
         // A tab lets the next word open a line. Clear the previous word so overflow
         // cannot carry it with the tab and replay the old advance from a new origin.
         lastEmitted = '\t';

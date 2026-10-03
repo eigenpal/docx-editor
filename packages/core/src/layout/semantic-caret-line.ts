@@ -25,22 +25,64 @@ export function laterLineOwns(layout: SemanticLayout, line: LineRecord, offset: 
   return false;
 }
 
-/** This line's place in its paragraph's line index; a repeated header row matches by id. */
-function paragraphLinePosition(layout: SemanticLayout, line: LineRecord, paragraphId: string) {
-  const lines = paragraphLinesIndex(layout).get(paragraphId) ?? [];
-  let index = lines.findIndex((placed) => placed.line === line);
-  if (index < 0) index = lines.findIndex((placed) => placed.line.id === line.id);
-  return { lines, index };
+/** The cut field fragment on `line` whose range starts or ends at `offset`, if any. */
+function fieldFragmentAt(
+  line: LineRecord,
+  paragraphId: string,
+  offset: number,
+  edge: 'start' | 'end'
+): { readonly start: number; readonly end: number } | null {
+  for (const { projected, range } of line.spans) {
+    if (!projected || range.paragraphId !== paragraphId || range.start >= range.end) continue;
+    if ((edge === 'end' ? range.end : range.start) === offset) return range;
+  }
+  return null;
 }
 
 /**
- * Whether a LATER line holds this offset strictly after its segment start, and so owns it.
+ * Whether another line of the same story occurrence draws the same field, in `direction`.
  *
- * Ordinary lines only touch at their ends, so this never holds for them. A field cut
- * across lines publishes its whole range on every fragment, and each line that draws one
- * covers that range (`coverPieceRange`). The offset after the field then belongs to the
- * last of those lines, where the last fragment ends. `caretAt` and the caret stops both
- * ask this, so the drawn caret and keyboard motion agree.
+ * A header or footer paragraph is indexed once per page with the SAME line records, so the
+ * scan stops at the first line this occurrence already drew: that line opens the next copy
+ * of the story, not a continuation. A repeated header row is not indexed; its copy matches
+ * by id.
+ */
+function fieldContinues(
+  layout: SemanticLayout,
+  line: LineRecord,
+  paragraphId: string,
+  field: { readonly start: number; readonly end: number },
+  direction: 1 | -1
+): boolean {
+  const lines = paragraphLinesIndex(layout).get(paragraphId) ?? [];
+  let index = lines.findIndex((placed) => placed.line === line);
+  if (index < 0) index = lines.findIndex((placed) => placed.line.id === line.id);
+  if (index < 0) return false;
+  // A story copy starts again with lines this occurrence already drew.
+  const seen = new Set(
+    (direction === 1 ? lines.slice(0, index + 1) : [lines[index]!]).map((placed) => placed.line.id)
+  );
+  for (let at = index + direction; at >= 0 && at < lines.length; at += direction) {
+    const other = lines[at]!.line;
+    if (seen.has(other.id)) return false;
+    seen.add(other.id);
+    const segment = lineSegmentFor(other, paragraphId);
+    if (!segment) continue;
+    if (direction === 1 ? segment.start >= field.end : segment.end <= field.start) return false;
+    if (fieldFragmentAt(other, paragraphId, field.end, 'end')?.start === field.start) return true;
+  }
+  return false;
+}
+
+/**
+ * Whether the field ending at `offset` on this line continues on a LATER line, which then
+ * owns the offset after the field.
+ *
+ * Every fragment of a field cut across lines publishes the whole field range, and each line
+ * that draws one covers that range (`coverPieceRange`). The offset after the field belongs
+ * to the last of those lines, where the last fragment ends. `caretAt` and the caret stops
+ * both ask this, so the drawn caret and keyboard motion agree. Ordinary text never has a
+ * cut field fragment, so it never reaches the scan.
  */
 export function laterSegmentHolds(
   layout: SemanticLayout,
@@ -48,21 +90,13 @@ export function laterSegmentHolds(
   paragraphId: string,
   offset: number
 ): boolean {
-  const { lines, index } = paragraphLinePosition(layout, line, paragraphId);
-  if (index < 0) return false;
-  for (let next = index + 1; next < lines.length; next += 1) {
-    const segment = lineSegmentFor(lines[next]!.line, paragraphId);
-    if (!segment) continue;
-    if (segment.start >= offset) return false;
-    if (offset <= segment.end) return true;
-  }
-  return false;
+  const field = fieldFragmentAt(line, paragraphId, offset, 'end');
+  return field !== null && fieldContinues(layout, line, paragraphId, field, 1);
 }
 
 /**
- * Whether an EARLIER line holds this offset strictly before its segment end, and so owns
- * it. The mirror of {@link laterSegmentHolds}: the offset before a field cut across lines
- * belongs to its first line.
+ * Whether the field starting at `offset` on this line began on an EARLIER line, which then
+ * owns the offset before the field. The mirror of {@link laterSegmentHolds}.
  */
 export function earlierSegmentHolds(
   layout: SemanticLayout,
@@ -70,14 +104,8 @@ export function earlierSegmentHolds(
   paragraphId: string,
   offset: number
 ): boolean {
-  const { lines, index } = paragraphLinePosition(layout, line, paragraphId);
-  for (let previous = index - 1; previous >= 0; previous -= 1) {
-    const segment = lineSegmentFor(lines[previous]!.line, paragraphId);
-    if (!segment) continue;
-    if (segment.end <= offset) return false;
-    if (segment.start <= offset) return true;
-  }
-  return false;
+  const field = fieldFragmentAt(line, paragraphId, offset, 'start');
+  return field !== null && fieldContinues(layout, line, paragraphId, field, -1);
 }
 
 /** The continuation line when a soft wrap opens on an inline drawing atom. */

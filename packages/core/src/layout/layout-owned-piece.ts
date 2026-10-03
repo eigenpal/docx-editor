@@ -25,7 +25,7 @@ export function isLayoutOwnedPiece(piece: FieldAwarePiece): boolean {
  * A layout-owned field result (a URL in a HYPERLINK field, a REF result) is cut too, with
  * every fragment publishing the whole piece range. Text that a later pass rewrites, or a
  * width that stands in for other text, stays whole: `measureText`, positional tabs, page
- * numbers, form controls, and note marks and separators.
+ * numbers, form controls, navigable note marks, and note separators.
  */
 export function canChopPiece(piece: FieldAwarePiece, layoutOwned: boolean): boolean {
   if (piece.measureText !== undefined) return false;

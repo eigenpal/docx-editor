@@ -2,7 +2,13 @@ import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import { documentOrder } from '../document-order.ts';
 import { selectionMarkRects, selectionRects } from '../selection-rects.ts';
-import { caretAt, caretStops, hitTestSemantic } from '../semantic-interaction.ts';
+import { layoutHeaderFooterStory } from '../hf-layout.ts';
+import {
+  caretAt,
+  caretStops,
+  caretStopsForBlocks,
+  hitTestSemantic,
+} from '../semantic-interaction.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { linesOf } from '../semantic-records.ts';
 import { elevenPointDefaults } from './fixtures/eleven-point-defaults.ts';
@@ -182,5 +188,66 @@ describe('a field cut across lines', () => {
     expect(stops.map((stop) => stop.position.offset)).toEqual([start, end]);
     expect(stops.map((stop) => stop.lineId)).toEqual([lines[0]!.id, lines.at(-1)!.id]);
     for (const stop of stops) expect(caretAt(result, stop.position)?.lineId).toBe(stop.lineId);
+  });
+});
+
+describe('a footer laid out on every page', () => {
+  // The footer story is indexed once per page with the same line records.
+  const twoPages = (footer: string) => {
+    const part = (xml: string, name: string) => {
+      const read = readOoxmlPart(xml, { name, contentType: 'app/xml' });
+      if (!read.ok) throw new Error(read.reason);
+      return read.part;
+    };
+    const styleCascade = elevenPointDefaults();
+    const measurer = createFixedMeasurer(6, 12);
+    const story = layoutHeaderFooterStory(
+      part(`<w:ftr xmlns:w="${W}"><w:p>${footer}</w:p></w:ftr>`, '/word/footer1.xml'),
+      60,
+      measurer,
+      'footer',
+      undefined,
+      styleCascade
+    );
+    const body = `<w:p>${run('one')}</w:p><w:p><w:r><w:br w:type="page"/></w:r>${run('two')}</w:p>`;
+    const result = layoutSemanticDocument(
+      part(
+        `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`,
+        '/word/document.xml'
+      ),
+      1,
+      {
+        measurer,
+        styleCascade,
+        geometry: { width: 60, height: 200, margin: { top: 0, bottom: 40, left: 0, right: 0 } },
+        furniture: {
+          titlePage: false,
+          evenAndOddHeaders: false,
+          headers: new Map(),
+          footers: new Map([['default', story]]),
+        },
+      }
+    );
+    expect(result.pages.length).toBe(2);
+    const stops = caretStopsForBlocks(result, 0, story.fragments);
+    const paragraphId = (story.fragments[0] as { paragraphId: string }).paragraphId;
+    return { result, stops, paragraphId };
+  };
+
+  test('keeps the caret stop at the end of an ordinary paragraph', () => {
+    const { result, stops, paragraphId } = twoPages(run('hello'));
+    expect(stops.map((stop) => stop.position.offset)).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(caretAt(result, { paragraphId, offset: 5 }, { preferredPageIndex: 0 })).not.toBeNull();
+  });
+
+  test('puts the end of a cut field on its last fragment line', () => {
+    const { result, stops, paragraphId } = twoPages(
+      field('HYPERLINK "https://example.org/"', TOKEN)
+    );
+    expect(stops.map((stop) => stop.position.offset)).toEqual([0, 1]);
+    const lineIds = stops.map((stop) => stop.lineId);
+    expect(new Set(lineIds).size).toBe(2);
+    const after = caretAt(result, { paragraphId, offset: 1 }, { preferredPageIndex: 0 });
+    expect(after?.lineId).toBe(lineIds[1]);
   });
 });
