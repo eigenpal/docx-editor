@@ -25,6 +25,39 @@ export function laterLineOwns(layout: SemanticLayout, line: LineRecord, offset: 
   return false;
 }
 
+/**
+ * Whether this line ends with a fragment of a projected field result that continues on a
+ * later line. Every fragment of a field cut across lines publishes the whole field range,
+ * so each fragment line ends at the field's end offset. The caret after the field belongs
+ * after its LAST fragment.
+ */
+export function projectedFragmentContinues(
+  layout: SemanticLayout,
+  line: LineRecord,
+  offset: number
+): boolean {
+  let tail: (typeof line.spans)[number] | undefined;
+  for (const span of line.spans) if (span.range.end === offset) tail = span;
+  if (!tail?.projected || tail.range.start >= offset) return false;
+  const { paragraphId, start } = tail.range;
+  const lines = paragraphLinesIndex(layout).get(paragraphId) ?? [];
+  const index = lines.findIndex((placed) => placed.line === line);
+  return (
+    index >= 0 &&
+    lines
+      .slice(index + 1)
+      .some((placed) =>
+        placed.line.spans.some(
+          (span) =>
+            span.projected &&
+            span.range.paragraphId === paragraphId &&
+            span.range.start === start &&
+            span.range.end === offset
+        )
+      )
+  );
+}
+
 /** The continuation line when a soft wrap opens on an inline drawing atom. */
 export function laterLineWithDrawingAt(
   layout: SemanticLayout,

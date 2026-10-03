@@ -51,6 +51,7 @@ import { wordBoundary } from './semantic-word-navigation.ts';
 import {
   laterLineOwns,
   laterLineWithDrawingAt,
+  projectedFragmentContinues,
   isNonNavigableInterior,
   endsWithLineBreak,
   isDrawingOnlySegment,
@@ -391,8 +392,9 @@ export function caretAt(
     }
     if (
       position.offset === segment.end &&
-      position.offset > segment.start &&
-      laterLineWithDrawingAt(layout, position.paragraphId, position.offset)
+      ((position.offset > segment.start &&
+        laterLineWithDrawingAt(layout, position.paragraphId, position.offset)) ||
+        projectedFragmentContinues(layout, line, position.offset))
     ) {
       continue;
     }

@@ -114,7 +114,7 @@ import type { ScanlineInterval } from './drawing-wrap.ts';
 import { createEquationLayouter } from './equation-layout.ts';
 import { anchorLineStartsByModelOffset } from './anchor-line-probe.ts';
 import * as lineEndSpaces from './line-end-whitespace.ts';
-import { chopOversizedWord } from './oversized-word-break.ts';
+import { canChopPiece, chopOversizedWord } from './oversized-word-break.ts';
 import { carryPartialWord, type WordCarryContext } from './word-carry.ts';
 import { collectLineChangeSites } from './paragraph-change-sites.ts';
 
@@ -1260,6 +1260,8 @@ export function breakParagraph(
       Boolean(piece.projected) ||
       Boolean(piece.positionalTab) ||
       piece.end - piece.start !== piece.text.length;
+    const canChopWord = canChopPiece(piece, layoutOwned);
+    const textBreaks = layoutOwned ? null : cjkBreaks; // That table holds a field as one unit.
     let consumed = 0;
     for (const boundary of cjkBreaks?.boundaries(piece) ??
       wordBoundaries(piece.text, !layoutOwned)) {
@@ -1512,8 +1514,7 @@ export function breakParagraph(
       // there instead of closing a line that contains only those tabs.
       const chopsAfterLeadingTabs =
         overflows &&
-        !layoutOwned &&
-        piece.measureText === undefined &&
+        canChopWord &&
         !paragraphRtl &&
         alignedTabRight === 0 &&
         !flow?.pageExclusionZones?.length &&
@@ -1572,11 +1573,9 @@ export function breakParagraph(
       applyNarrowWrapSkipIfNeeded(candidate, faceStyle);
       // A protected group that moves must also fit against its destination line.
       if (!opticalFit && line !== opticalSourceLine) opticalFit = applyOpticalFit?.();
-      // Layout-owned and measureText pieces have ranges or widths that cannot be sliced.
       let remaining = candidate;
       let remainingStart = piece.start + consumed;
       let remainingWidth = width;
-      const canChopWord = !layoutOwned && piece.measureText === undefined;
       if (
         canChopWord &&
         !hangs &&
@@ -1590,11 +1589,13 @@ export function breakParagraph(
           appendPrefix: (prefix) => {
             const metrics = measurer.lineMetrics(faceStyle, displayText(prefix.text, faceStyle));
             line.spans.push({
-              range: {
-                paragraphId,
-                start: prefix.modelStart,
-                end: prefix.modelStart + prefix.text.length,
-              },
+              range: layoutOwned
+                ? spanRange
+                : {
+                    paragraphId,
+                    start: prefix.modelStart,
+                    end: prefix.modelStart + prefix.text.length,
+                  },
               text: prefix.text,
               props: piece.props,
               style: piece.style,
@@ -1605,6 +1606,7 @@ export function breakParagraph(
                 height: metrics.height,
               },
               ...(piece.link ? { link: piece.link } : {}),
+              ...(layoutOwned ? { projected: true as const } : {}),
               ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
               ...(piece.fontSlot ? { fontSlot: piece.fontSlot } : {}),
               ...(piece.glyphOffsetPt !== undefined ? { glyphOffsetPt: piece.glyphOffsetPt } : {}),
@@ -1612,15 +1614,14 @@ export function breakParagraph(
             });
             line.width += prefix.width;
             growLineMetricsForText(line, metrics, prefix.text, faceStyle);
-            line.end = prefix.modelStart + prefix.text.length;
+            line.end = layoutOwned ? piece.end : prefix.modelStart + prefix.text.length;
           },
           closeLine,
           overflowTolerancePt: OVERFLOW_TOLERANCE_PT,
           keepWithPrevious: openDecision === 'forbidden',
-          // The measured fit knows nothing about kinsoku: at a one-character measure
-          // 天。地。人。 chopped every other line onto a leading 。.
-          cutAllowedAt: cjkBreaks
-            ? (_text, index) => cjkBreaks.cutAllowed(piece, consumed, index)
+          // Kinsoku vetoes measured cuts: 天。地。人。 must not chop onto a leading 。.
+          cutAllowedAt: textBreaks
+            ? (_text, index) => textBreaks.cutAllowed(piece, consumed, index)
             : cjkChopCutAllowedAt,
         });
         remaining = chopped.text;
