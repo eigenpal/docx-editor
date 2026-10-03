@@ -75,6 +75,24 @@ export const AUTO_PARAGRAPH_SPACING_PT = 14;
 // @public
 export const AUTO_PREFERRED_WIDTH: PreferredWidth;
 
+// @public
+export interface AutofitFieldContext {
+    // (undocumented)
+    readonly bodyPageFields?: BodyPageFieldContext | false;
+    // (undocumented)
+    readonly documentProperties?: DocumentProperties;
+    // (undocumented)
+    readonly fieldCodeRanges?: FieldCodeRanges;
+    // (undocumented)
+    readonly noteMarks?: NoteMarkContext;
+    // (undocumented)
+    readonly pageContext?: FieldPageContext;
+    // (undocumented)
+    readonly refFields?: RefFieldContext;
+    // (undocumented)
+    readonly showFieldCodes?: boolean;
+}
+
 // @public (undocumented)
 export type AutonumFieldKind = 'AUTONUM' | 'AUTONUMLGL' | 'AUTONUMOUT';
 
@@ -4313,10 +4331,10 @@ export type TableAlignment = 'left' | 'center' | 'right';
 export interface TableAutofitContext {
     readonly fields?: AutofitFieldContext;
     readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
-    // (undocumented)
     readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
-    // (undocumented)
     readonly measurer: TextMeasurer;
+    readonly paragraphToken?: (paragraph: OoxmlElement) => string;
+    readonly passToken?: string;
 }
 
 // @public

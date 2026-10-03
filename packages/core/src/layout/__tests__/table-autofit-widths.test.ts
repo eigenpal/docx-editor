@@ -3,7 +3,12 @@ import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import type { TableFragmentRecord } from '../semantic-records.ts';
 import { revisionAuthorFilter } from '../revision-projection.ts';
-import { widenAutofitColumns } from '../table-autofit-widths.ts';
+import {
+  autofitContextOf,
+  autofitColumnWidthsPt,
+  widenAutofitColumns,
+} from '../table-autofit-widths.ts';
+import { readTableStructure } from '../semantic-table.ts';
 import { layoutContext } from './anchored-drawing-test-fixtures.ts';
 import { elevenPointDefaults } from './fixtures/eleven-point-defaults.ts';
 
@@ -290,5 +295,46 @@ describe('autofit layout', () => {
     const fragment = columns(table('', author), { documentProperties: { creator: 'ABCDEFGHIJ' } });
     expect(fragment.widths[1]).toBe(60);
     expect(fragment.lines[1]).toBe(1);
+  });
+
+  test('words on each side of a page break in a cell are one word', () => {
+    const broken = `${run('ABCDE')}<w:r><w:br w:type="page"/></w:r>${run('FGHIJ')}`;
+    const fragment = columns(table('', broken));
+    expect(fragment.widths[1]).toBe(60);
+  });
+
+  test('a new pass with equal field values reuses every measured minimum', () => {
+    const read = readOoxmlPart(
+      `<w:document ${NAMESPACES}><w:body>${table('', run('ABCDEFGHIJ'))}</w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!read.ok) throw new Error(read.reason);
+    const tableNode = read.part.root.children
+      .flatMap((node) => ('children' in node ? node.children : []))
+      .find((node) => node.kind === 'table')!;
+    const base = readTableStructure(tableNode, 300, 0, elevenPointDefaults())!;
+    const fixed = createFixedMeasurer(6, 12);
+    let measured = 0;
+    const measurer = {
+      ...fixed,
+      measure: (...args: Parameters<typeof fixed.measure>) => (measured++, fixed.measure(...args)),
+    };
+    const view = {
+      styleCascade: elevenPointDefaults(),
+      displayMode: 'all-markup' as const,
+      authorFilter: undefined,
+    };
+    // Each pass builds its own deps and a fresh, frozen page-field context.
+    const pass = () =>
+      autofitColumnWidthsPt(
+        base,
+        300,
+        autofitContextOf({ measurer, bodyPageFields: Object.freeze({}) }),
+        view
+      );
+    expect(round(pass())).toEqual([38.2, 60, 21.8]);
+    const first = measured;
+    pass();
+    expect(measured).toBe(first);
   });
 });

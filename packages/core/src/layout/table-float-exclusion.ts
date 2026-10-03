@@ -1,5 +1,5 @@
 // Floating tables use the same scanline geometry and convergence keys as anchored drawings.
-import { autofitContextOf } from './table-autofit-widths.ts';
+import { autofitContextOf, type TableAutofitContext } from './table-autofit-widths.ts';
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
 import { hardBreakKind } from '../store/package/hard-break.ts';
 import { paragraphBreaksBefore } from './paragraph-style.ts';
@@ -32,6 +32,27 @@ import {
 import { positionedTableOriginX } from './table-origin.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
+
+/**
+ * A table's structure for float placement. A table that floats is read at the widths
+ * placement lays it out at; one that does not skips the autofit pass, since these readers
+ * only ask whether it floats.
+ */
+function floatTableStructure(table: OoxmlElement, width: number, deps: TableFlowDeps) {
+  const read = (autofit?: TableAutofitContext) =>
+    readTableStructure(
+      table,
+      width,
+      0,
+      deps.styleCascade,
+      deps.displayMode,
+      deps.revisionAuthorFilter,
+      deps.compatibilityMode,
+      autofit
+    );
+  const base = read();
+  return base?.float ? read(autofitContextOf(deps)) : base;
+}
 
 export function hasFloatingTables(
   blocks: readonly OoxmlElement[],
@@ -176,16 +197,7 @@ export function floatingTableBand(table: OoxmlElement, width: number, deps: Tabl
     const cached = widths.get(width);
     if (cached !== undefined) return cached;
   }
-  const structure = readTableStructure(
-    table,
-    width,
-    0,
-    deps.styleCascade,
-    deps.displayMode,
-    deps.revisionAuthorFilter,
-    deps.compatibilityMode,
-    autofitContextOf(deps)
-  );
+  const structure = floatTableStructure(table, width, deps);
   if (!structure?.float || structure.float.vertAnchor !== 'text') return 0;
   // Text-frame alignments need their own admission math; retain the existing row-flow path.
   if (structure.float.ySpec) return Infinity;
@@ -322,16 +334,7 @@ function breaksAtPageBottom(
   deps: TableFlowDeps,
   flow: FloatAdmissionFlow
 ): boolean {
-  const structure = readTableStructure(
-    table,
-    flow.width,
-    0,
-    deps.styleCascade,
-    deps.displayMode,
-    deps.revisionAuthorFilter,
-    deps.compatibilityMode,
-    autofitContextOf(deps)
-  );
+  const structure = floatTableStructure(table, flow.width, deps);
   const float = structure?.float;
   // A negative offset collides with earlier text. Only anchor placement displaces it.
   if (!structure || float?.vertAnchor !== 'text' || float.ySpec || float.yPt < 0) return false;
@@ -413,16 +416,7 @@ function pageFramedAnchorBand(
     return block.kind === 'table' ? [block.box] : block.lines.map((line) => line.box);
   });
   if (lineBoxes.length === 0) return 0;
-  const structure = readTableStructure(
-    anchor.table,
-    width,
-    0,
-    deps.styleCascade,
-    deps.displayMode,
-    deps.revisionAuthorFilter,
-    deps.compatibilityMode,
-    autofitContextOf(deps)
-  );
+  const structure = floatTableStructure(anchor.table, width, deps);
   const float = structure?.float;
   if (!structure || !float || float.vertAnchor === 'text' || float.ySpec === 'inline') return 0;
   const distances = float.distances ?? { top: 0, right: 0, bottom: 0, left: 0 };
@@ -502,16 +496,7 @@ export function clearEarlierText(
   earlier: readonly BlockFragmentRecord[],
   deps: TableFlowDeps
 ): number {
-  const structure = readTableStructure(
-    table,
-    width,
-    0,
-    deps.styleCascade,
-    deps.displayMode,
-    deps.revisionAuthorFilter,
-    deps.compatibilityMode,
-    autofitContextOf(deps)
-  );
+  const structure = floatTableStructure(table, width, deps);
   const float = structure?.float;
   if (!structure || !float || float.vertAnchor !== 'text' || float.ySpec) return anchorY;
   const tableWidth = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);

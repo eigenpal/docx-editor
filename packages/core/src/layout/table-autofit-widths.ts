@@ -29,19 +29,31 @@ import { gridColumnElements, gridColumnWidthsPt, type PreferredWidth } from './t
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
 
 /**
- * What autofit needs from layout: its measurer, and the list items that indent paragraphs.
+ * What autofit needs from layout to measure each cell the way layout paints it.
  * @public
  */
 export interface TableAutofitContext {
+  /** Measures text exactly as line breaking does. */
   readonly measurer: TextMeasurer;
+  /** List items by paragraph id: a list level indents its paragraph. */
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
   /** Resolves inline pictures, so a picture column keeps the width the picture paints at. */
   readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
-  /** The text layout gives fields and note marks, so the minimum measures what paints. */
+  /** Field and note context, so the minimum measures the text layout paints. */
   readonly fields?: AutofitFieldContext;
+  /**
+   * A token that changes whenever a paragraph's projected text can change: the same tokens
+   * the paragraph break cache keys on. Without it, minimums are not cached.
+   */
+  readonly paragraphToken?: (paragraph: OoxmlElement) => string;
+  /** A token over everything else the pass projects with. */
+  readonly passToken?: string;
 }
 
-/** What cell layout projects fields and note marks with; compared field by field. */
+/**
+ * The field and note context cell layout projects paragraphs with.
+ * @public
+ */
 export interface AutofitFieldContext {
   readonly pageContext?: FieldPageContext;
   readonly noteMarks?: NoteMarkContext;
@@ -52,37 +64,62 @@ export interface AutofitFieldContext {
   readonly fieldCodeRanges?: FieldCodeRanges;
 }
 
-const FIELD_KEYS = [
-  'pageContext',
-  'noteMarks',
-  'documentProperties',
-  'bodyPageFields',
-  'refFields',
-  'showFieldCodes',
-  'fieldCodeRanges',
-] as const;
-
-function sameFields(a: AutofitFieldContext | undefined, b: AutofitFieldContext | undefined) {
-  return FIELD_KEYS.every((key) => a?.[key] === b?.[key]);
+/** What a table flow carries that autofit reads. */
+interface AutofitFlowDeps extends AutofitFieldContext {
+  readonly measurer: TextMeasurer;
+  readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
+  readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
+  readonly drawingTokenForParagraph?: (paragraph: OoxmlElement) => string;
+  readonly projectionTokenForParagraph?: (paragraph: OoxmlElement) => string;
+  readonly drawingLayoutToken?: string;
 }
 
+/** One context per flow deps object, so every reader in a pass shares it. */
+const flowContexts = new WeakMap<object, TableAutofitContext>();
+
+const mapsAsEntries = (_key: string, value: unknown) => (value instanceof Map ? [...value] : value);
+
 /** The autofit inputs a table flow already carries, so every reader widens alike. */
-export function autofitContextOf(
-  deps: {
-    readonly measurer: TextMeasurer;
-    readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
-    readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
-  } & AutofitFieldContext
-): TableAutofitContext {
-  const fields: AutofitFieldContext = {};
-  for (const key of FIELD_KEYS)
-    if (deps[key] !== undefined) (fields as Record<string, unknown>)[key] = deps[key];
-  return {
+export function autofitContextOf(deps: AutofitFlowDeps): TableAutofitContext {
+  const known = flowContexts.get(deps);
+  if (known) return known;
+  const fields: AutofitFieldContext = {
+    ...(deps.pageContext ? { pageContext: deps.pageContext } : {}),
+    ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
+    ...(deps.documentProperties ? { documentProperties: deps.documentProperties } : {}),
+    ...(deps.bodyPageFields ? { bodyPageFields: deps.bodyPageFields } : {}),
+    ...(deps.refFields ? { refFields: deps.refFields } : {}),
+    ...(deps.showFieldCodes ? { showFieldCodes: true } : {}),
+    ...(deps.fieldCodeRanges ? { fieldCodeRanges: deps.fieldCodeRanges } : {}),
+  };
+  // Values, not identities: a pass builds these objects afresh and the cache must survive it.
+  const passToken = JSON.stringify(
+    [
+      deps.bodyPageFields ? (deps.bodyPageFields.format ?? '') : null,
+      deps.pageContext ?? null,
+      deps.documentProperties ?? null,
+      deps.showFieldCodes === true,
+      deps.refFields?.valuesToken ?? '',
+      deps.drawingLayoutToken ?? '',
+    ],
+    mapsAsEntries
+  );
+  const context: TableAutofitContext = {
     measurer: deps.measurer,
     ...(deps.listItems ? { listItems: deps.listItems } : {}),
     ...(deps.inlineDrawingLayout ? { inlineDrawingLayout: deps.inlineDrawingLayout } : {}),
     fields,
+    passToken,
+    paragraphToken: (paragraph) =>
+      [
+        deps.projectionTokenForParagraph?.(paragraph) ?? '',
+        deps.drawingTokenForParagraph?.(paragraph) ?? '',
+        deps.refFields?.tokenForParagraph(paragraph.id) ?? '',
+        deps.listItems?.get(paragraph.id)?.cacheToken ?? '',
+      ].join('\0'),
   };
+  flowContexts.set(deps, context);
+  return context;
 }
 
 /** The view a structure was read in: the cascade, display mode, and author filter. */
@@ -92,52 +129,36 @@ export interface AutofitView {
   readonly authorFilter: RevisionAuthorFilter | undefined;
 }
 
-/**
- * The last widths per measurer and base structure. A base structure is built for one view, so
- * it stands for the view. Keyed by the measurer first, never holding it in a value, for the
- * same reason as {@link paragraphMinimums}.
- */
-const widthMemos = new WeakMap<
-  TextMeasurer,
-  WeakMap<
-    SemanticTableStructure,
-    {
-      readonly listItems: ReadonlyMap<string, ResolvedListItem> | undefined;
-      readonly inlineDrawingLayout: InlineDrawingLayoutContext | undefined;
-      readonly fields: AutofitFieldContext | undefined;
-      readonly contentWidthPt: number;
-      readonly widths: readonly number[];
-    }
-  >
->();
-
 /** Below this a column is already as wide as its content needs. */
 const WIDTH_EPSILON_PT = 0.01;
 /** No column collapses below a hairline, whatever its content. */
 const MIN_COLUMN_PT = 1;
 
 interface MinimumInputs {
-  readonly measurer: TextMeasurer;
-  readonly styleCascade: StyleCascadeTable | undefined;
+  readonly context: TableAutofitContext;
+  readonly view: AutofitView;
   readonly tableCellStyle: SemanticTableCell['styleFormatting'] | undefined;
+}
+
+/** What a cached minimum was measured under: view identities and string tokens only. */
+interface MinimumKey {
+  readonly styleCascade: StyleCascadeTable | undefined;
   readonly displayMode: RevisionDisplayMode;
   readonly authorFilter: RevisionAuthorFilter | undefined;
-  readonly listItem: ResolvedListItem | undefined;
-  readonly inlineDrawingLayout: InlineDrawingLayoutContext | undefined;
-  readonly fields: AutofitFieldContext | undefined;
+  readonly cellStyle: string;
+  readonly token: string;
 }
 
 /**
  * The last minimum per measurer and paragraph node, so an edit re-measures only the paragraphs
- * it changed. Keyed by the measurer first and never holding it in a value: a disposed export
- * measurer, and the shaping caches it owns, must not live on through the document's nodes.
+ * it changed. Keyed by the measurer first and holding only tokens in its values: neither a
+ * disposed export measurer nor an earlier pass's field and drawing contexts live on through
+ * the document's nodes.
  */
 const paragraphMinimums = new WeakMap<
   TextMeasurer,
-  WeakMap<OoxmlElement, { readonly inputs: MinimumKey; readonly width: number }>
+  WeakMap<OoxmlElement, { readonly key: MinimumKey; readonly width: number }>
 >();
-
-type MinimumKey = Omit<MinimumInputs, 'measurer'>;
 
 /**
  * A table style's cell formatting, by content. A structure read builds new formatting objects
@@ -154,42 +175,55 @@ function cellStyleKey(style: SemanticTableCell['styleFormatting'] | undefined): 
   return key;
 }
 
-function sameInputs(a: MinimumKey, b: MinimumInputs): boolean {
+function minimumKey(paragraph: OoxmlElement, inputs: MinimumInputs): MinimumKey | null {
+  const { context, view } = inputs;
+  if (!context.paragraphToken) return null;
+  return {
+    styleCascade: view.styleCascade,
+    displayMode: view.displayMode,
+    authorFilter: view.authorFilter,
+    cellStyle: cellStyleKey(inputs.tableCellStyle),
+    token: `${context.passToken ?? ''}\0${context.paragraphToken(paragraph)}`,
+  };
+}
+
+function sameKey(a: MinimumKey, b: MinimumKey): boolean {
   return (
     a.styleCascade === b.styleCascade &&
-    cellStyleKey(a.tableCellStyle) === cellStyleKey(b.tableCellStyle) &&
-    a.inlineDrawingLayout === b.inlineDrawingLayout &&
-    sameFields(a.fields, b.fields) &&
     a.displayMode === b.displayMode &&
     a.authorFilter === b.authorFilter &&
-    a.listItem === b.listItem
+    a.cellStyle === b.cellStyle &&
+    a.token === b.token
   );
 }
 
 /**
  * The widest segment of a paragraph that no line break may split, plus its indents.
  *
- * Break opportunities are spaces, tabs, hard breaks, and the dash rule of
+ * Break opportunities are spaces, tabs, line breaks, and the dash rule of
  * {@link wordBoundaries}. An ideographic run counts as one segment here: an autofit column
  * widens to keep it whole, although line breaking may still wrap it inside the column. A
  * segment runs across source runs, field results, and hidden text, measured in the face each
  * piece paints. A positive first-line indent counts against the first segment.
  */
 export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: MinimumInputs): number {
-  let byParagraph = paragraphMinimums.get(inputs.measurer);
-  if (!byParagraph) paragraphMinimums.set(inputs.measurer, (byParagraph = new WeakMap()));
-  const cached = byParagraph.get(paragraph);
-  if (cached && sameInputs(cached.inputs, inputs)) return cached.width;
-  const { measurer, styleCascade, displayMode } = inputs;
+  const { context, view } = inputs;
+  const { measurer } = context;
+  const { styleCascade, displayMode } = view;
+  let byParagraph = paragraphMinimums.get(measurer);
+  if (!byParagraph) paragraphMinimums.set(measurer, (byParagraph = new WeakMap()));
+  const key = minimumKey(paragraph, inputs);
+  const cached = key ? byParagraph.get(paragraph) : undefined;
+  if (key && cached && sameKey(cached.key, key)) return cached.width;
   const layoutInputs = resolveParagraphLayoutInputs(
     paragraph,
     Number.MAX_SAFE_INTEGER,
     styleCascade,
-    inputs.listItem,
+    context.listItems?.get(paragraph.id),
     inputs.tableCellStyle,
     true
   );
-  const fields = inputs.fields;
+  const fields = context.fields;
   const pieces = piecesOfParagraphForDisplay(
     paragraph,
     layoutInputs.inheritedRunProperties,
@@ -201,13 +235,13 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
     fields?.noteMarks,
     displayMode,
     undefined,
-    inputs.inlineDrawingLayout,
+    context.inlineDrawingLayout,
     styleCascade?.themeFonts,
     undefined,
     fields?.documentProperties,
     fields?.bodyPageFields ?? false,
     fields?.refFields,
-    inputs.authorFilter,
+    view.authorFilter,
     fields?.showFieldCodes,
     fields?.fieldCodeRanges?.get(paragraph.id)
   );
@@ -230,7 +264,9 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
     if (piece.style.hidden) continue;
     if (dashPending && !BREAK_AFTER_DASH.has(piece.text[0] ?? '')) close();
     dashPending = false;
-    if (piece.text === '\n' || piece.text === PAGE_BREAK_CHAR) {
+    // A table cell lays out as though page breaks were absent: the words around one join.
+    if (piece.text === PAGE_BREAK_CHAR) continue;
+    if (piece.text === '\n') {
       // A break ends the first line, and with it the first-line indent.
       close();
       first = false;
@@ -279,19 +315,7 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
   }
   close();
   const width = widest + Math.max(0, left) + Math.max(0, right);
-  const { styleCascade: cascade, tableCellStyle, listItem, authorFilter } = inputs;
-  byParagraph.set(paragraph, {
-    inputs: {
-      styleCascade: cascade,
-      tableCellStyle,
-      displayMode,
-      authorFilter,
-      listItem,
-      inlineDrawingLayout: inputs.inlineDrawingLayout,
-      fields: inputs.fields,
-    },
-    width,
-  });
+  if (key) byParagraph.set(paragraph, { key, width });
   return width;
 }
 
@@ -312,7 +336,6 @@ export function autofitColumnMinimumsPt(
   context: TableAutofitContext,
   view: AutofitView
 ): number[] {
-  const { styleCascade, displayMode, authorFilter } = view;
   const columnCount = structure.columnWidthsPt.length;
   const minimums = new Array<number>(columnCount).fill(0);
   const collapsed = structure.cellSpacingPt === 0;
@@ -327,14 +350,9 @@ export function autofitColumnMinimumsPt(
         if (block.kind === 'table') content = Math.max(content, nestedTableMinimumPt(block));
         if (block.kind !== 'paragraph') continue;
         const width = paragraphMinimumWidthPt(block, {
-          measurer: context.measurer,
-          styleCascade,
+          context,
+          view,
           tableCellStyle: cell.styleFormatting,
-          displayMode,
-          authorFilter,
-          listItem: context.listItems?.get(block.id),
-          inlineDrawingLayout: context.inlineDrawingLayout,
-          fields: context.fields,
         });
         content = Math.max(content, width);
       }
@@ -417,17 +435,6 @@ export function autofitColumnWidthsPt(
   context: TableAutofitContext,
   view: AutofitView
 ): readonly number[] {
-  let byStructure = widthMemos.get(context.measurer);
-  if (!byStructure) widthMemos.set(context.measurer, (byStructure = new WeakMap()));
-  const memo = byStructure.get(structure);
-  if (
-    memo &&
-    memo.listItems === context.listItems &&
-    memo.inlineDrawingLayout === context.inlineDrawingLayout &&
-    sameFields(memo.fields, context.fields) &&
-    memo.contentWidthPt === contentWidthPt
-  )
-    return memo.widths;
   const minimums = autofitColumnMinimumsPt(structure, context, view);
   // The table indent moves a leading-aligned table into the text column's room.
   const leading = structure.bidiVisual ? 'right' : 'left';
@@ -443,12 +450,5 @@ export function autofitColumnWidthsPt(
     ),
     availablePt
   );
-  byStructure.set(structure, {
-    listItems: context.listItems,
-    inlineDrawingLayout: context.inlineDrawingLayout,
-    fields: context.fields,
-    contentWidthPt,
-    widths,
-  });
   return widths;
 }
