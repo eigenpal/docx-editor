@@ -281,7 +281,8 @@ export function placeTerminalTextTables(
       input.styleCascade,
       input.displayMode,
       input.authorFilter,
-      input.deps.compatibilityMode
+      input.deps.compatibilityMode,
+      input.deps.measurer
     )
   );
   const placements: { left: number; top: number; right: number; bottom: number }[] = [];

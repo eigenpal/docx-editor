@@ -78,6 +78,8 @@ import { legacyRoundedCellClaims, legacyTableContentWidth } from './legacy-table
 import { legacyFixedTableContentOffset } from './legacy-fixed-table-content.ts';
 import { withLegacyTableSideRules } from './legacy-table-side-rules.ts';
 import { conditionalTypesFor, readTableLook } from './table-conditional-formats.ts';
+import { autofitColumnMinimumsPt, widenAutofitColumns } from './table-autofit-widths.ts';
+import type { TextMeasurer } from './semantic-records.ts';
 export { tableOriginX, tableFloatOriginX } from './table-origin.ts';
 // Cell padding is its own unit (`table-cell-margins.ts`); re-exported here because this is
 // where the published table surface lives.
@@ -441,6 +443,21 @@ const tableStructureMemos = new WeakMap<object, TableStructureMemo>();
  */
 const filteredTableStructureMemos = new WeakMap<object, TableStructureMemo>();
 
+/** Measured structures, per measurer, so unmeasured reads never evict them. */
+const measuredTableStructureMemos = new WeakMap<
+  TextMeasurer,
+  readonly [WeakMap<object, TableStructureMemo>, WeakMap<object, TableStructureMemo>]
+>();
+
+function measuredMemoStore(measurer: TextMeasurer, filtered: boolean) {
+  let stores = measuredTableStructureMemos.get(measurer);
+  if (!stores) {
+    stores = [new WeakMap(), new WeakMap()];
+    measuredTableStructureMemos.set(measurer, stores);
+  }
+  return stores[filtered ? 1 : 0];
+}
+
 /**
  * Read one typed table node into a bounded structure, or null when the node is not a
  * typed table or sits beyond the nesting ceiling.
@@ -453,9 +470,15 @@ export function readTableStructure(
   /** Which revisions the view resolves away; only the proposed result performs the join. */
   displayMode: RevisionDisplayMode = 'all-markup',
   authorFilter?: RevisionAuthorFilter,
-  compatibilityMode?: number
+  compatibilityMode?: number,
+  /** Widens autofit columns to their content minimums; layout passes its measurer. */
+  measurer?: TextMeasurer
 ): SemanticTableStructure | null {
-  const memoStore = authorFilter ? filteredTableStructureMemos : tableStructureMemos;
+  const memoStore = measurer
+    ? measuredMemoStore(measurer, authorFilter !== undefined)
+    : authorFilter
+      ? filteredTableStructureMemos
+      : tableStructureMemos;
   const memo = memoStore.get(table);
   if (
     memo &&
@@ -477,7 +500,8 @@ export function readTableStructure(
     styleCascade,
     displayMode,
     authorFilter,
-    compatibilityMode
+    compatibilityMode,
+    measurer
   );
   const entry: TableStructureMemo = {
     contentWidthPt,
@@ -499,7 +523,8 @@ function readTableStructureUncached(
   styleCascade: StyleCascadeTable | undefined,
   displayMode: RevisionDisplayMode,
   authorFilter?: RevisionAuthorFilter,
-  compatibilityMode?: number
+  compatibilityMode?: number,
+  measurer?: TextMeasurer
 ): SemanticTableStructure | null {
   if (depth >= MAX_TABLE_NESTING) return null;
   if (table.kind !== 'table') return null;
@@ -851,7 +876,7 @@ function readTableStructureUncached(
     floating: float !== undefined,
   });
 
-  const columnWidthsPt = resolveColumnWidthsPt({
+  const resolvedWidthsPt = resolveColumnWidthsPt({
     gridCols,
     claims:
       legacyWidth === undefined
@@ -865,13 +890,13 @@ function readTableStructureUncached(
     hasOmittedRows,
   });
   // Project the grid visually; cell arrays retain document order for keyboard traversal.
-  const visualRows = physicalTableRows(rows, columnWidthsPt.length, bidiVisual);
+  const visualRows = physicalTableRows(rows, resolvedWidthsPt.length, bidiVisual);
   let contentRows = withTableContentBorders(
     visualRows,
     bidiVisual
       ? { ...tableBorders, left: tableBorders.right, right: tableBorders.left }
       : tableBorders,
-    columnWidthsPt.length,
+    resolvedWidthsPt.length,
     cellSpacingPt === 0
   );
   contentRows = withRowMinimumContentInsets(
@@ -880,9 +905,24 @@ function readTableStructureUncached(
     bidiVisual
       ? { ...tableBorders, left: tableBorders.right, right: tableBorders.left }
       : tableBorders,
-    columnWidthsPt.length,
+    resolvedWidthsPt.length,
     cellSpacingPt === 0
   );
+  // Autofit minimums read the resolved content borders, so a widened column holds its
+  // segment inside the same content box layout uses.
+  const columnWidthsPt =
+    measurer && !layoutFixed
+      ? widenAutofitColumns(
+          resolvedWidthsPt,
+          autofitColumnMinimumsPt(contentRows, resolvedWidthsPt.length, measurer, {
+            styleCascade,
+            displayMode,
+            collapsedBorders: cellSpacingPt === 0,
+          }),
+          tableWidth,
+          legacyWidth ?? contentWidthPt
+        )
+      : resolvedWidthsPt;
   const sideRuleShape = {
     compatibilityMode,
     depth,

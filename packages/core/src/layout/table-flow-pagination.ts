@@ -92,7 +92,8 @@ export function paginateTableInFlow(
     styleCascade,
     displayMode,
     revisionAuthorFilter,
-    flow.compatibilityMode
+    flow.compatibilityMode,
+    flowDeps.measurer
   );
   if (!structure || structure.rows.length === 0) return { outOfFlow: false };
   const outOfFlow =

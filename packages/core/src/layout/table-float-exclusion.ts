@@ -182,7 +182,8 @@ export function floatingTableBand(table: OoxmlElement, width: number, deps: Tabl
     deps.styleCascade,
     deps.displayMode,
     deps.revisionAuthorFilter,
-    deps.compatibilityMode
+    deps.compatibilityMode,
+    deps.measurer
   );
   if (!structure?.float || structure.float.vertAnchor !== 'text') return 0;
   // Text-frame alignments need their own admission math; retain the existing row-flow path.
@@ -327,7 +328,8 @@ function breaksAtPageBottom(
     deps.styleCascade,
     deps.displayMode,
     deps.revisionAuthorFilter,
-    deps.compatibilityMode
+    deps.compatibilityMode,
+    deps.measurer
   );
   const float = structure?.float;
   // A negative offset collides with earlier text. Only anchor placement displaces it.
@@ -417,7 +419,8 @@ function pageFramedAnchorBand(
     deps.styleCascade,
     deps.displayMode,
     deps.revisionAuthorFilter,
-    deps.compatibilityMode
+    deps.compatibilityMode,
+    deps.measurer
   );
   const float = structure?.float;
   if (!structure || !float || float.vertAnchor === 'text' || float.ySpec === 'inline') return 0;
@@ -505,7 +508,8 @@ export function clearEarlierText(
     deps.styleCascade,
     deps.displayMode,
     deps.revisionAuthorFilter,
-    deps.compatibilityMode
+    deps.compatibilityMode,
+    deps.measurer
   );
   const float = structure?.float;
   if (!structure || !float || float.vertAnchor !== 'text' || float.ySpec) return anchorY;
