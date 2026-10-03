@@ -208,7 +208,7 @@ test('mode 15 mixed compound side rules preserve full-stroke layout and paint', 
     ]) {
       const original = source(0, CENTRED, 24, styles[0], widthType, styles[1]);
       const xml = serializeOoxmlPart(original.part)
-        .replace('Left', 'AAAAAAAAAAAAAAAAAAAAAAAAA')
+        .replace('Left', 'AAAAA AAAAA AAAAA AAAAA AAAAA')
         .replace('w:sz="4"', 'w:sz="24"');
       const parsed = readOoxmlPart(xml, { name: '/word/document.xml', contentType: 'app/xml' });
       if (!parsed.ok) throw new Error(parsed.reason);

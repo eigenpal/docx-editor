@@ -1,4 +1,5 @@
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
+import { autofitContextOf } from './table-autofit-widths.ts';
 import type { CellContentInsets } from './table-cell-geometry.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { MAX_TABLE_NESTING, readTableStructure, tableOriginX } from './semantic-table.ts';
@@ -44,7 +45,8 @@ export function emitNestedTable(
     deps.styleCascade,
     deps.displayMode,
     deps.revisionAuthorFilter,
-    deps.compatibilityMode
+    deps.compatibilityMode,
+    autofitContextOf(deps)
   );
   if (!structure || structure.rows.length === 0) return null;
   const startRowIndex = continuation?.nextRowIndex ?? 0;

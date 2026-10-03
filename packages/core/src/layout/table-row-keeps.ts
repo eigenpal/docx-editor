@@ -29,6 +29,7 @@
 // - A first cell that opens with a nested table.
 // - Nested tables and positioned (`w:tblpPr`) tables never keep their rows.
 
+import { autofitContextOf } from './table-autofit-widths.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import {
   readTableStructure,
@@ -350,7 +351,7 @@ export interface TableKeepFlow {
 /** A body flow block: a table is priced, anything else is not. */
 type FlowBlock = { readonly kind: string; readonly table?: OoxmlElement } | undefined;
 
-const structureOf = (table: OoxmlElement, at: TableKeepFlow) =>
+const structureOf = (table: OoxmlElement, at: TableKeepFlow, deps?: TableFlowDeps) =>
   readTableStructure(
     table,
     at.width,
@@ -358,7 +359,9 @@ const structureOf = (table: OoxmlElement, at: TableKeepFlow) =>
     at.styleCascade,
     at.displayMode,
     at.authorFilter,
-    at.compatibilityMode
+    at.compatibilityMode,
+    // Priced at the widths placement lays it out at: the same autofit inputs.
+    deps ? autofitContextOf(deps) : undefined
   );
 
 /** Whether a body table's last row keeps with the body content after the table. */
@@ -428,7 +431,7 @@ function measureTableKeepOpening(
   pageHeight: number,
   deps: TableFlowDeps
 ): TableKeepOpening | null {
-  const structure = structureOf(table, at);
+  const structure = structureOf(table, at, deps);
   if (!structure || structure.float || structure.rows.length === 0) return null;
   if (rowBreaksPage(structure.rows[0]!, at.styleCascade)) return { breaksPage: true, height: 0 };
   const measure = (row: SemanticTableRow, rowDeps: TableFlowDeps): number =>
