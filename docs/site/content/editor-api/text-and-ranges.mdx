@@ -28,7 +28,7 @@ const text = await runtime.run(async (context) => {
 });
 ```
 
-`Body.text` joins paragraphs with carriage returns (`\r`). `Paragraph.text` reads paragraph text; `Range.text` reads the addressed content. Text reads follow the runtime's `revisionTextView` option. The API does not expose HTML, OOXML strings, or document-wide `start` and `end` offsets. `Paragraph.uniqueLocalId` identifies a paragraph within the runtime; load it before reading. Do not use it as a permanent identifier across separately opened files.
+`Body.text` joins paragraphs with carriage returns (`\r`). `Paragraph.text` reads paragraph text; `Range.text` reads the addressed content. A non-breaking hyphen reads as U+001E and an optional hyphen as U+001F, so replace those characters before you pass text to a reader that expects plain hyphens. Text reads follow the runtime's `revisionTextView` option. The API does not expose HTML, OOXML strings, or document-wide `start` and `end` offsets. `Paragraph.uniqueLocalId` identifies a paragraph within the runtime; load it before reading. Do not use it as a permanent identifier across separately opened files.
 
 ## Choose an insertion location
 

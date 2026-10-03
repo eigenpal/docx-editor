@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "deleteText removed text on either side of a w:sym, w:noBreakHyphen or w:softHyphen but left the element, because it has no model offset width. Read text and search left both hyphens out.",
+  "after": "A deletion whose range spans one of these elements removes it, or strikes it inside the w:del when tracked. Read text shows the hyphens as U+001E and U+001F; model offsets are unchanged.",
+  "reason": "The deletion removes or wraps existing nodes inside the same transaction, through the existing journal, so it replicates and undoes as one change. No stored field, operation shape, identity, or model offset changes. Read text and search are local projections and are not shared state. Released participants apply the replicated tree as before.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-inline-characters.test.ts",
+    "packages/core/src/store/__tests__/inline-character-deletion.test.ts",
+    "packages/core/src/store/__tests__/text-projection-hyphens.test.ts"
+  ],
+  "changeset": "nonbreaking-hyphen-text",
+  "migration": null
+}

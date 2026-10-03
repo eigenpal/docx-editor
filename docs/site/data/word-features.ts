@@ -247,7 +247,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Symbol runs render and survive editing and save. The editor requests fonts for symbol runs, SYMBOL fields, and used numbering markers through the configured font resolver. You can insert a symbol from the Insert menu. Existing symbol run properties are not editable.',
+      'Symbol runs render and survive editing and save. The editor requests fonts for symbol runs, SYMBOL fields, and used numbering markers through the configured font resolver. You can insert a symbol from the Insert menu. Deleting text across a symbol, a non-breaking hyphen, or an optional hyphen removes it with the text. Text reads show a non-breaking hyphen as U+001E and an optional hyphen as U+001F. Existing symbol run properties are not editable.',
   },
 
   // --- Paragraphs & styles ---------------------------------------------

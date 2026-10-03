@@ -109,6 +109,7 @@ import {
   sdtPrChild,
 } from './tree-op-nodes.ts';
 import { paragraphIdsWithin, survivingCaretAfterBlockRemoval } from './tree-op-blocks.ts';
+import { inlineCharactersWithin } from './inline-character-marks.ts';
 import {
   PARAGRAPH_VOCABULARY,
   RUN_VOCABULARY,
@@ -1239,6 +1240,14 @@ function applyDeleteText(
       if (!removed.ok) return fromEdit(removed, effect);
       current = removed.part;
     }
+  }
+  // A symbol or hyphen has no model width, so no segment covers it: it goes with a range
+  // that spans it.
+  for (const nodeId of inlineCharactersWithin(paragraph, start, end)) {
+    if (!findNode(current, nodeId)) continue;
+    const removed = removeNode(current, nodeId, editOptions);
+    if (!removed.ok) return fromEdit(removed, effect);
+    current = removed.part;
   }
 
   // Drop runs left with no content. A run holding only `w:rPr` renders nothing and would

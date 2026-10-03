@@ -18,6 +18,8 @@ import {
   type TextOccurrence,
 } from './text-match.ts';
 import { segmentsOfWithFieldSpans } from './tree-op-segments.ts';
+import { NON_BREAKING_HYPHEN_TEXT, OPTIONAL_HYPHEN_TEXT } from '../package/hyphen-text.ts';
+import { inlineCharacterMarks, type InlineCharacterMark } from './inline-character-marks.ts';
 
 /** One visible interval linked to one raw model interval. */
 export interface VisiblePiece {
@@ -121,11 +123,38 @@ function rawEndBoundary(piece: PositionedPiece, projectedOffset: number): number
   return piece.rawStart + projectedOffset - piece.projectedStart;
 }
 
+interface SearchText {
+  readonly text: string;
+  /** Projected offset of each search-text unit, or null when the two are the same. */
+  readonly at: readonly number[] | null;
+}
+
+/**
+ * Text as search compares it: a non-breaking hyphen matches a typed hyphen, and an optional
+ * hyphen matches nothing, so `rates` finds a word with an optional hyphen inside it.
+ */
+function searchTextOf(text: string): SearchText {
+  if (!text.includes(NON_BREAKING_HYPHEN_TEXT) && !text.includes(OPTIONAL_HYPHEN_TEXT)) {
+    return { text, at: null };
+  }
+  let out = '';
+  const at: number[] = [];
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index]!;
+    if (char === OPTIONAL_HYPHEN_TEXT) continue;
+    out += char === NON_BREAKING_HYPHEN_TEXT ? '-' : char;
+    at.push(index);
+  }
+  return { text: out, at };
+}
+
 /** Build a mapped projection from visible pieces in raw order. */
 export function projectionFromPieces(pieces: readonly VisiblePiece[]): ProjectedParagraphText {
   const positioned = positionedPieces(pieces);
   let text = '';
   for (const piece of pieces) text += piece.text;
+  const rawLength = positioned.length === 0 ? 0 : positioned[positioned.length - 1]!.rawEnd;
+  let searchText: SearchText | null = null;
   return {
     text,
     projectedOffset(rawOffset) {
@@ -154,6 +183,15 @@ export function projectionFromPieces(pieces: readonly VisiblePiece[]): Projected
       if (start >= end) return '';
       let value = '';
       for (const piece of positioned) {
+        if (piece.expansion && piece.rawStart === piece.rawEnd) {
+          // A hyphen sits between two model offsets. It belongs to a range that spans it, or
+          // that reaches the paragraph edge it stands on.
+          const offset = piece.rawStart;
+          const fromLeft = start < offset || offset === 0;
+          const toRight = offset < end || offset === rawLength;
+          if (fromLeft && toRight) value += piece.text;
+          continue;
+        }
         if (piece.expansion) {
           if (start <= piece.rawStart && end >= piece.rawEnd) value += piece.text;
           continue;
@@ -177,7 +215,7 @@ export function projectionFromPieces(pieces: readonly VisiblePiece[]): Projected
       const localOffset = projectedOffset - piece.projectedStart;
       for (const run of piece.resultRuns) {
         if (localOffset >= run.start && localOffset < run.end) {
-          return { runId: run.runId, offset: localOffset - run.start };
+          return { runId: run.runId, offset: (run.runOffset ?? 0) + localOffset - run.start };
         }
       }
       return null;
@@ -189,13 +227,26 @@ export function projectionFromPieces(pieces: readonly VisiblePiece[]): Projected
       }
       const matchCase = options.matchCase === true;
       const wholeWord = options.wholeWord === true;
-      const needle = matchCase ? query : foldCase(query);
-      const haystack = matchCase ? text : foldCase(text);
+      searchText ??= searchTextOf(text);
+      const folded = searchText;
+      const wanted = searchTextOf(query).text;
+      if (wanted.length === 0) return { matches, truncated: false };
+      const needle = matchCase ? wanted : foldCase(wanted);
+      const haystack = matchCase ? folded.text : foldCase(folded.text);
+      const projectedAt = (index: number): number => folded.at?.[index] ?? index;
+      const searchIndexOf = (projected: number): number => {
+        if (!folded.at) return projected;
+        let index = 0;
+        while (index < folded.at.length && folded.at[index]! < projected) index += 1;
+        return index;
+      };
       const to = Math.min(text.length, options.to ?? text.length);
       const matchedExpansions = new Set<PositionedPiece>();
-      let cursor = haystack.indexOf(needle, Math.max(0, options.from ?? 0));
-      while (cursor >= 0) {
-        const end = cursor + needle.length;
+      let found = haystack.indexOf(needle, searchIndexOf(Math.max(0, options.from ?? 0)));
+      while (found >= 0) {
+        const foundEnd = found + needle.length;
+        const cursor = projectedAt(found);
+        const end = projectedAt(foundEnd - 1) + 1;
         if (end > to) return { matches, truncated: false };
         if (!wholeWord || isWholeWord(text, cursor, end)) {
           const first = positioned.find(
@@ -213,14 +264,14 @@ export function projectionFromPieces(pieces: readonly VisiblePiece[]): Projected
             if (matches.length >= limit) return { matches, truncated: true };
             matches.push({
               start: cursor,
-              length: needle.length,
+              length: end - cursor,
               rawStart: rawStartBoundary(first, cursor),
               rawEnd: rawEndBoundary(last, end),
             });
             if (containedExpansion) matchedExpansions.add(containedExpansion);
           }
         }
-        cursor = haystack.indexOf(needle, end);
+        found = haystack.indexOf(needle, foundEnd);
       }
       return { matches, truncated: false };
     },
@@ -238,6 +289,82 @@ export function visibleParagraphPieces(
   paragraph: OoxmlParagraphNode,
   rawText: string,
   view: FieldResultTextView = 'allMarkup'
+): readonly VisiblePiece[] {
+  const shown = hyphenMarksOf(paragraph, view);
+  const pieces = fieldPieces(paragraph, rawText, view);
+  return shown.length === 0 ? pieces : withHyphens(pieces, shown);
+}
+
+type HyphenMark = InlineCharacterMark & { readonly text: string };
+
+/** The hyphens this view reads; a symbol is not read text. */
+function hyphenMarksOf(
+  paragraph: OoxmlParagraphNode,
+  view: FieldResultTextView
+): readonly HyphenMark[] {
+  const marks = inlineCharacterMarks(paragraph);
+  if (marks.length === 0) return [];
+  return marks.filter(
+    (mark): mark is HyphenMark => mark.text !== null && (view !== 'original' || !mark.inserted)
+  );
+}
+
+/** Insert each hyphen as a zero-width piece at its model offset. */
+function withHyphens(
+  pieces: readonly VisiblePiece[],
+  marks: readonly HyphenMark[]
+): readonly VisiblePiece[] {
+  const out: VisiblePiece[] = [];
+  let next = 0;
+  const hyphen = (mark: HyphenMark): VisiblePiece => ({
+    text: mark.text,
+    rawStart: mark.offset,
+    rawEnd: mark.offset,
+  });
+  for (const piece of pieces) {
+    while (next < marks.length && marks[next]!.offset <= piece.rawStart) {
+      out.push(hyphen(marks[next]!));
+      next += 1;
+    }
+    if (piece.text.length !== piece.rawEnd - piece.rawStart) {
+      out.push(piece);
+      continue;
+    }
+    let cursor = piece.rawStart;
+    while (next < marks.length && marks[next]!.offset < piece.rawEnd) {
+      const offset = marks[next]!.offset;
+      if (offset > cursor) {
+        out.push({
+          text: piece.text.slice(cursor - piece.rawStart, offset - piece.rawStart),
+          rawStart: cursor,
+          rawEnd: offset,
+        });
+        cursor = offset;
+      }
+      out.push(hyphen(marks[next]!));
+      next += 1;
+    }
+    out.push(
+      cursor === piece.rawStart
+        ? piece
+        : {
+            text: piece.text.slice(cursor - piece.rawStart),
+            rawStart: cursor,
+            rawEnd: piece.rawEnd,
+          }
+    );
+  }
+  while (next < marks.length) {
+    out.push(hyphen(marks[next]!));
+    next += 1;
+  }
+  return out;
+}
+
+function fieldPieces(
+  paragraph: OoxmlParagraphNode,
+  rawText: string,
+  view: FieldResultTextView
 ): readonly VisiblePiece[] {
   if (!rawText.includes(FIELD_ATOM_CHAR)) {
     return rawText.length === 0 ? [] : [{ text: rawText, rawStart: 0, rawEnd: rawText.length }];
@@ -291,6 +418,8 @@ export function projectVisibleParagraphText(
   rawText: string,
   view: FieldResultTextView = 'allMarkup'
 ): ProjectedParagraphText {
-  if (!rawText.includes(FIELD_ATOM_CHAR)) return identityProjection(rawText);
+  if (!rawText.includes(FIELD_ATOM_CHAR) && hyphenMarksOf(paragraph, view).length === 0) {
+    return identityProjection(rawText);
+  }
   return projectionFromPieces(visibleParagraphPieces(paragraph, rawText, view));
 }

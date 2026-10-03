@@ -4,6 +4,7 @@
 // wrapper-merging and adjacency rules both lanes share. The dependency runs one way: this
 // module imports the builders; nothing here is imported back.
 
+import { inlineCharactersWithin } from './inline-character-marks.ts';
 import {
   isInlineRunContainer,
   MAX_INLINE_CONTAINER_DEPTH,
@@ -112,6 +113,9 @@ export function applyDeleteTracked(
       struck.add(id);
     }
   }
+  // A symbol or hyphen has no model width, so no offset places it inside the range. It is
+  // struck with a range that spans it, by identity like atom chrome.
+  for (const id of inlineCharactersWithin(paragraph, start, end)) struck.add(id);
   /** A run carrying part of a struck atom, whether or not it carries the offset itself. */
   const carriesStruckAtom = (node: OoxmlNode): boolean =>
     node.kind !== 'textValue' && contentOf(node).some((child) => struck.has(child.id));

@@ -7,6 +7,7 @@
 // Exhausting a field's node budget returns its atom placeholder. The walk fails soft and
 // never makes a file-sized allocation.
 
+import { hyphenTextOf } from './hyphen-text.ts';
 import {
   collectFieldRunChildren,
   FIELD_ATOM_CHAR,
@@ -36,6 +37,11 @@ export interface FieldResultRunBoundary {
   readonly runId: string;
   readonly start: number;
   readonly end: number;
+  /**
+   * Model offset inside the run where this interval starts, when it is not 0. A hyphen shows
+   * a character with no model width, so the run's later text starts a new interval here.
+   */
+  readonly runOffset?: number;
 }
 
 /** Visible cached result text and its result-run intervals. @internal */
@@ -75,41 +81,49 @@ interface CharacterBudget {
 interface MutableFieldResult {
   readonly out: string[];
   readonly runs: FieldResultRunBoundary[];
+  /** Model text already read from each run. */
+  readonly runOffsets: Map<string, number>;
   length: number;
 }
 
 function emptyFieldResult(): MutableFieldResult {
-  return { out: [], runs: [], length: 0 };
+  return { out: [], runs: [], runOffsets: new Map(), length: 0 };
 }
 
 function appendRunBoundary(
   result: MutableFieldResult,
   runId: string,
   start: number,
-  end: number
+  end: number,
+  runOffset = 0
 ): void {
   if (runId.length === 0 || start === end) return;
   const previous = result.runs[result.runs.length - 1];
   if (previous?.runId === runId && previous.end === start) {
-    result.runs[result.runs.length - 1] = { runId, start: previous.start, end };
+    result.runs[result.runs.length - 1] = { ...previous, end };
     return;
   }
-  result.runs.push({ runId, start, end });
+  result.runs.push(runOffset === 0 ? { runId, start, end } : { runId, start, end, runOffset });
 }
 
 function appendResultText(
   result: MutableFieldResult,
-  text: string,
+  node: OoxmlNode,
   runId: string,
   budget: CharacterBudget
 ): boolean {
+  const text = fieldResultInlineTextOf(node);
   if (text.length > budget.left) return false;
   budget.left -= text.length;
   if (text.length > 0) {
     const start = result.length;
     result.out.push(text);
     result.length += text.length;
-    appendRunBoundary(result, runId, start, result.length);
+    // A hyphen has no model width, so it maps to no run position.
+    if (hyphenTextOf(node) !== null) return true;
+    const runOffset = result.runOffsets.get(runId) ?? 0;
+    result.runOffsets.set(runId, runOffset + text.length);
+    appendRunBoundary(result, runId, start, result.length, runOffset);
   }
   return true;
 }
@@ -119,7 +133,7 @@ function appendNestedResult(result: MutableFieldResult, nested: FieldResultProje
   if (nested.text.length > 0) result.out.push(nested.text);
   result.length += nested.text.length;
   for (const run of nested.runs) {
-    appendRunBoundary(result, run.runId, start + run.start, start + run.end);
+    appendRunBoundary(result, run.runId, start + run.start, start + run.end, run.runOffset);
   }
 }
 
@@ -153,8 +167,7 @@ function plainFieldResultText(
       continue;
     }
     if (isInstrText(entry.node)) continue;
-    const text = fieldResultInlineTextOf(entry.node);
-    if (!appendResultText(result, text, entry.runId, chars)) return null;
+    if (!appendResultText(result, entry.node, entry.runId, chars)) return null;
   }
   return finishFieldResult(result);
 }
@@ -185,8 +198,7 @@ function scanSimpleEntries(
       appendNestedResult(result, nested);
       continue;
     }
-    const text = fieldResultInlineTextOf(node);
-    if (!appendResultText(result, text, entry.runId, chars)) return null;
+    if (!appendResultText(result, node, entry.runId, chars)) return null;
   }
   return finishFieldResult(result);
 }
@@ -227,8 +239,7 @@ function consumeComplexEntry(
   ) {
     return false;
   }
-  const text = fieldResultInlineTextOf(node);
-  if (!appendResultText(active.result, text, entry.runId, active.chars)) active.overflow = true;
+  if (!appendResultText(active.result, node, entry.runId, active.chars)) active.overflow = true;
   return false;
 }
 
