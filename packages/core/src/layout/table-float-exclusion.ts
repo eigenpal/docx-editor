@@ -14,15 +14,22 @@ import {
   type PositionedTableAnchor,
   type TableVerticalAnchorFrames,
 } from './table-float-position.ts';
-import { measureRowHeight, type TableFlowDeps } from './semantic-table-layout.ts';
+import {
+  createTableBorderOwnershipBudget,
+  createTableVMergeResolveBudget,
+  layoutTableFragment,
+  measureRowHeight,
+  type TableFlowDeps,
+} from './semantic-table-layout.ts';
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
+import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
 import {
   readTableStructure,
   type SemanticTableStructure,
   type TableAnchorFrames,
 } from './semantic-table.ts';
 import { positionedTableOriginX } from './table-origin.ts';
-import { pinnedTableBreak, probePositionedTable } from './table-pinned-break.ts';
+import { pinnedTableBreak } from './table-pinned-break.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 
@@ -198,7 +205,7 @@ export function floatingTableBand(table: OoxmlElement, width: number, deps: Tabl
     return Infinity;
   const band =
     Math.max(0, structure.float.yPt) +
-    probeTableHeight(structure, table, width, deps) +
+    probeTableHeight(structure, table.id, deps) +
     (structure.float.distances?.bottom ?? 0);
   widths?.set(width, band);
   return band;
@@ -304,7 +311,9 @@ export function admitsAtAnchor(
   flow: FloatAdmissionFlow
 ): boolean {
   if (hasEarlierCellExclusions(table, flow.zones, deps, flow.page)) return false;
-  if (breaksAcrossPages(table, deps, flow)) return false;
+  // An anchor that keeps whole-table placement (a break or space before it, or a shared
+  // anchor) keeps it for a page- or margin-positioned table too.
+  if (flow.allowBreak && breaksAcrossPages(table, deps, flow)) return false;
   const band = floatingTableBand(table, flow.width, deps);
   if (band > flow.bottom) return false;
   if (deps.styleCascade?.doNotBreakWrappedTables) return true;
@@ -388,11 +397,17 @@ function breaksAtPageBottom(
 
 function probeTableHeight(
   structure: SemanticTableStructure,
-  table: OoxmlElement,
-  width: number,
+  tableId: string,
   deps: TableFlowDeps
 ): number {
-  return probePositionedTable(table, structure, width, deps).bottom;
+  let line = 0;
+  return layoutTableFragment(structure, 0, 0, 0, tableId, 0, {
+    ...stripAnchorSinksForProbe(deps),
+    onCellBreakKey: undefined,
+    borderOwnershipBudget: createTableBorderOwnershipBudget(),
+    vMergeResolveBudget: createTableVMergeResolveBudget(),
+    nextLineId: () => `floating-table-probe-${line++}`,
+  }).bottom;
 }
 
 /**
@@ -455,7 +470,7 @@ function pageFramedAnchorBand(
     inkBottom <= tableFloatOriginY(float, 0, placement.verticalFrames) - distances.top
   )
     return 0;
-  const height = probeTableHeight(structure, anchor.table, width, deps);
+  const height = probeTableHeight(structure, anchor.table.id, deps);
   const top = tableFloatOriginY(float, height, placement.verticalFrames);
   const bandTop = top - distances.top;
   const bandBottom = top + height + distances.bottom;

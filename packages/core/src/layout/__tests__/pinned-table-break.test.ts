@@ -223,6 +223,11 @@ describe('positioned tables that keep their sheet position', () => {
     expect(flowing[0]!.fragment.box.y).toBeCloseTo(24, 6);
   });
 
+  test('an anchor that keeps whole-table placement keeps it for a tall table', () => {
+    const anchor = `<w:p><w:pPr><w:pageBreakBefore/>${EXACT.slice(7, -8)}</w:pPr><w:r><w:t>tail</w:t></w:r></w:p>`;
+    pinned(layoutOf(lead + table({ tblpPr: PAGE }) + anchor));
+  });
+
   test('one exact-height row taller than the page keeps the whole table pinned', () => {
     const exactRow = table({
       tblpPr: PAGE,

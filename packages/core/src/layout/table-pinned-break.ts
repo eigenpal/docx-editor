@@ -63,41 +63,34 @@ export interface PinnedTableBreak {
 
 const probes = new WeakMap<
   TableFlowDeps,
-  WeakMap<
-    OoxmlElement,
-    Map<number, { readonly fragment: TableFragmentRecord; readonly bottom: number }>
-  >
+  WeakMap<OoxmlElement, Map<number, TableFragmentRecord>>
 >();
 
 /**
- * A positioned table laid out whole from 0, without breaks, for measurement only. Memoized per
- * body pass and width, except when inline drawing layout makes the probe depend on the page.
+ * A positioned table laid out whole from 0, without breaks, for measurement only. Page
+ * exclusion zones are left out, so the probe does not depend on where it runs and is memoized
+ * per body pass and width.
  */
-export function probePositionedTable(
+function probeTable(
   table: OoxmlElement,
   structure: SemanticTableStructure,
   width: number,
   deps: TableFlowDeps
-): { readonly fragment: TableFragmentRecord; readonly bottom: number } {
-  let widths:
-    | Map<number, { readonly fragment: TableFragmentRecord; readonly bottom: number }>
-    | undefined;
-  if (!deps.inlineDrawingLayout) {
-    let tables = probes.get(deps);
-    if (!tables) probes.set(deps, (tables = new WeakMap()));
-    widths = tables.get(table);
-    if (!widths) tables.set(table, (widths = new Map()));
-    const cached = widths.get(width);
-    if (cached) return cached;
-  }
-  const probe = layoutTableFragment(structure, 0, 0, 0, table.id, 0, {
-    ...measuringFlowDeps(deps, true),
+): TableFragmentRecord {
+  let tables = probes.get(deps);
+  if (!tables) probes.set(deps, (tables = new WeakMap()));
+  let widths = tables.get(table);
+  if (!widths) tables.set(table, (widths = new Map()));
+  const cached = widths.get(width);
+  if (cached) return cached;
+  const { fragment } = layoutTableFragment(structure, 0, 0, 0, table.id, 0, {
+    ...measuringFlowDeps(deps, false),
     onCellBreakKey: undefined,
     borderOwnershipBudget: createTableBorderOwnershipBudget(),
     vMergeResolveBudget: createTableVMergeResolveBudget(),
   });
-  widths?.set(width, probe);
-  return probe;
+  widths.set(width, fragment);
+  return fragment;
 }
 
 /** Bottoms of every line in a row's cells, nested tables included, in probe coordinates. */
@@ -192,10 +185,14 @@ export function pinnedTableBreak(
     left - distances.left >= column.left + column.width - EPSILON
   )
     return undefined;
-  const probe = probePositionedTable(table, structure, flow.width, deps).fragment;
+  const probe = probeTable(table, structure, flow.width, deps);
   const height = probe.box.height;
   const authored = tableFloatOriginY(float, height, flow.verticalFrames);
-  if (authored >= flow.bottom - EPSILON || authored + height <= flow.bottom + EPSILON)
+  // Reaching below the bottom margin is judged against the margin line, so a footnote reserve
+  // that shortens this page's band neither starts a break nor flips it between passes.
+  const margin = flow.verticalFrames.margin;
+  const marginBottom = Math.max(flow.bottom, margin.top + margin.height);
+  if (authored >= marginBottom - EPSILON || authored + height <= marginBottom + EPSILON)
     return undefined;
   const leading = leadingPartHeight(probe, flow.bottom - flow.top);
   const pageEdge = flow.verticalFrames.page.top + flow.verticalFrames.page.height;
@@ -236,8 +233,12 @@ export function pinnedBreakAtCursor(
   const placed = pinnedTableBreak(table, structure, flow.deps, at());
   if (!placed || placed.top >= flow.cursorY - EPSILON || !flow.pageHoldsContent(flow.cursorY))
     return placed;
+  // Only open the next page for a table that still breaks from the top of a page; one that
+  // would fit there keeps its sheet position here, as before.
+  const fresh = pinnedTableBreak(table, structure, flow.deps, { ...at(), top: 0 });
+  if (!fresh) return undefined;
   flow.advancePage();
-  return pinnedTableBreak(table, structure, flow.deps, at());
+  return pinnedTableBreak(table, structure, flow.deps, at()) ?? fresh;
 }
 
 const splittable = new WeakMap<SemanticTableStructure, SemanticTableStructure>();
