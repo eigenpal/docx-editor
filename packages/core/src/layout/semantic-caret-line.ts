@@ -1,4 +1,4 @@
-import type { LineSegment } from './line-segments.ts';
+import { lineSegmentFor, type LineSegment } from './line-segments.ts';
 import type { LineRecord, SemanticLayout } from './semantic-records.ts';
 import { paragraphLinesIndex } from './paragraph-lines.ts';
 import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
@@ -25,37 +25,59 @@ export function laterLineOwns(layout: SemanticLayout, line: LineRecord, offset: 
   return false;
 }
 
+/** This line's place in its paragraph's line index; a repeated header row matches by id. */
+function paragraphLinePosition(layout: SemanticLayout, line: LineRecord, paragraphId: string) {
+  const lines = paragraphLinesIndex(layout).get(paragraphId) ?? [];
+  let index = lines.findIndex((placed) => placed.line === line);
+  if (index < 0) index = lines.findIndex((placed) => placed.line.id === line.id);
+  return { lines, index };
+}
+
 /**
- * Whether this line ends with a fragment of a projected field result that continues on a
- * later line. Every fragment of a field cut across lines publishes the whole field range,
- * so each fragment line ends at the field's end offset. The caret after the field belongs
- * after its LAST fragment.
+ * Whether a LATER line holds this offset strictly after its segment start, and so owns it.
+ *
+ * Ordinary lines only touch at their ends, so this never holds for them. A field cut
+ * across lines publishes its whole range on every fragment, and each line that draws one
+ * covers that range (`coverPieceRange`). The offset after the field then belongs to the
+ * last of those lines, where the last fragment ends. `caretAt` and the caret stops both
+ * ask this, so the drawn caret and keyboard motion agree.
  */
-export function projectedFragmentContinues(
+export function laterSegmentHolds(
   layout: SemanticLayout,
   line: LineRecord,
+  paragraphId: string,
   offset: number
 ): boolean {
-  let tail: (typeof line.spans)[number] | undefined;
-  for (const span of line.spans) if (span.range.end === offset) tail = span;
-  if (!tail?.projected || tail.range.start >= offset) return false;
-  const { paragraphId, start } = tail.range;
-  const lines = paragraphLinesIndex(layout).get(paragraphId) ?? [];
-  const index = lines.findIndex((placed) => placed.line === line);
-  return (
-    index >= 0 &&
-    lines
-      .slice(index + 1)
-      .some((placed) =>
-        placed.line.spans.some(
-          (span) =>
-            span.projected &&
-            span.range.paragraphId === paragraphId &&
-            span.range.start === start &&
-            span.range.end === offset
-        )
-      )
-  );
+  const { lines, index } = paragraphLinePosition(layout, line, paragraphId);
+  if (index < 0) return false;
+  for (let next = index + 1; next < lines.length; next += 1) {
+    const segment = lineSegmentFor(lines[next]!.line, paragraphId);
+    if (!segment) continue;
+    if (segment.start >= offset) return false;
+    if (offset <= segment.end) return true;
+  }
+  return false;
+}
+
+/**
+ * Whether an EARLIER line holds this offset strictly before its segment end, and so owns
+ * it. The mirror of {@link laterSegmentHolds}: the offset before a field cut across lines
+ * belongs to its first line.
+ */
+export function earlierSegmentHolds(
+  layout: SemanticLayout,
+  line: LineRecord,
+  paragraphId: string,
+  offset: number
+): boolean {
+  const { lines, index } = paragraphLinePosition(layout, line, paragraphId);
+  for (let previous = index - 1; previous >= 0; previous -= 1) {
+    const segment = lineSegmentFor(lines[previous]!.line, paragraphId);
+    if (!segment) continue;
+    if (segment.end <= offset) return false;
+    if (segment.start <= offset) return true;
+  }
+  return false;
 }
 
 /** The continuation line when a soft wrap opens on an inline drawing atom. */

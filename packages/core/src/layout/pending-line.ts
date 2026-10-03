@@ -14,7 +14,8 @@ import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
 export interface PendingLine {
   readonly spans: StyleSpanRecord[];
   readonly drawings: InlineDrawingRecord[];
-  readonly start: number;
+  /** Lowered only by {@link coverPieceRange}; otherwise where the previous line ended. */
+  start: number;
   end: number;
   width: number;
   height: number;
@@ -73,6 +74,21 @@ export interface PendingLine {
   anchorRevisions?: readonly RevisionAttribution[];
   /** Revisions a resolved view answered on this line; see {@link LineRecord.changeSites}. */
   changeSites?: readonly RevisionAttribution[];
+}
+
+/**
+ * Widen a line's range to cover a layout-owned piece it draws part of.
+ *
+ * Every fragment of a field cut across lines publishes the whole field range, so each line
+ * that draws one covers that range too: a selection over the field reaches every fragment,
+ * and caret ownership of the shared end offset goes to the last line (`laterSegmentHolds`).
+ */
+export function coverPieceRange(
+  line: PendingLine,
+  piece: { readonly start: number; readonly end: number }
+): void {
+  line.start = Math.min(line.start, piece.start);
+  line.end = piece.end;
 }
 
 /** Merge baseline-aligned face boxes, preserving both ascent and descent. */

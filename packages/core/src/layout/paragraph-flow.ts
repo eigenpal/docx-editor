@@ -6,6 +6,7 @@ import {
 import { growRunBorderLineMetrics, textBandHeightWithBorders } from './run-border-strokes.ts';
 import type { CellAnchorScope } from './cell-anchor-layout.ts';
 import {
+  coverPieceRange,
   growPendingLineDrawingExtent,
   lineHoldsContent,
   markPendingLineWrapAdvances,
@@ -114,7 +115,8 @@ import type { ScanlineInterval } from './drawing-wrap.ts';
 import { createEquationLayouter } from './equation-layout.ts';
 import { anchorLineStartsByModelOffset } from './anchor-line-probe.ts';
 import * as lineEndSpaces from './line-end-whitespace.ts';
-import { canChopPiece, chopOversizedWord } from './oversized-word-break.ts';
+import { chopOversizedWord } from './oversized-word-break.ts';
+import { canChopPiece, isLayoutOwnedPiece } from './layout-owned-piece.ts';
 import { carryPartialWord, type WordCarryContext } from './word-carry.ts';
 import { collectLineChangeSites } from './paragraph-change-sites.ts';
 
@@ -1246,22 +1248,13 @@ export function breakParagraph(
     // The face this piece MEASURES in. Spans keep `piece.style` — the run's real
     // resolution — plus the slot, and re-resolve through the same helper.
     const faceStyle = styleForFontSlot(piece.style, piece.fontSlot);
-    // Projected PAGE/NUMPAGES digits publish the suppressed cached-result model range (or a
-    // zero-width insertion point when the cache was empty) so surrounding source offsets
-    // stay aligned with binding / paragraphTextOf.
-    // A projected field publishes the model range it stands in for; a `w:ptab` publishes
-    // its ZERO-WIDTH insertion point, because it contributes no text to the paragraph.
-    // Defensive: any piece whose display length disagrees with its model range is also
-    // layout-owned (inert DATE/TOC/REF/… cache before `projected` was set).
-    // Layout-owned pieces get no ideographic boundaries: they are documented below as
-    // staying whole, and a per-ideograph split wrapped a CJK field result mid-text with
-    // every span claiming the same model range.
-    const layoutOwned =
-      Boolean(piece.projected) ||
-      Boolean(piece.positionalTab) ||
-      piece.end - piece.start !== piece.text.length;
+    // Layout-owned pieces get no ideographic boundaries: every span publishes the whole
+    // piece range, so a per-ideograph split painted dozens of spans claiming one range. An
+    // oversized result is cut once per line instead, and checks kinsoku by its own text,
+    // because the paragraph table holds a field as one unit.
+    const layoutOwned = isLayoutOwnedPiece(piece);
     const canChopWord = canChopPiece(piece, layoutOwned);
-    const textBreaks = layoutOwned ? null : cjkBreaks; // That table holds a field as one unit.
+    const textBreaks = layoutOwned ? null : cjkBreaks;
     let consumed = 0;
     for (const boundary of cjkBreaks?.boundaries(piece) ??
       wordBoundaries(piece.text, !layoutOwned)) {
@@ -1614,7 +1607,8 @@ export function breakParagraph(
             });
             line.width += prefix.width;
             growLineMetricsForText(line, metrics, prefix.text, faceStyle);
-            line.end = layoutOwned ? piece.end : prefix.modelStart + prefix.text.length;
+            if (layoutOwned) coverPieceRange(line, piece);
+            else line.end = prefix.modelStart + prefix.text.length;
           },
           closeLine,
           overflowTolerancePt: OVERFLOW_TOLERANCE_PT,
@@ -1666,7 +1660,8 @@ export function breakParagraph(
         else lineEndSpaces.appendWordEnd(line.spans, span, clippedWordEnd);
         line.width += remainingWidth;
         growLineMetricsForText(line, metrics, remaining, faceStyle);
-        line.end = layoutOwned ? piece.end : piece.start + boundary;
+        if (layoutOwned) coverPieceRange(line, piece);
+        else line.end = piece.start + boundary;
       }
       lastEmitted = candidate;
       consumed = boundary;

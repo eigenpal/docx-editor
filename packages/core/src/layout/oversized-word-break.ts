@@ -1,6 +1,5 @@
 // Grapheme-safe chopping for an unbroken word that is wider than the line measure.
 
-import type { FieldAwarePiece } from './field-pieces.ts';
 import { segmentGraphemes } from './grapheme.ts';
 
 export interface OversizedWordPrefix {
@@ -143,26 +142,4 @@ export function chopOversizedWord(
     width: remainingWidth,
     brokeLine,
   };
-}
-
-/**
- * Whether a piece's oversized word may be cut into display fragments.
- *
- * A projected field result (a URL in a HYPERLINK field, a REF result) is cut too: each
- * fragment publishes the whole piece range, as the word-boundary split does. Text that a
- * later pass rewrites, or a width that stands in for other text, stays whole: `measureText`,
- * positional tabs, page numbers, form controls, and note marks and separators.
- */
-export function canChopPiece(piece: FieldAwarePiece, layoutOwned: boolean): boolean {
-  if (piece.measureText !== undefined) return false;
-  if (!layoutOwned) return true;
-  const atom = piece.fieldAtom;
-  return (
-    !piece.positionalTab &&
-    !piece.noteNav &&
-    !piece.noteSeparator &&
-    !atom?.pageField &&
-    !atom?.pageRef &&
-    !atom?.formControl
-  );
 }

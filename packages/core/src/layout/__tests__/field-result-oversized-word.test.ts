@@ -1,6 +1,8 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
-import { caretAt, hitTestSemantic } from '../semantic-interaction.ts';
+import { documentOrder } from '../document-order.ts';
+import { selectionMarkRects, selectionRects } from '../selection-rects.ts';
+import { caretAt, caretStops, hitTestSemantic } from '../semantic-interaction.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { linesOf } from '../semantic-records.ts';
 import { elevenPointDefaults } from './fixtures/eleven-point-defaults.ts';
@@ -135,4 +137,50 @@ test('a field result in an East Asian paragraph chops at its own text', () => {
   expect(fragments.map((span) => span.text).join('')).toBe(TOKEN);
   expect(fragments.length).toBeGreaterThan(1);
   for (const span of fragments) expect(span.box.x + span.box.width).toBeLessThanOrEqual(120.01);
+});
+
+describe('a field cut across lines', () => {
+  // The fixed cell cuts the field into three fragments, then 'next' follows in a new paragraph.
+  const cut = () => {
+    const result = layout(field('HYPERLINK "https://example.org/"', TOKEN), true);
+    const lines = linesOf(result).filter((line) => line.spans.some((span) => span.projected));
+    const { paragraphId, start, end } = lines[0]!.spans[0]!.range;
+    return { result, lines, paragraphId, start, end };
+  };
+
+  test('covers the field range on every fragment line', () => {
+    const { lines, start, end } = cut();
+    expect(lines).toHaveLength(3);
+    for (const line of lines) expect(line.range).toMatchObject({ start, end });
+  });
+
+  test('a selection over the field highlights every fragment', () => {
+    const { result, lines, paragraphId, start, end } = cut();
+    const rects = selectionRects(
+      result,
+      { anchor: { paragraphId, offset: start }, head: { paragraphId, offset: end } },
+      documentOrder(result)
+    );
+    expect(rects.map((rect) => rect.y)).toEqual(lines.map((line) => line.box.y));
+  });
+
+  test('a selected paragraph mark paints once, after the last fragment', () => {
+    const { result, lines, paragraphId, start } = cut();
+    const order = documentOrder(result);
+    const next = order[order.indexOf(paragraphId) + 1]!;
+    const marks = selectionMarkRects(
+      result,
+      { anchor: { paragraphId, offset: start }, head: { paragraphId: next, offset: 1 } },
+      order
+    );
+    expect(marks.map((rect) => rect.y)).toEqual([lines.at(-1)!.box.y]);
+  });
+
+  test('caret stops put each field edge on the line caretAt draws it on', () => {
+    const { result, lines, paragraphId, start, end } = cut();
+    const stops = caretStops(result).filter((stop) => stop.position.paragraphId === paragraphId);
+    expect(stops.map((stop) => stop.position.offset)).toEqual([start, end]);
+    expect(stops.map((stop) => stop.lineId)).toEqual([lines[0]!.id, lines.at(-1)!.id]);
+    for (const stop of stops) expect(caretAt(result, stop.position)?.lineId).toBe(stop.lineId);
+  });
 });

@@ -51,7 +51,8 @@ import { wordBoundary } from './semantic-word-navigation.ts';
 import {
   laterLineOwns,
   laterLineWithDrawingAt,
-  projectedFragmentContinues,
+  laterSegmentHolds,
+  earlierSegmentHolds,
   isNonNavigableInterior,
   endsWithLineBreak,
   isDrawingOnlySegment,
@@ -130,6 +131,8 @@ function pushSegmentCaretStops(
   /** Whether some painted span covers this offset — the glyphs the caret would sit between. */
   const painted = (offset: number): boolean =>
     segment.spans.some((span) => span.range.start <= offset && offset <= span.range.end);
+  const continuesEarlier =
+    segment.start > 0 || earlierSegmentHolds(layout, line, segment.paragraphId, segment.start);
   for (let offset = segment.start; offset <= segment.end; offset += 1) {
     // A line ENDED BY A HARD BREAK does not own the position after it — the line the
     // break opened does, and `caretAt` places the caret there. Emitting it here too
@@ -140,15 +143,14 @@ function pushSegmentCaretStops(
     if (
       offset === segment.end &&
       offset > segment.start &&
-      !mixed &&
-      endsWithLineBreak(line) &&
-      laterLineOwns(layout, line, offset)
+      ((!mixed && endsWithLineBreak(line) && laterLineOwns(layout, line, offset)) ||
+        laterSegmentHolds(layout, line, segment.paragraphId, offset))
     ) {
       continue;
     }
     // A continuation line's first stop is the same model position as the previous
     // line's last, so it is emitted once — by the line that starts there.
-    if (offset === segment.start && segment.start > 0 && stops.length > 0) {
+    if (offset === segment.start && continuesEarlier && stops.length > 0) {
       const previous = lastStopOfParagraph(stops, segment.paragraphId);
       if (previous?.position.offset === offset) {
         continue;
@@ -392,9 +394,9 @@ export function caretAt(
     }
     if (
       position.offset === segment.end &&
-      ((position.offset > segment.start &&
-        laterLineWithDrawingAt(layout, position.paragraphId, position.offset)) ||
-        projectedFragmentContinues(layout, line, position.offset))
+      position.offset > segment.start &&
+      (laterLineWithDrawingAt(layout, position.paragraphId, position.offset) ||
+        laterSegmentHolds(layout, line, position.paragraphId, position.offset))
     ) {
       continue;
     }
