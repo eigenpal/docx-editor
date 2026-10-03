@@ -104,7 +104,11 @@ function cellPlacementsOf(rows: readonly OoxmlElement[]): {
 } {
   const placements: CellPlacement[][] = [];
   const items: RowItem[][] = [];
+  // A continuation only continues a cell above it that carries `w:vMerge`. Otherwise it
+  // starts its own merge, so its content is copied instead of dropped.
+  let mergedAbove = new Set<number>();
   for (const row of rows) {
+    const mergedHere = new Set<number>();
     const rowPlacements: CellPlacement[] = [];
     const rowItems: RowItem[] = [];
     let column = 0;
@@ -118,8 +122,10 @@ function cellPlacementsOf(rows: readonly OoxmlElement[]): {
             63
           );
           const vMergeNode = wmlChild(tcPr, 'vMerge');
-          const vMerge =
+          const marked =
             vMergeNode === null ? null : wmlVal(vMergeNode) === 'restart' ? 'restart' : 'continue';
+          const vMerge = marked === 'continue' && !mergedAbove.has(column) ? 'restart' : marked;
+          if (marked !== null) mergedHere.add(column);
           const placement: CellPlacement = { cell: child, startColumn: column, span, vMerge };
           rowPlacements.push(placement);
           rowItems.push({ placement });
@@ -139,6 +145,7 @@ function cellPlacementsOf(rows: readonly OoxmlElement[]): {
       }
     };
     collect(row.children);
+    mergedAbove = mergedHere;
     placements.push(rowPlacements);
     items.push(rowItems);
   }

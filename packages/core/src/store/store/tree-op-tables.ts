@@ -60,6 +60,11 @@ import {
   tableHidesRowBetween,
   verticalMergeContinuationCells,
 } from './tree-op-table-vmerge.ts';
+import {
+  planVerticalMergeHeadRepairs,
+  verticalMergeHeadRepairDirtyIds,
+  verticalMergeHeadRepairEdits,
+} from './tree-op-table-vmerge-removal.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import {
   invalidRevisionAttribution,
@@ -736,8 +741,11 @@ export function validateTableRowOp(
         })
       )
         return 'block-required';
+      return null;
     }
-    return null;
+    // A tracked removal keeps the row until it is accepted; accepting repairs the merge.
+    const repairs = planVerticalMergeHeadRepairs(topology.table, op.rowId);
+    return repairs.ok ? null : repairs.reason;
   }
 
   return validateRowInsertionPlan(part, topology, rowIndex, op.where, resolved);
@@ -856,15 +864,21 @@ export function applyDeleteTableRow(
     };
     return fromEdit(replaceNode(part, op.rowId, trackedRow, options), effect);
   }
+  const repairs = planVerticalMergeHeadRepairs(topologyResult.topology.table, op.rowId);
+  if (!repairs.ok) return { ok: false, reason: repairs.reason };
   const effect: TreeOpEffect = {
-    dirty: [op.tableId],
+    dirty: [op.tableId, ...verticalMergeHeadRepairDirtyIds(repairs.repairs)],
     created: [],
     deleted: [op.rowId, ...paragraphs],
     dependencyKeys: TEXT_DEPS,
     impact: 'flow-structural',
     caret: { paragraphId: caretParagraphId },
   };
-  return fromEdit(removeNode(part, op.rowId, options), effect);
+  const edits = [
+    ...verticalMergeHeadRepairEdits(repairs.repairs, options),
+    (current: OoxmlPart) => removeNode(current, op.rowId, options),
+  ];
+  return fromEdit(applyEdits(part, edits, options), effect);
 }
 
 export function applyTableRowOp(

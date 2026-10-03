@@ -173,7 +173,17 @@ export function tableHidesRowBetween(
   return false;
 }
 
-function gridIntervalsMatchExactly(
+/** True when a wrapper hiding a `w:tr` follows the last direct row, `lastRowId`. */
+export function tableHidesRowAfter(table: OoxmlElement, lastRowId: string): boolean {
+  const last = table.children.findIndex((child) => child.id === lastRowId);
+  if (last === -1) return false;
+  for (let index = last + 1; index < table.children.length; index += 1) {
+    if (subtreeHolds(table.children[index]!, 'row')) return true;
+  }
+  return false;
+}
+
+export function gridIntervalsMatchExactly(
   aStart: number,
   aSpan: number,
   bStart: number,

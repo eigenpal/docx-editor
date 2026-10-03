@@ -69,7 +69,7 @@ await runtime.run(async (context) => {
 | `Table.deleteColumns(columnIndex, columnCount?)` | Delete columns from a zero-based index; default count is one |
 | `Table.delete()` | Delete the table and clean up its references |
 
-Value matrices must match the affected row and column dimensions. Do not assume ragged matrices or implicit resizing work. Deleting all rows or all columns removes the table. `Table.delete()` can remove an existing merged table. Deletion can still fail if the table is protected or its surrounding structure is unsupported. Sync structural changes before addressing newly added cells or relying on changed indexes.
+Value matrices must match the affected row and column dimensions. Do not assume ragged matrices or implicit resizing work. Deleting all rows or all columns removes the table. `Table.deleteRows()` works on merged tables. If a vertical merge starts in a deleted row, the next row starts the merge. If no later row continues the merge, the next row is no longer merged. The deleted row's content is removed. `Table.delete()` can remove an existing merged table. Deletion can still fail if the table is protected or its surrounding structure is unsupported. Sync structural changes before addressing newly added cells or relying on changed indexes.
 
 Row insertion preserves unrelated merged headers when the source row has ordinary cells covering the table grid. `addRows()` uses the first or last row as its source. `insertRows()` uses the addressed row. Merged source rows, row offsets, hidden source cells, and boundaries crossing vertical merges refuse with `InvalidArgument`. Tables with merges require an explicit grid. Other table mutations retain their documented restrictions.
 

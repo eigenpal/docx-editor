@@ -37,6 +37,7 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import {
+  applyEdits,
   createNodeIdAllocator,
   findNode,
   insertChildren,
@@ -109,6 +110,11 @@ import {
   sdtPrChild,
 } from './tree-op-nodes.ts';
 import { paragraphIdsWithin, survivingCaretAfterBlockRemoval } from './tree-op-blocks.ts';
+import {
+  planVerticalMergeHeadRepairs,
+  verticalMergeHeadRepairDirtyIds,
+  verticalMergeHeadRepairEdits,
+} from './tree-op-table-vmerge-removal.ts';
 import {
   PARAGRAPH_VOCABULARY,
   RUN_VOCABULARY,
@@ -3051,6 +3057,15 @@ function applyDeleteBlock(part: OoxmlPart, blockId: string, options?: EditOption
     impact: 'flow-structural',
     caret: { paragraphId: caretParagraphId },
   };
+  if (block.kind === 'tableRow' && parent) {
+    // A row taking a merge's `restart` cell with it hands the merge to the row below.
+    const repairs = planVerticalMergeHeadRepairs(parent, blockId);
+    if (!repairs.ok) return { ok: false, reason: repairs.reason };
+    const edits = verticalMergeHeadRepairEdits(repairs.repairs, options);
+    edits.push((current) => removeNode(current, blockId, options));
+    const dirty = verticalMergeHeadRepairDirtyIds(repairs.repairs);
+    return fromEdit(applyEdits(part, edits, options), { ...effect, dirty });
+  }
   const removed = removeNode(part, blockId, options);
   if (!removed.ok) return { ok: false, reason: 'unknown-block' };
   if (!cellNeedsParagraph || !parent) return fromEdit(removed, effect);

@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "deleteTableRow and deleteBlock removed a row holding a w:vMerge restart cell and left the next row's continuation with no merge start. Layout merged a continuation into any cell above it, including an unmerged one, and hid the continuation's content.",
+  "after": "Removing such a row in the same write makes the next row's continuation the new restart, or removes its w:vMerge when no later row continues the merge. Layout and clipboard export treat a continuation with no merged cell above it as the start of its own merge.",
+  "reason": "The repair is ordinary tree edits to w:vMerge attributes and elements, inside the transaction that removes the row, so it replicates and undoes as one change through the existing journal. No stored field, operation shape, or identity changes. Released participants read the repaired table as an ordinary merge. Concurrent removal of the merge start and the next row converges to a continuation without a start; the layout change paints it as a merge start, and released participants keep their earlier rendering of that state.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-table-vmerge-rows.test.ts",
+    "packages/core/src/store/__tests__/table-row-delete-vmerge.test.ts",
+    "packages/core/src/layout/__tests__/table-vmerge-orphan.test.ts"
+  ],
+  "changeset": "vmerge-row-deletion",
+  "migration": null
+}
