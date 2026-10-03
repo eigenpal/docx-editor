@@ -505,4 +505,33 @@ describe('autofit layout', () => {
       '</w:tr></w:tbl>';
     expect(columns(outer).widths[0]).toBe(60);
   });
+
+  test('every word of a ruled table stays whole after another column widens it', () => {
+    const ruled =
+      '<w:tbl><w:tblPr><w:tblBorders><w:top w:val="single" w:sz="8"/><w:left w:val="single" w:sz="8"/>' +
+      '<w:bottom w:val="single" w:sz="8"/><w:right w:val="single" w:sz="8"/>' +
+      '<w:insideH w:val="single" w:sz="8"/><w:insideV w:val="single" w:sz="8"/></w:tblBorders>' +
+      '<w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="510"/><w:gridCol w:w="600"/><w:gridCol w:w="3000"/></w:tblGrid><w:tr>' +
+      `<w:tc><w:tcPr><w:tcW w:w="510" w:type="dxa"/></w:tcPr><w:p>${run('ABCD')}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr><w:p>${run('A'.repeat(30))}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="3000" w:type="dxa"/></w:tcPr><w:p>${run('ab')}</w:p></w:tc>` +
+      '</w:tr></w:tbl>';
+    expect(columns(ruled, { compatibilityMode: 15 }).lines).toEqual([1, 1, 1]);
+  });
+
+  test('a fixed nested table keeps room for its indent', () => {
+    const nested =
+      '<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/><w:tblInd w:w="400" w:type="dxa"/></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="600"/></w:tblGrid>' +
+      `<w:tr><w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr><w:p>${run('n')}</w:p></w:tc></w:tr></w:tbl>`;
+    const outer =
+      '<w:tbl><w:tblPr><w:tblW w:w="2400" w:type="dxa"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/>' +
+      '<w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="600"/><w:gridCol w:w="1800"/></w:tblGrid><w:tr>' +
+      `<w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr>${nested}<w:p/></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="1800" w:type="dxa"/></w:tcPr><w:p>${run('A'.repeat(14))}</w:p></w:tc>` +
+      '</w:tr></w:tbl>';
+    expect(columns(outer).widths[0]).toBeGreaterThanOrEqual(50 - 0.01);
+  });
 });

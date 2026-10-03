@@ -412,8 +412,11 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
  * keep legacy content alignment, and widening can end either; the larger insets of the two
  * geometries keep the word that widened the column whole in both.
  */
-function widenedCellInsets(cell: SemanticTableCell, collapsed: boolean) {
-  const current = cellContentInsets(cell, collapsed);
+function widenedCellInsets(
+  cell: SemanticTableCell,
+  collapsed: boolean,
+  current: { readonly left: number; readonly right: number }
+) {
   if (!cell.centeredSideRules && !cell.legacyContentAlignment) return current;
   const { centeredSideRules: _centered, legacyContentAlignment: _legacy, ...plain } = cell;
   const fullStroke = cellContentInsets(plain, collapsed);
@@ -430,18 +433,21 @@ function nestedTableMinimumPt(
   context: TableAutofitContext,
   view: AutofitView
 ): number {
-  let width = 0;
-  for (const column of gridColumnWidthsPt(gridColumnElements(table))) width += column ?? 0;
-  // A nested autofit table needs its own columns' minimums too, or its words split one
-  // level down while the outer table has room.
+  let grid = 0;
+  for (const column of gridColumnWidthsPt(gridColumnElements(table))) grid += column ?? 0;
   const depth = (view.depth ?? 0) + 1;
   const nested = view.readNested?.(table, cellContentWidthPt, depth);
-  if (nested && !nested.layoutFixed) {
+  if (!nested) return grid;
+  // A leading-aligned nested table starts its indent into the cell, fixed or autofit.
+  const leading = nested.bidiVisual ? 'right' : 'left';
+  const indent = nested.alignment === leading ? Math.max(0, nested.indentPt) : 0;
+  let width = grid + indent;
+  // A nested autofit table needs its own columns' minimums too, or its words split one
+  // level down while the outer table has room.
+  if (!nested.layoutFixed) {
     let minimums = 0;
     for (const minimum of autofitColumnMinimumsPt(nested, context, { ...view, depth }))
       minimums += minimum;
-    const leading = nested.bidiVisual ? 'right' : 'left';
-    const indent = nested.alignment === leading ? Math.max(0, nested.indentPt) : 0;
     width = Math.max(width, minimums + indent);
   }
   return width;
@@ -474,7 +480,7 @@ export function autofitColumnMinimumsPt(
       const insets = cellContentInsets(cell, collapsed);
       // The width the cell flow lays a nested table out at, so both reads share one memo.
       const cellContentWidthPt = Math.max(
-        0,
+        1,
         structure.columnWidthsPt[cell.gridColumn]! -
           insets.left -
           insets.right -
@@ -497,7 +503,7 @@ export function autofitColumnMinimumsPt(
       if (content < 0) continue;
       const needed = content + insets.left + insets.right + structure.cellSpacingPt;
       if (needed > minimums[cell.gridColumn]!) minimums[cell.gridColumn] = needed;
-      const widened = widenedCellInsets(cell, collapsed);
+      const widened = widenedCellInsets(cell, collapsed, insets);
       const neededWide = content + widened.left + widened.right + structure.cellSpacingPt;
       if (neededWide > wide[cell.gridColumn]!) wide[cell.gridColumn] = neededWide;
     }
@@ -597,13 +603,19 @@ export function autofitColumnWidthsPt(
   if (!byStructure) passWidths.set(context, (byStructure = new WeakMap()));
   const known = byStructure.get(structure);
   if (known && known.contentWidthPt === contentWidthPt) return known.widths;
-  // Whether a column widens is decided in its current geometry; a column that widens is
-  // sized for the geometry widening can bring.
+  // Whether the table widens is decided in its current geometry. Widening rebuilds every
+  // cell, which can change every cell's insets, so once it widens every column is sized for
+  // the geometry widening can bring.
   const ifWidened: number[] = [];
   const current = autofitColumnMinimumsPt(structure, context, view, ifWidened);
-  const minimums = current.map((minimum, column) =>
-    minimum > structure.columnWidthsPt[column]! + WIDTH_EPSILON_PT ? ifWidened[column]! : minimum
+  const widens = current.some(
+    (minimum, column) => minimum > structure.columnWidthsPt[column]! + WIDTH_EPSILON_PT
   );
+  if (!widens) {
+    byStructure.set(structure, { contentWidthPt, widths: structure.columnWidthsPt });
+    return structure.columnWidthsPt;
+  }
+  const minimums = ifWidened;
   // The table indent moves a leading-aligned table into the text column's room.
   const leading = structure.bidiVisual ? 'right' : 'left';
   const indent = structure.alignment === leading ? Math.max(0, structure.indentPt) : 0;
