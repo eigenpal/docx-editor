@@ -14,10 +14,6 @@
 
 import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
 import { themeFontFamilyOf, type DocumentThemeFonts } from './theme-font-scheme.ts';
-import {
-  APPLICATION_FONT_SIZE_HALF_POINTS,
-  omittedDocDefaults,
-} from './application-doc-defaults.ts';
 
 /** What a run inherits at one point of the chain — null means "nothing authored". */
 export interface StyleRunDefaults {
@@ -173,13 +169,10 @@ export function createRunDefaultsResolver(
     hasLatinFontReference: false,
   };
 
-  // An omitted `w:rPrDefault` takes the application's 12pt (`application-doc-defaults.ts`).
-  if (omittedDocDefaults(stylesRoot).run)
-    docDefaults = { ...docDefaults, fontSizeHalfPoints: APPLICATION_FONT_SIZE_HALF_POINTS };
   if (stylesRoot) {
     const defaults = childElement(stylesRoot, 'docDefaults');
     const rPrDefault = defaults ? childElement(defaults, 'rPrDefault') : undefined;
-    if (rPrDefault) docDefaults = rPrDefaults(childElement(rPrDefault, 'rPr'), themeFonts);
+    docDefaults = rPrDefaults(rPrDefault ? childElement(rPrDefault, 'rPr') : undefined, themeFonts);
 
     for (const child of stylesRoot.children as readonly OoxmlNode[]) {
       if (!isElement(child) || child.localName !== 'style') continue;

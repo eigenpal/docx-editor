@@ -44,23 +44,28 @@ export interface OmittedDocDefaults {
 const BOTH: OmittedDocDefaults = Object.freeze({ run: true, paragraph: true });
 const NEITHER: OmittedDocDefaults = Object.freeze({ run: false, paragraph: false });
 
-/**
- * The halves of `w:docDefaults` a styles root omits. `null` is a package with no styles part.
- * A root outside the WordprocessingML namespace is not a styles part, so it supplies nothing.
- */
-export function omittedDocDefaults(stylesRoot: OoxmlElement | null): OmittedDocDefaults {
-  if (!stylesRoot) return BOTH;
-  if (stylesRoot.namespaceUri !== WML_NAMESPACE_URI) return NEITHER;
-  const defaults = firstDocDefaults(stylesRoot);
-  if (!defaults) return BOTH;
+/** The halves a `w:docDefaults` element leaves out; a missing element leaves out both. */
+export function omittedHalves(docDefaults: OoxmlElement | null | undefined): OmittedDocDefaults {
+  if (!docDefaults) return BOTH;
   const has = (localName: string): boolean =>
-    defaults.children.some(
+    docDefaults.children.some(
       (child) =>
         child.kind !== 'textValue' &&
         child.namespaceUri === WML_NAMESPACE_URI &&
         child.localName === localName
     );
   return { run: !has('rPrDefault'), paragraph: !has('pPrDefault') };
+}
+
+/**
+ * The halves of `w:docDefaults` a styles root omits, read from the first `w:docDefaults` as
+ * layout reads it. `null` is a package with no styles part. A root outside the
+ * WordprocessingML namespace is not a styles part, so it supplies nothing.
+ */
+export function omittedDocDefaults(stylesRoot: OoxmlElement | null): OmittedDocDefaults {
+  if (!stylesRoot) return BOTH;
+  if (stylesRoot.namespaceUri !== WML_NAMESPACE_URI) return NEITHER;
+  return omittedHalves(firstDocDefaults(stylesRoot));
 }
 
 function wmlElement(
@@ -110,16 +115,17 @@ function firstDocDefaults(stylesRoot: OoxmlElement): OoxmlElement | undefined {
 }
 
 /**
- * The `w:docDefaults` layout reads, with every omitted half stated as the application's
- * properties, so a copy of the document carries what it painted. `null` when a styles root
- * outside the WordprocessingML namespace supplies nothing.
+ * `authored`, the `w:docDefaults` a reader takes from `stylesRoot`, with every omitted half
+ * stated as the application's properties, so a copy of the document carries what it painted.
+ * A root outside the WordprocessingML namespace supplies nothing, so `authored` stays as is.
  */
 export function explicitDocDefaults(
   stylesRoot: OoxmlElement | null,
+  authored: OoxmlElement | null,
   idPrefix: string
 ): OoxmlElement | null {
-  const authored = stylesRoot ? (firstDocDefaults(stylesRoot) ?? null) : null;
-  const omitted = omittedDocDefaults(stylesRoot);
+  if (stylesRoot && stylesRoot.namespaceUri !== WML_NAMESPACE_URI) return authored;
+  const omitted = omittedHalves(authored);
   if (!omitted.run && !omitted.paragraph) return authored;
   const stated: OoxmlNode[] = [];
   if (omitted.run)

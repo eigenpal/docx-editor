@@ -1,7 +1,7 @@
 {
   "impact": "compatible",
   "fields": [],
-  "before": "A document that omitted its default run or paragraph properties laid out at 10pt with no spacing, and paste, copy, and the formatting readers used the same values.",
+  "before": "A document that omitted its default run or paragraph properties laid out at 10pt with no spacing, and copy and paste used the same values.",
   "after": "Omitted defaults resolve to 12pt text with 8pt after and 278/240 automatic line spacing. Paste stamps these values when the target defaults differ.",
   "reason": "The defaults are derived from the shared styles part and are not stored. Paste stamps ordinary run and paragraph properties through the existing fragment operations, which released participants apply unchanged.",
   "tests": [

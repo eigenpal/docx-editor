@@ -15,12 +15,10 @@ import {
 } from '../package/ooxml-tree.ts';
 import { W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import { attributeValueOf } from './tree-op-nodes.ts';
-import { propertyElement } from './tree-op-properties.ts';
-import type { OoxmlProperty } from './tree-op-types.ts';
 import {
-  APPLICATION_PARAGRAPH_PROPERTIES,
-  APPLICATION_RUN_PROPERTIES,
-  omittedDocDefaults,
+  applicationDefaultsContainer,
+  omittedHalves,
+  type OmittedDocDefaults,
 } from '../package/application-doc-defaults.ts';
 
 export function isElementNode(node: OoxmlNode): node is OoxmlElement {
@@ -140,13 +138,23 @@ function stylesRootOf(styles: StylesInfo): OoxmlElement | null {
   return root && isElementNode(root) ? root : null;
 }
 
-/** The application's properties for an omitted default half, as property nodes. */
-function applicationDefaults(properties: readonly OoxmlProperty[]): Map<string, OoxmlNode> {
+/**
+ * The halves a side leaves to the application, judged on the `w:docDefaults` this module reads,
+ * so omission and authored values come from one element.
+ */
+function sideOmits(styles: StylesInfo): OmittedDocDefaults {
+  const root = stylesRootOf(styles);
+  if (root && root.namespaceUri !== WML_NAMESPACE_URI) return { run: false, paragraph: false };
+  return omittedHalves(styles.docDefaults);
+}
+
+/** The application's properties for an omitted default half, keyed by name. */
+function applicationDefaults(localName: 'rPr' | 'pPr'): Map<string, OoxmlNode> {
+  const container = applicationDefaultsContainer(localName, 'fragment#application');
   return new Map(
-    properties.map((property) => [
-      property.localName,
-      propertyElement(property, `fragment#application-${property.localName}`),
-    ])
+    container.children.flatMap((child) =>
+      child.kind === 'textValue' ? [] : [[child.localName, child as OoxmlNode] as const]
+    )
   );
 }
 
@@ -290,20 +298,19 @@ export function materializeDefaults(
 ): readonly OoxmlNode[] {
   // A fragment without a styles part (external HTML) has no defaults of its own, so only a
   // carried styles part, or the target, resolves the application's defaults for an omission.
-  const fragmentRoot = stylesRootOf(fragmentStyles);
-  const fragmentOmits = fragmentRoot ? omittedDocDefaults(fragmentRoot) : null;
-  const targetOmits = omittedDocDefaults(stylesRootOf(targetStyles));
+  const fragmentOmits = stylesRootOf(fragmentStyles) ? sideOmits(fragmentStyles) : null;
+  const targetOmits = sideOmits(targetStyles);
   const fragmentRun = fragmentOmits?.run
-    ? applicationDefaults(APPLICATION_RUN_PROPERTIES)
+    ? applicationDefaults('rPr')
     : defaultsContainer(fragmentStyles.docDefaults, 'rPrDefault', 'rPr');
   const targetRun = targetOmits.run
-    ? applicationDefaults(APPLICATION_RUN_PROPERTIES)
+    ? applicationDefaults('rPr')
     : defaultsContainer(targetStyles.docDefaults, 'rPrDefault', 'rPr');
   const fragmentPara = fragmentOmits?.paragraph
-    ? applicationDefaults(APPLICATION_PARAGRAPH_PROPERTIES)
+    ? applicationDefaults('pPr')
     : defaultsContainer(fragmentStyles.docDefaults, 'pPrDefault', 'pPr');
   const targetPara = targetOmits.paragraph
-    ? applicationDefaults(APPLICATION_PARAGRAPH_PROPERTIES)
+    ? applicationDefaults('pPr')
     : defaultsContainer(targetStyles.docDefaults, 'pPrDefault', 'pPr');
 
   // Fold each side's default paragraph style over its docDefaults, the way the cascade

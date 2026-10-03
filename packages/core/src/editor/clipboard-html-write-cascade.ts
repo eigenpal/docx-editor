@@ -9,7 +9,7 @@ import { resolveInternalTarget } from '../store/package/opc-names.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
 import {
   applicationDefaultsContainer,
-  omittedDocDefaults,
+  omittedHalves,
 } from '../store/package/application-doc-defaults.ts';
 import { MAX_STYLE_BASED_ON_DEPTH, MAX_STYLE_DEFINITIONS } from '../layout/style-cascade.ts';
 import { isElement, wmlChild, wmlVal } from './clipboard-html-write-tree.ts';
@@ -53,11 +53,6 @@ export function styleIndexOf(pkg: OoxmlPackage): StyleIndex {
   let defaultParagraphStyleId: string | null = null;
   let defaultCharacterStyleId: string | null = null;
   let defaultTableStyleId: string | null = null;
-  // Omitted halves resolve to the application's defaults, which the page paints. A fragment
-  // without a styles part carries no defaults at all, so it keeps the receiver's.
-  const omitted = root ? omittedDocDefaults(root) : { run: false, paragraph: false };
-  if (omitted.run) docDefaultsRPr = applicationDefaultsContainer('rPr', 'application');
-  if (omitted.paragraph) docDefaultsPPr = applicationDefaultsContainer('pPr', 'application');
   if (!root) {
     return {
       byId,
@@ -72,11 +67,13 @@ export function styleIndexOf(pkg: OoxmlPackage): StyleIndex {
   // layout's buildStyleCascadeTable: styles.xml is attacker-controlled, and the
   // copy lane must not scan more (or resolve a default the painter revoked).
   let counted = 0;
+  let docDefaults: OoxmlElement | null = null;
   for (const child of root.children) {
     if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
     if (child.localName === 'docDefaults') {
-      if (!omitted.run) docDefaultsRPr = wmlChild(wmlChild(child, 'rPrDefault'), 'rPr');
-      if (!omitted.paragraph) docDefaultsPPr = wmlChild(wmlChild(child, 'pPrDefault'), 'pPr');
+      docDefaults = child;
+      docDefaultsRPr = wmlChild(wmlChild(child, 'rPrDefault'), 'rPr');
+      docDefaultsPPr = wmlChild(wmlChild(child, 'pPrDefault'), 'pPr');
       continue;
     }
     if (child.localName !== 'style') continue;
@@ -99,6 +96,13 @@ export function styleIndexOf(pkg: OoxmlPackage): StyleIndex {
       if (defaultCharacterStyleId === id) defaultCharacterStyleId = null;
       if (defaultTableStyleId === id) defaultTableStyleId = null;
     }
+  }
+  // Omitted halves resolve to the application's defaults, which the page paints, judged on the
+  // element read above. A fragment without a styles part carries no defaults of its own.
+  if (root.namespaceUri === WML_NAMESPACE_URI) {
+    const omitted = omittedHalves(docDefaults);
+    if (omitted.run) docDefaultsRPr = applicationDefaultsContainer('rPr', 'application');
+    if (omitted.paragraph) docDefaultsPPr = applicationDefaultsContainer('pPr', 'application');
   }
   return {
     byId,

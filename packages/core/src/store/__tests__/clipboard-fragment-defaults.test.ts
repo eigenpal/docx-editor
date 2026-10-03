@@ -17,7 +17,7 @@ import {
   paragraphIdsUnder,
 } from './clipboard-fragment-fixtures.ts';
 
-describe('omitted and format defaults travel as what the source painted', () => {
+describe('omitted defaults travel as what the source painted', () => {
   const styles = (inner: string) => `<w:styles xmlns:w="${W}">${inner}</w:styles>`;
   const authoredTenPoint = styles(
     '<w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="20"/></w:rPr></w:rPrDefault>' +

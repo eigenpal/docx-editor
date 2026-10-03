@@ -127,8 +127,8 @@ describe('createRunDefaultsResolver', () => {
     expect(resolve(null)).toEqual({ fontFamily: null, fontSizeHalfPoints: null });
   });
 
-  test('no styles part answers the application size and no family', () => {
+  test('no styles part answers nulls', () => {
     const resolve = createRunDefaultsResolver(null, NO_THEME);
-    expect(resolve('Anything')).toEqual({ fontFamily: null, fontSizeHalfPoints: 24 });
+    expect(resolve('Anything')).toEqual({ fontFamily: null, fontSizeHalfPoints: null });
   });
 });

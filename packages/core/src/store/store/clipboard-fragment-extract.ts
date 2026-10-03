@@ -617,7 +617,11 @@ export function extractFragmentPackage(
   // receiver can tell them from content that carries no defaults at all.
   const sourceStylesRoot =
     stylesIndex.part && isElementNode(stylesIndex.part.root) ? stylesIndex.part.root : null;
-  const docDefaults = explicitDocDefaults(sourceStylesRoot, 'fragment#doc-defaults');
+  const docDefaults = explicitDocDefaults(
+    sourceStylesRoot,
+    stylesIndex.docDefaults,
+    'fragment#doc-defaults'
+  );
   const literalDocDefaults = docDefaults
     ? (literalizeThemeReferences(docDefaults, fonts) as OoxmlElement)
     : null;
