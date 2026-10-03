@@ -114,11 +114,11 @@ export function bookmarkRangeText(paragraph: OoxmlElement, name: string): string
       return;
     }
     if (node.kind === 'run') {
-      if (!collecting) return;
+      // Deleted content never joins a computed result. A run holds no bookmark marker, so a
+      // deleted one is skipped whole; markers beside it in the deletion still count.
+      if (!collecting || deleted) return;
       for (const grand of node.children) {
         if (done || !consumeScanNode(budget)) return;
-        // Deleted content never joins a computed result; its bookmark markers still count.
-        if (deleted) continue;
         if (grand.kind === 'text') {
           for (const value of grand.children) {
             if (value.kind === 'textValue') append(value.value);
