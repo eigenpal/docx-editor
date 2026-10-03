@@ -209,7 +209,7 @@ export function gridColumnElements(table: OoxmlElement): readonly OoxmlElement[]
  * has to be exempted from every later fit. One unreadable column costs that column only; the
  * rest of the authored grid survives.
  */
-export function gridColumnWidthsPt(cols: readonly OoxmlElement[]): readonly (number | undefined)[] {
+function gridColumnWidthsPt(cols: readonly OoxmlElement[]): readonly (number | undefined)[] {
   const widths: (number | undefined)[] = [];
   for (const col of cols) {
     const raw = attributeValue(col, 'w');

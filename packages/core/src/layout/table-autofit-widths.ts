@@ -3,6 +3,8 @@
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
+import { bidiSourceBoundaries } from './bidi-piece-coalescing.ts';
+import { bidiPieces, paragraphIsRtl } from './rtl-paragraph.ts';
 import {
   BREAK_AFTER_DASH,
   ENDS_WITH_BREAKING_SPACE,
@@ -32,7 +34,7 @@ import {
   type StyleCascadeTable,
 } from './style-cascade.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
-import { gridColumnElements, gridColumnWidthsPt, type PreferredWidth } from './table-widths.ts';
+import type { PreferredWidth } from './table-widths.ts';
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
 
 /**
@@ -173,7 +175,7 @@ export interface AutofitView {
    * Reads a nested table in the same view in the narrowest cell, at its own depth; null past
    * the nesting limit, where layout paints nothing either. See {@link narrowNestedReader}.
    */
-  readonly readNested?: (table: OoxmlElement, depth: number) => SemanticTableStructure | null;
+  readonly readNested: (table: OoxmlElement, depth: number) => SemanticTableStructure | null;
 }
 
 /** Below this a column is already as wide as its content needs. */
@@ -276,7 +278,7 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
     true
   );
   const fields = context.fields;
-  const pieces = piecesOfParagraphForDisplay(
+  const projected = piecesOfParagraphForDisplay(
     paragraph,
     layoutInputs.inheritedRunProperties,
     fields?.pageContext,
@@ -297,6 +299,14 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
     fields?.showFieldCodes,
     fields?.fieldCodeRanges?.get(paragraph.id),
     fields?.tocLinkStyleRanges?.get(paragraph.id)
+  );
+  // The bidi pass gives each piece the shaping and joining context line breaking measures with;
+  // an unshaped complex-script word measures far wider than it paints.
+  const pieces = bidiPieces(
+    projected,
+    paragraphIsRtl(layoutInputs.props),
+    bidiSourceBoundaries(paragraph),
+    true
   );
   const { left, right, firstLine } = layoutInputs.indent;
   let widest = 0;
@@ -428,11 +438,6 @@ function nestedTableMinimumPt(
   context: TableAutofitContext,
   view: AutofitView
 ): number {
-  if (!view.readNested) {
-    let grid = 0;
-    for (const column of gridColumnWidthsPt(gridColumnElements(table))) grid += column ?? 0;
-    return grid;
-  }
   const depth = (view.depth ?? 0) + 1;
   const nested = view.readNested(table, depth);
   // Past the nesting limit layout paints nothing, so nothing needs room.
@@ -483,8 +488,8 @@ const narrowReads = new WeakMap<
 
 /**
  * A nested-table reader for {@link AutofitView.readNested}: the nested structure in the
- * narrowest cell, memoized per node apart from the cell-width structure layout reads, so the
- * two never evict each other.
+ * narrowest cell, memoized per node apart from the cell-width structure layout reads. Its
+ * first read also refills the reader's own per-node slot once; later reads come from here.
  */
 export function narrowNestedReader(
   read: StructureReader,

@@ -323,6 +323,7 @@ describe('autofit layout', () => {
       styleCascade: elevenPointDefaults(),
       displayMode: 'all-markup' as const,
       authorFilter: undefined,
+      readNested: () => null,
     };
     // Each pass builds its own deps and a fresh, frozen page-field context.
     const pass = () =>
