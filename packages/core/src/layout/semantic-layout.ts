@@ -1568,9 +1568,9 @@ function layoutBlocksPass(
     measurer,
     cache,
     producer,
-    // Recorded per table node, so retention can name cell entries of tables a later
-    // resumed pass never places.
+    // Recorded per table node: retention names cell entries a later resumed pass never places.
     onCellBreakKey: (key) => void collectingCellBreakKeys?.push(key),
+    cellBreakMemo: new WeakMap(),
     nextLineId: (paragraphId, start, lineIndex, occurrence) => {
       lineCounter += 1;
       return bodyLineId(paragraphId, start, lineIndex, occurrence);

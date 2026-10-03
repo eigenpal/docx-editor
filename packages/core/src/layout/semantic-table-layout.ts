@@ -50,7 +50,11 @@ import {
   withDrawingContext,
   type ParagraphLayoutCache,
 } from './layout-cache.ts';
-import { continuedCellLines, holdWholeCellBreak } from './cell-continuation-lines.ts';
+import {
+  continuedCellLines,
+  settleCellBreak,
+  type CellBreakMemo,
+} from './cell-continuation-lines.ts';
 import {
   initialCellCursor,
   initialCellCursors,
@@ -330,6 +334,8 @@ export interface TableFlowDeps {
    * cache retention can name a table's cell entries without laying the table out.
    */
   readonly onCellBreakKey?: (key: string) => void;
+  /** Held whole breaks of cell paragraphs continued across pages; one per layout pass. */
+  readonly cellBreakMemo?: CellBreakMemo;
 }
 
 function sumCols(cols: readonly number[], from: number, to: number): number {
@@ -441,11 +447,10 @@ function placeCellParagraph(
   const startsParagraph = startOffset === 0 && (options?.lineStart ?? 0) === 0;
   // A legacy line-index cursor still breaks the full paragraph before slicing it.
   // Only a model-offset continuation removes the first-line indent from the break.
-  const firstLineOffsetFrom = (offset: number): number =>
-    offset === 0
+  const firstLineOffset =
+    startOffset === 0
       ? directionalListFirstLineShift(listItem, indent, deps.measurer, tabStops, available, rtl)
       : 0;
-  const firstLineOffset = firstLineOffsetFrom(startOffset);
   const anchorScope = cellAnchorScope(options?.inTableCell, deps, paragraphId);
   const rawZones = (anchorScope.anchorsWrapText && deps.pageExclusionZones?.()) || [];
   const paragraphOrder = deps.paragraphOrderIndex?.(paragraphId) ?? Number.MAX_SAFE_INTEGER;
@@ -482,8 +487,8 @@ function placeCellParagraph(
       projectionToken: `${deps.projectionTokenForParagraph?.(paragraph) ?? ''}|inTableCell:${options?.inTableCell === true}|cellEndMark:${options?.cellEndMark === true}|from:${offset}|rowsClear:${anchorScope.rowsClearOutOfCellFloats}`,
       ...(positionedExclusionToken ? { exclusionToken: positionedExclusionToken } : {}),
     });
-  const breakFrom = (offset: number): readonly PendingLine[] => {
-    const key = keyFrom(offset);
+  const breakRemainder = (): readonly PendingLine[] => {
+    const key = keyFrom(startOffset);
     if (deps.cache) deps.onCellBreakKey?.(key);
     return breakPreparedParagraph({
       compatibilityMode: deps.compatibilityMode,
@@ -501,9 +506,9 @@ function placeCellParagraph(
       ...(deps.pageContext ? { pageContext: deps.pageContext } : {}),
       flow: {
         paragraphMarkIsCellEnd: options?.cellEndMark,
-        firstLineOffset: firstLineOffsetFrom(offset),
-        ...(offset === 0 ? listMarkerFirstLineMetrics(listItem, deps.measurer) : {}),
-        startOffset: offset,
+        firstLineOffset,
+        ...(startOffset === 0 ? listMarkerFirstLineMetrics(listItem, deps.measurer) : {}),
+        startOffset,
         marginExtent: { left: 0, right: cellBoxWidth },
         ...(deps.projectLink ? { projectLink: deps.projectLink } : {}),
         ...(deps.projectFieldLink ? { projectFieldLink: deps.projectFieldLink } : {}),
@@ -528,16 +533,24 @@ function placeCellParagraph(
       },
     });
   };
-  // Per-fragment copies of the deps share the pass's line-id allocator, so it names the pass.
   const continuation = {
-    pass: deps.nextLineId,
+    memo: deps.cellBreakMemo,
     pageZones: pageZones.length > 0,
     inlineDrawingLayout: deps.inlineDrawingLayout,
   };
-  const brokenLines = continuedCellLines(paragraph, startOffset, continuation, keyFrom, breakFrom);
+  // A model-offset continuation places from `from`: 0 in its own remainder break, or its index
+  // in the held whole break. Line ids and the returned cursor count from the paragraph start.
+  const { lines: brokenLines, from } = continuedCellLines(
+    paragraph,
+    startOffset,
+    options?.startOffset !== undefined ? (options?.lineStart ?? 0) : 0,
+    continuation,
+    keyFrom,
+    breakRemainder
+  );
 
-  const lineStart = options?.startOffset !== undefined ? 0 : (options?.lineStart ?? 0);
-  const priorLineCount = options?.startOffset !== undefined ? (options?.lineStart ?? 0) : 0;
+  const lineStart = options?.startOffset !== undefined ? from : (options?.lineStart ?? 0);
+  const priorLineCount = options?.startOffset !== undefined ? (options?.lineStart ?? 0) - from : 0;
   const fragmentIndex = options?.fragmentIndex ?? 0;
   const maxBottom = options?.maxBottom ?? Number.POSITIVE_INFINITY;
   const includeAfter = options?.includeAfter ?? true;
@@ -737,8 +750,7 @@ function placeCellParagraph(
   }
 
   const complete = nextLineIndex >= lines.length;
-  if (!complete && startOffset === 0)
-    holdWholeCellBreak(paragraph, continuation, keyFrom, brokenLines);
+  settleCellBreak(paragraph, startOffset, complete, continuation, keyFrom, brokenLines);
   const linesTop = rawRecords[0]!.box.y;
   const linesBottom = y;
   // Every `w:pBdr` edge, in the paint order body flow publishes: open, close, sides, bar.
