@@ -248,15 +248,17 @@ def word_matches(
     matches: list[tuple[int, int]] = []
     matched_reference: set[int] = set()
     matched_candidate: set[int] = set()
-    pages = sorted({word["page"] for word in reference} | {word["page"] for word in candidate})
+    reference_pages: dict[int, list[int]] = {}
+    candidate_pages: dict[int, list[int]] = {}
+    for index, word in enumerate(reference):
+        reference_pages.setdefault(word["page"], []).append(index)
+    for index, word in enumerate(candidate):
+        candidate_pages.setdefault(word["page"], []).append(index)
+    pages = sorted(reference_pages.keys() | candidate_pages.keys())
 
     for page in pages:
-        reference_indices = [
-            index for index, word in enumerate(reference) if word["page"] == page
-        ]
-        candidate_indices = [
-            index for index, word in enumerate(candidate) if word["page"] == page
-        ]
+        reference_indices = reference_pages.get(page, [])
+        candidate_indices = candidate_pages.get(page, [])
         matcher = difflib.SequenceMatcher(
             None,
             [reference[index]["text"] for index in reference_indices],
@@ -319,18 +321,17 @@ def word_matches(
         repeated_reference.setdefault((word["page"], word["text"]), []).append(index)
     for index, word in enumerate(candidate):
         repeated_candidate.setdefault((word["page"], word["text"]), []).append(index)
+    replacements: list[tuple[int, int]] = []
+    replaced_reference: set[int] = set()
+    replaced_candidate: set[int] = set()
     for key in repeated_reference.keys() & repeated_candidate.keys():
         reference_indices = repeated_reference[key]
         candidate_indices = repeated_candidate[key]
         if len(reference_indices) < 2 or len(candidate_indices) < 2:
             continue
-        reference_set = set(reference_indices)
-        candidate_set = set(candidate_indices)
-        matches = [
-            pair
-            for pair in matches
-            if pair[0] not in reference_set and pair[1] not in candidate_set
-        ]
+        # Page/text groups do not share indices. Remove old pairs once after refinement.
+        replaced_reference.update(reference_indices)
+        replaced_candidate.update(candidate_indices)
         reading_order = lambda words, index: (
             words[index]["y0"],
             words[index]["x0"],
@@ -350,7 +351,14 @@ def word_matches(
             candidate,
             ordered_candidate,
         ):
-            matches.append((reference_index, candidate_index))
+            replacements.append((reference_index, candidate_index))
+
+    matches = [
+        pair
+        for pair in matches
+        if pair[0] not in replaced_reference and pair[1] not in replaced_candidate
+    ]
+    matches.extend(replacements)
 
     matches.sort()
     return matches

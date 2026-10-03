@@ -221,6 +221,39 @@ class PdfVisualDiffTest(unittest.TestCase):
         self.assertEqual(summary["distanceBuckets"]["beyond8Pt"], 1)
         self.assertEqual([pair["distancePt"] for pair in pairs], [0, 20, 0])
 
+    def test_page_lookup_work_scales_with_words_instead_of_pages_times_words(self) -> None:
+        page_reads = [0]
+
+        class CountedWord(dict):
+            def __getitem__(self, key):
+                if key == "page":
+                    page_reads[0] += 1
+                return super().__getitem__(key)
+
+        reference = [
+            CountedWord(word(f"label-{index % 4}", page, 10, index * 15))
+            for page in range(1, 101)
+            for index in range(12)
+        ]
+        candidate = [CountedWord(item) for item in reference]
+        matches = MODULE.word_matches(reference, candidate)
+        self.assertEqual(matches, [(index, index) for index in range(len(reference))])
+        self.assertLessEqual(page_reads[0], 5 * (len(reference) + len(candidate)))
+
+    def test_refinement_keeps_multiple_labels_and_cross_page_residuals_separate(self) -> None:
+        reference = [
+            word("alpha", 1, 10, 10), word("beta", 1, 40, 10),
+            word("alpha", 1, 10, 100), word("beta", 1, 40, 100),
+            word("extra", 2, 10, 10),
+        ]
+        candidate = [
+            word("beta", 1, 40, 22), word("alpha", 1, 10, 22),
+            word("beta", 1, 40, 112), word("alpha", 1, 10, 112),
+            word("extra", 3, 10, 10),
+        ]
+        self.assertEqual(MODULE.word_matches(reference, candidate),
+                         [(0, 1), (1, 0), (2, 3), (3, 2), (4, 4)])
+
     def test_text_movement_repairs_distant_repeated_label_pairs(self) -> None:
         reference = [
             word("место", 1, 10, 10),
