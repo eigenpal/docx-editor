@@ -3,7 +3,12 @@
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
-import { BREAK_AFTER_DASH, wordBoundaries } from './cjk-line-break.ts';
+import {
+  BREAK_AFTER_DASH,
+  ENDS_WITH_BREAKING_SPACE,
+  STARTS_WITH_BREAKING_SPACE,
+  wordBoundaries,
+} from './cjk-line-break.ts';
 import { measureInlineDrawing, type InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { createEquationLayouter } from './equation-layout.ts';
 import type { DocumentProperties } from '@docx-editor.dev/core/store';
@@ -174,9 +179,6 @@ export interface AutofitView {
     depth: number
   ) => SemanticTableStructure | null;
 }
-
-/** A run that ends in a breaking space other than U+0020 also ends its word. */
-const BREAKING_SPACE_END = /[\u1680\u2000-\u2006\u2008-\u200a\u205f\u3000]$/u;
 
 /** Below this a column is already as wide as its content needs. */
 const WIDTH_EPSILON_PT = 0.01;
@@ -351,6 +353,8 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
       lead = 0;
       continue;
     }
+    // A run that opens with a breaking space breaks before it, as the line breaker does.
+    if (STARTS_WITH_BREAKING_SPACE.test(piece.text)) close();
     const style = styleForFontSlot(piece.style, piece.fontSlot);
     const measure = (text: string): number => measurer.measure(displayText(text, style), style);
     if (piece.measureText !== undefined) {
@@ -391,7 +395,7 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
       if (
         ink.length < candidate.length ||
         to < piece.text.length ||
-        BREAKING_SPACE_END.test(candidate)
+        ENDS_WITH_BREAKING_SPACE.test(candidate)
       )
         close();
       else dashPending = BREAK_AFTER_DASH.has(candidate.at(-1)!);
@@ -436,7 +440,9 @@ function nestedTableMinimumPt(
     let minimums = 0;
     for (const minimum of autofitColumnMinimumsPt(nested, context, { ...view, depth }))
       minimums += minimum;
-    width = Math.max(width, minimums + Math.max(0, nested.indentPt));
+    const leading = nested.bidiVisual ? 'right' : 'left';
+    const indent = nested.alignment === leading ? Math.max(0, nested.indentPt) : 0;
+    width = Math.max(width, minimums + indent);
   }
   return width;
 }
@@ -449,11 +455,14 @@ function nestedTableMinimumPt(
 export function autofitColumnMinimumsPt(
   structure: SemanticTableStructure,
   context: TableAutofitContext,
-  view: AutofitView
+  view: AutofitView,
+  /** Filled with each column's minimum should it have to widen (see widenedCellInsets). */
+  ifWidened?: number[]
 ): number[] {
   const columnCount = structure.columnWidthsPt.length;
   // -1 marks a column no single-column cell measured; a measured empty column may be 0.
   const minimums = new Array<number>(columnCount).fill(-1);
+  const wide = new Array<number>(columnCount).fill(-1);
   const collapsed = structure.cellSpacingPt === 0;
   for (const row of structure.rows) {
     for (const cell of row.cells) {
@@ -462,10 +471,14 @@ export function autofitColumnMinimumsPt(
         continue;
       if (cell.gridColumn < 0 || cell.gridColumn >= columnCount) continue;
       let content = -1;
-      const insets = widenedCellInsets(cell, collapsed);
+      const insets = cellContentInsets(cell, collapsed);
+      // The width the cell flow lays a nested table out at, so both reads share one memo.
       const cellContentWidthPt = Math.max(
         0,
-        structure.columnWidthsPt[cell.gridColumn]! - insets.left - insets.right
+        structure.columnWidthsPt[cell.gridColumn]! -
+          insets.left -
+          insets.right -
+          structure.cellSpacingPt
       );
       for (const block of cell.blocks) {
         if (block.kind === 'table')
@@ -484,11 +497,16 @@ export function autofitColumnMinimumsPt(
       if (content < 0) continue;
       const needed = content + insets.left + insets.right + structure.cellSpacingPt;
       if (needed > minimums[cell.gridColumn]!) minimums[cell.gridColumn] = needed;
+      const widened = widenedCellInsets(cell, collapsed);
+      const neededWide = content + widened.left + widened.right + structure.cellSpacingPt;
+      if (neededWide > wide[cell.gridColumn]!) wide[cell.gridColumn] = neededWide;
     }
   }
   // A column only spanning cells cover has no minimum of its own; it keeps its width.
-  for (const [column, minimum] of minimums.entries())
+  for (const [column, minimum] of minimums.entries()) {
     if (minimum < 0) minimums[column] = structure.columnWidthsPt[column]!;
+    if (ifWidened) ifWidened[column] = wide[column]! < 0 ? minimums[column]! : wide[column]!;
+  }
   return minimums;
 }
 
@@ -579,7 +597,13 @@ export function autofitColumnWidthsPt(
   if (!byStructure) passWidths.set(context, (byStructure = new WeakMap()));
   const known = byStructure.get(structure);
   if (known && known.contentWidthPt === contentWidthPt) return known.widths;
-  const minimums = autofitColumnMinimumsPt(structure, context, view);
+  // Whether a column widens is decided in its current geometry; a column that widens is
+  // sized for the geometry widening can bring.
+  const ifWidened: number[] = [];
+  const current = autofitColumnMinimumsPt(structure, context, view, ifWidened);
+  const minimums = current.map((minimum, column) =>
+    minimum > structure.columnWidthsPt[column]! + WIDTH_EPSILON_PT ? ifWidened[column]! : minimum
+  );
   // The table indent moves a leading-aligned table into the text column's room.
   const leading = structure.bidiVisual ? 'right' : 'left';
   const indent = structure.alignment === leading ? Math.max(0, structure.indentPt) : 0;

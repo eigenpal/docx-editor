@@ -468,4 +468,41 @@ describe('autofit layout', () => {
     const spaced = `${run('ABCDEFGHIJ\u2003')}<w:r><w:rPr><w:b/></w:rPr><w:t>KLMNOPQRST</w:t></w:r>`;
     expect(columns(table('', spaced)).widths[1]).toBeLessThan(70);
   });
+
+  test('a word that already fits its ruled cell does not widen the column', () => {
+    const ruled =
+      '<w:tbl><w:tblPr><w:tblBorders><w:top w:val="single" w:sz="8"/><w:left w:val="single" w:sz="8"/>' +
+      '<w:bottom w:val="single" w:sz="8"/><w:right w:val="single" w:sz="8"/>' +
+      '<w:insideH w:val="single" w:sz="8"/><w:insideV w:val="single" w:sz="8"/></w:tblBorders>' +
+      '<w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="1200"/><w:gridCol w:w="510"/><w:gridCol w:w="600"/></w:tblGrid><w:tr>' +
+      `<w:tc><w:tcPr><w:tcW w:w="1200" w:type="dxa"/></w:tcPr><w:p>${run('ab')}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="510" w:type="dxa"/></w:tcPr><w:p>${run('ABCD')}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr><w:p>${run('cd')}</w:p></w:tc>` +
+      '</w:tr></w:tbl>';
+    const fragment = columns(ruled, { compatibilityMode: 15 });
+    expect(fragment.widths[1]).toBeCloseTo(25.5, 6);
+    expect(fragment.lines[1]).toBe(1);
+  });
+
+  test('a run that opens with an em space starts a new word', () => {
+    const spaced = `${run('ABCDE')}<w:r><w:rPr><w:b/></w:rPr><w:t>\u2003FGHIJ</w:t></w:r>`;
+    expect(columns(table('', spaced)).widths[1]).toBe(36);
+  });
+
+  test('a centered nested table does not count its indent', () => {
+    const nested =
+      '<w:tbl><w:tblPr><w:jc w:val="center"/><w:tblInd w:w="1440" w:type="dxa"/><w:tblCellMar>' +
+      '<w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="600"/></w:tblGrid>' +
+      `<w:tr><w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr><w:p>${run('ABCDEFGHIJ')}</w:p></w:tc></w:tr></w:tbl>`;
+    const outer =
+      '<w:tbl><w:tblPr><w:tblW w:w="2400" w:type="dxa"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/>' +
+      '<w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="600"/><w:gridCol w:w="1800"/></w:tblGrid><w:tr>' +
+      `<w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr>${nested}<w:p/></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="1800" w:type="dxa"/></w:tcPr><w:p>${run('ab')}</w:p></w:tc>` +
+      '</w:tr></w:tbl>';
+    expect(columns(outer).widths[0]).toBe(60);
+  });
 });
