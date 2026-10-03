@@ -25,6 +25,7 @@ import { escapeXmlAttribute } from '../package/sinks.ts';
 import { resolveNotesPart } from '../package/note-references.ts';
 import { writeZip, strToU8 } from '../package/zip.ts';
 import { applyTreeOp } from './tree-op-apply.ts';
+import { explicitDocDefaults } from '../package/application-doc-defaults.ts';
 import { paragraphLength } from './tree-op-segments.ts';
 import { attributeValueOf } from './tree-op-nodes.ts';
 import {
@@ -127,6 +128,20 @@ function findParagraph(node: OoxmlNode, id: string): OoxmlElement | null {
     if (found) return found;
   }
   return null;
+}
+
+/** A `w:styles` root for a fragment whose source has no styles part. */
+function emptyStylesRoot(): OoxmlElement {
+  return {
+    id: 'fragment#styles',
+    kind: 'generic',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName: 'styles',
+    prefix: 'w',
+    namespaceBindings: [{ prefix: 'w', namespaceUri: WML_NAMESPACE_URI }],
+    attributes: [],
+    children: [],
+  } as unknown as OoxmlElement;
 }
 
 function withChildren(node: OoxmlElement, children: readonly OoxmlNode[]): OoxmlElement {
@@ -598,8 +613,17 @@ export function extractFragmentPackage(
   const literalStyles = styles.map(
     (style) => literalizeThemeReferences(style, fonts) as OoxmlElement
   );
-  const literalDocDefaults = stylesIndex.docDefaults
-    ? (literalizeThemeReferences(stylesIndex.docDefaults, fonts) as OoxmlElement)
+  // Omitted default halves travel as the application's values the source painted, so the
+  // receiver can tell them from content that carries no defaults at all.
+  const sourceStylesRoot =
+    stylesIndex.part && isElementNode(stylesIndex.part.root) ? stylesIndex.part.root : null;
+  const docDefaults = explicitDocDefaults(
+    sourceStylesRoot,
+    stylesIndex.docDefaults,
+    'fragment#doc-defaults'
+  );
+  const literalDocDefaults = docDefaults
+    ? (literalizeThemeReferences(docDefaults, fonts) as OoxmlElement)
     : null;
   blocks = blocks.map((block) => literalizeThemeReferences(block, fonts));
   const literalFootnotes = footnotes.map(
@@ -773,8 +797,8 @@ export function extractFragmentPackage(
   addXmlPart('/word/document.xml', DOCUMENT_CT, documentRoot);
 
   // styles.xml — the closure plus materialized (theme-literal) docDefaults.
-  if (stylesIndex.part && (literalStyles.length > 0 || literalDocDefaults)) {
-    const stylesRoot = withChildren(stylesIndex.part.root as OoxmlElement, [
+  if (literalStyles.length > 0 || literalDocDefaults) {
+    const stylesRoot = withChildren(sourceStylesRoot ?? emptyStylesRoot(), [
       ...(literalDocDefaults ? [literalDocDefaults] : []),
       ...literalStyles,
     ]);

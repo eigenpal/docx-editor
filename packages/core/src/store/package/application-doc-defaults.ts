@@ -7,8 +7,9 @@
 // defaults (10pt, no spacing), and so does an `w:rPrDefault` without `w:sz`. Layout, the
 // formatting readers, and the clipboard all read omission here, so they agree on one answer.
 
-import { WML_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
+import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from './ooxml-tree.ts';
 import type { OoxmlProperty } from '../store/tree-op-types.ts';
+import { propertyElement } from '../store/tree-op-properties.ts';
 
 /** The run size an omitted `w:rPrDefault` supplies, in half-points. */
 export const APPLICATION_FONT_SIZE_HALF_POINTS = 24;
@@ -65,4 +66,91 @@ export function omittedDocDefaults(stylesRoot: OoxmlElement | null): OmittedDocD
         child.localName === localName
     );
   return { run: !has('rPrDefault'), paragraph: !has('pPrDefault') };
+}
+
+/**
+ * What a document with an authored run half paints for the profile's run properties when that
+ * half leaves them out: no kerning and 10pt in both size lanes.
+ */
+export const FORMAT_RUN_BASELINE: readonly OoxmlProperty[] = Object.freeze([
+  Object.freeze({ localName: 'kern', attributes: Object.freeze({ val: '0' }) }),
+  Object.freeze({ localName: 'sz', attributes: Object.freeze({ val: '20' }) }),
+  Object.freeze({ localName: 'szCs', attributes: Object.freeze({ val: '20' }) }),
+]);
+
+/** The `w:spacing` attributes a paragraph paints when nothing in its cascade states them. */
+export const FORMAT_SPACING_BASELINE: Readonly<Record<string, string>> = Object.freeze({
+  before: '0',
+  after: '0',
+  line: '240',
+  lineRule: 'auto',
+});
+
+function wmlElement(
+  kind: string,
+  localName: string,
+  id: string,
+  children: readonly OoxmlNode[]
+): OoxmlElement {
+  return {
+    id,
+    kind,
+    namespaceUri: WML_NAMESPACE_URI,
+    localName,
+    prefix: 'w',
+    namespaceBindings: [],
+    attributes: [],
+    children,
+  } as unknown as OoxmlElement;
+}
+
+/** A `w:rPr` or `w:pPr` holding the application's properties for an omitted default half. */
+export function applicationDefaultsContainer(
+  localName: 'rPr' | 'pPr',
+  idPrefix: string
+): OoxmlElement {
+  const properties =
+    localName === 'rPr' ? APPLICATION_RUN_PROPERTIES : APPLICATION_PARAGRAPH_PROPERTIES;
+  return wmlElement(
+    localName === 'rPr' ? 'runProperties' : 'paragraphProperties',
+    localName,
+    `${idPrefix}-${localName}`,
+    properties.map((property) =>
+      propertyElement(property, `${idPrefix}-${localName}-${property.localName}`)
+    )
+  );
+}
+
+/**
+ * `w:docDefaults` with every omitted half stated as the application's properties, so a copy of
+ * the document carries what it painted. Returns the authored element unchanged when it omits
+ * nothing, and `null` when there is nothing to state.
+ */
+export function explicitDocDefaults(
+  stylesRoot: OoxmlElement | null,
+  authored: OoxmlElement | null,
+  idPrefix: string
+): OoxmlElement | null {
+  const omitted = omittedDocDefaults(stylesRoot);
+  if (!omitted.run && !omitted.paragraph) return authored;
+  const stated: OoxmlNode[] = [];
+  if (omitted.run)
+    stated.push(
+      wmlElement('generic', 'rPrDefault', `${idPrefix}-rPrDefault`, [
+        applicationDefaultsContainer('rPr', idPrefix),
+      ])
+    );
+  if (omitted.paragraph)
+    stated.push(
+      wmlElement('generic', 'pPrDefault', `${idPrefix}-pPrDefault`, [
+        applicationDefaultsContainer('pPr', idPrefix),
+      ])
+    );
+  // CT_DocDefaults is a sequence: rPrDefault, then pPrDefault.
+  const children = omitted.run
+    ? [...stated, ...(authored?.children ?? [])]
+    : [...(authored?.children ?? []), ...stated];
+  return authored
+    ? ({ ...authored, children } as OoxmlElement)
+    : wmlElement('generic', 'docDefaults', `${idPrefix}-docDefaults`, children);
 }
