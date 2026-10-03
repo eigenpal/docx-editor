@@ -73,6 +73,22 @@ function equationsInParagraph(part: OoxmlPart, paragraphId: string): readonly Su
   return result;
 }
 
+/**
+ * The plain-text spelling of the equation atom at a paragraph offset: its linear form,
+ * with the equations of one display separated by spaces. Null when no equation sits there.
+ */
+export function equationPlainText(
+  part: OoxmlPart,
+  paragraphId: string,
+  offset: number
+): string | null {
+  const here = equationsInParagraph(part, paragraphId).filter(
+    (equation) => equation.start === offset
+  );
+  if (here.length === 0) return null;
+  return here.map((equation) => equation.linear || equation.fallbackText).join(' ');
+}
+
 function expressionIsSupported(expression: EquationExpression): boolean {
   switch (expression.kind) {
     case 'fallback':

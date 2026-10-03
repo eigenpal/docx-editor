@@ -161,4 +161,15 @@ describe('pasted Word equations in collaboration', () => {
     expect(equationsOf(harness.packageOf(alice))).toHaveLength(0);
     harness.expectConverged(alice, bob);
   });
+
+  test('a display pasted beside text lands inline on every peer', async () => {
+    const { alice, bob } = await harness.pair(zipDocument('<w:p><w:r><w:t>Host</w:t></w:r></w:p>'));
+    pasteEquation(alice, harness.paragraphIdAt(alice, 0), 2, true);
+    for (const peer of [alice, bob]) {
+      expect(displaysOf(harness.packageOf(peer))).toBe(0);
+      expect(equationsOf(harness.packageOf(peer))).toHaveLength(1);
+    }
+    expectSame(harness.packageOf(alice), harness.packageOf(bob));
+    harness.expectConverged(alice, bob);
+  });
 });

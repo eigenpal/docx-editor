@@ -37,6 +37,7 @@ import {
 } from './tree-op-segments.ts';
 import { rejectContentEdit } from './tree-op-validate-controls.ts';
 import { applyTreeOp } from './tree-op-apply.ts';
+import { equationsOfAtom, isOmmlDisplay } from '../package/omml-display.ts';
 import type { TreeDocOp, TreeOpEffect, TreeOpRejection, TreeOpResult } from './tree-op-types.ts';
 import { recordSetNamespaceBinding } from '../package/canonical-primitive-capture.ts';
 
@@ -173,6 +174,22 @@ function inlineChildrenOf(paragraph: OoxmlElement): readonly OoxmlNode[] {
   return paragraph.children.filter((child) => child !== pPr);
 }
 
+/**
+ * A display equation (`m:oMathPara`) is a paragraph of its own. Merged beside existing
+ * text, it becomes its inline equations, the same as Word pastes a display into a line.
+ */
+function besideText(
+  pasted: readonly OoxmlNode[],
+  neighbour: readonly OoxmlNode[]
+): readonly OoxmlNode[] {
+  const hasContent = (nodes: readonly OoxmlNode[]): boolean =>
+    paragraphLength({ children: nodes } as unknown as OoxmlParagraphNode) > 0;
+  if (!pasted.some(isOmmlDisplay) || !hasContent(neighbour)) return pasted;
+  return pasted.flatMap((node): OoxmlNode[] =>
+    isOmmlDisplay(node) ? [...equationsOfAtom(node)] : [node]
+  );
+}
+
 function rebuiltParagraph(
   pPr: OoxmlElement | undefined,
   inline: readonly OoxmlNode[]
@@ -237,7 +254,10 @@ export function applyInsertFragment(
     const appended = replaceChildren(
       split.part,
       head.id,
-      [...head.children, ...inlineChildrenOf(first as OoxmlElement)],
+      [
+        ...head.children,
+        ...besideText(inlineChildrenOf(first as OoxmlElement), inlineChildrenOf(host)),
+      ],
       { ...options, deferValidation: true }
     );
     if (!appended.ok) return { ok: false, reason: 'tree-invariant' };
@@ -282,7 +302,10 @@ export function applyInsertFragment(
     const replaced = replaceChildren(
       current,
       head.id,
-      rebuiltParagraph(fragmentPPr, [...headInline, ...inlineChildrenOf(first as OoxmlElement)]),
+      rebuiltParagraph(fragmentPPr, [
+        ...headInline,
+        ...besideText(inlineChildrenOf(first as OoxmlElement), headInline),
+      ]),
       { ...options, deferValidation: true }
     );
     if (!replaced.ok) return { ok: false, reason: 'tree-invariant' };
@@ -305,7 +328,10 @@ export function applyInsertFragment(
     const replaced = replaceChildren(
       current,
       tail.id,
-      rebuiltParagraph(tailPPr, [...inlineChildrenOf(last as OoxmlElement), ...tailInline]),
+      rebuiltParagraph(tailPPr, [
+        ...besideText(inlineChildrenOf(last as OoxmlElement), tailInline),
+        ...tailInline,
+      ]),
       { ...options, deferValidation: true }
     );
     if (!replaced.ok) return { ok: false, reason: 'tree-invariant' };
