@@ -55,6 +55,8 @@ export interface AutomationShapeEntry extends AutomationShapeRead {
    * shape can hold one; a linked text box continues another box's story and holds none.
    */
   readonly textboxRoot: OoxmlElement | null;
+  /** The `mc:AlternateContent` the drawing was read through, or null for a bare drawing. */
+  readonly alternate: OoxmlElement | null;
 }
 
 export type AutomationShapesRead =
@@ -116,12 +118,6 @@ function shapeOf(drawing: OoxmlElement): ShapeOf | 'malformed' | null {
   return { read: { id: Number(rawId), name, type }, root };
 }
 
-/** The text story a floating shape's drawing holds, or null when it holds none or is inline. */
-export function storyOfDrawing(drawing: OoxmlElement): OoxmlElement | null {
-  const found = shapeOf(drawing);
-  return found && found !== 'malformed' ? found.root : null;
-}
-
 /**
  * The floating shapes a story's paragraphs anchor, in reading order.
  *
@@ -163,7 +159,12 @@ export function shapesInParagraphs(
           if (seen.has(found.read.id)) return { ok: false, reason: 'duplicates' };
           if (shapes.length >= MAX_SHAPES_PER_STORY) return { ok: false, reason: 'truncated' };
           seen.add(found.read.id);
-          shapes.push({ ...found.read, hostParagraphId: paragraph.id, textboxRoot: found.root });
+          shapes.push({
+            ...found.read,
+            hostParagraphId: paragraph.id,
+            textboxRoot: found.root,
+            alternate: alternate ? node : null,
+          });
         }
         continue;
       }

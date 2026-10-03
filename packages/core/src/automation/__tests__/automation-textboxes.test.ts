@@ -340,6 +340,24 @@ describe('shapes and text-box stories', () => {
     expect(savedMainXml(target)).not.toContain('<w:ins');
   });
 
+  test('changes in boxes no body reaches stay with the owner story', () => {
+    const tracked =
+      'Boxed</w:t></w:r><w:ins w:id="9" w:author="A" w:date="2024-01-01T00:00:00Z">' +
+      '<w:r><w:t>X</w:t></w:r></w:ins><w:r><w:t>';
+    // Duplicate shape ids refuse the listing; an unsupported `Requires` paints the fallback.
+    for (const boxes of [
+      `${textbox(1, tracked)}${textbox(1, tracked)}`,
+      textbox(1, tracked, { requires: 'x99' }),
+    ]) {
+      const target = open(docx(`<w:p><w:r><w:t>Body</w:t></w:r>${boxes}</w:p>`));
+      const { body } = roots(target);
+      expect(
+        target.execute({ operations: [decide('acceptAllRevisions', body)] }).results[0]?.status
+      ).toBe('ok');
+      expect(savedMainXml(target)).not.toContain('<w:ins');
+    }
+  });
+
   test('duplicate shape ids make the story’s shapes unaddressable', () => {
     const target = open(docx(`<w:p>${textbox(5, 'one')}</w:p><w:p>${textbox(5, 'two')}</w:p>`));
     const { body } = roots(target);

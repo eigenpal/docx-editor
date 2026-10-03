@@ -5,21 +5,15 @@
 // A text box is its own story, the way `Body.text` and `search` already treat it, so its changes
 // are listed and decided through `Shape.body` and are left out of the owner's.
 //
-// Only a story `Shape.body` can reach is indexed: a floating DrawingML shape on the branch layout
-// selects (`storyOfDrawing`, the rule the shape listing uses). Its VML fallback copy is a shadow
+// Only a story `Shape.body` can reach is indexed: one the owner's shape listing answers, a
+// floating DrawingML shape on the branch layout selects. Its VML fallback copy is a shadow
 // of that story, rewritten from it on export (`textbox-fallback-export.ts`), so the copy's sites
 // map to the same story. A legacy VML-only box, an inline box, or a fallback branch that layout
 // paints is no reachable story, so its changes stay with the owner.
 
-import {
-  isMcAlternateContent,
-  namespaceScopeForNode,
-  resolveRunLevelMcAtom,
-} from '../store/package/drawing-projection.ts';
-import { emptyNamespaceScope } from '../store/package/drawing-projection-walk.ts';
 import { MC_NAMESPACE_URI, WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
-import { storyOfDrawing } from './shapes.ts';
+import { shapesInParagraphs } from './shapes.ts';
 
 /** Where the reachable text box stories of a part are. */
 export interface TextboxSiteIndex {
@@ -86,45 +80,48 @@ function indexSubtree(
   return true;
 }
 
+/** The part's own paragraphs: every `w:p` outside another paragraph, as a story lists them. */
+function ownerParagraphs(part: OoxmlPart, budget: { left: number }): OoxmlNode[] | null {
+  const paragraphs: OoxmlNode[] = [];
+  const stack: { node: OoxmlNode; depth: number }[] = [{ node: part.root, depth: 0 }];
+  while (stack.length > 0) {
+    const { node, depth } = stack.pop()!;
+    if (node.kind === 'textValue') continue;
+    if (--budget.left < 0 || depth > MAX_DEPTH) return null;
+    if (node.kind === 'paragraph') {
+      paragraphs.push(node);
+      continue;
+    }
+    for (let index = node.children.length - 1; index >= 0; index -= 1) {
+      stack.push({ node: node.children[index]!, depth: depth + 1 });
+    }
+  }
+  return paragraphs;
+}
+
 /**
  * Every node id inside a text box story `Shape.body` reaches, mapped to the story's root id.
- * A box inside a box belongs to the outer story. A part past the walk bounds has no index, so
- * its revisions are read and decided part-wide as they were before text box stories.
+ *
+ * Built from the same shape listing `Shape.body` resolves through, so the two cannot disagree:
+ * where that listing refuses (duplicate or missing shape ids, a scan past its bounds), no box is
+ * reachable and the part has no index, so its revisions are read and decided part-wide.
  */
 export function textboxSiteIndex(part: OoxmlPart): TextboxSiteIndex {
   const cached = cache.get(part.root);
   if (cached) return cached;
+  const budget = { left: MAX_NODES };
+  const paragraphs = ownerParagraphs(part, budget);
+  const listing = paragraphs ? shapesInParagraphs(part, paragraphs) : null;
   const index = new Map<string, string>();
   const copies = new Set<string>();
-  const budget = { left: MAX_NODES };
-  let complete = true;
-  const stack: { node: OoxmlNode; scope: ReadonlyMap<string, string>; depth: number }[] = [
-    { node: part.root, scope: emptyNamespaceScope(), depth: 0 },
-  ];
-  while (stack.length > 0 && complete) {
-    const { node, scope: inherited, depth } = stack.pop()!;
-    if (node.kind === 'textValue') continue;
-    if (--budget.left < 0 || depth > MAX_DEPTH) {
-      complete = false;
-      break;
-    }
-    const scope = namespaceScopeForNode(inherited, node);
-    const alternate = isMcAlternateContent(node) ? node : null;
-    const drawing =
-      node.kind === 'drawing' ||
-      (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'drawing')
-        ? node
-        : alternate
-          ? resolveRunLevelMcAtom(alternate, scope).drawing
-          : null;
-    const root = drawing ? storyOfDrawing(drawing) : null;
-    if (root) {
-      complete = indexSubtree(root, root.id, index, budget);
-      const copy = alternate ? fallbackCopyOf(alternate) : null;
-      if (complete && copy) complete = indexSubtree(copy, root.id, index, budget, copies);
-      continue;
-    }
-    for (const child of node.children) stack.push({ node: child, scope, depth: depth + 1 });
+  let complete = listing?.ok === true;
+  for (const shape of listing?.ok ? listing.shapes : []) {
+    if (!complete) break;
+    const root = shape.textboxRoot;
+    if (!root) continue;
+    complete = indexSubtree(root, root.id, index, budget);
+    const copy = shape.alternate ? fallbackCopyOf(shape.alternate) : null;
+    if (complete && copy) complete = indexSubtree(copy, root.id, index, budget, copies);
   }
   const answer = !complete || index.size === 0 ? EMPTY : { story: index, copy: copies };
   cache.set(part.root, answer);
