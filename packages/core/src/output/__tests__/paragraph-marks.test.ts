@@ -23,7 +23,7 @@ test('paragraph marks appear once per paragraph across pages, including table ce
   expect(container.querySelectorAll('.docx-paragraph-mark')).toHaveLength(4);
   expect(container.classList.contains('docx-show-paragraph-marks')).toBe(true);
   const paragraphIds = [...container.querySelectorAll('.docx-paragraph-mark')].map(
-    (mark) => mark.parentElement!.dataset.paragraphId
+    (mark) => mark.closest<HTMLElement>('[data-paragraph-id]')!.dataset.paragraphId
   );
   expect(new Set(paragraphIds).size).toBe(4);
   paintSemanticLayout(container, layout, { scale: 1, showParagraphMarks: false });

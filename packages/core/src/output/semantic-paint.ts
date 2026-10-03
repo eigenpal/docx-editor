@@ -5,11 +5,12 @@ import { isRunKerningEnabled } from '../layout/run-kerning.ts';
 import { paintLegacyDropdown } from './semantic-paint-legacy-dropdown.ts';
 import { paintLegacyCheckbox } from './semantic-paint-legacy-checkbox.ts';
 import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
+import { DEFAULT_RUN_STYLE } from '../layout/run-style.ts';
+
 import {
   paintParagraphMark,
   paintManualLineBreak,
-  lineTerminatorEdge,
-  positionTerminatorMark,
+  seatTerminatorMark,
 } from './semantic-paragraph-marks.ts';
 // Non-authoritative semantic DOM paint: position elements from the numbers layout already
 // published and never measures anything back: no `getBoundingClientRect`, no `offsetWidth`,
@@ -71,6 +72,7 @@ import {
 } from './semantic-paint-hf-chrome.ts';
 import { anchoredDrawingsOf } from '../layout/semantic-records.ts';
 import { lineSegments } from '../layout/line-segments.ts';
+import { pictureIsRtl } from '../layout/inline-picture-caret.ts';
 import { type AnchoredDrawingRecord } from '../layout/drawing-layout.ts';
 import { headerFooterAnchoredDrawingOrigin } from '../layout/header-footer-drawing-origin.ts';
 import {
@@ -1298,6 +1300,13 @@ function paintLine(
       rankOf(left.paragraphId) - rankOf(right.paragraphId) || left.start - right.start
   );
   let nextInlineDrawing = 0;
+  // Shaped spans are placed relative to where inline flow (spans and spacers) left them.
+  const bidi =
+    line.spans.some((span) => span.style.shaping !== undefined) ||
+    (line.drawings ?? []).some(pictureIsRtl);
+  let logicalAdvance = 0;
+  // How far the flow reaches; a picture's spacer reaches its far edge, past any jump before it.
+  let flowRight = line.contentX;
   const appendDrawingAdvancesBefore = (paragraphId: string, modelOffset: number): void => {
     while (
       nextInlineDrawing < inlineDrawings.length &&
@@ -1306,10 +1315,16 @@ function paintLine(
           inlineDrawings[nextInlineDrawing]!.start < modelOffset))
     ) {
       const drawing = inlineDrawings[nextInlineDrawing]!;
-      const advance = Math.max(0, drawing.advanceEnd - drawing.advanceStart);
+      const advance = bidi
+        ? Math.max(0, drawing.advanceEnd - drawing.advanceStart)
+        : Math.max(0, drawing.advanceEnd - flowRight);
+      flowRight = Math.max(flowRight, drawing.advanceEnd);
       const spacer = document.createElement('span');
       spacer.className = 'docx-inline-drawing-advance';
       spacer.dataset.docxMarker = '';
+      // The picture's model position: a lone picture paints no text to hold a caret after it.
+      spacer.dataset.drawingParagraphId = drawing.paragraphId;
+      spacer.dataset.drawingStart = String(drawing.start);
       spacer.setAttribute('contenteditable', 'false');
       spacer.setAttribute('aria-hidden', 'true');
       spacer.style.display = 'inline-block';
@@ -1322,6 +1337,7 @@ function paintLine(
       spacer.style.pointerEvents = 'none';
       spacer.style.verticalAlign = 'baseline';
       element.append(spacer);
+      logicalAdvance += advance;
       nextInlineDrawing += 1;
       anchor = null;
       anchorLinkId = null;
@@ -1353,13 +1369,18 @@ function paintLine(
 
   // Each boundary's gap is computed ONCE and carried into the next iteration, so a gap is
   // painted exactly once — as a stretch or as a margin, never both, never neither.
-  const bidi = line.spans.some((span) => span.style.shaping !== undefined);
-  let logicalAdvance = 0;
   let pendingGap = 0;
   let previousSpanAbsorbedGap = false;
   for (const [spanIndex, span] of line.spans.entries()) {
+    const flushed = nextInlineDrawing;
     appendDrawingAdvancesBefore(span.range.paragraphId, span.range.start);
     if (!bidi) appendWrapAdvance(span);
+    // Justify slack after a picture: its spacer ends at its far edge, and no span gap paints it.
+    const slackAfterPicture =
+      !bidi && nextInlineDrawing > flushed
+        ? span.box.x - flowRight - (span.wrapAdvanceBefore ?? 0)
+        : 0;
+    flowRight = Math.max(flowRight, span.box.x + span.box.width);
     const band = Math.min(span.box.height + leading, line.box.height);
     const painted = span.noteSeparator
       ? paintNoteSeparatorSpan(document, span, line, scale)
@@ -1375,9 +1396,8 @@ function paintLine(
         painted.style.wordSpacing = `${span.style.shaping.wordSpacingPt * scale}px`;
       logicalAdvance += span.box.width;
     }
-    if (pendingGap > 0 && !previousSpanAbsorbedGap) {
-      painted.style.marginLeft = `${pendingGap * scale}px`;
-    }
+    const margin = pendingGap > 0 && !previousSpanAbsorbedGap ? pendingGap : slackAfterPicture;
+    if (margin > 0.001) painted.style.marginLeft = `${margin * scale}px`;
     // A justify gap is drawn INSIDE the span before it wherever that span can stretch its
     // trailing space: the browser highlights a space's advance but never a margin, so a
     // margin gap broke the selection band into one block per word on justified lines.
@@ -1444,7 +1464,7 @@ function paintLine(
   });
   paintRunBorders(document, element, line, scale);
   if (ctx.showParagraphMarks && line.manualBreakAfter)
-    element.append(paintManualLineBreak(document, line, scale, ctx.revisionStyles, paragraphRtl));
+    paintManualLineBreak(document, line, element, scale, ctx.revisionStyles, paragraphRtl);
   const drawingCtx = drawingContextOf(asResolvedPaintContext(ctx));
   if (line.drawings && line.drawings.length > 0) {
     for (const painted of paintInlineDrawingsOnLine(
@@ -1577,33 +1597,10 @@ function paintFragment(
       if (leader) element.append(leader);
     }
   }
-  if (
-    (ctx.showParagraphMarks && fragment.paragraphEnd) ||
-    (fragment.markRevisions && fragment.markRevisions.length > 0)
-  ) {
-    const glyph = paintParagraphMark(
-      document,
-      fragment.markRevisions ?? [],
-      scale,
-      ctx.revisionStyles
-    );
-    const last = fragment.lines[fragment.lines.length - 1];
-    if (last) {
-      // At the end of the last line's text, which is where the mark itself sits.
-      glyph.style.top = `${(last.box.y - fragment.box.y) * scale}px`;
-      // No spans means an empty paragraph, whose mark sits at the ALIGNED origin — the same
-      // place the caret goes. Reading the line box drew a centred one against the margin.
-      positionTerminatorMark(
-        glyph,
-        lineTerminatorEdge(last, paragraphIsRtl(fragment.props)),
-        fragment.box.x,
-        scale
-      );
-      element.append(glyph);
-    }
-  }
+  let lastElement: HTMLElement | null = null;
   for (const line of fragment.lines) {
     const painted = paintLine(document, line, ctx, paragraphIsRtl(fragment.props));
+    lastElement = painted;
     if (fragment.markFormatRevision && line === fragment.lines[fragment.lines.length - 1]) {
       applyParagraphFormatAnchor(painted, fragment, true);
     }
@@ -1613,6 +1610,23 @@ function paintFragment(
     painted.style.top = `${(line.box.y - fragment.box.y) * scale}px`;
     painted.style.left = `${(line.contentX - fragment.box.x) * scale}px`;
     element.append(painted);
+  }
+  if (
+    (ctx.showParagraphMarks && fragment.paragraphEnd) ||
+    (fragment.markRevisions && fragment.markRevisions.length > 0)
+  ) {
+    const glyph = paintParagraphMark(document, fragment.markRevisions ?? [], ctx.revisionStyles);
+    const last = fragment.lines[fragment.lines.length - 1];
+    if (last && lastElement) {
+      // On the last line's baseline after its content, at the mark's own size. No content
+      // means an empty paragraph, whose mark sits at the ALIGNED origin, where the caret goes.
+      const size =
+        fragment.paragraphMarkSizePt ??
+        fragment.emptyParagraphStyle?.fontSizePt ??
+        last.spans.at(-1)?.style.fontSizePt ??
+        DEFAULT_RUN_STYLE.fontSizePt;
+      seatTerminatorMark(glyph, lastElement, last, paragraphIsRtl(fragment.props), size, scale);
+    }
   }
   // Layout owns border geometry. Side rules sit OUTSIDE the text column — Word draws them
   // there and never reflows the text for them — so a painter deriving an edge from the

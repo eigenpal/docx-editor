@@ -6,6 +6,7 @@ import { createFixedMeasurer, layoutSemanticDocument } from '../../layout/index.
 import { paintSemanticLayout } from '../semantic-paint.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
 test.each([false, true])(
   'RTL terminator marks stay outside the physical left text edge (mixed=%s)',
   (mixed) => {
@@ -22,17 +23,16 @@ test.each([false, true])(
     const mark = host.querySelector<HTMLElement>('.docx-paragraph-mark')!;
     const last = fragment.lines.at(-1)!;
     const edge = Math.min(...last.spans.map((s) => s.box.x));
-    expect(parseFloat(mark.style.left)).toBeCloseTo((edge - fragment.box.x) * 2, 5);
-    expect(mark.style.transform).toBe('translateX(-100%)');
-    expect(mark.style.marginLeft).toBe('-4px');
+    // The seat stands at the edge, relative to its line, and reads from its right.
+    expect(parseFloat(mark.parentElement!.style.left)).toBeCloseTo((edge - last.contentX) * 2, 5);
+    expect(mark.parentElement!.style.direction).toBe('rtl');
     const manual = host.querySelector<HTMLElement>('.docx-line-break-mark')!;
     const first = fragment.lines[0]!;
-    expect(parseFloat(manual.style.left)).toBeCloseTo(
+    expect(parseFloat(manual.parentElement!.style.left)).toBeCloseTo(
       (Math.min(...first.spans.map((s) => s.box.x)) - first.contentX) * 2,
       5
     );
-    expect(manual.style.transform).toBe('translateX(-100%)');
-    expect(manual.style.marginLeft).toBe('-4px');
+    expect(manual.parentElement!.style.direction).toBe('rtl');
   }
 );
 
@@ -48,7 +48,6 @@ test('empty and tab-containing RTL paragraphs keep marks on the leading-directio
   for (const mark of host.querySelectorAll<HTMLElement>(
     '.docx-paragraph-mark,.docx-line-break-mark'
   )) {
-    expect(mark.style.transform).toBe('translateX(-100%)');
-    expect(mark.style.marginLeft).toBe('-2px');
+    expect(mark.parentElement!.style.direction).toBe('rtl');
   }
 });

@@ -1,9 +1,11 @@
 import {
+  DEFAULT_RUN_STYLE,
   markRevisionRemovesMark,
   shownMarkRevision,
   type RevisionAttribution,
   type LineRecord,
 } from '@docx-editor.dev/core/layout';
+import { lineContentEdges } from '../layout/pending-line.ts';
 import {
   REVIEW_AUTHOR_SLOTS,
   reviewAuthorSlotColor,
@@ -21,34 +23,66 @@ export function lineTerminatorEdge(
 } {
   const base = line.spans.find((span) => span.style.shaping)?.style.shaping?.baseLevel;
   const rtl = base === undefined ? paragraphRtl : base === 1;
-  if (!line.spans.length) return { x: line.contentX, rtl };
-  return {
-    x: rtl
-      ? line.spans.reduce((x, span) => Math.min(x, span.box.x), Infinity)
-      : line.spans.reduce((x, span) => Math.max(x, span.box.x + span.box.width), -Infinity),
-    rtl,
-  };
+  // An inline picture is content: the mark follows a picture that ends the line.
+  const edges = lineContentEdges(line.spans, line.drawings ?? []);
+  if (!edges) return { x: line.contentX, rtl };
+  return { x: rtl ? edges.left : edges.right, rtl };
 }
 
-export function positionTerminatorMark(
+/**
+ * Seat a terminator glyph (the pilcrow or the line-break arrow) on its painted line's baseline.
+ *
+ * The glyph sits in a seat placed at the terminator edge, out of the line's flow. With
+ * `line-height: 0` on the seat and the glyph, the seat's one line box runs from the glyph's
+ * box down to the shared baseline, and the seat's strut has `font-size: 0`, so nothing hangs
+ * below the baseline. The seat's bottom edge is the glyph's baseline whatever its font, so
+ * the seat's bottom is placed on the line's published baseline. A top-anchored seat drew the
+ * glyph a third of an em low: its line box starts at the glyph's box, not at the baseline. A right-to-left seat reads from its right
+ * edge, so its glyph ends at the terminator edge rather than starting there.
+ */
+export function seatTerminatorMark(
   glyph: HTMLElement,
-  edge: { readonly x: number; readonly rtl: boolean },
-  originX: number,
+  lineElement: HTMLElement,
+  line: LineRecord,
+  paragraphRtl: boolean,
+  fontSizePt: number,
   scale: number
 ): void {
-  glyph.style.left = `${(edge.x - originX) * scale}px`;
-  glyph.style.marginLeft = `${(edge.rtl ? -2 : 2) * scale}px`;
-  if (edge.rtl) glyph.style.transform = 'translateX(-100%)';
+  const edge = lineTerminatorEdge(line, paragraphRtl);
+  const seat = lineElement.ownerDocument.createElement('span');
+  seat.className = 'docx-terminator-seat';
+  seat.dataset.docxMarker = '';
+  seat.setAttribute('aria-hidden', 'true');
+  seat.setAttribute('contenteditable', 'false');
+  seat.style.position = 'absolute';
+  seat.style.left = `${(edge.x - line.contentX) * scale}px`;
+  seat.style.bottom = `${Math.max(0, line.box.height - line.baseline) * scale}px`;
+  seat.style.width = '0';
+  seat.style.fontSize = '0';
+  seat.style.lineHeight = '0';
+  seat.style.whiteSpace = 'pre';
+  seat.style.pointerEvents = 'none';
+  seat.style.userSelect = 'none';
+  if (edge.rtl) seat.style.direction = 'rtl';
+  glyph.style.display = 'inline-block';
+  glyph.style.verticalAlign = 'baseline';
+  glyph.style.fontSize = `${fontSizePt * scale}px`;
+  seat.append(glyph);
+  lineElement.append(seat);
 }
 
-/** Manual line-break furniture. The zero-width model span still owns the newline. */
+/**
+ * Manual line-break furniture, seated at the end of `lineElement`. The zero-width model span
+ * still owns the newline.
+ */
 export function paintManualLineBreak(
   document: Document,
   line: LineRecord,
+  lineElement: HTMLElement,
   scale: number,
   colors?: RevisionStyleContext,
   paragraphRtl = false
-): HTMLElement {
+): void {
   const glyph = document.createElement('span');
   const last = line.spans[line.spans.length - 1];
   glyph.className = 'docx-line-break-mark';
@@ -56,13 +90,8 @@ export function paintManualLineBreak(
   glyph.setAttribute('aria-hidden', 'true');
   glyph.contentEditable = 'false';
   glyph.textContent = '\u21b5';
-  glyph.style.position = 'absolute';
   glyph.style.pointerEvents = 'none';
   glyph.style.userSelect = 'none';
-  positionTerminatorMark(glyph, lineTerminatorEdge(line, paragraphRtl), line.contentX, scale);
-  glyph.style.top = `${line.leading * scale}px`;
-  glyph.style.fontSize = `${(last?.style.fontSizePt ?? line.box.height) * scale}px`;
-  glyph.style.lineHeight = `${Math.max(0, line.box.height - line.leading - (line.trailingSpacing ?? 0)) * scale}px`;
   glyph.style.color = 'var(--doc-revision-format)';
   // Read the newline's own revision, never the preceding text's attribution.
   const presentation = revisionPresentationOf(last?.revisions, colors?.authorSlots, colors?.styles);
@@ -87,7 +116,8 @@ export function paintManualLineBreak(
       glyph.style.textDecorationColor = glyph.style.color;
     }
   }
-  return glyph;
+  const size = last?.style.fontSizePt ?? DEFAULT_RUN_STYLE.fontSizePt;
+  seatTerminatorMark(glyph, lineElement, line, paragraphRtl, size, scale);
 }
 
 /**
@@ -102,7 +132,6 @@ export function paintManualLineBreak(
 export function paintParagraphMark(
   document: Document,
   revisions: readonly RevisionAttribution[],
-  scale: number,
   colors: RevisionStyleContext | undefined
 ): HTMLElement {
   // ONE glyph however many decisions stand on it: there is one pilcrow, and drawing a second
@@ -118,9 +147,7 @@ export function paintParagraphMark(
     glyph.setAttribute('aria-hidden', 'true');
     glyph.contentEditable = 'false';
     glyph.textContent = '\u00b6';
-    glyph.style.position = 'absolute';
     glyph.style.pointerEvents = 'none';
-    glyph.style.marginLeft = `${2 * scale}px`;
     glyph.style.color = 'var(--doc-revision-format)';
     return glyph;
   }
@@ -137,9 +164,7 @@ export function paintParagraphMark(
   glyph.dataset.revisionIds = revisions.map((revision) => revision.id).join(' ');
   glyph.dataset.revisionKinds = revisions.map((revision) => revision.kind).join(' ');
   glyph.textContent = '\u00b6';
-  glyph.style.position = 'absolute';
   glyph.style.pointerEvents = 'none';
-  glyph.style.marginLeft = `${2 * scale}px`;
   const removes = markRevisionRemovesMark(shown);
   // Under author colouring the glyph follows its author, like the spans beside it; the
   // strike still says a removal is a removal.

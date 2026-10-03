@@ -23,10 +23,10 @@ import {
 import { tocLinkRanges, tocLinkStyleToken } from './toc-link-formatting.ts';
 import { tocCodeRanges } from './field-code-toc.ts';
 import { tocIdsToken, tocVerdictFor, type TocIdSets } from './toc-id-sets.ts';
-import { paragraphIsRtl, spanContentX } from './rtl-paragraph.ts';
+import { paragraphIsRtl } from './rtl-paragraph.ts';
 import * as sectionPrep from './section-preparation.ts';
 import { resolveListAutoSpacing, listAutoSpacingFlowKeys } from './list-auto-spacing.ts';
-import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
+import { emptyParagraphStyleFields, markStyleOf } from './empty-paragraph-style.ts';
 import { frameOrigins, positionedFrameBottom } from './paragraph-frame.ts';
 import { ParagraphFrameFlow, paragraphFrameFlowKeys } from './paragraph-frame-flow.ts';
 // Semantic paragraph layout over the canonical tree (tasks 7.1, 7.3).
@@ -58,7 +58,6 @@ import {
 } from './layout-cache.ts';
 import {
   alignSpans,
-  alignDrawings,
   lineAlignmentMeasure,
   pendingLineFlowExtentAtPlacement,
   type PendingLine,
@@ -82,7 +81,6 @@ import {
   paragraphKeeps,
   KEEP_BREAK_RETRY_ALLOWANCE,
 } from './pagination-keeps.ts';
-import { DEFAULT_RUN_STYLE, resolveRunStyle } from './run-style.ts';
 import {
   prepareParagraphBreakInputs,
   bodyParagraphBreakKey,
@@ -93,7 +91,8 @@ import { collapsingSpaceAfter, resolveParagraphLayoutInputs } from './style-casc
 import { paragraphBorderGroupKey } from './cell-border-groups.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import { paragraphFragmentBorders } from './paragraph-fragment-borders.ts';
-import { holdsOnlyPageBreak } from './pending-line.ts';
+import { holdsOnlyPageBreak, lineContentX } from './pending-line.ts';
+import { alignLineWithPictures } from './line-picture-alignment.ts';
 import { createLeadingBreakGroups } from './leading-break-border-group.ts';
 import { type TableAnchorFrames } from './semantic-table.ts';
 import * as tableFloat from './table-float-position.ts';
@@ -2272,10 +2271,7 @@ function layoutBlocksPass(
     // Fit uses unsuppressed lead; top-of-page suppression applies after any flush below.
     if (!frame) {
       const lead = collapsedSpaceBefore(spacing.before, previousSpaceAfter);
-      const emptyStyle =
-        markRunProperties.length === 0
-          ? DEFAULT_RUN_STYLE
-          : resolveRunStyle(markRunProperties, styleCascade?.themeFonts);
+      const emptyStyle = markStyleOf(markRunProperties, styleCascade?.themeFonts);
       // Spacing-after never decides its own line's fit (§17.3.1.33): Word fits the LINE box,
       // and trailing space that crosses the page boundary clips at the break. Only the closing
       // border rule is real painted content below the last line, so only it joins the budget.
@@ -2529,7 +2525,7 @@ function layoutBlocksPass(
         ...(isLast && showsMarkup ? markRevisionFields(markRevisions, markFormatRevision) : {}),
         ...(isLast && markChangeSites.length > 0 ? { markChangeSites } : {}),
         lines: mergedLines ?? pending,
-        ...emptyParagraphStyleFields(pending, markRunProperties, styleCascade?.themeFonts),
+        ...emptyParagraphStyleFields(pending, markRunProperties, styleCascade?.themeFonts, isLast),
         box: { x: columnX + indent.left, y: top, width: available, height },
       };
       if (frame) paragraphFrames.add(frame, publishedFragment, frameStart?.groupId, index);
@@ -2760,51 +2756,50 @@ function layoutBlocksPass(
       const firstLineOffset = pendingLine.firstLineOffset ?? 0;
       const lineIndent = columnX + indent.left + (rtl ? 0 : firstLineOffset);
       const lineAvailableWidth = Math.max(1, available - firstLineOffset);
+      // Spans and inline drawings come from one pen, so they share one origin.
+      const penX = columnX - (rtl ? firstLineOffset : 0);
       const placedSpans = pendingLine.spans.map((span) => ({
         ...span,
         range: { ...span.range, paragraphId },
-        box: {
-          ...span.box,
-          x: span.box.x + columnX - (rtl ? firstLineOffset : 0),
-          y: cursorY,
-        },
+        box: { ...span.box, x: span.box.x + penX, y: cursorY },
       }));
       // Word aligns inside the passage a float leaves the line, not the page margins.
       const measure = lineAlignmentMeasure(pendingLine, columnX, lineIndent, lineAvailableWidth);
-      const alignedSpans = alignSpans(
-        placedSpans,
-        measurer,
-        measure.indent,
-        measure.available,
-        alignment,
-        isLastLine,
-        alignment === 'center' || alignment === 'right' ? measure.used : undefined,
-        rtl,
-        false,
-        pendingLine.spaceShrink === true
-      );
-      const alignOffset = lineAlignOffset(
-        placedSpans,
-        alignedSpans,
-        alignment,
-        measure.available,
-        measure.used
-      );
+      // Use page width: column-zero width would erase drawings in later columns.
       const pageClip = Object.freeze({
         x: 0,
         y: 0,
-        // Use page width: column-zero width would erase drawings in later columns.
         width: contentWidthForReflow,
         height: contentHeight(),
       });
-      const placedDrawings = pendingLine.drawings.map((drawing) => {
-        const placed = Object.freeze({
-          ...shiftInlineDrawingRecord(drawing, columnX, cursorY),
-          paragraphId,
-        });
-        return clipInlineDrawingRecordToRegion(placed, pageClip);
-      });
-      const alignedDrawings = alignDrawings(placedDrawings, alignOffset);
+      const placedDrawings = pendingLine.drawings.map((drawing) =>
+        Object.freeze({ ...shiftInlineDrawingRecord(drawing, penX, cursorY), paragraphId })
+      );
+      const content = alignLineWithPictures(
+        placedSpans,
+        placedDrawings,
+        rtl,
+        (spans) =>
+          alignSpans(
+            spans,
+            measurer,
+            measure.indent,
+            measure.available,
+            alignment,
+            isLastLine,
+            alignment === 'center' || alignment === 'right' ? measure.used : undefined,
+            rtl,
+            false,
+            pendingLine.spaceShrink === true
+          ),
+        (aligned) =>
+          lineAlignOffset(placedSpans, aligned, alignment, measure.available, measure.used)
+      );
+      const { spans: alignedSpans, offset: alignOffset } = content;
+      // Clip where alignment put each picture, not where the line's fill left it.
+      const alignedDrawings = content.drawings.map((drawing) =>
+        clipInlineDrawingRecordToRegion(drawing, pageClip)
+      );
       const record: LineRecord = {
         id: bodyLineId(paragraph.id, pendingLine.start, lineIndex),
         range: { paragraphId, start: pendingLine.start, end: pendingLine.end },
@@ -2815,7 +2810,7 @@ function layoutBlocksPass(
           width: available,
           height: pendingLine.height,
         },
-        contentX: spanContentX(alignedSpans, lineIndent + alignOffset),
+        contentX: lineContentX(alignedSpans, alignedDrawings, lineIndent + alignOffset),
         baseline: pendingLine.baseline,
         leading: pendingLine.leading,
         trailingSpacing: pendingLine.trailingSpacing,

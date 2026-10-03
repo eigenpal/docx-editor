@@ -2,8 +2,8 @@ import { adjustedBreakIndex, paragraphKeeps } from './pagination-keeps.ts';
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { cellContextualSpacing, contextualCellNeighbours } from './contextual-paragraph-spacing.ts';
 import { emitNestedTable } from './nested-table-layout.ts';
-import { paragraphIsRtl, spanContentX } from './rtl-paragraph.ts';
-import { pendingLineExclusionSkipAtPlacement } from './pending-line.ts';
+import { paragraphIsRtl } from './rtl-paragraph.ts';
+import { lineContentX, pendingLineExclusionSkipAtPlacement } from './pending-line.ts';
 import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
 // Table row and cell layout over the canonical tree.
 //
@@ -50,7 +50,8 @@ import {
   withDrawingContext,
   type ParagraphLayoutCache,
 } from './layout-cache.ts';
-import { alignDrawings, alignSpans, type PendingLine } from './paragraph-flow.ts';
+import { alignSpans, type PendingLine } from './paragraph-flow.ts';
+import { alignLineWithPictures } from './line-picture-alignment.ts';
 import { lineAlignOffset } from './paragraph-alignment.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
 import { resolvedParagraphMarkChangeSites } from './revision-formatting-projection.ts';
@@ -666,51 +667,45 @@ function placeCellParagraph(
     y = lineTops[lineIndex - lineStart]!;
     const lineIndent = originX + indent.left + (lineIndex === 0 && !rtl ? firstLineOffset : 0);
     const lineAvailableWidth = Math.max(1, available - (lineIndex === 0 ? firstLineOffset : 0));
+    // Spans and inline drawings come from one pen, so they share one origin.
+    const penX = originX - (rtl && lineIndex === 0 ? firstLineOffset : 0);
     const placedSpans = pendingLine.spans.map((span) => ({
       ...span,
       range: { ...span.range, paragraphId },
-      box: {
-        ...span.box,
-        x: span.box.x + originX - (rtl && lineIndex === 0 ? firstLineOffset : 0),
-        y,
-      },
+      box: { ...span.box, x: span.box.x + penX, y },
     }));
-    const alignedSpans = alignSpans(
-      placedSpans,
-      deps.measurer,
-      lineIndent,
-      lineAvailableWidth,
-      alignment,
-      isLastLine,
-      alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined,
-      rtl,
-      options?.inTableCell === true,
-      pendingLine.spaceShrink === true
-    );
-    const alignOffset = lineAlignOffset(
-      placedSpans,
-      alignedSpans,
-      alignment,
-      lineAvailableWidth,
-      pendingLine.width
-    );
     const cellClip = Object.freeze({
       x: originX,
       y: top,
       width: cellContentWidth,
       height: Math.max(0, maxBottom - top),
     });
-    const alignedDrawings = alignDrawings(
-      pendingLine.drawings.map((drawing) =>
-        clipInlineDrawingRecordToRegion(
-          Object.freeze({
-            ...shiftInlineDrawingRecord(drawing, originX, y),
-            paragraphId,
-          }),
-          cellClip
-        )
-      ),
-      alignOffset
+    const placedDrawings = pendingLine.drawings.map((drawing) =>
+      Object.freeze({ ...shiftInlineDrawingRecord(drawing, penX, y), paragraphId })
+    );
+    const content = alignLineWithPictures(
+      placedSpans,
+      placedDrawings,
+      rtl,
+      (spans) =>
+        alignSpans(
+          spans,
+          deps.measurer,
+          lineIndent,
+          lineAvailableWidth,
+          alignment,
+          isLastLine,
+          alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined,
+          rtl,
+          options?.inTableCell === true,
+          pendingLine.spaceShrink === true
+        ),
+      (aligned) =>
+        lineAlignOffset(placedSpans, aligned, alignment, lineAvailableWidth, pendingLine.width)
+    );
+    const { spans: alignedSpans, offset: alignOffset } = content;
+    const alignedDrawings = content.drawings.map((drawing) =>
+      clipInlineDrawingRecordToRegion(drawing, cellClip)
     );
     rawRecords.push({
       id: deps.nextLineId(paragraphId, pendingLine.start, priorLineCount + lineIndex),
@@ -727,7 +722,7 @@ function placeCellParagraph(
         // caret until something is typed into it, which un-collapses it.
         height: collapseHeight ? 0 : pendingLine.height,
       },
-      contentX: spanContentX(alignedSpans, lineIndent + alignOffset),
+      contentX: lineContentX(alignedSpans, alignedDrawings, lineIndent + alignOffset),
       baseline: collapseHeight
         ? Math.max(0, Math.min(pendingLine.baseline, options?.collapseBandAbove ?? 0))
         : pendingLine.baseline,
@@ -941,7 +936,8 @@ function placeCellParagraph(
     ...emptyParagraphStyleFields(
       records,
       layoutInputs.markRunProperties,
-      deps.styleCascade?.themeFonts
+      deps.styleCascade?.themeFonts,
+      complete
     ),
     box: {
       x: fragmentX,

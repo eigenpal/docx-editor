@@ -7,6 +7,7 @@ import { growRunBorderLineMetrics, textBandHeightWithBorders } from './run-borde
 import type { CellAnchorScope } from './cell-anchor-layout.ts';
 import {
   growPendingLineDrawingExtent,
+  lineContentX,
   lineHoldsContent,
   markPendingLineWrapAdvances,
   placeLeadingIgnoredBreaks,
@@ -287,8 +288,6 @@ export {
 };
 
 export { indentTwips, MAX_PARAGRAPH_INDENT_TWIPS, paragraphIndent } from './paragraph-indent.ts';
-
-export { alignDrawings } from './pending-line.ts';
 
 /**
  * Measure and break one paragraph into pending lines at `available` width.
@@ -696,12 +695,9 @@ export function breakParagraph(
   };
 
   /**
-   * Total capacity of the line being built, in the same units as `line.width` — how far the
-   * pen may travel from `lineOrigin()`, not how much room is left from where it stands.
-   *
-   * Callers compare `line.width + width` against this, so it MUST stay a capacity. Returning
-   * the room remaining ahead of the pen makes the test `line.width + width > remaining`, which
-   * halves the usable width of every line on a page that carries any exclusion zone.
+   * Total capacity of the line being built, in `line.width` units: how far the pen may travel
+   * from `lineOrigin()`. Callers test `line.width + width` against it, so it MUST stay a
+   * capacity; the room ahead of the pen would halve every line beside an exclusion zone.
    */
   const lineAvailable = (): number => {
     const base = baseLineAvailable();
@@ -732,7 +728,8 @@ export function breakParagraph(
     if (zones.length === 0) return;
     const intervals = availableIntervals(zones);
     if (intervals.length === 0) return;
-    const contentStart = line.spans[0]?.box.x ?? Math.max(contentLeft, lineOrigin());
+    const fallbackStart = Math.max(contentLeft, lineOrigin());
+    const contentStart = lineContentX(line.spans, line.drawings, fallbackStart);
     const contentEnd = lineOrigin() + line.width;
     const segment = intervals.find(
       (interval) => contentStart >= interval.start - 0.001 && contentStart <= interval.end + 0.001
@@ -857,14 +854,10 @@ export function breakParagraph(
   const { changeSitesOn, claimTrailingChangeSites } = collectLineChangeSites(changeSites);
 
   /**
-   * Where the word currently being placed started on this line.
+   * Where the word being placed started on this line; `-1` when the line has no partial word.
    *
-   * A word can span RUNS — `<w:del>which</w:del><w:ins>that</w:ins>` is one word, so is
-   * `<w:r><w:b/>un</w:r><w:r>breakable</w:r>` — and a run boundary is not a break opportunity.
-   * Breaking there put half a word at the end of one line and half at the start of the next,
-   * which no word processor does and which changed where every following line broke.
-   *
-   * `-1` means the line has no partial word: the next span may legally start a line.
+   * A word can span RUNS (`<w:del>which</w:del><w:ins>that</w:ins>`, or a bold prefix), and a
+   * run boundary is not a break opportunity: breaking there split a word across two lines.
    */
   let wordStartSpan = -1;
   let wordStartWidth = 0;
@@ -1148,16 +1141,27 @@ export function breakParagraph(
       recordTopAndBottomAnchorLineTop(piece.start);
       const measure = measureInlineDrawing(piece.inlineDrawing.projection);
       const atomWidth = measure.totalWidth;
-      if (holdsContent() && line.width + atomWidth > lineAvailable()) closeLine();
+      // A picture that does not fit before a float resumes past it (probed at the line's own
+      // metrics: the picture's would move its text), and the text before it stays put.
+      let jumps = false;
+      if (holdsContent() && line.width + atomWidth > lineAvailable()) {
+        const settledWidth = line.width;
+        jumps = tryAdvanceToNextPassage() && line.width + atomWidth <= lineAvailable() + 0.001;
+        line.width = settledWidth;
+        if (!jumps) closeLine();
+      }
       exclusionProbe.setMetrics(
-        {
-          height: measure.lineContribution,
-          baseline: measure.lineContribution,
-        },
+        { height: measure.lineContribution, baseline: measure.lineContribution },
         atomWidth
       );
-      applyInlineObjectSkipIfNeeded(atomWidth, measure.lineContribution);
+      const jumpedLine = line;
+      if (!jumps) applyInlineObjectSkipIfNeeded(atomWidth, measure.lineContribution);
       if (!ensurePlacementWidth(atomWidth)) continue;
+      if (jumps && line !== jumpedLine) {
+        // Placement refused the jump at the picture's own height and closed the line.
+        applyInlineObjectSkipIfNeeded(atomWidth, measure.lineContribution);
+        if (!ensurePlacementWidth(atomWidth)) continue;
+      }
       const { extentTopY } = growLineMetricsForDrawing(piece.style, measure);
       const slotX = lineOrigin() + line.width;
       line.drawings.push(
@@ -1171,6 +1175,7 @@ export function breakParagraph(
           contentLeft: contentOriginX,
           contentRight: contentOriginX + rightEdge,
           ...(piece.revisions ? { revisions: piece.revisions } : {}),
+          ...(piece.style.shaping ? { bidiLevel: piece.style.shaping.level } : {}),
         })
       );
       // A picture a resolved view kept has no span to carry its site; the line takes it.
@@ -1202,13 +1207,9 @@ export function breakParagraph(
       const closed = lines[lines.length - 1]!;
       closed.pageBreakAfter = true;
       firstLineOpen = carriesSlot && slotLine && holdsOnlyPageBreak(closed);
-      // NOT `trailingLineBreak`, unlike the hard break / column break above. An empty
-      // remainder publishes no line on the page the break opened: Word Online puts the
-      // following block flush at the top of that page, which `paragraph-spacing-borders`
-      // and `section-aware-pagination` pin against the comprehensive fixture. The caret
-      // after such a break therefore has nowhere to go on the new page, which is why the
-      // click that lands in the blank space beside the mark resolves BEFORE it — see
-      // `hitTestSemantic`.
+      // NOT `trailingLineBreak`: an empty remainder publishes no line on the page the break
+      // opened, so the following block sits at its top (`paragraph-spacing-borders` and
+      // `section-aware-pagination` pin it). A click beside the mark resolves BEFORE it.
       trailingLineBreak = false;
       continue;
     }

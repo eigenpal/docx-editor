@@ -368,6 +368,12 @@ export interface InlineDrawingRecord {
    * Absent when the drawing is untracked.
    */
   readonly revisions?: readonly RevisionAttribution[];
+  /**
+   * The picture's resolved Unicode bidi level in a right-to-left or mixed-direction paragraph.
+   * An odd level reads right to left: its logical start is its right edge. Absent when the
+   * paragraph needed no bidi resolution.
+   */
+  readonly bidiLevel?: number;
 }
 
 export type LineLayoutAtom =
@@ -1329,6 +1335,7 @@ export function buildInlineDrawingRecord(options: {
   readonly contentTop?: number;
   readonly contentBottom?: number;
   readonly revisions?: readonly RevisionAttribution[];
+  readonly bidiLevel?: number;
 }): InlineDrawingRecord {
   const measure = measureInlineDrawing(options.input.projection);
   const extentX = options.slotX + measure.distL + measure.effectL;
@@ -1382,5 +1389,6 @@ export function buildInlineDrawingRecord(options: {
     accessibility: drawingAccessibility(options.input.projection),
     ...drawingPaintFields(options.input.projection),
     ...(options.revisions && options.revisions.length > 0 ? { revisions: options.revisions } : {}),
+    ...(options.bidiLevel !== undefined ? { bidiLevel: options.bidiLevel } : {}),
   });
 }

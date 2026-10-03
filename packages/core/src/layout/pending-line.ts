@@ -6,7 +6,7 @@ import { baselineShiftPtOf, type ResolvedRunStyle } from './run-style.ts';
 import { isIdeographicForLineBreak, lastCodePointOf } from './cjk-line-break.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
 import type { StyleSpanRecord } from './semantic-records.ts';
-import { shiftInlineDrawingRecord, type InlineDrawingRecord } from './drawing-layout.ts';
+import type { InlineDrawingRecord } from './drawing-layout.ts';
 import { topAndBottomSkipBeforeLine, type ExclusionZone } from './drawing-exclusion.ts';
 import type { ModelRange } from './field-pieces.ts';
 import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
@@ -387,34 +387,75 @@ export function frozenLine(line: PendingLine): PendingLine {
   }) as PendingLine;
 }
 
-/** Shift inline drawing boxes by the paragraph text alignment offset. */
-export function alignDrawings(
-  drawings: readonly InlineDrawingRecord[],
-  offset: number
-): readonly InlineDrawingRecord[] {
-  if (offset === 0 || drawings.length === 0) return drawings;
-  return drawings.map((drawing) => shiftInlineDrawingRecord(drawing, offset, 0));
+/**
+ * The line's content origin: the leftmost advance of any span OR inline drawing.
+ *
+ * An inline drawing is content too. Paint opens the line at this x and reserves each
+ * drawing's advance as an inline spacer before the spans that follow it, so an origin taken
+ * from the spans alone started a picture-first line at its first glyph and the spacer then
+ * pushed that glyph a second picture width to the right.
+ */
+export function lineContentX(
+  spans: readonly StyleSpanRecord[],
+  drawings: readonly Pick<InlineDrawingRecord, 'advanceStart' | 'advanceEnd'>[],
+  fallback: number
+): number {
+  return lineContentEdges(spans, drawings)?.left ?? fallback;
 }
 
 /**
- * Record the jumps a float's wrap zone forced between this line's spans.
+ * The left and right edges of a line's content: every span box and inline drawing advance,
+ * or null for a line with neither. The one place that decides what counts as line content,
+ * for the line's origin, its end in hit testing, and where its terminator mark goes.
+ */
+export function lineContentEdges(
+  spans: readonly StyleSpanRecord[],
+  drawings: readonly Pick<InlineDrawingRecord, 'advanceStart' | 'advanceEnd'>[]
+): { readonly left: number; readonly right: number } | null {
+  if (spans.length === 0 && drawings.length === 0) return null;
+  let left = Infinity;
+  let right = -Infinity;
+  for (const span of spans) {
+    left = Math.min(left, span.box.x);
+    right = Math.max(right, span.box.x + span.box.width);
+  }
+  for (const drawing of drawings) {
+    left = Math.min(left, drawing.advanceStart);
+    right = Math.max(right, drawing.advanceEnd);
+  }
+  return { left, right };
+}
+
+/**
+ * Record the jumps a float's wrap zone forced before each of this line's spans.
  *
  * Spans are laid contiguously as the pen advances, so at close time the ONLY horizontal
- * gaps between them are advances the pen skipped: an inline drawing's own reserved slot,
+ * gaps before them are advances the pen skipped: an inline drawing's own reserved slot,
  * which paint already fills, and a wrap exclusion the line stepped over to resume in the
  * next passage. Justification has not run yet, so nothing here can be confused with slack.
+ *
+ * Paint flows each span after the previous one, and each inline drawing's spacer reaches the
+ * drawing's far edge (covering any jump before the drawing). So a span's jump is whatever is
+ * left between the far edge of the content before it and the span. A span with no content
+ * before it starts the line, so it has nothing to jump.
  */
 export function markPendingLineWrapAdvances(line: PendingLine): void {
-  if (line.spans.length < 2) return;
-  for (let index = 1; index < line.spans.length; index += 1) {
-    const previous = line.spans[index - 1]!;
+  // Model order is the order paint flushes spacers in; one forward pass visits each once.
+  const drawings =
+    line.drawings.length > 1
+      ? [...line.drawings].sort((left, right) => left.start - right.start)
+      : line.drawings;
+  let next = 0;
+  for (let index = 0; index < line.spans.length; index += 1) {
+    const previous = line.spans[index - 1];
     const current = line.spans[index]!;
-    const gap = current.box.x - (previous.box.x + previous.box.width);
+    let flowEnd = previous ? previous.box.x + previous.box.width : -Infinity;
+    for (; next < drawings.length && drawings[next]!.start < current.range.start; next += 1) {
+      flowEnd = Math.max(flowEnd, drawings[next]!.advanceEnd);
+    }
+    if (!Number.isFinite(flowEnd)) continue;
+    const gap = current.box.x - flowEnd;
     if (gap <= 0.001) continue;
-    const drawingFillsGap = line.drawings.some(
-      (drawing) => drawing.start >= previous.range.end && drawing.start < current.range.start
-    );
-    if (drawingFillsGap) continue;
     line.spans[index] = { ...current, wrapAdvanceBefore: gap };
   }
 }

@@ -6,6 +6,7 @@
 
 import { segmentGraphemes, type GraphemeSegment } from './grapheme.ts';
 import { MAX_CARET_ADVANCE_UTF16 } from './shaped-caret-advances.ts';
+import { drawingAtOffset, pictureEdgeX } from './inline-picture-caret.ts';
 import { spanOffsetX } from './semantic-hit-test.ts';
 import type { LineSegment } from './line-segments.ts';
 import type { LineRecord, StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
@@ -15,16 +16,18 @@ function xWithinLine(
   line: LineRecord,
   offset: number,
   measurer?: TextMeasurer | undefined,
-  segment?: LineSegment
+  segment?: LineSegment,
+  upstream = false
 ): number {
   // An offset only means something in ONE paragraph, so a mixed line is walked through the
   // segment that owns it. Given none, the line is its own segment, which is every ordinary
   // line and the path this function always took.
   const spans = segment ? segment.spans : line.spans;
-  for (const drawing of segment ? segment.drawings : (line.drawings ?? [])) {
-    if (offset === drawing.start) return drawing.advanceStart;
-    if (offset === drawing.start + 1) return drawing.advanceEnd;
-  }
+  const ended = upstream ? upstreamX(line, spans, offset, measurer, segment) : null;
+  if (ended !== null) return ended;
+  // The content that starts at an offset owns it; see `drawingAtOffset`.
+  const picture = drawingAtOffset(line, offset, segment);
+  if (picture) return pictureEdgeX(picture, offset > picture.start);
   let x = segment ? (segment.spans[0]?.box.x ?? line.contentX) : line.contentX;
   for (const span of spans) {
     if (offset <= span.range.start)
@@ -123,6 +126,32 @@ function selectionSpanEdges(
   return [spanOffsetX(span, from, measurer), spanOffsetX(span, to, measurer)];
 }
 
+/**
+ * The x of a range END at `offset`, where the content that ends there owns it: a band over a
+ * picture or a word stops at it rather than past a picture or a float's jump after it. A word
+ * whose next word justification moved keeps the stretched gap, which the next word owns.
+ * Null when nothing ends at `offset`, so the caret's own rule answers.
+ */
+function upstreamX(
+  line: LineRecord,
+  spans: readonly StyleSpanRecord[],
+  offset: number,
+  measurer: TextMeasurer | undefined,
+  segment: LineSegment | undefined
+): number | null {
+  const picture = (segment?.drawings ?? line.drawings ?? []).find(
+    (drawing) => drawing.start + 1 === offset
+  );
+  if (picture) return pictureEdgeX(picture, true);
+  const ending = spans.find((span) => span.range.end === offset && span.range.start < offset);
+  if (!ending) return null;
+  const next = spans.find((span) => span.range.start === offset && span.range.end > offset);
+  if (next && !((next.wrapAdvanceBefore ?? 0) > 0)) return null;
+  return ending.style.shaping
+    ? spanOffsetX(ending, offset, measurer)
+    : ending.box.x + ending.box.width;
+}
+
 /** A logical range can occupy several disjoint physical bands in a bidi line. */
 export function rangeBandsWithinLine(
   line: LineRecord,
@@ -134,10 +163,15 @@ export function rangeBandsWithinLine(
   const spans = segment?.spans ?? line.spans;
   if (!spans.some((span) => span.style.shaping !== undefined)) {
     const a = xWithinLine(line, start, measurer, segment);
-    const b = xWithinLine(line, end, measurer, segment);
+    const b = xWithinLine(line, end, measurer, segment, end > start);
     return [{ x: Math.min(a, b), width: Math.abs(b - a) }];
   }
   const bands: LineRangeBand[] = [];
+  // A picture reorders with the text on a shaped line, so it brings its own band.
+  for (const picture of segment?.drawings ?? line.drawings ?? []) {
+    if (picture.start < start || picture.start >= end) continue;
+    bands.push({ x: picture.advanceStart, width: picture.advanceEnd - picture.advanceStart });
+  }
   for (const span of spans) {
     const from = Math.max(start, span.range.start);
     const to = Math.min(end, span.range.end);

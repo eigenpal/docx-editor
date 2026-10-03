@@ -369,6 +369,7 @@ export interface InlineDrawingRecord {
     readonly advanceStart: number;
     // (undocumented)
     readonly baselineOffset: number;
+    readonly bidiLevel?: number;
     // (undocumented)
     readonly crop: SourceCrop;
     // (undocumented)

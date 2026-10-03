@@ -316,7 +316,13 @@ function collectIndexedRangeRects(
                 const overlap = sameParagraphOverlap(segment, range.from, range.to);
                 if (!overlap) continue;
                 const startX = xWithinLine(line, overlap.start, undefined, segment);
-                const endX = xWithinLine(line, overlap.end, undefined, segment);
+                const endX = xWithinLine(
+                  line,
+                  overlap.end,
+                  undefined,
+                  segment,
+                  overlap.end > overlap.start
+                );
                 const rects = found.get(range.key) ?? [];
                 rects.push({
                   pageIndex: page.index,

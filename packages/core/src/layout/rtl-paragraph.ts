@@ -1,6 +1,7 @@
 import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import { coalesceBidiPieces } from './bidi-piece-coalescing.ts';
 import { bidiAlgorithm } from './bidi.ts';
+import { PICTURE_CHAR } from './line-picture-alignment.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
 import { itemizeScriptFontSlots } from './script-itemization.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
@@ -68,19 +69,51 @@ export function bidiPieces(
   sourceBoundaries?: ReadonlySet<number>,
   pageBreaksIgnored = false
 ): readonly FieldAwarePiece[] {
+  // An inline picture is its U+FFFC in the text, and it gets its own piece back afterwards with
+  // the level it resolved to. Its run's own `w:rtl` does not place it; the nearest text with
+  // letters or digits on each side does (spaces and other neutral runs are passed over). Between
+  // two runs of one direction it takes that direction, and between two directions the
+  // paragraph's. With no such text after it, it reads with the text before it; with none before
+  // it, it reads in the paragraph's direction.
+  const pictures = new Map<number, FieldAwarePiece>();
+  const isPicture = (piece: FieldAwarePiece | undefined) =>
+    piece?.inlineDrawing !== undefined && piece.text === PICTURE_CHAR;
   const text = pieces.map((piece) => piece.text).join('');
   if (
     !rtl &&
     !/[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufeff]/u.test(text) &&
-    !pieces.some((piece) => runIsRtl(piece.props))
+    !pieces.some((piece) => !isPicture(piece) && runIsRtl(piece.props))
   )
     return pieces;
+  const resolvable = pieces.map((piece, index): FieldAwarePiece => {
+    if (!isPicture(piece)) return piece;
+    pictures.set(piece.start, piece);
+    const { projected: _projected, inlineDrawing: _picture, ...plain } = piece;
+    const side = (step: number) => {
+      let at = index + step;
+      while (pieces[at] && (isPicture(pieces[at]) || !STRONG_TEXT.test(pieces[at]!.text)))
+        at += step;
+      return pieces[at] ? runIsRtl(pieces[at]!.props) : undefined;
+    };
+    const before = side(-1);
+    const after = side(1);
+    const direction =
+      after === undefined
+        ? (before ?? rtl)
+        : before === undefined
+          ? rtl
+          : before === after
+            ? before
+            : rtl;
+    const props = piece.props.filter((prop) => prop.localName !== 'rtl');
+    return { ...plain, props: direction ? [...props, { localName: 'rtl' }] : props };
+  });
   // Atom placement has separate advances and is not an ordinary text run. A tab is: it is a
   // segment separator (UAX #9 class S), so it takes the paragraph level below and the text
   // on each side of it resolves as usual. Bailing out on tabs left every tab-aligned RTL form
   // label unshaped and in left-to-right order.
   if (
-    pieces.some(
+    resolvable.some(
       (p) =>
         p.projected ||
         p.inlineDrawing ||
@@ -91,14 +124,44 @@ export function bidiPieces(
     )
   )
     return pieces;
-  const ignored = pageBreaksIgnored && pieces.some(isPageBreak);
+  const ignored = pageBreaksIgnored && resolvable.some(isPageBreak);
   const items = ignored
-    ? withoutIgnoredBreaks(pieces, rtl, sourceBoundaries)
-    : resolvedItems(pieces, rtl, sourceBoundaries);
-  return items ? withJoiningContext(items, ignored) : pieces;
+    ? withoutIgnoredBreaks(resolvable, rtl, sourceBoundaries)
+    : resolvedItems(resolvable, rtl, sourceBoundaries);
+  return items ? withJoiningContext(withPictures(items, pictures), ignored) : pieces;
+}
+
+/** Put each picture's own piece back where its U+FFFC resolved, with that level. */
+function withPictures(
+  items: FieldAwarePiece[],
+  pictures: ReadonlyMap<number, FieldAwarePiece>
+): FieldAwarePiece[] {
+  if (pictures.size === 0) return items;
+  const starts = [...pictures.keys()].sort((left, right) => left - right);
+  const result: FieldAwarePiece[] = [];
+  for (const item of items) {
+    let from = item.start;
+    const keep = (to: number) => {
+      if (to <= from) return;
+      const text = item.text.slice(from - item.start, to - item.start);
+      result.push({ ...item, text, start: from, end: to });
+    };
+    for (const at of starts) {
+      if (at < item.start || at >= item.end) continue;
+      const picture = pictures.get(at)!;
+      keep(at);
+      result.push({ ...picture, style: { ...picture.style, shaping: item.style.shaping } });
+      from = at + 1;
+    }
+    keep(item.end);
+  }
+  return result;
 }
 
 const isPageBreak = (piece: FieldAwarePiece | undefined) => piece?.text === PAGE_BREAK_CHAR;
+
+/** Text that decides a neighbouring picture's direction: any letter or digit. */
+const STRONG_TEXT = /[\p{L}\p{N}]/u;
 
 /**
  * Resolve the pieces as though every page break were absent, then put the breaks back.
@@ -531,10 +594,6 @@ export function reorderBidiSpans(
     x += advances[index]!;
   }
   return result;
-}
-
-export function spanContentX(spans: readonly StyleSpanRecord[], fallback: number): number {
-  return spans.length ? spans.reduce((x, s) => Math.min(x, s.box.x), Infinity) : fallback;
 }
 
 export function nearestBidiSpan(

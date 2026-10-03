@@ -16,8 +16,8 @@ const PDF_PAINT_GRID_PT = 0.24;
  * than rounding each span, keeps the spacing inside a line exact.
  *
  * WHICH origin it rounds depends on alignment. For a left-aligned or justified line it is
- * where the text actually starts, `contentX`, which already carries the indent and any float
- * exclusion and is measured from the story origin. On page 5 of
+ * where the text actually starts, the leftmost span, which already carries the indent and any
+ * float exclusion and is measured from the story origin. On page 5 of
  * `float-wrap-comprehensive-test.docx` those lines start at exact half units — 381.00, 177.00
  * and 171.00 — and the reference paints 381.12, 177.12 and 171.12. One at 103.50 rounds the
  * other way to 103.44, and the reference agrees.
@@ -27,14 +27,32 @@ const PDF_PAINT_GRID_PT = 0.24;
  * `issue-483-firstline-marker.docx` starts at 190.733, off the grid, while the body text of
  * the same document starts at 63.84, on it.
  *
- * `contentX` is relative to the story origin, so the paragraph and line boxes are NOT added:
+ * Span boxes are relative to the story origin, so the paragraph and line boxes are NOT added:
  * inside a table cell all three carry the same cell offset, and adding them counts it twice.
  */
 export function paragraphGridOffsetX(visit: SemanticSpanVisit): number {
   const alignment = visit.paragraph.alignment;
   const origin =
     alignment === 'left' || alignment === 'both'
-      ? visit.storyOrigin.x + visit.line.contentX
+      ? visit.storyOrigin.x + textStartX(visit.line)
       : visit.storyOrigin.x + visit.paragraph.box.x;
   return Math.round(origin / PDF_PAINT_GRID_PT) * PDF_PAINT_GRID_PT - origin;
 }
+
+/**
+ * Where a line's text starts: its leftmost span.
+ *
+ * `contentX` is the line's content origin, which is a leading inline picture's edge when a
+ * picture comes first. A line with no text has only that origin.
+ */
+function textStartX(line: SemanticSpanVisit['line']): number {
+  const known = textStarts.get(line);
+  if (known !== undefined) return known;
+  let x = Infinity;
+  for (const span of line.spans) x = Math.min(x, span.box.x);
+  const start = Number.isFinite(x) ? x : line.contentX;
+  textStarts.set(line, start);
+  return start;
+}
+
+const textStarts = new WeakMap<SemanticSpanVisit['line'], number>();

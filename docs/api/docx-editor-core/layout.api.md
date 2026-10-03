@@ -1489,6 +1489,7 @@ export interface InlineDrawingRecord {
     readonly advanceStart: number;
     // (undocumented)
     readonly baselineOffset: number;
+    readonly bidiLevel?: number;
     // (undocumented)
     readonly crop: SourceCrop;
     // (undocumented)
@@ -2544,6 +2545,7 @@ export interface ParagraphFragmentRecord {
     readonly paragraphEnd?: true;
     // (undocumented)
     readonly paragraphId: string;
+    readonly paragraphMarkSizePt?: number;
     readonly positionedFrame?: {
         readonly anchorId: string;
         readonly box: LayoutBox;
