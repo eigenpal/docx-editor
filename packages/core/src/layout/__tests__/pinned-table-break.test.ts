@@ -176,6 +176,16 @@ describe('a page-positioned table taller than the room below it', () => {
     expect(first!.fragment.rows[1]!.hasContinuation).toBe(true);
   });
 
+  test('a header row taller than the page band never lifts the table above the page', () => {
+    const header = table({ tblpPr: PAGE, rows: 3, lines: 60 }).replace(
+      '<w:tr><w:tc>',
+      '<w:tr><w:trPr><w:tblHeader/></w:trPr><w:tc>'
+    );
+    const [first] = tableFragments(layoutOf(lead + header + tail));
+    expect(first!.pageIndex).toBe(0);
+    expect(first!.fragment.box.y).toBeGreaterThanOrEqual(24);
+  });
+
   test('legacy modes run the first fragment to the page edge', () => {
     const layout = layoutOf(lead + table({ tblpPr: PAGE }) + tail, { compatibilityMode: 14 });
     expect(shape(layout)[0]).toEqual([0, 96, 624]);

@@ -311,9 +311,7 @@ export function admitsAtAnchor(
   flow: FloatAdmissionFlow
 ): boolean {
   if (hasEarlierCellExclusions(table, flow.zones, deps, flow.page)) return false;
-  // An anchor that keeps whole-table placement (a break or space before it, or a shared
-  // anchor) keeps it for a page- or margin-positioned table too.
-  if (flow.allowBreak && breaksAcrossPages(table, deps, flow)) return false;
+  if (breaksAcrossPages(table, deps, flow)) return false;
   const band = floatingTableBand(table, flow.width, deps);
   if (band > flow.bottom) return false;
   if (deps.styleCascade?.doNotBreakWrappedTables) return true;

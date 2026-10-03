@@ -83,6 +83,7 @@ import {
   KEEP_BREAK_RETRY_ALLOWANCE,
 } from './pagination-keeps.ts';
 import { DEFAULT_RUN_STYLE, resolveRunStyle } from './run-style.ts';
+import { positionedTableDeps } from './table-pinned-break.ts';
 import {
   prepareParagraphBreakInputs,
   bodyParagraphBreakKey,
@@ -1563,8 +1564,7 @@ function layoutBlocksPass(
   // Share counters/cache with body flow; budget border ownership and vMerge once per pass.
   const tableDeps: TableFlowDeps = {
     paragraphLineUnitPt: options.paragraphLineUnitPt,
-    isolatedFloatingTableId:
-      positionedTables.length === 1 ? positionedTables[0]!.table.id : undefined,
+    ...positionedTableDeps(positionedTables, positionedTablePolicy),
     measurer,
     cache,
     producer,

@@ -54,6 +54,27 @@ export interface PinnedTableFlow {
   readonly width: number;
 }
 
+/**
+ * Which positioned tables may break: their anchor paragraph does not keep whole-table
+ * placement (a page or column break or space before it, or an anchor shared with another
+ * table). Carried on the table deps, which every probe and placement copies.
+ */
+export interface PinnedBreakDeps {
+  readonly pinnedBreakAllowed?: (tableId: string) => boolean;
+}
+
+/** The positioned-table facts a body pass gives its table deps. */
+export function positionedTableDeps(
+  anchors: readonly { readonly table: { readonly id: string } }[],
+  policy: ReadonlyMap<string, boolean>
+): { readonly isolatedFloatingTableId?: string } & PinnedBreakDeps {
+  return {
+    // A sole positioned table cannot collide with another floating table in this story.
+    isolatedFloatingTableId: anchors.length === 1 ? anchors[0]!.table.id : undefined,
+    pinnedBreakAllowed: (tableId) => policy.get(tableId) !== false,
+  };
+}
+
 /** Where a breaking positioned table's first fragment opens and how far it may reach. */
 export interface PinnedTableBreak {
   readonly top: number;
@@ -68,8 +89,8 @@ const probes = new WeakMap<
 
 /**
  * A positioned table laid out whole from 0, without breaks, for measurement only. Page
- * exclusion zones are left out, so the probe does not depend on where it runs and is memoized
- * per body pass and width.
+ * exclusion zones are left out, so the probe does not depend on the cursor; it is memoized per
+ * body pass and width.
  */
 function probeTable(
   table: OoxmlElement,
@@ -77,19 +98,23 @@ function probeTable(
   width: number,
   deps: TableFlowDeps
 ): TableFragmentRecord {
-  let tables = probes.get(deps);
-  if (!tables) probes.set(deps, (tables = new WeakMap()));
-  let widths = tables.get(table);
-  if (!widths) tables.set(table, (widths = new Map()));
-  const cached = widths.get(width);
-  if (cached) return cached;
+  // Inline drawing layout can place cell drawings against the page, so its probes are not reused.
+  let widths: Map<number, TableFragmentRecord> | undefined;
+  if (!deps.inlineDrawingLayout) {
+    let tables = probes.get(deps);
+    if (!tables) probes.set(deps, (tables = new WeakMap()));
+    widths = tables.get(table);
+    if (!widths) tables.set(table, (widths = new Map()));
+    const cached = widths.get(width);
+    if (cached) return cached;
+  }
   const { fragment } = layoutTableFragment(structure, 0, 0, 0, table.id, 0, {
     ...measuringFlowDeps(deps, false),
     onCellBreakKey: undefined,
     borderOwnershipBudget: createTableBorderOwnershipBudget(),
     vMergeResolveBudget: createTableVMergeResolveBudget(),
   });
-  widths.set(width, fragment);
+  widths?.set(width, fragment);
   return fragment;
 }
 
@@ -121,11 +146,23 @@ function openingHeight(fragment: TableFragmentRecord): number {
   const row = fragment.rows[index];
   if (!row) return bottom;
   const rowBottom = row.box.y + row.box.height;
-  const bottoms = lineBottoms(row, []);
-  if (bottoms.length === 0) return rowBottom;
-  const first = bottoms.reduce((min, value) => Math.min(min, value), rowBottom);
-  const last = bottoms.reduce((max, value) => Math.max(max, value), row.box.y);
-  return Math.min(rowBottom, first + rowBottom - last);
+  // Every cell must place its first line, so the opening is the lowest of those first lines.
+  let opening = row.box.y;
+  let last = row.box.y;
+  for (const cell of row.cells) {
+    const bottoms = lineBottoms({ ...row, cells: [cell] }, []);
+    if (bottoms.length === 0) continue;
+    opening = Math.max(
+      opening,
+      bottoms.reduce((min, value) => Math.min(min, value), Infinity)
+    );
+    last = Math.max(
+      last,
+      bottoms.reduce((max, value) => Math.max(max, value), row.box.y)
+    );
+  }
+  if (opening <= row.box.y) return rowBottom;
+  return Math.min(rowBottom, opening + Math.max(0, rowBottom - last));
 }
 
 /**
@@ -172,6 +209,7 @@ export function pinnedTableBreak(
     // One column spans the margins; a narrower text frame is one of several columns.
     flow.frames.text.width < flow.frames.margin.width - 0.5 ||
     deps.styleCascade?.doNotBreakWrappedTables ||
+    (deps as TableFlowDeps & PinnedBreakDeps).pinnedBreakAllowed?.(table.id) === false ||
     structure.rows.length === 0 ||
     structure.rows.some((row) => row.height.rule === 'exact')
   )
@@ -196,11 +234,13 @@ export function pinnedTableBreak(
     return undefined;
   const leading = leadingPartHeight(probe, flow.bottom - flow.top);
   const pageEdge = flow.verticalFrames.page.top + flow.verticalFrames.page.height;
-  // The band below the start must still hold the header rows and the first body line.
+  // The band below the start must still hold the header rows and the first body line, unless
+  // that opening is taller than the band itself, where the paginator degrades the group.
+  const opening = openingHeight(probe);
   const top = Math.min(
     tableFloatOriginY(float, leading, flow.verticalFrames),
     pageEdge - leading,
-    flow.bottom - openingHeight(probe)
+    opening <= flow.bottom ? flow.bottom - opening : Infinity
   );
   const reach = top + flow.bottom - flow.top;
   return {
@@ -233,12 +273,8 @@ export function pinnedBreakAtCursor(
   const placed = pinnedTableBreak(table, structure, flow.deps, at());
   if (!placed || placed.top >= flow.cursorY - EPSILON || !flow.pageHoldsContent(flow.cursorY))
     return placed;
-  // Only open the next page for a table that still breaks from the top of a page; one that
-  // would fit there keeps its sheet position here, as before.
-  const fresh = pinnedTableBreak(table, structure, flow.deps, { ...at(), top: 0 });
-  if (!fresh) return undefined;
   flow.advancePage();
-  return pinnedTableBreak(table, structure, flow.deps, at()) ?? fresh;
+  return pinnedTableBreak(table, structure, flow.deps, at()) ?? placed;
 }
 
 const splittable = new WeakMap<SemanticTableStructure, SemanticTableStructure>();
