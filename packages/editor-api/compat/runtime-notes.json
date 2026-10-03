@@ -359,9 +359,37 @@
     "status": "partial",
     "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
   },
+  "Word.Body#shapes": {
+    "status": "partial",
+    "notes": "Lists floating drawings (wp:anchor) anchored in the body or paragraph, in reading order. Inline drawings are inline pictures and are not listed. A run-level mc:AlternateContent is read through its first mc:Choice that holds a drawing. Shapes in notes are not listed. Duplicate or missing wp:docPr ids refuse the listing. Range#shapes is not published."
+  },
+  "Word.Paragraph#shapes": {
+    "status": "partial",
+    "notes": "Lists floating drawings (wp:anchor) anchored in the body or paragraph, in reading order. Inline drawings are inline pictures and are not listed. A run-level mc:AlternateContent is read through its first mc:Choice that holds a drawing. Shapes in notes are not listed. Duplicate or missing wp:docPr ids refuse the listing. Range#shapes is not published."
+  },
+  "Word.Shape#id": {
+    "status": "partial",
+    "notes": "Reads wp:docPr/@id. Read-only."
+  },
+  "Word.Shape#name": {
+    "status": "partial",
+    "notes": "Reads wp:docPr/@name. Writes are not published."
+  },
+  "Word.Shape#type": {
+    "status": "partial",
+    "notes": "TextBox for a wps shape with a text box story, GeometricShape for any other wps shape, Picture, Group, Canvas, or Unsupported."
+  },
+  "Word.Shape#body": {
+    "status": "partial",
+    "notes": "A text box answers its own story: paragraphs, text, search, and the same edits as any body. Other shape types refuse with InvalidArgument. Text boxes are reachable in the body, headers, and footers. Edits save to the DrawingML story and to its VML fallback. The body becomes addressable after the sync that answers it."
+  },
+  "Word.ShapeCollection#getByTypes": {
+    "status": "partial",
+    "notes": "Filters the listing by type, keeping its order. Unknown type values refuse with InvalidArgument."
+  },
   "Word.ShapeCollection#getFirst": {
     "status": "partial",
-    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+    "notes": "Lists floating drawings (wp:anchor) anchored in the body or paragraph, in reading order. Inline drawings are inline pictures and are not listed. A run-level mc:AlternateContent is read through its first mc:Choice that holds a drawing. Shapes in notes are not listed. Duplicate or missing wp:docPr ids refuse the listing. Range#shapes is not published. Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
   },
   "Word.ListCollection#getFirst": {
     "status": "partial",
@@ -377,7 +405,7 @@
   },
   "Word.ShapeCollection#getFirstOrNullObject": {
     "status": "partial",
-    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+    "notes": "Lists floating drawings (wp:anchor) anchored in the body or paragraph, in reading order. Inline drawings are inline pictures and are not listed. A run-level mc:AlternateContent is read through its first mc:Choice that holds a drawing. Shapes in notes are not listed. Duplicate or missing wp:docPr ids refuse the listing. Range#shapes is not published. Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
   },
   "Word.BuildingBlockCategoryCollection#getItemAt": {
     "status": "partial",

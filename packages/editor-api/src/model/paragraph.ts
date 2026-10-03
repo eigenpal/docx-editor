@@ -21,6 +21,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // touches it is refused with `ConflictingChanges` rather than planned against coordinates that have
 // stopped describing it. Two syncs get both edits, each exactly as asked.
 
+import { ShapeCollection } from './shapes.ts';
 import { InsertLocation, Alignment } from './editing-enums.ts';
 import {
   ObjectPath,
@@ -75,6 +76,7 @@ export type ParagraphAlignment =
  */
 export class Paragraph extends ModelObject implements PromisedItem {
   #font: Font | undefined;
+  #shapes: ShapeCollection | undefined;
   #list: List | undefined;
   #listItem: ListItem | undefined;
   #format: Record<string, unknown> | undefined;
@@ -133,6 +135,17 @@ export class Paragraph extends ModelObject implements PromisedItem {
 
   set style(value: string) {
     this.#authorFormat('style', requireStyleName(value, `${this.path.label}.style`));
+  }
+
+  /** Floating shapes anchored in this paragraph, such as text boxes. */
+  get shapes(): ShapeCollection {
+    this.#shapes ??= ShapeCollection.of(
+      this.context,
+      `${this.path.label}.shapes`,
+      this.path,
+      'paragraph'
+    );
+    return this.#shapes;
   }
 
   /** The character formatting of this paragraph's characters, and of its paragraph mark. */

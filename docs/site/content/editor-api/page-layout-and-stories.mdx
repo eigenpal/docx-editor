@@ -101,6 +101,34 @@ const notes = await runtime.run(async (context) => {
 
 The legacy `Document.footnotes` and `Document.endnotes` accessors enumerate note parts. They are DocxEditor extensions, outside the Office.js document model.
 
+## Read and edit text boxes
+
+`Body.shapes` and `Paragraph.shapes` return the floating shapes that the body or paragraph anchors, in reading order. Each returns `ShapeCollection`, which exposes `items`, `getFirst()`, `getFirstOrNullObject()`, and `getByTypes(types)`. A `Shape` exposes read-only `id`, `name`, and `type`. `ShapeType` values are `TextBox`, `GeometricShape`, `Picture`, `Group`, `Canvas`, and `Unsupported`.
+
+A text box's `body` is its own story. Read, search, and edit it with the same `Body` members as the main story. The main body's `text` and `search` do not include text box content. Other shape types refuse `body` with `InvalidArgument`.
+
+The following example replaces a client name inside a text box:
+
+```ts
+await runtime.run(async (context) => {
+  const boxes = context.document.body.shapes.getByTypes([ShapeType.textBox]);
+  boxes.load('items');
+  await context.sync();
+  const body = boxes.items[0].body;
+  body.load('text');
+  await context.sync();
+  const matches = body.search('Acme Holdings');
+  matches.load('items');
+  await context.sync();
+  matches.items[0].insertText('Beta Logistics', 'Replace');
+  await context.sync();
+});
+```
+
+Sync after reading `shape.body` and before you search it. Text boxes are reachable in the body, headers, and footers. Inline drawings are inline pictures and are not listed as shapes. Shape geometry, text frames, and inserting or deleting shapes are not exposed.
+
+When a text box has a legacy VML copy for older readers, saving writes the edited text into that copy too.
+
 ## Next steps
 
 See [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Comments](/docs/2.x/editor-api/comments), and [API member directory](/docs/2.x/editor-api/reference).

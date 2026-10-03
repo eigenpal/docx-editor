@@ -9,7 +9,7 @@ import {
   type FieldResultRunBoundary,
   type FieldResultTextView,
 } from '../package/field-result-text.ts';
-import type { OoxmlParagraphNode } from '../package/ooxml-tree.ts';
+import type { OoxmlNode, OoxmlParagraphNode } from '../package/ooxml-tree.ts';
 import {
   foldCase,
   isSearchableQuery,
@@ -233,6 +233,31 @@ export function identityProjection(text: string): ProjectedParagraphText {
   return projectionFromPieces([{ text, rawStart: 0, rawEnd: text.length }]);
 }
 
+const MC_NAMESPACE = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
+
+/** Whether a drawing atom is anchored (floating) rather than inline. */
+function isFloatingDrawingAtom(node: OoxmlNode): boolean {
+  if (node.kind === 'textValue') return false;
+  const anchored = (drawing: OoxmlNode): boolean =>
+    drawing.kind !== 'textValue' &&
+    drawing.children.some(
+      (child) =>
+        child.kind === 'anchoredDrawing' ||
+        (child.kind !== 'textValue' && child.localName === 'anchor')
+    );
+  if (node.kind === 'drawing') return anchored(node);
+  if (node.namespaceUri !== MC_NAMESPACE || node.localName !== 'AlternateContent') return false;
+  for (const choice of node.children) {
+    if (choice.kind === 'textValue' || choice.localName !== 'Choice') continue;
+    const drawing = choice.children.find(
+      (child) =>
+        child.kind === 'drawing' || (child.kind !== 'textValue' && child.localName === 'drawing')
+    );
+    if (drawing) return anchored(drawing);
+  }
+  return false;
+}
+
 /** Visible pieces for one paragraph, with field atoms expanded to cached result text. */
 export function visibleParagraphPieces(
   paragraph: OoxmlParagraphNode,
@@ -252,7 +277,22 @@ export function visibleParagraphPieces(
   let rawStart = 0;
   for (const segment of segments) {
     const span = spansByNodeId.get(segment.node.id);
-    if (!span) continue;
+    if (!span) {
+      // A floating drawing keeps its model offset but is no character of the paragraph's text:
+      // a text read of a paragraph that anchors a text box answers the paragraph's words alone.
+      if (isFloatingDrawingAtom(segment.node)) {
+        if (rawStart < segment.start) {
+          pieces.push({
+            text: rawText.slice(rawStart, segment.start),
+            rawStart,
+            rawEnd: segment.start,
+          });
+        }
+        pieces.push({ text: '', rawStart: segment.start, rawEnd: segment.end });
+        rawStart = segment.end;
+      }
+      continue;
+    }
     if (rawStart < segment.start) {
       pieces.push({
         text: rawText.slice(rawStart, segment.start),

@@ -16,6 +16,7 @@
 //   - the number of parts converted into trees is capped, so a package cannot force
 //     unbounded tree construction.
 
+import { textboxFallbackExportPackage } from './textbox-fallback-export.ts';
 import {
   readZip,
   writeZip,
@@ -534,7 +535,7 @@ export function readOoxmlPackage(
  * save cannot be smuggled into the archive.
  */
 export function writeOoxmlPackage(pkg: OoxmlPackage): Uint8Array {
-  const exported = commentExportPackage(pkg);
+  const exported = textboxFallbackExportPackage(commentExportPackage(pkg));
   const entries = new Map<string, Uint8Array>(exported.partBytes);
   for (const [name, part] of exported.parts) {
     entries.set(name, strToU8(serializeOoxmlPart(part)));

@@ -1,0 +1,161 @@
+// Floating shapes and text-box stories through the automation host (issue #1070).
+//
+// A text box is a story of its own: its paragraphs, text, search and edits go through the same
+// operations as any body, reached through `getShapes` and `getShapeBody`. The anchoring paragraph
+// keeps its own text, and an edit inside the box saves to both its DrawingML and VML copies.
+
+import { describe, expect, test } from 'bun:test';
+import {
+  docx,
+  errorAt,
+  handleAt,
+  handlesAt,
+  open,
+  paragraphTexts,
+  refusal,
+  roots,
+  savedMainXml,
+  spansAt,
+  storyText,
+} from './support/protocol.ts';
+import type { AutomationHandle, AutomationHost } from '../protocol.ts';
+
+const DRAWING_NS =
+  'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ' +
+  'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ' +
+  'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+  'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" ' +
+  'xmlns:v="urn:schemas-microsoft-com:vml"';
+
+function anchor(id: number, name: string, graphic: string): string {
+  return (
+    '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1" ' +
+    'behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/>' +
+    '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>' +
+    '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
+    '<wp:extent cx="2743200" cy="457200"/><wp:effectExtent l="0" t="0" r="0" b="0"/>' +
+    `<wp:wrapSquare wrapText="bothSides"/><wp:docPr id="${id}" name="${name}"/>` +
+    `<wp:cNvGraphicFramePr/><a:graphic>${graphic}</a:graphic></wp:anchor>`
+  );
+}
+
+function textbox(id: number, text: string): string {
+  const story = `<w:txbxContent><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:txbxContent>`;
+  const graphic =
+    '<a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">' +
+    '<wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="2743200" ' +
+    'cy="457200"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></wps:spPr>' +
+    `<wps:txbx>${story}</wps:txbx><wps:bodyPr/></wps:wsp></a:graphicData>`;
+  return (
+    `<w:r><mc:AlternateContent ${DRAWING_NS}><mc:Choice Requires="wps"><w:drawing>` +
+    `${anchor(id, `Text Box ${id}`, graphic)}</w:drawing></mc:Choice><mc:Fallback><w:pict>` +
+    `<v:shape id="Text Box ${id}" type="#_x0000_t202" style="width:3in;height:36pt"><v:textbox>` +
+    `${story}</v:textbox></v:shape></w:pict></mc:Fallback></mc:AlternateContent></w:r>`
+  );
+}
+
+function rectangle(id: number): string {
+  const graphic =
+    '<a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">' +
+    '<wps:wsp><wps:cNvSpPr/><wps:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
+    '</wps:spPr><wps:bodyPr/></wps:wsp></a:graphicData>';
+  return `<w:r><w:drawing ${DRAWING_NS}>${anchor(id, `Rectangle ${id}`, graphic)}</w:drawing></w:r>`;
+}
+
+function host(): AutomationHost {
+  return open(
+    docx(
+      `<w:p><w:r><w:t>Cover</w:t></w:r>${textbox(1, 'Client: Acme Holdings')}</w:p>` +
+        `<w:p><w:r><w:t>Terms</w:t></w:r>${rectangle(2)}${textbox(3, 'Ref 7')}</w:p>`
+    )
+  );
+}
+
+function shapesOf(
+  target: AutomationHost,
+  span: { body: AutomationHandle } | { paragraph: AutomationHandle }
+) {
+  return handlesAt(target.execute({ operations: [{ op: 'getShapes', span }] }), 0);
+}
+
+function shapeRead(target: AutomationHost, shape: AutomationHandle) {
+  const response = target.execute({ operations: [{ op: 'getShape', shape }] });
+  const result = response.results[0];
+  if (result?.status !== 'ok' || result.value.kind !== 'shape') throw new Error('no shape read');
+  return result.value.shape;
+}
+
+describe('shapes and text-box stories', () => {
+  test('a body lists its floating shapes with id, name and type', () => {
+    const target = host();
+    const { body } = roots(target);
+    const shapes = shapesOf(target, { body });
+    expect(shapes.map((shape) => shapeRead(target, shape))).toEqual([
+      { id: 1, name: 'Text Box 1', type: 'TextBox' },
+      { id: 2, name: 'Rectangle 2', type: 'GeometricShape' },
+      { id: 3, name: 'Text Box 3', type: 'TextBox' },
+    ]);
+  });
+
+  test('a paragraph lists only the shapes it anchors', () => {
+    const target = host();
+    const { body } = roots(target);
+    const paragraphs = handlesAt(
+      target.execute({ operations: [{ op: 'getParagraphs', body }] }),
+      0
+    );
+    expect(
+      shapesOf(target, { paragraph: paragraphs[0]! }).map((s) => shapeRead(target, s).id)
+    ).toEqual([1]);
+    expect(
+      shapesOf(target, { paragraph: paragraphs[1]! }).map((s) => shapeRead(target, s).id)
+    ).toEqual([2, 3]);
+  });
+
+  test('a text box body reads, searches and edits its own story', () => {
+    const target = host();
+    const { body } = roots(target);
+    const [box] = shapesOf(target, { body });
+    const boxBody = handleAt(
+      target.execute({ operations: [{ op: 'getShapeBody', shape: box! }] }),
+      0
+    );
+    expect(paragraphTexts(target, boxBody)).toEqual(['Client: Acme Holdings']);
+    expect(storyText(target, boxBody)).toBe('Client: Acme Holdings');
+    // The main body search stays in the main story, and the box answers its own.
+    expect(
+      spansAt(target.execute({ operations: [{ op: 'search', scope: { body }, text: 'Acme' }] }), 0)
+    ).toHaveLength(0);
+    const [match] = spansAt(
+      target.execute({
+        operations: [{ op: 'search', scope: { body: boxBody }, text: 'Acme Holdings' }],
+      }),
+      0
+    );
+    const replaced = target.execute({
+      operations: [{ op: 'replaceSpan', span: match!, text: 'Beta Logistics' }],
+    });
+    expect(replaced.results[0]?.status).toBe('ok');
+    expect(storyText(target, boxBody)).toBe('Client: Beta Logistics');
+    const xml = savedMainXml(target);
+    expect(xml.match(/Beta Logistics/g)).toHaveLength(2);
+    expect(xml).not.toContain('Acme');
+  });
+
+  test('a shape without text has no body', () => {
+    const target = host();
+    const { body } = roots(target);
+    const [, rectangleShape] = shapesOf(target, { body });
+    expect(
+      errorAt(target.execute({ operations: [{ op: 'getShapeBody', shape: rectangleShape! }] }), 0)
+    ).toBe('unsupported-content');
+  });
+
+  test('duplicate shape ids make the story’s shapes unaddressable', () => {
+    const target = open(docx(`<w:p>${textbox(5, 'one')}</w:p><w:p>${textbox(5, 'two')}</w:p>`));
+    const { body } = roots(target);
+    expect(refusal(target.execute({ operations: [{ op: 'getShapes', span: { body } }] }))).toBe(
+      'ambiguous-document'
+    );
+  });
+});

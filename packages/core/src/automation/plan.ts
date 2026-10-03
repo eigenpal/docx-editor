@@ -1,3 +1,4 @@
+import { planShapes } from './plan-shapes.ts';
 import { planDocumentProperties } from './plan-document-properties.ts';
 import { referencedNoteIds } from './note-references.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
@@ -1591,6 +1592,10 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           },
           host.fieldPageContext
         );
+      case 'getShapes':
+      case 'getShape':
+      case 'getShapeBody':
+        return planShapes(operation, handles, packageReads);
       case 'getInlinePictures':
       case 'getInlinePicture':
       case 'setInlinePicture':

@@ -21,6 +21,7 @@
 // would report a document shorter than the one on screen — then place an insertion in the wrong
 // paragraph, because the caller counted with a different list than the engine writes with.
 
+import { shapesInParagraphs, type AutomationShapesRead } from './shapes.ts';
 import {
   resolveHeaderFooterResolutionBySection,
   type HeaderFooterSectionResolution,
@@ -49,7 +50,13 @@ import { paragraphTextOf } from '../store/store/tree-ops.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 import { sectionReads, type AutomationSectionRead } from './sections.ts';
 import { styleIndex, type AutomationStyleIndex } from './styles.ts';
-import { BODY_STORY, HEADER_FOOTER_VARIANTS, storyKey, type AutomationStoryId } from './stories.ts';
+import {
+  BODY_STORY,
+  HEADER_FOOTER_VARIANTS,
+  storyKey,
+  type AutomationShapeOwnerStory,
+  type AutomationStoryId,
+} from './stories.ts';
 import type { AutomationTextProjection } from './operations.ts';
 import { projectParagraphText, type ProjectedParagraphText } from './text-projection.ts';
 
@@ -179,6 +186,11 @@ export interface AutomationPackageReads {
    * aliasing, so no note of that kind is addressable until the malformed document is repaired.
    */
   noteIds(noteKind: NoteKind): AutomationNoteIdsRead;
+  /**
+   * The floating shapes one story's paragraphs anchor, by `wp:docPr/@id`, or an ambiguity that
+   * makes that story's shapes unaddressable.
+   */
+  shapes(story: AutomationStoryId): AutomationShapesRead;
   styles(): AutomationStyleIndex;
 }
 
@@ -192,6 +204,7 @@ const NO_STYLE_INDEX: AutomationStyleIndex = Object.freeze({
 const NO_BLOCKS: readonly AutomationBlockRead[] = Object.freeze([]);
 const NO_SECTIONS: readonly AutomationSectionRead[] = Object.freeze([]);
 const NO_FURNITURE: readonly AutomationFurnitureRead[] = Object.freeze([]);
+const NO_SHAPES: AutomationShapesRead = Object.freeze({ ok: true as const, shapes: [] });
 
 export const EMPTY_READS: AutomationPackageReads = Object.freeze({
   package: null,
@@ -201,6 +214,7 @@ export const EMPTY_READS: AutomationPackageReads = Object.freeze({
   sections: () => NO_SECTIONS,
   furniture: () => NO_FURNITURE,
   noteIds: (): AutomationNoteIdsRead => ({ ok: true, ids: NONE_NUMBERS }),
+  shapes: (): AutomationShapesRead => NO_SHAPES,
   styles: () => NO_STYLE_INDEX,
 });
 
@@ -331,6 +345,23 @@ export function documentReads(pkg: OoxmlPackage): AutomationPackageReads {
 
   const cache = new Map<string, AutomationStoryReads | null>();
   const noteIdsCache = new Map<NoteKind, AutomationNoteIdsRead>();
+  const shapesCache = new Map<string, AutomationShapesRead>();
+
+  const shapesOf = (id: AutomationStoryId): AutomationShapesRead => {
+    const key = storyKey(id);
+    const cached = shapesCache.get(key);
+    if (cached) return cached;
+    const reads = story(id);
+    const paragraphs = reads
+      ? reads.paragraphIds.flatMap((paragraphId) => {
+          const node = reads.node(paragraphId);
+          return node ? [node] : [];
+        })
+      : [];
+    const listing = reads ? shapesInParagraphs(paragraphs) : NO_SHAPES;
+    shapesCache.set(key, listing);
+    return listing;
+  };
 
   const noteIdsOf = (noteKind: NoteKind): AutomationNoteIdsRead => {
     const cached = noteIdsCache.get(noteKind);
@@ -422,6 +453,15 @@ export function documentReads(pkg: OoxmlPackage): AutomationPackageReads {
         stylesOf
       );
     }
+    if (story.kind === 'textbox') {
+      // A text box is reachable only while its owner names exactly one shape with this id.
+      const owner = documentStory(story.owner);
+      const listing = shapesOf(story.owner);
+      if (!owner || !listing.ok) return null;
+      const shape = listing.shapes.find((entry) => entry.id === story.shapeId);
+      if (!shape?.textboxRoot) return null;
+      return storyReadsOver(story, owner.part, owner.scope, shape.textboxRoot, stylesOf);
+    }
     const slot = slotOf(story);
     if (!slot) return null;
     // The part's ROOT is the story: `w:hdr` and `w:ftr` hold blocks directly.
@@ -434,6 +474,7 @@ export function documentReads(pkg: OoxmlPackage): AutomationPackageReads {
     );
   };
 
+  const documentStory = (id: AutomationStoryId): AutomationStoryReads | null => story(id);
   const story = (id: AutomationStoryId): AutomationStoryReads | null => {
     const key = storyKey(id);
     if (cache.has(key)) return cache.get(key) ?? null;
@@ -450,14 +491,33 @@ export function documentReads(pkg: OoxmlPackage): AutomationPackageReads {
    * alone does not name the story a paragraph belongs to. Ordered cheapest-first, and the body is
    * both the common case and the only story most documents have.
    */
+  /** The text box of `owner` holding a paragraph, probed only when the owner has text boxes. */
+  const textboxStoryOf = (
+    owner: AutomationShapeOwnerStory,
+    paragraphId: string
+  ): AutomationStoryId | null => {
+    const listing = shapesOf(owner);
+    if (!listing.ok) return null;
+    for (const shape of listing.shapes) {
+      if (!shape.textboxRoot) continue;
+      const id: AutomationStoryId = { kind: 'textbox', owner, shapeId: shape.id };
+      if (story(id)?.has(paragraphId)) return id;
+    }
+    return null;
+  };
+
   const storyOf = (paragraphId: string): AutomationStoryId | null => {
     const body = story(BODY_STORY);
     if (body?.has(paragraphId)) return BODY_STORY;
+    const inBodyBox = textboxStoryOf({ kind: 'body' }, paragraphId);
+    if (inBodyBox) return inBodyBox;
     for (const [index] of resolution().entries()) {
       for (const kind of ['header', 'footer'] as const) {
         for (const variant of HEADER_FOOTER_VARIANTS) {
-          const id: AutomationStoryId = { kind, sectionIndex: index, variant };
+          const id: AutomationShapeOwnerStory = { kind, sectionIndex: index, variant };
           if (story(id)?.has(paragraphId)) return id;
+          const inBox = story(id) ? textboxStoryOf(id, paragraphId) : null;
+          if (inBox) return inBox;
         }
       }
     }
@@ -495,6 +555,7 @@ export function documentReads(pkg: OoxmlPackage): AutomationPackageReads {
       return Object.freeze(found);
     },
     noteIds: noteIdsOf,
+    shapes: shapesOf,
     styles: stylesOf,
   };
 }

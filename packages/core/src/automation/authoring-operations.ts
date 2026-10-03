@@ -61,6 +61,16 @@ export type AutomationAuthoringOperation =
       readonly columnCount: number;
       readonly values?: readonly (readonly string[])[];
     }
+  /** The floating shapes anchored in a span's paragraphs, in reading order. */
+  | {
+      readonly op: 'getShapes';
+      readonly span: AutomationSpanRef;
+      /** Only shapes of these types. Absent lists every type. */
+      readonly types?: readonly import('./shapes.ts').AutomationShapeType[];
+    }
+  | { readonly op: 'getShape'; readonly shape: AutomationHandle }
+  /** A text box's own story. Any other shape has no body and refuses. */
+  | { readonly op: 'getShapeBody'; readonly shape: AutomationHandle }
   | { readonly op: 'getInlinePictures'; readonly span: AutomationSpanRef }
   | { readonly op: 'getInlinePicture'; readonly picture: AutomationHandle }
   | {

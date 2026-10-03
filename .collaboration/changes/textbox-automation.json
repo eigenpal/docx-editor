@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Automation could not reach text box stories, and a save kept a text box's VML fallback story unchanged after its DrawingML story was edited.",
+  "after": "Automation lists floating shapes and edits text box stories through their owner's ordinary operations. A save writes each text box's DrawingML story into its VML fallback wherever the two differ.",
+  "reason": "Text box edits are the same paragraph operations on nodes of the owner part, so they replicate, merge, and undo as before. The fallback copy is made on an export snapshot only, from canonical content, so the live shared tree is never written and every participant saves the same bytes for the same document. No stored field, operation shape, or identity changes. Read text that drops a floating drawing's object character is a local projection with unchanged model offsets.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-shape-automation.test.ts",
+    "packages/core/src/store/__tests__/textbox-fallback-export.test.ts",
+    "packages/core/src/automation/__tests__/automation-textboxes.test.ts"
+  ],
+  "changeset": "textbox-automation",
+  "migration": null
+}

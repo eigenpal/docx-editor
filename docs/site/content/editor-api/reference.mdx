@@ -35,8 +35,8 @@ Every model object inherits the common `ClientObject` members. Each collection a
 | `Document` | `removeDocumentInformation`, `properties`, `body`, `paragraphs`, `sections`, `contentControls`, `comments`, `revisions`, `footnotes`, `endnotes`, `changeTrackingMode` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories), [Tracked changes](/docs/2.x/editor-api/revisions) |
 | `RemoveDocInfoType` | All standard enum values; only `documentProperties` removal is supported | [Remove document properties](#remove-document-properties) |
 | `DocumentProperties` | `author`, `title`, `subject`, `keywords`, `comments`, `category`, read-only `lastAuthor` | [Document properties](#document-properties) |
-| `Body` | `text`, `footnotes`, `endnotes`, `paragraphs`, `getRange`, `search`, `clear`, `insertText`, `insertParagraph`; `font`, `style`, `lists`, `bookmarks`, `contentControls`, `getComments`, `revisions`, `tables`, `inlinePictures`, `fields` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges) |
-| `Paragraph` | `text`, `uniqueLocalId`, `getRange`, `insertText`, `insertParagraph`, `split`, `clear`, `delete`; `font`, `style`, paragraph formatting; `list`, `listItem`, `startNewList`, `attachToList`, `detachFromList` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Formatting and styles](/docs/2.x/editor-api/formatting), [Lists and numbering](/docs/2.x/editor-api/lists) |
+| `Body` | `text`, `footnotes`, `endnotes`, `paragraphs`, `getRange`, `search`, `clear`, `insertText`, `insertParagraph`; `font`, `style`, `lists`, `bookmarks`, `contentControls`, `getComments`, `revisions`, `tables`, `inlinePictures`, `shapes`, `fields` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) |
+| `Paragraph` | `text`, `uniqueLocalId`, `getRange`, `insertText`, `insertParagraph`, `split`, `clear`, `delete`; `font`, `style`, paragraph formatting; `list`, `listItem`, `startNewList`, `attachToList`, `detachFromList`; `shapes` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Formatting and styles](/docs/2.x/editor-api/formatting), [Lists and numbering](/docs/2.x/editor-api/lists) |
 | `Range` | `text`, `paragraphs`, `search`, `insertText`, `insertParagraph`, `clear`, `delete`, `select`; `font`, `style`, `hyperlink`, `bookmarks`, `tables`, `inlinePictures`, `fields`; `insertTable`, `insertInlinePictureFromBase64`, `insertField`, `insertBreak`, `insertContentControl`, `insertComment` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges) and the dedicated insertion guides |
 | `ParagraphCollection` | `getFirst`, `getLast`, `getFirstOrNullObject`, `getLastOrNullObject` | [Search and navigation](/docs/2.x/editor-api/search-and-navigation) |
 | `RangeCollection` | `getFirst`, `getLast`, `getFirstOrNullObject` | [Search and navigation](/docs/2.x/editor-api/search-and-navigation) |
@@ -62,6 +62,7 @@ Font writes honor inherited complex-script properties. Font reads return authore
 | `VerticalAlignment` | Cell alignment values | [Tables and cells](/docs/2.x/editor-api/tables) |
 | `InlinePicture` | `width`, `height`, `lockAspectRatio`, `altTextDescription`, `delete` | [Inline pictures](/docs/2.x/editor-api/pictures) |
 | `InlinePictureCollection` | `getFirst`, `getLast`, `getFirstOrNullObject`, `getLastOrNullObject` | [Inline pictures](/docs/2.x/editor-api/pictures) |
+| `Shape`, `ShapeCollection`, `ShapeType` | Shape `id`, `name`, `type`, `body`; collection `getFirst`, `getFirstOrNullObject`, `getByTypes`; shape type values | [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories#read-and-edit-text-boxes) |
 
 ## Fields, stories, and controls
 
