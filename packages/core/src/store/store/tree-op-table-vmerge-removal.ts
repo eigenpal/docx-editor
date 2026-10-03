@@ -51,27 +51,19 @@ export type VerticalMergeHeadRepairPlan =
 
 const NO_REPAIRS: VerticalMergeHeadRepairPlan = { ok: true, repairs: [] };
 
-interface Flattened<T> {
-  readonly items: readonly T[];
-  /** Something other than a content control hides a row or cell the walk cannot type. */
-  readonly unreadable: boolean;
-}
-
 /**
  * Typed rows or cells of `root` in document order. Content controls unwrap as they do for
- * layout, so both read the same grid; any other element holding a row or cell, such as
- * `w:customXml`, marks the result unreadable.
+ * layout, so both read the same grid. Any other element holding a row or cell, such as
+ * `w:customXml`, stands in the sequence as `null`: a place the walk cannot read.
  */
-function flatten<T extends OoxmlNode>(root: OoxmlElement, want: 'row' | 'cell'): Flattened<T> {
+function flatten<T extends OoxmlNode>(root: OoxmlElement, want: 'row' | 'cell'): (T | null)[] {
   const kind = want === 'row' ? 'tableRow' : 'tableCell';
-  const items: T[] = [];
+  const items: (T | null)[] = [];
   for (const node of flattenContentControls(root.children)) {
     if (node.kind === kind) items.push(node as T);
-    else if (node.kind !== 'textValue' && subtreeHolds(node, want)) {
-      return { items, unreadable: true };
-    }
+    else if (node.kind !== 'textValue' && subtreeHolds(node, want)) items.push(null);
   }
-  return { items, unreadable: false };
+  return items;
 }
 
 interface ReadRow {
@@ -80,10 +72,13 @@ interface ReadRow {
   readonly slots: readonly GridCellSlot[];
 }
 
-function readRow(row: OoxmlTableRowNode): ReadRow | null {
+/** The row's grid, or null when a cell hides where the walk cannot read it. */
+function readRow(row: OoxmlTableRowNode | null): ReadRow | null {
+  if (!row) return null;
   const cells = flatten<OoxmlElement>(row, 'cell');
-  if (cells.unreadable) return null;
-  return { row, cells: cells.items, slots: buildCellGridSlots(row, cells.items) };
+  if (cells.includes(null)) return null;
+  const typed = cells as OoxmlElement[];
+  return { row, cells: typed, slots: buildCellGridSlots(row, typed) };
 }
 
 function sameInterval(a: GridCellSlot, b: GridCellSlot): boolean {
@@ -100,20 +95,20 @@ export function planVerticalMergeHeadRepairs(
   rowId: string
 ): VerticalMergeHeadRepairPlan {
   const target = findNode(part, rowId);
-  if (!target || target.kind !== 'tableRow' || !rowHasVerticalMerge(target)) return NO_REPAIRS;
-  const removed = readRow(target);
-  if (!removed) return { ok: false, reason: 'row-hides-cell' };
-  const heads = removed.slots.filter((slot) => slot.vMergeKind === 'restart');
-  if (heads.length === 0) return NO_REPAIRS;
+  // Only a removed `restart` leaves a continuation behind, wrapped or not.
+  if (!target || target.kind !== 'tableRow' || !rowHasVerticalMerge(target, 'restart')) {
+    return NO_REPAIRS;
+  }
   const table = tableAncestorOf(part, rowId);
   if (!table) return NO_REPAIRS;
+  // Only the rows next to the removed one decide the repair, so only they must be readable.
   const rows = flatten<OoxmlTableRowNode>(table, 'row');
-  const index = rows.items.findIndex((row) => row.id === rowId);
-  if (rows.unreadable || index === -1) return { ok: false, reason: 'row-hides-cell' };
-  const belowRow = rows.items[index + 1];
-  if (!belowRow) return NO_REPAIRS;
-
-  const below = readRow(belowRow);
+  const index = rows.findIndex((row) => row !== null && row.id === rowId);
+  const removed = readRow(target);
+  if (index === -1 || !removed) return { ok: false, reason: 'row-hides-cell' };
+  const heads = removed.slots.filter((slot) => slot.vMergeKind === 'restart');
+  if (index + 1 >= rows.length) return NO_REPAIRS;
+  const below = readRow(rows[index + 1]!);
   if (!below) return { ok: false, reason: 'row-hides-cell' };
   const candidates = below.slots.flatMap((slot, cellIndex) =>
     slot.vMergeKind === 'continue' && heads.some((head) => sameInterval(head, slot))
@@ -122,17 +117,18 @@ export function planVerticalMergeHeadRepairs(
   );
   if (candidates.length === 0) return NO_REPAIRS;
 
-  const aboveRow = rows.items[index - 1];
-  const nextRow = rows.items[index + 2];
-  const above = aboveRow ? readRow(aboveRow) : null;
-  const next = nextRow ? readRow(nextRow) : null;
-  if ((aboveRow && !above) || (nextRow && !next)) return { ok: false, reason: 'row-hides-cell' };
+  const above = index > 0 ? readRow(rows[index - 1]!) : null;
+  const next = index + 2 < rows.length ? readRow(rows[index + 2]!) : null;
+  if ((index > 0 && !above) || (index + 2 < rows.length && !next)) {
+    return { ok: false, reason: 'row-hides-cell' };
+  }
 
   const repairs: VerticalMergeHeadRepair[] = [];
   for (const { slot, cell } of candidates) {
-    // A merged cell starting at the same column above takes the continuation over.
+    // A merged cell above on the same grid interval takes the continuation over. The exact
+    // interval is what the store's merge chains match on, so the result stays a valid chain.
     const joins = above?.slots.some(
-      (other) => other.vMergeKind !== 'none' && other.startCol === slot.startCol
+      (other) => other.vMergeKind !== 'none' && sameInterval(slot, other)
     );
     if (joins) continue;
     const continues = next?.slots.some(

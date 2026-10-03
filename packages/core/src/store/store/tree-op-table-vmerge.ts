@@ -142,7 +142,10 @@ export function rowHidesCellInWrapper(row: OoxmlTableRowNode): boolean {
  * let the boundary read as merge-free. A cell's own children are never walked, so a nested
  * table's merges stay its own. An exhausted budget reads as "merged", fail-closed.
  */
-export function rowHasVerticalMerge(row: OoxmlTableRowNode): boolean {
+export function rowHasVerticalMerge(
+  row: OoxmlTableRowNode,
+  only: VerticalMergeKind | 'any' = 'any'
+): boolean {
   // Seeded with the row, not its children: a spread would let the breadth check fire before
   // a single node is examined, so a wide row would report "merged" without being read.
   const stack: OoxmlNode[] = [row];
@@ -154,7 +157,8 @@ export function rowHasVerticalMerge(row: OoxmlTableRowNode): boolean {
     if (node.kind === 'textValue') continue;
     if (isCellLike(node)) {
       const tcPr = wmlChildNamed(node, 'tcPr');
-      if (tcPr && wmlChildNamed(tcPr, 'vMerge')) return true;
+      const kind = readVMergeKind(tcPr);
+      if (kind !== 'none' && (only === 'any' || only === kind)) return true;
       continue;
     }
     for (const child of node.children) stack.push(child);

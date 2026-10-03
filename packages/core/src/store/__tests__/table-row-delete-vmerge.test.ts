@@ -328,6 +328,50 @@ describe.each(['deleteTableRow', 'deleteBlock'] as const)('%s across vertical me
     ]);
   });
 
+  test('a merge start deletes when an unreadable row is out of reach', () => {
+    const part = load(
+      TABLE(
+        2,
+        HEADER,
+        ROW(CELL('Supplier', 'restart'), CELL('USD 100')),
+        ROW(CELL('', 'continue'), CELL('USD 200')),
+        ROW(CELL('Plain'), CELL('USD 300')),
+        `<w:customXml w:element="row">${ROW(CELL('Other'), CELL('USD 400'))}</w:customXml>`
+      )
+    );
+    expect(rows(removeRow(part, 1, via))).toEqual([
+      ['-:Party', '-:Amount'],
+      ['-:', '-:USD 200'],
+      ['-:Plain', '-:USD 300'],
+      ['-:Other', '-:USD 400'],
+    ]);
+  });
+
+  test('a continuation-only row deletes when one of its cells is unreadable', () => {
+    const part = load(
+      TABLE(
+        2,
+        HEADER,
+        ROW(CELL('Supplier', 'restart'), CELL('USD 100')),
+        ROW(CELL('', 'continue'), `<w:customXml w:element="cell">${CELL('USD 200')}</w:customXml>`),
+        ROW(CELL('Plain'), CELL('USD 300'))
+      )
+    );
+    expect(rows(removeRow(part, 2, via))[2]).toEqual(['-:Plain', '-:USD 300']);
+  });
+
+  test('a merged cell above joins only on the same grid interval', () => {
+    const part = load(
+      TABLE(
+        2,
+        ROW(CELL('Wide', 'restart', 2)),
+        ROW(CELL('Narrow', 'restart'), CELL('x')),
+        ROW(CELL('', 'continue'), CELL('y'))
+      )
+    );
+    expect(rows(removeRow(part, 1, via))).toEqual([['restart:Wide'], ['-:', '-:y']]);
+  });
+
   test('a merge-free row with a wrapped neighbour still deletes', () => {
     const part = load(
       TABLE(
