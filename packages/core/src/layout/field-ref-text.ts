@@ -98,7 +98,7 @@ export function bookmarkRangeText(paragraph: OoxmlElement, name: string): string
     text += value.length > room ? value.slice(0, room) : value;
   };
 
-  const visit = (node: OoxmlNode, depth: number, containerDepth: number): void => {
+  const visit = (node: OoxmlNode, depth: number, containerDepth: number, deleted = false): void => {
     if (done || node.kind === 'textValue') return;
     if (containerDepth >= MAX_INLINE_CONTAINER_DEPTH) return;
     if (budget.exhausted || depth > MAX_STORY_FIELD_SCAN_DEPTH) return;
@@ -117,6 +117,8 @@ export function bookmarkRangeText(paragraph: OoxmlElement, name: string): string
       if (!collecting) return;
       for (const grand of node.children) {
         if (done || !consumeScanNode(budget)) return;
+        // Deleted content never joins a computed result; its bookmark markers still count.
+        if (deleted) continue;
         if (grand.kind === 'text') {
           for (const value of grand.children) {
             if (value.kind === 'textValue') append(value.value);
@@ -131,10 +133,11 @@ export function bookmarkRangeText(paragraph: OoxmlElement, name: string): string
       }
       return;
     }
-    if (isDrawingHost(node) || isFldSimple(node) || node.kind === 'revisionDelete') return;
+    if (isDrawingHost(node) || isFldSimple(node)) return;
     if (!consumeScanNode(budget)) return;
     const nextDepth = nextInlineContainerDepth(node, containerDepth);
-    for (const child of node.children) visit(child, depth + 1, nextDepth);
+    const within = deleted || node.kind === 'revisionDelete';
+    for (const child of node.children) visit(child, depth + 1, nextDepth, within);
   };
   for (const child of paragraph.children) {
     if (done || !consumeScanNode(budget)) break;

@@ -50,7 +50,6 @@
 // content. `resolveStoryRefFields` returns null for the common no-REF story, which costs
 // callers nothing downstream.
 
-import { revisionsAreDeletion } from './revision-projection.ts';
 import { visibleHyphenText } from '../store/package/hyphen-text.ts';
 import {
   fldSimpleInstr,
@@ -373,8 +372,11 @@ function scanParagraphRefs(paragraph: OoxmlElement): ParagraphRefScan {
           } else if (grand.kind === 'tab' && pending.cached.length < MAX_REF_TEXT_CHARS) {
             pending.cached += ' ';
           } else if (pending.cached.length < MAX_REF_TEXT_CHARS) {
-            // Deleted content never joins a cached result, the same as `w:delText`.
-            if (!revisionsAreDeletion(revisions)) pending.cached += visibleHyphenText(grand) ?? '';
+            // A hyphen in a real deletion never joins a cached result, the same as `w:delText`.
+            const hyphen = visibleHyphenText(grand);
+            if (hyphen && !revisions.some((revision) => revision.kind === 'delete')) {
+              pending.cached += hyphen;
+            }
           }
         }
       }

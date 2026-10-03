@@ -552,7 +552,7 @@ function artifactOf(
     author: item.comment.author,
     initials: commentInitials(item.comment),
     ...(item.comment.date !== undefined ? { date: item.comment.date } : {}),
-    text: withHyphenGlyphs(commentBodyText(item.comment)),
+    text: commentBodyText(item.comment),
     resolved: item.resolved,
     ...(item.parentId !== undefined
       ? { parentId: mappedId(ids.comment, 'comment', item.parentId) }

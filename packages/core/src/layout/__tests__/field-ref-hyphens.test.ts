@@ -45,3 +45,18 @@ test('deleted hyphens do not join bookmarked text', () => {
   );
   expect(bookmarkRangeText(p, 'bm')).toBe('new');
 });
+
+test('bookmark markers inside a deletion still bound the text', () => {
+  const endInside = paragraph(
+    '<w:p><w:bookmarkStart w:id="1" w:name="bm"/><w:r><w:t>keep</w:t></w:r><w:del w:id="2" ' +
+      'w:author="A"><w:r><w:delText>x</w:delText></w:r><w:bookmarkEnd w:id="1"/></w:del><w:r>' +
+      '<w:t> tail</w:t></w:r></w:p>'
+  );
+  expect(bookmarkRangeText(endInside, 'bm')).toBe('keep');
+  const startInside = paragraph(
+    '<w:p><w:del w:id="2" w:author="A"><w:bookmarkStart w:id="1" w:name="bm"/><w:r>' +
+      '<w:delText>x</w:delText></w:r></w:del><w:r><w:t>live</w:t></w:r><w:bookmarkEnd w:id="1"/>' +
+      '<w:r><w:t> tail</w:t></w:r></w:p>'
+  );
+  expect(bookmarkRangeText(startInside, 'bm')).toBe('live');
+});

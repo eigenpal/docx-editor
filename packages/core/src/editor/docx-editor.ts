@@ -1608,7 +1608,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           kind: 'comment',
           author: item.comment.author,
           initials: commentInitials(item.comment),
-          text: withDisplayedHyphens(commentBodyText(item.comment)),
+          text: commentBodyText(item.comment),
           resolved: item.resolved,
           ...(item.parentId !== undefined ? { parentId: item.parentId } : {}),
           ...(item.parentRevisionId !== undefined

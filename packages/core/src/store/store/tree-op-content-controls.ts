@@ -1388,8 +1388,7 @@ function planValue(
       return {
         text: value.text,
         showingPlaceholder: false,
-        // An attribute cannot hold U+001E or U+001F, so it keeps the hyphens as they are seen.
-        ...(properties.type === 'comboBox' ? { lastValue: withDisplayedHyphens(value.text) } : {}),
+        ...(properties.type === 'comboBox' ? { lastValue: value.text } : {}),
       };
     }
     case 'listItem': {
@@ -1526,7 +1525,8 @@ export function editedProperties(
       ) {
         return child;
       }
-      return withAttribute(child, 'lastValue', edits.lastValue!);
+      // An attribute cannot hold U+001E or U+001F, so it keeps the hyphens as they are seen.
+      return withAttribute(child, 'lastValue', withDisplayedHyphens(edits.lastValue!));
     });
   }
   if (edits.fullDate !== undefined) {

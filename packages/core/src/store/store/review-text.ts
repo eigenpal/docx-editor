@@ -1,11 +1,19 @@
-import { hyphenTextOf } from '../package/hyphen-text.ts';
+import { hyphenTextOf, withDisplayedHyphens } from '../package/hyphen-text.ts';
 import type { OoxmlNode } from '../package/ooxml-tree.ts';
 import { hardBreakText } from '../package/hard-break.ts';
 import { isInstrText } from '../package/field-nodes.ts';
 import type { CommentRecord } from './comment-reads.ts';
 
-/** Plain text of a comment's body, so a card never re-implements the run walk. */
+/**
+ * Plain text of a comment's body, as a card shows it: a non-breaking hyphen is U+2011 and an
+ * optional hyphen shows nothing. A card never re-implements the run walk.
+ */
 export function commentBodyText(comment: CommentRecord): string {
+  return withDisplayedHyphens(commentBodyModelText(comment));
+}
+
+/** A comment body in paragraph-text characters, as automation reads it (U+001E, U+001F). */
+export function commentBodyModelText(comment: CommentRecord): string {
   const parts: string[] = [];
   const visit = (node: OoxmlNode): void => {
     if (node.kind === 'textValue') {
