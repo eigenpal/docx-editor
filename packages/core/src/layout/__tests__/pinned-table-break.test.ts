@@ -251,6 +251,30 @@ describe('positioned tables that keep their sheet position', () => {
     pinned(layoutOf(lead + exactRow + ordinaryRow + tail));
   });
 
+  test('legacy modes keep a table that ends above the page edge pinned', () => {
+    // 40 lines end at 705.8: below the bottom margin, above the page edge.
+    const layout = layoutOf(lead + table({ tblpPr: PAGE, lines: 40 }) + tail, {
+      compatibilityMode: 14,
+    });
+    expect(pinned(layout).fragment.box.y).toBeCloseTo(225.8, 6);
+    expect(paragraphAt(layout, 'tail')).toEqual({ pageIndex: 0, y: 24 });
+  });
+
+  test('content taller than the page band keeps the table pinned instead of failing', () => {
+    const huge =
+      '<w:p><w:pPr><w:spacing w:line="15000" w:lineRule="exact"/></w:pPr><w:r><w:t>huge</w:t></w:r></w:p>';
+    const hugeLine = table({ tblpPr: PAGE, lines: 1 }).replace('</w:tc>', `${huge}</w:tc>`);
+    pinned(layoutOf(lead + hugeLine + tail));
+    const tallRow = '<w:trHeight w:val="14000" w:hRule="atLeast"/>';
+    pinned(layoutOf(lead + table({ tblpPr: PAGE, lines: 1, trPr: tallRow }) + tail));
+    const nested = table({ tblpPr: '', lines: 60, trPr: '<w:cantSplit/>' });
+    const nestedRow = table({ tblpPr: PAGE, lines: 1 }).replace(
+      '</w:tc>',
+      `${nested}<w:p/></w:tc>`
+    );
+    pinned(layoutOf(lead + nestedRow + tail));
+  });
+
   test('a table entirely outside the text column keeps its sheet position', () => {
     const margin =
       '<w:tblpPr w:leftFromText="0" w:rightFromText="0" w:vertAnchor="page" w:horzAnchor="page" w:tblpX="100" w:tblpY="1000"/>';

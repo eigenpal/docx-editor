@@ -18,8 +18,11 @@
 // - When the start lies above the body cursor, the table would cover text already on the
 //   page, so it opens the next page and starts there by the same rule.
 //
+// - Earlier modes break only a table that reaches below the page edge.
+//
 // Limits, each keeping the sheet-pinned placement:
 // - A table entirely outside the text column, or one with an exact-height row.
+// - A table with a line, a minimum row height, or a nested row taller than the page band.
 // - A table whose authored top is already in the bottom margin.
 // - Multi-column sections, and `w:doNotBreakWrappedTables`.
 // Further differences: following text resumes below the last row even beside a narrow table,
@@ -166,6 +169,32 @@ function openingHeight(fragment: TableFragmentRecord): number {
 }
 
 /**
+ * Whether every piece the paginator cannot split fits a page band of `band` points: each line,
+ * each row's authored minimum height, and each nested table row, which keeps its whole height.
+ */
+function paginates(
+  structure: SemanticTableStructure,
+  fragment: TableFragmentRecord,
+  band: number
+): boolean {
+  if (structure.rows.some((row) => row.height.rule === 'atLeast' && row.height.valuePt > band))
+    return false;
+  const fits = (rows: readonly TableRowFragmentRecord[], nested: boolean): boolean =>
+    rows.every(
+      (row) =>
+        (!nested || row.box.height <= band + EPSILON) &&
+        row.cells.every((cell) =>
+          cell.blocks.every((block) =>
+            block.kind === 'table'
+              ? fits(block.rows, true)
+              : block.lines.every((line) => line.box.height <= band + EPSILON)
+          )
+        )
+    );
+  return fits(fragment.rows, false);
+}
+
+/**
  * Height of the leading part of a probed table that fits `room`: the whole rows that fit, or
  * the lines of the first row that fit when it does not fit whole. A split row keeps the space
  * its cells leave below their last line. Every box of the probe shares one frame, with the
@@ -230,10 +259,17 @@ export function pinnedTableBreak(
   // that shortens this page's band neither starts a break nor flips it between passes.
   const margin = flow.verticalFrames.margin;
   const marginBottom = Math.max(flow.bottom, margin.top + margin.height);
-  if (authored >= marginBottom - EPSILON || authored + height <= marginBottom + EPSILON)
+  const pageEdge = flow.verticalFrames.page.top + flow.verticalFrames.page.height;
+  const atMargin = hasCompatibilityRule(deps.compatibilityMode, 'positionedTableBreaksAtMargin');
+  // Earlier modes break only a table that reaches below the page edge itself.
+  const breakLine = atMargin ? marginBottom : Math.max(marginBottom, pageEdge);
+  if (
+    authored >= marginBottom - EPSILON ||
+    authored + height <= breakLine + EPSILON ||
+    !paginates(structure, probe, flow.bottom)
+  )
     return undefined;
   const leading = leadingPartHeight(probe, flow.bottom - flow.top);
-  const pageEdge = flow.verticalFrames.page.top + flow.verticalFrames.page.height;
   // The band below the start must still hold the header rows and the first body line, unless
   // that opening is taller than the band itself, where the paginator degrades the group.
   const opening = openingHeight(probe);
@@ -245,12 +281,8 @@ export function pinnedTableBreak(
   const reach = top + flow.bottom - flow.top;
   return {
     top,
-    firstBottom: Math.min(
-      hasCompatibilityRule(deps.compatibilityMode, 'positionedTableBreaksAtMargin')
-        ? flow.bottom
-        : pageEdge,
-      reach
-    ),
+    // A note reserve that shortens the band also stops an earlier mode's run to the page edge.
+    firstBottom: Math.min(atMargin || flow.bottom < marginBottom ? flow.bottom : pageEdge, reach),
   };
 }
 
