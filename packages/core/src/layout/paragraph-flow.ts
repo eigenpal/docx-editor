@@ -1252,7 +1252,7 @@ export function breakParagraph(
     // oversized result is cut once per line instead, and checks kinsoku by its own text,
     // because the paragraph table holds a field as one unit.
     const layoutOwned = isLayoutOwnedPiece(piece);
-    const canChopWord = canChopPiece(piece, layoutOwned);
+    const canChopWord = canChopPiece(piece);
     const textBreaks = layoutOwned ? null : cjkBreaks;
     let consumed = 0;
     for (const boundary of cjkBreaks?.boundaries(piece) ??

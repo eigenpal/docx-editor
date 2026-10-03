@@ -44,6 +44,13 @@ function acceptedCut(
   return graphemes.length;
 }
 
+/** Whether `text` from `from` on is one or more ordinary spaces and nothing else. */
+function onlySpaces(text: string, from: number): boolean {
+  if (from >= text.length) return false;
+  for (let index = from; index < text.length; index += 1) if (text[index] !== ' ') return false;
+  return true;
+}
+
 export function chopOversizedWord(
   text: string,
   modelStart: number,
@@ -124,6 +131,12 @@ export function chopOversizedWord(
 
     const utf16To = graphemes[fitTo - 1]!.utf16To;
     const prefixText = text.slice(utf16From, utf16To);
+    // Spaces after the cut hang at this line's end; they never open the next line. Priced
+    // like any line-end space: the ink plus whatever room the line has left.
+    if (onlySpaces(text, utf16To)) {
+      const width = Math.max(options.measureText(prefixText), available);
+      return { text: text.slice(utf16From), modelStart: modelStart + utf16From, width, brokeLine };
+    }
     options.appendPrefix({
       text: prefixText,
       modelStart: modelStart + utf16From,

@@ -294,3 +294,50 @@ test('the caret before a field cut across pages stays on its first page', () => 
       );
   }
 });
+
+test('a space after a cut word hangs at the line end instead of opening the next line', () => {
+  // 40 letters fill two 20-letter lines exactly; the space after them must not lead line 3.
+  const word = 'ABCDEFGHIJKLMNOPQRST'.repeat(2);
+  for (const content of [run(`${word} UV`), field('HYPERLINK "https://e/"', `${word} UV`)])
+    expect(lineTexts(layout(content))).toEqual([
+      'ABCDEFGHIJKLMNOPQRST',
+      'ABCDEFGHIJKLMNOPQRST ',
+      'UV',
+    ]);
+  const fieldLines = lineTexts(layout(field('HYPERLINK "https://e/"', 'ABCDEFGHIJKLMNOPQRST UV')));
+  expect(fieldLines).toEqual(['ABCDEFGHIJKLMNOPQRST ', 'UV']);
+});
+
+test('a repeated header row resolves the field end on its own last fragment', () => {
+  const header =
+    '<w:tr><w:trPr><w:tblHeader/></w:trPr><w:tc><w:tcPr><w:tcW w:w="2400" w:type="dxa"/></w:tcPr>' +
+    `<w:p>${field('HYPERLINK "https://e/"', TOKEN)}</w:p></w:tc></w:tr>`;
+  const row = `<w:tr><w:tc><w:tcPr><w:tcW w:w="2400" w:type="dxa"/></w:tcPr><w:p>${run('row')}</w:p></w:tc></w:tr>`;
+  const table =
+    '<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="0"/><w:right w:w="0"/>' +
+    '</w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>' +
+    header +
+    row.repeat(12) +
+    '</w:tbl>';
+  const read = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${table}</w:body></w:document>`, {
+    name: '/word/document.xml',
+    contentType: 'app/xml',
+  });
+  if (!read.ok) throw new Error(read.reason);
+  const result = layoutSemanticDocument(read.part, 1, {
+    measurer: createFixedMeasurer(6, 12),
+    styleCascade: elevenPointDefaults(),
+    geometry: { width: 120, height: 100, margin: { top: 0, bottom: 0, left: 0, right: 0 } },
+  });
+  expect(result.pages.length).toBeGreaterThan(1);
+  const first = linesOf(result).find((line) => line.spans.some((span) => span.projected))!;
+  const { paragraphId, start, end } = first.spans.find((span) => span.projected)!.range;
+  for (const preferredPageIndex of [0, 1]) {
+    const after = caretAt(result, { paragraphId, offset: end }, { preferredPageIndex })!;
+    const before = caretAt(result, { paragraphId, offset: start }, { preferredPageIndex })!;
+    expect(after.pageIndex).toBe(preferredPageIndex);
+    expect(after.x).toBe(30);
+    expect(after.y).toBeGreaterThan(before.y);
+    expect(before.x).toBe(0);
+  }
+});

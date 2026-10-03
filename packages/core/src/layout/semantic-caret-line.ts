@@ -40,45 +40,53 @@ function fieldFragmentAt(
   return null;
 }
 
-/** Each line's FIRST position in its paragraph's line list, built once per list. */
-const linePositions = new WeakMap<readonly PlacedLine[], Map<string, number>>();
+/** Each line record's FIRST position in its paragraph's line list, built once per list. */
+const linePositions = new WeakMap<readonly PlacedLine[], Map<LineRecord, number>>();
 
 function linePosition(lines: readonly PlacedLine[], line: LineRecord): number {
   let positions = linePositions.get(lines);
   if (!positions) {
     positions = new Map();
     for (const [at, placed] of lines.entries())
-      if (!positions.has(placed.line.id)) positions.set(placed.line.id, at);
+      if (!positions.has(placed.line)) positions.set(placed.line, at);
     linePositions.set(lines, positions);
   }
-  return positions.get(line.id) ?? -1;
+  return positions.get(line) ?? -1;
 }
 
 /**
  * Whether another line of the same story occurrence draws the same field, in `direction`.
  *
- * A header or footer paragraph is indexed once per page with the SAME line records. Lines
- * resolve to their first occurrence, so a backward scan never meets a copy, and a forward
- * scan stops at a line that already appeared earlier: it opens the next copy of the story.
- * A repeated header row is not indexed; its copy matches by id.
+ * A header or footer paragraph is indexed once per page, with the same line records or with
+ * per-page records that reuse their ids. Every occurrence opens with the paragraph's first
+ * line id, so the scan stops there: past it lies another copy, not a continuation. A
+ * repeated header row is not indexed at all; its copy scans the repeat lines on its page.
  */
 function fieldContinues(
   layout: SemanticLayout,
   line: LineRecord,
   paragraphId: string,
   field: { readonly start: number; readonly end: number },
-  direction: 1 | -1
+  direction: 1 | -1,
+  pageIndex: number | undefined
 ): boolean {
-  const lines = paragraphLinesIndex(layout).get(paragraphId) ?? [];
-  const index = linePosition(lines, line);
+  let lines: readonly PlacedLine[] = paragraphLinesIndex(layout).get(paragraphId) ?? [];
+  let index = linePosition(lines, line);
+  if (index < 0 && pageIndex !== undefined) {
+    lines = headerRepeatLinesOnPage(layout, pageIndex, paragraphId);
+    index = lines.findIndex((placed) => placed.line === line);
+  }
   if (index < 0) return false;
+  const opening = lines[0]!.line.id;
   for (let at = index + direction; at >= 0 && at < lines.length; at += direction) {
     const other = lines[at]!.line;
-    if (linePosition(lines, other) !== at) return false;
+    if (direction === 1 && other.id === opening) return false;
     const segment = lineSegmentFor(other, paragraphId);
-    if (!segment) continue;
-    if (direction === 1 ? segment.start >= field.end : segment.end <= field.start) return false;
-    if (fieldFragmentAt(other, paragraphId, field.end, 'end')?.start === field.start) return true;
+    if (segment) {
+      if (direction === 1 ? segment.start >= field.end : segment.end <= field.start) return false;
+      if (fieldFragmentAt(other, paragraphId, field.end, 'end')?.start === field.start) return true;
+    }
+    if (other.id === opening) return false;
   }
   return false;
 }
@@ -97,10 +105,11 @@ export function laterSegmentHolds(
   layout: SemanticLayout,
   line: LineRecord,
   paragraphId: string,
-  offset: number
+  offset: number,
+  pageIndex?: number
 ): boolean {
   const field = fieldFragmentAt(line, paragraphId, offset, 'end');
-  return field !== null && fieldContinues(layout, line, paragraphId, field, 1);
+  return field !== null && fieldContinues(layout, line, paragraphId, field, 1, pageIndex);
 }
 
 /**
@@ -111,10 +120,11 @@ export function earlierSegmentHolds(
   layout: SemanticLayout,
   line: LineRecord,
   paragraphId: string,
-  offset: number
+  offset: number,
+  pageIndex?: number
 ): boolean {
   const field = fieldFragmentAt(line, paragraphId, offset, 'start');
-  return field !== null && fieldContinues(layout, line, paragraphId, field, -1);
+  return field !== null && fieldContinues(layout, line, paragraphId, field, -1, pageIndex);
 }
 
 /** The continuation line when a soft wrap opens on an inline drawing atom. */

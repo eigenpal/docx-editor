@@ -374,9 +374,9 @@ export function caretAt(
       (position.offset === segment.end &&
         position.offset > segment.start &&
         (laterLineWithDrawingAt(layout, position.paragraphId, position.offset) ||
-          laterSegmentHolds(layout, line, position.paragraphId, position.offset))) ||
+          laterSegmentHolds(layout, line, position.paragraphId, position.offset, pageIndex))) ||
       (position.offset === segment.start &&
-        earlierSegmentHolds(layout, line, position.paragraphId, position.offset))
+        earlierSegmentHolds(layout, line, position.paragraphId, position.offset, pageIndex))
     ) {
       continue;
     }
