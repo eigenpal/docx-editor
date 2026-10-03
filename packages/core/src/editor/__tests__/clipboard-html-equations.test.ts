@@ -24,6 +24,7 @@ import {
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
 import { projectExternalHtml } from '../clipboard-html-read.ts';
+import { wrapInteropHtml } from '../clipboard-fragment-codec.ts';
 import { mount, paragraph, putCaret } from './paginated-surface-fixtures.ts';
 
 const PNG =
@@ -102,6 +103,8 @@ describe('Word clipboard equations', () => {
     walk(part.root);
     expect(equations.map(linearOf)).toEqual(['{a}/{b}+x^{2}', '√{y}=∑[i=1]^[n]{i}']);
     expect(xml).toContain('<m:degHide m:val="on"/>');
+    // The display equation stays a display.
+    expect(xml).toMatch(/<w:p><m:oMathPara><m:oMath><m:rad>/);
     expect(xml).toContain('Inline ');
     expect(xml).toContain('after.');
     expect(xml).toContain('End.');
@@ -109,10 +112,15 @@ describe('Word clipboard equations', () => {
   });
 
   test('reads all three run-text shapes into canonical m:t', () => {
-    for (const run of ['<m:r><m:t>Z</m:t></m:r>', '<m:r>Z</m:r>', '<m:r><i>Z</i></m:r>']) {
+    const shapes = [
+      (text: string) => `<m:r><m:t>${text}</m:t></m:r>`,
+      (text: string) => `<m:r>${text}</m:r>`,
+      (text: string) => `<m:r><i>${text}</i></m:r>`,
+    ];
+    for (const run of shapes) {
       const { xml, equations } = project(
-        `<p class=MsoNormal><m:oMath><m:sSub><m:e>${run}</m:e>` +
-          '<m:sub><m:r><i>A</i></m:r></m:sub></m:sSub></m:oMath></p>'
+        `<p class=MsoNormal><m:oMath><m:sSub><m:e>${run('Z')}</m:e>` +
+          `<m:sub>${run('A')}</m:sub></m:sSub></m:oMath></p>`
       );
       expect(equations).toHaveLength(1);
       expect(xml).toContain('<m:sSub><m:e><m:r><m:t xml:space="preserve">Z</m:t></m:r></m:e>');
@@ -156,13 +164,45 @@ describe('Word clipboard equations', () => {
     expect(imageCount).toBe(0);
   });
 
-  test('keeps the fallback picture when the comment holds only MathML', () => {
+  test('converts MathML from the msEquation comment and drops the picture', () => {
     const { equations, imageCount } = project(
       '<p class=MsoNormal><!--[if gte msEquation 12]><math><mi>x</mi></math><![endif]-->' +
         `${FALLBACK}</p>`
     );
+    expect(equations.map(linearOf)).toEqual(['x']);
+    expect(imageCount).toBe(0);
+  });
+
+  test('keeps the picture when MathML holds only annotations', () => {
+    const { equations, imageCount } = project(
+      '<p class=MsoNormal><!--[if gte msEquation 12]><math><semantics><annotation>x' +
+        `</annotation></semantics></math><![endif]-->${FALLBACK}</p>`
+    );
     expect(equations).toHaveLength(0);
     expect(imageCount).toBe(1);
+  });
+
+  test('keeps a pasted display equation and its justification', () => {
+    const { xml } = project(
+      '<p class=MsoNormal><m:oMathPara><m:oMathParaPr><m:jc m:val="left"/></m:oMathParaPr>' +
+        '<m:oMath><m:r>x</m:r></m:oMath></m:oMathPara></p>'
+    );
+    expect(xml).toContain(
+      '<m:oMathPara><m:oMathParaPr><m:jc m:val="left"/></m:oMathParaPr><m:oMath>'
+    );
+  });
+
+  test('carries color, size, highlight, bold, and upright style from HTML wrappers', () => {
+    const { xml } = project(
+      "<p class=MsoNormal><m:oMath><span style='color:red;font-size:14pt'><i><m:r>x</m:r></i>" +
+        "</span><b><span style='background:yellow'><m:r>y</m:r></span></b></m:oMath></p>"
+    );
+    expect(xml).toContain(
+      '<m:r><w:rPr><w:color w:val="FF0000"/><w:sz w:val="28"/></w:rPr><m:t xml:space="preserve">x</m:t></m:r>'
+    );
+    expect(xml).toMatch(
+      /<m:r><m:rPr><m:sty m:val="b"\/><\/m:rPr><w:rPr>.*<\/w:rPr><m:t xml:space="preserve">y/
+    );
   });
 
   test('keeps the fallback picture when the equation is empty', () => {
@@ -210,6 +250,59 @@ describe('Word clipboard equations', () => {
   });
 });
 
+describe('MathML clipboard equations', () => {
+  const math = (inner: string, attributes = '') =>
+    project(`<p>see <math${attributes}>${inner}</math> here</p>`);
+
+  test('converts fractions, roots, and scripts into editable equations', () => {
+    const { equations, xml } = math(
+      '<mfrac><mi>a</mi><mn>2</mn></mfrac><mo>+</mo><msqrt><mi>x</mi></msqrt>' +
+        '<mo>+</mo><msubsup><mi>y</mi><mn>1</mn><mn>2</mn></msubsup>'
+    );
+    expect(equations.map(linearOf)).toEqual(['{a}/{2}+√{x}+y_{1}^{2}']);
+    expect(xml).toContain('see ');
+    expect(xml).toContain(' here');
+  });
+
+  test('turns a scripted large operator and its next sibling into m:nary', () => {
+    const { equations, xml } = math(
+      '<munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi>' +
+        '</munderover><msup><mi>i</mi><mn>2</mn></msup>'
+    );
+    expect(xml).toContain('<m:chr m:val="∑"/><m:limLoc m:val="undOvr"/>');
+    expect(equations.map(linearOf)).toEqual(['∑[i=1]^[n]{i^{2}}']);
+  });
+
+  test('maps fences, accents, text, styles, matrices, and color', () => {
+    const { xml } = math(
+      '<mrow><mo>(</mo><mi>x</mi><mo>)</mo></mrow>' +
+        '<mover><mi>v</mi><mo>→</mo></mover>' +
+        '<mtext>if</mtext><mi>sin</mi><mi mathvariant="bold">B</mi>' +
+        '<mfenced open="[" close="]"><mi>a</mi><mi>b</mi></mfenced>' +
+        '<mtable><mtr><mtd><mn>1</mn></mtd><mtd><mn>0</mn></mtd></mtr></mtable>' +
+        '<mi mathcolor="#f00">c</mi>'
+    );
+    expect(xml).toContain('<m:d><m:dPr><m:begChr m:val="("/><m:endChr m:val=")"/></m:dPr>');
+    expect(xml).toContain('<m:acc><m:accPr><m:chr m:val="⃗"/></m:accPr>');
+    expect(xml).toContain('<m:rPr><m:nor/></m:rPr><m:t xml:space="preserve">if</m:t>');
+    expect(xml).toContain('<m:rPr><m:sty m:val="p"/></m:rPr><m:t xml:space="preserve">sin</m:t>');
+    expect(xml).toContain('<m:rPr><m:sty m:val="b"/></m:rPr>');
+    expect(xml).toContain('<m:sepChr m:val=","/>');
+    expect(xml).toContain('<m:m><m:mr><m:e>');
+    expect(xml).toContain('<w:color w:val="FF0000"/>');
+  });
+
+  test('a block MathML equation pastes as a display equation', () => {
+    const { xml } = project('<math display="block"><mi>x</mi></math>');
+    expect(xml).toContain('<m:oMathPara><m:oMath>');
+  });
+
+  test('a MathML flood stays bounded', () => {
+    const nested = '<mrow>'.repeat(300) + '<mi>x</mi>' + '</mrow>'.repeat(300);
+    expect(projectExternalHtml(`<p><math>${nested}</math>tail</p>`).ok).toBe(true);
+  });
+});
+
 describe('pasting Word equations into the editor', () => {
   test('lands an editable equation that survives save and reopen', async () => {
     const target = mount(paragraph('ab'));
@@ -226,5 +319,51 @@ describe('pasting Word equations into the editor', () => {
     const reopened = readOoxmlPackage(await target.surface.save());
     expect(reopened.ok).toBe(true);
     target.container.remove();
+  });
+});
+
+describe('copying equations to other applications', () => {
+  const M = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
+  const body =
+    `<w:p xmlns:m="${M}"><w:r><w:t xml:space="preserve">Inline </w:t></w:r>` +
+    '<m:oMath><m:f><m:num><m:r><m:t>a</m:t></m:r></m:num><m:den><m:r><m:t>b&lt;c</m:t></m:r>' +
+    '</m:den></m:f><m:r><m:rPr><m:sty m:val="p"/></m:rPr><m:t>d</m:t></m:r></m:oMath></w:p>' +
+    `<w:p xmlns:m="${M}"><m:oMathPara><m:oMath><m:sSup><m:e><m:r><m:t>x</m:t></m:r></m:e>` +
+    '<m:sup><m:r><m:t>2</m:t></m:r></m:sup></m:sSup></m:oMath></m:oMathPara></w:p>';
+
+  function copied(): string {
+    const source = mount(body);
+    putCaret(source.surface, 0);
+    source.surface.selectAll();
+    const html = source.surface.copyFlavours().html;
+    source.container.remove();
+    if (html === null) throw new Error('no html flavour');
+    return html;
+  }
+
+  test('writes OMML for Word and MathML for other applications', () => {
+    const html = copied();
+    expect(
+      html.startsWith('<html xmlns:m="http://schemas.microsoft.com/office/2004/12/omml">')
+    ).toBe(true);
+    expect(html).toContain(
+      '<!--[if gte msEquation 12]><m:oMath><m:f><m:num><i><m:r>a</m:r></i></m:num>' +
+        '<m:den><i><m:r>b&lt;c</m:r></i></m:den></m:f><m:r>d</m:r></m:oMath><![endif]-->'
+    );
+    expect(html).toContain('<![if !msEquation]><math xmlns="http://www.w3.org/1998/Math/MathML">');
+    expect(html).toContain(
+      '<mfrac><mrow><mi>a</mi></mrow><mrow><mi>b</mi><mo>&lt;</mo><mi>c</mi></mrow></mfrac>'
+    );
+    expect(html).toContain('<m:oMathPara><m:oMath><m:sSup>');
+    expect(html).toContain('<math xmlns="http://www.w3.org/1998/Math/MathML" display="block">');
+  });
+
+  test('the HTML alone pastes back as the same equations without duplicates', () => {
+    const html = copied();
+    const visible = /<div[^>]*>([\s\S]*)<\/div>/.exec(html)![1]!;
+    const { equations, xml } = project(wrapInteropHtml(visible, null));
+    expect(equations.map(linearOf)).toHaveLength(2);
+    expect(xml).toContain('<m:oMathPara>');
+    expect(xml).not.toContain('mfrac');
   });
 });

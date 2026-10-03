@@ -231,12 +231,12 @@ export const wordFeatures: WordFeature[] = [
     id: 'text.math',
     name: 'Math equations (OMML)',
     category: 'text',
-    editing: 'none',
+    editing: 'partial',
     rendering: 'partial',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Equations round-trip verbatim as raw OMML and show a styled text fallback. Laid-out math and equation editing are not built yet.',
+      'Inline (m:oMath) and display (m:oMathPara) equations lay out and paint as math. Display equations follow m:oMathParaPr justification and center by default when they are the only content of the paragraph. Each equation is one atom in the text: typing beside it creates ordinary runs, and deleting it removes the whole equation. The equation popover edits fractions, radicals, scripts, and n-ary operators in a linear format and removes equations; removing the last equation of a display removes the display. Constructs outside that subset show a text fallback and stay read-only. Unedited equations round-trip verbatim.',
   },
   {
     id: 'text.symbols',
@@ -1168,7 +1168,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Copy writes plain text and HTML with an embedded document fragment. Pasting that fragment restores styles, lists, tables, links, images, footnotes, and endnotes. Pasted Microsoft Word HTML restores footnotes, endnotes, and Office Math equations; each equation lands as an editable inline equation instead of its fallback picture. Display equations paste as inline equations, and MathML equations keep their fallback picture. Sections, headers, footers, and comments do not travel on the clipboard. Suggesting mode and non-body scopes use plain-text paste.',
+      'Copy writes plain text and HTML with an embedded document fragment. Pasting that fragment restores styles, lists, tables, links, images, footnotes, and endnotes. Pasted Microsoft Word HTML restores footnotes, endnotes, and equations. Inline and display equations land as editable equations instead of their fallback pictures, with color, highlight, size, bold, and upright text. Pasted MathML converts to equations. Copied equations reach Microsoft Word as equations and other applications as MathML. Sections, headers, footers, and comments do not travel on the clipboard. Suggesting mode and non-body scopes use plain-text paste.',
   },
   {
     id: 'collab.undo-redo',

@@ -535,7 +535,8 @@ function projectFlow(
         pageBreak.skipSpacer = true;
         continue;
       }
-      if (IGNORED_TAGS.has(tag)) {
+      // A recovered `<math>` is ignored markup only when it holds no equation.
+      if (IGNORED_TAGS.has(tag) && !p.equations.has(node)) {
         p.nodesLeft -= 1;
         continue;
       }

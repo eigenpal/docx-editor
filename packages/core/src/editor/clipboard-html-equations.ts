@@ -1,14 +1,26 @@
-// Word clipboard Office Math (OMML) projected into canonical `m:oMath` XML.
+// Clipboard equations (Word OMML and MathML) projected into canonical OMML.
 //
 // Word writes each equation twice: OMML markup and a downlevel fallback picture in an
-// `<![if !msEquation]>` block. Current Word writes the OMML as live elements; older
-// setups hide it in an `<!--[if gte msEquation 12]>` comment. Run text appears in
-// `m:t`, as bare text, or inside HTML formatting such as `<i>`. Every name passes an
-// OMML allowlist, every value is escaped, and node, depth, and count limits bound
-// the work. A recovered equation drops its fallback picture; an unrecovered one keeps it.
-import { escapeXml, escapeXmlAttribute } from '../store/package/sinks.ts';
+// `<![if !msEquation]>` block. Word writes the OMML as live elements or inside an
+// `<!--[if gte msEquation 12]>` comment; some setups write MathML there instead, and
+// browsers paste MathML directly. Run text appears in `m:t`, as bare text, or inside
+// HTML formatting such as `<i>`; that formatting carries color, highlight, size, and
+// bold onto the math runs. Every OMML name passes an allowlist, every value is escaped,
+// and node, depth, and count limits bound the work. A recovered equation drops its
+// fallback picture; an unrecovered one keeps it.
+import { escapeXmlAttribute } from '../store/package/sinks.ts';
 import { xmlSafeText } from './clipboard-html-xml.ts';
-import { tagOf } from './clipboard-html-styles.ts';
+import { applyElementRunProps, applyInlineTag, tagOf } from './clipboard-html-styles.ts';
+import {
+  MAX_EQUATION_DEPTH,
+  NO_MATH_FORMAT,
+  charge,
+  mathFormatOf,
+  mathRunXml,
+  type EquationState,
+  type MathRunFormat,
+} from './clipboard-html-math-xml.ts';
+import { isMathmlDisplay, isMathmlRoot, mathmlToOmml } from './clipboard-html-mathml.ts';
 
 /** Office Math Markup Language namespace (ECMA-376 Part 1, §22.1). */
 export const OMML_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
@@ -47,7 +59,6 @@ const ARGUMENT_NAMES: ReadonlySet<string> = new Set([
 
 const MAX_EQUATIONS = 512;
 const MAX_EQUATION_COMMENTS = 512;
-const MAX_EQUATION_DEPTH = 32;
 const MAX_VALUE_LENGTH = 64;
 const MAX_FALLBACK_NODES = 64;
 const MAX_WRAPPER_CLIMB = 2;
@@ -59,7 +70,7 @@ const DOWNLEVEL_OPEN = /^\[if\b[^\]]*\]$/i;
 const DOWNLEVEL_CLOSE = /^\[endif\]$/i;
 
 export interface WordEquations {
-  /** Canonical `m:oMath` XML for each recovered equation element, in source order. */
+  /** Canonical equation XML (`m:oMath` or `m:oMathPara`) for each recovered element. */
   readonly byElement: ReadonlyMap<Element, readonly string[]>;
   /** Nodes visited, charged by the caller against the projection walk budget. */
   readonly visited: number;
@@ -73,35 +84,13 @@ const NO_EQUATIONS: WordEquations = Object.freeze({
   truncated: false,
 });
 
-interface EquationState {
-  left: number;
-  visited: number;
-  truncated: boolean;
-}
-
-/** True when the payload can carry Word Office Math, so the parsed document needs a pass. */
+/** True when the payload can carry equations, so the parsed document needs a pass. */
 export function hasWordEquationMarkup(html: string): boolean {
-  return /<m:omath|msEquation/i.test(html);
-}
-
-function charge(state: EquationState): boolean {
-  if (state.left <= 0) {
-    state.truncated = true;
-    return false;
-  }
-  state.left -= 1;
-  state.visited += 1;
-  return true;
+  return /<m:omath|msEquation|<math[\s>]/i.test(html);
 }
 
 function ommlName(node: Node): string | undefined {
   return node.nodeType === 1 ? OMML_NAME_BY_TAG.get(tagOf(node as Element)) : undefined;
-}
-
-function normalizedMathText(raw: string): string {
-  // Word's HTML export spells spaces as NBSP and wraps long source lines; both are
-  // ordinary space inside a math run.
-  return raw.replace(/ /g, ' ').replace(/[ \t\r\n\f\v]+/g, ' ');
 }
 
 /** Visible text below `node`, skipping `o:p` paragraph-mark placeholders. */
@@ -115,35 +104,45 @@ function collectText(node: Node, state: EquationState, depth: number, out: strin
   for (const child of Array.from(node.childNodes)) collectText(child, state, depth + 1, out);
 }
 
-function runXml(text: string, properties: string): string {
-  const value = escapeXml(xmlSafeText(normalizedMathText(text)));
-  if (value.length === 0) return '';
-  return `<m:r>${properties}<m:t xml:space="preserve">${value}</m:t></m:r>`;
+/** HTML formatting on an element, folded into the math run format. */
+function wrapperFormat(element: Element, format: MathRunFormat): MathRunFormat {
+  return mathFormatOf(applyElementRunProps(applyInlineTag({}, tagOf(element)), element), format);
 }
 
 /** One `m:r`: properties first, then all run text as one `m:t`, whatever its clipboard shape. */
-function mathRunXml(element: Element, state: EquationState, depth: number): string {
+function ommlRunXml(
+  element: Element,
+  state: EquationState,
+  depth: number,
+  format: MathRunFormat
+): string {
   let properties = '';
   const text: string[] = [];
+  let runFormat = format;
   for (const child of Array.from(element.childNodes)) {
     const name = ommlName(child);
     if (name === 'rPr') {
-      properties += mathElementXml(child as Element, 'r', state, depth + 1);
+      properties += childrenXml(child as Element, 'rPr', state, depth + 1, format);
     } else if (child.nodeType === 1 && tagOf(child as Element) === 'w:rpr') {
-      // Word run formatting inside math does not travel through the fragment.
+      // Word run properties never appear as markup on the clipboard; HTML wrappers carry them.
       continue;
     } else {
+      // Formatting INSIDE the run (`<m:r><b>x</b></m:r>`) applies to the run.
+      if (child.nodeType === 1 && name === undefined) {
+        runFormat = wrapperFormat(child as Element, runFormat);
+      }
       collectText(child, state, depth + 1, text);
     }
   }
-  return runXml(text.join(''), properties);
+  return mathRunXml(text.join(''), properties, runFormat);
 }
 
 function childrenXml(
   element: Element,
   container: string,
   state: EquationState,
-  depth: number
+  depth: number,
+  format: MathRunFormat
 ): string {
   let out = '';
   let stray = '';
@@ -155,11 +154,11 @@ function childrenXml(
       continue;
     }
     if (child.nodeType !== 1) continue;
-    if (stray.trim().length > 0) out += runXml(stray, '');
+    if (stray.trim().length > 0) out += mathRunXml(stray, '', format);
     stray = '';
-    out += mathElementXml(child as Element, container, state, depth + 1);
+    out += mathElementXml(child as Element, container, state, depth + 1, format);
   }
-  if (stray.trim().length > 0) out += runXml(stray, '');
+  if (stray.trim().length > 0) out += mathRunXml(stray, '', format);
   return out;
 }
 
@@ -167,7 +166,8 @@ function mathElementXml(
   element: Element,
   container: string,
   state: EquationState,
-  depth: number
+  depth: number,
+  format: MathRunFormat
 ): string {
   if (depth > MAX_EQUATION_DEPTH) {
     state.truncated = true;
@@ -175,48 +175,57 @@ function mathElementXml(
   }
   if (!charge(state)) return '';
   const name = OMML_NAME_BY_TAG.get(tagOf(element));
-  // HTML formatting between math elements is transparent: its children belong to
-  // the enclosing math container.
+  // HTML formatting between math elements is transparent: its children belong to the
+  // enclosing math container, and its formatting applies to the runs inside it.
   if (name === undefined) {
-    return tagOf(element) === 'o:p' ? '' : childrenXml(element, container, state, depth);
+    if (tagOf(element) === 'o:p') return '';
+    return childrenXml(element, container, state, depth, wrapperFormat(element, format));
   }
   // `m:ctrlPr` holds Word run formatting as HTML on the clipboard; it does not travel.
   if (name === 'ctrlPr' || name === 'oMathPara' || name === 'oMath') return '';
-  if (name === 'r' || name === 't') return mathRunXml(element, state, depth);
+  if (name === 'r' || name === 't') return ommlRunXml(element, state, depth, format);
   const value = element.getAttribute('m:val');
   const attribute =
     value !== null && value.length <= MAX_VALUE_LENGTH
       ? ` m:val="${escapeXmlAttribute(xmlSafeText(value))}"`
       : '';
-  const inner = childrenXml(element, name, state, depth);
+  const inner = childrenXml(element, name, state, depth, format);
   return inner.length > 0
     ? `<m:${name}${attribute}>${inner}</m:${name}>`
     : `<m:${name}${attribute}/>`;
 }
 
-function equationXml(element: Element, state: EquationState): string | null {
+function equationXml(element: Element, state: EquationState, format: MathRunFormat): string | null {
   if (!charge(state)) return null;
-  const inner = childrenXml(element, 'oMath', state, 1);
+  const inner = childrenXml(element, 'oMath', state, 1, format);
   return inner.length > 0 ? `<m:oMath>${inner}</m:oMath>` : null;
 }
 
-/** The `m:oMath` children of a display equation, through any HTML wrappers. */
-function displayEquationsOf(
+/** The display properties and `m:oMath` children of a display, through HTML wrappers. */
+function displayPartsOf(
   element: Element,
   state: EquationState,
   depth: number,
-  out: string[]
+  format: MathRunFormat,
+  out: { properties: string; equations: string[] }
 ): void {
   if (depth > MAX_EQUATION_DEPTH || !charge(state)) return;
   for (const child of Array.from(element.children)) {
     const name = ommlName(child);
     if (name === 'oMath') {
-      const xml = equationXml(child, state);
-      if (xml !== null) out.push(xml);
+      const xml = equationXml(child, state, format);
+      if (xml !== null) out.equations.push(xml);
+    } else if (name === 'oMathParaPr' && out.properties.length === 0) {
+      out.properties = mathElementXml(child, 'oMathPara', state, depth + 1, format);
     } else if (name === undefined) {
-      displayEquationsOf(child, state, depth + 1, out);
+      displayPartsOf(child, state, depth + 1, wrapperFormat(child, format), out);
     }
   }
+}
+
+function isEquationRoot(element: Element): boolean {
+  const name = ommlName(element);
+  return name === 'oMath' || name === 'oMathPara' || isMathmlRoot(element);
 }
 
 /** True inside another equation, or below the climb cap, where a root never sits. */
@@ -224,13 +233,12 @@ function hasMathAncestor(element: Element): boolean {
   let steps = 0;
   for (let parent = element.parentElement; parent !== null; parent = parent.parentElement) {
     if ((steps += 1) > MAX_ANCESTOR_CLIMB) return true;
-    const name = ommlName(parent);
-    if (name === 'oMath' || name === 'oMathPara') return true;
+    if (isEquationRoot(parent)) return true;
   }
   return false;
 }
 
-/** Replace each `msEquation` conditional comment that holds OMML with its live markup. */
+/** Replace each `msEquation` conditional comment that holds OMML or MathML with live markup. */
 function unwrapEquationComments(document: Document, state: EquationState): void {
   if (typeof document.createTreeWalker !== 'function') return;
   const walker = document.createTreeWalker(document.body, 128 /* SHOW_COMMENT */);
@@ -238,7 +246,7 @@ function unwrapEquationComments(document: Document, state: EquationState): void 
   for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
     if (!charge(state)) return;
     const data = (node as Comment).data;
-    if (/<m:omath/i.test(data) && EQUATION_COMMENT.test(data)) {
+    if (/<m:omath|<math[\s>]/i.test(data) && EQUATION_COMMENT.test(data)) {
       if (comments.length >= MAX_EQUATION_COMMENTS) {
         state.truncated = true;
         break;
@@ -310,10 +318,31 @@ function removeFallbackAfter(equation: Element): void {
   }
 }
 
+/** Canonical XML for one equation root, or null when nothing recoverable remains. */
+function rootXml(root: Element, state: EquationState): string | null {
+  const format: MathRunFormat =
+    root.getElementsByTagName('i').length > 0 ? { uprightUnlessItalic: true } : NO_MATH_FORMAT;
+  if (isMathmlRoot(root)) {
+    if (!charge(state)) return null;
+    const inner = mathmlToOmml(root, state, format);
+    if (inner.length === 0) return null;
+    return isMathmlDisplay(root)
+      ? `<m:oMathPara><m:oMath>${inner}</m:oMath></m:oMathPara>`
+      : `<m:oMath>${inner}</m:oMath>`;
+  }
+  if (ommlName(root) === 'oMathPara') {
+    const parts = { properties: '', equations: [] as string[] };
+    displayPartsOf(root, state, 1, format, parts);
+    if (parts.equations.length === 0) return null;
+    return `<m:oMathPara>${parts.properties}${parts.equations.join('')}</m:oMathPara>`;
+  }
+  return equationXml(root, state, format);
+}
+
 /**
- * Recover the Office Math in a parsed Word clipboard document. The pass mutates the
- * detached document: it unwraps `msEquation` comments and removes the fallback pictures
- * of recovered equations.
+ * Recover the equations in a parsed clipboard document. The pass mutates the detached
+ * document: it unwraps `msEquation` comments and removes the fallback pictures of
+ * recovered equations.
  */
 export function prepareWordEquations(document: Document, budget: number): WordEquations {
   if (document.body === null || budget <= 0) return NO_EQUATIONS;
@@ -321,7 +350,7 @@ export function prepareWordEquations(document: Document, budget: number): WordEq
   unwrapEquationComments(document, state);
   const byElement = new Map<Element, readonly string[]>();
   const roots: Element[] = [];
-  for (const tag of ['m:omathpara', 'm:omath']) {
+  for (const tag of ['m:omathpara', 'm:omath', 'math']) {
     const found = document.body.getElementsByTagName(tag);
     for (let index = 0; index < found.length; index += 1) {
       if (roots.length >= MAX_EQUATIONS) {
@@ -338,16 +367,10 @@ export function prepareWordEquations(document: Document, budget: number): WordEq
       state.truncated = true;
       break;
     }
-    const equations: string[] = [];
-    if (ommlName(root) === 'oMathPara') {
-      displayEquationsOf(root, state, 1, equations);
-    } else {
-      const xml = equationXml(root, state);
-      if (xml !== null) equations.push(xml);
-    }
+    const xml = rootXml(root, state);
     // A partial equation would change the math; the walk keeps its text and picture.
-    if (equations.length === 0 || state.truncated) continue;
-    byElement.set(root, equations);
+    if (xml === null || state.truncated) continue;
+    byElement.set(root, [xml]);
     removeFallbackAfter(root);
   }
   return { byElement, visited: state.visited, truncated: state.truncated };
@@ -355,5 +378,5 @@ export function prepareWordEquations(document: Document, budget: number): WordEq
 
 /** True for a projected paragraph child that is visible content, not furniture. */
 export function isEquationPiece(piece: string): boolean {
-  return piece.startsWith('<m:oMath>');
+  return piece.startsWith('<m:oMath>') || piece.startsWith('<m:oMathPara>');
 }

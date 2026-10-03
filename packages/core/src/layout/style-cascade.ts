@@ -23,6 +23,7 @@ import { compatibilityProfileFromSettings } from './compatibility/compatibility-
 
 import {
   canonicalOoxmlFingerprint,
+  displayMathAlignment,
   twipsToPoints,
   type OoxmlElement,
   type OoxmlNode,
@@ -959,7 +960,7 @@ export function resolveParagraphLayoutInputs(
     props,
     indent,
     available: Math.max(1, contentWidth - indent.left - indent.right),
-    alignment: paragraphAlignment(props),
+    alignment: displayMathAlignment(paragraph) ?? paragraphAlignment(props),
     spacing: {
       ...paragraphSpacing(props, {
         inList: listItem !== undefined,
