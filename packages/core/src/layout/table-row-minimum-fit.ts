@@ -16,7 +16,8 @@
 // Limits, each placed by the ordinary row rules instead:
 // - A minimum taller than a fresh column below the repeated header rows. The row splits where
 //   it stands.
-// - Positioned (`w:tblpPr`) tables.
+// - Positioned (`w:tblpPr`) tables, except one breaking across pages from a page or margin
+//   anchor (`table-pinned-break.ts`).
 
 import type { SemanticTableRow } from './semantic-table.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';

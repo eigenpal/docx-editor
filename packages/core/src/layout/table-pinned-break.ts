@@ -277,17 +277,14 @@ export function pinnedTableBreak(
   // The band below the start must still hold the header rows and the first body line, unless
   // that opening is taller than the band itself, where the paginator degrades the group.
   const opening = openingHeight(probe);
+  // A note reserve that shortens the band also stops an earlier mode's run to the page edge.
+  const limit = atMargin || flow.bottom < marginBottom ? flow.bottom : pageEdge;
   const top = Math.min(
     tableFloatOriginY(float, leading, flow.verticalFrames),
     pageEdge - leading,
-    opening <= flow.bottom ? flow.bottom - opening : Infinity
+    opening <= flow.bottom ? limit - opening : Infinity
   );
-  const reach = top + flow.bottom - flow.top;
-  return {
-    top,
-    // A note reserve that shortens the band also stops an earlier mode's run to the page edge.
-    firstBottom: Math.min(atMargin || flow.bottom < marginBottom ? flow.bottom : pageEdge, reach),
-  };
+  return { top, firstBottom: Math.min(limit, top + flow.bottom - flow.top) };
 }
 
 /**

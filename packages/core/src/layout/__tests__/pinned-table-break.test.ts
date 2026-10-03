@@ -212,6 +212,18 @@ describe('a page-positioned table taller than the room below it', () => {
     expect(paragraphAt(layout, 'tail')).toEqual({ pageIndex: 1, y: 300 });
   });
 
+  test('a first row whose minimum ends below the margin opens the next page from mode 15', () => {
+    // A 400pt first row is the leading part: the table starts at 720 - 400 = 320. Earlier
+    // modes run the first fragment to the page edge and keep the row there; from mode 15 the
+    // fragment ends at the margin, so the row moves to the next page.
+    const atLeast = '<w:trHeight w:val="8000" w:hRule="atLeast"/>';
+    const tblpPr = '<w:tblpPr w:vertAnchor="page" w:horzAnchor="margin" w:tblpY="9000"/>';
+    const body = lead + table({ tblpPr, rows: 2, lines: 2, trPr: atLeast }) + tail;
+    expect(shape(layoutOf(body, { compatibilityMode: 14 }))[0]).toEqual([0, 320, 400]);
+    const modern = tableFragments(layoutOf(body)).filter(({ fragment }) => fragment.rows.length);
+    expect(modern[0]!.pageIndex).toBe(1);
+  });
+
   test('legacy modes run the first fragment to the page edge', () => {
     const layout = layoutOf(lead + table({ tblpPr: PAGE }) + tail, { compatibilityMode: 14 });
     expect(shape(layout)[0]).toEqual([0, 96, 624]);
