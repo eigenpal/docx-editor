@@ -58,6 +58,19 @@ export function omittedHalves(docDefaults: OoxmlElement | null | undefined): Omi
 }
 
 /**
+ * The halves a reader leaves to the application, judged on the `w:docDefaults` element it took
+ * from `stylesRoot`. A root outside the WordprocessingML namespace is not a styles part, so it
+ * supplies nothing; `null` is a package with no styles part.
+ */
+export function omittedFor(
+  stylesRoot: OoxmlElement | null,
+  docDefaults: OoxmlElement | null | undefined
+): OmittedDocDefaults {
+  if (stylesRoot && stylesRoot.namespaceUri !== WML_NAMESPACE_URI) return NEITHER;
+  return omittedHalves(docDefaults);
+}
+
+/**
  * The halves of `w:docDefaults` a styles root omits, read from the first `w:docDefaults` as
  * layout reads it. `null` is a package with no styles part. A root outside the
  * WordprocessingML namespace is not a styles part, so it supplies nothing.
@@ -124,8 +137,7 @@ export function explicitDocDefaults(
   authored: OoxmlElement | null,
   idPrefix: string
 ): OoxmlElement | null {
-  if (stylesRoot && stylesRoot.namespaceUri !== WML_NAMESPACE_URI) return authored;
-  const omitted = omittedHalves(authored);
+  const omitted = omittedFor(stylesRoot, authored);
   if (!omitted.run && !omitted.paragraph) return authored;
   const stated: OoxmlNode[] = [];
   if (omitted.run)

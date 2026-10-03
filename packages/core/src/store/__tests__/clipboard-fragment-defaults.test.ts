@@ -58,6 +58,27 @@ describe('omitted defaults travel as what the source painted', () => {
     }
   });
 
+  test('partial spacing on a style or the paragraph gains only the attributes it leaves out', () => {
+    const headStyles = styles(
+      '<w:style w:type="paragraph" w:styleId="Head"><w:pPr><w:spacing w:before="240"/></w:pPr></w:style>'
+    );
+    for (const pPr of [
+      '<w:pPr><w:pStyle w:val="Head"/></w:pPr>',
+      '<w:pPr><w:spacing w:before="240"/></w:pPr>',
+    ]) {
+      const source = buildPackage(`<w:p>${pPr}<w:r><w:t>carried</w:t></w:r></w:p>`, {
+        'word/styles.xml': headStyles,
+      });
+      const xml = pasteInto(authoredTenPoint, copied(source));
+      const spacing = xml.match(/<w:spacing [^>]*\/>/g) ?? [];
+      expect(spacing).toHaveLength(1);
+      expect(spacing[0]).toContain('w:after="160"');
+      expect(spacing[0]).toContain('w:line="278"');
+      // The style states w:before itself; only direct spacing keeps it on the paragraph.
+      expect(spacing[0]!.includes('w:before="240"')).toBe(pPr.includes('w:spacing'));
+    }
+  });
+
   test('external content without a styles part stamps nothing', () => {
     const external = zipSync({
       '[Content_Types].xml': strToU8(
