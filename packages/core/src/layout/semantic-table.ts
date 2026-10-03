@@ -442,11 +442,15 @@ const tableStructureMemos = new WeakMap<object, TableStructureMemo>();
  */
 const filteredTableStructureMemos = new WeakMap<object, TableStructureMemo>();
 
-/** The widened structure for each base structure, while its widths stay the same. */
+/**
+ * Widened structures per base, by their widths. Readers that widen one base differently (two
+ * measurers, two field contexts) keep separate entries instead of evicting each other.
+ */
 const widenedStructureMemos = new WeakMap<
   SemanticTableStructure,
-  { readonly widths: readonly number[]; readonly structure: SemanticTableStructure }
+  Map<string, SemanticTableStructure>
 >();
+const MAX_WIDENED_PER_BASE = 4;
 
 /**
  * Read one typed table node into a bounded structure, or null when the node is not a
@@ -518,9 +522,10 @@ export function readTableStructure(
       ),
   });
   if (widths === base.columnWidthsPt) return base;
-  const widened = widenedStructureMemos.get(base);
-  if (widened && widened.widths.every((width, index) => width === widths[index]))
-    return widened.structure;
+  const widthsKey = widths.join(',');
+  let widened = widenedStructureMemos.get(base);
+  const known = widened?.get(widthsKey);
+  if (known) return known;
   const structure = readTableStructureUncached(
     table,
     contentWidthPt,
@@ -531,7 +536,11 @@ export function readTableStructure(
     compatibilityMode,
     base.bidiVisual ? [...widths].reverse() : widths
   );
-  if (structure) widenedStructureMemos.set(base, { widths, structure });
+  if (structure) {
+    if (!widened) widenedStructureMemos.set(base, (widened = new Map()));
+    if (widened.size >= MAX_WIDENED_PER_BASE) widened.delete(widened.keys().next().value!);
+    widened.set(widthsKey, structure);
+  }
   return structure;
 }
 

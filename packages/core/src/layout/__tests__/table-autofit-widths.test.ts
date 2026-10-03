@@ -534,4 +534,29 @@ describe('autofit layout', () => {
       '</w:tr></w:tbl>';
     expect(columns(outer).widths[0]).toBeGreaterThanOrEqual(50 - 0.01);
   });
+
+  const outerWith = (nested: string, second: string) =>
+    '<w:tbl><w:tblPr><w:tblW w:w="2400" w:type="dxa"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/>' +
+    '<w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+    '<w:tblGrid><w:gridCol w:w="600"/><w:gridCol w:w="1800"/></w:tblGrid><w:tr>' +
+    `<w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr>${nested}<w:p/></w:tc>` +
+    `<w:tc><w:tcPr><w:tcW w:w="1800" w:type="dxa"/></w:tcPr><w:p>${second}</w:p></w:tc>` +
+    '</w:tr></w:tbl>';
+
+  test('a wide nested grid does not lock or widen the outer column', () => {
+    const nested =
+      '<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid><w:tr>' +
+      `<w:tc><w:tcPr><w:tcW w:w="3000" w:type="dxa"/></w:tcPr><w:p>${run('ab')}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="3000" w:type="dxa"/></w:tcPr><w:p>${run('cd')}</w:p></w:tc>` +
+      '</w:tr></w:tbl>';
+    expect(columns(outerWith(nested, run('cd'))).widths).toEqual([30, 90]);
+  });
+
+  test('a fixed nested table keeps the width it paints at', () => {
+    const nested =
+      '<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol/></w:tblGrid>' +
+      `<w:tr><w:tc><w:tcPr><w:tcW w:w="1200" w:type="dxa"/></w:tcPr><w:p>${run('n')}</w:p></w:tc></w:tr></w:tbl>`;
+    expect(columns(outerWith(nested, run('A'.repeat(30)))).widths[0]).toBeGreaterThanOrEqual(60);
+  });
 });

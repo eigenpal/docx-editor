@@ -426,31 +426,34 @@ function widenedCellInsets(
   };
 }
 
-/** A nested table needs at least the width its own grid states. */
+/** The width a nested table needs from the column that holds it. */
 function nestedTableMinimumPt(
   table: OoxmlElement,
   cellContentWidthPt: number,
   context: TableAutofitContext,
   view: AutofitView
 ): number {
-  let grid = 0;
-  for (const column of gridColumnWidthsPt(gridColumnElements(table))) grid += column ?? 0;
   const depth = (view.depth ?? 0) + 1;
   const nested = view.readNested?.(table, cellContentWidthPt, depth);
-  if (!nested) return grid;
+  if (!nested) {
+    // Unreadable here (or past the nesting limit): the authored grid is the only evidence.
+    let grid = 0;
+    for (const column of gridColumnWidthsPt(gridColumnElements(table))) grid += column ?? 0;
+    return grid;
+  }
   // A leading-aligned nested table starts its indent into the cell, fixed or autofit.
   const leading = nested.bidiVisual ? 'right' : 'left';
   const indent = nested.alignment === leading ? Math.max(0, nested.indentPt) : 0;
-  let width = grid + indent;
-  // A nested autofit table needs its own columns' minimums too, or its words split one
-  // level down while the outer table has room.
-  if (!nested.layoutFixed) {
-    let minimums = 0;
+  let width = 0;
+  if (nested.layoutFixed) {
+    // A fixed table paints at its resolved width, whatever the cell gives it.
+    for (const column of nested.columnWidthsPt) width += column;
+  } else {
+    // An autofit table needs only its own columns' minimums; its words stay whole.
     for (const minimum of autofitColumnMinimumsPt(nested, context, { ...view, depth }))
-      minimums += minimum;
-    width = Math.max(width, minimums + indent);
+      width += minimum;
   }
-  return width;
+  return width + indent;
 }
 
 /**
