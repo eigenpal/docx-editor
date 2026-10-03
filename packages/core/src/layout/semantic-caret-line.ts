@@ -1,6 +1,7 @@
 import { lineSegmentFor, type LineSegment } from './line-segments.ts';
-import type { LineRecord, SemanticLayout } from './semantic-records.ts';
-import { paragraphLinesIndex } from './paragraph-lines.ts';
+import type { LayoutBox, LineRecord, SemanticLayout } from './semantic-records.ts';
+import { paragraphFragmentsOf } from './semantic-records.ts';
+import { paragraphLinesIndex, type PlacedLine } from './paragraph-lines.ts';
 import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
 
 /**
@@ -39,13 +40,27 @@ function fieldFragmentAt(
   return null;
 }
 
+/** Each line's FIRST position in its paragraph's line list, built once per list. */
+const linePositions = new WeakMap<readonly PlacedLine[], Map<string, number>>();
+
+function linePosition(lines: readonly PlacedLine[], line: LineRecord): number {
+  let positions = linePositions.get(lines);
+  if (!positions) {
+    positions = new Map();
+    for (const [at, placed] of lines.entries())
+      if (!positions.has(placed.line.id)) positions.set(placed.line.id, at);
+    linePositions.set(lines, positions);
+  }
+  return positions.get(line.id) ?? -1;
+}
+
 /**
  * Whether another line of the same story occurrence draws the same field, in `direction`.
  *
- * A header or footer paragraph is indexed once per page with the SAME line records, so the
- * scan stops at the first line this occurrence already drew: that line opens the next copy
- * of the story, not a continuation. A repeated header row is not indexed; its copy matches
- * by id.
+ * A header or footer paragraph is indexed once per page with the SAME line records. Lines
+ * resolve to their first occurrence, so a backward scan never meets a copy, and a forward
+ * scan stops at a line that already appeared earlier: it opens the next copy of the story.
+ * A repeated header row is not indexed; its copy matches by id.
  */
 function fieldContinues(
   layout: SemanticLayout,
@@ -55,17 +70,11 @@ function fieldContinues(
   direction: 1 | -1
 ): boolean {
   const lines = paragraphLinesIndex(layout).get(paragraphId) ?? [];
-  let index = lines.findIndex((placed) => placed.line === line);
-  if (index < 0) index = lines.findIndex((placed) => placed.line.id === line.id);
+  const index = linePosition(lines, line);
   if (index < 0) return false;
-  // A story copy starts again with lines this occurrence already drew.
-  const seen = new Set(
-    (direction === 1 ? lines.slice(0, index + 1) : [lines[index]!]).map((placed) => placed.line.id)
-  );
   for (let at = index + direction; at >= 0 && at < lines.length; at += direction) {
     const other = lines[at]!.line;
-    if (seen.has(other.id)) return false;
-    seen.add(other.id);
+    if (linePosition(lines, other) !== at) return false;
     const segment = lineSegmentFor(other, paragraphId);
     if (!segment) continue;
     if (direction === 1 ? segment.start >= field.end : segment.end <= field.start) return false;
@@ -79,7 +88,7 @@ function fieldContinues(
  * owns the offset after the field.
  *
  * Every fragment of a field cut across lines publishes the whole field range, and each line
- * that draws one covers that range (`coverPieceRange`). The offset after the field belongs
+ * that draws one covers that range in its segment (`lineSegments`). The offset after the field belongs
  * to the last of those lines, where the last fragment ends. `caretAt` and the caret stops
  * both ask this, so the drawn caret and keyboard motion agree. Ordinary text never has a
  * cut field fragment, so it never reaches the scan.
@@ -178,4 +187,27 @@ export function isDrawingOnlySegment(line: LineRecord, segment: LineSegment): bo
     if (span.range.end > span.range.start) return false;
   }
   return true;
+}
+
+/**
+ * Header-repeat lines of one paragraph on one sheet.
+ *
+ * The main line index skips `w:tblHeader` repeats so keyboard stops visit each offset once.
+ * A click on a later copy still needs geometry on THAT sheet, or the painted caret and
+ * scroll-follow jump back to the authored row on page 0.
+ */
+export function headerRepeatLinesOnPage(
+  layout: SemanticLayout,
+  pageIndex: number,
+  paragraphId: string
+): { line: LineRecord; pageIndex: number; clipBox?: LayoutBox }[] {
+  const page = layout.pages[pageIndex];
+  if (!page) return [];
+  const found: { line: LineRecord; pageIndex: number; clipBox?: LayoutBox }[] = [];
+  for (const fragment of paragraphFragmentsOf(page, true)) {
+    if (fragment.paragraphId !== paragraphId) continue;
+    for (const line of fragment.lines)
+      found.push({ line, pageIndex, ...(fragment.clipToBox ? { clipBox: fragment.box } : {}) });
+  }
+  return found;
 }

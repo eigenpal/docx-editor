@@ -53,6 +53,7 @@ import {
   laterLineWithDrawingAt,
   laterSegmentHolds,
   earlierSegmentHolds,
+  headerRepeatLinesOnPage,
   isNonNavigableInterior,
   endsWithLineBreak,
   isDrawingOnlySegment,
@@ -321,29 +322,6 @@ function resolveCaretAtOptions(measurerOrOptions?: TextMeasurer | CaretAtOptions
   return measurerOrOptions as CaretAtOptions;
 }
 
-/**
- * Header-repeat lines of one paragraph on one sheet.
- *
- * The main line index skips `w:tblHeader` repeats so keyboard stops visit each offset once.
- * A click on a later copy still needs geometry on THAT sheet, or the painted caret and
- * scroll-follow jump back to the authored row on page 0.
- */
-function headerRepeatLinesOnPage(
-  layout: SemanticLayout,
-  pageIndex: number,
-  paragraphId: string
-): { line: LineRecord; pageIndex: number; clipBox?: LayoutBox }[] {
-  const page = layout.pages[pageIndex];
-  if (!page) return [];
-  const found: { line: LineRecord; pageIndex: number; clipBox?: LayoutBox }[] = [];
-  for (const fragment of paragraphFragmentsOf(page, true)) {
-    if (fragment.paragraphId !== paragraphId) continue;
-    for (const line of fragment.lines)
-      found.push({ line, pageIndex, ...(fragment.clipToBox ? { clipBox: fragment.box } : {}) });
-  }
-  return found;
-}
-
 /** Geometry for one model position, or null when it is not laid out. */
 export function caretAt(
   layout: SemanticLayout,
@@ -393,10 +371,12 @@ export function caretAt(
       continue;
     }
     if (
-      position.offset === segment.end &&
-      position.offset > segment.start &&
-      (laterLineWithDrawingAt(layout, position.paragraphId, position.offset) ||
-        laterSegmentHolds(layout, line, position.paragraphId, position.offset))
+      (position.offset === segment.end &&
+        position.offset > segment.start &&
+        (laterLineWithDrawingAt(layout, position.paragraphId, position.offset) ||
+          laterSegmentHolds(layout, line, position.paragraphId, position.offset))) ||
+      (position.offset === segment.start &&
+        earlierSegmentHolds(layout, line, position.paragraphId, position.offset))
     ) {
       continue;
     }

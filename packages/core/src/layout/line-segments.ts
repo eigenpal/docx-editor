@@ -55,16 +55,21 @@ const lineSegmentsCache = new WeakMap<LineRecord, readonly LineSegment[]>();
 export function lineSegments(line: LineRecord): readonly LineSegment[] {
   const cached = lineSegmentsCache.get(line);
   if (cached) return cached;
+  const mixed =
+    line.spans.some((span) => span.range.paragraphId !== line.range.paragraphId) ||
+    (line.drawings ?? []).some((drawing) => drawing.paragraphId !== line.range.paragraphId);
+  // A field cut across lines publishes its whole range on every fragment, while the line
+  // range starts where the previous line ended. The segment covers what the line draws, so
+  // selection reaches every fragment and caret ownership can see it (`laterSegmentHolds`).
+  let start = line.range.start;
+  for (const span of line.spans) if (span.range.start < start) start = span.range.start;
   const whole: LineSegment = {
     paragraphId: line.range.paragraphId,
-    start: line.range.start,
+    start,
     end: line.range.end,
     spans: line.spans,
     drawings: line.drawings ?? [],
   };
-  const mixed =
-    line.spans.some((span) => span.range.paragraphId !== line.range.paragraphId) ||
-    (line.drawings ?? []).some((drawing) => drawing.paragraphId !== line.range.paragraphId);
   const segments = mixed ? splitLineByParagraph(line) : [whole];
   lineSegmentsCache.set(line, segments);
   return segments;

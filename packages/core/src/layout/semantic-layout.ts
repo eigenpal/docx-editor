@@ -2484,7 +2484,7 @@ function layoutBlocksPass(
             mergedLines[mergedLines.length - 1]!.range
           : {
               paragraphId,
-              start: Math.min(fragmentStart, pending[0]!.range.start),
+              start: fragmentStart,
               end: pending[pending.length - 1]!.range.end,
             },
         props,

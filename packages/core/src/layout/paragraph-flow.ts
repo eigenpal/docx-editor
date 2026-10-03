@@ -6,7 +6,6 @@ import {
 import { growRunBorderLineMetrics, textBandHeightWithBorders } from './run-border-strokes.ts';
 import type { CellAnchorScope } from './cell-anchor-layout.ts';
 import {
-  coverPieceRange,
   growPendingLineDrawingExtent,
   lineHoldsContent,
   markPendingLineWrapAdvances,
@@ -1359,8 +1358,7 @@ export function breakParagraph(
         });
         line.width += width;
         growLineMetricsForText(line, metrics, '\t', faceStyle);
-        if (layoutOwned) coverPieceRange(line, piece);
-        else line.end = piece.start + boundary;
+        line.end = layoutOwned ? piece.end : piece.start + boundary;
         // A tab lets the next word open a line. Clear the previous word so overflow
         // cannot carry it with the tab and replay the old advance from a new origin.
         lastEmitted = '\t';
@@ -1608,8 +1606,7 @@ export function breakParagraph(
             });
             line.width += prefix.width;
             growLineMetricsForText(line, metrics, prefix.text, faceStyle);
-            if (layoutOwned) coverPieceRange(line, piece);
-            else line.end = prefix.modelStart + prefix.text.length;
+            line.end = layoutOwned ? piece.end : prefix.modelStart + prefix.text.length;
           },
           closeLine,
           overflowTolerancePt: OVERFLOW_TOLERANCE_PT,
@@ -1661,8 +1658,7 @@ export function breakParagraph(
         else lineEndSpaces.appendWordEnd(line.spans, span, clippedWordEnd);
         line.width += remainingWidth;
         growLineMetricsForText(line, metrics, remaining, faceStyle);
-        if (layoutOwned) coverPieceRange(line, piece);
-        else line.end = piece.start + boundary;
+        line.end = layoutOwned ? piece.end : piece.start + boundary;
       }
       lastEmitted = candidate;
       consumed = boundary;

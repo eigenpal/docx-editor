@@ -3,6 +3,7 @@ import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import { documentOrder } from '../document-order.ts';
 import { selectionMarkRects, selectionRects } from '../selection-rects.ts';
 import { layoutHeaderFooterStory } from '../hf-layout.ts';
+import { lineSegments } from '../line-segments.ts';
 import {
   caretAt,
   caretStops,
@@ -154,10 +155,10 @@ describe('a field cut across lines', () => {
     return { result, lines, paragraphId, start, end };
   };
 
-  test('covers the field range on every fragment line', () => {
+  test('covers the field range in the segment of every fragment line', () => {
     const { lines, start, end } = cut();
     expect(lines).toHaveLength(3);
-    for (const line of lines) expect(line.range).toMatchObject({ start, end });
+    for (const line of lines) expect(lineSegments(line)[0]).toMatchObject({ start, end });
   });
 
   test('a selection over the field highlights every fragment', () => {
@@ -250,4 +251,46 @@ describe('a footer laid out on every page', () => {
     const after = caretAt(result, { paragraphId, offset: 1 }, { preferredPageIndex: 0 });
     expect(after?.lineId).toBe(lineIds[1]);
   });
+});
+
+test('a field carried to the next line with its word keeps its end there', () => {
+  // `x ` fits after the first word; `yyyy` overflows and carries with `zz` to line 2.
+  const result = layout(
+    run('aaaaaaaaaaaa ') + field('HYPERLINK "https://e/"', 'x yyyy') + run('zz')
+  );
+  const lines = linesOf(result);
+  const tail = lines.find((line) => line.spans.some((span) => span.text === 'yyyy'))!;
+  const { paragraphId, start, end } = tail.spans.find((span) => span.projected)!.range;
+  expect(caretAt(result, { paragraphId, offset: end })?.lineId).toBe(tail.id);
+  const rects = selectionRects(
+    result,
+    { anchor: { paragraphId, offset: start }, head: { paragraphId, offset: end } },
+    documentOrder(result)
+  );
+  expect(rects.some((rect) => rect.y === tail.box.y)).toBe(true);
+});
+
+test('the caret before a field cut across pages stays on its first page', () => {
+  const read = readOoxmlPart(
+    `<w:document xmlns:w="${W}"><w:body><w:p>${run('ab ')}${field('HYPERLINK "https://e/"', TOKEN + TOKEN)}${run(' tail')}</w:p></w:body></w:document>`,
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!read.ok) throw new Error(read.reason);
+  const result = layoutSemanticDocument(read.part, 1, {
+    measurer: createFixedMeasurer(6, 12),
+    styleCascade: elevenPointDefaults(),
+    geometry: { width: 120, height: 30, margin: { top: 0, bottom: 0, left: 0, right: 0 } },
+  });
+  expect(result.pages.length).toBeGreaterThan(1);
+  const first = linesOf(result).find((line) => line.spans.some((span) => span.projected))!;
+  const { paragraphId, start, end } = first.spans.find((span) => span.projected)!.range;
+  const stops = caretStops(result).filter((stop) => stop.position.paragraphId === paragraphId);
+  for (const offset of [start, end]) {
+    const stop = stops.filter((candidate) => candidate.position.offset === offset);
+    expect(stop).toHaveLength(1);
+    for (const preferredPageIndex of [0, 1, 2])
+      expect(caretAt(result, { paragraphId, offset }, { preferredPageIndex })?.lineId).toBe(
+        stop[0]!.lineId
+      );
+  }
 });
