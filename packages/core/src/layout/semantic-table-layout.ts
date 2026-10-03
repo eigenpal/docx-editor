@@ -52,8 +52,10 @@ import {
 } from './layout-cache.ts';
 import { cellParagraphLines, type HeldCellBreak } from './cell-continuation-lines.ts';
 import {
+  continuedCellCursor,
   initialCellCursor,
   initialCellCursors,
+  unplacedHeldBreak,
   type CellPlaceCursor,
 } from './table-cell-cursor.ts';
 export { initialCellCursors, type CellPlaceCursor } from './table-cell-cursor.ts';
@@ -1180,15 +1182,7 @@ function flowBlocksInBoxBounded(
       return {
         blocks: fragments,
         bottom: y,
-        cursor: {
-          blockIndex,
-          lineIndex: placed.nextLineIndex,
-          startOffset: placed.nextStartOffset,
-          ...(placed.heldBreak ? { heldBreak: placed.heldBreak } : {}),
-          previousSpaceAfter: 0,
-          paragraphFragmentIndex: paragraphFragmentIndex + 1,
-          precededByEmittedTable: lastEmittedTable,
-        },
+        cursor: continuedCellCursor(blockIndex, placed, paragraphFragmentIndex, lastEmittedTable),
         complete: false,
         fitted: true,
         nestedSplitBlocked: false,
@@ -1203,10 +1197,7 @@ function flowBlocksInBoxBounded(
       blockIndex,
       lineIndex,
       startOffset,
-      // A continued paragraph that placed nothing here keeps its break for the next page.
-      ...(heldBreak && blockIndex === cursor.blockIndex && startOffset !== undefined
-        ? { heldBreak }
-        : {}),
+      ...unplacedHeldBreak(cursor, blockIndex, startOffset),
       ...(nestedTable ? { nestedTable } : {}),
       previousSpaceAfter,
       paragraphFragmentIndex,

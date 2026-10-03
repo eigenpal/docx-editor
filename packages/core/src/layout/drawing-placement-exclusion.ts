@@ -28,7 +28,8 @@ export function anchorsTopAndBottomDrawing(
   return value;
 }
 
-const anyAnchorMemo = new WeakMap<OoxmlElement, boolean>();
+// By context first: whether an atom is anchored can depend on `projectionForAtom`.
+const anyAnchorMemo = new WeakMap<InlineDrawingLayoutContext, WeakMap<OoxmlElement, boolean>>();
 
 /** True when the paragraph anchors any drawing, whose own band then moves with the paragraph. */
 export function anchorsAnyDrawing(
@@ -36,10 +37,15 @@ export function anchorsAnyDrawing(
   context: InlineDrawingLayoutContext | undefined
 ): boolean {
   if (!context) return false;
-  let value = anyAnchorMemo.get(paragraph);
+  let byParagraph = anyAnchorMemo.get(context);
+  if (!byParagraph) {
+    byParagraph = new WeakMap();
+    anyAnchorMemo.set(context, byParagraph);
+  }
+  let value = byParagraph.get(paragraph);
   if (value === undefined) {
     value = anchoredDrawingAtomsInParagraph(paragraph, context).length > 0;
-    anyAnchorMemo.set(paragraph, value);
+    byParagraph.set(paragraph, value);
   }
   return value;
 }

@@ -1,6 +1,7 @@
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
 import type { ExclusionZone } from './drawing-exclusion.ts';
 import { anchorsAnyDrawing } from './drawing-placement-exclusion.ts';
+import { crossesContent } from './narrow-wrap-clearance.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import type { PendingLine } from './paragraph-flow.ts';
 
@@ -31,15 +32,8 @@ function positionFree(
   for (const zone of zones) {
     const band = zone.verticalBand;
     if (band.y + band.height <= top - 0.001) continue;
-    const { mode, textSide, contentBounds, wrapDistances } = zone.input;
-    if (mode !== 'topAndBottom' && textSide === 'bothSides') {
-      const left = Math.min(band.x, contentBounds.x - wrapDistances.left);
-      const right = Math.max(
-        band.x + band.width,
-        contentBounds.x + contentBounds.width + wrapDistances.right
-      );
-      if (right <= 0.001 || left >= cellWidth - 0.001) continue;
-    }
+    // A one-sided wrap can clear the whole far side, so only a two-sided one may sit beside.
+    if (zone.input.textSide === 'bothSides' && !crossesContent(zone, 0, cellWidth)) continue;
     return false;
   }
   return !anchorsAnyDrawing(paragraph, inlineDrawingLayout);
@@ -74,15 +68,20 @@ export function cellParagraphLines(input: {
   readonly priorLineCount: number;
   readonly carry: () => HeldCellBreak | undefined;
 } {
-  const free = positionFree(
-    input.paragraph,
-    input.top,
-    input.cellWidth,
-    input.zones,
-    input.inlineDrawingLayout
-  );
+  // Asked only when a page checks or carries a break; most cell paragraphs finish in place.
+  const free = (): boolean =>
+    positionFree(
+      input.paragraph,
+      input.top,
+      input.cellWidth,
+      input.zones,
+      input.inlineDrawingLayout
+    );
+  // Any zone on the page, even one that crosses no line, switches the breaker to placing lines
+  // in wrap intervals, so a break made with zones never stands for one made without, or back.
+  const key = (): string => `${input.heldKey()}|zones:${input.zones.length > 0}`;
   const { held, continuedAfter } = input;
-  if (free && held && continuedAfter !== undefined && held.key === input.heldKey()) {
+  if (held && continuedAfter !== undefined && held.key === key() && free()) {
     // Index 0 of a whole break owns the first-line indent and list marker; never a continuation.
     const index = continuedAfter - held.base;
     if (index > 0 && held.lines[index]?.start === input.startOffset) {
@@ -95,6 +94,6 @@ export function cellParagraphLines(input: {
     lines,
     lineStart: continuedAfter !== undefined ? 0 : input.legacyLineStart,
     priorLineCount: base,
-    carry: () => (free ? { key: input.heldKey(), lines, base } : undefined),
+    carry: () => (free() ? { key: key(), lines, base } : undefined),
   };
 }

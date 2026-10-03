@@ -40,3 +40,36 @@ export function initialCellCursor(): CellPlaceCursor {
     precededByEmittedTable: false,
   };
 }
+
+/** The cursor for a paragraph that continues on the next page, carrying its line break. */
+export function continuedCellCursor(
+  blockIndex: number,
+  placed: {
+    readonly nextLineIndex: number;
+    readonly nextStartOffset: number;
+    readonly heldBreak?: HeldCellBreak;
+  },
+  paragraphFragmentIndex: number,
+  precededByEmittedTable: boolean
+): CellPlaceCursor {
+  return {
+    blockIndex,
+    lineIndex: placed.nextLineIndex,
+    startOffset: placed.nextStartOffset,
+    ...(placed.heldBreak ? { heldBreak: placed.heldBreak } : {}),
+    previousSpaceAfter: 0,
+    paragraphFragmentIndex: paragraphFragmentIndex + 1,
+    precededByEmittedTable,
+  };
+}
+
+/** A continued paragraph that placed nothing on this page keeps its break for the next one. */
+export function unplacedHeldBreak(
+  cursor: CellPlaceCursor,
+  blockIndex: number,
+  startOffset: number | undefined
+): { readonly heldBreak?: HeldCellBreak } {
+  return cursor.heldBreak && blockIndex === cursor.blockIndex && startOffset !== undefined
+    ? { heldBreak: cursor.heldBreak }
+    : {};
+}

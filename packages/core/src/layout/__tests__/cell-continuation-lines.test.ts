@@ -4,6 +4,7 @@ import { cellParagraphLines, type HeldCellBreak } from '../cell-continuation-lin
 import type { ExclusionZone } from '../drawing-exclusion.ts';
 import type { PendingLine } from '../paragraph-flow.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
+import { initialCellCursor, unplacedHeldBreak } from '../table-cell-cursor.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import type { TableFragmentRecord, TextMeasurer } from '../semantic-records.ts';
 
@@ -134,7 +135,10 @@ const zoneAt = (
       mode,
       textSide,
       contentBounds: { x, y, width: 50, height },
+      polygon: null,
+      clipPolygon: null,
       wrapDistances: { top: 0, right: 9, bottom: 0, left: 9 },
+      effectInsets: { top: 0, right: 0, bottom: 0, left: 0 },
     },
   }) as unknown as ExclusionZone;
 function linesFor(held: HeldCellBreak | undefined, continuedAfter: number, startOffset: number) {
@@ -158,7 +162,7 @@ function linesFor(held: HeldCellBreak | undefined, continuedAfter: number, start
 test('a continuation picks its line by index, not by the first line with its start', () => {
   // A layout-owned piece wrapped over three lines: the last two start at its end.
   const whole = [line(0, 5), line(5, 9), line(9, 9), line(9, 12)];
-  const held = { key: 'k', lines: whole, base: 0 };
+  const held = { key: 'k|zones:false', lines: whole, base: 0 };
   const hit = linesFor(held, 3, 9)();
   expect(hit.lines).toBe(whole);
   expect(hit.lineStart).toBe(3);
@@ -184,7 +188,8 @@ test('a page that breaks its own remainder carries it on to the next page', () =
 
 test('only an exclusion band that can reach the paragraph stops the reuse', () => {
   const whole = [line(0, 5), line(5, 9), line(9, 12)];
-  const held = { key: 'k', lines: whole, base: 0 };
+  // Every page here carries a zone, so the break was made with zones too.
+  const held = { key: 'k|zones:true', lines: whole, base: 0 };
   const reuses = (zone: ExclusionZone) => linesFor(held, 1, 5)([zone]).lines === whole;
   // A header logo's band ends above the paragraph.
   expect(reuses(zoneAt(0, 60))).toBe(true);
@@ -197,4 +202,24 @@ test('only an exclusion band that can reach the paragraph stops the reuse', () =
   expect(reuses(zoneAt(150, 40, 260, 'topAndBottom'))).toBe(false);
   expect(reuses(zoneAt(150, 40, 260, 'square', 'left'))).toBe(false);
   expect(linesFor(held, 1, 5)([zoneAt(150, 40)]).carry()).toBeUndefined();
+});
+
+test('a break made with zones on its page never stands for one made without, or back', () => {
+  const whole = [line(0, 5), line(5, 9), line(9, 12)];
+  const made = linesFor(undefined, 0, 0)([zoneAt(0, 60)]).carry()!;
+  const withZones = { ...made, lines: whole };
+  expect(linesFor(withZones, 1, 5)([zoneAt(0, 60)]).lines).toBe(whole);
+  expect(linesFor(withZones, 1, 5)([]).lines).not.toBe(whole);
+  const without = { ...linesFor(undefined, 0, 0)().carry()!, lines: whole };
+  expect(linesFor(without, 1, 5)([]).lines).toBe(whole);
+  expect(linesFor(without, 1, 5)([zoneAt(0, 60)]).lines).not.toBe(whole);
+});
+
+test('a continued paragraph that places nothing keeps its break for the next page', () => {
+  const held = { key: 'k', lines: [line(0, 5)], base: 0 };
+  const cursor = { ...initialCellCursor(), blockIndex: 2, startOffset: 5, heldBreak: held };
+  expect(unplacedHeldBreak(cursor, 2, 5)).toEqual({ heldBreak: held });
+  // Once the walk moves past it, or the cursor carries none, nothing is kept.
+  expect(unplacedHeldBreak(cursor, 3, undefined)).toEqual({});
+  expect(unplacedHeldBreak(initialCellCursor(), 0, undefined)).toEqual({});
 });
