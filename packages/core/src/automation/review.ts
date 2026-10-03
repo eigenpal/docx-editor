@@ -16,6 +16,8 @@
 // item remains.
 
 import { sharesItsPart } from './stories.ts';
+import { sitesInStory, textboxSiteIndex } from './textbox-revision-scope.ts';
+import { revisionSiteNodeIdsOf } from '../store/store/review-items.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
 import {
@@ -80,6 +82,18 @@ function inStory(reads: AutomationStoryReads, ranges: readonly ReviewRange[]): b
   return ranges.every((range) => reads.has(range.start.paragraphId));
 }
 
+/**
+ * Whether a tracked change is the addressed story's. A text box story and its owner share a
+ * part, and a change inside the box is located by its sites, not by its ranges.
+ */
+function revisionInStory(reads: AutomationStoryReads, item: ReviewRevisionItem): boolean {
+  if (reads.story.kind === 'note') return inStory(reads, item.ranges);
+  const index = textboxSiteIndex(reads.part);
+  const box =
+    reads.story.kind === 'textbox' && reads.root.kind !== 'textValue' ? reads.root.id : null;
+  return sitesInStory(index, revisionSiteNodeIdsOf(item), box, () => inStory(reads, item.ranges));
+}
+
 /** One pending decision, as the protocol answers it. */
 export interface AutomationRevisionRead {
   readonly id: string;
@@ -92,7 +106,7 @@ export interface AutomationRevisionRead {
 
 /** Every tracked-change item that belongs to one story, including unsupported structural ones. */
 export function revisionItemsInStory(reads: AutomationStoryReads): readonly ReviewRevisionItem[] {
-  return Object.freeze(revisionItemsOf(reads.part).filter((item) => inStory(reads, item.ranges)));
+  return Object.freeze(revisionItemsOf(reads.part).filter((item) => revisionInStory(reads, item)));
 }
 
 /**

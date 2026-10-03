@@ -276,3 +276,55 @@ test('a text box edit replicates, undoes, and saves the same synced bytes on eve
     r.close();
   }
 });
+
+test('tracked changes in a text box are reviewed through its body on every peer', async () => {
+  const r = await room();
+  try {
+    const [alice, bob] = r.peers;
+    await alice!.runtime.run(async (context) => {
+      context.document.changeTrackingMode = 'TrackMineOnly';
+      await context.sync();
+    });
+    await replaceInBox(alice!.runtime, 'Acme', 'Beta');
+    r.sync();
+    const counts = async (runtime: Runtime) =>
+      runtime.run(async (context) => {
+        const shapes = context.document.body.shapes;
+        shapes.load('items');
+        await context.sync();
+        const box = shapes.items[0]!.body;
+        box.load('text');
+        await context.sync();
+        const inBody = context.document.body.revisions;
+        const inBox = box.revisions;
+        inBody.load('items');
+        inBox.load('items');
+        await context.sync();
+        return [inBody.items.length, inBox.items.length];
+      });
+    const [, boxCount] = await counts(bob!.runtime);
+    expect(boxCount).toBeGreaterThan(0);
+    expect(await counts(bob!.runtime)).toEqual([0, boxCount]);
+    await bob!.runtime.run(async (context) => {
+      const shapes = context.document.body.shapes;
+      shapes.load('items');
+      await context.sync();
+      const box = shapes.items[0]!.body;
+      box.load('text');
+      await context.sync();
+      box.revisions.acceptAll();
+      await context.sync();
+    });
+    r.sync();
+    for (const peer of r.peers) {
+      expect(await counts(peer.runtime)).toEqual([0, 0]);
+      expect(await boxText(peer.runtime)).toBe('Client: Beta Holdings');
+    }
+    const xml = await r.savedXml();
+    expect(xml[0]).toBe(xml[1]!);
+    expect(xml[0]).not.toContain('<w:ins');
+    expect(xml[0]).not.toContain('<w:del ');
+  } finally {
+    r.close();
+  }
+});

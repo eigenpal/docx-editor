@@ -7,7 +7,6 @@ import {
   type ReviewRevisionItem,
 } from '../store/store/review-items.ts';
 import type { PlannedOperation } from './plan-types.ts';
-import { revisionItemsOf } from '../store/store/review-reads.ts';
 import { planRevisionBatch, type RevisionBatchResult } from '../store/store/revision-batch.ts';
 import { storyKey } from './stories.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
@@ -16,6 +15,8 @@ import type { AutomationOperation } from './operations.ts';
 import type { AutomationErrorCode } from './protocol.ts';
 import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
 import { storyOfHandle } from './spans.ts';
+import { revisionItemsInStory } from './review.ts';
+import { textboxSiteIndex } from './textbox-revision-scope.ts';
 
 type CollectionDecision = Extract<
   AutomationOperation,
@@ -70,7 +71,9 @@ export function revisionDecisionTarget(
  *
  * A header, footer, or the main body owns its part, so the store's part-wide op is the decision.
  * Notes share `footnotes.xml` / `endnotes.xml`, so one exact canonical note root scopes the same
- * store-level all-decision. Listing identities never participate in collection mutation.
+ * store-level all-decision, and a text box story is scoped to its own `w:txbxContent` the same
+ * way. Its owner's decision names its own sites so it leaves the boxes it anchors alone.
+ * Listing identities never participate in collection mutation.
  */
 export function revisionCollectionOps(
   operation: CollectionDecision,
@@ -82,7 +85,15 @@ export function revisionCollectionOps(
   )
     return [];
   const accept = operation.op === 'acceptAllRevisions';
-  const scope = sharesItsPart(reads.story) ? { scopeRootId: reads.root.id } : {};
+  const index = textboxSiteIndex(reads.part);
+  let scope: { readonly scopeRootId?: string; readonly siteNodeIds?: readonly string[] } = {};
+  if (sharesItsPart(reads.story)) scope = { scopeRootId: reads.root.id };
+  else if (index.size > 0) {
+    const sites = collectRevisionSites(reads.part).map((site) => site.node.id);
+    const own = sites.filter((id) => !index.has(id));
+    if (own.length === 0) return [];
+    if (own.length < sites.length) scope = { siteNodeIds: own };
+  }
   return [accept ? { op: 'acceptAllRevisions', ...scope } : { op: 'rejectAllRevisions', ...scope }];
 }
 
@@ -107,7 +118,14 @@ export function revisionBatchPlan(
       code: 'unsupported-content' as const,
       message: 'invalid revision batch',
     };
-  const keys: string[] | undefined = operation.revisions === undefined ? undefined : [];
+  // Every decision of the story. An owner story names its own, so the boxes it anchors stay.
+  let keys: string[] | undefined = operation.revisions === undefined ? undefined : [];
+  if (
+    keys === undefined &&
+    !sharesItsPart(target.reads.story) &&
+    textboxSiteIndex(target.reads.part).size > 0
+  )
+    keys = revisionItemsInStory(target.reads).map(reviewItemKey);
   for (const handle of operation.revisions ?? []) {
     const revision = handles.resolve(handle, 'revision');
     if (
@@ -140,10 +158,7 @@ export function revisionBatchAnswer(
 ): import('./protocol.ts').AutomationValue {
   const target = revisionDecisionTarget({ op: 'acceptAllRevisions', body }, handles, post);
   if (!target.ok) throw new Error('resolved story disappeared');
-  const { part, root, story } = target.reads;
-  const remaining = revisionItemsOf(
-    sharesItsPart(story) && root.kind !== 'textValue' ? { ...part, root } : part
-  ).length;
+  const remaining = revisionItemsInStory(target.reads).length;
   return { kind: 'revisionBatch', result: { ...result, remaining } };
 }
 

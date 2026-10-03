@@ -19,6 +19,7 @@ import {
   storyText,
 } from './support/protocol.ts';
 import type { AutomationHandle, AutomationHost } from '../protocol.ts';
+import type { AutomationOperation } from '../operations.ts';
 
 const DRAWING_NS =
   'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ' +
@@ -81,6 +82,13 @@ function shapesOf(
   span: { body: AutomationHandle } | { paragraph: AutomationHandle }
 ) {
   return handlesAt(target.execute({ operations: [{ op: 'getShapes', span }] }), 0);
+}
+
+function decide(
+  op: 'acceptAllRevisions' | 'rejectAllRevisions',
+  body: AutomationHandle
+): AutomationOperation {
+  return op === 'acceptAllRevisions' ? { op, body } : { op, body };
 }
 
 function shapeRead(target: AutomationHost, shape: AutomationHandle) {
@@ -221,6 +229,80 @@ describe('shapes and text-box stories', () => {
     expect(find('ab')).toHaveLength(1);
     expect(find('cd')).toHaveLength(1);
     expect(paragraphTexts(target, body)).toEqual(['abcd']);
+  });
+
+  test('a text box lists and decides its own tracked changes', () => {
+    for (const op of ['acceptAllRevisions', 'rejectAllRevisions'] as const) {
+      const target = host();
+      const { body } = roots(target);
+      const [box] = shapesOf(target, { body });
+      const boxBody = handleAt(
+        target.execute({ operations: [{ op: 'getShapeBody', shape: box! }] }),
+        0
+      );
+      target.execute({
+        operations: [{ op: 'setChangeTrackingMode', mode: 'TrackMineOnly', author: 'Reviewer' }],
+      });
+      const [match] = spansAt(
+        target.execute({ operations: [{ op: 'search', scope: { body: boxBody }, text: 'Acme' }] }),
+        0
+      );
+      expect(
+        target.execute({ operations: [{ op: 'replaceSpan', span: match!, text: 'Beta' }] })
+          .results[0]?.status
+      ).toBe('ok');
+      const revisions = (story: AutomationHandle) =>
+        handlesAt(target.execute({ operations: [{ op: 'getRevisions', body: story }] }), 0);
+      expect(revisions(body)).toHaveLength(0);
+      expect(revisions(boxBody).length).toBeGreaterThan(0);
+      expect(target.execute({ operations: [decide(op, boxBody)] }).results[0]?.status).toBe('ok');
+      expect(revisions(boxBody)).toHaveLength(0);
+      expect(storyText(target, boxBody)).toBe(
+        op === 'acceptAllRevisions' ? 'Client: Beta Holdings' : 'Client: Acme Holdings'
+      );
+    }
+  });
+
+  test('the owner story decides its own changes and leaves its text boxes alone', () => {
+    const insertion = (id: number, text: string) =>
+      `<w:ins w:id="${id}" w:author="A" w:date="2024-01-01T00:00:00Z"><w:r><w:t>${text}</w:t></w:r></w:ins>`;
+    for (const op of ['acceptAllRevisions', 'rejectAllRevisions'] as const) {
+      const target = open(docx(`<w:p>${insertion(1, 'Lead')}${textbox(2, 'Boxed')}</w:p>`));
+      const { body } = roots(target);
+      const [box] = shapesOf(target, { body });
+      const boxBody = handleAt(
+        target.execute({ operations: [{ op: 'getShapeBody', shape: box! }] }),
+        0
+      );
+      // The box's own story holds a tracked insertion of its own.
+      const [boxParagraph] = handlesAt(
+        target.execute({ operations: [{ op: 'getParagraphs', body: boxBody }] }),
+        0
+      );
+      target.execute({
+        operations: [{ op: 'setChangeTrackingMode', mode: 'TrackMineOnly', author: 'Reviewer' }],
+      });
+      target.execute({
+        operations: [
+          {
+            op: 'insertParagraph',
+            anchor: { paragraph: boxParagraph! },
+            where: 'after',
+            text: 'More',
+          },
+        ],
+      });
+      target.execute({ operations: [{ op: 'setChangeTrackingMode', mode: 'Off' }] });
+      const count = (story: AutomationHandle) =>
+        handlesAt(target.execute({ operations: [{ op: 'getRevisions', body: story }] }), 0).length;
+      expect(count(body)).toBe(1);
+      const boxBefore = count(boxBody);
+      expect(boxBefore).toBeGreaterThan(0);
+      expect(target.execute({ operations: [decide(op, body)] }).results[0]?.status).toBe('ok');
+      expect(count(body)).toBe(0);
+      expect(count(boxBody)).toBe(boxBefore);
+      expect(paragraphTexts(target, boxBody)).toEqual(['Boxed', 'More']);
+    }
   });
 
   test('duplicate shape ids make the story’s shapes unaddressable', () => {
