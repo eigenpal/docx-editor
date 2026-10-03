@@ -19,7 +19,7 @@
 //   page, so it opens the next page and starts there by the same rule.
 //
 // Limits, each keeping the sheet-pinned placement:
-// - A table entirely outside the text column, or one whose rows are all exact heights.
+// - A table entirely outside the text column, or one with an exact-height row.
 // - A table whose authored top is already in the bottom margin.
 // - Multi-column sections, and `w:doNotBreakWrappedTables`.
 // Further differences: following text resumes below the last row even beside a narrow table,
@@ -36,7 +36,7 @@ import {
 import type { SemanticTableStructure, TableAnchorFrames } from './semantic-table.ts';
 import { tableFloatOriginY, type TableVerticalAnchorFrames } from './table-float-position.ts';
 import { positionedTableOriginX } from './table-origin.ts';
-import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
+import { measuringFlowDeps } from './table-probe-deps.ts';
 import type { TableFlowCursor } from './table-flow-cursor.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 
@@ -63,32 +63,41 @@ export interface PinnedTableBreak {
 
 const probes = new WeakMap<
   TableFlowDeps,
-  WeakMap<OoxmlElement, Map<number, TableFragmentRecord>>
+  WeakMap<
+    OoxmlElement,
+    Map<number, { readonly fragment: TableFragmentRecord; readonly bottom: number }>
+  >
 >();
 
-/** The table laid out whole from 0, without breaks. Memoized per body pass. */
-function probeTable(
+/**
+ * A positioned table laid out whole from 0, without breaks, for measurement only. Memoized per
+ * body pass and width, except when inline drawing layout makes the probe depend on the page.
+ */
+export function probePositionedTable(
   table: OoxmlElement,
   structure: SemanticTableStructure,
   width: number,
   deps: TableFlowDeps
-): TableFragmentRecord {
-  let tables = probes.get(deps);
-  if (!tables) probes.set(deps, (tables = new WeakMap()));
-  let widths = tables.get(table);
-  if (!widths) tables.set(table, (widths = new Map()));
-  const cached = widths.get(width);
-  if (cached) return cached;
-  let line = 0;
-  const { fragment } = layoutTableFragment(structure, 0, 0, 0, table.id, 0, {
-    ...stripAnchorSinksForProbe(deps),
+): { readonly fragment: TableFragmentRecord; readonly bottom: number } {
+  let widths:
+    | Map<number, { readonly fragment: TableFragmentRecord; readonly bottom: number }>
+    | undefined;
+  if (!deps.inlineDrawingLayout) {
+    let tables = probes.get(deps);
+    if (!tables) probes.set(deps, (tables = new WeakMap()));
+    widths = tables.get(table);
+    if (!widths) tables.set(table, (widths = new Map()));
+    const cached = widths.get(width);
+    if (cached) return cached;
+  }
+  const probe = layoutTableFragment(structure, 0, 0, 0, table.id, 0, {
+    ...measuringFlowDeps(deps, true),
     onCellBreakKey: undefined,
     borderOwnershipBudget: createTableBorderOwnershipBudget(),
     vMergeResolveBudget: createTableVMergeResolveBudget(),
-    nextLineId: () => `pinned-table-probe-${line++}`,
   });
-  widths.set(width, fragment);
-  return fragment;
+  widths?.set(width, probe);
+  return probe;
 }
 
 /** Bottoms of every line in a row's cells, nested tables included, in probe coordinates. */
@@ -103,6 +112,27 @@ function lineBottoms(row: TableRowFragmentRecord, out: number[]): number[] {
     }
   }
   return out;
+}
+
+/**
+ * Height the first fragment needs to open: the header rows, which move as one group, and the
+ * first line of the first body row.
+ */
+function openingHeight(fragment: TableFragmentRecord): number {
+  let bottom = 0;
+  let index = 0;
+  for (; index < fragment.rows.length && fragment.rows[index]!.isHeaderRow; index++) {
+    const header = fragment.rows[index]!;
+    bottom = header.box.y + header.box.height;
+  }
+  const row = fragment.rows[index];
+  if (!row) return bottom;
+  const rowBottom = row.box.y + row.box.height;
+  const bottoms = lineBottoms(row, []);
+  if (bottoms.length === 0) return rowBottom;
+  const first = bottoms.reduce((min, value) => Math.min(min, value), rowBottom);
+  const last = bottoms.reduce((max, value) => Math.max(max, value), row.box.y);
+  return Math.min(rowBottom, first + rowBottom - last);
 }
 
 /**
@@ -150,7 +180,7 @@ export function pinnedTableBreak(
     flow.frames.text.width < flow.frames.margin.width - 0.5 ||
     deps.styleCascade?.doNotBreakWrappedTables ||
     structure.rows.length === 0 ||
-    structure.rows.every((row) => row.height.rule === 'exact')
+    structure.rows.some((row) => row.height.rule === 'exact')
   )
     return undefined;
   const distances = float.distances ?? { top: 0, right: 0, bottom: 0, left: 0 };
@@ -162,14 +192,19 @@ export function pinnedTableBreak(
     left - distances.left >= column.left + column.width - EPSILON
   )
     return undefined;
-  const probe = probeTable(table, structure, flow.width, deps);
+  const probe = probePositionedTable(table, structure, flow.width, deps).fragment;
   const height = probe.box.height;
   const authored = tableFloatOriginY(float, height, flow.verticalFrames);
   if (authored >= flow.bottom - EPSILON || authored + height <= flow.bottom + EPSILON)
     return undefined;
   const leading = leadingPartHeight(probe, flow.bottom - flow.top);
   const pageEdge = flow.verticalFrames.page.top + flow.verticalFrames.page.height;
-  const top = Math.min(tableFloatOriginY(float, leading, flow.verticalFrames), pageEdge - leading);
+  // The band below the start must still hold the header rows and the first body line.
+  const top = Math.min(
+    tableFloatOriginY(float, leading, flow.verticalFrames),
+    pageEdge - leading,
+    flow.bottom - openingHeight(probe)
+  );
   const reach = top + flow.bottom - flow.top;
   return {
     top,
@@ -205,11 +240,21 @@ export function pinnedBreakAtCursor(
   return pinnedTableBreak(table, structure, flow.deps, at());
 }
 
-/** The structure a breaking positioned table paginates with: its rows may all split. */
+const splittable = new WeakMap<SemanticTableStructure, SemanticTableStructure>();
+
+/**
+ * The structure a breaking positioned table paginates with: its rows may all split. Memoized,
+ * so identity-keyed row and structure caches keep hitting across passes.
+ */
 export function withSplittableRows(structure: SemanticTableStructure): SemanticTableStructure {
   if (!structure.rows.some((row) => row.cantSplit)) return structure;
-  return {
-    ...structure,
-    rows: structure.rows.map((row) => (row.cantSplit ? { ...row, cantSplit: false } : row)),
-  };
+  let result = splittable.get(structure);
+  if (!result) {
+    result = {
+      ...structure,
+      rows: structure.rows.map((row) => (row.cantSplit ? { ...row, cantSplit: false } : row)),
+    };
+    splittable.set(structure, result);
+  }
+  return result;
 }

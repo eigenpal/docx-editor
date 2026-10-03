@@ -161,6 +161,21 @@ describe('a page-positioned table taller than the room below it', () => {
     expect(tailAt.y).toBeCloseTo(last.fragment.box.y + last.fragment.box.height + 36, 6);
   });
 
+  test('starts high enough for a tall header row to open on the anchor page', () => {
+    // The 50-line header row cannot split. Placed by the leading part alone, it would start at
+    // 720 - 600 = 120 and leave it 528 of band; the opening rule lifts the table to 648 - 612.
+    const header = table({ tblpPr: PAGE, rows: 3, lines: 50 }).replace(
+      '<w:tr><w:tc>',
+      '<w:tr><w:trPr><w:tblHeader/></w:trPr><w:tc>'
+    );
+    const layout = layoutOf(lead + header + tail);
+    const [first] = tableFragments(layout);
+    expect(first!.pageIndex).toBe(0);
+    expect(first!.fragment.box.y).toBeCloseTo(36, 6);
+    expect(first!.fragment.rows[0]!.isHeaderRow).toBe(true);
+    expect(first!.fragment.rows[1]!.hasContinuation).toBe(true);
+  });
+
   test('legacy modes run the first fragment to the page edge', () => {
     const layout = layoutOf(lead + table({ tblpPr: PAGE }) + tail, { compatibilityMode: 14 });
     expect(shape(layout)[0]).toEqual([0, 96, 624]);
@@ -206,6 +221,19 @@ describe('positioned tables that keep their sheet position', () => {
     const text = '<w:tblpPr w:vertAnchor="text" w:horzAnchor="margin" w:tblpY="1"/>';
     const flowing = tableFragments(layoutOf(lead + table({ tblpPr: text }) + tail));
     expect(flowing[0]!.fragment.box.y).toBeCloseTo(24, 6);
+  });
+
+  test('one exact-height row taller than the page keeps the whole table pinned', () => {
+    const exactRow = table({
+      tblpPr: PAGE,
+      lines: 1,
+      trPr: '<w:trHeight w:val="14000" w:hRule="exact"/>',
+    }).replace(/<\/w:tbl>$/, '');
+    const ordinaryRow =
+      '<w:tr><w:tc><w:tcPr><w:tcW w:type="dxa" w:w="9360"/></w:tcPr>' +
+      paragraphs('body', 5) +
+      '</w:tc></w:tr></w:tbl>';
+    pinned(layoutOf(lead + exactRow + ordinaryRow + tail));
   });
 
   test('a table entirely outside the text column keeps its sheet position', () => {

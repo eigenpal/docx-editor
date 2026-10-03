@@ -14,22 +14,15 @@ import {
   type PositionedTableAnchor,
   type TableVerticalAnchorFrames,
 } from './table-float-position.ts';
-import {
-  createTableBorderOwnershipBudget,
-  createTableVMergeResolveBudget,
-  layoutTableFragment,
-  measureRowHeight,
-  type TableFlowDeps,
-} from './semantic-table-layout.ts';
+import { measureRowHeight, type TableFlowDeps } from './semantic-table-layout.ts';
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
-import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
 import {
   readTableStructure,
   type SemanticTableStructure,
   type TableAnchorFrames,
 } from './semantic-table.ts';
 import { positionedTableOriginX } from './table-origin.ts';
-import { pinnedTableBreak } from './table-pinned-break.ts';
+import { pinnedTableBreak, probePositionedTable } from './table-pinned-break.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 
@@ -205,7 +198,7 @@ export function floatingTableBand(table: OoxmlElement, width: number, deps: Tabl
     return Infinity;
   const band =
     Math.max(0, structure.float.yPt) +
-    probeTableHeight(structure, table.id, deps) +
+    probeTableHeight(structure, table, width, deps) +
     (structure.float.distances?.bottom ?? 0);
   widths?.set(width, band);
   return band;
@@ -288,16 +281,12 @@ export interface FloatAdmissionFlow {
   /** The narrowest column. The table must fit whichever column its anchor reaches. */
   readonly width: number;
   readonly frames: TableAnchorFrames;
-  /**
-   * Vertical frames on this page. The text frame starts at the body cursor and ends at the
-   * bottom of the page content box.
-   */
+  /** Vertical frames on this page. The text frame starts at the body cursor. */
   readonly verticalFrames: TableVerticalAnchorFrames;
+  readonly bottom: number;
 }
 
 const flowTop = (flow: FloatAdmissionFlow): number => flow.verticalFrames.text.top;
-const flowBottom = (flow: FloatAdmissionFlow): number =>
-  flow.verticalFrames.text.top + flow.verticalFrames.text.height;
 
 /**
  * True when a positioned table waits for its anchor paragraph and is placed there whole.
@@ -317,10 +306,10 @@ export function admitsAtAnchor(
   if (hasEarlierCellExclusions(table, flow.zones, deps, flow.page)) return false;
   if (breaksAcrossPages(table, deps, flow)) return false;
   const band = floatingTableBand(table, flow.width, deps);
-  if (band > flowBottom(flow)) return false;
+  if (band > flow.bottom) return false;
   if (deps.styleCascade?.doNotBreakWrappedTables) return true;
   return (
-    band <= flowBottom(flow) - flowTop(flow) ||
+    band <= flow.bottom - flowTop(flow) ||
     !flow.allowBreak ||
     !breaksAtPageBottom(table, deps, flow)
   );
@@ -341,11 +330,11 @@ function breaksAcrossPages(
     deps.revisionAuthorFilter,
     deps.compatibilityMode
   );
-  if (!structure?.float || structure.float.vertAnchor === 'text') return false;
   return (
+    !!structure &&
     pinnedTableBreak(table, structure, deps, {
       top: flowTop(flow),
-      bottom: flowBottom(flow),
+      bottom: flow.bottom,
       frames: flow.frames,
       verticalFrames: flow.verticalFrames,
       width: flow.width,
@@ -391,7 +380,7 @@ function breaksAtPageBottom(
       index === 0 ? firstRowContentDeps(structure, row, deps) : deps,
       structure.cellSpacingPt
     );
-    if (top > flowBottom(flow) + 0.001) return false;
+    if (top > flow.bottom + 0.001) return false;
     if (!row.isHeader) return true;
   }
   return false;
@@ -399,17 +388,11 @@ function breaksAtPageBottom(
 
 function probeTableHeight(
   structure: SemanticTableStructure,
-  tableId: string,
+  table: OoxmlElement,
+  width: number,
   deps: TableFlowDeps
 ): number {
-  let line = 0;
-  return layoutTableFragment(structure, 0, 0, 0, tableId, 0, {
-    ...stripAnchorSinksForProbe(deps),
-    onCellBreakKey: undefined,
-    borderOwnershipBudget: createTableBorderOwnershipBudget(),
-    vMergeResolveBudget: createTableVMergeResolveBudget(),
-    nextLineId: () => `floating-table-probe-${line++}`,
-  }).bottom;
+  return probePositionedTable(table, structure, width, deps).bottom;
 }
 
 /**
@@ -472,7 +455,7 @@ function pageFramedAnchorBand(
     inkBottom <= tableFloatOriginY(float, 0, placement.verticalFrames) - distances.top
   )
     return 0;
-  const height = probeTableHeight(structure, anchor.table.id, deps);
+  const height = probeTableHeight(structure, anchor.table, width, deps);
   const top = tableFloatOriginY(float, height, placement.verticalFrames);
   const bandTop = top - distances.top;
   const bandBottom = top + height + distances.bottom;
