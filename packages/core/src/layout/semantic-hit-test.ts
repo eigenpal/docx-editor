@@ -751,9 +751,11 @@ function beyondLine(
 ): LineOffset | null {
   if (x > left && x < right) return null;
   const atEnd = rtl ? x <= left : x >= right;
-  const offset = atEnd ? lineEndOffset(context.layout, line) : line.range.start;
-  // The offset counts in the line's own paragraph; a join line's other one has its own.
-  const segment = lineSegments(line).find((entry) => entry.paragraphId === line.range.paragraphId);
+  // A join line ends in its last paragraph and starts in its first, each counting its own.
+  const segments = lineSegments(line);
+  const segment = atEnd ? segments.at(-1) : segments[0];
+  const owned = lineForSegment(line, segment);
+  const offset = atEnd ? lineEndOffset(context.layout, owned) : owned.range.start;
   return {
     offset,
     x: caretBoxOnLine(line, offset, context.measurer, segment).x,
@@ -1106,7 +1108,12 @@ export function caretBoxOnLine(
       chosen = span;
     } else if (
       offset === span.range.start &&
-      !spans.some((other) => other.range.end === offset && other.range.start < offset)
+      !spans.some(
+        (other) =>
+          other.range.paragraphId === span.range.paragraphId &&
+          other.range.end === offset &&
+          other.range.start < offset
+      )
     ) {
       // Nothing ends here (a picture or hidden text came before), so the text that starts
       // here owns the caret rather than the span before the gap.

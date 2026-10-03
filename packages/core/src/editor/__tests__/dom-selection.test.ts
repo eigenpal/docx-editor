@@ -623,3 +623,29 @@ test('an endpoint on a line-break mark in an inert text box line resolves withou
   root.append(line);
   expect(() => positionFromDomPoint(mark, 0, root)).not.toThrow();
 });
+
+test('an endpoint on a paragraph mark does not read back inside a text box on its line', () => {
+  // Inline drawings paint after the line's text, and an edited text box has runs of its own.
+  const root = paintedLine([{ text: 'ab', paragraphId: 'p', start: 0 }]);
+  const line = root.querySelector('.docx-line')!;
+  line.setAttribute('data-paragraph-id', 'p');
+  const box = document.createElement('div');
+  const boxLine = document.createElement('div');
+  boxLine.className = 'docx-line';
+  const boxRun = document.createElement('span');
+  boxRun.dataset.paragraphId = 'box';
+  boxRun.dataset.start = '0';
+  boxRun.dataset.end = '3';
+  boxRun.textContent = 'xyz';
+  boxLine.append(boxRun);
+  box.append(boxLine);
+  const seat = document.createElement('span');
+  seat.className = 'docx-terminator-seat';
+  seat.dataset.docxMarker = '';
+  const mark = document.createElement('span');
+  mark.className = 'docx-paragraph-mark';
+  mark.textContent = '¶';
+  seat.append(mark);
+  line.append(box, seat);
+  expect(positionFromDomPoint(mark, 0, root)).toEqual({ paragraphId: 'p', offset: 2 });
+});

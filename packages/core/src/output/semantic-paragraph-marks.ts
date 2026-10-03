@@ -82,7 +82,7 @@ export function paintManualLineBreak(
   scale: number,
   colors?: RevisionStyleContext,
   paragraphRtl = false
-): HTMLElement {
+): void {
   const glyph = document.createElement('span');
   const last = line.spans[line.spans.length - 1];
   glyph.className = 'docx-line-break-mark';
@@ -118,7 +118,6 @@ export function paintManualLineBreak(
   }
   const size = last?.style.fontSizePt ?? DEFAULT_RUN_STYLE.fontSizePt;
   seatTerminatorMark(glyph, lineElement, line, paragraphRtl, size, scale);
-  return glyph;
 }
 
 /**
