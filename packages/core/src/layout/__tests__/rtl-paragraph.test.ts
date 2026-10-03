@@ -15,6 +15,9 @@ function part(xml: string, name = '/word/document.xml') {
   return result.part;
 }
 const measurer = createFixedMeasurer(6, 14);
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
 function layout(text: string, pPr = '', table = false, width = 120, rPr = '') {
   const paragraph = `<w:p><w:pPr>${pPr}</w:pPr><w:r><w:rPr>${rPr}</w:rPr><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
   return layoutSemanticDocument(
@@ -26,7 +29,7 @@ function layout(text: string, pPr = '', table = false, width = 120, rPr = '') {
       measurer,
       styleCascade: buildStyleCascadeTable(
         part(
-          `<w:styles xmlns:w="${W}"><w:style w:type="paragraph" w:default="1" w:styleId="a"><w:name w:val="Normal"/><w:pPr><w:bidi/></w:pPr></w:style></w:styles>`,
+          `<w:styles xmlns:w="${W}">${FORMAT_DOC_DEFAULTS}<w:style w:type="paragraph" w:default="1" w:styleId="a"><w:name w:val="Normal"/><w:pPr><w:bidi/></w:pPr></w:style></w:styles>`,
           '/word/styles.xml'
         ).root
       ),

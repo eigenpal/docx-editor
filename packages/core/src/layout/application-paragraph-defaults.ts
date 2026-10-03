@@ -31,7 +31,9 @@ export function applicationParagraphDefaults(
       child.localName === 'docDefaults'
   );
   if (
-    defaults?.children.some(
+    defaults &&
+    defaults.kind !== 'textValue' &&
+    defaults.children.some(
       (child) =>
         child.kind !== 'textValue' &&
         child.namespaceUri === WML_NAMESPACE_URI &&

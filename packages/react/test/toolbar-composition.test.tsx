@@ -39,18 +39,28 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+const STYLES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
 
-function docx(body: string): Uint8Array {
+/** `styles` is the content of `w:styles`; the default pins the format defaults. */
+function docx(body: string, styles = FORMAT_DOC_DEFAULTS): Uint8Array {
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}">` +
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
         '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
         '</Types>'
     ),
     '_rels/.rels': strToU8(
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
     ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdStyles" Type="${STYLES_REL}" Target="styles.xml"/></Relationships>`
+    ),
+    'word/styles.xml': strToU8(`<w:styles xmlns:w="${W}">${styles}</w:styles>`),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
     ),
@@ -839,37 +849,18 @@ describe('the shaped parts', () => {
   });
 
   test('the style picker lists the DOCUMENT paragraph styles and a pick applies one', async () => {
-    const STYLE_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
-    const styled = zipSync({
-      '[Content_Types].xml': strToU8(
-        `<Types xmlns="${CT}">` +
-          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-          '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>'
-      ),
-      '_rels/.rels': strToU8(
-        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
-      ),
-      'word/_rels/document.xml.rels': strToU8(
-        `<Relationships xmlns="${REL}"><Relationship Id="rId9" Type="${STYLE_REL}" Target="styles.xml"/></Relationships>`
-      ),
-      'word/styles.xml': strToU8(
-        // Declared OUT of gallery order on purpose — a round-tripped file routinely is, and
-        // a picker that just echoes `styles.xml` shows Heading 1 above Normal.
-        `<w:styles xmlns:w="${W}">` +
-          '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/>' +
-          '<w:rPr><w:b/><w:color w:val="1F3864"/><w:sz w:val="64"/></w:rPr></w:style>' +
-          // Unranked: keeps its document position, after everything Word's gallery ranks.
-          '<w:style w:type="paragraph" w:styleId="Callout"><w:name w:val="Callout"/></w:style>' +
-          '<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style>' +
-          // A character style must NOT appear among the paragraph options.
-          '<w:style w:type="character" w:styleId="Emphasis"><w:name w:val="Emphasis"/></w:style>' +
-          '</w:styles>'
-      ),
-      'word/document.xml': strToU8(
-        `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>hello</w:t></w:r></w:p></w:body></w:document>`
-      ),
-    });
+    const styled = docx(
+      '<w:p><w:r><w:t>hello</w:t></w:r></w:p>',
+      // Declared OUT of gallery order on purpose — a round-tripped file routinely is, and
+      // a picker that just echoes `styles.xml` shows Heading 1 above Normal.
+      '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/>' +
+        '<w:rPr><w:b/><w:color w:val="1F3864"/><w:sz w:val="64"/></w:rPr></w:style>' +
+        // Unranked: keeps its document position, after everything Word's gallery ranks.
+        '<w:style w:type="paragraph" w:styleId="Callout"><w:name w:val="Callout"/></w:style>' +
+        '<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style>' +
+        // A character style must NOT appear among the paragraph options.
+        '<w:style w:type="character" w:styleId="Emphasis"><w:name w:val="Emphasis"/></w:style>'
+    );
     const { view, editor } = mountToolbar(<DocxEditorToolbar />, styled);
 
     // Live: a real button trigger showing the unstyled placeholder (raw key — no `t`).

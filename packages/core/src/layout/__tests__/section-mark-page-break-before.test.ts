@@ -24,10 +24,14 @@ function read(xml: string, name: string): OoxmlPart {
 const load = (body: string) =>
   read(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, '/word/document.xml');
 
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
+
 // `Break` inherits the page break and keep through `basedOn`; `Listed` adds numbering.
 const styleCascade = buildStyleCascadeTable(
   read(
-    `<w:styles xmlns:w="${W}">` +
+    `<w:styles xmlns:w="${W}">${FORMAT_DOC_DEFAULTS}` +
       '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
       '<w:style w:type="paragraph" w:styleId="Base"><w:basedOn w:val="Normal"/>' +
       '<w:pPr><w:keepNext/><w:pageBreakBefore/></w:pPr></w:style>' +

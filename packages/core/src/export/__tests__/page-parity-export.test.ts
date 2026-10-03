@@ -14,6 +14,10 @@ const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const WML = 'application/vnd.openxmlformats-officedocument.wordprocessingml';
 
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
+
 const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
 function sectPr(
@@ -49,6 +53,7 @@ function docx(
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
         `<Override PartName="/word/document.xml" ContentType="${WML}.document.main+xml"/>` +
         `<Override PartName="/word/settings.xml" ContentType="${WML}.settings+xml"/>` +
+        `<Override PartName="/word/styles.xml" ContentType="${WML}.styles+xml"/>` +
         `<Override PartName="/word/header1.xml" ContentType="${WML}.header+xml"/>` +
         `<Override PartName="/word/header2.xml" ContentType="${WML}.header+xml"/>` +
         `<Override PartName="/word/footnotes.xml" ContentType="${WML}.footnotes+xml"/>` +
@@ -61,12 +66,14 @@ function docx(
     'word/_rels/document.xml.rels': strToU8(
       `<Relationships xmlns="${REL}">` +
         `<Relationship Id="rIdS" Type="${R}/settings" Target="settings.xml"/>` +
+        `<Relationship Id="rIdSt" Type="${R}/styles" Target="styles.xml"/>` +
         `<Relationship Id="rIdOdd" Type="${R}/header" Target="header1.xml"/>` +
         `<Relationship Id="rIdEven" Type="${R}/header" Target="header2.xml"/>` +
         `<Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/>` +
         `<Relationship Id="rIdEn" Type="${R}/endnotes" Target="endnotes.xml"/>` +
         '</Relationships>'
     ),
+    'word/styles.xml': strToU8(`<w:styles xmlns:w="${W}">${FORMAT_DOC_DEFAULTS}</w:styles>`),
     'word/settings.xml': strToU8(`<w:settings xmlns:w="${W}">${evenAndOddHeaders}</w:settings>`),
     'word/header1.xml': strToU8(`<w:hdr xmlns:w="${W}">${p('ODD')}</w:hdr>`),
     'word/header2.xml': strToU8(`<w:hdr xmlns:w="${W}">${p('EVEN')}</w:hdr>`),

@@ -22,6 +22,10 @@ const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawi
 const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
 
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
+
 function pkg(
   body: string,
   linkTarget?: string,
@@ -39,6 +43,7 @@ function pkg(
       '[Content_Types].xml': strToU8(
         `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
           '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
           (extra.contentTypes ?? '') +
           '</Types>'
       ),
@@ -46,8 +51,9 @@ function pkg(
         `<Relationships xmlns="${REL}"><Relationship Id="rDoc" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
       ),
       'word/_rels/document.xml.rels': strToU8(
-        `<Relationships xmlns="${REL}">${relationship}${extra.relationships ?? ''}</Relationships>`
+        `<Relationships xmlns="${REL}"><Relationship Id="rStyles" Type="${R}/styles" Target="styles.xml"/>${relationship}${extra.relationships ?? ''}</Relationships>`
       ),
+      'word/styles.xml': strToU8(`<w:styles xmlns:w="${W}">${FORMAT_DOC_DEFAULTS}</w:styles>`),
       'word/document.xml': strToU8(
         `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body}</w:body></w:document>`
       ),
@@ -63,7 +69,7 @@ function liveView(store: TreePackageStore): HeadlessDocumentView {
     part: () => store.bodyStore().part,
     currentPackage: () => store.currentPackage(),
     packageRevision: () => store.packageRevision,
-    stylesRoot: () => null,
+    stylesRoot: () => store.currentPackage().parts.get('/word/styles.xml')?.root ?? null,
     numberingRoot: () => null,
     settingsRoot: () => null,
     documentThemeFonts: () => ({ major: null, minor: null }),

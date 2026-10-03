@@ -28,6 +28,10 @@ const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
 const NUM = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering';
+const STYLES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
 
 const NUMBERING =
   `<w:numbering xmlns:w="${W}">` +
@@ -42,6 +46,7 @@ function docx(body: string, withNumbering = false): Uint8Array {
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
         '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
         (withNumbering
           ? '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>'
           : '') +
@@ -53,13 +58,14 @@ function docx(body: string, withNumbering = false): Uint8Array {
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
     ),
+    'word/styles.xml': strToU8(`<w:styles xmlns:w="${W}">${FORMAT_DOC_DEFAULTS}</w:styles>`),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdStyles" Type="${STYLES_REL}" Target="styles.xml"/>` +
+        (withNumbering ? `<Relationship Id="rId9" Type="${NUM}" Target="numbering.xml"/>` : '') +
+        '</Relationships>'
+    ),
   };
-  if (withNumbering) {
-    files['word/numbering.xml'] = strToU8(NUMBERING);
-    files['word/_rels/document.xml.rels'] = strToU8(
-      `<Relationships xmlns="${REL}"><Relationship Id="rId9" Type="${NUM}" Target="numbering.xml"/></Relationships>`
-    );
-  }
+  if (withNumbering) files['word/numbering.xml'] = strToU8(NUMBERING);
   return zipSync(files);
 }
 

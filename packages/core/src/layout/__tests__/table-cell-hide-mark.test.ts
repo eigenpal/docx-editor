@@ -31,9 +31,13 @@ const table = (rows: string, properties = '') =>
   `<w:tbl><w:tblPr>${properties}<w:tblCellMar>${['top', 'bottom', 'left', 'right'].map((s) => `<w:${s} w:w="0" w:type="dxa"/>`).join('')}</w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>${rows}</w:tbl>`;
 const documentPart = (body: string) =>
   part(`<w:document xmlns:w="${W}" xmlns:x="urn:foreign"><w:body>${body}</w:body></w:document>`);
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
 const styles = (body: string) =>
   buildStyleCascadeTable(
-    part(`<w:styles xmlns:w="${W}">${body}</w:styles>`, '/word/styles.xml').root
+    part(`<w:styles xmlns:w="${W}">${FORMAT_DOC_DEFAULTS}${body}</w:styles>`, '/word/styles.xml')
+      .root
   );
 const style = (id: string, content: string, base = '') =>
   `<w:style w:type="table" w:styleId="${id}">${base ? `<w:basedOn w:val="${base}"/>` : ''}${content}</w:style>`;

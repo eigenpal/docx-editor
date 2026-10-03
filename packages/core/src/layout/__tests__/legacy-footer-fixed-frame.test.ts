@@ -31,10 +31,13 @@ function part(xml: string, kind = 'ftr') {
   if (!loaded.ok) throw new Error(loaded.reason);
   return loaded.part;
 }
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
 const stylesWith = (extra = '') =>
   buildStyleCascadeTable(
     part(
-      `<w:style w:type="paragraph" w:styleId="Footer"><w:pPr><w:tabs><w:tab w:val="center" w:pos="4000"/></w:tabs>${extra}</w:pPr><w:rPr><w:sz w:val="22"/></w:rPr></w:style>`,
+      `${FORMAT_DOC_DEFAULTS}<w:style w:type="paragraph" w:styleId="Footer"><w:pPr><w:tabs><w:tab w:val="center" w:pos="4000"/></w:tabs>${extra}</w:pPr><w:rPr><w:sz w:val="22"/></w:rPr></w:style>`,
       'styles'
     ).root
   );

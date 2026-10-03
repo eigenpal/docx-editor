@@ -38,6 +38,9 @@ import {
 } from './image-decode-harness.ts';
 
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
 const EMU_PER_POINT = 12700;
 
 // ---------------------------------------------------------------------------------------------
@@ -242,6 +245,7 @@ function overlapDocx(options: FixtureOptions = {}): Uint8Array {
         '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
         '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>' +
         '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
         '</Types>'
     ),
     '_rels/.rels': strToU8(
@@ -261,6 +265,7 @@ function overlapDocx(options: FixtureOptions = {}): Uint8Array {
         `<Relationship Id="rIdHdr" Type="${R}/header" Target="header1.xml"/>` +
         `<Relationship Id="rIdFtr" Type="${R}/footer" Target="footer1.xml"/>` +
         `<Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/>` +
+        `<Relationship Id="rIdStyles" Type="${R}/styles" Target="styles.xml"/>` +
         `<Relationship Id="rIdImg" Type="${IMG_REL}" Target="media/image1.png"/>` +
         `<Relationship Id="rIdLink" Type="${R}/hyperlink" Target="https://example.com/" TargetMode="External"/>` +
         '</Relationships>'
@@ -270,6 +275,7 @@ function overlapDocx(options: FixtureOptions = {}): Uint8Array {
     ),
     'word/footer1.xml': strToU8(`<w:ftr ${DRAWING_NS}>${footer}</w:ftr>`),
     'word/footnotes.xml': strToU8(`<w:footnotes xmlns:w="${W_NS}">${footnotes}</w:footnotes>`),
+    'word/styles.xml': strToU8(`<w:styles xmlns:w="${W_NS}">${FORMAT_DOC_DEFAULTS}</w:styles>`),
     'word/_rels/header1.xml.rels': imageRels,
     'word/media/image1.png': PNG_1X1,
   });

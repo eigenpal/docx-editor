@@ -15,9 +15,12 @@ function part(xml: string, name = '/word/document.xml') {
   if (!result.ok) throw new Error(result.reason);
   return result.part;
 }
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
 const styles = buildStyleCascadeTable(
   part(
-    `<w:styles xmlns:w="${W}">
+    `<w:styles xmlns:w="${W}">${FORMAT_DOC_DEFAULTS}
 <w:style w:type="table" w:default="1" w:styleId="TableNormal"><w:name w:val="Normal Table"/>
 <w:tblPr><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="108" w:type="dxa"/>
 <w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style></w:styles>`,
@@ -200,7 +203,7 @@ describe('legacy fixed table content edges', () => {
     for (const attrs of ['w:w="300" w:type="pct"', 'w:w="bad" w:type="dxa"']) {
       const cascade = buildStyleCascadeTable(
         part(
-          `<w:styles xmlns:w="${W}"><w:style w:type="table" w:default="1" w:styleId="Default"><w:name w:val="Default"/><w:tblPr><w:tblInd ${attrs}/></w:tblPr></w:style></w:styles>`,
+          `<w:styles xmlns:w="${W}">${FORMAT_DOC_DEFAULTS}<w:style w:type="table" w:default="1" w:styleId="Default"><w:name w:val="Default"/><w:tblPr><w:tblInd ${attrs}/></w:tblPr></w:style></w:styles>`,
           '/word/styles.xml'
         ).root
       );
@@ -215,7 +218,7 @@ describe('legacy fixed table content edges', () => {
     for (const [revision, margin] of [108, 240, 108].entries()) {
       const cascade = buildStyleCascadeTable(
         part(
-          `<w:styles xmlns:w="${W}"><w:style w:type="table" w:styleId="Named"><w:name w:val="Named"/><w:tblPr><w:tblCellMar><w:left w:w="${margin}" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style></w:styles>`,
+          `<w:styles xmlns:w="${W}">${FORMAT_DOC_DEFAULTS}<w:style w:type="table" w:styleId="Named"><w:name w:val="Named"/><w:tblPr><w:tblCellMar><w:left w:w="${margin}" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style></w:styles>`,
           '/word/styles.xml'
         ).root
       );

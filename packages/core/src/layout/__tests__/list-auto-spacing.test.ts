@@ -19,9 +19,16 @@ const paragraph = (text: string, props = '') =>
 const item = (text: string, props = AUTO) => paragraph(text, LIST + props);
 const NORMAL =
   '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>';
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
 const NUMBERING = `<w:numbering xmlns:w="${W}"><w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>`;
 
-function docx(body: string, styles = NORMAL, numbering = NUMBERING): Uint8Array {
+function docx(
+  body: string,
+  styles = FORMAT_DOC_DEFAULTS + NORMAL,
+  numbering = NUMBERING
+): Uint8Array {
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}">` +
@@ -98,7 +105,7 @@ describe('automatic list spacing matches Word', () => {
       '<w:num w:numId="2"><w:abstractNumId w:val="0"/><w:lvlOverride w:ilvl="0"><w:startOverride w:val="1"/></w:lvlOverride></w:num></w:numbering>'
     );
     const second = item('Two').replace('w:numId w:val="1"', 'w:numId w:val="2"');
-    const editor = mount(docx(item('One') + second, NORMAL, numbering));
+    const editor = mount(docx(item('One') + second, FORMAT_DOC_DEFAULTS + NORMAL, numbering));
     // The second before-margin collapses against the first after-margin.
     expect(spacing(editor)).toEqual([
       { before: 0, after: 14 },
@@ -112,7 +119,9 @@ describe('automatic list spacing matches Word', () => {
       '<w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="lowerLetter"/><w:lvlText w:val="%2."/></w:lvl></w:abstractNum>'
     );
     const nested = item('Nested').replace('w:ilvl w:val="0"', 'w:ilvl w:val="1"');
-    const editor = mount(docx(item('One') + nested + item('Two'), NORMAL, numbering));
+    const editor = mount(
+      docx(item('One') + nested + item('Two'), FORMAT_DOC_DEFAULTS + NORMAL, numbering)
+    );
     expect(spacing(editor)).toEqual([
       { before: 0, after: 0 },
       { before: 0, after: 0 },
@@ -125,7 +134,9 @@ describe('automatic list spacing matches Word', () => {
       'w:numFmt w:val="decimal"',
       'w:numFmt w:val="bullet"'
     ).replace('w:lvlText w:val="%1."', 'w:lvlText w:val="•"');
-    const editor = mount(docx(paragraph('Before') + item('One') + item('Two'), NORMAL, numbering));
+    const editor = mount(
+      docx(paragraph('Before') + item('One') + item('Two'), FORMAT_DOC_DEFAULTS + NORMAL, numbering)
+    );
     expect(spacing(editor).slice(1)).toEqual([
       { before: 14, after: 0 },
       { before: 0, after: 14 },
@@ -201,6 +212,7 @@ describe('automatic list spacing matches Word', () => {
 
   test('contextual spacing still suppresses outer margins against the same style', () => {
     const styles =
+      FORMAT_DOC_DEFAULTS +
       NORMAL +
       `<w:style w:type="paragraph" w:styleId="Tight"><w:basedOn w:val="Normal"/><w:pPr><w:contextualSpacing/></w:pPr></w:style>`;
     const style = '<w:pStyle w:val="Tight"/>';
