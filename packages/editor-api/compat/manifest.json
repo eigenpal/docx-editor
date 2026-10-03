@@ -553,7 +553,7 @@
     },
     {
       "uid": "Word.Table#deleteRows",
-      "note": "Deletes count rows from a zero-based index; default count is one. Deleting all rows removes the table. Invalid bounds refuse atomically. Structural mutations are solitary. TrackMineOnly supports partial deletion, but pending row or cell structure revisions refuse with NotImplemented."
+      "note": "Deletes count rows from a zero-based index; default count is one. Deleting all rows removes the table. Merged tables are supported: a vertical merge that starts in a deleted row starts in the next row instead, unless a merged cell above takes that row over. Rows the editor cannot place in the grid refuse with InvalidArgument. Invalid bounds refuse atomically. Structural mutations are solitary. TrackMineOnly supports partial deletion, but pending row or cell structure revisions refuse with NotImplemented."
     },
     {
       "uid": "Word.Table#deleteColumns",

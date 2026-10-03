@@ -147,7 +147,7 @@ export function validateDeleteBlock(part: OoxmlPart, blockId: string): TreeOpRej
     return 'block-required';
   }
   if (block.kind === 'tableRow') {
-    const repairs = planVerticalMergeHeadRepairs(parent, blockId);
+    const repairs = planVerticalMergeHeadRepairs(part, blockId);
     if (!repairs.ok) return repairs.reason;
   }
 

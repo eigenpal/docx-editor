@@ -741,10 +741,10 @@ export function validateTableRowOp(
         })
       )
         return 'block-required';
+      // The row stays until the deletion is accepted, so no merge changes here.
       return null;
     }
-    // A tracked removal keeps the row until it is accepted; accepting repairs the merge.
-    const repairs = planVerticalMergeHeadRepairs(topology.table, op.rowId);
+    const repairs = planVerticalMergeHeadRepairs(part, op.rowId);
     return repairs.ok ? null : repairs.reason;
   }
 
@@ -864,7 +864,7 @@ export function applyDeleteTableRow(
     };
     return fromEdit(replaceNode(part, op.rowId, trackedRow, options), effect);
   }
-  const repairs = planVerticalMergeHeadRepairs(topologyResult.topology.table, op.rowId);
+  const repairs = planVerticalMergeHeadRepairs(part, op.rowId);
   if (!repairs.ok) return { ok: false, reason: repairs.reason };
   const effect: TreeOpEffect = {
     dirty: [op.tableId, ...verticalMergeHeadRepairDirtyIds(repairs.repairs)],

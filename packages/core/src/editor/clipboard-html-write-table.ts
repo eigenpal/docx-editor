@@ -40,6 +40,8 @@ interface CellPlacement {
   readonly cell: OoxmlElement;
   readonly startColumn: number;
   readonly span: number;
+  /** Grid column after the row's `w:gridBefore`: the key a merge chain matches on. */
+  readonly gridStart: number;
   readonly vMerge: 'restart' | 'continue' | null;
 }
 
@@ -112,6 +114,10 @@ function cellPlacementsOf(rows: readonly OoxmlElement[]): {
     const rowPlacements: CellPlacement[] = [];
     const rowItems: RowItem[] = [];
     let column = 0;
+    const gridBefore = Math.min(
+      Math.max(parseIntValue(wmlVal(wmlChild(wmlChild(row, 'trPr'), 'gridBefore'))) ?? 0, 0),
+      63
+    );
     const collect = (children: readonly OoxmlNode[]): void => {
       for (const child of children) {
         if (!isElement(child)) continue;
@@ -124,9 +130,16 @@ function cellPlacementsOf(rows: readonly OoxmlElement[]): {
           const vMergeNode = wmlChild(tcPr, 'vMerge');
           const marked =
             vMergeNode === null ? null : wmlVal(vMergeNode) === 'restart' ? 'restart' : 'continue';
-          const vMerge = marked === 'continue' && !mergedAbove.has(column) ? 'restart' : marked;
-          if (marked !== null) mergedHere.add(column);
-          const placement: CellPlacement = { cell: child, startColumn: column, span, vMerge };
+          const gridStart = gridBefore + column;
+          const vMerge = marked === 'continue' && !mergedAbove.has(gridStart) ? 'restart' : marked;
+          if (marked !== null) mergedHere.add(gridStart);
+          const placement: CellPlacement = {
+            cell: child,
+            startColumn: column,
+            span,
+            gridStart,
+            vMerge,
+          };
           rowPlacements.push(placement);
           rowItems.push({ placement });
           column += span;
@@ -314,7 +327,7 @@ export function renderHtmlTable(
         for (let below = rowIndex + 1; below < placements.length; below += 1) {
           const continuation = placements[below]!.find(
             (candidate) =>
-              candidate.startColumn === placement.startColumn && candidate.vMerge === 'continue'
+              candidate.gridStart === placement.gridStart && candidate.vMerge === 'continue'
           );
           if (!continuation) break;
           rowSpan += 1;

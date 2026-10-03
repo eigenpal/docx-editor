@@ -1,11 +1,18 @@
 // Vertical-merge repair for a removed table row.
 //
 // A `w:vMerge w:val="restart"` cell leaves with its row, content included. The cell below it
-// at the same grid interval then continues nothing. It becomes the new `restart` when the
-// chain goes on past it, and loses `w:vMerge` when it was the chain's last row. Its own
-// content stays as it is, and no row further down changes.
+// at the same grid interval is then a continuation under a new neighbour. If that neighbour
+// has a merged cell starting at the same grid column, the continuation joins it and nothing
+// changes. Otherwise it continues nothing: it becomes the new `restart` when the chain goes
+// on past it, and loses `w:vMerge` when it was the chain's last row. Its own content stays,
+// and no row further down changes. Layout reads a continuation by the same rule.
+//
+// Rows and cells inside `w:sdt` or `w:customXml` wrappers count where they stand, so the
+// repair sees the same grid as layout does.
 
 import {
+  findNode,
+  parentNodeOf,
   removeNode,
   replaceNode,
   type EditOptions,
@@ -15,18 +22,17 @@ import {
   WML_NAMESPACE_URI,
   type OoxmlAttribute,
   type OoxmlElement,
+  type OoxmlNode,
   type OoxmlPart,
   type OoxmlTableRowNode,
 } from '../package/ooxml-tree.ts';
 import { wmlFreshNamespaceContextAt } from '../package/wml-namespace.ts';
-import { wmlChildNamed } from './tree-op-table-shared.ts';
+import { isWmlElement, wmlChildNamed } from './tree-op-table-shared.ts';
 import {
-  buildRowGridSlots,
+  buildCellGridSlots,
   gridIntervalsMatchExactly,
   rowHasVerticalMerge,
-  rowHidesCellInWrapper,
-  tableHidesRowAfter,
-  tableHidesRowBetween,
+  subtreeHolds,
   type GridCellSlot,
 } from './tree-op-table-vmerge.ts';
 import type { TreeOpRejection } from './tree-op-types.ts';
@@ -46,73 +52,128 @@ export type VerticalMergeHeadRepairPlan =
 
 const NO_REPAIRS: VerticalMergeHeadRepairPlan = { ok: true, repairs: [] };
 
-function directRows(table: OoxmlElement): OoxmlTableRowNode[] {
-  return table.children.filter((child) => child.kind === 'tableRow') as OoxmlTableRowNode[];
+/** Ceiling on nodes walked per table or row; exhausting it refuses, fail-closed. */
+const WRAPPER_SCAN_NODES = 1 << 16;
+
+function isWrapper(node: OoxmlNode): node is OoxmlElement {
+  if (node.kind === 'contentControl' || node.kind === 'contentControlContent') return true;
+  return (
+    isWmlElement(node, 'customXml') || isWmlElement(node, 'sdt') || isWmlElement(node, 'sdtContent')
+  );
 }
 
-function cellsWithSlots(
-  row: OoxmlTableRowNode
-): { readonly cell: OoxmlElement; readonly slot: GridCellSlot }[] {
-  const slots = buildRowGridSlots(row);
-  const cells = row.children.filter((child) => child.kind === 'tableCell') as OoxmlElement[];
-  return cells.map((cell, index) => ({ cell, slot: slots[index]! }));
-}
-
-/** A row whose grid the walk can read: no wrapped cell, and no wrapped row before it. */
-function unreadable(
-  table: OoxmlElement,
-  upper: OoxmlTableRowNode,
-  lower: OoxmlTableRowNode | undefined
-): boolean {
-  if (!lower) return tableHidesRowAfter(table, upper.id);
-  return rowHidesCellInWrapper(lower) || tableHidesRowBetween(table, upper.id, lower.id);
+interface Flattened<T> {
+  readonly items: readonly T[];
+  /** A wrapper hid a row or cell the walk could not type, or the walk ran out of budget. */
+  readonly unreadable: boolean;
 }
 
 /**
- * The continuation markers that removing `rowId` from `table` would orphan, and what each
- * becomes. Refuses `row-hides-cell` when a wrapper hides the cells or rows the answer
- * depends on, because a guessed grid would write the marker into a column with no chain.
+ * Typed descendants of `root` in document order, reached through wrappers only. Anything else
+ * holding a row or cell the canonical tree did not type marks the result unreadable.
+ */
+function flatten<T extends OoxmlNode>(root: OoxmlElement, want: 'row' | 'cell'): Flattened<T> {
+  const kind = want === 'row' ? 'tableRow' : 'tableCell';
+  const items: T[] = [];
+  const stack: OoxmlNode[] = [];
+  for (let index = root.children.length - 1; index >= 0; index -= 1) {
+    stack.push(root.children[index]!);
+  }
+  let budget = WRAPPER_SCAN_NODES;
+  while (stack.length > 0) {
+    budget -= 1;
+    if (budget < 0) return { items, unreadable: true };
+    const node = stack.pop()!;
+    if (node.kind === kind) {
+      items.push(node as T);
+      continue;
+    }
+    if (isWrapper(node)) {
+      for (let index = node.children.length - 1; index >= 0; index -= 1) {
+        stack.push(node.children[index]!);
+      }
+      continue;
+    }
+    if (node.kind !== 'textValue' && subtreeHolds(node, want)) return { items, unreadable: true };
+  }
+  return { items, unreadable: false };
+}
+
+interface ReadRow {
+  readonly row: OoxmlTableRowNode;
+  readonly cells: readonly OoxmlElement[];
+  readonly slots: readonly GridCellSlot[];
+}
+
+function readRow(row: OoxmlTableRowNode): ReadRow | null {
+  const cells = flatten<OoxmlElement>(row, 'cell');
+  if (cells.unreadable) return null;
+  return { row, cells: cells.items, slots: buildCellGridSlots(row, cells.items) };
+}
+
+function tableOf(part: OoxmlPart, rowId: string): OoxmlElement | null {
+  let current = parentNodeOf(part, rowId);
+  while (current && current.kind !== 'table') current = parentNodeOf(part, current.id);
+  return current;
+}
+
+function sameInterval(a: GridCellSlot, b: GridCellSlot): boolean {
+  return gridIntervalsMatchExactly(a.startCol, a.span, b.startCol, b.span);
+}
+
+/**
+ * The continuation markers that removing `rowId` would orphan, and what each becomes.
+ * Refuses `row-hides-cell` when the tree hides a cell or row the answer depends on, because
+ * a guessed grid would write the marker into a column with no chain.
  */
 export function planVerticalMergeHeadRepairs(
-  table: OoxmlElement,
+  part: OoxmlPart,
   rowId: string
 ): VerticalMergeHeadRepairPlan {
-  const rows = directRows(table);
-  const index = rows.findIndex((row) => row.id === rowId);
-  const removed = rows[index];
-  if (!removed || !rowHasVerticalMerge(removed)) return NO_REPAIRS;
-  if (rowHidesCellInWrapper(removed)) return { ok: false, reason: 'row-hides-cell' };
-  const heads = cellsWithSlots(removed).filter(({ slot }) => slot.vMergeKind === 'restart');
-  if (heads.length === 0) return NO_REPAIRS;
+  const target = findNode(part, rowId);
+  if (!target || target.kind !== 'tableRow' || !rowHasVerticalMerge(target)) return NO_REPAIRS;
+  const table = tableOf(part, rowId);
+  if (!table) return NO_REPAIRS;
+  const rows = flatten<OoxmlTableRowNode>(table, 'row');
+  const index = rows.items.findIndex((row) => row.id === rowId);
+  const removed = readRow(target);
+  if (rows.unreadable || index === -1 || !removed) return { ok: false, reason: 'row-hides-cell' };
+  const heads = removed.slots.filter((slot) => slot.vMergeKind === 'restart');
+  const belowRow = rows.items[index + 1];
+  if (heads.length === 0 || !belowRow) return NO_REPAIRS;
 
-  const below = rows[index + 1];
-  if (unreadable(table, removed, below)) return { ok: false, reason: 'row-hides-cell' };
-  if (!below) return NO_REPAIRS;
-  const orphans = cellsWithSlots(below).filter(
-    ({ slot }) =>
-      slot.vMergeKind === 'continue' &&
-      heads.some(({ slot: head }) =>
-        gridIntervalsMatchExactly(head.startCol, head.span, slot.startCol, slot.span)
-      )
+  const below = readRow(belowRow);
+  if (!below) return { ok: false, reason: 'row-hides-cell' };
+  const candidates = below.slots.flatMap((slot, cellIndex) =>
+    slot.vMergeKind === 'continue' && heads.some((head) => sameInterval(head, slot))
+      ? [{ slot, cell: below.cells[cellIndex]! }]
+      : []
   );
-  if (orphans.length === 0) return NO_REPAIRS;
+  if (candidates.length === 0) return NO_REPAIRS;
 
-  const next = rows[index + 2];
-  if (unreadable(table, below, next)) return { ok: false, reason: 'row-hides-cell' };
-  const nextSlots = next ? buildRowGridSlots(next) : [];
-  const repairs = orphans.map(({ cell, slot }): VerticalMergeHeadRepair => {
-    const continues = nextSlots.some(
-      (other) =>
-        other.vMergeKind === 'continue' &&
-        gridIntervalsMatchExactly(slot.startCol, slot.span, other.startCol, other.span)
+  const aboveRow = rows.items[index - 1];
+  const nextRow = rows.items[index + 2];
+  const above = aboveRow ? readRow(aboveRow) : null;
+  const next = nextRow ? readRow(nextRow) : null;
+  if ((aboveRow && !above) || (nextRow && !next)) return { ok: false, reason: 'row-hides-cell' };
+
+  const repairs: VerticalMergeHeadRepair[] = [];
+  for (const { slot, cell } of candidates) {
+    // A merged cell starting at the same column above takes the continuation over.
+    const joins = above?.slots.some(
+      (other) => other.vMergeKind !== 'none' && other.startCol === slot.startCol
     );
-    return {
-      rowId: below.id,
+    if (joins) continue;
+    const continues = next?.slots.some(
+      (other) => other.vMergeKind === 'continue' && sameInterval(slot, other)
+    );
+    repairs.push({
+      rowId: below.row.id,
       cellId: cell.id,
       marker: wmlChildNamed(wmlChildNamed(cell, 'tcPr')!, 'vMerge')!,
       becomes: continues ? 'restart' : 'unmerged',
-    };
-  });
+    });
+  }
   return { ok: true, repairs };
 }
 

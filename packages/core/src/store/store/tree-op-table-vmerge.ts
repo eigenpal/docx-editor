@@ -48,12 +48,23 @@ export function readVMergeKind(cellProperties: OoxmlElement | undefined): Vertic
 
 /** Grid intervals the row's direct `w:tc` children occupy, in cell order. */
 export function buildRowGridSlots(row: OoxmlTableRowNode): readonly GridCellSlot[] {
+  return buildCellGridSlots(
+    row,
+    row.children.filter((child) => child.kind === 'tableCell')
+  );
+}
+
+/** Grid intervals `cells` occupy, in order, after the row's `w:gridBefore`. */
+export function buildCellGridSlots(
+  row: OoxmlTableRowNode,
+  cells: readonly OoxmlNode[]
+): readonly GridCellSlot[] {
   const trPr = wmlChildNamed(row, 'trPr');
   const gridBefore = readGridSkip(trPr, 'gridBefore');
   let cursor = gridBefore;
   const slots: GridCellSlot[] = [];
-  for (const child of row.children) {
-    if (child.kind !== 'tableCell') continue;
+  for (const child of cells) {
+    if (child.kind === 'textValue') continue;
     const tcPr = wmlChildNamed(child, 'tcPr');
     const startCol = Math.min(cursor, MAX_TABLE_COLUMNS);
     const span = Math.min(readGridSpan(tcPr), MAX_TABLE_COLUMNS - startCol);
@@ -89,7 +100,7 @@ function isRowLike(node: OoxmlNode): boolean {
 }
 
 /** Iterative, budgeted, fail-closed search for a cell or row anywhere under `root`. */
-function subtreeHolds(root: OoxmlNode, want: 'cell' | 'row'): boolean {
+export function subtreeHolds(root: OoxmlNode, want: 'cell' | 'row'): boolean {
   const matches = want === 'cell' ? isCellLike : isRowLike;
   const stack: OoxmlNode[] = [root];
   let budget = WRAPPED_SCAN_NODES;
@@ -168,16 +179,6 @@ export function tableHidesRowBetween(
   const lower = table.children.findIndex((child) => child.id === lowerRowId);
   if (upper === -1 || lower === -1 || lower <= upper + 1) return false;
   for (let index = upper + 1; index < lower; index += 1) {
-    if (subtreeHolds(table.children[index]!, 'row')) return true;
-  }
-  return false;
-}
-
-/** True when a wrapper hiding a `w:tr` follows the last direct row, `lastRowId`. */
-export function tableHidesRowAfter(table: OoxmlElement, lastRowId: string): boolean {
-  const last = table.children.findIndex((child) => child.id === lastRowId);
-  if (last === -1) return false;
-  for (let index = last + 1; index < table.children.length; index += 1) {
     if (subtreeHolds(table.children[index]!, 'row')) return true;
   }
   return false;

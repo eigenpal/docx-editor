@@ -45,24 +45,23 @@ function textOf(node: OoxmlNode): string {
   return node.children.map(textOf).join('');
 }
 
-/** Each row as `marker:text` per cell, where marker is `-`, `restart` or `continue`. */
+/**
+ * Each row as `marker:text` per cell, where marker is `-`, `restart` or `continue`. Rows and
+ * cells inside wrappers count where they stand.
+ */
 function rows(part: OoxmlPart): string[][] {
   const table = collectByKind(part.root, 'table')[0]!;
-  return table.children
-    .filter((child) => child.kind === 'tableRow')
-    .map((row) =>
-      (row as OoxmlElement).children
-        .filter((child) => child.kind === 'tableCell')
-        .map((cell) => {
-          const tcPr = wmlChildNamed(cell as OoxmlElement, 'tcPr');
-          const marker = tcPr && wmlChildNamed(tcPr, 'vMerge');
-          const val = marker?.attributes.find(
-            (attribute) => attribute.namespaceUri === W && attribute.localName === 'val'
-          )?.value;
-          const kind = !marker ? '-' : val === 'restart' ? 'restart' : 'continue';
-          return `${kind}:${textOf(cell)}`;
-        })
-    );
+  return collectByKind(table, 'tableRow').map((row) =>
+    collectByKind(row, 'tableCell').map((cell) => {
+      const tcPr = wmlChildNamed(cell as OoxmlElement, 'tcPr');
+      const marker = tcPr && wmlChildNamed(tcPr, 'vMerge');
+      const val = marker?.attributes.find(
+        (attribute) => attribute.namespaceUri === W && attribute.localName === 'val'
+      )?.value;
+      const kind = !marker ? '-' : val === 'restart' ? 'restart' : 'continue';
+      return `${kind}:${textOf(cell)}`;
+    })
+  );
 }
 
 const tcPr = (merge: 'restart' | 'continue' | null, span = 1): string =>
@@ -212,13 +211,89 @@ describe.each(['deleteTableRow', 'deleteBlock'] as const)('%s across vertical me
     ]);
   });
 
-  test('refuses without mutation when a wrapper hides the row below', () => {
+  test('a continuation under another merge joins it', () => {
+    const part = load(
+      TABLE(
+        2,
+        HEADER,
+        ROW(CELL('A', 'restart'), CELL('1')),
+        ROW(CELL('B', 'continue'), CELL('2')),
+        ROW(CELL('C', 'restart'), CELL('3')),
+        ROW(CELL('D', 'continue'), CELL('4'))
+      )
+    );
+    expect(rows(removeRow(part, 3, via))).toEqual([
+      ['-:Party', '-:Amount'],
+      ['restart:A', '-:1'],
+      ['continue:B', '-:2'],
+      ['continue:D', '-:4'],
+    ]);
+  });
+
+  test('repairs a continuation in a wrapped row below', () => {
     const part = load(
       TABLE(
         2,
         HEADER,
         ROW(CELL('Supplier', 'restart'), CELL('USD 100')),
         `<w:sdt><w:sdtContent>${ROW(CELL('', 'continue'), CELL('USD 200'))}</w:sdtContent></w:sdt>`
+      )
+    );
+    expect(rows(removeRow(part, 1, via))).toEqual([
+      ['-:Party', '-:Amount'],
+      ['-:', '-:USD 200'],
+    ]);
+  });
+
+  test('repairs a continuation below a wrapped removed row', () => {
+    // `deleteTableRow` addresses direct rows only; `deleteBlock` reaches a wrapped one.
+    if (via === 'deleteTableRow') return;
+    const part = load(
+      TABLE(
+        2,
+        HEADER,
+        `<w:customXml w:element="rows"><w:sdt><w:sdtContent>` +
+          ROW(CELL('Lead'), CELL('USD 50')) +
+          ROW(CELL('Supplier', 'restart'), CELL('USD 100')) +
+          `</w:sdtContent></w:sdt></w:customXml>`,
+        ROW(CELL('', 'continue'), CELL('USD 200')),
+        ROW(CELL('', 'continue'), CELL('USD 300'))
+      )
+    );
+    expect(rows(removeRow(part, 2, via))).toEqual([
+      ['-:Party', '-:Amount'],
+      ['-:Lead', '-:USD 50'],
+      ['restart:', '-:USD 200'],
+      ['continue:', '-:USD 300'],
+    ]);
+  });
+
+  test('reads wrapped cells in other columns', () => {
+    const wrapped = (inner: string): string =>
+      `<w:sdt><w:sdtContent>${inner}</w:sdtContent></w:sdt>`;
+    const part = load(
+      TABLE(
+        2,
+        HEADER,
+        ROW(CELL('Supplier', 'restart'), wrapped(CELL('USD 100'))),
+        ROW(wrapped(CELL('', 'continue')), CELL('USD 200')),
+        ROW(CELL('', 'continue'), wrapped(CELL('USD 300')))
+      )
+    );
+    expect(rows(removeRow(part, 1, via))).toEqual([
+      ['-:Party', '-:Amount'],
+      ['restart:', '-:USD 200'],
+      ['continue:', '-:USD 300'],
+    ]);
+  });
+
+  test('refuses without mutation when an unknown element hides the row below', () => {
+    const part = load(
+      TABLE(
+        2,
+        HEADER,
+        ROW(CELL('Supplier', 'restart'), CELL('USD 100')),
+        `<x:wrap xmlns:x="urn:example">${ROW(CELL('', 'continue'), CELL('USD 200'))}</x:wrap>`
       )
     );
     const before = serializeOoxmlPart(part);
@@ -240,7 +315,10 @@ describe.each(['deleteTableRow', 'deleteBlock'] as const)('%s across vertical me
         `<w:sdt><w:sdtContent>${ROW(CELL('three'), CELL('four'))}</w:sdtContent></w:sdt>`
       )
     );
-    expect(rows(removeRow(part, 1, via))).toEqual([['-:Party', '-:Amount']]);
+    expect(rows(removeRow(part, 1, via))).toEqual([
+      ['-:Party', '-:Amount'],
+      ['-:three', '-:four'],
+    ]);
   });
 });
 
