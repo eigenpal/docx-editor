@@ -104,12 +104,15 @@ export function planVerticalMergeHeadRepairs(
   // Only the rows next to the removed one decide the repair, so only they must be readable.
   const rows = flatten<OoxmlTableRowNode>(table, 'row');
   const index = rows.findIndex((row) => row !== null && row.id === rowId);
-  const removed = readRow(target);
-  if (index === -1 || !removed) return { ok: false, reason: 'row-hides-cell' };
-  const heads = removed.slots.filter((slot) => slot.vMergeKind === 'restart');
+  if (index === -1) return { ok: false, reason: 'row-hides-cell' };
+  // Nothing continues below: no repair, whatever the removed row's own shape.
   if (index + 1 >= rows.length) return NO_REPAIRS;
-  const below = readRow(rows[index + 1] ?? null);
-  if (!below) return { ok: false, reason: 'row-hides-cell' };
+  const belowRow = rows[index + 1] ?? null;
+  if (belowRow && !rowHasVerticalMerge(belowRow, 'continue')) return NO_REPAIRS;
+  const removed = readRow(target);
+  const below = readRow(belowRow);
+  if (!removed || !below) return { ok: false, reason: 'row-hides-cell' };
+  const heads = removed.slots.filter((slot) => slot.vMergeKind === 'restart');
   const candidates = below.slots.flatMap((slot, cellIndex) =>
     slot.vMergeKind === 'continue' && heads.some((head) => sameInterval(head, slot))
       ? [{ slot, cell: below.cells[cellIndex]! }]

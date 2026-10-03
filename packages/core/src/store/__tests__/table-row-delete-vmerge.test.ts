@@ -389,6 +389,21 @@ describe.each(['deleteTableRow', 'deleteBlock'] as const)('%s across vertical me
     ]);
   });
 
+  test('a merge start with an unreadable cell deletes when nothing continues below', () => {
+    const part = load(
+      TABLE(
+        2,
+        HEADER,
+        ROW(CELL('Plain'), CELL('USD 100')),
+        ROW(CELL('Last', 'restart'), `<w:customXml w:element="cell">${CELL('X')}</w:customXml>`)
+      )
+    );
+    expect(rows(removeRow(part, 2, via))).toEqual([
+      ['-:Party', '-:Amount'],
+      ['-:Plain', '-:USD 100'],
+    ]);
+  });
+
   test('a merge-free row with a wrapped neighbour still deletes', () => {
     const part = load(
       TABLE(
