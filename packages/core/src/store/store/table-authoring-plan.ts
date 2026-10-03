@@ -269,9 +269,10 @@ export function planTableMutation(
     return { ok: false, reason: 'unsupported-tracked-table-operation' };
   const initial = topology;
   if (!initial.ok) return { ok: false, reason: initial.reason };
+  // Row deletion hands a vertical merge that starts in a removed row to the row below.
   if (
     initial.topology.hasMerge &&
-    !['delete', 'properties', 'addRows', 'insertRows'].includes(mutation.kind)
+    !['delete', 'properties', 'addRows', 'insertRows', 'deleteRows'].includes(mutation.kind)
   )
     return { ok: false, reason: 'table-has-merge' };
   let part: OoxmlPart = reads.part;
@@ -338,6 +339,7 @@ export function planTableMutation(
     mutation.kind !== 'properties' &&
     mutation.kind !== 'addRows' &&
     mutation.kind !== 'insertRows' &&
+    mutation.kind !== 'deleteRows' &&
     current.rows.some(({ cells }) => cells.length !== cols)
   )
     return { ok: false, reason: 'nonrectangular-table' };

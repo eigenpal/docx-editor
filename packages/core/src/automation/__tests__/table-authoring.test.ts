@@ -226,6 +226,25 @@ describe('canonical table authoring', () => {
       })
     ).toMatchObject({ ok: false, reason: 'table-has-merge' });
   });
+  test('deletes rows of a merged table and hands a vertical merge to the next row', () => {
+    const cell = (text: string, pr = '') =>
+      `<w:tc><w:tcPr>${pr}</w:tcPr><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+    const part = load(
+      '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>' +
+        `<w:tr>${cell('Head', '<w:gridSpan w:val="2"/>')}</w:tr>` +
+        `<w:tr>${cell('Supplier', '<w:vMerge w:val="restart"/>')}${cell('100')}</w:tr>` +
+        `<w:tr>${cell('', '<w:vMerge/>')}${cell('200')}</w:tr>` +
+        `<w:tr>${cell('', '<w:vMerge/>')}${cell('300')}</w:tr></w:tbl><w:p/>`
+    );
+    const id = tableNodes(part.root)[0]!.id;
+    const xml = serializeOoxmlPart(mutate(part, id, { kind: 'deleteRows', index: 1, count: 1 }));
+    const rows = xml.match(/<w:tr>.*?<\/w:tr>/g)!;
+    expect(rows).toHaveLength(3);
+    expect(xml).not.toContain('Supplier');
+    expect(rows[1]).toContain('<w:vMerge w:val="restart"/>');
+    expect(rows[1]).toContain('200');
+    expect(rows[2]).toContain('<w:vMerge/>');
+  });
   test('preserves unrelated properties and foreign table extension markup', () => {
     const part = load(
       '<w:tbl x:keep="yes"><w:tblPr><w:tblStyle w:val="Old" x:keep="style"/><x:data x:key="preserved"/></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:trPr><x:row/></w:trPr><w:tc><w:tcPr><x:cell/></w:tcPr><w:p/></w:tc></w:tr></w:tbl><w:p/>'
