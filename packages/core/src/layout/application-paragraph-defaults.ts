@@ -13,12 +13,16 @@ const APPLICATION_SPACING: readonly OoxmlProperty[] = Object.freeze([
 
 /**
  * An omitted pPrDefault is application-defined (17.7.5.4), unlike an explicitly
- * empty pPrDefault. Use the current application profile for documents that
- * declare docDefaults but omit their paragraph defaults. Authored properties in
- * any later cascade layer override these independently, including explicit zero.
- * This is layout material only; the source styles part remains untouched.
+ * empty pPrDefault. Use the current application profile for documents that omit
+ * their paragraph defaults: a package with no styles part (`null`), a styles part
+ * with no `w:docDefaults`, and `w:docDefaults` with no `w:pPrDefault`. Authored
+ * properties in any later cascade layer override these independently, including
+ * explicit zero. This is layout material only; the source styles part remains untouched.
  */
-export function applicationParagraphDefaults(styles: OoxmlElement): readonly OoxmlProperty[] {
+export function applicationParagraphDefaults(
+  styles: OoxmlElement | null
+): readonly OoxmlProperty[] {
+  if (!styles) return APPLICATION_SPACING;
   if (styles.namespaceUri !== WML_NAMESPACE_URI) return [];
   const defaults = styles.children.find(
     (child): child is OoxmlElement =>
@@ -27,9 +31,7 @@ export function applicationParagraphDefaults(styles: OoxmlElement): readonly Oox
       child.localName === 'docDefaults'
   );
   if (
-    !defaults ||
-    defaults.kind === 'textValue' ||
-    defaults.children.some(
+    defaults?.children.some(
       (child) =>
         child.kind !== 'textValue' &&
         child.namespaceUri === WML_NAMESPACE_URI &&

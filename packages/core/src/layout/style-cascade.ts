@@ -475,12 +475,14 @@ export function buildStyleCascadeTable(
   const theme = themeCacheMaterial(themeFonts);
   if (!stylesRoot) {
     const runDefaults = applicationRunDefaults(null, ligaturesEnabled);
+    const paragraphDefaults = applicationParagraphDefaults(null);
     return {
       // Still keyed on the theme: a document with no styles part can carry a theme, and
       // its runs resolve `+Body` through it.
       cacheToken: stableHash({
         empty: true,
         dR: propertiesFingerprint(runDefaults),
+        dP: propertiesFingerprint(paragraphDefaults),
         ...ligatureCompatibility,
         theme,
         typography,
@@ -492,7 +494,7 @@ export function buildStyleCascadeTable(
       strictTableStyleHierarchy: strictTableHierarchy,
       typography,
       docDefaultsRun: runDefaults,
-      docDefaultsParagraph: [],
+      docDefaultsParagraph: paragraphDefaults,
       docDefaultsParagraphNode: undefined,
       defaultParagraphStyleId: null,
       defaultCharacterStyleId: null,
