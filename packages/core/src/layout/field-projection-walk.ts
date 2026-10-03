@@ -748,7 +748,7 @@ export function unmergedPiecesOfParagraphForDisplay(
           }
           if (style.hidden) continue;
           donateResultCapture(text);
-          pending.cachedText += text;
+          pending.cachedText += hyphen?.measureText ?? text;
           continue;
         }
 

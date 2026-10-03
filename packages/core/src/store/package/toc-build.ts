@@ -71,6 +71,31 @@ function textNode(mint: () => string, text: string): OoxmlNode {
   } as unknown as OoxmlNode;
 }
 
+/**
+ * Entry text from the outline shows a heading's non-breaking hyphen as U+2011. The row writes
+ * it back as a `w:noBreakHyphen`, as the heading has it.
+ */
+function textWithNonBreakingHyphens(mint: () => string, text: string): OoxmlNode[] {
+  if (!text.includes('\u2011')) return [textNode(mint, text)];
+  return text.split('\u2011').flatMap((piece, index) => [
+    ...(index > 0
+      ? [
+          {
+            id: mint(),
+            kind: 'generic',
+            namespaceUri: WML_NAMESPACE_URI,
+            localName: 'noBreakHyphen',
+            prefix: 'w',
+            namespaceBindings: [],
+            attributes: [],
+            children: [],
+          } as OoxmlNode,
+        ]
+      : []),
+    ...(piece.length > 0 ? [textNode(mint, piece)] : []),
+  ]);
+}
+
 function runWithText(mint: () => string, text: string): OoxmlNode {
   return {
     id: mint(),
@@ -95,7 +120,7 @@ function runWithText(mint: () => string, text: string): OoxmlNode {
             } as OoxmlNode,
           ]
         : []),
-      textNode(mint, piece),
+      ...textWithNonBreakingHyphens(mint, piece),
     ]),
   } as unknown as OoxmlNode;
 }

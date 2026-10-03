@@ -4,6 +4,7 @@
 // section-ending paragraphs and content-control wrappers. A fresh-document write must remove
 // those blocks, while a body must retain its final `w:sectPr` page setup.
 
+import { isInsertableText, textWithHyphens } from './tree-op-inline-elements.ts';
 import { createNodeIdAllocator, findNode, replaceChildren } from '../package/ooxml-edit.ts';
 import {
   mintParaId,
@@ -12,7 +13,6 @@ import {
   usedParaIds,
   w14RootPrefix,
 } from '../package/para-id.ts';
-import { isValidXmlText } from '../package/sinks.ts';
 import { storyRootsOf } from '../package/story-blocks.ts';
 import {
   WML_NAMESPACE_URI,
@@ -42,7 +42,7 @@ export function validateReplaceStoryBlocks(
   ) {
     return 'invalidArgs';
   }
-  return paragraphs.every((text) => typeof text === 'string' && isValidXmlText(text))
+  return paragraphs.every((text) => typeof text === 'string' && isInsertableText(text))
     ? null
     : 'invalid-text';
 }
@@ -62,17 +62,7 @@ function paragraph(
 ): OoxmlNode {
   const children: OoxmlNode[] = [];
   if (text.length > 0) {
-    const value: OoxmlNode = { id: nextId(), kind: 'textValue', value: text };
-    const textNode = {
-      id: nextId(),
-      kind: 'text',
-      namespaceUri: WML_NAMESPACE_URI,
-      localName: 't',
-      prefix: 'w',
-      namespaceBindings: [],
-      attributes: [],
-      children: [value],
-    } as OoxmlNode;
+    const content = textWithHyphens(nextId, text);
     children.push({
       id: nextId(),
       kind: 'run',
@@ -81,7 +71,7 @@ function paragraph(
       prefix: 'w',
       namespaceBindings: [],
       attributes: [],
-      children: [textNode],
+      children: content,
     } as OoxmlNode);
   }
   const identity: OoxmlAttribute[] = [];

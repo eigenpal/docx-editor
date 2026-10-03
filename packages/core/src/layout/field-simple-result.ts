@@ -240,7 +240,9 @@ export function collectSimpleFieldDisplay(args: {
           }
 
           // A field result paints its text, so a hyphen shows its glyph, not its model character.
-          const value = hyphenDisplayOf(grand)?.text ?? modelTextOfRunChild(grand);
+          // An optional hyphen paints nothing in a cached result, which is measured as one string.
+          const hyphen = hyphenDisplayOf(grand);
+          const value = hyphen ? (hyphen.measureText ?? hyphen.text) : modelTextOfRunChild(grand);
           if (value.length === 0) continue;
           const deleted = revisionsAreDeletion(local);
           const revisionSuppressed =

@@ -1,3 +1,4 @@
+import { isInsertableText } from '../store/store/tree-op-inline-elements.ts';
 import { planDocumentProperties } from './plan-document-properties.ts';
 import { referencedNoteIds } from './note-references.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
@@ -101,7 +102,6 @@ import { BODY_STORY, storyKey, type AutomationStoryId } from './stories.ts';
 import { isStoryId } from './stories.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { authorableHyperlinkTarget } from '../store/package/hyperlink-part.ts';
-import { isValidXmlText } from '../store/package/sinks.ts';
 import {
   bookmarkIn,
   bookmarkReads,
@@ -775,7 +775,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       paragraphs.length < 1 ||
       paragraphs.length > 10_000 ||
       paragraphs.some(
-        (text) => typeof text !== 'string' || PARAGRAPH_BREAKING.test(text) || !isValidXmlText(text)
+        (text) =>
+          typeof text !== 'string' || PARAGRAPH_BREAKING.test(text) || !isInsertableText(text)
       )
     ) {
       return refuse(

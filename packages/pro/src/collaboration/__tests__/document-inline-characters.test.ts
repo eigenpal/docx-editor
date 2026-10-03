@@ -73,3 +73,34 @@ test('a concurrent edit in another part of the paragraph keeps both changes', as
   expect(body(alice)).not.toContain('noBreakHyphen');
   expect(body(alice)).toContain('At ');
 });
+
+test('inserting hyphen characters converges and survives undo, redo, and reconnect', async () => {
+  const { alice, bob, pause, resume } = await harness.pair(bytes);
+  const before = body(alice);
+  pause();
+  harness.apply(alice, [
+    {
+      op: 'insertText',
+      paragraphId: harness.paragraphIdAt(alice, 0),
+      offset: 0,
+      text: 'co\u001esigned re\u001fsign ',
+    },
+  ]);
+  harness.apply(bob, [
+    { op: 'deleteText', paragraphId: harness.paragraphIdAt(bob, 0), start: 0, end: 4 },
+  ]);
+  resume();
+  harness.expectConverged(alice, bob);
+  expect(body(bob).match(/<w:noBreakHyphen\/>/g)).toHaveLength(2);
+  expect(body(bob).match(/<w:softHyphen\/>/g)).toHaveLength(2);
+
+  expect(alice.room.session.undo()).toBe(true);
+  harness.expectConverged(alice, bob);
+  expect(body(bob).match(/<w:noBreakHyphen\/>/g)).toHaveLength(1);
+  expect(alice.room.session.redo()).toBe(true);
+  harness.expectConverged(alice, bob);
+  expect(body(bob)).not.toBe(before);
+
+  const rejoined = await harness.remount(bob);
+  harness.expectConverged(alice, rejoined);
+});

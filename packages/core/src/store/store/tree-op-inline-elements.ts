@@ -1,3 +1,4 @@
+import { isValidXmlText } from '../package/sinks.ts';
 import { hardBreakAttributes } from '../package/hard-break.ts';
 import { NON_BREAKING_HYPHEN_TEXT, OPTIONAL_HYPHEN_TEXT } from '../package/hyphen-text.ts';
 import { WML_NAMESPACE_URI, type OoxmlNode } from '../package/ooxml-tree.ts';
@@ -48,10 +49,24 @@ export function simpleElement(
 }
 
 const HYPHEN_CHARACTERS = /[\u001e\u001f]/;
+const ALL_HYPHEN_CHARACTERS = /[\u001e\u001f]/g;
+
+/** Most hyphen elements one inserted text may create, so a string cannot mint a node flood. */
+export const MAX_INSERTED_HYPHENS = 4096;
 
 /** Whether inserted text holds a character that becomes a hyphen element. */
 export function holdsHyphenCharacter(text: string): boolean {
   return HYPHEN_CHARACTERS.test(text);
+}
+
+/**
+ * Whether text can be inserted as run content: valid XML text, except that U+001E and U+001F
+ * are allowed, up to {@link MAX_INSERTED_HYPHENS}, because they become hyphen elements.
+ */
+export function isInsertableText(text: string): boolean {
+  if (!holdsHyphenCharacter(text)) return isValidXmlText(text);
+  const hyphens = text.match(ALL_HYPHEN_CHARACTERS)?.length ?? 0;
+  return hyphens <= MAX_INSERTED_HYPHENS && isValidXmlText(text.replace(ALL_HYPHEN_CHARACTERS, ''));
 }
 
 /** A builder for one inserted run child. */

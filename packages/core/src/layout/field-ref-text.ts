@@ -116,8 +116,9 @@ export function bookmarkRangeText(paragraph: OoxmlElement, name: string): string
           }
         } else if (grand.kind === 'tab') {
           append('\t');
-        } else if (hyphenDisplayOf(grand)) {
-          append(hyphenDisplayOf(grand)!.text);
+        } else {
+          const hyphen = hyphenDisplayOf(grand);
+          if (hyphen) append(hyphen.text);
         }
       }
       return;

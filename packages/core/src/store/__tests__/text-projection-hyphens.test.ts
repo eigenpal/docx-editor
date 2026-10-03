@@ -15,6 +15,10 @@ import {
 import { applyTreeOp, paragraphTextOf } from '../store/tree-ops.ts';
 import { serializeOoxmlPart } from '../package/ooxml-tree.ts';
 import { collectDocumentOutline } from '../../binding/document-outline.ts';
+import { buildTocEntryParagraph } from '../package/toc-build.ts';
+import { parseTocInstruction } from '../package/index.ts';
+import { MAX_INSERTED_HYPHENS } from '../store/tree-op-inline-elements.ts';
+import { validateTreeOp } from '../store/tree-ops.ts';
 import { projectVisibleParagraphText } from '../store/text-projection.ts';
 import { projectParagraphText } from '../../automation/text-projection.ts';
 
@@ -147,5 +151,68 @@ describe('hyphen elements in paragraph text', () => {
     if (!styles.ok) throw new Error(styles.reason);
     const outline = collectDocumentOutline(part, styles.part.root);
     expect(outline.map((entry) => entry.text)).toEqual(['Pre\u2011Trial rates']);
+  });
+
+  test('a table of contents row writes a non-breaking hyphen as the element', () => {
+    let next = 0;
+    const row = buildTocEntryParagraph(
+      () => `toc${next++}`,
+      {
+        level: 0,
+        text: 'Pre\u2011Trial',
+        headingParagraphId: 'h',
+        bookmarkName: '_Toc1',
+        pageNumberText: '1',
+      },
+      parseTocInstruction('TOC \\o "1-3"')!
+    );
+    const texts: string[] = [];
+    const walk = (node: OoxmlNode): void => {
+      if (node.kind === 'textValue') {
+        texts.push(node.value);
+        return;
+      }
+      if (node.localName === 'noBreakHyphen') texts.push('<nbh>');
+      node.children.forEach(walk);
+    };
+    walk(row);
+    expect(texts.join('')).toContain('Pre<nbh>Trial');
+  });
+
+  test('a content control value written back keeps its hyphens', () => {
+    const part = load(
+      '<w:sdt><w:sdtPr><w:id w:val="5"/><w:text/></w:sdtPr><w:sdtContent><w:p><w:r><w:t>co</w:t>' +
+        '<w:noBreakHyphen/><w:t>signer</w:t></w:r></w:p></w:sdtContent></w:sdt>'
+    );
+    const control = (function find(node: OoxmlNode): OoxmlNode | null {
+      if (node.kind === 'textValue') return null;
+      if (node.kind === 'contentControl') return node;
+      for (const child of node.children) {
+        const hit = find(child);
+        if (hit) return hit;
+      }
+      return null;
+    })(part.root)!;
+    const result = applyTreeOp(part, {
+      op: 'setContentControlValue',
+      controlId: control.id,
+      value: { kind: 'text', text: `co${NBH}signer!` },
+    } as never);
+    if (!result.ok) throw new Error(result.reason);
+    expect(serializeOoxmlPart(result.part)).toContain('<w:noBreakHyphen/>');
+  });
+
+  test('refuses text that would create more hyphens than the cap', () => {
+    const part = load('<w:p><w:r><w:t>ab</w:t></w:r></w:p>');
+    const paragraph = firstParagraph(part);
+    const op = (count: number) =>
+      ({
+        op: 'insertText',
+        paragraphId: paragraph.id,
+        offset: 1,
+        text: NBH.repeat(count),
+      }) as const;
+    expect(validateTreeOp(part, op(MAX_INSERTED_HYPHENS))).toBeNull();
+    expect(validateTreeOp(part, op(MAX_INSERTED_HYPHENS + 1))).toBe('invalid-text');
   });
 });

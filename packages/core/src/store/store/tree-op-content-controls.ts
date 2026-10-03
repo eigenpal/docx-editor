@@ -1,4 +1,5 @@
 export { formsProtectionCommandRefusal } from './forms-protection-command.ts';
+import { isInsertableText, textWithHyphens } from './tree-op-inline-elements.ts';
 import {
   checkboxContent,
   checkboxStateHexes,
@@ -1179,17 +1180,7 @@ export function textRun(
   text: string,
   properties: OoxmlNode | undefined
 ): OoxmlNode {
-  const value: OoxmlNode = { id: nextId(), kind: 'textValue', value: text };
-  const textNode = {
-    id: nextId(),
-    kind: 'text',
-    namespaceUri: WML_NAMESPACE_URI,
-    localName: 't',
-    prefix: 'w',
-    namespaceBindings: [],
-    attributes: [],
-    children: [value],
-  } as unknown as OoxmlNode;
+  const content = textWithHyphens(nextId, text);
   return {
     id: nextId(),
     kind: 'run',
@@ -1198,7 +1189,7 @@ export function textRun(
     prefix: 'w',
     namespaceBindings: [],
     attributes: [],
-    children: properties ? [properties, textNode] : [textNode],
+    children: properties ? [properties, ...content] : content,
   } as unknown as OoxmlNode;
 }
 
@@ -1389,7 +1380,7 @@ function planValue(
       ) {
         return 'typeMismatch';
       }
-      if (typeof value.text !== 'string' || !isValidXmlText(value.text)) return 'invalidArgs';
+      if (typeof value.text !== 'string' || !isInsertableText(value.text)) return 'invalidArgs';
       if (value.text.length === 0) {
         return { text: promptFor(properties.type), showingPlaceholder: true };
       }
