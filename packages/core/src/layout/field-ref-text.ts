@@ -4,7 +4,7 @@
 // its line budget. Every walk here is node/depth/character capped — the inputs are
 // attacker-controlled OOXML.
 
-import { hyphenDisplayOf } from './field-run-text.ts';
+import { visibleHyphenText } from '../store/package/hyphen-text.ts';
 import {
   isFldSimple,
   WML_NAMESPACE_URI,
@@ -56,6 +56,13 @@ export function fldSimpleCachedText(
       }
       return;
     }
+    // The same hyphen text the computed result carries, so a cache can match it.
+    const hyphen = visibleHyphenText(node);
+    if (hyphen !== null) {
+      text += hyphen.slice(0, MAX_REF_TEXT_CHARS - text.length);
+      return;
+    }
+    if (node.kind === 'revisionDelete') return;
     for (const child of node.children) visit(child, depth + 1);
   };
   for (const child of simple.children) visit(child, 1);
@@ -117,14 +124,14 @@ export function bookmarkRangeText(paragraph: OoxmlElement, name: string): string
         } else if (grand.kind === 'tab') {
           append('\t');
         } else {
-          const hyphen = hyphenDisplayOf(grand);
-          // A REF result is measured as one string, where an optional hyphen shows nothing.
-          if (hyphen) append(hyphen.measureText ?? hyphen.text);
+          // A REF result is read as one string, where an optional hyphen shows nothing.
+          const hyphen = visibleHyphenText(grand);
+          if (hyphen) append(hyphen);
         }
       }
       return;
     }
-    if (isDrawingHost(node) || isFldSimple(node)) return;
+    if (isDrawingHost(node) || isFldSimple(node) || node.kind === 'revisionDelete') return;
     if (!consumeScanNode(budget)) return;
     const nextDepth = nextInlineContainerDepth(node, containerDepth);
     for (const child of node.children) visit(child, depth + 1, nextDepth);

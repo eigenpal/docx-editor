@@ -25,6 +25,27 @@ export function hyphenDisplayText(node: OoxmlNode): string | null {
   return text === null ? null : text === NON_BREAKING_HYPHEN_TEXT ? '\u2011' : '\u00ad';
 }
 
+/**
+ * The text a hyphen element contributes to text read as one string, such as a cached field
+ * result or a card: U+2011 for a non-breaking hyphen, nothing for an optional one. Null for
+ * any other node.
+ */
+export function visibleHyphenText(node: OoxmlNode): string | null {
+  const text = hyphenTextOf(node);
+  return text === null ? null : text === NON_BREAKING_HYPHEN_TEXT ? '\u2011' : '';
+}
+
+/**
+ * Paragraph text with each hyphen as the character a person sees, one for one, so offsets
+ * into the model text still apply: U+2011 and U+00AD.
+ */
+export function withHyphenGlyphs(text: string): string {
+  if (!text.includes(NON_BREAKING_HYPHEN_TEXT) && !text.includes(OPTIONAL_HYPHEN_TEXT)) return text;
+  return text
+    .replaceAll(NON_BREAKING_HYPHEN_TEXT, '\u2011')
+    .replaceAll(OPTIONAL_HYPHEN_TEXT, '\u00ad');
+}
+
 /** Paragraph text as a person reads it: U+2011 for a non-breaking hyphen, no optional hyphen. */
 export function withDisplayedHyphens(text: string): string {
   if (!text.includes(NON_BREAKING_HYPHEN_TEXT) && !text.includes(OPTIONAL_HYPHEN_TEXT)) return text;

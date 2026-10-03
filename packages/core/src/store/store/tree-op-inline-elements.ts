@@ -64,13 +64,21 @@ export function holdsHyphenCharacter(text: string): boolean {
  * are allowed, up to {@link MAX_INSERTED_HYPHENS}, because they become hyphen elements.
  */
 export function isInsertableText(text: string): boolean {
+  if (!holdsHyphenCharacter(text)) return isValidXmlText(text);
   return areInsertableTexts([text]);
+}
+
+/** A hyphen between the two halves of a surrogate pair would leave each half alone. */
+function splitsSurrogateAt(text: string, index: number): boolean {
+  const before = index > 0 ? text.charCodeAt(index - 1) : 0;
+  const after = index + 1 < text.length ? text.charCodeAt(index + 1) : 0;
+  return (before >= 0xd800 && before <= 0xdbff) || (after >= 0xdc00 && after <= 0xdfff);
 }
 
 /**
  * {@link isInsertableText} for texts one operation writes together: the hyphen cap covers them
- * all. Each piece between hyphens must be valid on its own, since each becomes its own `w:t`,
- * so a hyphen cannot split a surrogate pair.
+ * all. Each hyphen becomes its own element, so one between the halves of a surrogate pair is
+ * refused.
  */
 export function areInsertableTexts(texts: readonly string[]): boolean {
   let hyphens = 0;
@@ -79,9 +87,13 @@ export function areInsertableTexts(texts: readonly string[]): boolean {
       if (!isValidXmlText(text)) return false;
       continue;
     }
-    hyphens += text.match(ALL_HYPHEN_CHARACTERS)?.length ?? 0;
-    if (hyphens > MAX_INSERTED_HYPHENS) return false;
-    if (!text.split(ALL_HYPHEN_CHARACTERS).every((piece) => isValidXmlText(piece))) return false;
+    for (let index = 0; index < text.length; index += 1) {
+      const code = text.charCodeAt(index);
+      if (code !== 0x1e && code !== 0x1f) continue;
+      hyphens += 1;
+      if (hyphens > MAX_INSERTED_HYPHENS || splitsSurrogateAt(text, index)) return false;
+    }
+    if (!isValidXmlText(text.replace(ALL_HYPHEN_CHARACTERS, ''))) return false;
   }
   return true;
 }

@@ -50,7 +50,8 @@
 // content. `resolveStoryRefFields` returns null for the common no-REF story, which costs
 // callers nothing downstream.
 
-import { hyphenDisplayOf } from './field-run-text.ts';
+import { revisionsAreDeletion } from './revision-projection.ts';
+import { visibleHyphenText } from '../store/package/hyphen-text.ts';
 import {
   fldSimpleInstr,
   isFldSimple,
@@ -372,8 +373,8 @@ function scanParagraphRefs(paragraph: OoxmlElement): ParagraphRefScan {
           } else if (grand.kind === 'tab' && pending.cached.length < MAX_REF_TEXT_CHARS) {
             pending.cached += ' ';
           } else if (pending.cached.length < MAX_REF_TEXT_CHARS) {
-            const hyphen = hyphenDisplayOf(grand);
-            pending.cached += hyphen ? (hyphen.measureText ?? hyphen.text) : '';
+            // Deleted content never joins a cached result, the same as `w:delText`.
+            if (!revisionsAreDeletion(revisions)) pending.cached += visibleHyphenText(grand) ?? '';
           }
         }
       }

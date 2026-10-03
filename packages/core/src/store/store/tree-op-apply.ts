@@ -1,3 +1,4 @@
+import { withDisplayedHyphens } from '../package/hyphen-text.ts';
 import { withTailStyle } from './tree-op-paragraph-tail.ts';
 import { applySetFieldCode } from './tree-op-field-code.ts';
 import { applyTableAuthoring } from './tree-op-table-batch.ts';
@@ -2060,7 +2061,8 @@ function setLastValueOnList(list: OoxmlElement, value: string): OoxmlNode {
         namespaceUri: WML_NAMESPACE_URI,
         prefix: 'w',
         localName: 'lastValue',
-        value,
+        // An attribute cannot hold U+001E or U+001F, so it keeps the hyphens as they are seen.
+        value: withDisplayedHyphens(value),
       },
     ],
   } as OoxmlNode;

@@ -1,6 +1,6 @@
 // Normalize comments and tracked changes onto the exact layout/package revision being published.
 
-import { withDisplayedHyphens } from '../store/package/hyphen-text.ts';
+import { withHyphenGlyphs } from '../store/package/hyphen-text.ts';
 import {
   commentBodyText,
   commentInitials,
@@ -524,8 +524,9 @@ function artifactOf(
       ...(item.markDirection ? { markDirection: item.markDirection } : {}),
       author: item.author,
       ...(item.date !== undefined ? { date: item.date } : {}),
-      text: withDisplayedHyphens(item.text),
-      replacedText: withDisplayedHyphens(item.replacedText),
+      // One for one, so the text still lines up with its occurrence spans.
+      text: withHyphenGlyphs(item.text),
+      replacedText: withHyphenGlyphs(item.replacedText),
       nesting: item.nesting,
       ...(item.replacedRangeCount !== undefined
         ? { replacedRangeCount: item.replacedRangeCount }
@@ -551,7 +552,7 @@ function artifactOf(
     author: item.comment.author,
     initials: commentInitials(item.comment),
     ...(item.comment.date !== undefined ? { date: item.comment.date } : {}),
-    text: commentBodyText(item.comment),
+    text: withHyphenGlyphs(commentBodyText(item.comment)),
     resolved: item.resolved,
     ...(item.parentId !== undefined
       ? { parentId: mappedId(ids.comment, 'comment', item.parentId) }
