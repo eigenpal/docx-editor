@@ -1,6 +1,7 @@
 // Grapheme-safe chopping for an unbroken word that is wider than the line measure.
 
 import { segmentGraphemes } from './grapheme.ts';
+import { withoutTrailingSpaces } from './trailing-spaces.ts';
 
 export interface OversizedWordPrefix {
   readonly text: string;
@@ -42,13 +43,6 @@ function acceptedCut(
     if (cutAllowedAt(text, graphemes[candidate - 1]!.utf16To)) return candidate;
   }
   return graphemes.length;
-}
-
-/** Whether `text` from `from` on is one or more ordinary spaces and nothing else. */
-function onlySpaces(text: string, from: number): boolean {
-  if (from >= text.length) return false;
-  for (let index = from; index < text.length; index += 1) if (text[index] !== ' ') return false;
-  return true;
 }
 
 export function chopOversizedWord(
@@ -133,7 +127,7 @@ export function chopOversizedWord(
     const prefixText = text.slice(utf16From, utf16To);
     // Spaces after the cut hang at this line's end; they never open the next line. Priced
     // like any line-end space: the ink plus whatever room the line has left.
-    if (onlySpaces(text, utf16To)) {
+    if (utf16To < text.length && withoutTrailingSpaces(text).length <= utf16To) {
       const width = Math.max(options.measureText(prefixText), available);
       return { text: text.slice(utf16From), modelStart: modelStart + utf16From, width, brokeLine };
     }

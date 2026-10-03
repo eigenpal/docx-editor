@@ -1,5 +1,5 @@
 import { lineSegmentFor, type LineSegment } from './line-segments.ts';
-import type { LayoutBox, LineRecord, SemanticLayout } from './semantic-records.ts';
+import type { LineRecord, SemanticLayout } from './semantic-records.ts';
 import { paragraphFragmentsOf } from './semantic-records.ts';
 import { paragraphLinesIndex, type PlacedLine } from './paragraph-lines.ts';
 import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
@@ -210,10 +210,10 @@ export function headerRepeatLinesOnPage(
   layout: SemanticLayout,
   pageIndex: number,
   paragraphId: string
-): { line: LineRecord; pageIndex: number; clipBox?: LayoutBox }[] {
+): PlacedLine[] {
   const page = layout.pages[pageIndex];
   if (!page) return [];
-  const found: { line: LineRecord; pageIndex: number; clipBox?: LayoutBox }[] = [];
+  const found: PlacedLine[] = [];
   for (const fragment of paragraphFragmentsOf(page, true)) {
     if (fragment.paragraphId !== paragraphId) continue;
     for (const line of fragment.lines)
