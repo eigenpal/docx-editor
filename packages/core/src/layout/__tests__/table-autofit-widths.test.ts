@@ -281,4 +281,14 @@ describe('autofit layout', () => {
     expect(fragment.widths[1]).toBeGreaterThan(30);
     expect(fragment.lines[1]).toBe(1);
   });
+
+  test('a field value that only layout knows sets the minimum it paints', () => {
+    // AUTHOR with no cached result paints the document's author.
+    const author =
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> AUTHOR </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>';
+    const fragment = columns(table('', author), { documentProperties: { creator: 'ABCDEFGHIJ' } });
+    expect(fragment.widths[1]).toBe(60);
+    expect(fragment.lines[1]).toBe(1);
+  });
 });

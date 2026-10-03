@@ -6,6 +6,12 @@ import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
 import { BREAK_AFTER_DASH, wordBoundaries } from './cjk-line-break.ts';
 import { measureInlineDrawing, type InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { createEquationLayouter } from './equation-layout.ts';
+import type { DocumentProperties } from '@docx-editor.dev/core/store';
+import type { FieldCodeRanges } from './field-code-toc.ts';
+import type { BodyPageFieldContext } from './field-page-furniture.ts';
+import type { FieldPageContext } from './field-projection.ts';
+import type { RefFieldContext } from './field-ref.ts';
+import type { NoteMarkContext } from './note-projection.ts';
 import { piecesOfParagraphForDisplay } from './field-projection-display.ts';
 import type { ResolvedListItem } from './list-resolve.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
@@ -31,18 +37,51 @@ export interface TableAutofitContext {
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
   /** Resolves inline pictures, so a picture column keeps the width the picture paints at. */
   readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
+  /** The text layout gives fields and note marks, so the minimum measures what paints. */
+  readonly fields?: AutofitFieldContext;
+}
+
+/** What cell layout projects fields and note marks with; compared field by field. */
+export interface AutofitFieldContext {
+  readonly pageContext?: FieldPageContext;
+  readonly noteMarks?: NoteMarkContext;
+  readonly documentProperties?: DocumentProperties;
+  readonly bodyPageFields?: BodyPageFieldContext | false;
+  readonly refFields?: RefFieldContext;
+  readonly showFieldCodes?: boolean;
+  readonly fieldCodeRanges?: FieldCodeRanges;
+}
+
+const FIELD_KEYS = [
+  'pageContext',
+  'noteMarks',
+  'documentProperties',
+  'bodyPageFields',
+  'refFields',
+  'showFieldCodes',
+  'fieldCodeRanges',
+] as const;
+
+function sameFields(a: AutofitFieldContext | undefined, b: AutofitFieldContext | undefined) {
+  return FIELD_KEYS.every((key) => a?.[key] === b?.[key]);
 }
 
 /** The autofit inputs a table flow already carries, so every reader widens alike. */
-export function autofitContextOf(deps: {
-  readonly measurer: TextMeasurer;
-  readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
-  readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
-}): TableAutofitContext {
+export function autofitContextOf(
+  deps: {
+    readonly measurer: TextMeasurer;
+    readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
+    readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
+  } & AutofitFieldContext
+): TableAutofitContext {
+  const fields: AutofitFieldContext = {};
+  for (const key of FIELD_KEYS)
+    if (deps[key] !== undefined) (fields as Record<string, unknown>)[key] = deps[key];
   return {
     measurer: deps.measurer,
     ...(deps.listItems ? { listItems: deps.listItems } : {}),
     ...(deps.inlineDrawingLayout ? { inlineDrawingLayout: deps.inlineDrawingLayout } : {}),
+    fields,
   };
 }
 
@@ -65,6 +104,7 @@ const widthMemos = new WeakMap<
     {
       readonly listItems: ReadonlyMap<string, ResolvedListItem> | undefined;
       readonly inlineDrawingLayout: InlineDrawingLayoutContext | undefined;
+      readonly fields: AutofitFieldContext | undefined;
       readonly contentWidthPt: number;
       readonly widths: readonly number[];
     }
@@ -84,6 +124,7 @@ interface MinimumInputs {
   readonly authorFilter: RevisionAuthorFilter | undefined;
   readonly listItem: ResolvedListItem | undefined;
   readonly inlineDrawingLayout: InlineDrawingLayoutContext | undefined;
+  readonly fields: AutofitFieldContext | undefined;
 }
 
 /**
@@ -118,6 +159,7 @@ function sameInputs(a: MinimumKey, b: MinimumInputs): boolean {
     a.styleCascade === b.styleCascade &&
     cellStyleKey(a.tableCellStyle) === cellStyleKey(b.tableCellStyle) &&
     a.inlineDrawingLayout === b.inlineDrawingLayout &&
+    sameFields(a.fields, b.fields) &&
     a.displayMode === b.displayMode &&
     a.authorFilter === b.authorFilter &&
     a.listItem === b.listItem
@@ -147,24 +189,27 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
     inputs.tableCellStyle,
     true
   );
+  const fields = inputs.fields;
   const pieces = piecesOfParagraphForDisplay(
     paragraph,
     layoutInputs.inheritedRunProperties,
-    undefined,
+    fields?.pageContext,
     styleCascade
       ? (inherited, direct) => cascadeRunProperties(inherited, direct, styleCascade)
       : undefined,
     undefined,
-    undefined,
+    fields?.noteMarks,
     displayMode,
     undefined,
     inputs.inlineDrawingLayout,
     styleCascade?.themeFonts,
     undefined,
-    undefined,
-    false,
-    undefined,
-    inputs.authorFilter
+    fields?.documentProperties,
+    fields?.bodyPageFields ?? false,
+    fields?.refFields,
+    inputs.authorFilter,
+    fields?.showFieldCodes,
+    fields?.fieldCodeRanges?.get(paragraph.id)
   );
   const { left, right, firstLine } = layoutInputs.indent;
   let widest = 0;
@@ -243,6 +288,7 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
       authorFilter,
       listItem,
       inlineDrawingLayout: inputs.inlineDrawingLayout,
+      fields: inputs.fields,
     },
     width,
   });
@@ -288,6 +334,7 @@ export function autofitColumnMinimumsPt(
           authorFilter,
           listItem: context.listItems?.get(block.id),
           inlineDrawingLayout: context.inlineDrawingLayout,
+          fields: context.fields,
         });
         content = Math.max(content, width);
       }
@@ -377,6 +424,7 @@ export function autofitColumnWidthsPt(
     memo &&
     memo.listItems === context.listItems &&
     memo.inlineDrawingLayout === context.inlineDrawingLayout &&
+    sameFields(memo.fields, context.fields) &&
     memo.contentWidthPt === contentWidthPt
   )
     return memo.widths;
@@ -398,6 +446,7 @@ export function autofitColumnWidthsPt(
   byStructure.set(structure, {
     listItems: context.listItems,
     inlineDrawingLayout: context.inlineDrawingLayout,
+    fields: context.fields,
     contentWidthPt,
     widths,
   });

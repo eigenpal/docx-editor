@@ -885,7 +885,7 @@ function readTableStructureUncached(
     floating: float !== undefined,
   });
 
-  const resolvedWidthsPt =
+  const columnWidthsPt =
     columnWidthsOverridePt ??
     resolveColumnWidthsPt({
       gridCols,
@@ -901,13 +901,13 @@ function readTableStructureUncached(
       hasOmittedRows,
     });
   // Project the grid visually; cell arrays retain document order for keyboard traversal.
-  const visualRows = physicalTableRows(rows, resolvedWidthsPt.length, bidiVisual);
+  const visualRows = physicalTableRows(rows, columnWidthsPt.length, bidiVisual);
   let contentRows = withTableContentBorders(
     visualRows,
     bidiVisual
       ? { ...tableBorders, left: tableBorders.right, right: tableBorders.left }
       : tableBorders,
-    resolvedWidthsPt.length,
+    columnWidthsPt.length,
     cellSpacingPt === 0
   );
   contentRows = withRowMinimumContentInsets(
@@ -916,10 +916,9 @@ function readTableStructureUncached(
     bidiVisual
       ? { ...tableBorders, left: tableBorders.right, right: tableBorders.left }
       : tableBorders,
-    resolvedWidthsPt.length,
+    columnWidthsPt.length,
     cellSpacingPt === 0
   );
-  const columnWidthsPt = resolvedWidthsPt;
   const sideRuleShape = {
     compatibilityMode,
     depth,
