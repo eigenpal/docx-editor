@@ -84,4 +84,23 @@ describe('hyphen elements in host text', () => {
       runtime.dispose();
     }
   });
+
+  test('paragraph text written back keeps its hyphens', async () => {
+    const runtime = await DocxEditor.createServer(BYTES);
+    try {
+      const text = await runtime.run(async (context) => {
+        const paragraph = context.document.body.paragraphs.getFirst();
+        paragraph.load('text');
+        await context.sync();
+        paragraph.insertText(`${paragraph.text}!`, 'Replace');
+        await context.sync();
+        paragraph.load('text');
+        await context.sync();
+        return paragraph.text;
+      });
+      expect(text).toBe('the then\u001eapplicable rate\u001fs!');
+    } finally {
+      runtime.dispose();
+    }
+  });
 });

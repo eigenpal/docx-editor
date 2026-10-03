@@ -774,7 +774,7 @@ export function unmergedPiecesOfParagraphForDisplay(
           start: offset,
           end: offset + modelWidth,
           ...(positional ? { positionalTab: positional } : {}),
-          ...(hyphen ? { projected: true } : {}),
+          ...(hyphen?.measureText === undefined ? {} : { projected: true, measureText: '' }),
           ...attribution,
           ...(currentLink ? { link: currentLink } : {}),
           // EVERY buffered result piece is a field's displayed result — a demoted

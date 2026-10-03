@@ -20,6 +20,7 @@
 // chains are deliberately not chased: both are bounded-cost rules, and the style-level
 // answer is what Word's navigation pane keys on for the documents this slice loads.
 
+import { withDisplayedHyphens } from '../store/package/hyphen-text.ts';
 import { paragraphTextOf } from '@docx-editor.dev/core/store';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { styleOutlineLevel } from '../store/package/style-outline.ts';
@@ -116,7 +117,10 @@ export function collectDocumentOutline(
     const level = levels.get(styleId);
     if (level === undefined) continue;
     const raw = paragraphTextOf(part, paragraph.id) ?? '';
-    const text = raw.replace(CONTROL_CHARS_ALL, ' ').trim().slice(0, OUTLINE_TEXT_MAX);
+    const text = withDisplayedHyphens(raw)
+      .replace(CONTROL_CHARS_ALL, ' ')
+      .trim()
+      .slice(0, OUTLINE_TEXT_MAX);
     if (text.length === 0) continue;
     entries.push({ text, level, blockId: paragraph.id });
   }

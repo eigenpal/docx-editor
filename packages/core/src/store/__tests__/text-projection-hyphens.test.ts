@@ -12,7 +12,9 @@ import {
   type OoxmlParagraphNode,
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
-import { paragraphTextOf } from '../store/tree-ops.ts';
+import { applyTreeOp, paragraphTextOf } from '../store/tree-ops.ts';
+import { serializeOoxmlPart } from '../package/ooxml-tree.ts';
+import { collectDocumentOutline } from '../../binding/document-outline.ts';
 import { projectVisibleParagraphText } from '../store/text-projection.ts';
 import { projectParagraphText } from '../../automation/text-projection.ts';
 
@@ -110,5 +112,40 @@ describe('hyphen elements in paragraph text', () => {
     const { raw } = project(body);
     expect(raw.startsWith('Cover')).toBe(true);
     expect(raw).not.toContain(NBH);
+  });
+
+  test('inserted U+001E and U+001F become hyphen elements, tracked or not', () => {
+    for (const tracked of [false, true]) {
+      const part = load('<w:p><w:r><w:t>ab</w:t></w:r></w:p>');
+      const paragraph = firstParagraph(part);
+      const result = applyTreeOp(part, {
+        op: 'insertText',
+        paragraphId: paragraph.id,
+        offset: 1,
+        text: `x${NBH}y${SHY}`,
+        ...(tracked ? { revision: { author: 'Writer', date: '2026-10-03T00:00:00Z' } } : {}),
+      });
+      if (!result.ok) throw new Error(result.reason);
+      const xml = serializeOoxmlPart(result.part);
+      expect(xml).toContain('<w:noBreakHyphen/>');
+      expect(xml).toContain('<w:softHyphen/>');
+      expect(xml).not.toMatch(/[\u001e\u001f]/);
+      expect(paragraphTextOf(result.part, paragraph.id)).toBe(`ax${NBH}y${SHY}b`);
+    }
+  });
+
+  test('heading outline text shows a non-breaking hyphen and drops an optional one', () => {
+    const part = load(
+      '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Pre</w:t><w:noBreakHyphen/>' +
+        '<w:t>Trial rate</w:t><w:softHyphen/><w:t>s</w:t></w:r></w:p>'
+    );
+    const styles = readOoxmlPart(
+      `<w:styles xmlns:w="${W}"><w:style w:type="paragraph" w:styleId="Heading1">` +
+        '<w:name w:val="heading 1"/><w:pPr><w:outlineLvl w:val="0"/></w:pPr></w:style></w:styles>',
+      { name: '/word/styles.xml', contentType: 'application/xml' }
+    );
+    if (!styles.ok) throw new Error(styles.reason);
+    const outline = collectDocumentOutline(part, styles.part.root);
+    expect(outline.map((entry) => entry.text)).toEqual(['Pre\u2011Trial rates']);
   });
 });

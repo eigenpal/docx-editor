@@ -91,7 +91,8 @@ function attr(element: OoxmlElement, localName: string): string | null {
  *
  * `w:t` contributes its characters, `w:tab` a tab, `w:br`/`w:cr` a newline — matching how
  * the authored model reads a run, so an index built from the tree and a model built from
- * the same source agree on paragraph text. A GENERIC child contributes nothing: unknown
+ * the same source agree on paragraph text. A hyphen element contributes its one character. Any
+ * other GENERIC child contributes nothing: unknown
  * content has no text projection, but it is still present in the tree, which is exactly the
  * difference from the legacy model that dropped the run entirely.
  */

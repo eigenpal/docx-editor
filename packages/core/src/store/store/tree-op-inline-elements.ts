@@ -1,4 +1,5 @@
 import { hardBreakAttributes } from '../package/hard-break.ts';
+import { NON_BREAKING_HYPHEN_TEXT, OPTIONAL_HYPHEN_TEXT } from '../package/hyphen-text.ts';
 import { WML_NAMESPACE_URI, type OoxmlNode } from '../package/ooxml-tree.ts';
 
 /**
@@ -44,4 +45,54 @@ export function simpleElement(
     attributes: localName === 'br' ? [...hardBreakAttributes(breakKind)] : [],
     children: [],
   } as unknown as OoxmlNode;
+}
+
+const HYPHEN_CHARACTERS = /[\u001e\u001f]/;
+
+/** Whether inserted text holds a character that becomes a hyphen element. */
+export function holdsHyphenCharacter(text: string): boolean {
+  return HYPHEN_CHARACTERS.test(text);
+}
+
+/** A builder for one inserted run child. */
+export type RunChildBuilder = (nextId: () => string) => OoxmlNode;
+
+function hyphenElement(nextId: () => string, char: string): OoxmlNode {
+  return {
+    id: nextId(),
+    kind: 'generic',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName: char === NON_BREAKING_HYPHEN_TEXT ? 'noBreakHyphen' : 'softHyphen',
+    prefix: 'w',
+    namespaceBindings: [],
+    attributes: [],
+    children: [],
+  } as unknown as OoxmlNode;
+}
+
+/**
+ * Run content for inserted text: `w:t` for the text, and `w:noBreakHyphen` or `w:softHyphen`
+ * for each U+001E or U+001F, the characters a text read reports for those elements.
+ */
+export function textWithHyphenBuilders(text: string): RunChildBuilder[] {
+  if (!holdsHyphenCharacter(text)) return [(nextId) => textElement(nextId, text)];
+  const builders: RunChildBuilder[] = [];
+  let from = 0;
+  for (let index = 0; index <= text.length; index += 1) {
+    const char = text[index];
+    const end = index === text.length;
+    if (!end && char !== NON_BREAKING_HYPHEN_TEXT && char !== OPTIONAL_HYPHEN_TEXT) continue;
+    if (index > from) {
+      const piece = text.slice(from, index);
+      builders.push((nextId) => textElement(nextId, piece));
+    }
+    if (!end) builders.push((nextId) => hyphenElement(nextId, char!));
+    from = index + 1;
+  }
+  return builders;
+}
+
+/** The nodes {@link textWithHyphenBuilders} describes, minted in order. */
+export function textWithHyphens(nextId: () => string, text: string): OoxmlNode[] {
+  return textWithHyphenBuilders(text).map((build) => build(nextId));
 }

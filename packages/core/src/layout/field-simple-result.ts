@@ -39,6 +39,7 @@ import {
   type RefFieldContext,
 } from './field-ref.ts';
 import {
+  hyphenDisplayOf,
   modelTextOfRunChild,
   runPropertiesOf,
   type RunPropertyCascader,
@@ -238,7 +239,8 @@ export function collectSimpleFieldDisplay(args: {
             continue;
           }
 
-          const value = modelTextOfRunChild(grand);
+          // A field result paints its text, so a hyphen shows its glyph, not its model character.
+          const value = hyphenDisplayOf(grand)?.text ?? modelTextOfRunChild(grand);
           if (value.length === 0) continue;
           const deleted = revisionsAreDeletion(local);
           const revisionSuppressed =

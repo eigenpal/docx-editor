@@ -128,20 +128,25 @@ interface SearchText {
   readonly at: readonly number[] | null;
 }
 
+/** Characters search compares as a typed hyphen, and characters it skips. */
+const SEARCH_HYPHENS = new Set([NON_BREAKING_HYPHEN_TEXT, '\u2011']);
+const SEARCH_SKIPPED = new Set([OPTIONAL_HYPHEN_TEXT, '\u00ad']);
+const SEARCH_FOLDED = /[\u001e\u001f\u2011\u00ad]/;
+
 /**
  * Text as search compares it: a non-breaking hyphen matches a typed hyphen, and an optional
- * hyphen matches nothing, so `rates` finds a word with an optional hyphen inside it.
+ * hyphen matches nothing, so `rates` finds a word with an optional hyphen inside it. The
+ * characters copy writes for them (U+2011 and U+00AD) fold the same way, so copied text
+ * finds its source.
  */
 function searchTextOf(text: string): SearchText {
-  if (!text.includes(NON_BREAKING_HYPHEN_TEXT) && !text.includes(OPTIONAL_HYPHEN_TEXT)) {
-    return { text, at: null };
-  }
+  if (!SEARCH_FOLDED.test(text)) return { text, at: null };
   let out = '';
   const at: number[] = [];
   for (let index = 0; index < text.length; index += 1) {
     const char = text[index]!;
-    if (char === OPTIONAL_HYPHEN_TEXT) continue;
-    out += char === NON_BREAKING_HYPHEN_TEXT ? '-' : char;
+    if (SEARCH_SKIPPED.has(char)) continue;
+    out += SEARCH_HYPHENS.has(char) ? '-' : char;
     at.push(index);
   }
   return { text: out, at };

@@ -8,8 +8,8 @@
 import { hardBreakText, type OoxmlNode, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import { runTextOutlineProperty } from './run-text-outline.ts';
 import {
+  hyphenDisplayText,
   hyphenTextOf,
-  NON_BREAKING_HYPHEN_TEXT,
   OPTIONAL_HYPHEN_TEXT,
 } from '../store/package/hyphen-text.ts';
 import { runLigaturesValue } from './run-ligatures.ts';
@@ -36,16 +36,16 @@ export function modelTextOfRunChild(grand: OoxmlNode): string {
 }
 
 /**
- * How a hyphen element paints: a non-breaking hyphen as U+2011, an optional hyphen as U+00AD,
- * which measures nothing and shows only where a line breaks. Null for any other node.
+ * How a hyphen element paints: a non-breaking hyphen as U+2011, and an optional hyphen as
+ * U+00AD, which measures nothing. Layout does not break a line at an optional hyphen. Null for
+ * any other node.
  */
 export function hyphenDisplayOf(
   node: OoxmlNode
 ): { readonly text: string; readonly measureText?: string } | null {
-  const model = hyphenTextOf(node);
-  if (model === NON_BREAKING_HYPHEN_TEXT) return { text: '\u2011' };
-  if (model === OPTIONAL_HYPHEN_TEXT) return { text: '\u00ad', measureText: '' };
-  return null;
+  const text = hyphenDisplayText(node);
+  if (text === null) return null;
+  return hyphenTextOf(node) === OPTIONAL_HYPHEN_TEXT ? { text, measureText: '' } : { text };
 }
 
 export function propertiesOfRunContainer(container: OoxmlNode | undefined): OoxmlProperty[] {
