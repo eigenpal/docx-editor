@@ -57,9 +57,10 @@ export interface TableAutofitContext {
    */
   readonly paragraphToken?: (paragraph: OoxmlElement) => string;
   /**
-   * A token over every other input the minimum reads: the list items, the drawing context,
-   * and every member of {@link TableAutofitContext.fields}. It must change when any of them
-   * changes.
+   * A token over every other input the minimum reads: the drawing context and every member of
+   * {@link TableAutofitContext.fields}. It must change when any of them changes. List state is
+   * not part of it: {@link TableAutofitContext.paragraphToken} must carry each paragraph's
+   * list tokens.
    */
   readonly passToken?: string;
 }
@@ -413,8 +414,8 @@ export function paragraphMinimumWidthPt(paragraph: OoxmlElement, inputs: Minimum
     }
   }
   close();
-  // An empty paragraph still keeps its indents (a list item's marker slot).
-  const width = widest > 0 ? widest : Math.max(0, left + right);
+  // An empty paragraph still keeps its first line's indents (a list item's marker slot).
+  const width = widest > 0 ? widest : Math.max(0, left + right + firstShift);
   if (key) byParagraph.set(paragraph, { key, width });
   return width;
 }
@@ -639,7 +640,8 @@ export function autofitTargetPt(
   if (legacyContentAlignment) return totalPt;
   if (tableWidth.type === 'dxa' && tableWidth.value > 0) return totalPt;
   if (tableWidth.type === 'pct' && tableWidth.value > 0)
-    return Math.min(availablePt, (percentBasisPt * tableWidth.value) / 100);
+    // Never below the resolved total, so a column widening by a little never narrows the table.
+    return Math.max(totalPt, Math.min(availablePt, (percentBasisPt * tableWidth.value) / 100));
   return availablePt;
 }
 

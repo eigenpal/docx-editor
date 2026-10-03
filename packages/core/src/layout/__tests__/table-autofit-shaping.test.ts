@@ -114,6 +114,24 @@ test('an empty indented paragraph keeps its indent as a minimum', () => {
   expect(middle(tableOf(empty, 400), fixed)[1]!.width).toBeCloseTo(72, 6);
 });
 
+test('an empty paragraph with a hanging indent reserves only its first line', () => {
+  const empty = '<w:pPr><w:ind w:left="1440" w:hanging="1440"/></w:pPr>';
+  expect(middle(tableOf(empty, 400), fixed)[1]!.width).toBeCloseTo(20, 6);
+});
+
+test('an indented full-width percentage table never narrows when a column widens', () => {
+  const indented = (word: string) =>
+    '<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/><w:tblInd w:w="720" w:type="dxa"/>' +
+    '<w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>' +
+    '</w:tblPr><w:tblGrid><w:gridCol w:w="4500"/><w:gridCol w:w="4500"/></w:tblGrid><w:tr>' +
+    `<w:tc><w:tcPr><w:tcW w:w="2500" w:type="pct"/></w:tcPr><w:p>${run('ab')}</w:p></w:tc>` +
+    `<w:tc><w:tcPr><w:tcW w:w="2500" w:type="pct"/></w:tcPr><w:p>${run(word)}</w:p></w:tc>` +
+    '</w:tr></w:tbl>';
+  const total = (word: string) =>
+    middle(indented(word), fixed).reduce((sum, cell) => sum + cell.width, 0);
+  expect(total('A'.repeat(45))).toBeGreaterThanOrEqual(total('ab') - 1e-6);
+});
+
 test('a full-width legacy percentage table keeps its width when a column widens', () => {
   const legacy = (word: string) =>
     '<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/><w:tblLayout w:type="autofit"/>' +
