@@ -15,6 +15,9 @@
 // (`revisionKind: structural` and `readOnly: false`), and refuse atomically when any `readOnly`
 // item remains.
 
+import { sharesItsPart } from './stories.ts';
+import { sitesInStory, textboxSiteIndex } from './textbox-revision-scope.ts';
+import { revisionSiteNodeIdsOf } from '../store/store/review-items.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
 import {
@@ -32,7 +35,6 @@ import type {
 } from '../store/store/review-items.ts';
 import { commentPartNameOf, commentsExtendedPartNameOf } from '../store/store/comment-writes.ts';
 import type { AutomationStoryReads } from './reads.ts';
-import type { AutomationStoryId } from './stories.ts';
 
 /**
  * Word's own name for a kind of change.
@@ -63,9 +65,6 @@ export type AutomationRevisionType = (typeof REVISION_TYPES)[keyof typeof REVISI
  * exactly one question — what to do with a review item the part holds but nothing in it locates —
  * and getting it wrong is how a note ends up reviewing its neighbour.
  */
-function sharesItsPart(story: AutomationStoryId): boolean {
-  return story.kind === 'note';
-}
 
 /**
  * Whether an item anchored at these ranges is the addressed story's.
@@ -84,6 +83,18 @@ function inStory(reads: AutomationStoryReads, ranges: readonly ReviewRange[]): b
   return ranges.every((range) => reads.has(range.start.paragraphId));
 }
 
+/**
+ * Whether a tracked change is the addressed story's. A text box story and its owner share a
+ * part, and a change inside the box is located by its sites, not by its ranges.
+ */
+function revisionInStory(reads: AutomationStoryReads, item: ReviewRevisionItem): boolean {
+  if (reads.story.kind === 'note') return inStory(reads, item.ranges);
+  const index = textboxSiteIndex(reads.part);
+  const box =
+    reads.story.kind === 'textbox' && reads.root.kind !== 'textValue' ? reads.root.id : null;
+  return sitesInStory(index, revisionSiteNodeIdsOf(item), box, () => inStory(reads, item.ranges));
+}
+
 /** One pending decision, as the protocol answers it. */
 export interface AutomationRevisionRead {
   readonly id: string;
@@ -96,7 +107,7 @@ export interface AutomationRevisionRead {
 
 /** Every tracked-change item that belongs to one story, including unsupported structural ones. */
 export function revisionItemsInStory(reads: AutomationStoryReads): readonly ReviewRevisionItem[] {
-  return Object.freeze(revisionItemsOf(reads.part).filter((item) => inStory(reads, item.ranges)));
+  return Object.freeze(revisionItemsOf(reads.part).filter((item) => revisionInStory(reads, item)));
 }
 
 /**

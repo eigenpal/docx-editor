@@ -49,7 +49,7 @@
   },
   "Word.Range#insertComment": {
     "status": "partial",
-    "notes": "Writes require an explicit author. Browser writes also require the Pro review module and an editable document."
+    "notes": "Writes require an explicit author. Browser writes also require the Pro review module and an editable document. A range in a text box refuses with InvalidArgument, because a comment there is not kept when the file opens."
   },
   "Word.Section#getHeader": {
     "status": "partial",
@@ -359,9 +359,37 @@
     "status": "partial",
     "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
   },
+  "Word.Body#shapes": {
+    "status": "partial",
+    "notes": "Lists floating (wp:anchor) and inline (wp:inline) drawings in the body or paragraph, in reading order. An inline picture is listed as a Picture shape and also stays in inlinePictures. A run-level mc:AlternateContent is read through the branch that layout selects; a shape whose selected branch is the VML fallback is not listed. Shapes in notes and in text boxes are listed, but their bodies refuse. Duplicate or missing wp:docPr ids refuse the listing. Range#shapes is not published."
+  },
+  "Word.Paragraph#shapes": {
+    "status": "partial",
+    "notes": "Lists floating (wp:anchor) and inline (wp:inline) drawings in the body or paragraph, in reading order. An inline picture is listed as a Picture shape and also stays in inlinePictures. A run-level mc:AlternateContent is read through the branch that layout selects; a shape whose selected branch is the VML fallback is not listed. Shapes in notes and in text boxes are listed, but their bodies refuse. Duplicate or missing wp:docPr ids refuse the listing. Range#shapes is not published."
+  },
+  "Word.Shape#id": {
+    "status": "partial",
+    "notes": "Reads wp:docPr/@id. Read-only."
+  },
+  "Word.Shape#name": {
+    "status": "partial",
+    "notes": "Reads wp:docPr/@name. Writes are not published."
+  },
+  "Word.Shape#type": {
+    "status": "partial",
+    "notes": "TextBox for a wps shape that wps:cNvSpPr/@txBox marks as a text box, GeometricShape for any other wps shape, Picture, Group, Canvas, or Unsupported."
+  },
+  "Word.Shape#body": {
+    "status": "partial",
+    "notes": "A shape that holds its own w:txbxContent story answers it: paragraphs, text, search, and the same edits as any body. This includes a geometric shape with text. A shape without a story, such as a picture or a linked text box that continues another box, refuses with InvalidArgument. Bodies are reachable for shapes in the body, headers, and footers. Tracked changes inside a text box belong to its body. The owner story's tracked changes, acceptAll, and rejectAll leave them alone. A comment cannot be inserted in a text box, because a comment there is not kept when the file opens; insertComment refuses with InvalidArgument. Edits save to the DrawingML story and to its VML fallback. The body becomes addressable after the sync that answers it."
+  },
+  "Word.ShapeCollection#getByTypes": {
+    "status": "partial",
+    "notes": "Filters the listing by type, keeping its order. Unknown type values refuse with InvalidArgument."
+  },
   "Word.ShapeCollection#getFirst": {
     "status": "partial",
-    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+    "notes": "Lists floating (wp:anchor) and inline (wp:inline) drawings in the body or paragraph, in reading order. An inline picture is listed as a Picture shape and also stays in inlinePictures. A run-level mc:AlternateContent is read through the branch that layout selects; a shape whose selected branch is the VML fallback is not listed. Shapes in notes and in text boxes are listed, but their bodies refuse. Duplicate or missing wp:docPr ids refuse the listing. Range#shapes is not published. Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
   },
   "Word.ListCollection#getFirst": {
     "status": "partial",
@@ -377,7 +405,7 @@
   },
   "Word.ShapeCollection#getFirstOrNullObject": {
     "status": "partial",
-    "notes": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+    "notes": "Lists floating (wp:anchor) and inline (wp:inline) drawings in the body or paragraph, in reading order. An inline picture is listed as a Picture shape and also stays in inlinePictures. A run-level mc:AlternateContent is read through the branch that layout selects; a shape whose selected branch is the VML fallback is not listed. Shapes in notes and in text boxes are listed, but their bodies refuse. Duplicate or missing wp:docPr ids refuse the listing. Range#shapes is not published. Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
   },
   "Word.BuildingBlockCategoryCollection#getItemAt": {
     "status": "partial",

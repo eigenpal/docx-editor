@@ -60,6 +60,7 @@ export {
 } from './tables.ts';
 
 export { InlinePicture, InlinePictureCollection } from './pictures.ts';
+export { Shape, ShapeCollection, ShapeType } from './shapes.ts';
 
 export { Field, FieldCollection } from './fields.ts';
 export { FieldType, type FieldTypeLiteral } from './field-types.ts';

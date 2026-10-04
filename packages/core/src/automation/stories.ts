@@ -33,14 +33,32 @@ export const HEADER_FOOTER_VARIANTS: readonly HeaderFooterVariant[] = Object.fre
  * has no relationship of its own to name.
  */
 export type AutomationStoryId =
+  | AutomationShapeOwnerStory
+  | { readonly kind: 'note'; readonly noteKind: NoteKind; readonly noteId: number }
+  /**
+   * A text box: the `w:txbxContent` of the floating shape whose `wp:docPr/@id` is `shapeId`,
+   * anchored in `owner`. Its paragraphs live in the owner's part and commit through its scope.
+   */
+  | {
+      readonly kind: 'textbox';
+      readonly owner: AutomationShapeOwnerStory;
+      readonly shapeId: number;
+    };
+
+/** A story that can anchor shapes: the main body, or one header/footer variant of a section. */
+export type AutomationShapeOwnerStory =
   | { readonly kind: 'body' }
   | {
       readonly kind: 'header' | 'footer';
       /** Position of the section in the document, from zero. */
       readonly sectionIndex: number;
       readonly variant: HeaderFooterVariant;
-    }
-  | { readonly kind: 'note'; readonly noteKind: NoteKind; readonly noteId: number };
+    };
+
+/** Whether a story can anchor shapes. */
+export function isShapeOwnerStory(story: AutomationStoryId): story is AutomationShapeOwnerStory {
+  return story.kind === 'body' || story.kind === 'header' || story.kind === 'footer';
+}
 
 /** The main story, named once so nothing spells it twice. */
 export const BODY_STORY: AutomationStoryId = Object.freeze({ kind: 'body' as const });
@@ -57,6 +75,8 @@ export function storyKey(story: AutomationStoryId): string {
       return 'body';
     case 'note':
       return `note:${story.noteKind}:${String(story.noteId)}`;
+    case 'textbox':
+      return `textbox:${storyKey(story.owner)}:${String(story.shapeId)}`;
     default:
       return `${story.kind}:${String(story.sectionIndex)}:${story.variant}`;
   }
@@ -71,8 +91,18 @@ export function isStoryId(value: unknown): value is AutomationStoryId {
     variant?: unknown;
     noteKind?: unknown;
     noteId?: unknown;
+    owner?: unknown;
+    shapeId?: unknown;
   };
   if (candidate.kind === 'body') return true;
+  if (candidate.kind === 'textbox') {
+    return (
+      isStoryId(candidate.owner) &&
+      isShapeOwnerStory(candidate.owner) &&
+      Number.isInteger(candidate.shapeId) &&
+      (candidate.shapeId as number) >= 0
+    );
+  }
   if (candidate.kind === 'note') {
     return (
       (candidate.noteKind === 'footnote' || candidate.noteKind === 'endnote') &&
@@ -85,4 +115,12 @@ export function isStoryId(value: unknown): value is AutomationStoryId {
     (candidate.sectionIndex as number) >= 0 &&
     HEADER_FOOTER_VARIANTS.includes(candidate.variant as HeaderFooterVariant)
   );
+}
+
+/**
+ * Whether a story is one root among several in its part: a note in the notes part, or a text
+ * box in its owner's part. Part-wide work for such a story must be scoped to its own root.
+ */
+export function sharesItsPart(story: AutomationStoryId): boolean {
+  return story.kind === 'note' || story.kind === 'textbox';
 }
