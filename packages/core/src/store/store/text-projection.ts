@@ -34,6 +34,8 @@ export interface VisiblePiece {
   readonly resultRuns?: readonly FieldResultRunBoundary[];
   /** A `w:sym`: read as "(", but search matches it with nothing. */
   readonly symbol?: true;
+  /** Offsets in `text` of the symbols a field result holds, which search never matches. */
+  readonly symbolOffsets?: readonly number[];
 }
 
 /** One paragraph projection with lossless links to model offsets. */
@@ -93,6 +95,7 @@ function positionedPieces(pieces: readonly VisiblePiece[]): PositionedPiece[] {
         rawStart: piece.rawStart,
         rawEnd: piece.rawEnd,
         resultRuns: piece.resultRuns,
+        ...(piece.symbolOffsets ? { symbolOffsets: piece.symbolOffsets } : {}),
         projectedStart: projected,
         projectedEnd,
         expansion: piece.text.length !== piece.rawEnd - piece.rawStart,
@@ -103,6 +106,7 @@ function positionedPieces(pieces: readonly VisiblePiece[]): PositionedPiece[] {
         rawStart: piece.rawStart,
         rawEnd: piece.rawEnd,
         ...(piece.symbol ? { symbol: true as const } : {}),
+        ...(piece.symbolOffsets ? { symbolOffsets: piece.symbolOffsets } : {}),
         projectedStart: projected,
         projectedEnd,
         expansion: piece.text.length !== piece.rawEnd - piece.rawStart,
@@ -167,9 +171,12 @@ function searchTextOf(text: string, symbols?: ReadonlySet<number>): SearchText {
 function symbolPositions(positioned: readonly PositionedPiece[]): ReadonlySet<number> | undefined {
   let found: Set<number> | undefined;
   for (const piece of positioned) {
-    if (!piece.symbol) continue;
-    found ??= new Set();
-    for (let at = piece.projectedStart; at < piece.projectedEnd; at += 1) found.add(at);
+    if (piece.symbol) {
+      found ??= new Set();
+      for (let at = piece.projectedStart; at < piece.projectedEnd; at += 1) found.add(at);
+    }
+    for (const offset of piece.symbolOffsets ?? [])
+      (found ??= new Set()).add(piece.projectedStart + offset);
   }
   return found;
 }
@@ -350,12 +357,14 @@ export function visibleParagraphPieces(
         rawStart: segment.start,
         rawEnd: segment.end,
         resultRuns: result.runs,
+        ...(result.symbols ? { symbolOffsets: result.symbols } : {}),
       });
     } else {
       pieces.push({
         text: result?.text ?? FIELD_ATOM_CHAR,
         rawStart: segment.start,
         rawEnd: segment.end,
+        ...(result?.symbols ? { symbolOffsets: result.symbols } : {}),
       });
     }
     rawStart = segment.end;

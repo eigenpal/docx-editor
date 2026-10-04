@@ -21,6 +21,7 @@
 // answer is what Word's navigation pane keys on for the documents this slice loads.
 
 import { withDisplayedHyphens } from '../store/package/hyphen-text.ts';
+import { withoutSymbols } from '../store/store/paragraph-model-text.ts';
 import { paragraphTextOf } from '@docx-editor.dev/core/store';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { styleOutlineLevel } from '../store/package/style-outline.ts';
@@ -116,7 +117,9 @@ export function collectDocumentOutline(
     if (styleId === undefined) continue;
     const level = levels.get(styleId);
     if (level === undefined) continue;
-    const raw = paragraphTextOf(part, paragraph.id) ?? '';
+    // A symbol reads as "(" in model text; an entry, and the TOC row built from it, leaves it out.
+    const model = paragraphTextOf(part, paragraph.id) ?? '';
+    const raw = paragraph.kind === 'paragraph' ? withoutSymbols(paragraph, model) : model;
     const text = withDisplayedHyphens(raw)
       .replace(CONTROL_CHARS_ALL, ' ')
       .trim()

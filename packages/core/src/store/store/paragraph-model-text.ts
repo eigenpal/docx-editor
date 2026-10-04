@@ -1,6 +1,6 @@
 // Raw paragraph text in the canonical model offset vocabulary.
 
-import { inlineCharacterTextOf } from '../package/hyphen-text.ts';
+import { inlineCharacterTextOf, isSymbolElement, SYMBOL_TEXT } from '../package/hyphen-text.ts';
 import { fieldAtomText } from '../package/field-nodes.ts';
 import { hardBreakText } from '../package/hard-break.ts';
 import type { OoxmlParagraphNode } from '../package/ooxml-tree.ts';
@@ -29,4 +29,21 @@ export function paragraphModelTextOf(paragraph: OoxmlParagraphNode): string {
     }
   }
   return text;
+}
+
+/**
+ * Paragraph model text with its symbols left out. A symbol reads as "(" in model text; text
+ * that is written back as plain characters, such as a heading's table of contents row, must
+ * not turn it into a parenthesis. @internal
+ */
+export function withoutSymbols(paragraph: OoxmlParagraphNode, text: string): string {
+  if (!text.includes(SYMBOL_TEXT)) return text;
+  let kept = '';
+  let at = 0;
+  for (const segment of segmentsOf(paragraph)) {
+    if (!isSymbolElement(segment.node) || segment.start < at) continue;
+    kept += text.slice(at, segment.start);
+    at = segment.end;
+  }
+  return kept + text.slice(at);
 }

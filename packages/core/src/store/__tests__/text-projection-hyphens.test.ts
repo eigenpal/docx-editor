@@ -153,6 +153,23 @@ describe('hyphen elements in paragraph text', () => {
     expect(outline.map((entry) => entry.text)).toEqual(['Pre\u2011Trial rates']);
   });
 
+  test('heading outline text leaves a symbol out instead of writing a parenthesis', () => {
+    // A symbol reads as "(" in model text; the TOC row built from the entry must not show it.
+    const part = load(
+      '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r>' +
+        '<w:sym w:font="Wingdings" w:char="F0FC"/><w:t xml:space="preserve"> Approved (final)</w:t>' +
+        '</w:r></w:p>'
+    );
+    const styles = readOoxmlPart(
+      `<w:styles xmlns:w="${W}"><w:style w:type="paragraph" w:styleId="Heading1">` +
+        '<w:name w:val="heading 1"/><w:pPr><w:outlineLvl w:val="0"/></w:pPr></w:style></w:styles>',
+      { name: '/word/styles.xml', contentType: 'application/xml' }
+    );
+    if (!styles.ok) throw new Error(styles.reason);
+    const outline = collectDocumentOutline(part, styles.part.root);
+    expect(outline.map((entry) => entry.text)).toEqual(['Approved (final)']);
+  });
+
   test('a table of contents row writes a non-breaking hyphen as the element', () => {
     let next = 0;
     const row = buildTocEntryParagraph(
