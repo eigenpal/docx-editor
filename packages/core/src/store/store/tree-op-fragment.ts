@@ -169,9 +169,20 @@ export function withRequiredNamespaceBindings(
   return Object.freeze({ ...part, root }) as OoxmlPart;
 }
 
+/** Keep local bindings when a paste removes the node's original parent. */
+function withParentBindings(node: OoxmlNode, parent: OoxmlElement): OoxmlNode {
+  if (node.kind === 'textValue' || parent.namespaceBindings.length === 0) return node;
+  const ownPrefixes = new Set(node.namespaceBindings.map((binding) => binding.prefix));
+  const inherited = parent.namespaceBindings.filter((binding) => !ownPrefixes.has(binding.prefix));
+  if (inherited.length === 0) return node;
+  return { ...node, namespaceBindings: [...inherited, ...node.namespaceBindings] };
+}
+
 function inlineChildrenOf(paragraph: OoxmlElement): readonly OoxmlNode[] {
   const pPr = paragraphPropertiesNodeOf(paragraph);
-  return paragraph.children.filter((child) => child !== pPr);
+  return paragraph.children
+    .filter((child) => child !== pPr)
+    .map((child) => withParentBindings(child, paragraph));
 }
 
 /**
@@ -186,7 +197,9 @@ function besideText(
     paragraphLength({ children: nodes } as unknown as OoxmlParagraphNode) > 0;
   if (!pasted.some(isOmmlDisplay) || !hasContent(neighbour)) return pasted;
   return pasted.flatMap((node): OoxmlNode[] =>
-    isOmmlDisplay(node) ? [...equationsOfAtom(node)] : [node]
+    isOmmlDisplay(node)
+      ? equationsOfAtom(node).map((equation) => withParentBindings(equation, node))
+      : [node]
   );
 }
 
@@ -297,7 +310,10 @@ export function applyInsertFragment(
     middle.shift();
     const head = findNode(current, host.id);
     if (!head || head.kind !== 'paragraph') return { ok: false, reason: 'tree-invariant' };
-    const fragmentPPr = paragraphPropertiesNodeOf(first as OoxmlElement);
+    const sourcePPr = paragraphPropertiesNodeOf(first as OoxmlElement);
+    const fragmentPPr = sourcePPr
+      ? (withParentBindings(sourcePPr, first as OoxmlElement) as OoxmlElement)
+      : undefined;
     const headInline = inlineChildrenOf(head);
     const replaced = replaceChildren(
       current,
