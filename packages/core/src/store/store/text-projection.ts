@@ -18,7 +18,12 @@ import {
   type TextOccurrence,
 } from './text-match.ts';
 import { segmentsOfWithFieldSpans } from './tree-op-segments.ts';
-import { NON_BREAKING_HYPHEN_TEXT, OPTIONAL_HYPHEN_TEXT } from '../package/hyphen-text.ts';
+import {
+  isSymbolElement,
+  NON_BREAKING_HYPHEN_TEXT,
+  OPTIONAL_HYPHEN_TEXT,
+  SYMBOL_TEXT,
+} from '../package/hyphen-text.ts';
 
 /** One visible interval linked to one raw model interval. */
 export interface VisiblePiece {
@@ -27,6 +32,8 @@ export interface VisiblePiece {
   readonly rawEnd: number;
   /** Result-run intervals for a simple-field expansion. */
   readonly resultRuns?: readonly FieldResultRunBoundary[];
+  /** A `w:sym`: read as "(", but search matches it with nothing. */
+  readonly symbol?: true;
 }
 
 /** One paragraph projection with lossless links to model offsets. */
@@ -95,6 +102,7 @@ function positionedPieces(pieces: readonly VisiblePiece[]): PositionedPiece[] {
         text: piece.text,
         rawStart: piece.rawStart,
         rawEnd: piece.rawEnd,
+        ...(piece.symbol ? { symbol: true as const } : {}),
         projectedStart: projected,
         projectedEnd,
         expansion: piece.text.length !== piece.rawEnd - piece.rawStart,
@@ -132,6 +140,8 @@ interface SearchText {
 const SEARCH_HYPHENS = new Set([NON_BREAKING_HYPHEN_TEXT, '\u2011']);
 const SEARCH_SKIPPED = new Set([OPTIONAL_HYPHEN_TEXT, '\u00ad']);
 const SEARCH_FOLDED = /[\u001e\u001f\u2011\u00ad]/;
+/** What search compares a symbol as: a noncharacter no query can contain. */
+const SEARCH_SYMBOL = '\uffff';
 
 /**
  * Text as search compares it: a non-breaking hyphen matches a typed hyphen, and an optional
@@ -139,17 +149,29 @@ const SEARCH_FOLDED = /[\u001e\u001f\u2011\u00ad]/;
  * characters copy writes for them (U+2011 and U+00AD) fold the same way, so copied text
  * finds its source.
  */
-function searchTextOf(text: string): SearchText {
-  if (!SEARCH_FOLDED.test(text)) return { text, at: null };
+function searchTextOf(text: string, symbols?: ReadonlySet<number>): SearchText {
+  if (!SEARCH_FOLDED.test(text) && !symbols?.size) return { text, at: null };
   let out = '';
   const at: number[] = [];
   for (let index = 0; index < text.length; index += 1) {
     const char = text[index]!;
-    if (SEARCH_SKIPPED.has(char)) continue;
-    out += SEARCH_HYPHENS.has(char) ? '-' : char;
+    if (symbols?.has(index)) out += SEARCH_SYMBOL;
+    else if (SEARCH_SKIPPED.has(char)) continue;
+    else out += SEARCH_HYPHENS.has(char) ? '-' : char;
     at.push(index);
   }
   return { text: out, at };
+}
+
+/** Projected offsets of the symbol pieces. */
+function symbolPositions(positioned: readonly PositionedPiece[]): ReadonlySet<number> | undefined {
+  let found: Set<number> | undefined;
+  for (const piece of positioned) {
+    if (!piece.symbol) continue;
+    found ??= new Set();
+    for (let at = piece.projectedStart; at < piece.projectedEnd; at += 1) found.add(at);
+  }
+  return found;
 }
 
 /** Build a mapped projection from visible pieces in raw order. */
@@ -221,10 +243,12 @@ export function projectionFromPieces(pieces: readonly VisiblePiece[]): Projected
       }
       const matchCase = options.matchCase === true;
       const wholeWord = options.wholeWord === true;
-      searchText ??= searchTextOf(text);
+      // A symbol reads as "(" but is no character a query can name: it matches nothing.
+      searchText ??= searchTextOf(text, symbolPositions(positioned));
       const folded = searchText;
       const wanted = searchTextOf(query).text;
-      if (wanted.length === 0) return { matches, truncated: false };
+      if (wanted.length === 0 || wanted.includes(SEARCH_SYMBOL))
+        return { matches, truncated: false };
       const needle = matchCase ? wanted : foldCase(wanted);
       const haystack = matchCase ? folded.text : foldCase(folded.text);
       const projectedAt = (index: number): number => folded.at?.[index] ?? index;
@@ -285,7 +309,7 @@ export function visibleParagraphPieces(
   rawText: string,
   view: FieldResultTextView = 'allMarkup'
 ): readonly VisiblePiece[] {
-  if (!rawText.includes(FIELD_ATOM_CHAR)) {
+  if (!rawText.includes(FIELD_ATOM_CHAR) && !rawText.includes(SYMBOL_TEXT)) {
     return rawText.length === 0 ? [] : [{ text: rawText, rawStart: 0, rawEnd: rawText.length }];
   }
 
@@ -298,13 +322,24 @@ export function visibleParagraphPieces(
   let rawStart = 0;
   for (const segment of segments) {
     const span = spansByNodeId.get(segment.node.id);
-    if (!span) continue;
+    const symbol = !span && isSymbolElement(segment.node);
+    if (!span && !symbol) continue;
     if (rawStart < segment.start) {
       pieces.push({
         text: rawText.slice(rawStart, segment.start),
         rawStart,
         rawEnd: segment.start,
       });
+    }
+    if (!span) {
+      pieces.push({
+        text: SYMBOL_TEXT,
+        rawStart: segment.start,
+        rawEnd: segment.end,
+        symbol: true,
+      });
+      rawStart = segment.end;
+      continue;
     }
     const result = results.get(span.node.id);
     // Nested simple fields keep the store segment order here. This does not endorse Word's
@@ -337,6 +372,8 @@ export function projectVisibleParagraphText(
   rawText: string,
   view: FieldResultTextView = 'allMarkup'
 ): ProjectedParagraphText {
-  if (!rawText.includes(FIELD_ATOM_CHAR)) return identityProjection(rawText);
+  if (!rawText.includes(FIELD_ATOM_CHAR) && !rawText.includes(SYMBOL_TEXT)) {
+    return identityProjection(rawText);
+  }
   return projectionFromPieces(visibleParagraphPieces(paragraph, rawText, view));
 }

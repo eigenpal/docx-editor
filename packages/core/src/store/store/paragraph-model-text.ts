@@ -1,6 +1,6 @@
 // Raw paragraph text in the canonical model offset vocabulary.
 
-import { hyphenTextOf } from '../package/hyphen-text.ts';
+import { inlineCharacterTextOf } from '../package/hyphen-text.ts';
 import { fieldAtomText } from '../package/field-nodes.ts';
 import { hardBreakText } from '../package/hard-break.ts';
 import type { OoxmlParagraphNode } from '../package/ooxml-tree.ts';
@@ -17,7 +17,8 @@ export function paragraphModelTextOf(paragraph: OoxmlParagraphNode): string {
     if (segment.node.kind === 'textValue') text += segment.node.value;
     else if (segment.node.kind === 'tab') text += '\t';
     else if (segment.node.kind === 'hardBreak') text += hardBreakText(segment.node);
-    else if (hyphenTextOf(segment.node) !== null) text += hyphenTextOf(segment.node);
+    else if (inlineCharacterTextOf(segment.node) !== null)
+      text += inlineCharacterTextOf(segment.node);
     else if (
       segment.node.kind === 'fldChar' ||
       segment.node.kind === 'fldSimple' ||

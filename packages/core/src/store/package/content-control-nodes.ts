@@ -22,7 +22,7 @@
 // is fetched, resolved, or evaluated. A projection that reached for a part would be a
 // zero-click load of a target an untrusted file chose.
 
-import { hyphenTextOf } from './hyphen-text.ts';
+import { inlineCharacterTextOf } from './hyphen-text.ts';
 import { nextStripedDecimalId, resolveAllocationActor } from './actor-scoped-ids.ts';
 import { isInlineRunContainer, W14_NAMESPACE_URI, WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import type {
@@ -706,7 +706,7 @@ export function contentControlTextOf(control: OoxmlNode): string {
       text += '\t';
       return;
     }
-    const hyphen = hyphenTextOf(node);
+    const hyphen = inlineCharacterTextOf(node);
     if (hyphen !== null) {
       text += hyphen;
       return;

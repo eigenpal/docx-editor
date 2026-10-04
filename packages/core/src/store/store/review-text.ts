@@ -1,4 +1,4 @@
-import { hyphenTextOf, withDisplayedHyphens } from '../package/hyphen-text.ts';
+import { inlineCharacterTextOf, withDisplayedHyphens } from '../package/hyphen-text.ts';
 import type { OoxmlNode } from '../package/ooxml-tree.ts';
 import { hardBreakText } from '../package/hard-break.ts';
 import { isInstrText } from '../package/field-nodes.ts';
@@ -21,7 +21,7 @@ export function commentBodyModelText(comment: CommentRecord): string {
       return;
     }
     // One character each, as in paragraph text; a card maps them for display.
-    const hyphen = hyphenTextOf(node);
+    const hyphen = inlineCharacterTextOf(node);
     if (hyphen !== null) {
       parts.push(hyphen);
       return;
@@ -52,7 +52,7 @@ export function textUnder(node: OoxmlNode): string {
   // model counts for them.
   if (node.kind === 'tab') return '\t';
   if (node.kind === 'hardBreak') return hardBreakText(node);
-  const hyphen = hyphenTextOf(node);
+  const hyphen = inlineCharacterTextOf(node);
   if (hyphen !== null) return hyphen;
   // A field's instruction is CODE, not content: it measures nothing in the offset model,
   // and a tracked page field would otherwise present its ` PAGE ` source as inserted
