@@ -344,6 +344,30 @@ describe('autofit layout', () => {
     expect(lineCount(table.rows[1]!.cells[0]!)).toBe(1);
   });
 
+  test('a rotated header row gives its columns no minimum in an autofit table', () => {
+    const rotated =
+      '<w:tc><w:tcPr><w:tcW w:w="800" w:type="dxa"/><w:textDirection w:val="btLr"/></w:tcPr>' +
+      `<w:p>${run('v')}</w:p></w:tc>`;
+    const body =
+      `<w:tbl><w:tblPr><w:tblW w:w="2400" w:type="dxa"/>${zeroMargins}</w:tblPr>` +
+      '<w:tblGrid><w:gridCol w:w="800"/><w:gridCol w:w="800"/><w:gridCol w:w="800"/></w:tblGrid>' +
+      `<w:tr>${rotated.repeat(3)}</w:tr>` +
+      `<w:tr>${['a', 'A'.repeat(14), 'b'].map((text) => `<w:tc><w:tcPr><w:tcW w:w="800" w:type="dxa"/></w:tcPr><w:p>${run(text)}</w:p></w:tc>`).join('')}</w:tr>` +
+      '</w:tbl>';
+    expect(columns(body).widths).toEqual([18, 84, 18]);
+  });
+
+  test('a column of vertical text with no stated width keeps its resolved width', () => {
+    const body =
+      `<w:tbl><w:tblPr><w:tblW w:w="2400" w:type="dxa"/>${zeroMargins}</w:tblPr>` +
+      '<w:tblGrid><w:gridCol w:w="1200"/><w:gridCol w:w="600"/><w:gridCol w:w="600"/></w:tblGrid><w:tr>' +
+      `<w:tc><w:tcPr><w:tcW w:w="1200" w:type="dxa"/></w:tcPr><w:p>${run('ab')}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:textDirection w:val="btLr"/></w:tcPr><w:p>${run('v')}</w:p></w:tc>` +
+      `<w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr><w:p>${run('cd')}</w:p></w:tc>` +
+      '</w:tr></w:tbl>';
+    expect(columns(body).widths).toEqual([60, 30, 30]);
+  });
+
   test('widens a column to keep a 10-letter word whole', () => {
     // A 60 pt word in a 30 pt column. The others give the 30 pt in proportion to their
     // slack above their 12 pt minimums: 48 and 18 pt.

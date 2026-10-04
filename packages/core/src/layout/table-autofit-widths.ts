@@ -520,7 +520,7 @@ function nestedTableMinimumPt(
   // Past the nesting limit layout paints nothing, so nothing needs room.
   if (!nested) return 0;
   // A fixed table counts the words it holds, not its stated width, so the column narrows to
-  // its content and the table with it; a cell of vertical text keeps the width it has.
+  // its content and the table with it, though a cell of vertical text keeps its width.
   const nestedView = { ...view, depth };
   let minimums = spacingGapsPt(nested);
   if (nested.layoutFixed) {
@@ -553,6 +553,7 @@ function emptyColumnContent(): AutofitColumnContent {
     preferredWidths: [],
     spans: [],
     measured: [],
+    verticalHolds: [],
   };
 }
 
@@ -569,12 +570,17 @@ function fixedTableCellMinimums(
   const ifWidened: number[] = [];
   const content = emptyColumnContent();
   autofitColumnMinimumsPt(structure, context, view, ifWidened, content);
-  // A column with no cell of its own asks for no more than a hairline; a vertical-text cell
-  // has already asked for the width it has.
+  // A column with no horizontal text of its own asks for no more than a hairline, while a cell
+  // of vertical text keeps the width it has: one column's minimum, or a span's requirement.
   const own = ifWidened.map((minimum, column) =>
     Math.max(content.measured[column] ? minimum : 0, MIN_COLUMN_PT)
   );
-  return spanAdjustedMinimums(own, own, own, content.spans);
+  const spans = [...content.spans];
+  for (const hold of content.verticalHolds) {
+    if (hold.count > 1) spans.push(hold);
+    else own[hold.from] = Math.max(own[hold.from]!, hold.minimum);
+  }
+  return spanAdjustedMinimums(own, own, own, spans);
 }
 
 /**
@@ -674,9 +680,9 @@ export function narrowNestedReader(
 
 /**
  * Each physical column's autofit minimum, as a cell width: its widest single-column cell
- * content plus that cell's horizontal content insets, so an empty cell keeps them. A cell of
- * vertical text asks for the width it has. A cell that continues a vertical merge sets no
- * minimum; a cell that spans columns reports its own requirement in `content` instead.
+ * content plus that cell's horizontal content insets, so an empty cell keeps them. A cell that
+ * continues a vertical merge or sets its text vertically sets no minimum; a cell that spans
+ * columns reports its own requirement in `content` instead.
  */
 export function autofitColumnMinimumsPt(
   structure: SemanticTableStructure,
@@ -712,20 +718,13 @@ export function autofitColumnMinimumsPt(
         }
       }
       if (cell.textDirection !== 'horizontal') {
-        // Vertical text runs along the row, so the cell keeps the width it has across the
-        // columns it covers: one column's minimum, or a span's requirement.
+        // Vertical text runs along the row, not across the column: it sets no autofit minimum.
+        // It does record the width it has, which a table giving up its stated widths keeps.
         const end = Math.min(cell.gridColumn + cell.gridSpan, columnCount);
         let held = 0;
         for (let column = cell.gridColumn; column < end; column++) held += cellWidths[column]!;
-        if (end - cell.gridColumn > 1) {
-          const span = { from: cell.gridColumn, count: end - cell.gridColumn };
-          content?.spans.push({ ...span, minimum: held, current: held });
-          continue;
-        }
-        const column = cell.gridColumn;
-        minimums[column] = Math.max(minimums[column]!, held);
-        wide[column] = Math.max(wide[column]!, held);
-        widest[column] = Math.max(widest[column]!, held);
+        const count = end - cell.gridColumn;
+        content?.verticalHolds.push({ from: cell.gridColumn, count, minimum: held });
         continue;
       }
       if (cell.gridSpan !== 1 && !content) continue;
@@ -789,8 +788,10 @@ export interface AutofitColumnContent {
   readonly sizedByContent: boolean[];
   /** The widest absolute preferred width a single-column cell states, where one does. */
   readonly preferredWidths: (number | undefined)[];
-  /** Columns a single-column cell measured; a vertical-text cell measures the width it has. */
+  /** Columns a single-column cell of horizontal text measured. */
   readonly measured: boolean[];
+  /** The width each cell of vertical text has across the columns it covers. */
+  readonly verticalHolds: SpanRequirement[];
   /** What each cell spanning several columns needs across them. */
   readonly spans: SpanRequirement[];
 }
