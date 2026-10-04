@@ -139,6 +139,69 @@ describe('autofit layout', () => {
     expect(columns(spanned).widths).toEqual([36, 42, 42]);
   });
 
+  const laidOut = (body: string) => {
+    const read = readOoxmlPart(`<w:document ${NAMESPACES}><w:body>${body}</w:body></w:document>`, {
+      name: '/word/document.xml',
+      contentType: 'app/xml',
+    });
+    if (!read.ok) throw new Error(read.reason);
+    const result = layoutSemanticDocument(read.part, 1, {
+      measurer: createFixedMeasurer(6, 12),
+      styleCascade: elevenPointDefaults(),
+      geometry: { width: 300, height: 400, margin: { top: 0, bottom: 0, left: 0, right: 0 } },
+    });
+    return result.pages[0]!.fragments.find(
+      (candidate): candidate is TableFragmentRecord => candidate.kind === 'table'
+    )!;
+  };
+  const lineCount = (cell: TableFragmentRecord['rows'][number]['cells'][number]) =>
+    cell.blocks.flatMap((block) => (block.kind === 'paragraph' ? block.lines : [])).length;
+  const zeroMargins =
+    '<w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>';
+
+  test('a nested fixed table paints no wider than the narrowed cell that holds it', () => {
+    const nested =
+      '<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="1000"/></w:tblGrid>' +
+      `<w:tr><w:tc><w:tcPr><w:tcW w:w="1000" w:type="dxa"/></w:tcPr><w:p>${run('n')}</w:p></w:tc></w:tr></w:tbl>`;
+    const outer = laidOut(
+      `<w:tbl><w:tblPr><w:tblW w:w="2400" w:type="dxa"/>${zeroMargins}</w:tblPr>` +
+        '<w:tblGrid><w:gridCol w:w="1200"/><w:gridCol w:w="1200"/></w:tblGrid><w:tr>' +
+        `<w:tc><w:tcPr><w:tcW w:w="1200" w:type="dxa"/></w:tcPr>${nested}<w:p/></w:tc>` +
+        `<w:tc><w:tcPr><w:tcW w:w="1200" w:type="dxa"/></w:tcPr><w:p>${run('A'.repeat(14))}</w:p></w:tc>` +
+        '</w:tr></w:tbl>'
+    );
+    const host = outer.rows[0]!.cells[0]!;
+    const inner = host.blocks.find((block) => block.kind === 'table')!;
+    expect(host.box.width).toBeCloseTo(36, 6);
+    expect(inner.box.x + inner.box.width).toBeLessThanOrEqual(host.box.x + host.box.width + 0.01);
+  });
+
+  test('a content-sized table with no room left keeps its words whole', () => {
+    const table = laidOut(
+      `<w:tbl><w:tblPr><w:tblInd w:w="6000" w:type="dxa"/>${zeroMargins}</w:tblPr>` +
+        '<w:tblGrid><w:gridCol w:w="1200"/><w:gridCol w:w="1200"/></w:tblGrid><w:tr>' +
+        `<w:tc><w:p>${run('hello world')}</w:p></w:tc><w:tc><w:p>${run('abc')}</w:p></w:tc>` +
+        '</w:tr></w:tbl>'
+    );
+    const [first, second] = table.rows[0]!.cells;
+    expect(lineCount(first!)).toBeLessThanOrEqual(2);
+    expect(lineCount(second!)).toBe(1);
+  });
+
+  test('a spanning word keeps its room after the columns settle', () => {
+    const cell = (twips: number, text: string, span = '') =>
+      `<w:tc><w:tcPr><w:tcW w:w="${twips}" w:type="dxa"/>${span}</w:tcPr><w:p>${run(text)}</w:p></w:tc>`;
+    const table = laidOut(
+      `<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="dxa"/>${zeroMargins}</w:tblPr>` +
+        '<w:tblGrid><w:gridCol w:w="1600"/><w:gridCol w:w="1600"/><w:gridCol w:w="1800"/></w:tblGrid>' +
+        `<w:tr>${cell(1600, 'a')}${cell(1600, 'b')}${cell(1800, 'C'.repeat(30))}</w:tr>` +
+        `<w:tr>${cell(3200, 'S'.repeat(20), '<w:gridSpan w:val="2"/>')}${cell(1800, 'c')}</w:tr>` +
+        '</w:tbl>'
+    );
+    expect(lineCount(table.rows[1]!.cells[0]!)).toBe(1);
+    expect(lineCount(table.rows[0]!.cells[2]!)).toBe(1);
+  });
+
   test('widens a column to keep a 10-letter word whole', () => {
     // A 60 pt word in a 30 pt column. The others give the 30 pt in proportion to their
     // slack above their 12 pt minimums: 48 and 18 pt.

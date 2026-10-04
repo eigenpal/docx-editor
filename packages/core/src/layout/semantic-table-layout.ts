@@ -1364,8 +1364,9 @@ export function layoutRowFragmentBounded(
     const { gridSpan: span, gridColumn } = cell;
     const slotX = left + sumCols(cols, 0, gridColumn);
     const slotW = sumCols(cols, gridColumn, Math.min(gridColumn + span, cols.length)) || total;
-    const cellX = gap ? left + gap.cellLeft(gridColumn) : slotX;
-    const cellW = Math.max(gap ? gap.cellWidth(gridColumn, span) : slotW, MIN_CELL_BOX_PT);
+    const spaced = gap && gridColumn < cols.length ? gap : null;
+    const cellX = spaced ? left + spaced.cellLeft(gridColumn) : slotX;
+    const cellW = Math.max(spaced ? spaced.cellWidth(gridColumn, span) : slotW, MIN_CELL_BOX_PT);
     const insets =
       deps.cellContentInsets?.get(cell.id) ?? cellContentInsets(cell, cellSpacingPt === 0);
     // Each page fragment retains the cell padding, even when its paragraph continues.

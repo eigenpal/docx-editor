@@ -13,6 +13,8 @@ export interface SpanRequirement {
   readonly from: number;
   readonly count: number;
   readonly minimum: number;
+  /** The requirement with the insets the cell has now, before any widening. */
+  readonly current?: number;
 }
 
 /**
@@ -160,7 +162,12 @@ export function contentSizedWidths(
   // The minimums alone overflow: scale what each column holds above its hairline.
   const floor = minimums.map((minimum) => Math.max(minimum, MIN_COLUMN_PT));
   const needed = floor.reduce((sum, value) => sum + value, 0);
-  const fitTo = Math.max(target, availablePt);
+  // Never narrower than the table already was: an indent can leave the text column no room.
+  const fitTo = Math.max(
+    target,
+    availablePt,
+    widths.reduce((sum, width) => sum + width, 0)
+  );
   if (!Number.isFinite(fitTo) || needed <= fitTo) return floor;
   const hairlines = count * MIN_COLUMN_PT;
   const scale = Math.max(0, fitTo - hairlines) / Math.max(needed - hairlines, EPSILON_PT);

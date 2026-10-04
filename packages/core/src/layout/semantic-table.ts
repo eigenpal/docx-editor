@@ -308,11 +308,11 @@ export interface SemanticTableStructure {
    */
   readonly float?: TableFloatPosition;
   /**
-   * `w:tblCellSpacing` (17.4.45) in points: the gap between adjacent cell edges. Applied as
-   * a half-gap inset on each side of every cell, so cells separate visually without the grid
-   * itself moving. Word ALSO grows the table's overall width by the spacing it adds around
-   * the outside; that part is not modelled, so a spaced table is laid out on the same grid
-   * its file states rather than a wider one.
+   * `w:tblCellSpacing` (17.4.45) in points: the space on each side of every cell. Cells sit
+   * twice this apart and from the table edge; the gaps come out of the table width, and each
+   * column gives up its share in proportion (`table-cell-spacing.ts`). Rows do not yet get
+   * the matching gaps above and below them, so a spaced table's rows stay as tall as they
+   * would be without it.
    */
   readonly cellSpacingPt: number;
   /**
@@ -507,7 +507,7 @@ export function readTableStructure(
       structure: base,
     });
   }
-  if (!autofit || !base || base.layoutFixed) return base;
+  if (!autofit || !base || (base.layoutFixed && depth === 0)) return base;
   // Most tables already hold their content: they come back as the shared base structure.
   const widths = autofitColumnWidthsPt(base, contentWidthPt, autofit, {
     styleCascade,
