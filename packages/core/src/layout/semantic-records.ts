@@ -196,6 +196,12 @@ export interface StyleSpanRecord {
   /** Authored trailing spaces that layout may clip at the line's right edge. */
   readonly lineEndWhitespace?: true;
   /**
+   * An optional hyphen (`w:softHyphen`) where the line breaks. {@link text} stays U+00AD, one
+   * model character; {@link box} holds the advance of the visible hyphen that paint draws in
+   * its place. Absent for an optional hyphen inside a line, which draws nothing.
+   */
+  readonly optionalHyphenBreak?: true;
+  /**
    * Cumulative advances from {@link box}.x to each UTF-16 caret boundary in {@link text}.
    *
    * Length is `text.length + 1` (both endpoints). When PRESENT, these are the interaction
@@ -1026,28 +1032,7 @@ export interface SemanticLayout {
   readonly controlContextToken?: string;
 }
 
-/** Page geometry, in points. */
-export interface PageGeometry {
-  readonly width: number;
-  readonly height: number;
-  readonly margin: {
-    readonly top: number;
-    readonly right: number;
-    readonly bottom: number;
-    readonly left: number;
-  };
-  /** `w:pgMar/@header` — sheet edge to header top, in points. Defaults to 36 (720 twips). */
-  readonly headerDistance?: number;
-  /** `w:pgMar/@footer` — sheet edge to footer bottom, in points. Defaults to 36. */
-  readonly footerDistance?: number;
-}
-
-/** US Letter with one-inch margins, in points. */
-export const DEFAULT_PAGE_GEOMETRY: PageGeometry = Object.freeze({
-  width: 612,
-  height: 792,
-  margin: Object.freeze({ top: 72, right: 72, bottom: 72, left: 72 }),
-});
+export { DEFAULT_PAGE_GEOMETRY, type PageGeometry } from './page-geometry.ts';
 
 /**
  * Text measurement, injected.

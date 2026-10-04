@@ -4,7 +4,6 @@ import {
   tabDestinationForFlow,
 } from './paragraph-tab-flow.ts';
 import { growRunBorderLineMetrics, textBandHeightWithBorders } from './run-border-strokes.ts';
-import type { CellAnchorScope } from './cell-anchor-layout.ts';
 import {
   growPendingLineDrawingExtent,
   lineHoldsContent,
@@ -31,27 +30,15 @@ export {
 } from './paragraph-alignment.ts';
 import { bidiPieces, paragraphIsRtl } from './rtl-paragraph.ts';
 
-import {
-  PAGE_BREAK_CHAR,
-  type DocumentProperties,
-  type OoxmlNode,
-  type OoxmlProperty,
-} from '@docx-editor.dev/core/store';
+import { PAGE_BREAK_CHAR, type OoxmlNode, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import {
   propertiesOfRunContainer as propertiesOf,
   type FieldAwarePiece,
   type FieldPageContext,
-  type FieldLinkProjector,
-  type HyperlinkProjector,
   type ModelRange,
   type RunPropertyCascader,
 } from './field-projection.ts';
-import {
-  DEFAULT_REVISION_DISPLAY_MODE,
-  revisionsVisible,
-  type RevisionAuthorFilter,
-  type RevisionDisplayMode,
-} from './revision-projection.ts';
+import { DEFAULT_REVISION_DISPLAY_MODE, revisionsVisible } from './revision-projection.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import { cjkChopCutAllowedAt, lineOpenDecisionAt, wordBoundaries } from './cjk-line-break.ts';
 import { cjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
@@ -66,24 +53,19 @@ import {
   colonLostOpeningBearing,
   cjkColonNaturalWidths,
 } from './cjk-spacing.ts';
-import { resolveCjkTypography, type CjkParagraphTypography } from './cjk-typography.ts';
+import { resolveCjkTypography } from './cjk-typography.ts';
 import {
   EMPTY_TAB_STOPS,
   tabAdvanceWidth,
   TAB_LEADER_GLYPH,
   type ResolvedTabStops,
 } from './paragraph-tabs.ts';
-import {
-  SINGLE_LINE_SPACING,
-  applyLineSpacing,
-  type ParagraphLineSpacing,
-} from './paragraph-style.ts';
+import { SINGLE_LINE_SPACING, applyLineSpacing } from './paragraph-style.ts';
 import {
   DEFAULT_RUN_STYLE,
   displayText,
   resolveRunStyle,
   type ResolvedRunStyle,
-  type ThemeFonts,
 } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import {
@@ -91,7 +73,7 @@ import {
   createLineExclusionProbe,
   exclusionZoneAppliesToLine,
 } from './line-exclusion-clearance.ts';
-import type { LayoutBox, StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
+import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import type { MutableChangeSite } from './field-pieces.ts';
 import {
   buildInlineDrawingRecord,
@@ -100,7 +82,6 @@ import {
   repositionInlineDrawingsForBaseline,
   anchoredDrawingAtomsInParagraph,
   drawingModelOffsetsInParagraph,
-  type InlineDrawingLayoutContext,
   type InlineDrawingRecord,
 } from './drawing-layout.ts';
 import {
@@ -115,7 +96,8 @@ import { createEquationLayouter } from './equation-layout.ts';
 import { anchorLineStartsByModelOffset } from './anchor-line-probe.ts';
 import * as lineEndSpaces from './line-end-whitespace.ts';
 import { chopOversizedWord } from './oversized-word-break.ts';
-import { carryPartialWord, type WordCarryContext } from './word-carry.ts';
+import type { WordCarryContext } from './word-carry.ts';
+import { carryWordAtOptionalHyphens } from './optional-hyphen-break.ts';
 import { collectLineChangeSites } from './paragraph-change-sites.ts';
 
 /**
@@ -124,135 +106,8 @@ import { collectLineChangeSites } from './paragraph-change-sites.ts';
  */
 const OVERFLOW_TOLERANCE_PT = 0.001;
 
-/** Paragraph geometry affects line starts and heights, so callers must include it in cache keys. */
-export interface ParagraphFlowOptions {
-  readonly paragraphRtl?: boolean;
-  readonly justifySpaceShrink?: boolean;
-  readonly typography?: CjkParagraphTypography;
-  readonly lineSpacing?: ParagraphLineSpacing;
-  /** First-line offset from the paragraph indent: `w:firstLine` right, `w:hanging` left. */
-  readonly firstLineOffset?: number;
-  /**
-   * Baseline floor for the FIRST line, in points: a picture-bullet marker sits on it. The
-   * floor lowers the baseline and grows the box alike, so no later line moves. `exact` clips.
-   */
-  readonly firstLineMinimumBaseline?: number;
-  /**
-   * The list marker face's own ascent, reserved above the FIRST line's baseline.
-   *
-   * Word sets the number or bullet on that baseline, so a level `w:rFonts`/`w:sz` taller
-   * than the paragraph's own font pushes the line down by the excess. It applies BEFORE line
-   * spacing, because the marker grows the natural line that an `auto` multiple then scales.
-   * The marker never deepens the line below its baseline ({@link listMarkerFirstLineMetrics}).
-   */
-  readonly firstLineMarkerAscent?: number;
-  /**
-   * Page breaks that open the paragraph pass the first-line slot (offset and marker floors) on
-   * to the first line after them, where body layout publishes the list marker. A continuation
-   * from `startOffset` keeps the slot only when nothing but page breaks precedes it.
-   */
-  readonly firstLineAfterLeadingBreaks?: boolean;
-  /** Re-break only the unplaced suffix when an unequal-width column follows. */
-  readonly startOffset?: number;
-  /** Text column bounds in indentLeft coordinates. Margin-relative positional tabs use these
-   * bounds; absent, they use the paragraph column, which differs when indents are present. */
-  readonly marginExtent?: { readonly left: number; readonly right: number };
-  /** Sanitize hyperlink relationships. Without a resolver, text paints without a link. */
-  readonly projectLink?: HyperlinkProjector;
-  /** Sanitize HYPERLINK field targets; otherwise paint the cached result without a link. */
-  readonly projectFieldLink?: FieldLinkProjector;
-  /** Field-code inspection projection. @internal */
-  readonly showFieldCodes?: boolean;
-  /** @internal */
-  readonly fieldCodeRanges?: readonly import('./field-code-toc.ts').FieldCodeRange[];
-  /** @internal Word TOC character-style suppression. */
-  readonly tocLinkStyleRanges?: readonly import('./toc-link-formatting.ts').TocLinkRange[];
-  /**
-   * The document's parsed metadata, for document-property fields (TITLE, AUTHOR, …).
-   *
-   * Document-global rather than per-paragraph — the surface reads it once from the store and
-   * hands the same object to every flow. Absent means such a field paints its cached result or
-   * nothing, the same degradation as a furniture-only pass.
-   */
-  readonly documentProperties?: DocumentProperties;
-  /**
-   * True when this is BODY flow, whose PAGE/NUMPAGES/SECTIONPAGES fields are substituted at
-   * document finalize (`substituteBodyPageFields`). Only then does an empty-cache page field
-   * paint a placeholder digit; headers/footers, notes and text boxes leave it blank, keeping
-   * their own live path or their deferral, so a placeholder is never stranded unsubstituted.
-   */
-  readonly bodyPageFields?: import('./field-page-furniture.ts').BodyPageFieldContext | false;
-  /**
-   * The story's resolved REF inputs (bookmark targets + numbering), for live REF results.
-   *
-   * Supplied by the body flow, whose block cache keys fold the resolved values — a flow that
-   * threads this WITHOUT keying on those values would serve stale breaks after a renumbering
-   * edit. Absent means REF fields paint their cached results, the safe degradation every
-   * other story (headers/footers, notes, text boxes) currently takes.
-   */
-  readonly refFields?: import('./field-ref.ts').RefFieldContext;
-  /**
-   * Which revisions this break resolves away.
-   *
-   * A different mode is a different break — the proposed result drops deleted text, so lines
-   * wrap elsewhere — so it belongs in the caller's cache key alongside line spacing.
-   */
-  readonly displayMode?: RevisionDisplayMode;
-  /** Reviewers whose revisions project as accepted for this layout pass. */
-  readonly revisionAuthorFilter?: RevisionAuthorFilter;
-  /** Derived footnote/endnote marks for noteReference / noteRef projection. */
-  readonly noteMarks?: import('./note-projection.ts').NoteMarkContext;
-  /** Inline drawing projection + resource lookup for typed `w:drawing` nodes. */
-  readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
-  /** Column's paragraph-relative left edge; oversized inline extents clip here without scaling. */
-  readonly contentLeft?: number;
-  /** Right edge of the containing text column in paragraph-relative coordinates. */
-  readonly contentRight?: number;
-  /**
-   * Horizontal origin of the active column within page-content coordinates.
-   * Line x offsets are column-local; exclusion zones are page-wide.
-   */
-  readonly contentOriginX?: number;
-  /** Page-content Y where this paragraph starts — for anchored wrap exclusion at break time. */
-  readonly paragraphStartY?: number;
-  /** Anchor origin before displacement that its own wrap caused in a preceding paragraph. */
-  readonly anchorParagraphStartY?: number;
-  /** Spacing applied above the first line; `paragraphStartY` already includes it. */
-  readonly paragraphSpaceBefore?: number;
-  /** Active exclusion zones on the current page while breaking. */
-  readonly pageExclusionZones?: readonly ExclusionZone[];
-  /** When breaking inside a table cell, the cell content box for anchored frame resolution. */
-  readonly anchorCellBox?: LayoutBox | null;
-  /** With {@link anchorCellBox}: what decides the cell's anchors' `layoutInCell`. */
-  readonly cellAnchorScope?: CellAnchorScope;
-  /**
-   * Instruction-only TOC paragraphs and ending field chrome can carry no measurable text.
-   * When set, an otherwise empty break returns no lines. A paragraph mark after a TOC
-   * separator belongs to the result and must retain its ordinary empty line instead.
-   */
-  readonly suppressEmptyPlaceholderLine?: boolean;
-  /**
-   * The theme's Latin typefaces, resolving `w:rFonts` theme references.
-   *
-   * A different theme measures every `+Body`/`+Headings` run in a different face, so it
-   * belongs in the caller's cache key. The BODY lane has that: `semantic-layout` folds
-   * `StyleCascadeTable.cacheToken` into its producer. The header/footer and note lanes pass
-   * the raw surface producer instead, so their keys carry the cascaded `w:rFonts` property
-   * but not the theme it resolves through. That is safe only because the theme is memoized
-   * per session and every reload rebuilds the surface with a fresh cache — a live retheme
-   * would need `cacheToken` folded into those producers too.
-   */
-  readonly themeFonts?: ThemeFonts;
-  /** Stable measurement producer token for cross-break equation geometry reuse. */
-  readonly equationCacheToken?: string;
-  /**
-   * Paragraph-mark cascade for empty-line metrics and last-line mark height.
-   * When omitted, falls back to the content `inheritedRunProperties` argument.
-   */
-  readonly markRunProperties?: readonly OoxmlProperty[];
-  /** A nonempty cell terminator reserves a cell-height floor instead of last-line leading. */
-  readonly paragraphMarkIsCellEnd?: boolean;
-}
+import type { ParagraphFlowOptions } from './paragraph-flow-options.ts';
+export type { ParagraphFlowOptions } from './paragraph-flow-options.ts';
 
 export { propertiesOf };
 
@@ -1545,11 +1400,13 @@ export function breakParagraph(
           }
         } else {
           // Mid-word overflow: a run boundary is not a break opportunity, so the whole word
-          // moves to where the same text in one run would go.
-          const start = carryPartialWord(
+          // moves to where the same text in one run would go, unless an optional hyphen fits.
+          const start = carryWordAtOptionalHyphens(
             wordCarry,
             { span: wordStartSpan, width: wordStartWidth, end: wordStartEnd, ...wordStartMetrics },
-            placeWidth
+            placeWidth,
+            overflows,
+            OVERFLOW_TOLERANCE_PT
           );
           wordStartSpan = start.span;
           wordStartWidth = start.width;

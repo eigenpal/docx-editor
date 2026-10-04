@@ -247,7 +247,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Symbol runs render and survive editing and save. The editor requests fonts for symbol runs, SYMBOL fields, and used numbering markers through the configured font resolver. You can insert a symbol from the Insert menu. Deleting text across a symbol removes it with the text. Non-breaking and optional hyphens are characters of the paragraph text, read as U+001E and U+001F, and select, search, and delete like any character. Existing symbol run properties are not editable.',
+      'Symbol runs render and survive editing and save. The editor requests fonts for symbol runs, SYMBOL fields, and used numbering markers through the configured font resolver. You can insert a symbol from the Insert menu. Deleting text across a symbol removes it with the text. Non-breaking and optional hyphens are characters of the paragraph text, read as U+001E and U+001F, and select, search, and delete like any character. A line can break after an optional hyphen, which then shows as a hyphen at the line end. Existing symbol run properties are not editable.',
   },
 
   // --- Paragraphs & styles ---------------------------------------------
@@ -359,7 +359,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'none',
     roundTrip: 'preserved',
     tier: 'community',
-    notes: 'Document hyphenation settings round-trip; the layout engine does not hyphenate.',
+    notes:
+      'Document hyphenation settings round-trip; the layout engine does not hyphenate automatically. A line can break at an optional hyphen in the text. The line then ends with a visible hyphen, which counts toward the line width.',
   },
 
   // --- Lists & numbering -------------------------------------------------

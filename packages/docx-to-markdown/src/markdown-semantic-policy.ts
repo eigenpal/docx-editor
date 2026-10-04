@@ -55,6 +55,8 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     style: 'represented',
     box: 'layout-only',
     lineEndWhitespace: 'layout-only',
+    // A line-end hyphen belongs to one layout width; Markdown text reflows.
+    optionalHyphenBreak: 'layout-only',
     caretEdges: 'layout-only',
     tabLeader: 'explicitly-omitted',
     tabLeaderAdvancePt: 'layout-only',

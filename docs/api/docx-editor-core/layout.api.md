@@ -4262,6 +4262,7 @@ export interface StyleSpanRecord {
         readonly scopeId: string;
     };
     readonly noteSeparator?: 'separator' | 'continuationSeparator';
+    readonly optionalHyphenBreak?: true;
     readonly projected?: boolean;
     readonly props: readonly OoxmlProperty[];
     // (undocumented)

@@ -210,6 +210,7 @@ const SPAN_DECORATIONS: Record<Exclude<keyof StyleSpanRecord, 'range' | 'text' |
   noteNav: true,
   noteSeparator: true,
   lineEndWhitespace: true,
+  optionalHyphenBreak: true,
 };
 
 const SPAN_DECORATION_KEYS = Object.keys(SPAN_DECORATIONS) as readonly (keyof StyleSpanRecord)[];
