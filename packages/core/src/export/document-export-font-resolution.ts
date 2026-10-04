@@ -1,7 +1,11 @@
 // Exporter-neutral font-resolution evidence and session-owned admitted-face snapshots.
 
 import type { DroppedEmbeddedFont } from '../layout/embedded-font-sources.ts';
-import type { FontOriginFailure } from '../layout/font-resolver.ts';
+import {
+  ExecutionFontLimitError,
+  FontOriginAdmissionError,
+  type FontOriginFailure,
+} from '../layout/font-resolver.ts';
 import {
   FontResolutionError,
   HARD_MAX_FONT_SOURCES,
@@ -275,12 +279,25 @@ export function publishFontResolutionReport(
 
 export function enforceStrictFontPolicy(
   report: ExportFontResolutionReport,
-  options: DocumentExportFontResolutionOptions
+  options: DocumentExportFontResolutionOptions,
+  glyphFallbacks: readonly FontRequest[] = []
 ): void {
+  const normalize = (family: string): string => family.trim().toLowerCase();
+  const required = new Set([...report.requestedFamilies, report.defaultFamily].map(normalize));
+  const optional = new Set(glyphFallbacks.map((face) => normalize(face.family)));
+  const isRequiredFailure = (cause: unknown): boolean => {
+    if (!(cause instanceof ExecutionFontLimitError)) return true;
+    const family = normalize(cause.request.family);
+    return required.has(family) || !optional.has(family);
+  };
+  const hasRequiredFailure = report.originFailures.some(({ cause }) =>
+    cause instanceof FontOriginAdmissionError
+      ? cause.causes.length === 0 || cause.causes.some(isRequiredFailure)
+      : isRequiredFailure(cause)
+  );
   if (
     options.fontPolicy !== 'strict' ||
-    (report.originFailures.length === 0 &&
-      report.families.every((family) => family.coverage === 'complete'))
+    (!hasRequiredFailure && report.families.every((family) => family.coverage === 'complete'))
   ) {
     return;
   }

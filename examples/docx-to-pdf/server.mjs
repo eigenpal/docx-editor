@@ -132,6 +132,7 @@ export async function createPdfDemo({
               comments: comments === 'true',
               fidelityPolicy,
               timeoutMs: DEADLINE,
+              useSystemFonts: false,
             },
           },
           transferList: [bytes.buffer],

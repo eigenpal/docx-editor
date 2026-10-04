@@ -88,7 +88,7 @@ for (const entry of cases)
         `<w:rPr><w:rFonts w:ascii="${entry.family}" w:hAnsi="${entry.family}" w:eastAsia="${entry.family}" w:cs="${entry.family}"/></w:rPr>`
       )
     );
-    const result = await exportPdf(input, { fonts });
+    const result = await exportPdf(input, { fonts, useSystemFonts: false });
     expect(
       result.diagnostics.filter(
         (entry) => entry.code !== 'incomplete-font' || entry.severity !== 'information'
@@ -118,7 +118,7 @@ test('PDF baseline and glyph origins match the admitted Core shaping run', async
     const layout = await opened.session.layout();
     const visits: Parameters<Parameters<typeof forEachSemanticSpan>[1]>[0][] = [];
     forEachSemanticSpan(layout, (v) => visits.push(v));
-    const result = await exportPdf(input, { fonts });
+    const result = await exportPdf(input, { fonts, useSystemFonts: false });
     const pdf = await getDocument({ data: result.bytes.slice() }).promise;
     try {
       const content = await (await pdf.getPage(1)).getTextContent({ disableNormalization: true });
@@ -162,6 +162,7 @@ test('selected TTC face is embedded, not the first collection face', async () =>
       )
     ),
     {
+      useSystemFonts: false,
       fonts: {
         sources: [selected.source],
         defaultFont: { family: 'Selected collection', sizeHalfPoints: 22 },

@@ -14,7 +14,7 @@ for (const fixture of ['images-crop', 'images-transform'])
     const source = new Uint8Array(
       readFileSync(new URL(`../../../e2e/fixtures/${fixture}.docx`, import.meta.url))
     );
-    const result = await exportPdf(source);
+    const result = await exportPdf(source, { useSystemFonts: false });
     expect(result.diagnostics).toEqual([]);
     const pdf = await PDFDocument.load(result.bytes);
     const resources = pdf.getPage(0).node.Resources()!;
@@ -32,7 +32,7 @@ test('image alpha is published by Core and encoded as a PDF graphics state', asy
       '<a:alphaModFix amt="50000"/></a:blip>'
     )
   );
-  const result = await exportPdf(zipSync(files));
+  const result = await exportPdf(zipSync(files), { useSystemFonts: false });
   expect(result.diagnostics).toEqual([]);
   const pdf = await PDFDocument.load(result.bytes);
   const states = pdf.getPage(0).node.Resources()!.lookup(PDFName.of('ExtGState'), PDFDict);

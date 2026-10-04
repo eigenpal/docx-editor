@@ -419,7 +419,7 @@ export interface ParagraphFragmentRecord {
   readonly fragmentIndex: number;
   /** This fragment contains the visible paragraph end. */
   readonly paragraphEnd?: true;
-  /** Resolved paragraph-mark style when this fragment has no text or inline drawings. */
+  /** Resolved paragraph-mark style when this fragment has no text spans, including picture-only fragments. */
   readonly emptyParagraphStyle?: ResolvedRunStyle;
   /** Font size of the paragraph mark, on the fragment that ends the paragraph; sizes ¶. */
   readonly paragraphMarkSizePt?: number;

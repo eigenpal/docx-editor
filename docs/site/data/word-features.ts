@@ -100,7 +100,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'none',
     tier: 'premium',
     notes:
-      'File > Export downloads PDF through docx-to-pdf on Node.js. Configure menu.exporters.pdf. A dismissible dialog shows progress and errors. Customize it with popups.export. Missing handlers show a setup error. Rejects output without a PDF header. PDF conversion requires the EigenPal Pro License. Arabic letters join across supported formatting boundaries and when fallback fonts supply missing glyphs. Arabic, Persian, Urdu, and Hebrew text extracts in logical order as whole words. Missing Hebrew glyphs use Times New Roman, or Liberation Serif when that font is unavailable. The exporter synthesizes bold and italic when the selected font lacks those faces. Install @docx-editor.dev/fonts-cjk for Chinese, Japanese, and Korean fallback fonts on hosts without suitable fonts.',
+      'File > Export downloads PDF through docx-to-pdf on Node.js. Configure menu.exporters.pdf. A dismissible dialog shows progress and errors. Customize it with popups.export. Missing handlers show a setup error. Rejects output without a PDF header. PDF conversion requires the EigenPal Pro License. Arabic letters join across supported formatting boundaries and when fallback fonts supply missing glyphs. Arabic, Persian, Urdu, and Hebrew text extracts in logical order as whole words. Missing Hebrew glyphs use Times New Roman, or Liberation Serif when that font is unavailable. The exporter synthesizes bold and italic when the selected font lacks those faces. Install @docx-editor.dev/fonts-cjk for Chinese, Japanese, and Korean fallback fonts on hosts without suitable fonts. Font admission reports faces that exceed shaping limits and tries later sources. Strict font policy refuses rejected document fonts and the configured default font. Shaping-limit rejections for optional glyph fallbacks remain informational. Other source failures still cause strict refusal.',
     docsLink: '/docs/2.x/guides/export',
   },
   {
@@ -126,6 +126,17 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes:
       'Structural XML indentation does not hide run text. Authored spaces inside text elements remain part of the document.',
+  },
+  {
+    id: 'text.input-method',
+    name: 'Input-method composition',
+    category: 'text',
+    editing: 'partial',
+    rendering: 'partial',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'Empty paragraphs and lines containing only inline pictures provide a visible font for composition text. Committed text supports undo, redo, collaboration, and save/reopen. Native candidate-window placement depends on the browser and operating system; validate your target input methods.',
   },
   {
     id: 'text.format-painter',
@@ -202,7 +213,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Paragraphs use inherited bidirectional settings for alignment, script shaping, visual order, and caret placement. Alignment and indents name leading and trailing sides, and kashida alignments justify. Run direction controls numbers and punctuation independently of paragraph alignment. Runs with effective w:rtl or w:cs use complex-script font, size, bold, and italic properties. Formatting commands resolve inherited styles and document defaults, then write both property variants. Direct false values override inherited values. Arabic and other joining scripts preserve letter forms across adjacent formatting runs, including color changes. Joining requires the same bidirectional level and no intervening whitespace. Kerning and cursive offsets across those boundaries remain unsupported. List markers, spacing, indents, and tab stops follow paragraph direction in body text and table cells, and list markers read right to left. Left-to-right and right-to-left paragraph direction controls are in the toolbar, the Format menu, the Paragraph dialog, and the Ctrl+Shift keyboard chords in documents that already contain right-to-left text. Selection highlights can span separate visual bands; some glyph edges have no distinct caret position. Inline pictures read in the direction of the text around them, in paragraph direction between text of different directions or before the first text, and in the direction of the last text after it. They take the caret and clicks on their leading and trailing sides. Positional tabs, other inline objects, paragraphs with floating objects, section direction, and w:dir and w:bdo wrappers have partial support. Typed text does not receive w:rtl automatically. The i18n package includes Hebrew UI translations.',
+      'Paragraphs use inherited bidirectional settings for alignment, script shaping, visual order, and caret placement. Alignment and indents name leading and trailing sides, and kashida alignments justify. Run direction controls numbers and punctuation independently of paragraph alignment. Runs with effective w:rtl or w:cs use complex-script font, size, bold, and italic properties. Formatting commands resolve inherited styles and document defaults, then write both property variants. Direct false values override inherited values. Arabic and other joining scripts preserve letter forms across adjacent formatting runs, including color changes. Joining requires the same bidirectional level and no intervening whitespace. Kerning and cursive offsets across those boundaries remain unsupported. List markers, spacing, indents, and tab stops follow paragraph direction in body text and table cells, and list markers read right to left. Left-to-right and right-to-left paragraph direction controls are in the toolbar, the Format menu, the Paragraph dialog, and the Ctrl+Shift keyboard chords in documents that already contain right-to-left text. Selection highlights can span separate visual bands; some glyph edges have no distinct caret position. Inline pictures read in the direction of the text around them, in paragraph direction between text of different directions or before the first text, and in the direction of the last text after it. They take the caret and clicks on their leading and trailing sides. Numeric page fields and note marks containing only ASCII decimal digits preserve surrounding text order when they occupy one model character. Positional tabs, other inline objects, paragraphs with floating objects, section direction, and w:dir and w:bdo wrappers have partial support. Typed text does not receive w:rtl automatically. The i18n package includes Hebrew UI translations.',
     docsLink: '/docs/2.x/guides/right-to-left',
   },
   {

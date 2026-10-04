@@ -10,7 +10,7 @@ import {
 /**
  * The paragraph mark's resolved style, for the fragments that need it.
  *
- * An empty paragraph has no text span to carry it, so its fragment keeps it as
+ * A paragraph without text spans, including a picture-only paragraph, keeps it as
  * `emptyParagraphStyle`. The fragment that ends the paragraph keeps it as
  * the size in `paragraphMarkSizePt`, which sizes the painted pilcrow.
  */
@@ -20,7 +20,7 @@ export function emptyParagraphStyleFields(
   themeFonts?: ThemeFonts,
   paragraphEnd = false
 ): Pick<ParagraphFragmentRecord, 'emptyParagraphStyle' | 'paragraphMarkSizePt'> {
-  const empty = !lines.some((line) => line.spans.length > 0 || (line.drawings?.length ?? 0) > 0);
+  const empty = !lines.some((line) => line.spans.length > 0);
   if (!empty && !paragraphEnd) return {};
   const style = markStyleOf(properties, themeFonts);
   return {

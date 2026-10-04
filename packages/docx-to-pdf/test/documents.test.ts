@@ -22,8 +22,8 @@ test('native comment ranges and comments flag preserve text and pages', async ()
       'word/comments.xml': `<w:comments xmlns:w="${W}"><w:comment w:id="0" w:author="Reviewer" w:date="2026-01-01T00:00:00Z"><w:p><w:r><w:t>Please check café.</w:t></w:r></w:p></w:comment></w:comments>`,
     }
   );
-  const withComments = await exportPdf(input),
-    without = await exportPdf(input, { comments: false });
+  const withComments = await exportPdf(input, { useSystemFonts: false }),
+    without = await exportPdf(input, { comments: false, useSystemFonts: false });
   const a = await read(withComments.bytes),
     b = await read(without.bytes);
   try {
@@ -54,7 +54,7 @@ test('proposed, original, and markup views never mutate the DOCX', async () => {
     ['original', 'Old'],
     ['all-markup', 'OldNew'],
   ] as const) {
-    const result = await exportPdf(input, { displayMode: mode });
+    const result = await exportPdf(input, { displayMode: mode, useSystemFonts: false });
     const pdf = await read(result.bytes);
     try {
       const contents = await (await pdf.getPage(1)).getTextContent();
@@ -73,7 +73,7 @@ test('proposed, original, and markup views never mutate the DOCX', async () => {
 
 test('table shading, compound borders and cell text export strictly', async () => {
   const table = `<w:tbl><w:tblPr><w:tblBorders>${['top', 'bottom', 'left', 'right', 'insideH', 'insideV'].map((side) => `<w:${side} w:val="double" w:sz="12" w:color="000080"/>`).join('')}</w:tblBorders></w:tblPr><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="2400"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:shd w:fill="DDEEFF"/></w:tcPr>${paragraph('Cell A')}</w:tc><w:tc>${paragraph('Cell B')}</w:tc></w:tr></w:tbl>`;
-  const result = await exportPdf(docx(table));
+  const result = await exportPdf(docx(table), { useSystemFonts: false });
   expect(result.diagnostics).toEqual([]);
   const pdf = await read(result.bytes);
   try {
@@ -91,7 +91,8 @@ test('CFF font subsets extract text', async () => {
         'Century Gothic text',
         '<w:rPr><w:rFonts w:ascii="Century Gothic" w:hAnsi="Century Gothic"/></w:rPr>'
       )
-    )
+    ),
+    { useSystemFonts: false }
   );
   expect(result.diagnostics).toEqual([]);
   const pdf = await read(result.bytes);

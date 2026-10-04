@@ -76,7 +76,7 @@ export function bidiPieces(
   // two runs of one direction it takes that direction, and between two directions the
   // paragraph's. With no such text after it, it reads with the text before it; with none before
   // it, it reads in the paragraph's direction.
-  const pictures = new Map<number, FieldAwarePiece>();
+  const atoms = new Map<number, FieldAwarePiece>();
   const isPicture = (piece: FieldAwarePiece | undefined) =>
     piece?.inlineDrawing !== undefined && piece.text === PICTURE_CHAR;
   const text = pieces.map((piece) => piece.text).join('');
@@ -87,8 +87,19 @@ export function bidiPieces(
   )
     return pieces;
   const resolvable = pieces.map((piece, index): FieldAwarePiece => {
+    // Numeric fields and note marks occupy one model character regardless of display width.
+    // Resolve one digit with the same bidi class, then restore the complete atom unchanged.
+    if (
+      piece.end - piece.start === 1 &&
+      (piece.noteNav || (piece.fieldAtom && !piece.fieldAtom.formControl)) &&
+      /^[0-9]+$/u.test(piece.text)
+    ) {
+      atoms.set(piece.start, piece);
+      const { projected: _projected, measureText: _measureText, ...plain } = piece;
+      return { ...plain, text: piece.text[0]! };
+    }
     if (!isPicture(piece)) return piece;
-    pictures.set(piece.start, piece);
+    atoms.set(piece.start, piece);
     const { projected: _projected, inlineDrawing: _picture, ...plain } = piece;
     const side = (step: number) => {
       let at = index + step;
@@ -132,16 +143,16 @@ export function bidiPieces(
   const items = resolvable.some(neutral)
     ? withoutIgnoredBreaks(resolvable, rtl, sourceBoundaries, neutral)
     : resolvedItems(resolvable, rtl, sourceBoundaries);
-  return items ? withJoiningContext(withPictures(items, pictures), ignored) : pieces;
+  return items ? withAtoms(withJoiningContext(items, ignored), atoms) : pieces;
 }
 
-/** Put each picture's own piece back where its U+FFFC resolved, with that level. */
-function withPictures(
+/** Restore each atom's full display text, source range, and metadata at its resolved level. */
+function withAtoms(
   items: FieldAwarePiece[],
-  pictures: ReadonlyMap<number, FieldAwarePiece>
+  atoms: ReadonlyMap<number, FieldAwarePiece>
 ): FieldAwarePiece[] {
-  if (pictures.size === 0) return items;
-  const starts = [...pictures.keys()].sort((left, right) => left - right);
+  if (atoms.size === 0) return items;
+  const starts = [...atoms.keys()].sort((left, right) => left - right);
   const result: FieldAwarePiece[] = [];
   for (const item of items) {
     let from = item.start;
@@ -150,11 +161,20 @@ function withPictures(
       const text = item.text.slice(from - item.start, to - item.start);
       result.push({ ...item, text, start: from, end: to });
     };
-    for (const at of starts) {
-      if (at < item.start || at >= item.end) continue;
-      const picture = pictures.get(at)!;
+    // Source items remain logical, but a binary search also handles omitted source ranges.
+    // Do not rescan every preceding atom for each script item in a long paragraph.
+    let low = 0;
+    let high = starts.length;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (starts[middle]! < item.start) low = middle + 1;
+      else high = middle;
+    }
+    for (let index = low; index < starts.length && starts[index]! < item.end; index++) {
+      const at = starts[index]!;
+      const atom = atoms.get(at)!;
       keep(at);
-      result.push({ ...picture, style: { ...picture.style, shaping: item.style.shaping } });
+      result.push({ ...atom, style: { ...atom.style, shaping: item.style.shaping } });
       from = at + 1;
     }
     keep(item.end);

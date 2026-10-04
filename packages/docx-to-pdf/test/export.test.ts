@@ -11,7 +11,9 @@ import { docx, paragraph } from './fixture.ts';
 
 describe('exact PDF export', () => {
   test('strict text export embeds glyphs with extractable Unicode', async () => {
-    const result = await exportPdf(docx(paragraph('Hello office café!')));
+    const result = await exportPdf(docx(paragraph('Hello office café!')), {
+      useSystemFonts: false,
+    });
     expect(result.diagnostics).toEqual([]);
     const pdf = await getDocument({ data: result.bytes.slice(), useSystemFonts: false }).promise;
     try {
@@ -31,8 +33,8 @@ describe('exact PDF export', () => {
   });
   test('deterministic bytes and invalid document errors', async () => {
     const input = docx(paragraph('Repeatable'));
-    const a = await exportPdf(input),
-      b = await exportPdf(input);
+    const a = await exportPdf(input, { useSystemFonts: false }),
+      b = await exportPdf(input, { useSystemFonts: false });
     expect(a.bytes).toEqual(b.bytes);
     await expect(exportPdf(new Uint8Array([1, 2, 3]))).rejects.toBeInstanceOf(PdfDocumentOpenError);
   });
@@ -54,7 +56,7 @@ describe('exact PDF export', () => {
         'word/numbering.xml': `<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:abstractNum w:abstractNumId="1">${levels.map(([family, glyph], level) => `<w:lvl w:ilvl="${level}"><w:start w:val="1"/><w:numFmt w:val="bullet"/><w:lvlText w:val="${glyph}"/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr><w:rPr><w:rFonts w:ascii="${family}" w:hAnsi="${family}"/></w:rPr></w:lvl>`).join('')}</w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num></w:numbering>`,
       }
     );
-    const result = await exportPdf(input);
+    const result = await exportPdf(input, { useSystemFonts: false });
     expect(
       result.diagnostics.filter(
         (entry) => entry.code !== 'incomplete-font' || entry.severity !== 'information'
@@ -74,21 +76,64 @@ describe('exact PDF export', () => {
   });
   test('abort and output limit', async () => {
     await expect(
-      exportPdf(docx(paragraph('Test')), { signal: AbortSignal.abort() })
+      exportPdf(docx(paragraph('Test')), { signal: AbortSignal.abort(), useSystemFonts: false })
     ).rejects.toMatchObject({ code: 'aborted' });
-    await expect(exportPdf(docx(paragraph('Test')), { maxOutputBytes: 100 })).rejects.toThrow(
-      'maxOutputBytes'
-    );
-    await expect(exportPdf(docx(paragraph('Test')), { timeoutMs: 1 })).rejects.toMatchObject({
+    await expect(
+      exportPdf(docx(paragraph('Test')), { maxOutputBytes: 100, useSystemFonts: false })
+    ).rejects.toThrow('maxOutputBytes');
+    await expect(
+      exportPdf(docx(paragraph('Test')), { timeoutMs: 1, useSystemFonts: false })
+    ).rejects.toMatchObject({
       code: 'timedOut',
     });
-    expect((await exportPdf(docx(paragraph('Recovered')))).pageCount).toBe(1);
+    expect(
+      (await exportPdf(docx(paragraph('Recovered')), { useSystemFonts: false })).pageCount
+    ).toBe(1);
   });
   test('unsupported formatting refuses strict output', async () => {
     const input = docx(paragraph('Underlined', '<w:rPr><w:u w:val="unsupported"/></w:rPr>'));
-    await expect(exportPdf(input)).rejects.toBeInstanceOf(PdfFidelityError);
+    await expect(exportPdf(input, { useSystemFonts: false })).rejects.toBeInstanceOf(
+      PdfFidelityError
+    );
     expect(
-      (await exportPdf(input, { fidelityPolicy: 'best-effort' })).diagnostics.length
+      (await exportPdf(input, { fidelityPolicy: 'best-effort', useSystemFonts: false })).diagnostics
+        .length
     ).toBeGreaterThan(0);
   });
+});
+
+test('strict fidelity refuses missing glyphs after optional font execution rejection', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { createFontSource } = await import('@docx-editor.dev/core/editor');
+  const data = new Uint8Array(
+    readFileSync(
+      new URL('../../core/src/layout/__tests__/fixtures/fonts/DejaVuSans.ttf', import.meta.url)
+    )
+  );
+  const oversized = new Uint8Array(16 * 1024 * 1024 + 1);
+  oversized.set(data);
+  const family = 'Optional oversized fallback';
+  const rejected = createFontSource(oversized, { family, weight: 400, style: 'normal' });
+  if ('failure' in rejected) throw new Error(JSON.stringify(rejected.failure));
+  const base = createFontSource(data, { family: 'DejaVu Sans', weight: 400, style: 'normal' });
+  if ('failure' in base) throw new Error(JSON.stringify(base.failure));
+  const input = docx(
+    paragraph(
+      'नमस्ते',
+      '<w:rPr><w:rFonts w:ascii="DejaVu Sans" w:hAnsi="DejaVu Sans" w:cs="DejaVu Sans"/></w:rPr>'
+    )
+  );
+  const options = {
+    fonts: { sources: [base.source, rejected.source] },
+    glyphFallbacks: [{ family, weight: 400, style: 'normal' as const }],
+    useSystemFonts: false,
+  };
+  await expect(exportPdf(input, options)).rejects.toBeInstanceOf(PdfFidelityError);
+  const result = await exportPdf(input, { ...options, fidelityPolicy: 'best-effort' });
+  expect(result.diagnostics.some((entry) => entry.code === 'font-origin-failed')).toBe(true);
+  expect(
+    result.diagnostics.some(
+      (entry) => entry.code === 'missing-glyph' || entry.code === 'unshaped-text'
+    )
+  ).toBe(true);
 });

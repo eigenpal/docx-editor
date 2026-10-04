@@ -91,6 +91,12 @@ PDF export preserves Arabic joining across formatting runs and uses fonts that s
 
 For font configuration, see [Configure PDF fonts](/docs/2.x/export/pdf/fonts). For supported content, see [Word feature support](/docs/2.x/word-fidelity).
 
+## Numeric fields and note marks
+
+Page fields and note marks containing ASCII decimal digits preserve the surrounding text order. This includes footnote references. Multi-digit values remain one character in the document model. Their display width and navigation remain intact.
+
+This support applies to projected fields and note marks with one-character model ranges. Form controls and other projected content retain their existing layout limits.
+
 ## Limits
 
 - The editor does not add `w:rtl` to typed text. Text that you type in an RTL run keeps that run's direction.

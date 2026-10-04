@@ -13,6 +13,7 @@ import {
   type FontOriginFailure,
 } from '../layout/font-resolver.ts';
 import { prepareOwnedLayoutFontConfiguration } from '../layout/layout-shaping.ts';
+import { EXPORT_HARFBUZZ_SHAPER_POLICY } from '../layout/layout-shaper-policy.ts';
 import { HARD_MAX_AGGREGATE_FONT_BYTES, type FontRequest } from '../layout/font-resource.ts';
 import {
   complexSymbolFieldFonts,
@@ -409,6 +410,7 @@ export async function acquireDocumentExportShaping(
           {
             onOriginFailure: (failure) => originFailures.push(failure),
             reserveOwnedBytes: fontByteLease.reserve,
+            maxExecutionFontBytes: EXPORT_HARFBUZZ_SHAPER_POLICY.maxFontBytes,
           }
         );
         throwIfAborted(controller.signal);
@@ -422,7 +424,7 @@ export async function acquireDocumentExportShaping(
             embeddedFontDiagnostics.dropped
           );
           publishFontResolutionReport(report, options);
-          enforceStrictFontPolicy(report, options);
+          enforceStrictFontPolicy(report, options, options.glyphFallbacks);
           return undefined;
         }
         const shaping = await createSessionExportShaping(
@@ -440,7 +442,7 @@ export async function acquireDocumentExportShaping(
           embeddedFontDiagnostics.dropped
         );
         publishFontResolutionReport(report, options);
-        enforceStrictFontPolicy(report, options);
+        enforceStrictFontPolicy(report, options, options.glyphFallbacks);
         leaseTransferred = true;
         return Object.freeze({
           ...shaping,

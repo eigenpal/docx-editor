@@ -6,10 +6,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // Floating and inline shapes, and the text-box stories they hold.
 //
 // A SHAPE IS NAMED BY THE DOCUMENT. Its `id` is the number the file gives the drawing, and it is
-// listed by the body or paragraph that anchors it. A text box's `body` is an ordinary `Body`:
+// listed by the body or paragraph that anchors it. A supported shape's `body` is an ordinary `Body`:
 // paragraphs, text, search and edits through the same operations as the main story, so no second
-// vocabulary exists for text inside a box. Any other shape has no body, and asking for one
-// refuses at the sync rather than answering an empty story.
+// vocabulary exists for text inside a box. Shapes without their own supported text story
+// refuse body access at the sync rather than answering an empty story.
 
 import {
   ObjectPath,
@@ -27,7 +27,7 @@ import { Body } from './body.ts';
 import { ItemCollection, type PromisedItem } from './item-collection.ts';
 import { ModelObject } from './model-object.ts';
 
-/** Word's shape types. Only a text box has a body. @public */
+/** Word's shape types. Supported text-bearing shapes expose their own body. @public */
 export enum ShapeType {
   unsupported = 'Unsupported',
   textBox = 'TextBox',
@@ -43,8 +43,8 @@ const SHAPE_TYPES: ReadonlySet<string> = new Set(Object.values(ShapeType));
 /**
  * One floating or inline shape in a body or paragraph.
  *
- * `id`, `name` and `type` are read-only. {@link Shape.body} is the text-box story for a
- * `TextBox` shape; any other shape refuses it at the sync.
+ * `id`, `name` and `type` are read-only. {@link Shape.body} exposes a supported shape's
+ * own text story, including text-bearing geometric shapes. Other shapes refuse body access.
  *
  * @public
  */
@@ -92,7 +92,11 @@ export class Shape extends ModelObject implements PromisedItem {
     return this.loadedProperty<ShapeType>('type');
   }
 
-  /** The text box's own story. Refuses at the sync for a shape that is not a text box. */
+  /**
+   * The shape's own text story in the main body, a header, or a footer.
+   * Shapes in notes or nested text boxes refuse body access with `InvalidArgument` at the sync.
+   * Shapes without their own supported text story also refuse access.
+   */
   get body(): Body {
     if (this.#body) return this.#body;
     const label = `${this.path.label}.body`;

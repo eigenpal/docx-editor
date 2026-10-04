@@ -1,3 +1,4 @@
+import { appendEmptyLineAnchor } from './semantic-paint-empty-line.ts';
 import { paintListMarkerPicture } from './semantic-paint-list-marker-picture.ts';
 import { paintNoteSeparatorSpan } from './semantic-paint-note-rule.ts';
 import { paintRunBorders } from './semantic-paint-run-borders.ts';
@@ -1215,7 +1216,8 @@ function paintLine(
   document: Document,
   line: LineRecord,
   ctx: DrawingPaintHostContext,
-  paragraphRtl = false
+  paragraphRtl = false,
+  emptyStyle = DEFAULT_RUN_STYLE
 ): HTMLElement {
   const scale = ctx.scale;
   const element = document.createElement('div');
@@ -1264,9 +1266,7 @@ function paintLine(
     Math.max(
       leading,
       ...line.spans.map((span) => span.box.height + leading),
-      // Empty lines still need a content band so the caret has a strut — the paragraph
-      // mark's own depth, which is the box less the spacing published below it, not the
-      // whole spaced box.
+      // Empty lines use the paragraph mark's depth, excluding trailing spacing.
       line.spans.length === 0 ? line.box.height - (line.trailingSpacing ?? 0) : 0
     ),
     line.box.height
@@ -1447,15 +1447,9 @@ function paintLine(
     lineSegments(line)[lineSegments(line).length - 1]?.paragraphId ?? line.range.paragraphId,
     Number.POSITIVE_INFINITY
   );
-  // A span-less line (empty paragraph) has no inline content, and a browser will not
-  // draw a caret at a position with no inline box to measure. The <br> is the anchor;
-  // sizing it to the line keeps the caret the paragraph's font height, not the div's
-  // default.
-  if (line.spans.length === 0) {
-    const anchor = document.createElement('br');
-    anchor.style.lineHeight = `${line.box.height * scale}px`;
-    element.append(anchor);
-  }
+  appendEmptyLineAnchor(element, line, scale, emptyStyle, (style) =>
+    applyRunFaceStyle(element, style, ctx)
+  );
 
   const lineOrigin = Object.freeze({
     x: line.contentX,
@@ -1600,7 +1594,13 @@ function paintFragment(
   }
   let lastElement: HTMLElement | null = null;
   for (const line of fragment.lines) {
-    const painted = paintLine(document, line, ctx, paragraphIsRtl(fragment.props));
+    const painted = paintLine(
+      document,
+      line,
+      ctx,
+      paragraphIsRtl(fragment.props),
+      fragment.emptyParagraphStyle
+    );
     lastElement = painted;
     if (fragment.markFormatRevision && line === fragment.lines[fragment.lines.length - 1]) {
       applyParagraphFormatAnchor(painted, fragment, true);

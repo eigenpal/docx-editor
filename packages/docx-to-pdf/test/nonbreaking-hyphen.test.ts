@@ -14,7 +14,7 @@ test('authored nonbreaking hyphens survive strict PDF export and hidden runs sta
       '<w:p><w:r><w:rPr><w:vanish/></w:rPr><w:t>Hidden</w:t><w:noBreakHyphen/></w:r></w:p>'
   );
   const before = source.slice();
-  const result = await exportPdf(source);
+  const result = await exportPdf(source, { useSystemFonts: false });
   expect(source).toEqual(before);
   expect(result.diagnostics).toEqual([]);
   const pdf = await getDocument({ data: result.bytes.slice(), useSystemFonts: false }).promise;
