@@ -140,7 +140,8 @@ export function selectedTextIn(
   from: SemanticPosition,
   to: SemanticPosition,
   order?: readonly string[],
-  atomText?: (paragraphId: string, offset: number) => string | null
+  atomText?: (paragraphId: string, offset: number) => string | null,
+  paragraphText: (layout: SemanticLayout, paragraphId: string) => string = paragraphTextFromLayout
 ): string {
   // An atom paints as U+FFFC in the model text; a caller can spell it for plain text.
   const spell = (paragraphId: string, text: string, start: number): string =>
@@ -153,7 +154,7 @@ export function selectedTextIn(
   if (from.paragraphId === to.paragraphId) {
     return spell(
       from.paragraphId,
-      paragraphTextFromLayout(layout, from.paragraphId).slice(from.offset, to.offset),
+      paragraphText(layout, from.paragraphId).slice(from.offset, to.offset),
       from.offset
     );
   }
@@ -164,12 +165,12 @@ export function selectedTextIn(
   const ids = effectiveOrder.slice(firstIndex, lastIndex + 1);
   let text = spell(
     from.paragraphId,
-    paragraphTextFromLayout(layout, from.paragraphId).slice(from.offset),
+    paragraphText(layout, from.paragraphId).slice(from.offset),
     from.offset
   );
   for (let index = 1; index < ids.length; index += 1) {
     const paragraphId = ids[index]!;
-    const whole = paragraphTextFromLayout(layout, paragraphId);
+    const whole = paragraphText(layout, paragraphId);
     // A break the reader cannot SEE is not one to copy. A resolved display mode draws a run
     // of paragraphs as one, so a newline here pasted two paragraphs out of a line that was
     // drawn as one — and the file the reader is looking at says the break is gone.

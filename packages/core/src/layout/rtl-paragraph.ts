@@ -116,18 +116,21 @@ export function bidiPieces(
   if (
     resolvable.some(
       (p) =>
-        p.projected ||
+        (!isOptionalHyphenPiece(p) && p.projected) ||
         p.inlineDrawing ||
         p.equation ||
         p.positionalTab ||
-        p.measureText !== undefined ||
+        (!isOptionalHyphenPiece(p) && p.measureText !== undefined) ||
         p.end - p.start !== p.text.length
     )
   )
     return pieces;
   const ignored = pageBreaksIgnored && resolvable.some(isPageBreak);
-  const items = ignored
-    ? withoutIgnoredBreaks(resolvable, rtl, sourceBoundaries)
+  // An optional hyphen is resolved like an ignored break: absent, then at a neighbour's level.
+  const neutral = (piece: FieldAwarePiece | undefined) =>
+    (ignored && isPageBreak(piece)) || isOptionalHyphenPiece(piece);
+  const items = resolvable.some(neutral)
+    ? withoutIgnoredBreaks(resolvable, rtl, sourceBoundaries, neutral)
     : resolvedItems(resolvable, rtl, sourceBoundaries);
   return items ? withJoiningContext(withPictures(items, pictures), ignored) : pieces;
 }
@@ -160,6 +163,9 @@ function withPictures(
 }
 
 const isPageBreak = (piece: FieldAwarePiece | undefined) => piece?.text === PAGE_BREAK_CHAR;
+/** A `w:softHyphen`: one model character laid out as U+00AD with no advance. */
+const isOptionalHyphenPiece = (piece: FieldAwarePiece | undefined) =>
+  piece?.text === '\u00ad' && piece.measureText === '' && piece.end - piece.start === 1;
 
 /** Text that decides a neighbouring picture's direction: any letter or digit. */
 const STRONG_TEXT = /[\p{L}\p{N}]/u;
@@ -178,7 +184,8 @@ const STRONG_TEXT = /[\p{L}\p{N}]/u;
 function withoutIgnoredBreaks(
   pieces: readonly FieldAwarePiece[],
   rtl: boolean,
-  sourceBoundaries: ReadonlySet<number> | undefined
+  sourceBoundaries: ReadonlySet<number> | undefined,
+  isNeutral: (piece: FieldAwarePiece | undefined) => boolean
 ): FieldAwarePiece[] | null {
   // Each break is one UTF-16 unit (the caller refuses pieces whose text and range differ);
   // `at` is where it sits in the offsets without breaks.
@@ -186,7 +193,7 @@ function withoutIgnoredBreaks(
   const kept: FieldAwarePiece[] = [];
   for (const piece of pieces) {
     const removed = breaks.length;
-    if (isPageBreak(piece)) breaks.push({ piece, at: piece.start - removed });
+    if (isNeutral(piece)) breaks.push({ piece, at: piece.start - removed });
     else
       kept.push(
         removed ? { ...piece, start: piece.start - removed, end: piece.end - removed } : piece
@@ -238,10 +245,10 @@ function withoutIgnoredBreaks(
   // text. A caret at an offset sits on the span that starts there, so a break placed at the
   // leading edge of the text after it keeps each caret where the text without it puts it.
   let neighbour: FieldAwarePiece | undefined;
-  for (const piece of result) if (!isPageBreak(piece)) neighbour = piece;
+  for (const piece of result) if (!isNeutral(piece)) neighbour = piece;
   for (let index = result.length - 1; index >= 0; index--) {
     const piece = result[index]!;
-    if (!isPageBreak(piece)) {
+    if (!isNeutral(piece)) {
       neighbour = piece;
       continue;
     }
@@ -353,14 +360,25 @@ function withJoiningContext(pieces: FieldAwarePiece[], breaksIgnored: boolean): 
     return pieces;
   }
   const levelOf = (piece: FieldAwarePiece | undefined) => piece?.style.shaping?.level;
-  // The adjacent piece in `step` direction, stepping over contiguous ignored breaks.
+  // Optional hyphens stepped over on the way to a neighbour, kept in the context as U+00AD:
+  // the shaper treats it as transparent, so letters join across it inside a line, and a line
+  // that breaks there trims it with the context beyond (`trimJoiningAtHyphen`).
+  let hyphens = '';
+  // The adjacent piece in `step` direction, stepping over contiguous ignored breaks and
+  // optional hyphens.
   const neighbourOf = (index: number, step: -1 | 1) => {
     let at = index + step;
     let edge = step < 0 ? pieces[index]!.start : pieces[index]!.end;
-    for (; breaksIgnored && isPageBreak(pieces[at]); at += step) {
+    hyphens = '';
+    for (
+      ;
+      (breaksIgnored && isPageBreak(pieces[at])) || isOptionalHyphenPiece(pieces[at]);
+      at += step
+    ) {
       const next = pieces[at]!;
       if ((step < 0 ? next.end : next.start) !== edge) return undefined;
       edge = step < 0 ? next.start : next.end;
+      if (isOptionalHyphenPiece(next)) hyphens += next.text;
     }
     const neighbour = pieces[at];
     return neighbour && (step < 0 ? neighbour.end : neighbour.start) === edge
@@ -375,21 +393,23 @@ function withJoiningContext(pieces: FieldAwarePiece[], breaksIgnored: boolean): 
       return;
     }
     const previous = neighbourOf(index, -1);
+    const hyphensBefore = hyphens;
     const next = neighbourOf(index, 1);
+    const hyphensAfter = hyphens;
     // Nothing joins across whitespace, so a boundary with a space on either side needs none.
     const before =
       previous &&
       levelOf(previous) === shaping.level &&
       !BREAKS_JOINING.test(previous.text.slice(-1)) &&
       !BREAKS_JOINING.test(piece.text.slice(0, 1))
-        ? previous.text.slice(-MAX_SHAPING_CONTEXT)
+        ? (previous.text + hyphensBefore).slice(-MAX_SHAPING_CONTEXT)
         : '';
     const after =
       next &&
       levelOf(next) === shaping.level &&
       !BREAKS_JOINING.test(piece.text.slice(-1)) &&
       !BREAKS_JOINING.test(next.text.slice(0, 1))
-        ? next.text.slice(0, MAX_SHAPING_CONTEXT)
+        ? (hyphensAfter + next.text).slice(0, MAX_SHAPING_CONTEXT)
         : '';
     if (!before && !after) {
       result.push(piece);

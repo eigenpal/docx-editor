@@ -61,3 +61,25 @@ test('plain text keeps a non-breaking hyphen and leaves an optional hyphen out',
   // The selection itself still reads one character per hyphen, so offsets stay aligned.
   expect(surface.selectedText()).toBe('co‑op rate­s');
 });
+
+test('plain text keeps a literal U+00AD and drops only the optional hyphen element', () => {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const editor = createDocxEditor({
+    container,
+    document: docx(
+      '<w:p><w:r><w:t xml:space="preserve">aa­bb </w:t><w:softHyphen/><w:t xml:space="preserve">cc </w:t>' +
+        '<w:noBreakHyphen/><w:t>dd</w:t></w:r></w:p>'
+    ),
+  });
+  mounted = { editor, container };
+  const surface = editor.surface!;
+  const paragraphId = surface.state().selection.head.paragraphId;
+  surface.setSelection({
+    anchor: { paragraphId, offset: 0 },
+    head: { paragraphId, offset: 13 },
+  });
+  expect(surface.copyFlavours().text).toBe('aa­bb cc ‑dd');
+  // The selection still reads one character per model offset.
+  expect(surface.selectedText()).toBe('aa­bb ­cc ‑dd');
+});
