@@ -116,6 +116,7 @@ import { createEquationLayouter } from './equation-layout.ts';
 import { anchorLineStartsByModelOffset } from './anchor-line-probe.ts';
 import * as lineEndSpaces from './line-end-whitespace.ts';
 import { chopOversizedWord } from './oversized-word-break.ts';
+import { canChopPiece, isLayoutOwnedPiece } from './layout-owned-piece.ts';
 import { carryPartialWord, type WordCarryContext } from './word-carry.ts';
 import { collectLineChangeSites } from './paragraph-change-sites.ts';
 
@@ -1247,20 +1248,13 @@ export function breakParagraph(
     // The face this piece MEASURES in. Spans keep `piece.style` — the run's real
     // resolution — plus the slot, and re-resolve through the same helper.
     const faceStyle = styleForFontSlot(piece.style, piece.fontSlot);
-    // Projected PAGE/NUMPAGES digits publish the suppressed cached-result model range (or a
-    // zero-width insertion point when the cache was empty) so surrounding source offsets
-    // stay aligned with binding / paragraphTextOf.
-    // A projected field publishes the model range it stands in for; a `w:ptab` publishes
-    // its ZERO-WIDTH insertion point, because it contributes no text to the paragraph.
-    // Defensive: any piece whose display length disagrees with its model range is also
-    // layout-owned (inert DATE/TOC/REF/… cache before `projected` was set).
-    // Layout-owned pieces get no ideographic boundaries: they are documented below as
-    // staying whole, and a per-ideograph split wrapped a CJK field result mid-text with
-    // every span claiming the same model range.
-    const layoutOwned =
-      Boolean(piece.projected) ||
-      Boolean(piece.positionalTab) ||
-      piece.end - piece.start !== piece.text.length;
+    // Layout-owned pieces get no ideographic boundaries: every span publishes the whole
+    // piece range, so a per-ideograph split painted dozens of spans claiming one range. An
+    // oversized result is cut once per line instead, and checks kinsoku by its own text,
+    // because the paragraph table holds a field as one unit.
+    const layoutOwned = isLayoutOwnedPiece(piece);
+    const canChopWord = canChopPiece(piece);
+    const textBreaks = layoutOwned ? null : cjkBreaks;
     let consumed = 0;
     for (const boundary of cjkBreaks?.boundaries(piece) ??
       wordBoundaries(piece.text, !layoutOwned)) {
@@ -1513,8 +1507,7 @@ export function breakParagraph(
       // there instead of closing a line that contains only those tabs.
       const chopsAfterLeadingTabs =
         overflows &&
-        !layoutOwned &&
-        piece.measureText === undefined &&
+        canChopWord &&
         !paragraphRtl &&
         alignedTabRight === 0 &&
         !flow?.pageExclusionZones?.length &&
@@ -1573,11 +1566,9 @@ export function breakParagraph(
       applyNarrowWrapSkipIfNeeded(candidate, faceStyle);
       // A protected group that moves must also fit against its destination line.
       if (!opticalFit && line !== opticalSourceLine) opticalFit = applyOpticalFit?.();
-      // Layout-owned and measureText pieces have ranges or widths that cannot be sliced.
       let remaining = candidate;
       let remainingStart = piece.start + consumed;
       let remainingWidth = width;
-      const canChopWord = !layoutOwned && piece.measureText === undefined;
       if (
         canChopWord &&
         !hangs &&
@@ -1591,11 +1582,13 @@ export function breakParagraph(
           appendPrefix: (prefix) => {
             const metrics = measurer.lineMetrics(faceStyle, displayText(prefix.text, faceStyle));
             line.spans.push({
-              range: {
-                paragraphId,
-                start: prefix.modelStart,
-                end: prefix.modelStart + prefix.text.length,
-              },
+              range: layoutOwned
+                ? spanRange
+                : {
+                    paragraphId,
+                    start: prefix.modelStart,
+                    end: prefix.modelStart + prefix.text.length,
+                  },
               text: prefix.text,
               props: piece.props,
               style: piece.style,
@@ -1606,6 +1599,7 @@ export function breakParagraph(
                 height: metrics.height,
               },
               ...(piece.link ? { link: piece.link } : {}),
+              ...(layoutOwned ? { projected: true as const } : {}),
               ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
               ...(piece.fontSlot ? { fontSlot: piece.fontSlot } : {}),
               ...(piece.glyphOffsetPt !== undefined ? { glyphOffsetPt: piece.glyphOffsetPt } : {}),
@@ -1613,15 +1607,14 @@ export function breakParagraph(
             });
             line.width += prefix.width;
             growLineMetricsForText(line, metrics, prefix.text, faceStyle);
-            line.end = prefix.modelStart + prefix.text.length;
+            line.end = layoutOwned ? piece.end : prefix.modelStart + prefix.text.length;
           },
           closeLine,
           overflowTolerancePt: OVERFLOW_TOLERANCE_PT,
           keepWithPrevious: openDecision === 'forbidden',
-          // The measured fit knows nothing about kinsoku: at a one-character measure
-          // 天。地。人。 chopped every other line onto a leading 。.
-          cutAllowedAt: cjkBreaks
-            ? (_text, index) => cjkBreaks.cutAllowed(piece, consumed, index)
+          // Kinsoku vetoes measured cuts: 天。地。人。 must not chop onto a leading 。.
+          cutAllowedAt: textBreaks
+            ? (_text, index) => textBreaks.cutAllowed(piece, consumed, index)
             : cjkChopCutAllowedAt,
         });
         remaining = chopped.text;

@@ -277,17 +277,18 @@ describe('span merging under decorations', () => {
   });
 });
 
-describe('layout-owned pieces stay whole', () => {
-  test('a CJK field result neither splits per ideograph nor wraps mid-result', () => {
+describe('layout-owned pieces', () => {
+  test('a CJK field result wraps at the measure without per-ideograph spans', () => {
     // Every span of a layout-owned piece publishes the piece's whole model range, so a
-    // per-ideograph split painted dozens of spans all claiming the same range and let a
-    // DATE/REF/TOC result wrap in the middle.
-    const body =
-      '<w:p><w:fldSimple w:instr=" DATE "><w:r><w:t>二〇二六年八月三十日签署完成生效</w:t></w:r></w:fldSimple></w:p>';
+    // per-ideograph split painted dozens of spans all claiming the same range. An oversized
+    // result is cut once per line instead, inside the measure.
+    const result = '二〇二六年八月三十日签署完成生效';
+    const body = `<w:p><w:fldSimple w:instr=" DATE "><w:r><w:t>${result}</w:t></w:r></w:fldSimple></w:p>`;
     const lines = breakParagraph(paragraph(body), 'p', 0, 60, measurer, undefined, null);
-    expect(lines.length).toBe(1);
-    expect(lines[0]!.spans.length).toBe(1);
-    expect(lines[0]!.spans[0]!.text).toBe('二〇二六年八月三十日签署完成生效');
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines.map((line) => line.spans.length)).toEqual(lines.map(() => 1));
+    expect(lines.map((line) => line.spans[0]!.text).join('')).toBe(result);
+    for (const line of lines) expect(line.width).toBeLessThanOrEqual(60.01);
   });
 });
 

@@ -18,6 +18,7 @@ import type { CjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
 import { canHangCjkPunctuation } from './cjk-spacing.ts';
 import type { CjkParagraphTypography } from './cjk-typography.ts';
 import { measureInlineDrawing } from './drawing-layout.ts';
+import { isLayoutOwnedPiece } from './layout-owned-piece.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import type { EquationSpanRecord } from './equation-layout.ts';
 import type { TextMeasurer } from './semantic-records.ts';
@@ -84,10 +85,7 @@ export function anchorLineStartsByModelOffset(input: {
       closeProbeLine(piece.end);
       continue;
     }
-    const probePieceLayoutOwned =
-      Boolean(piece.projected) ||
-      Boolean(piece.positionalTab) ||
-      piece.end - piece.start !== piece.text.length;
+    const probePieceLayoutOwned = isLayoutOwnedPiece(piece);
     let consumed = 0;
     for (const boundary of input.cjkBreaks?.boundaries(piece) ??
       wordBoundaries(piece.text, !probePieceLayoutOwned)) {

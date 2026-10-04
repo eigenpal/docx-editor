@@ -1,6 +1,7 @@
-import type { LineSegment } from './line-segments.ts';
+import { lineSegmentFor, type LineSegment } from './line-segments.ts';
 import type { LineRecord, SemanticLayout } from './semantic-records.ts';
-import { paragraphLinesIndex } from './paragraph-lines.ts';
+import { paragraphFragmentsOf } from './semantic-records.ts';
+import { paragraphLinesIndex, type PlacedLine } from './paragraph-lines.ts';
 import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
 
 /**
@@ -23,6 +24,107 @@ export function laterLineOwns(layout: SemanticLayout, line: LineRecord, offset: 
     if (seen && placed.line.range.start === offset) return true;
   }
   return false;
+}
+
+/** The cut field fragment on `line` whose range starts or ends at `offset`, if any. */
+function fieldFragmentAt(
+  line: LineRecord,
+  paragraphId: string,
+  offset: number,
+  edge: 'start' | 'end'
+): { readonly start: number; readonly end: number } | null {
+  for (const { projected, range } of line.spans) {
+    if (!projected || range.paragraphId !== paragraphId || range.start >= range.end) continue;
+    if ((edge === 'end' ? range.end : range.start) === offset) return range;
+  }
+  return null;
+}
+
+/** Each line record's FIRST position in its paragraph's line list, built once per list. */
+const linePositions = new WeakMap<readonly PlacedLine[], Map<LineRecord, number>>();
+
+function linePosition(lines: readonly PlacedLine[], line: LineRecord): number {
+  let positions = linePositions.get(lines);
+  if (!positions) {
+    positions = new Map();
+    for (const [at, placed] of lines.entries())
+      if (!positions.has(placed.line)) positions.set(placed.line, at);
+    linePositions.set(lines, positions);
+  }
+  return positions.get(line) ?? -1;
+}
+
+/**
+ * Whether another line of the same story occurrence draws the same field, in `direction`.
+ *
+ * A header or footer paragraph is indexed once per page, with the same line records or with
+ * per-page records that reuse their ids. Every occurrence opens with the paragraph's first
+ * line id, so the scan stops there: past it lies another copy, not a continuation. A
+ * repeated header row is not indexed at all; its copy scans the repeat lines on its page.
+ */
+function fieldContinues(
+  layout: SemanticLayout,
+  line: LineRecord,
+  paragraphId: string,
+  field: { readonly start: number; readonly end: number },
+  direction: 1 | -1,
+  pageIndex: number | undefined
+): boolean {
+  let lines: readonly PlacedLine[] = paragraphLinesIndex(layout).get(paragraphId) ?? [];
+  let index = linePosition(lines, line);
+  if (index < 0 && pageIndex !== undefined) {
+    lines = headerRepeatLinesOnPage(layout, pageIndex, paragraphId);
+    index = lines.findIndex((placed) => placed.line === line);
+  }
+  if (index < 0) return false;
+  const opening = lines[0]!.line.id;
+  for (let at = index + direction; at >= 0 && at < lines.length; at += direction) {
+    const other = lines[at]!.line;
+    if (direction === 1 && other.id === opening) return false;
+    const segment = lineSegmentFor(other, paragraphId);
+    if (segment) {
+      if (direction === 1 ? segment.start >= field.end : segment.end <= field.start) return false;
+      if (fieldFragmentAt(other, paragraphId, field.end, 'end')?.start === field.start) return true;
+    }
+    if (other.id === opening) return false;
+  }
+  return false;
+}
+
+/**
+ * Whether the field ending at `offset` on this line continues on a LATER line, which then
+ * owns the offset after the field.
+ *
+ * Every fragment of a field cut across lines publishes the whole field range, and each line
+ * that draws one covers that range in its segment (`lineSegments`). The offset after the field belongs
+ * to the last of those lines, where the last fragment ends. `caretAt` and the caret stops
+ * both ask this, so the drawn caret and keyboard motion agree. Ordinary text never has a
+ * cut field fragment, so it never reaches the scan.
+ */
+export function laterSegmentHolds(
+  layout: SemanticLayout,
+  line: LineRecord,
+  paragraphId: string,
+  offset: number,
+  pageIndex?: number
+): boolean {
+  const field = fieldFragmentAt(line, paragraphId, offset, 'end');
+  return field !== null && fieldContinues(layout, line, paragraphId, field, 1, pageIndex);
+}
+
+/**
+ * Whether the field starting at `offset` on this line began on an EARLIER line, which then
+ * owns the offset before the field. The mirror of {@link laterSegmentHolds}.
+ */
+export function earlierSegmentHolds(
+  layout: SemanticLayout,
+  line: LineRecord,
+  paragraphId: string,
+  offset: number,
+  pageIndex?: number
+): boolean {
+  const field = fieldFragmentAt(line, paragraphId, offset, 'start');
+  return field !== null && fieldContinues(layout, line, paragraphId, field, -1, pageIndex);
 }
 
 /** The continuation line when a soft wrap opens on an inline drawing atom. */
@@ -95,4 +197,27 @@ export function isDrawingOnlySegment(line: LineRecord, segment: LineSegment): bo
     if (span.range.end > span.range.start) return false;
   }
   return true;
+}
+
+/**
+ * Header-repeat lines of one paragraph on one sheet.
+ *
+ * The main line index skips `w:tblHeader` repeats so keyboard stops visit each offset once.
+ * A click on a later copy still needs geometry on THAT sheet, or the painted caret and
+ * scroll-follow jump back to the authored row on page 0.
+ */
+export function headerRepeatLinesOnPage(
+  layout: SemanticLayout,
+  pageIndex: number,
+  paragraphId: string
+): PlacedLine[] {
+  const page = layout.pages[pageIndex];
+  if (!page) return [];
+  const found: PlacedLine[] = [];
+  for (const fragment of paragraphFragmentsOf(page, true)) {
+    if (fragment.paragraphId !== paragraphId) continue;
+    for (const line of fragment.lines)
+      found.push({ line, pageIndex, ...(fragment.clipToBox ? { clipBox: fragment.box } : {}) });
+  }
+  return found;
 }

@@ -55,19 +55,31 @@ const lineSegmentsCache = new WeakMap<LineRecord, readonly LineSegment[]>();
 export function lineSegments(line: LineRecord): readonly LineSegment[] {
   const cached = lineSegmentsCache.get(line);
   if (cached) return cached;
-  const whole: LineSegment = {
+  const mixed =
+    line.spans.some((span) => span.range.paragraphId !== line.range.paragraphId) ||
+    (line.drawings ?? []).some((drawing) => drawing.paragraphId !== line.range.paragraphId);
+  const segments = mixed ? splitLineByParagraph(line) : [wholeLineSegment(line)];
+  lineSegmentsCache.set(line, segments);
+  return segments;
+}
+
+/**
+ * A line that belongs to one paragraph, as one segment covering what the line draws.
+ *
+ * A field cut across lines publishes its whole range on every fragment, while the line range
+ * starts where the previous line ended. Starting at the earliest drawn span lets selection
+ * reach every fragment and caret ownership see it (`laterSegmentHolds`).
+ */
+function wholeLineSegment(line: LineRecord): LineSegment {
+  let start = line.range.start;
+  for (const span of line.spans) if (span.range.start < start) start = span.range.start;
+  return {
     paragraphId: line.range.paragraphId,
-    start: line.range.start,
+    start,
     end: line.range.end,
     spans: line.spans,
     drawings: line.drawings ?? [],
   };
-  const mixed =
-    line.spans.some((span) => span.range.paragraphId !== line.range.paragraphId) ||
-    (line.drawings ?? []).some((drawing) => drawing.paragraphId !== line.range.paragraphId);
-  const segments = mixed ? splitLineByParagraph(line) : [whole];
-  lineSegmentsCache.set(line, segments);
-  return segments;
 }
 
 /** Source member order is independent of the physical order used by hit testing. */
