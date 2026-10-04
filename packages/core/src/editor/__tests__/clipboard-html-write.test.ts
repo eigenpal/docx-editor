@@ -368,6 +368,24 @@ describe('interopHtmlFromFragment', () => {
     expect(count(html, 'merged')).toBe(1);
   });
 
+  test('a continuation below an unmerged cell starts its own merge and keeps its text', () => {
+    const cell = (props: string, text: string): string =>
+      `<w:tc><w:tcPr>${props}</w:tcPr><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+    const html = interopHtmlFromFragment(
+      fragment({
+        body:
+          '<w:tbl>' +
+          `<w:tr>${cell('', 'Party')}${cell('', 'Amount')}</w:tr>` +
+          `<w:tr>${cell('<w:vMerge/>', 'Orphan')}${cell('', 'USD 300')}</w:tr>` +
+          `<w:tr>${cell('<w:vMerge/>', '')}${cell('', 'USD 400')}</w:tr>` +
+          '</w:tbl>',
+      })
+    );
+    expect(html).toContain('Orphan');
+    expect(html).toContain('rowspan="2"');
+    expect(count(html, '<td')).toBe(5);
+  });
+
   test('table borders resolve from tblBorders onto every cell', () => {
     const html = interopHtmlFromFragment(
       fragment({

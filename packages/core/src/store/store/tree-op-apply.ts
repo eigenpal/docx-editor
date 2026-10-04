@@ -38,6 +38,7 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import {
+  applyEdits,
   createNodeIdAllocator,
   findNode,
   insertChildren,
@@ -110,6 +111,12 @@ import {
   sdtPrChild,
 } from './tree-op-nodes.ts';
 import { paragraphIdsWithin, survivingCaretAfterBlockRemoval } from './tree-op-blocks.ts';
+import { tableAncestorOf } from './tree-op-table-shared.ts';
+import {
+  planVerticalMergeHeadRepairs,
+  verticalMergeHeadRepairDirtyIds,
+  rowRemovalEdits,
+} from './tree-op-table-vmerge-removal.ts';
 import {
   PARAGRAPH_VOCABULARY,
   RUN_VOCABULARY,
@@ -3001,18 +3008,6 @@ function applySplitMany(
  * consumer scoping work by node id has to invalidate the paragraphs, and the block id alone
  * would leave a layout cache holding entries for paragraphs that no longer exist.
  */
-function tableAncestorOf(part: OoxmlPart, nodeId: string): OoxmlElement | null {
-  let current: string | null = nodeId;
-  while (current) {
-    const node = findNode(part, current);
-    if (!node || node.kind === 'textValue') return null;
-    if (node.kind === 'table') return node;
-    const parent = parentOf(part, current);
-    current = parent?.id ?? null;
-  }
-  return null;
-}
-
 function emptyCellParagraph(
   part: OoxmlPart,
   anchorTable: OoxmlElement,
@@ -3059,6 +3054,14 @@ function applyDeleteBlock(part: OoxmlPart, blockId: string, options?: EditOption
     impact: 'flow-structural',
     caret: { paragraphId: caretParagraphId },
   };
+  const repairs = block.kind === 'tableRow' ? planVerticalMergeHeadRepairs(part, blockId) : null;
+  if (repairs && !repairs.ok) return { ok: false, reason: repairs.reason };
+  if (repairs?.ok && repairs.repairs.length > 0) {
+    // A row taking a merge's `restart` cell with it hands the merge to the row below.
+    const edits = rowRemovalEdits(repairs.repairs, blockId, options);
+    const dirty = verticalMergeHeadRepairDirtyIds(repairs.repairs);
+    return fromEdit(applyEdits(part, edits, options), { ...effect, dirty });
+  }
   const removed = removeNode(part, blockId, options);
   if (!removed.ok) return { ok: false, reason: 'unknown-block' };
   if (!cellNeedsParagraph || !parent) return fromEdit(removed, effect);

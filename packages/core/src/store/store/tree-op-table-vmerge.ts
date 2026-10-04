@@ -48,12 +48,23 @@ export function readVMergeKind(cellProperties: OoxmlElement | undefined): Vertic
 
 /** Grid intervals the row's direct `w:tc` children occupy, in cell order. */
 export function buildRowGridSlots(row: OoxmlTableRowNode): readonly GridCellSlot[] {
+  return buildCellGridSlots(
+    row,
+    row.children.filter((child) => child.kind === 'tableCell')
+  );
+}
+
+/** Grid intervals `cells` occupy, in order, after the row's `w:gridBefore`. */
+export function buildCellGridSlots(
+  row: OoxmlTableRowNode,
+  cells: readonly OoxmlNode[]
+): readonly GridCellSlot[] {
   const trPr = wmlChildNamed(row, 'trPr');
   const gridBefore = readGridSkip(trPr, 'gridBefore');
   let cursor = gridBefore;
   const slots: GridCellSlot[] = [];
-  for (const child of row.children) {
-    if (child.kind !== 'tableCell') continue;
+  for (const child of cells) {
+    if (child.kind === 'textValue') continue;
     const tcPr = wmlChildNamed(child, 'tcPr');
     const startCol = Math.min(cursor, MAX_TABLE_COLUMNS);
     const span = Math.min(readGridSpan(tcPr), MAX_TABLE_COLUMNS - startCol);
@@ -89,7 +100,7 @@ function isRowLike(node: OoxmlNode): boolean {
 }
 
 /** Iterative, budgeted, fail-closed search for a cell or row anywhere under `root`. */
-function subtreeHolds(root: OoxmlNode, want: 'cell' | 'row'): boolean {
+export function subtreeHolds(root: OoxmlNode, want: 'cell' | 'row'): boolean {
   const matches = want === 'cell' ? isCellLike : isRowLike;
   const stack: OoxmlNode[] = [root];
   let budget = WRAPPED_SCAN_NODES;
@@ -131,7 +142,10 @@ export function rowHidesCellInWrapper(row: OoxmlTableRowNode): boolean {
  * let the boundary read as merge-free. A cell's own children are never walked, so a nested
  * table's merges stay its own. An exhausted budget reads as "merged", fail-closed.
  */
-export function rowHasVerticalMerge(row: OoxmlTableRowNode): boolean {
+export function rowHasVerticalMerge(
+  row: OoxmlTableRowNode,
+  only: VerticalMergeKind | 'any' = 'any'
+): boolean {
   // Seeded with the row, not its children: a spread would let the breadth check fire before
   // a single node is examined, so a wide row would report "merged" without being read.
   const stack: OoxmlNode[] = [row];
@@ -143,7 +157,8 @@ export function rowHasVerticalMerge(row: OoxmlTableRowNode): boolean {
     if (node.kind === 'textValue') continue;
     if (isCellLike(node)) {
       const tcPr = wmlChildNamed(node, 'tcPr');
-      if (tcPr && wmlChildNamed(tcPr, 'vMerge')) return true;
+      const kind = readVMergeKind(tcPr);
+      if (kind !== 'none' && (only === 'any' || only === kind)) return true;
       continue;
     }
     for (const child of node.children) stack.push(child);
@@ -173,7 +188,7 @@ export function tableHidesRowBetween(
   return false;
 }
 
-function gridIntervalsMatchExactly(
+export function gridIntervalsMatchExactly(
   aStart: number,
   aSpan: number,
   bStart: number,
