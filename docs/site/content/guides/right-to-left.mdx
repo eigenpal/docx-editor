@@ -22,6 +22,8 @@ List levels follow the same rule. In an RTL paragraph, a level's `w:ind w:left` 
 
 Tab stops count from the right margin, and the text on each side of a tab stays in reading order.
 
+Trailing ordinary spaces (`U+0020`) stay beside the text whose direction they follow. Their direction determines whether they extend outside the width used for alignment. The editor preserves these spaces in document text. Tabs and nonbreaking spaces (`U+00A0`) retain their width.
+
 An inline picture reads in the direction of the text on both sides of it. Between text of different directions, or before the first text of a paragraph, it reads in the paragraph's direction. After the last text of a paragraph, it reads in the direction of that text. In an RTL paragraph, a picture before the text stands at the right, and a picture after left-to-right text stands to the right of that text.
 
 A click past the end side of a line, where the paragraph mark stands, places the caret at the end of the line. A click past the start side places the caret on that side of the picture or text at the edge.

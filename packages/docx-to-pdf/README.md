@@ -60,7 +60,9 @@ Use `fonts` to provide font sources before the installed and packaged sources. U
 
 `glyphFallbacks` specifies an ordered list of fonts for missing glyphs. The defaults cover symbols, Arabic, Hebrew, mathematics, and color emoji. They also cover CJK text when `@docx-editor.dev/fonts-cjk` is installed. Emoji from a COLR font retain their palette colors and extractable text.
 
-Core's `fontPolicy` controls failed font sources and incomplete face coverage. Generic substitutions can change line breaks and page count, so strict export rejects them with a `font-substitution` diagnostic. Best-effort export uses the substitute and reports it. Inspect `result.fontResolution` for the selected fonts.
+`fontPolicy` controls font-source failures and family coverage. `fidelityPolicy: 'strict'` rejects generic substitutions that can change pagination. `fidelityPolicy: 'best-effort'` uses those substitutes and reports them. Inspect `result.fontResolution` for selected faces and source failures.
+
+For optional fallback rejections, see [Separate font policy from PDF policy](docs/fonts.md#separate-font-policy-from-pdf-policy).
 
 For custom font files and policy choices, see [Configure PDF fonts](docs/fonts.md).
 

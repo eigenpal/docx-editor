@@ -28,7 +28,21 @@ const text = await runtime.run(async (context) => {
 });
 ```
 
-`Body.text` joins paragraphs with carriage returns (`\r`). `Paragraph.text` reads paragraph text; `Range.text` reads the addressed content. A non-breaking hyphen reads as U+001E and an optional hyphen as U+001F, and each counts as one character in ranges. `insertText` turns U+001E and U+001F back into those hyphens, so text you read can be written back unchanged. Replace those characters before you pass text to a reader that expects plain hyphens. A symbol (`w:sym`) reads as `(` and counts as one character, whatever glyph it shows. Search never matches a symbol: `(` does not find it, and the text on both sides of it is not joined. Writing `(` inserts a parenthesis, not a symbol. Text reads follow the runtime's `revisionTextView` option. The API does not expose HTML, OOXML strings, or document-wide `start` and `end` offsets. `Paragraph.uniqueLocalId` identifies a paragraph within the runtime; load it before reading. Do not use it as a permanent identifier across separately opened files.
+`Body.text` joins paragraphs with carriage returns (`\r`). `Paragraph.text` reads paragraph text; `Range.text` reads the addressed content. Text reads follow the runtime's `revisionTextView` option.
+
+Some document elements use a single character in API text, regardless of their displayed glyph:
+
+| Document element    | API text | Range length    | `insertText()` behavior                     |
+| ------------------- | -------- | --------------- | ------------------------------------------- |
+| Non-breaking hyphen | U+001E   | One UTF-16 unit | Restores the non-breaking hyphen element    |
+| Optional hyphen     | U+001F   | One UTF-16 unit | Restores the optional hyphen element        |
+| Symbol (`w:sym`)    | `(`      | One UTF-16 unit | Inserts a literal parenthesis, not a symbol |
+
+Hyphen elements can survive a text read and write through these characters. This does not preserve arbitrary document structure, such as symbols or fields. Convert the hyphen characters before passing text to readers that require ordinary text.
+
+Search never matches a symbol. A search for `(` does not find it, and search does not join the text on either side. For hyphen matching rules, see [Search and navigation](/docs/2.x/editor-api/search-and-navigation).
+
+The API does not expose HTML, OOXML strings, or document-wide `start` and `end` offsets. `Paragraph.uniqueLocalId` identifies a paragraph within the runtime; load it before reading. Do not use it as a permanent identifier across separately opened files.
 
 ## Choose an insertion location
 
@@ -62,7 +76,9 @@ await runtime.run(async (context) => {
 
 ## Address existing content
 
-`Body.getRange(location?)` and `Paragraph.getRange(location?)` accept `Whole`, `Content`, `Start`, `End`, `Before`, and `After`. The default is `Whole`. Use `Content` when you want the owner's text, and an endpoint for an insertion point. Sync before using the returned range for dependent work. `Range.paragraphs` enumerates paragraphs intersecting the span.
+`Body.getRange(location?)` and `Paragraph.getRange(location?)` accept `Whole`, `Content`, `Start`, `End`, `Before`, and `After`. The default is `Whole`. Use `Content` when you want the owner's text, and an endpoint for an insertion point. `Range.paragraphs` enumerates paragraphs intersecting the span.
+
+Supported read-derived ranges accept text writes within one sync. For example, queue `paragraph.getRange('End').insertText(' suffix', 'Before')`, then call `await context.sync()`. Sync before inspecting loaded properties or reusing an object returned by a write. Other dependent operations can require a separate sync.
 
 For an exact replacement, use search and verify the match count:
 
@@ -105,7 +121,9 @@ Structural edits sharing a paragraph can conflict within one sync. Separate depe
 
 ## Reach other document objects
 
-`Body` exposes `font`, `style`, `lists`, `tables`, `inlinePictures`, `fields`, `contentControls`, `bookmarks`, and `revisions`. `Body.getComments()` returns story comments. `Range` exposes `font`, `style`, `hyperlink`, `tables`, `inlinePictures`, `fields`, and `bookmarks`. A range can create a table, picture, field, content control, comment, or break through its insertion methods. `Paragraph` exposes `font`, `style`, `list`, and `listItem`. Use the [API member directory](/docs/2.x/editor-api/reference) to find each dedicated guide and exact signatures.
+`Body` exposes `font`, `style`, `lists`, `tables`, `inlinePictures`, `shapes`, `fields`, `contentControls`, `bookmarks`, and `revisions`. `Body.getComments()` returns story comments. `Range` exposes `font`, `style`, `hyperlink`, `tables`, `inlinePictures`, `fields`, and `bookmarks`. A range can create a table, picture, field, content control, comment, or break through its insertion methods. `Paragraph` exposes `font`, `style`, `list`, `listItem`, and `shapes`. Use the [API member directory](/docs/2.x/editor-api/reference) to find each dedicated guide and exact signatures.
+
+For shape enumeration and text-box editing, see [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories#read-and-edit-text-boxes). `Range.shapes` is not available.
 
 ## Next steps
 

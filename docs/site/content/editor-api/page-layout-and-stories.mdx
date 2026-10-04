@@ -103,33 +103,52 @@ The legacy `Document.footnotes` and `Document.endnotes` accessors enumerate note
 
 ## Read and edit text boxes
 
-`Body.shapes` and `Paragraph.shapes` return the floating and inline shapes in the body or paragraph, in reading order. An inline picture is listed as a `Picture` shape and is also in `inlinePictures`. Each returns `ShapeCollection`, which exposes `items`, `getFirst()`, `getFirstOrNullObject()`, and `getByTypes(types)`. A `Shape` exposes read-only `id`, `name`, and `type`. `ShapeType` values are `TextBox`, `GeometricShape`, `Picture`, `Group`, `Canvas`, and `Unsupported`.
+`Body.shapes` and `Paragraph.shapes` return supported floating and inline shapes in reading order. Each returns `ShapeCollection`, with `items`, `getFirst()`, `getFirstOrNullObject()`, and `getByTypes(types)`. An inline picture appears as a `Picture` shape and also remains in `inlinePictures`. A `Shape` exposes read-only `id`, `name`, and `type`. Load these properties before reading them.
 
-A text box's `body` is its own story. Read, search, and edit it with the same `Body` members as the main story. The main body's `text`, `search`, comments, and tracked changes do not include text box content. To review changes inside a text box, use the tracked changes of its `body`. You can't insert a comment in a text box, because a comment there is not kept when the file opens. `insertComment` refuses with `InvalidArgument`. A geometric shape that holds text also has a `body`. A shape without its own text, such as a picture or a linked text box, refuses `body` with `InvalidArgument`.
+`ShapeType` provides these enum members:
 
-Shapes in the body, headers, and footers have a `body`. Shapes in notes and in text boxes are listed, but their `body` refuses with `InvalidArgument`.
+| Member                     | Value            |
+| -------------------------- | ---------------- |
+| `ShapeType.textBox`        | `TextBox`        |
+| `ShapeType.geometricShape` | `GeometricShape` |
+| `ShapeType.picture`        | `Picture`        |
+| `ShapeType.group`          | `Group`          |
+| `ShapeType.canvas`         | `Canvas`         |
+| `ShapeType.unsupported`    | `Unsupported`    |
 
-The following example replaces a client name inside a text box:
+A text box's `body` is its own story. Read, search, and edit it with supported `Body` members. The main body's text, search, comments, and tracked changes exclude text-box content. Use the text-box body's tracked changes to review changes there. Text-box `insertComment` refuses with `InvalidArgument`.
+
+Supported text-bearing shapes in the main body, headers, and footers expose their own `body`. This includes geometric shapes with their own text story. Pictures and linked text boxes without their own story refuse `body` with `InvalidArgument`. Shapes inside notes and text boxes are listed, but their `body` refuses with `InvalidArgument`.
+
+The following example replaces a client name when the main body contains exactly one text box:
 
 ```ts
+import { ShapeType } from '@docx-editor.dev/editor-api';
+
 await runtime.run(async (context) => {
   const boxes = context.document.body.shapes.getByTypes([ShapeType.textBox]);
   boxes.load('items');
   await context.sync();
-  const body = boxes.items[0].body;
-  body.load('text');
-  await context.sync();
+  if (boxes.items.length !== 1) throw new Error('Expected one text box.');
+
+  const body = boxes.items[0]!.body;
+  await context.sync(); // Resolve the text-box story before searching it.
+
   const matches = body.search('Acme Holdings');
   matches.load('items');
   await context.sync();
-  matches.items[0].insertText('Beta Logistics', 'Replace');
+  if (matches.items.length !== 1) throw new Error('Expected one match.');
+
+  matches.items[0]!.insertText('Beta Logistics', 'Replace');
   await context.sync();
 });
 ```
 
-Sync after reading `shape.body` and before you search it. Floating and inline text boxes are reachable in the body, headers, and footers. Shape geometry, text frames, and inserting or deleting shapes are not exposed.
+Sync after accessing `shape.body` and before searching it. Separate writes to different stories with `context.sync()`. Shape geometry, text frames, and shape insertion or deletion are not exposed.
 
-When a text box has a legacy VML copy for older readers, saving writes the edited text into that copy too.
+Repeated `getByTypes()` calls keep only types allowed by every filter. Unknown type values refuse with `InvalidArgument`. Duplicate or missing drawing IDs refuse shape enumeration.
+
+The API reads alternate drawing content through the branch selected for layout. Shapes selected through a legacy VML fallback are not listed. For supported DrawingML text-box stories, saving also updates the retained VML copy.
 
 ## Next steps
 

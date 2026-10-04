@@ -70,18 +70,30 @@ The notice also excludes symbol faces, such as MS Gothic in a Word checkbox (`w:
 
 The font picker is a separate list. It offers the families your configuration supplies and the families the document declares in `w:rFonts`, so a symbol face appears there when the file declares it as a run font, which Word's checkbox markup does.
 
-## Load Word-compatible defaults
+### Default family names
+
+Use these names for the package's family lists and type:
+
+| Preferred name              | Deprecated alias                 |
+| --------------------------- | -------------------------------- |
+| `DefaultFontFamily`         | `WordDefaultFamily`              |
+| `DEFAULT_FONT_FAMILIES`     | `WORD_DOCUMENT_DEFAULT_FAMILIES` |
+| `ALL_DEFAULT_FONT_FAMILIES` | `ALL_WORD_DEFAULT_FAMILIES`      |
+
+The deprecated names remain available. Both constant aliases reference the same arrays as their preferred names. The family lists and loaded font bytes do not change.
+
+## Load default substitute families
 
 The optional `@docx-editor.dev/fonts` package provides open-licensed substitutes.
 
-| Word font       | Substitute        | License           | Loaded by default |
-| --------------- | ----------------- | ----------------- | ----------------- |
-| Calibri         | Carlito           | SIL OFL           | Yes               |
-| Cambria         | Caladea           | SIL OFL           | Yes               |
-| Times New Roman | Liberation Serif  | SIL OFL           | Yes               |
-| Arial           | Liberation Sans   | SIL OFL           | Yes               |
-| Courier New     | Liberation Mono   | SIL OFL           | Yes               |
-| Century Gothic  | TeX Gyre Adventor | GUST Font License | No                |
+| Word font       | Substitute        | License           | Included by `defaultFonts()` |
+| --------------- | ----------------- | ----------------- | ---------------------------- |
+| Calibri         | Carlito           | SIL OFL           | Yes                          |
+| Cambria         | Caladea           | SIL OFL           | Yes                          |
+| Times New Roman | Liberation Serif  | SIL OFL           | Yes                          |
+| Arial           | Liberation Sans   | SIL OFL           | Yes                          |
+| Courier New     | Liberation Mono   | SIL OFL           | Yes                          |
+| Century Gothic  | TeX Gyre Adventor | GUST Font License | No                           |
 
 The first five match advance widths for the glyphs they cover. Kerning differences can still change line breaks.
 
@@ -91,7 +103,7 @@ Packaged faces do not cover every script. Liberation Sans has no Arabic glyphs. 
 
 Supply licensed font bytes when pixels must match the original face.
 
-`defaultFonts()` loads the five families Word applies to a document by default. Century Gothic is not one of them, and its four assets add about 709 KB to every load, so you opt in:
+`defaultFonts()` loads five package defaults: Calibri, Cambria, Times New Roman, Arial, and Courier New. Century Gothic requires an explicit choice and adds about 709 KB:
 
 ```ts
 import { ALL_DEFAULT_FONT_FAMILIES, defaultFonts } from '@docx-editor.dev/fonts';

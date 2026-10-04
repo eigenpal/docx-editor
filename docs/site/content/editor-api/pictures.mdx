@@ -5,7 +5,9 @@ category: 'Editing API'
 order: 58
 ---
 
-The API edits inline PNG and JPEG pictures. Use `Body.inlinePictures` or `Range.inlinePictures` to discover pictures. Floating shapes, picture bullets, embedded object previews, and a general `Shape` object are outside this subset.
+The API edits inline PNG and JPEG pictures. Use `Body.inlinePictures` or `Range.inlinePictures` to discover pictures. Floating picture writes, picture bullets, and embedded object previews are outside this subset.
+
+`Body.shapes` and `Paragraph.shapes` enumerate supported inline and floating shapes. Use a supported shape's `body` to edit its text story. For more information, see [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories#read-and-edit-text-boxes).
 
 Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
 

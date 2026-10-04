@@ -31,6 +31,14 @@ The editor also renders saved results for other complex and simple fields. Unsup
 
 Leading direction marks remain in saved results. Their formatting does not replace the first visible result run’s formatting. A result containing only direction marks keeps its first run’s formatting.
 
+### Wrapped field results
+
+Saved field results can wrap across lines. Long unbroken results, including hyperlink URLs, can break at the line edge. Authored line breaks inside supported results start another line. Page breaks follow the surrounding story rules. Page breaks inside table cells do not add pages.
+
+Wrapping does not split an atomic field into separately editable characters. The caret before the field stays on its first line. The caret after it goes to its last line. Deleting the field removes the complete field.
+
+Breaking long unbroken results excludes page-number placeholders, `PAGEREF` results, form controls, note marks, and positional tabs. These items retain their existing layout limits. Text form fields have separate editing rules described later in this guide.
+
 ### Nested fields
 
 Saved results inside another field's instruction do not add text, line breaks, or links. Find and text reads skip them too. This applies to complex fields and simple fields (`w:fldSimple`). The outer field keeps its normal display behavior. Fields inside a saved result still display.

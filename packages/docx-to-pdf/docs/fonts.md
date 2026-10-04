@@ -23,7 +23,9 @@ Sources resolve in this order:
 7. Your `lastResortFonts` sources.
 8. Generic substitutes for unresolved families.
 
-Earlier sources take priority. Each option accepts one source or an ordered array of sources. Use `defineFontResolver` for a resolver that reads the document's requested families. The `PdfFontOrigin` and `PdfFontsSource` types describe these inputs.
+Earlier sources take priority. Each option accepts one source or an ordered array of sources.
+
+Export rejects font faces that exceed the shaping byte limit. Later sources can supply usable faces. The resolution report retains rejected faces in `originFailures`. See [Separate font policy from PDF policy](#separate-font-policy-from-pdf-policy) for refusal rules. Use `defineFontResolver` for a resolver that reads the document's requested families. The `PdfFontOrigin` and `PdfFontsSource` types describe these inputs.
 
 The default sources need no network access. A resolver that you supply can make network requests.
 
@@ -115,9 +117,13 @@ Register bold, italic, and bold-italic files separately when the document needs 
 
 ## Separate font policy from PDF policy
 
-`fontPolicy: 'strict'` rejects failed sources and incomplete face coverage. It can reject an export when another source recovers from a source failure. Complete coverage can include substitutions; it does not prove original font selection.
+`fontPolicy: 'strict'` rejects incomplete family coverage and required font-source failures. It can reject conversion even when a later source supplies the requested font.
 
-`fidelityPolicy: 'strict'` rejects unsupported or approximate PDF output. It permits the packaged metric substitutes but rejects generic substitutions that can change page breaks. It does not automatically enable strict font policy.
+A shaping-limit rejection for an optional glyph fallback alone does not cause refusal. The report retains that rejection. Other source failures still cause refusal. An optional fallback family appears in the effective `glyphFallbacks` list. It is absent from the document's requested families and is not the configured default font.
+
+Complete coverage can include substitutions; it does not prove original font selection.
+
+`fidelityPolicy: 'strict'` rejects unsupported or approximate PDF output. It permits the packaged metric substitutes but rejects generic substitutions that can change page breaks. It does not automatically enable strict font policy. Missing glyphs still cause strict PDF fidelity to fail, even when font policy permits an optional fallback rejection.
 
 To require both checks, set both policies:
 

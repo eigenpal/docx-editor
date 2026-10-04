@@ -122,9 +122,13 @@ Check your font license before embedding its bytes. The writer rejects prohibite
 
 ## Separate font policy from PDF policy
 
-`fontPolicy: 'strict'` rejects failed sources and incomplete face coverage. It rejects source failures even when another source supplies the font. Complete coverage can include substitutions; it does not prove original font selection.
+`fontPolicy: 'strict'` rejects incomplete family coverage and required font-source failures. It can reject conversion even when a later source supplies the requested font.
 
-`fidelityPolicy: 'strict'` rejects unsupported or approximate PDF output. It permits the packaged metric substitutes but rejects generic substitutions that can change page breaks. It does not automatically enable strict font policy.
+A shaping-limit rejection for an optional glyph fallback alone does not cause refusal. The report retains that rejection. Other source failures still cause refusal. An optional fallback family appears in the effective `glyphFallbacks` list. It is absent from the document's requested families and is not the configured default font.
+
+Complete coverage can include substitutions; it does not prove original font selection.
+
+`fidelityPolicy: 'strict'` rejects unsupported or approximate PDF output. It permits the packaged metric substitutes but rejects generic substitutions that can change page breaks. It does not automatically enable strict font policy. Missing glyphs still cause strict PDF fidelity to fail, even when font policy permits an optional fallback rejection.
 
 To require both checks, set both policies:
 

@@ -39,7 +39,7 @@ import { createDocxEditor, loadFonts, DEFAULT_FONT } from '@docx-editor.dev/core
 import type { Editor, EditorSnapshot } from '@docx-editor.dev/core';
 ```
 
-`DEFAULT_FONT` is the font that the engine uses when a document does not set one: Calibri at 11 points.
+`DEFAULT_FONT` provides the default font configuration: Calibri at 11 points. `WORD_DEFAULT_FONT` is its deprecated alias. Document formatting and document-default rules determine the text size used for layout. Missing defaults and explicitly empty defaults can produce different results.
 
 The root exports editor creation, contracts, font helpers, control definitions, and document types. Use subpaths to access storage, layout, and rendering.
 

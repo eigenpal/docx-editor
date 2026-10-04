@@ -26,14 +26,17 @@ A supported subset covers only the listed objects and operations. It does not me
 | Lists | Partial | Create lists, attach/detach paragraphs, set bullets/numbering, nesting, indents, and restart | Picture bullets are unavailable. Different list levels can batch after list creation. |
 | Bookmarks | Partial | Discover bookmarks, read names and ranges, and select bookmarks | The API does not support bookmark deletion or document-wide bookmark offsets. |
 | Sections and page setup | Partial | Section bodies, headers, footers, size, orientation, margins, page breaks, and next-page section breaks | Other break types fail. Missing header/footer stories are created on their first write. |
-| Footnotes and endnotes | Supported subset | Enumerate notes, read note bodies and text, move to the next note, and delete notes | Use `document.footnotes` and `document.endnotes`. These accessors differ from Office.js. |
+| Footnotes and endnotes | Supported subset | Enumerate referenced notes through `Body.footnotes` and `Body.endnotes`, read their bodies, and delete notes | Note creation is unavailable. Legacy `Document.footnotes` and `Document.endnotes` enumerate note parts outside the Office.js model. |
 | Comments and replies | Partial | Read, create, reply, resolve, delete, and get the comment range | Writes need an explicit author. Browser writes also need the Pro review module and an editable document. Comment body replacement does not work. |
-| Tracked changes | Partial | Create tracked text edits, read actionable revisions and their ranges, and accept or reject individual revisions or batches | `TrackMineOnly` supports text in one paragraph. `TrackAll` fails. `resolve()` skips unsupported groups; `acceptAll()` and `rejectAll()` fail if unsupported changes remain. |
+| Tracked changes | Partial | Create supported text and formatting revisions, inspect revisions, and accept or reject individual revisions or batches | `TrackMineOnly` supports tracked range edits across adjacent sibling paragraphs outside collaboration. Collaboration limits tracked range edits to one paragraph. Table and wrapper boundaries refuse. `TrackAll` fails. |
 | Content controls | Partial | Common properties, nested controls, lookup by ID, tag, or title, text insertion, deletion, ranges, and typed value writes | The API does not expose typed Office.js subtype objects. The runtime rejects writes to custom XML-bound controls. |
 | Hyperlinks | Partial | Read or write `Range.hyperlink` | Standalone `Hyperlink` and `HyperlinkCollection` objects do not exist. |
-| Tables | Partial | Create rectangular tables, read/write values, add/delete rows and columns, set headers/styles/widths, and format cells | The runtime rejects structural edits on merged or unsupported tables. Existing cell content may prevent destructive value replacement. |
-| Inline pictures | Partial | Insert PNG/JPEG, enumerate, delete, resize, lock aspect ratio, and set alt descriptions | Floating shapes and picture bullets are unavailable. The runtime rejects conflicting dimensions when aspect ratio is locked. |
+| Tables | Partial | Create rectangular tables, edit values, add/delete rows and columns, and format supported tables and cells | Row deletion supports merged tables. Row insertion requires an ordinary source row and cannot cross vertical merges. Column insertion and deletion reject merged topology. See [Tables](/docs/2.x/editor-api/tables) for grid and content restrictions. |
+| Inline pictures | Partial | Insert PNG/JPEG, enumerate, delete, resize, lock aspect ratio, and set alt descriptions | Floating picture writes and picture bullets are unavailable. The runtime rejects conflicting dimensions when aspect ratio is locked. |
+| Shapes and text boxes | Partial | Enumerate inline and floating shapes, read their identity and type, and edit supported text stories | Geometry writes, shape insertion/deletion, and text frames are unavailable. Text-box stories require separate access through `Shape.body`. |
 | Fields | Partial | Insert, enumerate, change code, update results, and delete plain PAGE/NUMPAGES fields | The runtime rejects creation and evaluation of other field types and switches. Server evaluation requires explicit measured pagination. |
+
+For operation-specific tracking limits, see [Tracked changes](/docs/2.x/editor-api/revisions). `resolve()` skips unsupported groups; `acceptAll()` and `rejectAll()` fail if unsupported changes remain.
 
 ## Differences that affect existing code
 
@@ -107,7 +110,7 @@ Code that uses these APIs fails during TypeScript compilation.
 | API | Available alternative |
 | --- | --- |
 | Picture list levels | Use text bullets with an explicit font. |
-| `Shape` and canvases | No editing API alternative. |
+| Shape geometry writes, shape insertion/deletion, and canvas editing | Use `Shape.body` for supported text-story edits. Geometry editing has no API alternative. |
 | Repeating-section and picture content-control objects | Use common `ContentControl` members for other control kinds. |
 | `ContentControl.xmlMapping` | Use `ContentControl.isBound` to detect a binding. Writes to bound controls still fail. |
 | `Hyperlink`, `HyperlinkCollection` | Use `Range.hyperlink` for one range. |
@@ -136,6 +139,8 @@ bun run --filter '@docx-editor.dev/editor-api' compat:report
 The report compares editing methods and property writes with actual public source exports. The scope is defined in `packages/editor-api/compat/editing-scope.json`. Read-only APIs, navigation, host setup, enums, and support types are excluded. Property checks compare setter types without counting getter differences. It lists matching, differing, and missing signatures, with separate runtime notes from `packages/editor-api/compat/runtime-notes.json`. Read `packages/editor-api/compat/reports/report.md` for all endpoints, or `report.json` for expected and actual signatures. CI shows signature percentages and uploads the full report as an informational artifact. These percentages do not measure runtime equivalence or include other Office hosts.
 
 The same command reports an 81-member document-editing profile from `packages/editor-api/compat/agent-editing-scope.json`. Read `packages/editor-api/compat/reports/agent-editing-summary.md` for percentages by area, and `agent-editing-report.md` or `agent-editing-report.json` for endpoint details. Member presence counts exposed members; exact signature percentage counts matching signatures out of 81. Neither percentage proves Word-equivalent behavior or the success rate for arbitrary documents. Use endpoint runtime notes and the runnable consumer workflows to assess your required operations. Update `packages/editor-api/compat/runtime-notes.json` when a supported domain or runtime difference changes.
+
+The published shape subset belongs to `WordApiDesktop 1.2`, outside the selected conformance target. Its presence does not extend the measured 81-member profile. For supported operations, see [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories#read-and-edit-text-boxes).
 
 The package does not include Microsoft's declarations. Installation, tests, and builds do not fetch them.
 

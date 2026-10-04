@@ -9,7 +9,7 @@ order: 70
 
 This package is the engine. It reads a `.docx` into a canonical document tree, lays that tree out into pages, paints them, and writes the tree back to OOXML. It has no framework dependency and no UI.
 
-Most apps never import it directly: `@docx-editor.dev/react` carries it. Import it when you are writing your own adapter, or when you need the contract types to type a function signature.
+Install Core alongside the React or Vue adapter. Both adapters require it as a peer dependency. Keep one Core copy in your application. Import Core directly when you build an adapter or use its public contracts.
 
 ```bash
 npm install @docx-editor.dev/core
@@ -24,7 +24,7 @@ import { createDocxEditor, loadFonts, DEFAULT_FONT } from '@docx-editor.dev/core
 import type { Editor, EditorSnapshot } from '@docx-editor.dev/core';
 ```
 
-`DEFAULT_FONT` is the font that the engine uses when a document does not set one: Calibri at 11 points. `WORD_DEFAULT_FONT` is a deprecated alias for the same value.
+`DEFAULT_FONT` provides the default font configuration: Calibri at 11 points. `WORD_DEFAULT_FONT` is its deprecated alias. Document formatting and document-default rules determine the text size used for layout. Missing defaults and explicitly empty defaults can produce different results.
 
 Import a subpath when you need the canonical tree, the layout pass, or the paint step directly.
 
