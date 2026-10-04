@@ -309,9 +309,10 @@ function alignLogicalSpans(
 
 /**
  * Whether a line aligns as its paragraph's last line: it is that line, or a page or column
- * break closes it. Under the `unstretchedManualBreakLines` compatibility rule, a manual line
- * break closes it too. A distributed paragraph (`w:jc w:val="distribute"`) stretches a line
- * before such a break as it does any other.
+ * break closes it. Under the `pageBreakLinesStretch` compatibility rule, a page or column
+ * break does not; under `unstretchedManualBreakLines`, a manual line break does. A distributed
+ * paragraph (`w:jc w:val="distribute"`) stretches a line before such a break as it does any
+ * other.
  */
 export function setsLikeLastLine(
   props: readonly OoxmlProperty[],
@@ -321,12 +322,18 @@ export function setsLikeLastLine(
     readonly manualBreakAfter?: true;
   },
   isLastLine: boolean,
-  compatibility?: { readonly unstretchedManualBreakLines?: true }
+  compatibility?: {
+    readonly unstretchedManualBreakLines?: true;
+    readonly pageBreakLinesStretch?: true;
+  }
 ): boolean {
   if (isLastLine) return true;
+  const pageBreakSetsLast =
+    (line.pageBreakAfter === true || line.columnBreakAfter === true) &&
+    compatibility?.pageBreakLinesStretch !== true;
   const manualBreakSetsLast =
     line.manualBreakAfter === true && compatibility?.unstretchedManualBreakLines === true;
-  if (!line.pageBreakAfter && !line.columnBreakAfter && !manualBreakSetsLast) return false;
+  if (!pageBreakSetsLast && !manualBreakSetsLast) return false;
   let distributed = false;
   for (const property of props) {
     if (property.localName === 'jc') distributed = property.attributes?.val === 'distribute';

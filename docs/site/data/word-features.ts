@@ -260,7 +260,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Justified East Asian lines distribute inter-character spacing. Modern Latin justification measures complete words across formatting runs and terminal note citations before compressing spaces. Citations with reserved page-local widths retain their existing line-break behavior. The last line stays left-aligned. With the w:doNotExpandShiftReturn compatibility setting, a line that ends in a manual line break keeps its natural spacing. Tabs and float passages retain their reserved positions.',
+      'Justified East Asian lines distribute inter-character spacing. Modern Latin justification measures complete words across formatting runs and terminal note citations before compressing spaces. Citations with reserved page-local widths retain their existing line-break behavior. The last line stays left-aligned. With the w:doNotExpandShiftReturn compatibility setting, a line that ends in a manual line break keeps its natural spacing. In documents that declare compatibility mode 14 or earlier, or no mode, a line that ends in a page or column break stretches to both margins; in mode 15 and later it keeps its natural spacing. Tabs and float passages retain their reserved positions.',
   },
   {
     id: 'paragraphs.east-asian-typography',

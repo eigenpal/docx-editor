@@ -34,6 +34,7 @@ const MODE_MATRIX = {
   legacySharedGridLineSideRules: 'legacy',
   modernGridLineSideRules: 'modern',
   noteTableCellKeeps: 'modern',
+  pageBreakLinesStretch: 'legacy',
   rowPageBreakYieldsToKeep: 'modern',
   tableParagraphWidowControl: 'modern',
   vMergeTextMovesPastHeadRow: 'modern',

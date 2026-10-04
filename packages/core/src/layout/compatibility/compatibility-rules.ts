@@ -103,6 +103,10 @@ export const MODE_RULES = {
     'Note reference bands in table rows honor cell widow control and keep-lines cuts',
     'ECMA-376 Part 1 §17.11 Footnotes and Endnotes'
   ),
+  pageBreakLinesStretch: legacy(
+    'A justified line that ends in a page or column break stretches to the measure, unless it is the last line of its paragraph',
+    'ECMA-376 Part 1 §17.3.3.1 br'
+  ),
   rowPageBreakYieldsToKeep: modern(
     'A row with a page break does not start a page when the row before it keeps with it',
     'ECMA-376 Part 1 §17.3.1.15 keepNext'

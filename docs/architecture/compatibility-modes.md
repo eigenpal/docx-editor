@@ -50,6 +50,7 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `legacySharedGridLineSideRules` | `legacy` | Side rules center on shared grid lines |
 | `modernGridLineSideRules` | `modern` | Side rules center on grid lines for covered shapes; edge-aligned grids move by half a rule |
 | `noteTableCellKeeps` | `modern` | Note bands in table rows honor cell widow control and `w:keepLines` |
+| `pageBreakLinesStretch` | `legacy` | A justified line before a page or column break stretches, unless it ends its paragraph |
 | `rowPageBreakYieldsToKeep` | `modern` | A row with a page break follows a row that keeps with it |
 | `tableParagraphWidowControl` | `modern` | Paragraphs that split in table cells apply widow control |
 | `vMergeTextMovesPastHeadRow` | `modern` | Merged cell text moves whole past a head row that cannot hold it |

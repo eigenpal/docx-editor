@@ -4203,6 +4203,7 @@ export interface StyleCascadeTable {
     readonly doNotBreakWrappedTables?: true;
     readonly fixedParagraphSpacing?: true;
     readonly ignoreIndentAsNumberingTabStop?: true;
+    readonly pageBreakLinesStretch?: true;
     readonly preserveExactLineBaseline?: true;
     readonly strictTableStyleHierarchy?: boolean;
     // (undocumented)
