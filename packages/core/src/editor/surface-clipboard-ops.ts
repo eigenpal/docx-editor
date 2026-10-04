@@ -32,6 +32,10 @@ import {
 import { buildCopyFlavours, type CopyFlavours } from './clipboard-copy-payload.ts';
 import { routePaste } from './clipboard-paste-router.ts';
 import { insertableText } from './clipboard-plain-text.ts';
+import {
+  paragraphTextMarkingOptionalHyphens,
+  withoutOptionalHyphens,
+} from '../layout/optional-hyphen-copy-text.ts';
 import { clampTextFormPaste } from './text-form-field-paste.ts';
 import {
   collapsedAt,
@@ -47,12 +51,11 @@ type HistoryMark = { paragraphId: string; start: number; end: number };
 /** What this lane borrows from the mount closure. Mutable state arrives as a getter. */
 
 /**
- * The plain-text clipboard flavour: an optional hyphen (painted as U+00AD) is a hint for line
- * breaking, not a character of the text, so plain text leaves it out. The HTML flavour keeps it.
+ * The plain-text clipboard flavour: an optional hyphen element is a hint for line breaking,
+ * not a character of the text, so plain text leaves it out. A literal U+00AD in run text is
+ * text and stays. The HTML flavour keeps both.
  */
-function plainCopyText(text: string): string {
-  return text.includes('\u00ad') ? text.replaceAll('\u00ad', '') : text;
-}
+const plainCopyText = withoutOptionalHyphens;
 
 export interface SurfaceClipboardDeps {
   session: TreeDocxSessionView;
@@ -259,7 +262,9 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     }
     if (rectangle) {
       return buildCopyFlavours({
-        text: plainCopyText(cellSelectionText(deps.layout(), rectangle)),
+        text: plainCopyText(
+          cellSelectionText(deps.layout(), rectangle, paragraphTextMarkingOptionalHyphens)
+        ),
         cellRectangle: true,
         coverage: null,
         pkg: null,
@@ -269,8 +274,13 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     const textPart = session.part();
     // Plain text spells each equation in its linear form instead of U+FFFC.
     const text = plainCopyText(
-      selectedTextIn(deps.layout(), from, to, deps.paragraphOrder(), (id, offset) =>
-        textPart ? equationPlainText(textPart, id, offset) : null
+      selectedTextIn(
+        deps.layout(),
+        from,
+        to,
+        deps.paragraphOrder(),
+        (id, offset) => (textPart ? equationPlainText(textPart, id, offset) : null),
+        paragraphTextMarkingOptionalHyphens
       )
     );
     const scope = deps.storyScope();

@@ -7,6 +7,7 @@ import { paintLegacyCheckbox } from './semantic-paint-legacy-checkbox.ts';
 import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
 import { DEFAULT_RUN_STYLE } from '../layout/run-style.ts';
 
+import { paintedSpanText } from '../layout/optional-hyphen-break.ts';
 import {
   paintParagraphMark,
   paintManualLineBreak,
@@ -1088,7 +1089,7 @@ function paintSpan(
       applyTabAdvanceUnderline(element.style, tabUnderline, ctx.scale);
     }
   }
-  mountRunText(document, textHost, span.text, span.style, ctx.scale);
+  mountRunText(document, textHost, paintedSpanText(span), span.style, ctx.scale);
   paintLegacyCheckbox(element, span, ctx.scale);
   paintLegacyDropdown(element, span);
   if (span.projected) {

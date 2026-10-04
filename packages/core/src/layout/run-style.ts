@@ -492,14 +492,17 @@ export function withFontFamily(style: ResolvedRunStyle, family: string): Resolve
 
 /** The text as it is DRAWN, after case transforms. Measurement must use this, not the source. */
 export function displayText(text: string, style: ResolvedRunStyle): string {
-  if (style.caps) return text.toUpperCase();
+  // A literal U+00AD in `w:t` draws as a visible hyphen and is not a break opportunity. An
+  // optional hyphen element measures from its own empty `measureText` instead.
+  const shown = text.includes('\u00ad') ? text.replaceAll('\u00ad', '-') : text;
+  if (style.caps) return shown.toUpperCase();
   // Small caps changes glyph selection rather than the characters, so uppercasing here would
   // corrupt the text a copy produces. Resolving it belongs to the shaper, which requests the
   // `smcp` feature when the face carries small-cap glyphs and hands the run to the CSS
   // measurer when it does not (`shaped-measurer.ts`). That decision is per FACE, so a span
   // and every prefix of it measure from one source and the caret edges inside a run agree
   // with the painted span.
-  return text;
+  return shown;
 }
 
 /** Measure run text the way layout breaks lines and paints glyphs (caps/small-caps aware). */

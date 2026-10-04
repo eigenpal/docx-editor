@@ -491,7 +491,11 @@ export function cellSelectionRects(
  * the only shape that survives the trip: the text range a rectangle stands in for would paste
  * back as one run of characters with the grid gone.
  */
-export function cellSelectionText(layout: SemanticLayout, selection: CellSelection): string {
+export function cellSelectionText(
+  layout: SemanticLayout,
+  selection: CellSelection,
+  paragraphText: (layout: SemanticLayout, paragraphId: string) => string = paragraphTextFromLayout
+): string {
   const table = tableIndex(layout).get(selection.tableId);
   if (!table) return '';
   const wanted = new Set(selection.cellIds);
@@ -505,7 +509,7 @@ export function cellSelectionText(layout: SemanticLayout, selection: CellSelecti
     // pages puts the rest of its paragraphs in a later fragment, and reading one placement
     // silently dropped that tail from the clipboard.
     const text = paragraphsInCells(layout, [entry.cell.id])
-      .map((id) => paragraphTextFromLayout(layout, id))
+      .map((id) => paragraphText(layout, id))
       .join('\n');
     const row = rows.get(entry.rowIndex);
     // Merged text starts at the logical leading slot, which is physically rightmost in RTL.
