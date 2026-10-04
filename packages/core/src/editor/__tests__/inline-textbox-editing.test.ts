@@ -321,3 +321,68 @@ test('an inline box in a hidden run is not offered by Find', () => {
     editor.destroy();
   }
 });
+
+for (const kind of ['inline', 'anchored'] as const) {
+  test(`Find highlights paint inside a ${kind} header text box`, () => {
+    const source = inlineTextboxDocx({ inHeader: true });
+    const bytes = kind === 'anchored' ? withPart(source, 'word/header1.xml', anchoredBox) : source;
+    const mounted = mountAnchorEditor(bytes);
+    try {
+      const matches = mounted.editor.findMatches('header needle');
+      expect(matches).toHaveLength(1);
+      expect(mounted.editor.setHighlights('search', matches)).toMatchObject({
+        applied: 1,
+        unavailable: 0,
+      });
+      const box = mounted.host.querySelector<HTMLElement>('[data-docx-hf] .docx-drawing-textbox');
+      expect(mounted.editor.setHighlights('body', mounted.editor.findMatches('body')).applied).toBe(
+        1
+      );
+      const header = mounted.host.querySelector<HTMLElement>(
+        '[data-highlight-set="search"] .docx-text-highlight'
+      );
+      expect(header).not.toBeNull();
+      const body = mounted.host.querySelector<HTMLElement>(
+        '[data-highlight-set="body"] .docx-text-highlight'
+      );
+      // The mark sits in the header band, above the first body line.
+      expect(parseFloat(header!.style.top)).toBeLessThan(parseFloat(body!.style.top));
+      expect(box).not.toBeNull();
+    } finally {
+      mounted.destroy();
+    }
+  });
+}
+
+test('an inline box hidden by its character style is not offered by Find', () => {
+  const styled = (xml: string) =>
+    xml.replace(
+      '<w:r><mc:AlternateContent',
+      '<w:r><w:rPr><w:rStyle w:val="Hid"/></w:rPr><mc:AlternateContent'
+    );
+  const parts = unzipSync(withPart(inlineTextboxDocx(), 'word/document.xml', styled));
+  parts['word/styles.xml'] = strToU8(
+    `<w:styles xmlns:w="${W}"><w:style w:type="character" w:styleId="Hid">` +
+      '<w:name w:val="Hid"/><w:rPr><w:vanish/></w:rPr></w:style></w:styles>'
+  );
+  parts['word/_rels/document.xml.rels'] = strToU8(
+    `<Relationships xmlns="${REL}"><Relationship Id="rS" Type="${DOC_REL}/styles" Target="styles.xml"/></Relationships>`
+  );
+  parts['[Content_Types].xml'] = strToU8(
+    strFromU8(parts['[Content_Types].xml']!).replace(
+      '</Types>',
+      '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>'
+    )
+  );
+  const container = document.createElement('div');
+  document.body.append(container);
+  const editor = createDocxEditor({ container, document: zipSync(parts) });
+  try {
+    expect(container.querySelectorAll('.docx-drawing-textbox')).toHaveLength(0);
+    expect(editor.findMatches('boxed needle')).toHaveLength(0);
+    expect(editor.findMatches('before')).toHaveLength(1);
+  } finally {
+    editor.destroy();
+    container.remove();
+  }
+});

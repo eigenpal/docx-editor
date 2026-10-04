@@ -213,17 +213,28 @@ describe('document search facade', () => {
     editor.destroy();
   });
 
-  test('leaves the header closed when its text box has no painted frame', () => {
+  test('does not offer, or open the header for, a text box with no painted frame', () => {
     const editor = createDocxEditor({
       container: document.createElement('div'),
       document: textboxDocx(true, false, 12_000_000),
     });
     if (!editor.surface) throw new Error('surface did not open');
-    const match = editor.findMatches('needle')[0];
-    if (!match) throw new Error('frame match missing');
     const before = editor.surface.state().selection;
+    expect(editor.findMatches('needle')).toEqual([]);
+    const unplaced = {
+      blockId: 'missing',
+      start: 0,
+      length: 6,
+      scope: {
+        kind: 'frame' as const,
+        id: 'missing',
+        drawingNodeId: 'missing-drawing',
+        hostParagraphId: 'missing-host',
+        owner: { kind: 'headerFooter' as const, rId: 'rHeader' },
+      },
+    };
 
-    expect(editor.selectMatch(match)).toEqual({
+    expect(editor.selectMatch(unplaced)).toEqual({
       ok: false,
       code: 'unsupported',
       reason: 'the text box drawing could not be selected',

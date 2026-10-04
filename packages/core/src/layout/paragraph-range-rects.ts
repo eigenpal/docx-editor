@@ -139,6 +139,21 @@ function pagePlacedIds(page: PageRecord): readonly string[] {
   forEachStory(page, (blocks) => collect(blocks));
   // Body text boxes, anchored or inline, paint their own story on the page.
   for (const drawing of textboxDrawingsOnPage(page)) collect(drawing.textboxStory.fragments);
+  // Header and footer text boxes, anchored or inline, paint their stories with the furniture.
+  for (const story of [page.header, page.footer]) {
+    if (!story) continue;
+    const owners = [
+      ...(story.anchoredDrawings ?? []),
+      ...paragraphFragmentsOfBlocks(story.fragments).flatMap((fragment) =>
+        fragment.lines.flatMap((line) => line.drawings ?? [])
+      ),
+    ];
+    for (const drawing of owners) {
+      if (drawing.textboxStory && !drawing.accessibility.hidden) {
+        collect(drawing.textboxStory.fragments);
+      }
+    }
+  }
   const placed = [...ids];
   pagePlacedCache.set(page, placed);
   return placed;

@@ -29,6 +29,7 @@ import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import type { SurfaceOverlayFrame } from './surface-overlay-sheet.ts';
 import { partOfNodeId } from './surface-scope.ts';
 import { textboxPresenceLayout } from './textbox-presence-layout.ts';
+import { withoutUnplacedFrameMatches } from './search-frame-matches.ts';
 
 const NAME = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 const CLASS_TOKEN = /^-?[A-Za-z_][A-Za-z0-9_-]*$/;
@@ -643,9 +644,11 @@ export function createTextHighlights(deps: {
   return {
     members,
     /** Record what each search result covers now, before the document can move under it. */
-    noteMatches<T extends HighlightRange>(matches: readonly T[]): readonly T[] {
+    noteMatches<T extends HighlightRange>(found: readonly T[]): readonly T[] {
       const surface = deps.surface();
-      if (!surface || notedResults.has(matches)) return matches;
+      if (!surface || notedResults.has(found)) return found;
+      // Only text boxes the layout shows are matches a reader can reach.
+      const matches = withoutUnplacedFrameMatches(surface, found);
       notedResults.add(matches);
       const read = textReader(surface);
       for (const match of matches) {
