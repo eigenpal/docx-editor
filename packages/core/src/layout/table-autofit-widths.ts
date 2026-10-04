@@ -520,7 +520,7 @@ function nestedTableMinimumPt(
   // Past the nesting limit layout paints nothing, so nothing needs room.
   if (!nested) return 0;
   // A fixed table counts the words it holds, not its stated width, so the column narrows to
-  // its content and the table with it; a column of vertical text keeps its stated width.
+  // its content and the table with it; a cell of vertical text keeps the width it has.
   const nestedView = { ...view, depth };
   let minimums = spacingGapsPt(nested);
   if (nested.layoutFixed) {
@@ -553,7 +553,6 @@ function emptyColumnContent(): AutofitColumnContent {
     preferredWidths: [],
     spans: [],
     measured: [],
-    vertical: [],
   };
 }
 
@@ -570,10 +569,10 @@ function fixedTableCellMinimums(
   const ifWidened: number[] = [];
   const content = emptyColumnContent();
   autofitColumnMinimumsPt(structure, context, view, ifWidened, content);
-  // A column of vertical text keeps its stated width, since its text runs along the row;
-  // any other column without horizontal text of its own asks for no more than a hairline.
+  // A column with no cell of its own asks for no more than a hairline; a vertical-text cell
+  // has already asked for the width it has.
   const own = ifWidened.map((minimum, column) =>
-    Math.max(content.measured[column] || content.vertical[column] ? minimum : 0, MIN_COLUMN_PT)
+    Math.max(content.measured[column] ? minimum : 0, MIN_COLUMN_PT)
   );
   return spanAdjustedMinimums(own, own, own, content.spans);
 }
@@ -675,9 +674,9 @@ export function narrowNestedReader(
 
 /**
  * Each physical column's autofit minimum, as a cell width: its widest single-column cell
- * content plus that cell's horizontal content insets, so an empty cell keeps them. A cell that
- * continues a vertical merge or sets its text vertically sets no minimum; a cell that spans
- * columns reports its own requirement in `content` instead.
+ * content plus that cell's horizontal content insets, so an empty cell keeps them. A cell of
+ * vertical text asks for the width it has. A cell that continues a vertical merge sets no
+ * minimum; a cell that spans columns reports its own requirement in `content` instead.
  */
 export function autofitColumnMinimumsPt(
   structure: SemanticTableStructure,
@@ -697,15 +696,10 @@ export function autofitColumnMinimumsPt(
   const collapsed = structure.cellSpacingPt === 0;
   // Measured as cell widths: a spaced table's gaps sit between its cells, outside them.
   const gapPt = cellSpacingGapPt(structure.cellSpacingPt);
+  const cellWidths = spacedCellWidths(structure);
   for (const row of structure.rows) {
     for (const cell of row.cells) {
-      // Vertical text runs along the row, not across the column.
       if (cell.vMergeContinue) continue;
-      if (cell.textDirection !== 'horizontal') {
-        if (cell.gridSpan === 1 && cell.gridColumn >= 0 && cell.gridColumn < columnCount)
-          if (content) content.vertical[cell.gridColumn] = true;
-        continue;
-      }
       if (cell.gridColumn < 0 || cell.gridColumn >= columnCount) continue;
       if (cell.gridSpan === 1 && cell.preferredWidth.value > 0) {
         const stated = cell.preferredWidth;
@@ -716,6 +710,23 @@ export function autofitColumnMinimumsPt(
           if (known === undefined || points > known)
             content.preferredWidths[cell.gridColumn] = points;
         }
+      }
+      if (cell.textDirection !== 'horizontal') {
+        // Vertical text runs along the row, so the cell keeps the width it has across the
+        // columns it covers: one column's minimum, or a span's requirement.
+        const end = Math.min(cell.gridColumn + cell.gridSpan, columnCount);
+        let held = 0;
+        for (let column = cell.gridColumn; column < end; column++) held += cellWidths[column]!;
+        if (end - cell.gridColumn > 1) {
+          const span = { from: cell.gridColumn, count: end - cell.gridColumn };
+          content?.spans.push({ ...span, minimum: held, current: held });
+          continue;
+        }
+        const column = cell.gridColumn;
+        minimums[column] = Math.max(minimums[column]!, held);
+        wide[column] = Math.max(wide[column]!, held);
+        widest[column] = Math.max(widest[column]!, held);
+        continue;
       }
       if (cell.gridSpan !== 1 && !content) continue;
       let least = -1;
@@ -757,12 +768,8 @@ export function autofitColumnMinimumsPt(
     }
   }
   // A column only spanning cells cover has no minimum of its own; it keeps its width.
-  const cellWidths = spacedCellWidths(structure);
   for (const [column, minimum] of minimums.entries()) {
-    if (content) {
-      content.measured[column] = minimum >= 0;
-      content.vertical[column] = content.vertical[column] === true;
-    }
+    if (content) content.measured[column] = minimum >= 0;
     if (minimum < 0) minimums[column] = cellWidths[column]!;
     if (ifWidened) ifWidened[column] = wide[column]! < 0 ? minimums[column]! : wide[column]!;
     if (content) {
@@ -782,10 +789,8 @@ export interface AutofitColumnContent {
   readonly sizedByContent: boolean[];
   /** The widest absolute preferred width a single-column cell states, where one does. */
   readonly preferredWidths: (number | undefined)[];
-  /** Columns a single-column cell of horizontal text measured. */
+  /** Columns a single-column cell measured; a vertical-text cell measures the width it has. */
   readonly measured: boolean[];
-  /** Columns a single-column cell of vertical text holds; they set no minimum of their own. */
-  readonly vertical: boolean[];
   /** What each cell spanning several columns needs across them. */
   readonly spans: SpanRequirement[];
 }

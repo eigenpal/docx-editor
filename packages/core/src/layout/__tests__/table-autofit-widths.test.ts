@@ -316,6 +316,22 @@ describe('autofit layout', () => {
     }
   });
 
+  test('a nested vertical-text cell keeps its width when it spans or heads a text column', () => {
+    const spanned =
+      '<w:tc><w:tcPr><w:gridSpan w:val="2"/><w:textDirection w:val="btLr"/></w:tcPr>' +
+      `<w:p>${run('vv')}</w:p></w:tc>`;
+    const across = nestedRows([4000, 400, 400], `<w:tr>${plain(4000, 'a')}${spanned}</w:tr>`);
+    expect(innerOf(hostOf(across, 'A'.repeat(14))).rows[0]!.cells[1]!.box.width).toBeCloseTo(40, 6);
+    const header =
+      '<w:tc><w:tcPr><w:tcW w:w="800" w:type="dxa"/><w:textDirection w:val="btLr"/></w:tcPr>' +
+      `<w:p>${run('vv')}</w:p></w:tc>`;
+    const headed = nestedRows(
+      [4000, 800],
+      `<w:tr>${plain(4000, 'a')}${header}</w:tr><w:tr>${plain(4000, 'b')}${plain(800, 'x')}</w:tr>`
+    );
+    expect(innerOf(hostOf(headed, 'A'.repeat(14))).rows[0]!.cells[1]!.box.width).toBeCloseTo(40, 6);
+  });
+
   test('a span the cells’ stated widths hold but the grid does not still widens', () => {
     const table = laidOut(
       `<w:tbl><w:tblPr><w:tblW w:w="2400" w:type="dxa"/>${zeroMargins}</w:tblPr>` +
