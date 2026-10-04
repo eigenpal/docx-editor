@@ -6,7 +6,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 // (and a page break the page) while the field stays one unit for the caret and offsets.
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { strToU8, zipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import {
   FIELD_ATOM_CHAR,
   PAGE_BREAK_CHAR,
@@ -211,6 +211,37 @@ describe('the caret around a field whose result holds breaks', () => {
     expect(
       paragraphLines(editor).map((line) => line.spans.map((span) => span.text).join(''))
     ).toEqual(['bm1 \n', 'bm2', 'see bm1 \n', 'bm2']);
+  });
+
+  test('a line break typed into a bookmark saves into the REF result and reopens', async () => {
+    const editor = mount(
+      docx([
+        `<w:p><w:bookmarkStart w:id="1" w:name="bm"/>${run(t('alpha beta'))}<w:bookmarkEnd w:id="1"/></w:p>`,
+        `<w:p>${run(t('see '))}${complexField('REF bm \\h', run(t('alpha beta')))}</w:p>`,
+      ])
+    );
+    const surface = editor.surface!;
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    surface.setSelection({
+      anchor: { paragraphId, offset: 5 },
+      head: { paragraphId, offset: 6 },
+    });
+    surface.insertLineBreak();
+    surface.setSelection({
+      anchor: { paragraphId, offset: 6 },
+      head: { paragraphId, offset: 10 },
+    });
+    surface.type('gamma');
+    const texts = (target: DocxEditorInstance) =>
+      paragraphLines(target).map((line) => line.spans.map((span) => span.text).join(''));
+    const painted = ['alpha\n', 'gamma', 'see alpha\n', 'gamma'];
+    expect(texts(editor)).toEqual(painted);
+
+    const saved = new Uint8Array(await editor.save());
+    const xml = strFromU8(unzipSync(saved)['word/document.xml']!);
+    const result = xml.slice(xml.indexOf('fldCharType="separate"'));
+    expect(result).toMatch(/<w:t>alpha<\/w:t><w:br\/><w:t>gamma<\/w:t>/);
+    expect(texts(mount(saved))).toEqual(painted);
   });
 
   test('a justified line ending at a break in a result stretches like a plain break', () => {

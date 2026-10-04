@@ -5,7 +5,7 @@
 // attacker-controlled OOXML.
 
 import {
-  hardBreakText,
+  hardBreakKind,
   isFldSimple,
   WML_NAMESPACE_URI,
   type OoxmlElement,
@@ -116,7 +116,7 @@ export function bookmarkRangeText(paragraph: OoxmlElement, name: string): string
           }
         } else if (grand.kind === 'tab') {
           append('\t');
-        } else if (grand.kind === 'hardBreak' && hardBreakText(grand) === '\n') {
+        } else if (grand.kind === 'hardBreak' && hardBreakKind(grand) === 'line') {
           // A line break stays a line break in the result. A page break does not join it.
           append('\n');
         }

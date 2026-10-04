@@ -42,6 +42,8 @@ import {
 } from '../package/ooxml-shared.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { isValidXmlText } from '../package/sinks.ts';
+import { hardBreakKind } from '../package/hard-break.ts';
+import { simpleElement } from './tree-op-inline-elements.ts';
 import { effectiveContentLockAt, isBoundAt, ok, parentOf } from './tree-op-nodes.ts';
 import type { TreeDocOp, TreeOpRejection, TreeOpResult } from './tree-op-types.ts';
 
@@ -94,7 +96,7 @@ function isElement(node: OoxmlNode): node is OoxmlElement {
   return node.kind !== 'textValue';
 }
 
-/** Text of one plain result run: `w:t` values and `w:tab` as `\t`. */
+/** Text of one plain result run: `w:t` values, `w:tab` as `\t`, line breaks as `\n`. */
 function plainRunText(run: OoxmlElement): string {
   let text = '';
   for (const child of run.children) {
@@ -104,6 +106,8 @@ function plainRunText(run: OoxmlElement): string {
       }
     } else if (child.kind === 'tab') {
       text += '\t';
+    } else if (child.kind === 'hardBreak') {
+      text += '\n';
     }
   }
   return text;
@@ -112,8 +116,10 @@ function plainRunText(run: OoxmlElement): string {
 /**
  * Whether a run is PLAIN — only `w:rPr`, `w:t` and `w:tab` children, and an `w:rPr` free of
  * `w:rPrChange` (a tracked formatting change is revision markup the rewrite must not touch).
+ * A computed refresh also admits line breaks, which it writes back as `w:br`; a form edit
+ * does not.
  */
-function isPlainResultRun(node: OoxmlNode): node is OoxmlElement {
+function isPlainResultRun(node: OoxmlNode, lineBreaks: boolean): node is OoxmlElement {
   if (node.kind !== 'run') return false;
   for (const child of node.children) {
     if (child.kind === 'runProperties') {
@@ -128,6 +134,7 @@ function isPlainResultRun(node: OoxmlNode): node is OoxmlElement {
       continue;
     }
     if (child.kind === 'tab') continue;
+    if (lineBreaks && child.kind === 'hardBreak' && hardBreakKind(child) === 'line') continue;
     return false;
   }
   return true;
@@ -241,7 +248,7 @@ function consumeComplexField(
       }
       continue;
     }
-    if (!isPlainResultRun(node)) {
+    if (!isPlainResultRun(node, !allowInstructionBookmarks)) {
       plain = false;
       continue;
     }
@@ -260,7 +267,7 @@ function locateSimpleField(node: OoxmlElement): LocatedField {
   const resultRunIds: string[] = [];
   let cachedText = '';
   for (const child of node.children) {
-    if (!isPlainResultRun(child)) {
+    if (!isPlainResultRun(child, true)) {
       plain = false;
       continue;
     }
@@ -400,9 +407,8 @@ export function validateRefreshFieldResults(
       typeof update.text !== 'string' ||
       update.text.length > MAX_FIELD_RESULT_TEXT_CHARS ||
       !isValidXmlText(update.text) ||
-      // Tab is the one control character the rewrite can express (`w:tab`); a newline
-      // would need `w:br`, which is not a shape a field result refresh writes.
-      update.text.includes('\n') ||
+      // The rewrite expresses a tab as `w:tab` and a newline as `w:br`; a carriage return
+      // has no single form, so it is refused.
       update.text.includes('\r')
     ) {
       return 'invalidArgs';
@@ -415,24 +421,14 @@ export function validateRefreshFieldResults(
   return null;
 }
 
-/** Fresh `w:t` / `w:tab` children for one rewritten result run, splitting on `\t`. */
+/** Fresh `w:t` / `w:tab` / `w:br` children for one rewritten result run. */
 function resultRunContent(text: string, mint: () => string): OoxmlNode[] {
   const content: OoxmlNode[] = [];
-  const pieces = text.split('\t');
-  pieces.forEach((piece, index) => {
-    if (index > 0) {
-      content.push({
-        id: mint(),
-        kind: 'tab',
-        namespaceUri: WML_NAMESPACE_URI,
-        localName: 'tab',
-        prefix: 'w',
-        namespaceBindings: [],
-        attributes: [],
-        children: [],
-      } as unknown as OoxmlNode);
-    }
-    if (piece.length > 0) {
+  // Bounded by the op's text length cap; a capturing split keeps each separator.
+  for (const piece of text.split(/([\t\n])/)) {
+    if (piece === '\t') content.push(simpleElement(mint, 'tab'));
+    else if (piece === '\n') content.push(simpleElement(mint, 'br'));
+    else if (piece.length > 0) {
       content.push({
         id: mint(),
         kind: 'text',
@@ -446,7 +442,7 @@ function resultRunContent(text: string, mint: () => string): OoxmlNode[] {
         children: [{ id: mint(), kind: 'textValue', value: piece }],
       } as unknown as OoxmlNode);
     }
-  });
+  }
   return content;
 }
 
