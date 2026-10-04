@@ -344,7 +344,7 @@ export function cellSelectionRects(layout: SemanticLayout, cellIds: readonly str
 }[];
 
 // @public
-export function cellSelectionText(layout: SemanticLayout, selection: CellSelection): string;
+export function cellSelectionText(layout: SemanticLayout, selection: CellSelection, paragraphText?: (layout: SemanticLayout, paragraphId: string) => string): string;
 
 // @public
 export type CellVerticalAlign = 'top' | 'center' | 'bottom';
