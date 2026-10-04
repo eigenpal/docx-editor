@@ -1,3 +1,4 @@
+import { withHeadingSymbols } from './toc-heading-symbols.ts';
 import { resolveTocSources } from '../package/toc-sources.ts';
 import { tocRowOmitsPageNumber } from '../package/toc-rows.ts';
 import { sliceTocParagraph } from '../package/toc-result.ts';
@@ -398,7 +399,12 @@ export function applyInsertToc(
   if (index < 0) return { ok: false, reason: 'tree-invariant' };
   const mint = createNodeIdAllocator(current);
   const control = withFreshParaIds(
-    buildTocContentControl(mint, op.entries, instruction, op.alias),
+    buildTocContentControl(
+      mint,
+      op.entries.map((entry) => withHeadingSymbols(part, entry)),
+      instruction,
+      op.alias
+    ),
     new Set(usedParaIds(current.root)),
     actorScopedSeed(`${op.beforeParagraphId}:toc`),
     { value: 0 },
@@ -433,13 +439,15 @@ export function applyReplaceTocResult(
   const tocAfter = findDetectedToc(detectBodyTocs(current), op.tocId);
   if (!tocAfter) return { ok: false, reason: 'unknown-block' };
 
-  const entries: TocEntryPlan[] = op.entries.map((entry) => ({
-    level: entry.level,
-    text: entry.text,
-    headingParagraphId: entry.headingParagraphId,
-    bookmarkName: entry.bookmarkName,
-    pageNumberText: entry.pageNumberText,
-  }));
+  const entries: TocEntryPlan[] = op.entries.map((entry) =>
+    withHeadingSymbols(current, {
+      level: entry.level,
+      text: entry.text,
+      headingParagraphId: entry.headingParagraphId,
+      bookmarkName: entry.bookmarkName,
+      pageNumberText: entry.pageNumberText,
+    })
+  );
 
   return replaceResultParagraphs(current, tocAfter, entries, options);
 }

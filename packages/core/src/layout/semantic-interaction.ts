@@ -1,3 +1,4 @@
+import { spanBesideSymbol } from './symbol-run.ts';
 import { nearestPageWithStops } from './caret-page-step.ts';
 import { mergedCaretGroup } from './merged-caret-navigation.ts';
 import {
@@ -977,20 +978,22 @@ export function spansInSelection(
  * at a paragraph start.
  */
 function caretSpan(layout: SemanticLayout, position: SemanticPosition): StyleSpanRecord[] {
+  let leftward: StyleSpanRecord | null = null;
   let rightward: StyleSpanRecord | null = null;
   let furniture: StyleSpanRecord | null = null;
   for (const { line } of paragraphLinesIndex(layout).get(position.paragraphId) ?? []) {
     // This paragraph's spans only: on a merged line the other member's runs sit beside these
     // and would report their formatting for a caret that is not in them.
     for (const span of lineSegmentFor(line, position.paragraphId)?.spans ?? []) {
-      if (span.range.start < position.offset && position.offset <= span.range.end) return [span];
-      if (span.range.start !== position.offset) continue;
-      // A zero-width projected span (a `w:sym` glyph, a field-code atom) paints in its own
-      // face but is no run the caret types into: the character after it answers, and the
-      // glyph itself only when the paragraph holds nothing else.
-      if (span.range.end === span.range.start && span.projected) furniture ??= span;
-      else rightward ??= span;
+      const { start, end } = span.range;
+      if (start < position.offset && position.offset <= end) leftward ??= span;
+      // A zero-width projected span (a field-code atom) paints in its own face but is no run
+      // the caret types into: the character after it answers, and the atom itself only when
+      // the paragraph holds nothing else.
+      else if (start === position.offset && end === start && span.projected) furniture ??= span;
+      else if (start === position.offset) rightward ??= span;
     }
   }
-  return rightward ? [rightward] : furniture ? [furniture] : [];
+  const chosen = spanBesideSymbol(leftward, rightward) ?? leftward ?? rightward ?? furniture;
+  return chosen ? [chosen] : [];
 }

@@ -1,23 +1,37 @@
-import { inlineCharacterTextOf, withDisplayedHyphens } from '../package/hyphen-text.ts';
+import {
+  inlineCharacterTextOf,
+  isSymbolElement,
+  withDisplayedHyphens,
+} from '../package/hyphen-text.ts';
+import { symbolDisplayText } from '../package/symbol-glyph.ts';
 import type { OoxmlNode } from '../package/ooxml-tree.ts';
 import { hardBreakText } from '../package/hard-break.ts';
 import { isInstrText } from '../package/field-nodes.ts';
 import type { CommentRecord } from './comment-reads.ts';
 
 /**
- * Plain text of a comment's body, as a card shows it: a non-breaking hyphen is U+2011 and an
- * optional hyphen shows nothing. A card never re-implements the run walk.
+ * Plain text of a comment's body, as a card shows it: a non-breaking hyphen is U+2011, an
+ * optional hyphen shows nothing, and a symbol shows its glyph. A card never re-implements the
+ * run walk.
  */
 export function commentBodyText(comment: CommentRecord): string {
-  return withDisplayedHyphens(commentBodyModelText(comment));
+  return withDisplayedHyphens(commentBodyTextOf(comment, true));
 }
 
-/** A comment body in paragraph-text characters, as automation reads it (U+001E, U+001F). */
+/** A comment body in paragraph-text characters, as automation reads it (U+001E, U+001F, "("). */
 export function commentBodyModelText(comment: CommentRecord): string {
+  return commentBodyTextOf(comment, false);
+}
+
+function commentBodyTextOf(comment: CommentRecord, display: boolean): string {
   const parts: string[] = [];
   const visit = (node: OoxmlNode): void => {
     if (node.kind === 'textValue') {
       parts.push(node.value);
+      return;
+    }
+    if (display && isSymbolElement(node)) {
+      parts.push(symbolDisplayText(node));
       return;
     }
     // One character each, as in paragraph text; a card maps them for display.
@@ -52,6 +66,8 @@ export function textUnder(node: OoxmlNode): string {
   // model counts for them.
   if (node.kind === 'tab') return '\t';
   if (node.kind === 'hardBreak') return hardBreakText(node);
+  // A card shows a symbol's glyph, not the "(" its model text reads as.
+  if (isSymbolElement(node)) return symbolDisplayText(node);
   const hyphen = inlineCharacterTextOf(node);
   if (hyphen !== null) return hyphen;
   // A field's instruction is CODE, not content: it measures nothing in the offset model,

@@ -18,6 +18,7 @@ import {
   type TextOccurrence,
 } from './text-match.ts';
 import { segmentsOfWithFieldSpans } from './tree-op-segments.ts';
+import { symbolDisplayText } from '../package/symbol-glyph.ts';
 import {
   isSymbolElement,
   NON_BREAKING_HYPHEN_TEXT,
@@ -36,6 +37,8 @@ export interface VisiblePiece {
   readonly symbol?: true;
   /** Offsets in `text` of the symbols a field result holds, which search never matches. */
   readonly symbolOffsets?: readonly number[];
+  /** What the symbols show as plain text: one for a symbol piece, one per offset otherwise. */
+  readonly symbolDisplays?: readonly string[];
 }
 
 /** One paragraph projection with lossless links to model offsets. */
@@ -53,6 +56,8 @@ export interface ProjectedParagraphText {
   } | null;
   /** Read a model range through this projection. */
   sliceRaw(start: number, end: number): string;
+  /** Displayed text between two projected offsets, each symbol shown as its glyph. */
+  displaySlice(start: number, end: number): string;
   /** Resolve a displayed offset inside a simple field to its visible result run. */
   resultRunAddressAt(projectedOffset: number): {
     readonly runId: string;
@@ -96,6 +101,7 @@ function positionedPieces(pieces: readonly VisiblePiece[]): PositionedPiece[] {
         rawEnd: piece.rawEnd,
         resultRuns: piece.resultRuns,
         ...(piece.symbolOffsets ? { symbolOffsets: piece.symbolOffsets } : {}),
+        ...(piece.symbolDisplays ? { symbolDisplays: piece.symbolDisplays } : {}),
         projectedStart: projected,
         projectedEnd,
         expansion: piece.text.length !== piece.rawEnd - piece.rawStart,
@@ -107,6 +113,7 @@ function positionedPieces(pieces: readonly VisiblePiece[]): PositionedPiece[] {
         rawEnd: piece.rawEnd,
         ...(piece.symbol ? { symbol: true as const } : {}),
         ...(piece.symbolOffsets ? { symbolOffsets: piece.symbolOffsets } : {}),
+        ...(piece.symbolDisplays ? { symbolDisplays: piece.symbolDisplays } : {}),
         projectedStart: projected,
         projectedEnd,
         expansion: piece.text.length !== piece.rawEnd - piece.rawStart,
@@ -227,6 +234,24 @@ export function projectionFromPieces(pieces: readonly VisiblePiece[]): Projected
       }
       return value;
     },
+    displaySlice(start, end) {
+      let shown = '';
+      for (const piece of positioned) {
+        if (piece.projectedEnd <= start || piece.projectedStart >= end) continue;
+        const from = Math.max(start, piece.projectedStart) - piece.projectedStart;
+        const to = Math.min(end, piece.projectedEnd) - piece.projectedStart;
+        if (piece.symbol) {
+          shown += piece.symbolDisplays?.[0] ?? '';
+          continue;
+        }
+        const displays = new Map<number, string>();
+        piece.symbolOffsets?.forEach((offset, index) =>
+          displays.set(offset, piece.symbolDisplays?.[index] ?? '')
+        );
+        for (let at = from; at < to; at += 1) shown += displays.get(at) ?? piece.text[at];
+      }
+      return shown;
+    },
     resultRunAddressAt(projectedOffset) {
       const piece = positioned.find(
         (candidate) =>
@@ -344,6 +369,7 @@ export function visibleParagraphPieces(
         rawStart: segment.start,
         rawEnd: segment.end,
         symbol: true,
+        symbolDisplays: [symbolDisplayText(segment.node)],
       });
       rawStart = segment.end;
       continue;
@@ -358,6 +384,7 @@ export function visibleParagraphPieces(
         rawEnd: segment.end,
         resultRuns: result.runs,
         ...(result.symbols ? { symbolOffsets: result.symbols } : {}),
+        ...(result.symbolDisplays ? { symbolDisplays: result.symbolDisplays } : {}),
       });
     } else {
       pieces.push({
@@ -365,6 +392,7 @@ export function visibleParagraphPieces(
         rawStart: segment.start,
         rawEnd: segment.end,
         ...(result?.symbols ? { symbolOffsets: result.symbols } : {}),
+        ...(result?.symbolDisplays ? { symbolDisplays: result.symbolDisplays } : {}),
       });
     }
     rawStart = segment.end;

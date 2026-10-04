@@ -40,6 +40,7 @@ function clippedIdentityPiece(
     rawEnd: end,
     // A clipped symbol is still a symbol, which search never matches.
     ...(piece.symbol ? { symbol: true as const } : {}),
+    ...(piece.symbol && piece.symbolDisplays ? { symbolDisplays: piece.symbolDisplays } : {}),
   };
 }
 

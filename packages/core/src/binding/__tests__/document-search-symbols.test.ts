@@ -60,4 +60,9 @@ describe('search never matches a symbol', () => {
   test('a typed parenthesis next to a symbol still matches', () => {
     expect(count(`<w:p><w:r><w:t>x(</w:t>${SYM}<w:t>y</w:t></w:r></w:p>`, 'x(')).toBe(1);
   });
+
+  test('match context shows a symbol as its glyph, not as a parenthesis', () => {
+    const [match] = collectTextMatches(bodyPart(CASES.run), 'b').matches;
+    expect(match?.contextBefore).toBe('a\u2714');
+  });
 });

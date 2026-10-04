@@ -1,4 +1,5 @@
 import { resolveTocSources } from './toc-sources.ts';
+import { TOC_SYMBOL_MARK, tocSymbolNode, type TocSymbol } from './toc-symbol-text.ts';
 // Build TOC result paragraphs and ensure heading bookmarks.
 
 import {
@@ -36,6 +37,8 @@ export interface TocEntryPlan {
   readonly headingParagraphId: string;
   readonly bookmarkName: string;
   readonly pageNumberText: string;
+  /** The heading's symbols, one per {@link TOC_SYMBOL_MARK} in `text`, in order. */
+  readonly symbols?: readonly TocSymbol[];
 }
 
 function wAttr(localName: string, value: string) {
@@ -96,7 +99,23 @@ function textWithNonBreakingHyphens(mint: () => string, text: string): OoxmlNode
   ]);
 }
 
-function runWithText(mint: () => string, text: string): OoxmlNode {
+/** Text pieces between symbol marks, each mark written back as its `w:sym`. */
+function textWithSymbols(
+  mint: () => string,
+  text: string,
+  symbols: readonly TocSymbol[] | undefined
+): OoxmlNode[] {
+  if (!symbols || !text.includes(TOC_SYMBOL_MARK)) return textWithNonBreakingHyphens(mint, text);
+  return text.split(TOC_SYMBOL_MARK).flatMap((piece, index) => {
+    const symbol = index > 0 ? symbols[index - 1] : undefined;
+    return [
+      ...(symbol ? [tocSymbolNode(mint, symbol)] : []),
+      ...(piece.length > 0 ? textWithNonBreakingHyphens(mint, piece) : []),
+    ];
+  });
+}
+
+function runWithText(mint: () => string, text: string, symbols?: readonly TocSymbol[]): OoxmlNode {
   return {
     id: mint(),
     kind: 'run',
@@ -120,7 +139,7 @@ function runWithText(mint: () => string, text: string): OoxmlNode {
             } as OoxmlNode,
           ]
         : []),
-      ...textWithNonBreakingHyphens(mint, piece),
+      ...textWithSymbols(mint, piece, symbols),
     ]),
   } as unknown as OoxmlNode;
 }
@@ -301,7 +320,7 @@ export function buildTocEntryParagraph(
   paragraphPropertiesTemplate?: OoxmlNode
 ): OoxmlNode {
   const styleId = `TOC${Math.min(entry.level + 1, 9)}`;
-  const runs: OoxmlNode[] = [runWithText(mint, entry.text)];
+  const runs: OoxmlNode[] = [runWithText(mint, entry.text, entry.symbols)];
   if (!instruction.omitPageNumbers && entry.pageNumberText !== '') {
     runs.push(ptabRun(mint));
     runs.push(runWithText(mint, entry.pageNumberText));

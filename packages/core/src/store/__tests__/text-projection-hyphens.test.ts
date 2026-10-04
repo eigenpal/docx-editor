@@ -21,6 +21,7 @@ import { areInsertableTexts, MAX_INSERTED_HYPHENS } from '../store/tree-op-inlin
 import { validateTreeOp } from '../store/tree-ops.ts';
 import { projectVisibleParagraphText } from '../store/text-projection.ts';
 import { projectParagraphText } from '../../automation/text-projection.ts';
+import { withHeadingSymbols } from '../store/toc-heading-symbols.ts';
 
 const W = WML_NAMESPACE_URI;
 const NBH = '\u001e';
@@ -194,6 +195,40 @@ describe('hyphen elements in paragraph text', () => {
     };
     walk(row);
     expect(texts.join('')).toContain('Pre<nbh>Trial');
+  });
+
+  test('a table of contents row copies its heading symbols as symbols', () => {
+    // The outline entry leaves the symbol out; the row built from it writes the symbol back.
+    const part = load(
+      '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r>' +
+        '<w:sym w:font="Wingdings" w:char="F0FC"/><w:t xml:space="preserve"> Approved</w:t>' +
+        '</w:r></w:p>'
+    );
+    const heading = part.root.children[0]!.children.find((node) => node.kind === 'paragraph')!;
+    const plain = {
+      level: 0,
+      text: 'Approved',
+      headingParagraphId: heading.id,
+      bookmarkName: '_Toc1',
+      pageNumberText: '1',
+    };
+    const entry = withHeadingSymbols(part, plain);
+    let next = 0;
+    const row = buildTocEntryParagraph(
+      () => `toc${next++}`,
+      entry,
+      parseTocInstruction('TOC \\o "1-3"')!
+    );
+    const xml = serializeOoxmlPart({
+      ...part,
+      root: { ...part.root, children: [row] },
+    } as OoxmlPart);
+    expect(xml).toContain(
+      '<w:sym w:char="F0FC" w:font="Wingdings"/><w:t xml:space="preserve"> Approved</w:t>'
+    );
+    expect(xml).not.toContain('\ufdd0');
+    // A row whose text is not the heading's keeps the text it was given.
+    expect(withHeadingSymbols(part, { ...plain, text: 'Other' }).symbols).toBeUndefined();
   });
 
   test('a content control value written back keeps its hyphens', () => {

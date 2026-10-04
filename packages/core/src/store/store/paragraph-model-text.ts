@@ -47,3 +47,35 @@ export function withoutSymbols(paragraph: OoxmlParagraphNode, text: string): str
   }
   return kept + text.slice(at);
 }
+
+/** A symbol's `w:font` and `w:char`, as the file wrote them. @internal */
+export interface ParagraphSymbol {
+  readonly font: string | null;
+  readonly char: string;
+}
+
+/**
+ * Paragraph model text with each symbol replaced by `mark`, and the symbols in order. Text
+ * that already holds `mark` loses it first, so every mark left stands for one symbol. @internal
+ */
+export function withSymbolMarks(
+  paragraph: OoxmlParagraphNode,
+  text: string,
+  mark: string
+): { readonly text: string; readonly symbols: readonly ParagraphSymbol[] } {
+  const symbols: ParagraphSymbol[] = [];
+  let marked = '';
+  let at = 0;
+  for (const segment of segmentsOf(paragraph)) {
+    const node = segment.node;
+    if (node.kind === 'textValue' || !isSymbolElement(node) || segment.start < at) continue;
+    const attribute = (name: string) =>
+      node.attributes.find((entry) => entry.localName === name)?.value ?? null;
+    const char = attribute('char');
+    if (char === null) continue;
+    marked += text.slice(at, segment.start).replaceAll(mark, '') + mark;
+    symbols.push({ font: attribute('font'), char });
+    at = segment.end;
+  }
+  return { text: marked + text.slice(at).replaceAll(mark, ''), symbols };
+}
