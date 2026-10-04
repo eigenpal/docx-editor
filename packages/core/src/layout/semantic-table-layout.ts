@@ -62,7 +62,7 @@ import {
 export { initialCellCursors, type CellPlaceCursor } from './table-cell-cursor.ts';
 import { alignSpans, type PendingLine } from './paragraph-flow.ts';
 import { alignLineWithPictures } from './line-picture-alignment.ts';
-import { cellLineSetsLikeLastLine, lineAlignOffset } from './paragraph-alignment.ts';
+import { boxLineSetsLikeLastLine, lineAlignOffset } from './paragraph-alignment.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
 import { resolvedParagraphMarkChangeSites } from './revision-formatting-projection.ts';
 import { isEmptyCellTerminator, paragraphMergeGroupOf } from './story-roots.ts';
@@ -688,7 +688,7 @@ function placeCellParagraph(
           lineIndent,
           lineAvailableWidth,
           alignment,
-          cellLineSetsLikeLastLine(props, pendingLine, isLastLine, deps.styleCascade),
+          boxLineSetsLikeLastLine(props, pendingLine, isLastLine, deps.styleCascade),
           alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined,
           rtl,
           options?.inTableCell === true,

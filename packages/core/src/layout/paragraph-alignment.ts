@@ -299,9 +299,10 @@ function alignLogicalSpans(
 
 /**
  * Whether a line aligns as its paragraph's last line: it is that line, or a page or column
- * break closes it. Under the `unstretchedManualBreakLines` compatibility rule, a manual line
- * break closes it too. A distributed paragraph (`w:jc w:val="distribute"`) stretches a line
- * before such a break as it does any other.
+ * break closes it. Under the `pageBreakLinesStretch` compatibility rule, a page or column
+ * break does not; under `unstretchedManualBreakLines`, a manual line break does. A distributed
+ * paragraph (`w:jc w:val="distribute"`) stretches a line before such a break as it does any
+ * other.
  */
 export function setsLikeLastLine(
   props: readonly OoxmlProperty[],
@@ -311,12 +312,18 @@ export function setsLikeLastLine(
     readonly manualBreakAfter?: true;
   },
   isLastLine: boolean,
-  compatibility?: { readonly unstretchedManualBreakLines?: true }
+  compatibility?: {
+    readonly unstretchedManualBreakLines?: true;
+    readonly pageBreakLinesStretch?: true;
+  }
 ): boolean {
   if (isLastLine) return true;
+  const pageBreakSetsLast =
+    (line.pageBreakAfter === true || line.columnBreakAfter === true) &&
+    compatibility?.pageBreakLinesStretch !== true;
   const manualBreakSetsLast =
     line.manualBreakAfter === true && compatibility?.unstretchedManualBreakLines === true;
-  if (!line.pageBreakAfter && !line.columnBreakAfter && !manualBreakSetsLast) return false;
+  if (!pageBreakSetsLast && !manualBreakSetsLast) return false;
   let distributed = false;
   for (const property of props) {
     if (property.localName === 'jc') distributed = property.attributes?.val === 'distribute';
@@ -325,17 +332,23 @@ export function setsLikeLastLine(
 }
 
 /**
- * {@link setsLikeLastLine} for a line in a table cell. A cell ignores page and column breaks,
- * so only a manual line break can close one of its lines.
+ * {@link setsLikeLastLine} for a line laid out in a box: a table cell, a header or footer, a
+ * note, or a text box. A table cell ignores page breaks, so there only a manual line break
+ * can close a line. In the other stories a page break still closes its line. Column breaks
+ * do not change how a line in a box aligns.
  */
-export function cellLineSetsLikeLastLine(
+export function boxLineSetsLikeLastLine(
   props: readonly OoxmlProperty[],
-  line: { readonly manualBreakAfter?: true },
+  line: { readonly pageBreakAfter?: boolean; readonly manualBreakAfter?: true },
   isLastLine: boolean,
-  compatibility?: { readonly unstretchedManualBreakLines?: true }
+  compatibility?: Parameters<typeof setsLikeLastLine>[3]
 ): boolean {
   if (isLastLine) return true;
-  return line.manualBreakAfter === true && setsLikeLastLine(props, line, false, compatibility);
+  const closing = {
+    ...(line.pageBreakAfter === true ? { pageBreakAfter: true } : {}),
+    ...(line.manualBreakAfter === true ? { manualBreakAfter: true as const } : {}),
+  };
+  return setsLikeLastLine(props, closing, false, compatibility);
 }
 
 /**
