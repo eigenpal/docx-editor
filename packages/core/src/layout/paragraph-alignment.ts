@@ -156,8 +156,9 @@ function alignLogicalSpans(
   // Clipped whitespace runs hang past the content: with two of them the last one is a
   // zero-width span AT the measure, so last-span arithmetic reports no slack at all. The
   // content ends where the first hanging span starts, whatever hangs after it.
+  // Breaks alone do not hang: the content then ends where its own whitespace starts.
   const hangingStart =
-    trailingStart < spans.length ? spans[trailingStart]!.box.x - indentLeft : undefined;
+    trailingStart < trailingEnd ? spans[trailingStart]!.box.x - indentLeft : undefined;
   const spansReachLineEnd =
     lineUsedWidth !== undefined &&
     lastContentSpan !== undefined &&
@@ -199,8 +200,22 @@ function alignLogicalSpans(
       ? 0
       : span.box.width -
         measureDisplayText(visible, styleForFontSlot(span.style, span.fontSlot), measurer);
+  // The content ends at the last span holding more than U+0020 spaces. A break closing the
+  // line, and spaces in spans of their own, are not content: they hang. Before a break only
+  // U+0020 hangs; a tab or a no-break space there is content.
+  let contentLast = trailingEnd - 1;
+  while (contentLast > 0 && withoutTrailingSpaces(spans[contentLast]!.text) === '') {
+    contentLast -= 1;
+  }
+  const contentEnd = spans[contentLast] ?? last;
   const contentEndWithoutTrailingWhitespace = (): number =>
-    last.box.x - indentLeft + last.box.width - trailingWhitespaceOf(last);
+    contentEnd.box.x -
+    indentLeft +
+    contentEnd.box.width -
+    trailingWhitespaceOf(
+      contentEnd,
+      contentEnd === last ? undefined : withoutTrailingSpaces(contentEnd.text)
+    );
   // A justified line's hanging spaces may follow a word that keeps its own space (a double
   // space split across runs). That space hangs too: it is neither content nor a slot.
   // Only U+0020 hangs; a tab or a no-break space before the hanging spaces is content.
@@ -250,7 +265,7 @@ function alignLogicalSpans(
       spans,
       -slack,
       measurer,
-      hangsAfterOwnSpace ? trailingStart - 1 : spans.length - 1
+      hangsAfterOwnSpace ? trailingStart - 1 : Math.max(0, contentLast)
     );
   // A line that fills its measure can leave a rounding residue, which must not become spacing.
   if (slack <= SLACK_RESIDUE_PT) return spans;
@@ -265,7 +280,7 @@ function alignLogicalSpans(
     // run splits and drifted every later caret by N×step. Hanging whitespace runs are not
     // slots either: a boundary between two of them took a share of the slack from the words.
     const gapBefore: number[] = [];
-    for (let index = 1; index < trailingStart; index += 1) {
+    for (let index = 1; index < Math.min(trailingStart, contentLast + 1); index += 1) {
       if (endsWithExpandableSpace(spans[index - 1]!.text)) gapBefore.push(index);
     }
     if (gapBefore.length === 0) return spans;
@@ -280,6 +295,25 @@ function alignLogicalSpans(
 
   const offset = (alignment === 'center' ? slack / 2 : slack) - rtlTrailingAdvance;
   return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + offset } }));
+}
+
+/**
+ * Whether a line aligns as its paragraph's last line: it is that line, or a page or column
+ * break closes it. A distributed paragraph (`w:jc w:val="distribute"`) stretches a line
+ * before such a break as it does any other.
+ */
+export function setsLikeLastLine(
+  props: readonly OoxmlProperty[],
+  line: { readonly pageBreakAfter?: boolean; readonly columnBreakAfter?: boolean },
+  isLastLine: boolean
+): boolean {
+  if (isLastLine) return true;
+  if (!line.pageBreakAfter && !line.columnBreakAfter) return false;
+  let distributed = false;
+  for (const property of props) {
+    if (property.localName === 'jc') distributed = property.attributes?.val === 'distribute';
+  }
+  return !distributed;
 }
 
 /**

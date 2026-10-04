@@ -62,7 +62,7 @@ import {
   pendingLineFlowExtentAtPlacement,
   type PendingLine,
 } from './paragraph-flow.ts';
-import { lineAlignOffset } from './paragraph-alignment.ts';
+import { lineAlignOffset, setsLikeLastLine } from './paragraph-alignment.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
   markRevisionFields,
@@ -2785,7 +2785,7 @@ function layoutBlocksPass(
             measure.indent,
             measure.available,
             alignment,
-            isLastLine,
+            setsLikeLastLine(entry.props, pendingLine, isLastLine),
             alignment === 'center' || alignment === 'right' ? measure.used : undefined,
             rtl,
             false,

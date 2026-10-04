@@ -7,6 +7,7 @@ import { expect, test } from 'bun:test';
 import { exportPdf } from '../src/index.ts';
 import { docx } from './fixture.ts';
 import { glyphPositions } from './glyph-positions.ts';
+import { paragraphGridOffsetX } from '../src/paragraph-grid-origin.ts';
 
 const GRID = 0.24;
 // 1276 twips is 63.8pt, which is not a whole device unit. The reference rounds the
@@ -46,4 +47,28 @@ test('a centered paragraph is not itself rounded onto the grid', async () => {
   expect(onGrid(leftX)).toBe(true);
   expect(onGrid(centeredX)).toBe(false);
   expect(centeredX).toBeGreaterThan(leftX);
+});
+
+test('a justified right-to-left line snaps from its text, not its hanging space', () => {
+  const shaping = { script: 'Arab', direction: 'rtl', level: 1, baseLevel: 1 } as const;
+  const span = (text: string, x: number, width: number, style: object = { shaping }) => ({
+    text,
+    box: { x, y: 0, width, height: 12 },
+    style,
+  });
+  // The text starts at 63.8pt, off the grid; the line-end space hangs 3.18pt left of it.
+  const rtl = [span('word ', 100, 27.8), span('word', 63.8, 36.2), span(' ', 60.62, 3.18)];
+  const visit = (spans: readonly object[], contentX: number) =>
+    ({
+      paragraph: { alignment: 'both', box: { x: 63.8 } },
+      storyOrigin: { x: 0, y: 0 },
+      line: { contentX, spans },
+    }) as unknown as Parameters<typeof paragraphGridOffsetX>[0];
+  const snap = (origin: number) => Math.round(origin / GRID) * GRID - origin;
+  expect(paragraphGridOffsetX(visit(rtl, 60.62))).toBeCloseTo(snap(63.8), 9);
+  expect(onGrid(63.8 + paragraphGridOffsetX(visit(rtl, 60.62)))).toBe(true);
+  // A line without a hanging space, and a left-to-right line, snap from `contentX`.
+  expect(paragraphGridOffsetX(visit(rtl.slice(0, 2), 63.8))).toBeCloseTo(snap(63.8), 9);
+  const ltr = [span('word ', 60.62, 30, {}), span(' ', 90.62, 3, {})];
+  expect(paragraphGridOffsetX(visit(ltr, 60.62))).toBeCloseTo(snap(60.62), 9);
 });
