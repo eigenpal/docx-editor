@@ -12,7 +12,7 @@
 // Malformed fields demote too: markers contribute nothing and interior result text remains
 // visible/addressable so content never disappears.
 
-import { hyphenTextOf } from './hyphen-text.ts';
+import { inlineCharacterTextOf } from './hyphen-text.ts';
 import {
   contentControlContentChildren,
   isContentControl,
@@ -430,7 +430,7 @@ export interface FieldRunChildRef {
 /** Text contributed by one supported field-result inline node. @internal */
 export function fieldResultInlineTextOf(node: OoxmlNode): string {
   if (node.kind === 'textValue') return node.value;
-  const hyphen = hyphenTextOf(node);
+  const hyphen = inlineCharacterTextOf(node);
   if (hyphen !== null) return hyphen;
   if (node.kind === 'tab') return '\t';
   if (node.kind === 'hardBreak') return hardBreakText(node);

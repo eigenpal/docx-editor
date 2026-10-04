@@ -10,7 +10,11 @@
 // comes BACK — for the popover to show, for a click to open — is always the sanitized
 // projection layout already resolved, never the authored string.
 
-import { fromHyphenGlyphs, hyphenTextOf, withHyphenGlyphs } from '../store/package/hyphen-text.ts';
+import {
+  fromHyphenGlyphs,
+  inlineCharacterTextOf,
+  withHyphenGlyphs,
+} from '../store/package/hyphen-text.ts';
 import { relationshipTargetIn, storyParagraphs, storyRootsOf } from '@docx-editor.dev/core/store';
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import {
@@ -100,7 +104,7 @@ function liveTextUnder(node: OoxmlNode, depth = 0): string {
   if (isInstrText(node) || node.kind === 'runProperties') return '';
   // A demoted content control is transparent to the offset walk, so it must be transparent
   // here too, or the link's label comes back empty for a span the offsets say has text.
-  const hyphen = hyphenTextOf(node);
+  const hyphen = inlineCharacterTextOf(node);
   if (hyphen !== null) return hyphen;
   if (node.kind === 'generic' && !isInlineRunContainer(node) && !isContentControl(node)) return '';
   if (node.kind === 'tab') return '\t';

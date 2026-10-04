@@ -341,6 +341,27 @@ export function unmergedPiecesOfParagraphForDisplay(
     openAtomicBeginId = null;
   };
 
+  /**
+   * Record one model unit's deletion, and its removal unless vanish hides it anyway; whether
+   * this view shows it. The unit exists in every display mode, so the caret steps over it.
+   */
+  const unitShown = (start: number, hidden = false): boolean => {
+    if (revisionsAreDeletion(revisions) && deletedRanges) {
+      appendModelRange(deletedRanges, start, start + 1);
+    }
+    if (revisionsVisible(revisions, displayMode, authorFilter)) return true;
+    if (!hidden) recordRemoved(start, start + 1, revisions);
+    return false;
+  };
+
+  /** Reserve a `w:sym`'s one model unit; the glyph this view paints over it, or null. */
+  const symbolUnit = (grand: OoxmlNode, props: readonly OoxmlProperty[], hidden: boolean) => {
+    const start = offset;
+    offset += 1;
+    const glyph = unitShown(start, hidden) && !hidden ? symbolGlyphOf(grand) : null;
+    return glyph ? { start, text: glyph.text, ...symbolRunStyle(props, glyph, themeFonts) } : null;
+  };
+
   const pushRunContent = (
     grand: OoxmlNode,
     props: readonly OoxmlProperty[],
@@ -401,14 +422,9 @@ export function unmergedPiecesOfParagraphForDisplay(
         push('\t', props, style, false, offset, offset, { positionalTab: positional });
       return;
     }
-    // A `w:sym` is generic in the canonical tree, so the store gives it NO model width. The
-    // glyph is therefore a projected piece at a zero-width range — paint emits it as
-    // furniture (no `data-start`) and every surrounding offset stays where the store put it.
     if (isSymbolRunChild(grand)) {
-      const glyph = symbolGlyphOf(grand);
-      if (!glyph || style.hidden || !revisionsVisible(revisions, displayMode, authorFilter)) return;
-      const sym = symbolRunStyle(props, glyph, themeFonts);
-      push(glyph.text, sym.props, sym.style, true, offset, offset);
+      const sym = symbolUnit(grand, props, style.hidden);
+      if (sym) push(sym.text, sym.props, sym.style, true, sym.start, sym.start + 1);
       return;
     }
     const text = modelTextOfRunChild(grand);
@@ -650,25 +666,18 @@ export function unmergedPiecesOfParagraphForDisplay(
             }
             continue;
           }
-          // Demoted / editable-result field: the sym paints the way it does in an ordinary
-          // run — a projected zero-width glyph piece — instead of vanishing with the atomic
-          // skips. Buffered like the surrounding result text, so it flushes with it — and
-          // projected here, because the flush never runs `push`.
-          const glyph = symbolGlyphOf(grand);
-          if (!glyph || style.hidden) continue;
-          const sym = symbolRunStyle(props, glyph, themeFonts);
-          const symAttribution = projectPieceAttribution(
-            revisions,
-            sym.props,
-            displayMode,
-            authorFilter
-          );
-          if (symAttribution === null) continue;
+          // Demoted / editable-result field: the sym paints as it does in an ordinary run,
+          // buffered with the result text it flushes with (the flush never runs `push`).
+          const sym = symbolUnit(grand, props, style.hidden);
+          pending.bufferOffset = offset;
+          const symAttribution =
+            sym && projectPieceAttribution(revisions, sym.props, displayMode, authorFilter);
+          if (!sym || !symAttribution) continue;
           pending.buffered.push({
-            text: glyph.text,
+            text: sym.text,
             style: sym.style,
-            start: offset,
-            end: offset,
+            start: sym.start,
+            end: sym.start + 1,
             projected: true,
             ...symAttribution,
             ...(currentLink ? { link: currentLink } : {}),
@@ -860,13 +869,7 @@ export function unmergedPiecesOfParagraphForDisplay(
     // The deleted range is recorded whether or not it was laid out, exactly as the complex path
     // and inline drawings do: the offset exists in every display mode and the caret has to step
     // over it in every mode.
-    if (revisionsAreDeletion(revisions) && deletedRanges) {
-      appendModelRange(deletedRanges, start, start + 1);
-    }
-    if (!revisionsVisible(revisions, displayMode, authorFilter)) {
-      recordRemoved(start, start + 1, revisions);
-      return;
-    }
+    if (!unitShown(start)) return;
     // Inside an atomic field's instruction the result is input to that field, as nested run
     // content is. It keeps its model unit and paints nothing; the outer saved result shows.
     if (pending?.atomic && isInsideOpenFieldInstruction(field)) return;

@@ -345,16 +345,16 @@ export function collectTextMatchesForQueries(
             runIndex: address.index,
             runOffset: address.offset,
             ...(story.scope ? { scope: story.scope } : {}),
-            text: bounded(projected.text.slice(occurrence.start, projectedEnd), SEARCH_QUERY_MAX),
+            text: bounded(projected.displaySlice(occurrence.start, projectedEnd), SEARCH_QUERY_MAX),
             contextBefore: bounded(
-              projected.text.slice(
+              projected.displaySlice(
                 Math.max(0, occurrence.start - CONTEXT_RADIUS),
                 occurrence.start
               ),
               CONTEXT_RADIUS
             ),
             contextAfter: bounded(
-              projected.text.slice(projectedEnd, projectedEnd + CONTEXT_RADIUS),
+              projected.displaySlice(projectedEnd, projectedEnd + CONTEXT_RADIUS),
               CONTEXT_RADIUS
             ),
           });

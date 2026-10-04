@@ -10,6 +10,7 @@ import { runTextOutlineProperty } from './run-text-outline.ts';
 import {
   hyphenDisplayText,
   hyphenTextOf,
+  inlineCharacterTextOf,
   OPTIONAL_HYPHEN_TEXT,
 } from '../store/package/hyphen-text.ts';
 import { runLigaturesValue } from './run-ligatures.ts';
@@ -32,7 +33,7 @@ export function modelTextOfRunChild(grand: OoxmlNode): string {
   }
   if (grand.kind === 'tab') return '\t';
   if (grand.kind === 'hardBreak') return hardBreakText(grand);
-  return hyphenTextOf(grand) ?? '';
+  return inlineCharacterTextOf(grand) ?? '';
 }
 
 /**

@@ -1,8 +1,9 @@
-// Text that `w:noBreakHyphen` and `w:softHyphen` stand for.
+// Text that the inline character elements stand for: `w:noBreakHyphen`, `w:softHyphen`
+// and `w:sym`.
 //
-// Each element is one character of paragraph text: U+001E for a non-breaking hyphen and
-// U+001F for an optional hyphen, the characters a text read of the paragraph returns. Text a
-// person sees uses U+2011 and U+00AD instead.
+// Each element is one character of paragraph text: U+001E for a non-breaking hyphen, U+001F
+// for an optional hyphen, and "(" for a symbol, the characters a text read of the paragraph
+// returns. Text a person sees uses U+2011 and U+00AD for the hyphens; a symbol paints its glyph.
 
 import { WML_NAMESPACE_URI, type OoxmlNode } from './ooxml-tree.ts';
 
@@ -10,6 +11,27 @@ import { WML_NAMESPACE_URI, type OoxmlNode } from './ooxml-tree.ts';
 export const NON_BREAKING_HYPHEN_TEXT = '\u001e';
 /** Paragraph-text character for `w:softHyphen`. */
 export const OPTIONAL_HYPHEN_TEXT = '\u001f';
+
+/**
+ * Paragraph-text character for `w:sym`. A text read returns it for every symbol, whatever
+ * glyph the symbol paints, and search never matches it (`text-projection.ts`).
+ */
+export const SYMBOL_TEXT = '(';
+
+/** Whether a node is a `w:sym` symbol. */
+export function isSymbolElement(node: OoxmlNode): boolean {
+  return (
+    node.kind !== 'textValue' && node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'sym'
+  );
+}
+
+/**
+ * The paragraph-text character of an inline character element (a hyphen or a symbol), or
+ * null for any other node. Every walk that measures model text counts these as one character.
+ */
+export function inlineCharacterTextOf(node: OoxmlNode): string | null {
+  return hyphenTextOf(node) ?? (isSymbolElement(node) ? SYMBOL_TEXT : null);
+}
 
 /** The paragraph-text character of a hyphen element, or null for any other node. */
 export function hyphenTextOf(node: OoxmlNode): string | null {

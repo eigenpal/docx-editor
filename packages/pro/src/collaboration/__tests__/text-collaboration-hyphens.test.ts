@@ -81,3 +81,66 @@ test('hyphens survive a remote edit and a remote insertion as elements', async (
     for (const doc of docs) doc.destroy();
   }
 });
+
+test('a symbol survives remote edits on both sides of it as an element', async () => {
+  const docs = [new Y.Doc(), new Y.Doc()];
+  const awareness = docs.map((doc) => new Awareness(doc));
+  const first = await createTextCollaboration({
+    ydoc: docs[0]!,
+    awareness: awareness[0]!,
+    documentId: `${ROOM}-symbol`,
+    sessionId: 'first',
+    identity: { actorId: 'first', name: 'First' },
+    bootstrap: {
+      kind: 'create',
+      document: collaborationDocx('tick</w:t><w:sym w:font="Wingdings" w:char="F0FC"/><w:t>box'),
+    },
+  });
+  Y.applyUpdate(docs[1]!, Y.encodeStateAsUpdate(docs[0]!), 'initial');
+  const second = await createTextCollaboration({
+    ydoc: docs[1]!,
+    awareness: awareness[1]!,
+    documentId: `${ROOM}-symbol`,
+    sessionId: 'second',
+    identity: { actorId: 'second', name: 'Second' },
+    bootstrap: { kind: 'join' },
+  });
+  const writer = await DocxEditor.createCollaborative(first.document, first.session);
+  const reader = await DocxEditor.createCollaborative(second.document, second.session);
+  try {
+    await writer.run(async (context) => {
+      const paragraph = context.document.body.paragraphs.getFirst();
+      paragraph.insertText('[', 'Start');
+      await context.sync();
+    });
+    sync(docs[0]!, docs[1]!);
+    await writer.run(async (context) => {
+      context.document.body.paragraphs.getFirst().insertText(']', 'End');
+      await context.sync();
+    });
+    // One sync per edit: each update changes one region of the paragraph text.
+    sync(docs[0]!, docs[1]!);
+    await reader.run(async (context) => {
+      context.document.body.paragraphs.getFirst().insertText('!', 'End');
+      await context.sync();
+    });
+    sync(docs[1]!, docs[0]!);
+    const [written, received] = [await writer.save(), await reader.save()];
+    expect(firstParagraphXml(received)).toBe(firstParagraphXml(written));
+    expect(firstParagraphXml(received).match(/<w:sym /g)).toHaveLength(1);
+    const text = await reader.run(async (context) => {
+      const paragraph = context.document.body.paragraphs.getFirst();
+      paragraph.load('text');
+      await context.sync();
+      return paragraph.text;
+    });
+    expect(text).toBe('[tick(box]!');
+  } finally {
+    writer.dispose();
+    reader.dispose();
+    first.destroy();
+    second.destroy();
+    for (const entry of awareness) entry.destroy();
+    for (const doc of docs) doc.destroy();
+  }
+});

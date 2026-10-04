@@ -59,21 +59,21 @@ describe('a w:sym between two text nodes', () => {
     expect(pieces.map((piece) => piece.text)).toEqual(['a', '✔', 'b']);
   });
 
-  test('the glyph is projected furniture over a zero-width range', () => {
+  test('the glyph is a projected piece over its one model offset', () => {
     const sym = project(body)[1]!;
     expect(sym.projected).toBe(true);
     expect(sym.start).toBe(1);
-    expect(sym.end).toBe(1);
+    expect(sym.end).toBe(2);
   });
 
   test('the glyph carries the authored symbol family', () => {
     expect(project(body)[1]!.style.fontFamily).toBe('Wingdings');
   });
 
-  test('the model text is unchanged and unprojected pieces stay 1:1', () => {
+  test('the model text reads the symbol as "(" and unprojected pieces stay 1:1', () => {
     const part = partOf(body);
     const paragraph = paragraphOf(part);
-    expect(paragraphTextOf(part, paragraph.id)).toBe('ab');
+    expect(paragraphTextOf(part, paragraph.id)).toBe('a(b');
     const pieces = piecesOfParagraph(paragraph, []);
     // No piece claims an offset the paragraph does not have, and ranges never overlap.
     let cursor = 0;
@@ -82,7 +82,7 @@ describe('a w:sym between two text nodes', () => {
       cursor = piece.end;
       if (!piece.projected) expect(piece.text.length).toBe(piece.end - piece.start);
     }
-    expect(cursor).toBe(2);
+    expect(cursor).toBe(3);
   });
 });
 
@@ -148,9 +148,10 @@ describe('malformed w:sym', () => {
 
   for (const [label, sym] of cases) {
     test(`${label} renders nothing and does not throw`, () => {
+      // It paints no glyph but keeps its one model offset.
       const pieces = project(`<w:p><w:r><w:t>a</w:t>${sym}<w:t>b</w:t></w:r></w:p>`);
       expect(pieces.map((piece) => piece.text)).toEqual(['a', 'b']);
-      expect(pieces[1]).toMatchObject({ start: 1, end: 2 });
+      expect(pieces[1]).toMatchObject({ start: 2, end: 3 });
     });
   }
 });
