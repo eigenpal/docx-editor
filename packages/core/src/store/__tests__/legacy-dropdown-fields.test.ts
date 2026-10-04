@@ -115,4 +115,18 @@ describe('legacy dropdown choice', () => {
     expect(applyTreeOp(part, op).ok).toBe(false);
     expect(serializeOoxmlPart(part)).toBe(before);
   });
+
+  test('refuses an entry with a line break and stays changeable', () => {
+    const { part, op } = fixture(undefined, '', '', true, 'Bl&#10;ue');
+    expect(validateTreeOp(part, op)).toBe('invalidArgs');
+    expect(applyTreeOp(part, op).ok).toBe(false);
+    const red = applyTreeOp(part, { ...op, selectedIndex: 0 });
+    expect(red.ok).toBe(true);
+    if (!red.ok) return;
+    expect(serializeOoxmlPart(red.part)).toContain('<w:t>Red</w:t>');
+    const green = applyTreeOp(red.part, { ...op, selectedIndex: 1 });
+    expect(green.ok).toBe(true);
+    if (!green.ok) return;
+    expect(serializeOoxmlPart(green.part)).toContain('<w:t>Green</w:t>');
+  });
 });

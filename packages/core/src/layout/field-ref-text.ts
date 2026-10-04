@@ -6,6 +6,7 @@
 
 import { visibleHyphenText } from '../store/package/hyphen-text.ts';
 import {
+  hardBreakKind,
   isFldSimple,
   WML_NAMESPACE_URI,
   type OoxmlElement,
@@ -75,8 +76,8 @@ const bookmarkTextMemos = new WeakMap<OoxmlElement, Map<string, string>>();
 /**
  * The bookmarked text inside the target paragraph: from the named `w:bookmarkStart` to the
  * `w:bookmarkEnd` carrying the same `w:id`, or to the paragraph's end when the range runs
- * past it. Length-capped; collects `w:t` and tabs only — deleted text, field chrome and
- * drawings never join a computed result.
+ * past it. Length-capped; collects `w:t`, tabs and line breaks only — deleted text, page
+ * breaks, field chrome and drawings never join a computed result.
  */
 export function bookmarkRangeText(paragraph: OoxmlElement, name: string): string {
   let memo = bookmarkTextMemos.get(paragraph);
@@ -125,6 +126,9 @@ export function bookmarkRangeText(paragraph: OoxmlElement, name: string): string
           }
         } else if (grand.kind === 'tab') {
           append('\t');
+        } else if (grand.kind === 'hardBreak' && hardBreakKind(grand) === 'line') {
+          // A line break stays a line break in the result. A page break does not join it.
+          append('\n');
         } else {
           // A REF result is read as one string, where an optional hyphen shows nothing.
           const hyphen = visibleHyphenText(grand);
