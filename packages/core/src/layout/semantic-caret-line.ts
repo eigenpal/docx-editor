@@ -78,6 +78,20 @@ export function endsWithLineBreak(line: {
 }
 
 /**
+ * Whether the break that ended this line is the model unit just before `offset`, so the line
+ * the break opened owns that position.
+ *
+ * A break inside a projected field result carries the field's whole one-unit range. The
+ * lines between two such breaks then start and end at the offset after the field, and a
+ * test on the line's own range sees no content to be after. The break's range does.
+ */
+export function breakEndsLineBefore(line: LineRecord, offset: number): boolean {
+  const last = line.spans[line.spans.length - 1];
+  if (!last || !endsWithLineBreak(line)) return false;
+  return last.range.start < offset && last.range.end === offset;
+}
+
+/**
  * Whether this paragraph's slice of the line is ONE inline drawing and nothing else — a
  * picture too wide to share its line, painted as a block in text clothing.
  *
