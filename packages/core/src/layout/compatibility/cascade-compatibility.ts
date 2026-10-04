@@ -11,6 +11,7 @@ export interface CascadeCompatibility {
   readonly doNotBreakWrappedTables?: true;
   readonly fixedParagraphSpacing?: true;
   readonly unstretchedManualBreakLines?: true;
+  readonly pageBreakLinesStretch?: true;
 }
 
 const CASCADE_RULES = [
@@ -20,6 +21,7 @@ const CASCADE_RULES = [
   'doNotBreakWrappedTables',
   'fixedParagraphSpacing',
   'unstretchedManualBreakLines',
+  'pageBreakLinesStretch',
 ] as const satisfies readonly (keyof CascadeCompatibility)[];
 
 /** The cascade options a profile turns on, in a fixed key order. */

@@ -105,6 +105,11 @@ export interface StyleCascadeTable {
    * natural spacing, as a last line does.
    */
   readonly unstretchedManualBreakLines?: true;
+  /**
+   * Legacy modes: a justified line ending in a page or column break stretches to the measure
+   * unless it is the last line of its paragraph.
+   */
+  readonly pageBreakLinesStretch?: true;
   /** Explicit compatibility opt-in to the unmodified ISO table style hierarchy. */
   readonly strictTableStyleHierarchy?: boolean;
   readonly typography?: CjkTypographySettings;
