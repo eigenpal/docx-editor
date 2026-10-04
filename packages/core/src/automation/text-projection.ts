@@ -55,7 +55,9 @@ export function hideInsertionSpansFromPieces(
       hiddenIndex += 1;
     }
     const rawLength = piece.rawEnd - piece.rawStart;
-    if (piece.text.length !== rawLength) {
+    // A field result is one atom even when its text happens to be one character long, and it
+    // must keep its result runs and symbol offsets whole.
+    if (piece.text.length !== rawLength || piece.resultRuns || piece.symbolOffsets) {
       // Whole-atom revision wrappers are hidden here. Insertions inside a field result are
       // removed while its cached result text is built.
       const span = hidden[hiddenIndex];

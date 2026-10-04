@@ -110,7 +110,10 @@ describe('symbols in host text', () => {
   test('search never matches a symbol in the original revision view', async () => {
     const bytes = docx(
       '<w:p><w:ins w:id="1" w:author="A" w:date="2024-01-01T00:00:00Z"><w:r><w:t>new </w:t></w:r></w:ins>' +
-        `<w:r><w:t>a</w:t></w:r><w:r>${SYM}</w:r><w:r><w:t>b</w:t></w:r></w:p>`
+        `<w:r><w:t>a</w:t></w:r><w:r>${SYM}</w:r><w:r><w:t>b</w:t></w:r></w:p>` +
+        // A field whose saved result is one symbol is still one field atom in every view.
+        '<w:p><w:ins w:id="2" w:author="A" w:date="2024-01-01T00:00:00Z"><w:r><w:t>new </w:t></w:r></w:ins>' +
+        `<w:fldSimple w:instr=" DATE "><w:r>${SYM}</w:r></w:fldSimple></w:p>`
     );
     for (const view of ['original', 'allMarkup'] as const) {
       const runtime = await DocxEditor.createServer(bytes, { revisionTextView: view });
