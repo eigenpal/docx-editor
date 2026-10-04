@@ -15,12 +15,17 @@ export interface CellSpacingGeometry {
   cellWidth(column: number, span: number): number;
 }
 
+/** The gap between neighbouring cells, and a cell and the table edge: twice the spacing. */
+export function cellSpacingGapPt(spacingPt: number): number {
+  return Number.isFinite(spacingPt) && spacingPt > 0 ? 2 * spacingPt : 0;
+}
+
 export function cellSpacingGeometry(
   columns: readonly number[],
   spacingPt: number
 ): CellSpacingGeometry | null {
   if (!Number.isFinite(spacingPt) || spacingPt <= 0 || columns.length === 0) return null;
-  const gapPt = 2 * spacingPt;
+  const gapPt = cellSpacingGapPt(spacingPt);
   const prefix = [0];
   for (const width of columns) prefix.push(prefix.at(-1)! + width);
   const scale = cellSpacingScale(columns, spacingPt);
@@ -42,13 +47,12 @@ export function cellSpacingScale(columns: readonly number[], spacingPt: number):
   let total = 0;
   for (const width of columns) total += width;
   if (total <= 0) return 1;
-  return Math.max(0, total - (columns.length + 1) * 2 * spacingPt) / total;
+  return Math.max(0, total - (columns.length + 1) * cellSpacingGapPt(spacingPt)) / total;
 }
 
 /** The total of a spaced table's gaps: twice the spacing at every column edge. */
 export function spacingGapsPt(structure: SpacedTable): number {
-  if (!(structure.cellSpacingPt > 0)) return 0;
-  return (structure.columnWidthsPt.length + 1) * 2 * structure.cellSpacingPt;
+  return (structure.columnWidthsPt.length + 1) * cellSpacingGapPt(structure.cellSpacingPt);
 }
 
 /** Each column's cell width: the column itself, or its share once the gaps come out. */

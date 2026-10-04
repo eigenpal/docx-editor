@@ -308,9 +308,12 @@ describe('autofit layout', () => {
     const vertical =
       '<w:tc><w:tcPr><w:tcW w:w="800" w:type="dxa"/><w:textDirection w:val="btLr"/></w:tcPr>' +
       `<w:p>${run('vv')}</w:p></w:tc>`;
-    const nested = nestedRows([4000, 800], `<w:tr>${plain(4000, 'a')}${vertical}</w:tr>`);
-    const inner = innerOf(hostOf(nested, 'A'.repeat(14)));
-    expect(inner.rows[0]!.cells[1]!.box.width).toBeGreaterThanOrEqual(12);
+    for (const below of ['', `<w:tr>${spanning(2, 'c')}</w:tr>`]) {
+      // Also when a spanning cell in another row covers the same column.
+      const nested = nestedRows([4000, 800], `<w:tr>${plain(4000, 'a')}${vertical}</w:tr>${below}`);
+      const inner = innerOf(hostOf(nested, 'A'.repeat(14)));
+      expect(inner.rows[0]!.cells[1]!.box.width).toBeCloseTo(40, 6);
+    }
   });
 
   test('a span the cells’ stated widths hold but the grid does not still widens', () => {

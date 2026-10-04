@@ -1,5 +1,6 @@
 import { withDefaultTabInterval } from './paragraph-tabs.ts';
 import {
+  cellSpacingGapPt,
   cellSpacingScale,
   columnsAroundCells,
   spacedCellWidths,
@@ -518,8 +519,8 @@ function nestedTableMinimumPt(
   const nested = view.readNested(table, depth);
   // Past the nesting limit layout paints nothing, so nothing needs room.
   if (!nested) return 0;
-  // A fixed table counts only the words it holds, not its stated width: the column narrows
-  // to its content around it, and the table narrows with it.
+  // A fixed table counts the words it holds, not its stated width, so the column narrows to
+  // its content and the table with it; a column of vertical text keeps its stated width.
   const nestedView = { ...view, depth };
   let minimums = spacingGapsPt(nested);
   if (nested.layoutFixed) {
@@ -546,7 +547,14 @@ function nestedTableMinimumPt(
 }
 
 function emptyColumnContent(): AutofitColumnContent {
-  return { maximums: [], sizedByContent: [], preferredWidths: [], spans: [], measured: [] };
+  return {
+    maximums: [],
+    sizedByContent: [],
+    preferredWidths: [],
+    spans: [],
+    measured: [],
+    vertical: [],
+  };
 }
 
 /**
@@ -562,13 +570,10 @@ function fixedTableCellMinimums(
   const ifWidened: number[] = [];
   const content = emptyColumnContent();
   autofitColumnMinimumsPt(structure, context, view, ifWidened, content);
-  // Only a column that spanning cells alone cover asks for nothing; one whose cells all set
-  // their text vertically, or that no cell reaches, keeps its stated width.
-  const spanned = new Set<number>();
-  for (const span of content.spans)
-    for (let column = span.from; column < span.from + span.count; column++) spanned.add(column);
+  // A column of vertical text keeps its stated width, since its text runs along the row;
+  // any other column without horizontal text of its own asks for no more than a hairline.
   const own = ifWidened.map((minimum, column) =>
-    Math.max(content.measured[column] || !spanned.has(column) ? minimum : 0, MIN_COLUMN_PT)
+    Math.max(content.measured[column] || content.vertical[column] ? minimum : 0, MIN_COLUMN_PT)
   );
   return spanAdjustedMinimums(own, own, own, content.spans);
 }
@@ -691,11 +696,16 @@ export function autofitColumnMinimumsPt(
   const preferred = new Array<boolean>(columnCount).fill(false);
   const collapsed = structure.cellSpacingPt === 0;
   // Measured as cell widths: a spaced table's gaps sit between its cells, outside them.
-  const gapPt = 2 * Math.max(0, structure.cellSpacingPt);
+  const gapPt = cellSpacingGapPt(structure.cellSpacingPt);
   for (const row of structure.rows) {
     for (const cell of row.cells) {
       // Vertical text runs along the row, not across the column.
-      if (cell.vMergeContinue || cell.textDirection !== 'horizontal') continue;
+      if (cell.vMergeContinue) continue;
+      if (cell.textDirection !== 'horizontal') {
+        if (cell.gridSpan === 1 && cell.gridColumn >= 0 && cell.gridColumn < columnCount)
+          if (content) content.vertical[cell.gridColumn] = true;
+        continue;
+      }
       if (cell.gridColumn < 0 || cell.gridColumn >= columnCount) continue;
       if (cell.gridSpan === 1 && cell.preferredWidth.value > 0) {
         const stated = cell.preferredWidth;
@@ -749,7 +759,10 @@ export function autofitColumnMinimumsPt(
   // A column only spanning cells cover has no minimum of its own; it keeps its width.
   const cellWidths = spacedCellWidths(structure);
   for (const [column, minimum] of minimums.entries()) {
-    if (content) content.measured[column] = minimum >= 0;
+    if (content) {
+      content.measured[column] = minimum >= 0;
+      content.vertical[column] = content.vertical[column] === true;
+    }
     if (minimum < 0) minimums[column] = cellWidths[column]!;
     if (ifWidened) ifWidened[column] = wide[column]! < 0 ? minimums[column]! : wide[column]!;
     if (content) {
@@ -769,8 +782,10 @@ export interface AutofitColumnContent {
   readonly sizedByContent: boolean[];
   /** The widest absolute preferred width a single-column cell states, where one does. */
   readonly preferredWidths: (number | undefined)[];
-  /** Columns a single-column cell measured; the others only spanning cells cover. */
+  /** Columns a single-column cell of horizontal text measured. */
   readonly measured: boolean[];
+  /** Columns a single-column cell of vertical text holds; they set no minimum of their own. */
+  readonly vertical: boolean[];
   /** What each cell spanning several columns needs across them. */
   readonly spans: SpanRequirement[];
 }
