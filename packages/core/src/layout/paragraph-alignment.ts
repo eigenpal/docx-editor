@@ -193,9 +193,12 @@ function alignLogicalSpans(
   // Centre and right pass `lineUsedWidth` and never read this; the path that does is a
   // JUSTIFIED non-last line, where an over-reported `trailing` inflates `slack` and
   // over-stretches the line. Measured only on that path.
-  // `trimEnd` strips exactly the `\s` set, in linear time; `/\s+$/` is quadratic on a
-  // long whitespace run that does not reach the end.
-  const trailingWhitespaceOf = (span: StyleSpanRecord, visible = span.text.trimEnd()): number =>
+  // Only U+0020 hangs. A tab or no-break space remains content after bidi alignment
+  // separates the zero-width break that follows it.
+  const trailingWhitespaceOf = (
+    span: StyleSpanRecord,
+    visible = withoutTrailingSpaces(span.text)
+  ): number =>
     visible === span.text
       ? 0
       : span.box.width -

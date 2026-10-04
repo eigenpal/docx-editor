@@ -37,7 +37,10 @@ function body(
   options: { rtl?: boolean; table?: boolean; jc?: string; brk?: string } = {}
 ) {
   const { rtl = false, table = false, jc = 'both', brk = '<w:br/>' } = options;
-  const run = (content: string) => `<w:r><w:rPr>${rtl ? '<w:rtl/>' : ''}</w:rPr>${content}</w:r>`;
+  // Pin the size so this spacing test does not depend on document font defaults.
+  const run = (content: string) =>
+    `<w:r><w:rPr><w:sz w:val="20"/><w:szCs w:val="20"/>` +
+    `${rtl ? '<w:rtl/>' : ''}</w:rPr>${content}</w:r>`;
   const paragraph =
     `<w:p><w:pPr>${rtl ? '<w:bidi/>' : ''}<w:jc w:val="${jc}"/></w:pPr>` +
     `${run(`<w:t xml:space="preserve">${text}</w:t>`)}${run(brk)}${run('<w:t>tail</w:t>')}</w:p>`;
