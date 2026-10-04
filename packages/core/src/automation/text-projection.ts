@@ -38,6 +38,8 @@ function clippedIdentityPiece(
     text: piece.text.slice(start - piece.rawStart, end - piece.rawStart),
     rawStart: start,
     rawEnd: end,
+    // A clipped symbol is still a symbol, which search never matches.
+    ...(piece.symbol ? { symbol: true as const } : {}),
   };
 }
 
