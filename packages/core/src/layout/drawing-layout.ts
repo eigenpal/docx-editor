@@ -3,6 +3,9 @@
 // DOM-free points everywhere. `wp:extent` EMUs convert at this boundary; intrinsic pixel
 // dimensions never resize layout. Paint and hit testing consume the published records only.
 
+import { clipBoxToRegion } from './drawing-clip-box.ts';
+export { clipBoxHorizontally, clipBoxToRegion } from './drawing-clip-box.ts';
+
 import type { DrawingImageEffects } from '../store/package/drawing-image-effects.ts';
 import { anchorLaidOutInCell, type CellAnchorScope } from './cell-anchor-layout.ts';
 import {
@@ -275,40 +278,6 @@ export function repositionInlineDrawingsForBaseline(
 }
 
 /** Clip `box` to a horizontal content band; preserves authored size, zeroes clipped axes. */
-export function clipBoxHorizontally(
-  box: LayoutBox,
-  contentLeft: number,
-  contentRight: number
-): LayoutBox {
-  const left = Math.max(box.x, contentLeft);
-  const right = Math.min(box.x + box.width, contentRight);
-  if (right <= left) {
-    return Object.freeze({ x: left, y: box.y, width: 0, height: box.height });
-  }
-  return Object.freeze({
-    x: left,
-    y: box.y,
-    width: right - left,
-    height: box.height,
-  });
-}
-
-/** Clip `box` to a rectangular region on both axes. */
-export function clipBoxToRegion(box: LayoutBox, region: LayoutBox): LayoutBox {
-  const x = Math.max(box.x, region.x);
-  const y = Math.max(box.y, region.y);
-  const right = Math.min(box.x + box.width, region.x + region.width);
-  const bottom = Math.min(box.y + box.height, region.y + region.height);
-  // A box with no width (or height) of its own, such as a straight vertical line, stays when
-  // it lies inside the region; a box that had size and lost it all is empty.
-  const emptyX = box.width > 0 ? right <= x : right < x;
-  const emptyY = box.height > 0 ? bottom <= y : bottom < y;
-  if (emptyX || emptyY) {
-    return Object.freeze({ x, y, width: 0, height: 0 });
-  }
-  return Object.freeze({ x, y, width: right - x, height: bottom - y });
-}
-
 /** How a drawing record holds the picture member of a shape group. */
 export interface DrawingGroupPictureRecord {
   /**

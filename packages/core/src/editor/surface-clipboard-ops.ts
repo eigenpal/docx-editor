@@ -273,10 +273,16 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     const { from, to } = deps.orderedRange();
     const textPart = session.part();
     // Plain text spells each equation in its linear form instead of U+FFFC.
-    const text = plainCopyText(selectedTextIn(deps.layout(), from, to, deps.paragraphOrder(), (id, offset) =>
-      textPart ? equationPlainText(textPart, id, offset) : null,
-      paragraphTextMarkingOptionalHyphens
-    ));
+    const text = plainCopyText(
+      selectedTextIn(
+        deps.layout(),
+        from,
+        to,
+        deps.paragraphOrder(),
+        (id, offset) => (textPart ? equationPlainText(textPart, id, offset) : null),
+        paragraphTextMarkingOptionalHyphens
+      )
+    );
     const scope = deps.storyScope();
     const collapsed = from.paragraphId === to.paragraphId && from.offset === to.offset;
     if (collapsed || scope.kind !== 'body') return { text, html: null };
