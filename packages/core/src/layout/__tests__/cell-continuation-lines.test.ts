@@ -1,6 +1,10 @@
 import { expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlNode } from '../../store/package/ooxml-tree.ts';
-import { cellParagraphLines, type HeldCellBreak } from '../cell-continuation-lines.ts';
+import {
+  cellParagraphLines,
+  zonesReachingCellParagraph,
+  type HeldCellBreak,
+} from '../cell-continuation-lines.ts';
 import type { ExclusionZone } from '../drawing-exclusion.ts';
 import type { PendingLine } from '../paragraph-flow.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
@@ -150,9 +154,7 @@ function linesFor(held: HeldCellBreak | undefined, continuedAfter: number, start
       continuedAfter,
       legacyLineStart: 0,
       held,
-      top: 100,
-      cellWidth: 200,
-      zones,
+      zones: zonesReachingCellParagraph(zones, 'p', 100, 200),
       inlineDrawingLayout: undefined,
       heldKey: () => key,
       breakRemainder: () => rest,
@@ -162,7 +164,7 @@ function linesFor(held: HeldCellBreak | undefined, continuedAfter: number, start
 test('a continuation picks its line by index, not by the first line with its start', () => {
   // A layout-owned piece wrapped over three lines: the last two start at its end.
   const whole = [line(0, 5), line(5, 9), line(9, 9), line(9, 12)];
-  const held = { key: 'k|zones:false', lines: whole, base: 0 };
+  const held = { key: 'k', lines: whole, base: 0 };
   const hit = linesFor(held, 3, 9)();
   expect(hit.lines).toBe(whole);
   expect(hit.lineStart).toBe(3);
@@ -188,31 +190,37 @@ test('a page that breaks its own remainder carries it on to the next page', () =
 
 test('only an exclusion band that can reach the paragraph stops the reuse', () => {
   const whole = [line(0, 5), line(5, 9), line(9, 12)];
-  // Every page here carries a zone, so the break was made with zones too.
-  const held = { key: 'k|zones:true', lines: whole, base: 0 };
+  const held = { key: 'k', lines: whole, base: 0 };
   const reuses = (zone: ExclusionZone) => linesFor(held, 1, 5)([zone]).lines === whole;
   // A header logo's band ends above the paragraph.
   expect(reuses(zoneAt(0, 60))).toBe(true);
-  // A band beside the cell, wider than its wrap distance away, that text passes on both sides.
+  // A band beside the cell, wider than its wrap distance away, on whichever side text passes.
   expect(reuses(zoneAt(150, 40, 260))).toBe(true);
   expect(reuses(zoneAt(150, 40, -70))).toBe(true);
-  // A band over the cell, within its wrap distance, top and bottom, or one-sided: no reuse.
+  expect(reuses(zoneAt(150, 40, 260, 'square', 'left'))).toBe(true);
+  // A band over the cell, within its wrap distance, or top and bottom: no reuse.
   expect(reuses(zoneAt(150, 40, 20))).toBe(false);
   expect(reuses(zoneAt(150, 40, 205))).toBe(false);
   expect(reuses(zoneAt(150, 40, 260, 'topAndBottom'))).toBe(false);
-  expect(reuses(zoneAt(150, 40, 260, 'square', 'left'))).toBe(false);
   expect(linesFor(held, 1, 5)([zoneAt(150, 40)]).carry()).toBeUndefined();
 });
 
-test('a break made with zones on its page never stands for one made without, or back', () => {
+test('pages with and without zones that cannot reach the paragraph share one break', () => {
   const whole = [line(0, 5), line(5, 9), line(9, 12)];
-  const made = linesFor(undefined, 0, 0)([zoneAt(0, 60)]).carry()!;
-  const withZones = { ...made, lines: whole };
-  expect(linesFor(withZones, 1, 5)([zoneAt(0, 60)]).lines).toBe(whole);
-  expect(linesFor(withZones, 1, 5)([]).lines).not.toBe(whole);
-  const without = { ...linesFor(undefined, 0, 0)().carry()!, lines: whole };
-  expect(linesFor(without, 1, 5)([]).lines).toBe(whole);
-  expect(linesFor(without, 1, 5)([zoneAt(0, 60)]).lines).not.toBe(whole);
+  const beside = zoneAt(150, 40, 260);
+  const made = { ...linesFor(undefined, 0, 0)([zoneAt(0, 60), beside]).carry()!, lines: whole };
+  expect(linesFor(made, 1, 5)([]).lines).toBe(whole);
+  expect(linesFor(made, 1, 5)([beside]).lines).toBe(whole);
+  // A zone that reaches the paragraph is passed on to the break, and stops the reuse.
+  const zones = [zoneAt(0, 60), beside, zoneAt(150, 40, 20)];
+  expect(zonesReachingCellParagraph(zones, 'p', 100, 200)).toEqual([zones[2]]);
+  expect(linesFor(made, 1, 5)(zones).lines).not.toBe(whole);
+});
+
+test('a zone the paragraph anchors itself always reaches it', () => {
+  const own = { ...zoneAt(0, 60), anchorParagraphId: 'p' } as ExclusionZone;
+  expect(zonesReachingCellParagraph([own], 'p', 100, 200)).toEqual([own]);
+  expect(zonesReachingCellParagraph([own], 'q', 100, 200)).toEqual([]);
 });
 
 test('a continued paragraph that places nothing keeps its break for the next page', () => {

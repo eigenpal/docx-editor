@@ -50,7 +50,11 @@ import {
   withDrawingContext,
   type ParagraphLayoutCache,
 } from './layout-cache.ts';
-import { cellParagraphLines, type HeldCellBreak } from './cell-continuation-lines.ts';
+import {
+  cellParagraphLines,
+  zonesReachingCellParagraph,
+  type HeldCellBreak,
+} from './cell-continuation-lines.ts';
 import {
   continuedCellCursor,
   initialCellCursor,
@@ -459,7 +463,13 @@ function placeCellParagraph(
     : rawZones;
   // The cell's own content box: tabs measure against it, and cell anchors resolve in it.
   const cellBoxWidth = indent.left + available + indent.right;
-  const pageZones = localizeExclusionZones(filtered, originX, 0, { left: 0, right: cellBoxWidth });
+  // Only zones that can reach this paragraph: one above it or beside the cell changes nothing.
+  const pageZones = zonesReachingCellParagraph(
+    localizeExclusionZones(filtered, originX, 0, { left: 0, right: cellBoxWidth }),
+    paragraphId,
+    top,
+    cellBoxWidth
+  );
   // Zone geometry alone does NOT identify the break: these zones stay in page-content Y
   // (only x is localized to the cell), so which band a line crosses depends on where the
   // paragraph starts. Two cells of the same text and width under the same float would
@@ -540,8 +550,6 @@ function placeCellParagraph(
     continuedAfter: options?.startOffset !== undefined ? (options?.lineStart ?? 0) : undefined,
     legacyLineStart: options?.lineStart ?? 0,
     held: options?.heldBreak,
-    top,
-    cellWidth: cellBoxWidth,
     zones: pageZones,
     inlineDrawingLayout: deps.inlineDrawingLayout,
     heldKey: () => keyFrom(0, false),
