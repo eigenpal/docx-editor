@@ -106,6 +106,10 @@ export function planInsertComment(
     return refuse('invalid-handle', 'an empty story has no comment anchor');
   const story = storyOfSpanRef(operation.span, handles, packageReads);
   if (!story.ok) return refuse(story.code, 'that span is not a place', story.detail);
+  // A text box story cannot hold a comment: the selection there offers no comment, and a
+  // comment anchored there is dropped when the file opens.
+  if (story.value.story.kind === 'textbox')
+    return refuse('unsupported-content', 'a comment cannot be anchored in a text box');
   const range = resolved.value;
   if (
     tableCellOf(story.value, range.start.paragraphId) !==

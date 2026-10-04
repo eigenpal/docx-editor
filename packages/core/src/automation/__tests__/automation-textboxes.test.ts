@@ -450,6 +450,25 @@ describe('shapes and text-box stories', () => {
     expect(xml).not.toContain('Acme');
   });
 
+  test('a comment cannot be anchored in a text box', () => {
+    const target = host();
+    const { body } = roots(target);
+    const [box] = shapesOf(target, { body });
+    const boxBody = handleAt(
+      target.execute({ operations: [{ op: 'getShapeBody', shape: box! }] }),
+      0
+    );
+    const [match] = spansAt(
+      target.execute({ operations: [{ op: 'search', scope: { body: boxBody }, text: 'Acme' }] }),
+      0
+    );
+    const response = target.execute({
+      operations: [{ op: 'insertComment', span: match!, text: 'Check', author: 'Reviewer' }],
+    });
+    expect(errorAt(response, 0)).toBe('unsupported-content');
+    expect(savedMainXml(target)).not.toContain('commentRangeStart');
+  });
+
   test('duplicate shape ids make the story’s shapes unaddressable', () => {
     const target = open(docx(`<w:p>${textbox(5, 'one')}</w:p><w:p>${textbox(5, 'two')}</w:p>`));
     const { body } = roots(target);

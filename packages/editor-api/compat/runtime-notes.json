@@ -49,7 +49,7 @@
   },
   "Word.Range#insertComment": {
     "status": "partial",
-    "notes": "Writes require an explicit author. Browser writes also require the Pro review module and an editable document."
+    "notes": "Writes require an explicit author. Browser writes also require the Pro review module and an editable document. A range in a text box refuses with InvalidArgument, because a comment there is not kept when the file opens."
   },
   "Word.Section#getHeader": {
     "status": "partial",
@@ -381,7 +381,7 @@
   },
   "Word.Shape#body": {
     "status": "partial",
-    "notes": "A shape that holds its own w:txbxContent story answers it: paragraphs, text, search, and the same edits as any body. This includes a geometric shape with text. A shape without a story, such as a picture or a linked text box that continues another box, refuses with InvalidArgument. Bodies are reachable for shapes in the body, headers, and footers. Tracked changes and comments inside a text box belong to its body. The owner story's tracked changes, acceptAll, and rejectAll leave them alone. Edits save to the DrawingML story and to its VML fallback. The body becomes addressable after the sync that answers it."
+    "notes": "A shape that holds its own w:txbxContent story answers it: paragraphs, text, search, and the same edits as any body. This includes a geometric shape with text. A shape without a story, such as a picture or a linked text box that continues another box, refuses with InvalidArgument. Bodies are reachable for shapes in the body, headers, and footers. Tracked changes inside a text box belong to its body. The owner story's tracked changes, acceptAll, and rejectAll leave them alone. A comment cannot be inserted in a text box, because a comment there is not kept when the file opens; insertComment refuses with InvalidArgument. Edits save to the DrawingML story and to its VML fallback. The body becomes addressable after the sync that answers it."
   },
   "Word.ShapeCollection#getByTypes": {
     "status": "partial",
