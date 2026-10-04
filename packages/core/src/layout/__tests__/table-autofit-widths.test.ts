@@ -202,6 +202,70 @@ describe('autofit layout', () => {
     expect(lineCount(table.rows[0]!.cells[2]!)).toBe(1);
   });
 
+  const fixedNested = (grid: readonly number[], rows: readonly string[][], extra = '') =>
+    `<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/>${extra}${zeroMargins}</w:tblPr><w:tblGrid>` +
+    grid.map((w) => `<w:gridCol w:w="${w}"/>`).join('') +
+    '</w:tblGrid>' +
+    rows
+      .map(
+        (row) =>
+          '<w:tr>' +
+          row
+            .map((text, index) =>
+              row.length < grid.length
+                ? `<w:tc><w:tcPr><w:gridSpan w:val="${grid.length}"/></w:tcPr><w:p>${run(text)}</w:p></w:tc>`
+                : `<w:tc><w:tcPr><w:tcW w:w="${grid[index]}" w:type="dxa"/></w:tcPr><w:p>${run(text)}</w:p></w:tc>`
+            )
+            .join('') +
+          '</w:tr>'
+      )
+      .join('') +
+    '</w:tbl>';
+  const hostOf = (nested: string, neighbour: string) =>
+    laidOut(
+      `<w:tbl><w:tblPr><w:tblW w:w="2400" w:type="dxa"/>${zeroMargins}</w:tblPr>` +
+        '<w:tblGrid><w:gridCol w:w="1200"/><w:gridCol w:w="1200"/></w:tblGrid><w:tr>' +
+        `<w:tc><w:tcPr><w:tcW w:w="1200" w:type="dxa"/></w:tcPr>${nested}<w:p/></w:tc>` +
+        `<w:tc><w:tcPr><w:tcW w:w="1200" w:type="dxa"/></w:tcPr><w:p>${run(neighbour)}</w:p></w:tc>` +
+        '</w:tr></w:tbl>'
+    ).rows[0]!.cells[0]!;
+  const innerOf = (host: TableFragmentRecord['rows'][number]['cells'][number]) =>
+    host.blocks.find((block): block is TableFragmentRecord => block.kind === 'table')!;
+
+  test('a narrowed nested fixed table gives way down to each column’s own words', () => {
+    const host = hostOf(fixedNested([4000, 400], [['a', 'BBBBBB']]), 'A'.repeat(14));
+    const inner = innerOf(host);
+    expect(lineCount(inner.rows[0]!.cells[1]!)).toBe(1);
+    expect(inner.box.x + inner.box.width).toBeLessThanOrEqual(host.box.x + host.box.width + 0.01);
+  });
+
+  test('a nested fixed table’s spanning word reaches the outer column', () => {
+    const host = hostOf(fixedNested([3000, 3000], [['a', 'b'], ['W'.repeat(12)]]), 'A'.repeat(18));
+    const inner = innerOf(host);
+    expect(lineCount(inner.rows[1]!.cells[0]!)).toBe(1);
+  });
+
+  test('an indented nested fixed table stays inside its cell', () => {
+    const host = hostOf(
+      fixedNested([4000], [['n']], '<w:tblInd w:w="400" w:type="dxa"/>'),
+      'A'.repeat(14)
+    );
+    const inner = innerOf(host);
+    expect(inner.box.x + inner.box.width).toBeLessThanOrEqual(host.box.x + host.box.width + 0.01);
+  });
+
+  test('a span the cells’ stated widths hold but the grid does not still widens', () => {
+    const table = laidOut(
+      `<w:tbl><w:tblPr><w:tblW w:w="2400" w:type="dxa"/>${zeroMargins}</w:tblPr>` +
+        '<w:tblGrid><w:gridCol w:w="1200"/><w:gridCol w:w="1200"/></w:tblGrid>' +
+        `<w:tr><w:tc><w:tcPr><w:tcW w:w="1600" w:type="dxa"/></w:tcPr><w:p>${run('a')}</w:p></w:tc>` +
+        `<w:tc><w:tcPr><w:tcW w:w="1600" w:type="dxa"/></w:tcPr><w:p>${run('b')}</w:p></w:tc></w:tr>` +
+        `<w:tr><w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr><w:p>${run('S'.repeat(23))}</w:p></w:tc></w:tr>` +
+        '</w:tbl>'
+    );
+    expect(lineCount(table.rows[1]!.cells[0]!)).toBe(1);
+  });
+
   test('widens a column to keep a 10-letter word whole', () => {
     // A 60 pt word in a 30 pt column. The others give the 30 pt in proportion to their
     // slack above their 12 pt minimums: 48 and 18 pt.

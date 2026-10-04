@@ -340,6 +340,8 @@ export function paragraphContentWidthsPt(
   );
   const { left, right, firstLine, hanging } = layoutInputs.indent;
   const tabs = withDefaultTabInterval(layoutInputs.tabStops, context.defaultTabStopPt);
+  // Tab stops count from the leading indent, which is the right one in right-to-left text.
+  const leading = paragraphIsRtl(layoutInputs.props) ? right : left;
   // Where a tab at `at` lands: the next stop the paragraph states, else the default grid.
   const nextTabStop = (at: number): number => {
     for (const stop of tabs.stops)
@@ -438,7 +440,7 @@ export function paragraphContentWidthsPt(
       if (candidate.length === 0) continue;
       if (candidate === '\t') {
         // A tab uses up the first-line indent, and spaces after it no longer open the line.
-        const at = line + left + (onFirstLine ? firstShift : 0);
+        const at = line + leading + (onFirstLine ? firstShift : 0);
         advance(Math.max(0, nextTabStop(at) - at));
         close();
         first = false;
@@ -528,7 +530,8 @@ function nestedTableMinimumPt(
   // A spanning cell of the nested table asks the outer column for its room too.
   let minimums = spacingGapsPt(nested);
   for (const minimum of spanAdjustedMinimums(
-    spacedCellWidths(nested),
+    // A fixed table gives its stated widths up to its content; an autofit one keeps them.
+    nested.layoutFixed ? ifWidened : spacedCellWidths(nested),
     ifWidened,
     content.maximums,
     content.spans
@@ -537,13 +540,17 @@ function nestedTableMinimumPt(
   return Math.max(width, minimums) + leadingIndentPt(nested);
 }
 
-/** A nested fixed table's columns, scaled down together when they outgrow the cell. */
-function fixedNestedWidths(columns: readonly number[], cellWidthPt: number): readonly number[] {
+/** A nested fixed table's columns once they give way to fit the cell's room. */
+function fixedNestedWidths(
+  columns: readonly number[],
+  minimums: readonly number[],
+  roomPt: number
+): readonly number[] {
   let total = 0;
   for (const width of columns) total += width;
-  if (!(cellWidthPt > 0) || total <= cellWidthPt + WIDTH_EPSILON_PT) return columns;
-  const scale = cellWidthPt / total;
-  return columns.map((width) => width * scale);
+  if (!(roomPt > 0) || total <= roomPt + WIDTH_EPSILON_PT) return columns;
+  const stated = columns.map(() => false);
+  return contentSizedWidths(columns, stated, minimums, minimums, roomPt, roomPt, roomPt);
 }
 
 /** How often a table settles again for spans its settled columns no longer hold. */
@@ -830,9 +837,12 @@ export function autofitColumnWidthsPt(
   const known = byStructure.get(structure);
   if (known && known.contentWidthPt === contentWidthPt) return known.widths;
   if (structure.layoutFixed) {
-    // A nested fixed table paints no wider than the cell that holds it: its columns shrink
-    // together to the cell's width. A top-level fixed table never reaches here.
-    const widths = fixedNestedWidths(structure.columnWidthsPt, contentWidthPt);
+    // A nested fixed table paints no wider than the cell that holds it, after its indent: its
+    // columns give way down to their own minimums. A top-level fixed table never reaches here.
+    const ifWidened: number[] = [];
+    autofitColumnMinimumsPt(structure, context, view, ifWidened);
+    const room = Math.max(0, contentWidthPt - Math.max(0, leadingIndentPt(structure)));
+    const widths = fixedNestedWidths(structure.columnWidthsPt, ifWidened, room);
     byStructure.set(structure, { contentWidthPt, widths });
     return widths;
   }
@@ -856,8 +866,9 @@ export function autofitColumnWidthsPt(
     content.preferredWidths[column] === undefined ? width : content.preferredWidths[column]! * scale
   );
   // Whether the table widens is decided with the insets it has now, spans included.
+  // Spans are held against the widths the table paints at now, not the ones its cells ask.
   const current = spanAdjustedMinimums(
-    preferredWidths,
+    cellWidths,
     minimumsNow,
     content.maximums,
     content.spans.map((span) => ({ ...span, minimum: span.current ?? span.minimum }))
@@ -891,7 +902,8 @@ export function autofitColumnWidthsPt(
           content.maximums,
           // A table with no width of its own takes what its content asks, up to its room.
           ownWidth ? targetPt : undefined,
-          roomPt
+          roomPt,
+          cellWidths.reduce((sum, width) => sum + width, 0)
         )
       : widenAutofitColumns(cellWidths, minimums, targetPt, roomPt);
   let cells = settle();
@@ -905,7 +917,10 @@ export function autofitColumnWidthsPt(
       return held < span.minimum - WIDTH_EPSILON_PT;
     });
     if (short.length === 0) break;
-    minimums = spanAdjustedMinimums(cells, minimums, content.maximums, short);
+    const raised = spanAdjustedMinimums(cells, minimums, content.maximums, short);
+    // Overflowing tables scale every column below its minimum; raising cannot help there.
+    if (raised.every((minimum, column) => minimum === minimums[column])) break;
+    minimums = raised;
     cells = settle();
   }
   const computed = gaps > 0 ? columnsAroundCells(cells, gaps) : cells;
