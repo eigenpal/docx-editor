@@ -111,7 +111,7 @@ export class ImageWriter {
    */
   paintTextbox(visit: SemanticDrawingVisit, page: PDFPage, body: readonly string[]): string {
     const d = visit.drawing;
-    if (d.kind !== 'anchoredDrawing' || !d.textboxStory) return '';
+    if (!d.textboxStory) return '';
     const story = d.textboxStory;
     const bounds = visit.absolutePaintBounds;
     if (bounds.width <= 0 || bounds.height <= 0 || d.accessibility.hidden) return '';
@@ -169,8 +169,7 @@ export class ImageWriter {
     };
     if (d.groupPicture) return this.paintGroupPicture(visit, page, report);
     if (d.vectorShape) return paintVectorShape(this.doc, page, visit, this.work);
-    if (d.kind === 'anchoredDrawing' && d.textboxStory)
-      return report('Textbox story not routed through paintTextbox');
+    if (d.textboxStory) return report('Textbox story not routed through paintTextbox');
     if (d.placeholderGraphicKind) return report(`Unsupported drawing: ${d.placeholderGraphicKind}`);
     return this.paintPicture(visit, page, report);
   }

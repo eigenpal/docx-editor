@@ -467,13 +467,15 @@ export function layoutTextboxStory(
 
   const extentWidth = emuToPoints(projection.extentEmu.cx);
   const extentHeight = emuToPoints(projection.extentEmu.cy);
-  const insetLeft = emuToPoints(story.insetsEmu.left);
-  const insetRight = emuToPoints(story.insetsEmu.right);
-  const insetTop = emuToPoints(story.insetsEmu.top);
-  const insetBottom = emuToPoints(story.insetsEmu.bottom);
+  const strokeWidthPt = emuToPoints(story.strokeWidthEmu);
+  // The outline is centered on the shape edge, so its inner half also insets the text.
+  const outlineInset = story.strokeHex !== null ? strokeWidthPt / 2 : 0;
+  const insetLeft = emuToPoints(story.insetsEmu.left) + outlineInset;
+  const insetRight = emuToPoints(story.insetsEmu.right) + outlineInset;
+  const insetTop = emuToPoints(story.insetsEmu.top) + outlineInset;
+  const insetBottom = emuToPoints(story.insetsEmu.bottom) + outlineInset;
   const contentWidth = Math.max(1, extentWidth - insetLeft - insetRight);
   const contentHeight = Math.max(0, extentHeight - insetTop - insetBottom);
-  const strokeWidthPt = emuToPoints(story.strokeWidthEmu);
 
   const chrome = {
     fillHex: story.fillHex,

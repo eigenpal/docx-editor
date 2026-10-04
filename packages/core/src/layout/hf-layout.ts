@@ -858,7 +858,7 @@ export function storyDrawingResourceToken(story: HeaderFooterStoryLayout): strin
   const tokens: string[] = [];
   forEachStoryDrawing(story, (drawing) => {
     tokens.push(drawingResourceLayoutToken(drawing.resource));
-    if (drawing.kind === 'anchoredDrawing' && drawing.textboxStory?.clippedResourceToken) {
+    if (drawing.textboxStory?.clippedResourceToken) {
       tokens.push(`clip:${drawing.textboxStory.clippedResourceToken}`);
     }
   });

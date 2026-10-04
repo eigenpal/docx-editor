@@ -515,7 +515,7 @@ export async function paint(
   const paintDrawing = async (visit: SemanticDrawingVisit): Promise<string> => {
     const page = pages[visit.page.index]!;
     const d = visit.drawing;
-    if (d.kind !== 'anchoredDrawing' || !d.textboxStory) return images.paint(visit, page);
+    if (!d.textboxStory) return images.paint(visit, page);
     const story = d.textboxStory;
     const origin = {
       x: visit.drawingOrigin.x + story.contentOffset.x - visit.page.box.x,

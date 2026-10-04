@@ -247,8 +247,9 @@ function wrapOf(record: SelectedDrawingRecord): ImageWrapTarget {
 export function selectedImageStateOf(surface: PaginatedSurface | null): SelectedImageState | null {
   const record = resolveSelectedDrawingRecord(surface);
   if (!record) return null;
-  if (record.placeholderGraphicKind !== null && !('textboxStory' in record && record.textboxStory))
-    return null;
+  // An inline text box renders read-only; only an anchored box is a selectable object.
+  const textbox = record.kind === 'anchoredDrawing' && record.textboxStory;
+  if (record.placeholderGraphicKind !== null && !textbox) return null;
   const projection = surface ? projectDrawingForRecord(surface, record) : null;
   if (!projection) return null;
   if (projection.hidden || projection.locks.select) return null;

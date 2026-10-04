@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Inline text boxes painted a placeholder, and anchored text box content ignored the outline width.",
+  "after": "Inline text boxes paint their content read-only inside the extent on the line, and text box content is inset by half the outline width.",
+  "reason": "Layout and paint read the shared document only. Inline text boxes stay read-only, so no new edit, operation, or shared state reaches collaboration.",
+  "tests": [
+    "packages/core/src/layout/__tests__/inline-textbox-layout.test.ts",
+    "packages/core/src/editor/__tests__/textbox-editing.test.ts"
+  ],
+  "changeset": "inline-textbox-read-only-render",
+  "migration": null
+}

@@ -246,6 +246,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     vectorShape: 'explicitly-omitted',
     groupPicture: 'explicitly-omitted',
     revisions: 'explicitly-omitted',
+    textboxStory: 'explicitly-omitted',
   } satisfies Record<keyof InlineDrawingRecord, MarkdownFieldPolicy>,
   anchoredDrawing: {
     kind: 'represented',

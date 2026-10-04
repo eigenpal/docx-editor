@@ -203,6 +203,7 @@ import { createLayoutSession, type FlowCheckpoint, type LayoutSession } from './
 import { replaceLayoutSession } from './layout-session.ts';
 import { furnitureForSection, layoutMultiSectionDocument } from './multi-section-layout.ts';
 import { hostedStoryFlowDeps, layoutTextboxStory } from './textbox-story-layout.ts';
+import { inlineDrawingFlow } from './inline-textbox-flow.ts';
 import {
   layoutBlocksWithColumnBalance,
   type BlockLayoutOptions as ColumnBalanceBlockLayoutOptions,
@@ -1766,9 +1767,7 @@ function layoutBlocksPass(
         displayMode,
         ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
         ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
-        ...(options.inlineDrawingLayout
-          ? { inlineDrawingLayout: options.inlineDrawingLayout }
-          : {}),
+        ...inlineDrawingFlow(options.inlineDrawingLayout, hostedStory),
         contentLeft: 0,
         contentRight:
           columnCount > 1 ? columnWidth() : entry.indent.left + available + entry.indent.right,

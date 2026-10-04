@@ -51,9 +51,9 @@ function compatibleDirectChild(
 /**
  * Read only the direct WPS path that holds a drawing's text-box story.
  *
- * ANCHORED only. Layout carries a text-box story on an anchored drawing record alone, so an
- * inline box paints as a placeholder with its text nowhere on the page. Listing one would
- * report a match the reader cannot see.
+ * ANCHORED only. These stories feed search and in-place editing, and both reveal a match
+ * through the anchored drawing record. An inline box renders its story read-only on its
+ * line, with no editing scope to enter, so it stays out of this list.
  */
 function textboxContentOf(drawing: OoxmlDrawingNode): OoxmlElement | null {
   let anchor: OoxmlElement | null = null;
