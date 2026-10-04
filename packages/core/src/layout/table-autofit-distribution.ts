@@ -6,7 +6,7 @@
 
 const EPSILON_PT = 0.01;
 /** No column collapses below a hairline, whatever its content. */
-const MIN_COLUMN_PT = 1;
+export const MIN_COLUMN_PT = 1;
 
 /** What a cell spanning `count` columns from `from` needs across them, in points. */
 export interface SpanRequirement {

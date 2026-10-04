@@ -293,6 +293,26 @@ describe('autofit layout', () => {
     expect(lineCount(inner.rows[0]!.cells[1]!)).toBe(1);
   });
 
+  test('a nested column with nothing of its own still keeps the words beside it whole', () => {
+    const nested = nestedRows(
+      [400, 3000, 400],
+      `<w:tr>${plain(400, 'AAAAAAA')}${spanning(2, 'b')}</w:tr>` +
+        `<w:tr>${spanning(2, 'c')}${plain(400, 'DDDDDDD')}</w:tr>`
+    );
+    const inner = innerOf(hostOf(nested, 'A'.repeat(14)));
+    expect(lineCount(inner.rows[0]!.cells[0]!)).toBe(1);
+    expect(lineCount(inner.rows[1]!.cells[1]!)).toBe(1);
+  });
+
+  test('a nested fixed column of vertical text keeps its width', () => {
+    const vertical =
+      '<w:tc><w:tcPr><w:tcW w:w="800" w:type="dxa"/><w:textDirection w:val="btLr"/></w:tcPr>' +
+      `<w:p>${run('vv')}</w:p></w:tc>`;
+    const nested = nestedRows([4000, 800], `<w:tr>${plain(4000, 'a')}${vertical}</w:tr>`);
+    const inner = innerOf(hostOf(nested, 'A'.repeat(14)));
+    expect(inner.rows[0]!.cells[1]!.box.width).toBeGreaterThanOrEqual(12);
+  });
+
   test('a span the cells’ stated widths hold but the grid does not still widens', () => {
     const table = laidOut(
       `<w:tbl><w:tblPr><w:tblW w:w="2400" w:type="dxa"/>${zeroMargins}</w:tblPr>` +

@@ -1,6 +1,12 @@
 import { withDefaultTabInterval } from './paragraph-tabs.ts';
-import { cellSpacingScale } from './table-cell-spacing.ts';
 import {
+  cellSpacingScale,
+  columnsAroundCells,
+  spacedCellWidths,
+  spacingGapsPt,
+} from './table-cell-spacing.ts';
+import {
+  MIN_COLUMN_PT,
   contentSizedWidths,
   spanAdjustedMinimums,
   type SpanRequirement,
@@ -193,8 +199,6 @@ export interface AutofitView {
 
 /** Below this a column is already as wide as its content needs. */
 const WIDTH_EPSILON_PT = 0.01;
-/** No column collapses below a hairline, whatever its content. */
-const MIN_COLUMN_PT = 1;
 
 interface MinimumInputs {
   readonly context: TableAutofitContext;
@@ -514,16 +518,16 @@ function nestedTableMinimumPt(
   const nested = view.readNested(table, depth);
   // Past the nesting limit layout paints nothing, so nothing needs room.
   if (!nested) return 0;
-  // What the table paints at in the narrowest cell: a stated absolute width keeps it, a
-  // cell-relative width shrinks with the cell, and the same resolver decides both.
   // A fixed table counts only the words it holds, not its stated width: the column narrows
-  // to its content around it. An autofit one keeps its resolved width as well.
+  // to its content around it, and the table narrows with it.
   const nestedView = { ...view, depth };
   let minimums = spacingGapsPt(nested);
   if (nested.layoutFixed) {
     for (const minimum of fixedTableCellMinimums(nested, context, nestedView)) minimums += minimum;
     return minimums + leadingIndentPt(nested);
   }
+  // An autofit table paints at its resolved width in the narrowest cell: a stated absolute
+  // width keeps it, a cell-relative width shrinks with the cell, and the resolver decides both.
   let width = 0;
   for (const column of nested.columnWidthsPt) width += column;
   const ifWidened: number[] = [];
@@ -536,7 +540,8 @@ function nestedTableMinimumPt(
     content.maximums,
     content.spans
   );
-  for (const minimum of held) minimums += minimum;
+  // Every column keeps a hairline, as the widths it settles at do.
+  for (const minimum of held) minimums += Math.max(minimum, MIN_COLUMN_PT);
   return Math.max(width, minimums) + leadingIndentPt(nested);
 }
 
@@ -557,7 +562,14 @@ function fixedTableCellMinimums(
   const ifWidened: number[] = [];
   const content = emptyColumnContent();
   autofitColumnMinimumsPt(structure, context, view, ifWidened, content);
-  const own = ifWidened.map((minimum, column) => (content.measured[column] ? minimum : 0));
+  // Only a column that spanning cells alone cover asks for nothing; one whose cells all set
+  // their text vertically, or that no cell reaches, keeps its stated width.
+  const spanned = new Set<number>();
+  for (const span of content.spans)
+    for (let column = span.from; column < span.from + span.count; column++) spanned.add(column);
+  const own = ifWidened.map((minimum, column) =>
+    Math.max(content.measured[column] || !spanned.has(column) ? minimum : 0, MIN_COLUMN_PT)
+  );
   return spanAdjustedMinimums(own, own, own, content.spans);
 }
 
@@ -593,27 +605,6 @@ function fixedNestedWidths(
 
 /** How often a table settles again for spans its settled columns no longer hold. */
 const MAX_SPAN_ROUNDS = 3;
-
-/** The total of a spaced table's gaps: twice the spacing at every column edge. */
-function spacingGapsPt(structure: SemanticTableStructure): number {
-  if (!(structure.cellSpacingPt > 0)) return 0;
-  return (structure.columnWidthsPt.length + 1) * 2 * structure.cellSpacingPt;
-}
-
-/** Each column's cell width: the column itself, or its share once the gaps come out. */
-function spacedCellWidths(structure: SemanticTableStructure): readonly number[] {
-  const scale = cellSpacingScale(structure.columnWidthsPt, structure.cellSpacingPt);
-  return scale === 1 ? structure.columnWidthsPt : structure.columnWidthsPt.map((w) => w * scale);
-}
-
-/** Column widths whose cells, once `gaps` come out of their total, have the widths given. */
-function columnsAroundCells(cells: readonly number[], gaps: number): readonly number[] {
-  let total = 0;
-  for (const cell of cells) total += cell;
-  if (total <= 0) return cells.map(() => gaps / Math.max(cells.length, 1));
-  const grow = (total + gaps) / total;
-  return cells.map((cell) => cell * grow);
-}
 
 /** The table indent, which moves only a table aligned to its leading edge. */
 function leadingIndentPt(structure: SemanticTableStructure): number {

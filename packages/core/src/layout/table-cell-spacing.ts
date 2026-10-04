@@ -23,8 +23,7 @@ export function cellSpacingGeometry(
   const gapPt = 2 * spacingPt;
   const prefix = [0];
   for (const width of columns) prefix.push(prefix.at(-1)! + width);
-  const total = prefix.at(-1)!;
-  const scale = total > 0 ? Math.max(0, total - (columns.length + 1) * gapPt) / total : 0;
+  const scale = cellSpacingScale(columns, spacingPt);
   const at = (column: number): number => prefix[Math.max(0, Math.min(column, columns.length))]!;
   return {
     gapPt,
@@ -44,4 +43,31 @@ export function cellSpacingScale(columns: readonly number[], spacingPt: number):
   for (const width of columns) total += width;
   if (total <= 0) return 1;
   return Math.max(0, total - (columns.length + 1) * 2 * spacingPt) / total;
+}
+
+/** The total of a spaced table's gaps: twice the spacing at every column edge. */
+export function spacingGapsPt(structure: SpacedTable): number {
+  if (!(structure.cellSpacingPt > 0)) return 0;
+  return (structure.columnWidthsPt.length + 1) * 2 * structure.cellSpacingPt;
+}
+
+/** Each column's cell width: the column itself, or its share once the gaps come out. */
+export function spacedCellWidths(structure: SpacedTable): readonly number[] {
+  const scale = cellSpacingScale(structure.columnWidthsPt, structure.cellSpacingPt);
+  return scale === 1 ? structure.columnWidthsPt : structure.columnWidthsPt.map((w) => w * scale);
+}
+
+/** Column widths whose cells, once `gaps` come out of their total, have the widths given. */
+export function columnsAroundCells(cells: readonly number[], gaps: number): readonly number[] {
+  let total = 0;
+  for (const cell of cells) total += cell;
+  if (total <= 0) return cells.map(() => gaps / Math.max(cells.length, 1));
+  const grow = (total + gaps) / total;
+  return cells.map((cell) => cell * grow);
+}
+
+/** What the spacing helpers read from a table. */
+interface SpacedTable {
+  readonly columnWidthsPt: readonly number[];
+  readonly cellSpacingPt: number;
 }
