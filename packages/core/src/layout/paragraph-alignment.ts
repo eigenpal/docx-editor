@@ -204,10 +204,22 @@ function alignLogicalSpans(
       ? 0
       : span.box.width -
         measureDisplayText(visible, styleForFontSlot(span.style, span.fontSlot), measurer);
-  // A break closing the line is not content: the whitespace before it is what hangs.
-  const contentEnd = lastContentSpan ?? last;
+  // The content ends at the last span holding more than U+0020 spaces. A break closing the
+  // line, and spaces in spans of their own, are not content: they hang. Before a break only
+  // U+0020 hangs; a tab or a no-break space there is content.
+  let contentLast = trailingEnd - 1;
+  while (contentLast > 0 && withoutTrailingSpaces(spans[contentLast]!.text) === '') {
+    contentLast -= 1;
+  }
+  const contentEnd = spans[contentLast] ?? last;
   const contentEndWithoutTrailingWhitespace = (): number =>
-    contentEnd.box.x - indentLeft + contentEnd.box.width - trailingWhitespaceOf(contentEnd);
+    contentEnd.box.x -
+    indentLeft +
+    contentEnd.box.width -
+    trailingWhitespaceOf(
+      contentEnd,
+      contentEnd === last ? undefined : withoutTrailingSpaces(contentEnd.text)
+    );
   // A right-to-left line hangs ALL of its line-end whitespace (`alignSpans`), so the
   // width it fills ends where that whitespace starts.
   const rtlWhitespaceX =
@@ -264,7 +276,7 @@ function alignLogicalSpans(
       spans,
       -slack,
       measurer,
-      hangsAfterOwnSpace ? trailingStart - 1 : spans.length - 1
+      hangsAfterOwnSpace ? trailingStart - 1 : Math.max(0, contentLast)
     );
   if (slack <= 0) return spans;
 
@@ -278,7 +290,7 @@ function alignLogicalSpans(
     // run splits and drifted every later caret by N×step. Hanging whitespace runs are not
     // slots either: a boundary between two of them took a share of the slack from the words.
     const gapBefore: number[] = [];
-    for (let index = 1; index < trailingStart; index += 1) {
+    for (let index = 1; index < Math.min(trailingStart, contentLast + 1); index += 1) {
       if (endsWithExpandableSpace(spans[index - 1]!.text)) gapBefore.push(index);
     }
     if (gapBefore.length === 0) return spans;
@@ -293,6 +305,25 @@ function alignLogicalSpans(
 
   const offset = (alignment === 'center' ? slack / 2 : slack) - rtlTrailingAdvance;
   return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + offset } }));
+}
+
+/**
+ * Whether a line aligns as its paragraph's last line: it is that line, or a page or column
+ * break closes it. A distributed paragraph (`w:jc w:val="distribute"`) stretches a line
+ * before such a break as it does any other.
+ */
+export function setsLikeLastLine(
+  props: readonly OoxmlProperty[],
+  line: { readonly pageBreakAfter?: boolean; readonly columnBreakAfter?: boolean },
+  isLastLine: boolean
+): boolean {
+  if (isLastLine) return true;
+  if (!line.pageBreakAfter && !line.columnBreakAfter) return false;
+  let distributed = false;
+  for (const property of props) {
+    if (property.localName === 'jc') distributed = property.attributes?.val === 'distribute';
+  }
+  return !distributed;
 }
 
 /**
@@ -311,17 +342,14 @@ export function alignSpans(
   pageBreaksIgnored = false,
   lastLineShrinks = false
 ): readonly StyleSpanRecord[] {
-  // A line closed by a page break sets like the paragraph's last line.
-  const endsLikeParagraph =
-    isLastLine || (!pageBreaksIgnored && spans[spans.length - 1]?.text === PAGE_BREAK_CHAR);
-  const effective = alignment === 'both' && endsLikeParagraph && paragraphRtl ? 'right' : alignment;
+  const effective = alignment === 'both' && isLastLine && paragraphRtl ? 'right' : alignment;
   const aligned = alignLogicalSpans(
     splitBidiTrailingWhitespace(spans, measurer),
     measurer,
     indentLeft,
     available,
     effective,
-    endsLikeParagraph,
+    isLastLine,
     lineUsedWidth,
     paragraphRtl,
     pageBreaksIgnored,

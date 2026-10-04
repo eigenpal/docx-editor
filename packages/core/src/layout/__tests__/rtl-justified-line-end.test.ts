@@ -68,12 +68,19 @@ const font10 =
   '<w:rFonts w:ascii="DejaVu Sans" w:hAnsi="DejaVu Sans" w:cs="DejaVu Sans"/>' +
   '<w:sz w:val="20"/><w:szCs w:val="20"/>';
 /** One justified paragraph; with `brk`, the text, that break, then `after`. */
-function body(text: string, rtl: boolean, table = false, brk = '', after = '') {
+function body(
+  text: string,
+  rtl: boolean,
+  table = false,
+  brk = '',
+  after = '',
+  pPr = '<w:jc w:val="both"/>'
+) {
   const run = (content: string) =>
     `<w:r><w:rPr>${font10}${rtl ? '<w:rtl/>' : ''}</w:rPr>${content}</w:r>`;
   const words = (value: string) => run(`<w:t xml:space="preserve">${value}</w:t>`);
   const paragraph =
-    `<w:p><w:pPr>${rtl ? '<w:bidi/>' : ''}<w:jc w:val="both"/></w:pPr>${words(text)}` +
+    `<w:p><w:pPr>${rtl ? '<w:bidi/>' : ''}${pPr}</w:pPr>${words(text)}` +
     `${brk ? run(brk) + words(after) : ''}</w:p>`;
   const cell =
     `<w:tbl><w:tblPr><w:tblW w:w="${WIDTH * 20}" w:type="dxa"/><w:tblLayout w:type="fixed"/>` +
@@ -215,6 +222,64 @@ test.each([
 test("a justified right-to-left paragraph's last line hangs its trailing spaces", () => {
   for (const source of ['المستفيد من العقد ', 'المستفيد من العقد  ']) {
     const line = firstLine(body(source, true));
+    expect(edges(line, shaped)[1]).toBeCloseTo(START + WIDTH, 3);
+  }
+});
+
+test('a tab before a line break keeps its stop and its leader inside the measure', () => {
+  const pPr =
+    '<w:tabs><w:tab w:val="right" w:leader="underscore" w:pos="2400"/></w:tabs>' +
+    '<w:jc w:val="both"/>';
+  const tabOf = (line: LineRecord) => line.spans.find((span) => span.text === '\t')!;
+  const ltr = firstLine(body('Name of the party:', false, false, '<w:tab/><w:br/>', 'x', pPr));
+  expect(tabOf(ltr).box.x + tabOf(ltr).box.width).toBeCloseTo(START + WIDTH, 3);
+  expect(ltr.spans.every((span) => !span.style.shaping?.wordSpacingPt)).toBe(true);
+  const rtl = firstLine(body('اسم الطرف:', true, false, '<w:tab/><w:br/>', 'التالي', pPr));
+  expect(tabOf(rtl).box.x).toBeCloseTo(START, 3);
+  expect(edges(rtl, shaped)[1]).toBeCloseTo(START + WIDTH, 3);
+});
+
+test('a no-break space before a line break is content, not a hanging space', () => {
+  const nbsp = shaped.measure(
+    '\u00a0',
+    linesOf(
+      layoutSemanticDocument(body('x', false), 0, { measurer: shaped, compatibilityMode: 15 })
+    )[0]!.spans[0]!.style
+  );
+  const ltr = firstLine(body('lorem ipsum dolor\u00a0', false, false, '<w:br/>', 'sit'));
+  expect(edges(ltr, shaped)[1]).toBeCloseTo(START + WIDTH - nbsp, 3);
+  const rtl = firstLine(body('المستفيد من العقد\u00a0', true, false, '<w:br/>', 'يلتزم'));
+  expect(edges(rtl, shaped)[0]).toBeCloseTo(START + nbsp, 3);
+  expect(edges(rtl, shaped)[1]).toBeCloseTo(START + WIDTH, 3);
+});
+
+test.each([2, 3])('justified lines that wrap at %i spaces fill the measure', (count) => {
+  const latin = 'lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor';
+  for (const [source, rtl] of [
+    [latin, false],
+    [ARABIC, true],
+  ] as const) {
+    const part = body(source.split(' ').join(' '.repeat(count)), rtl);
+    const lines = linesOf(
+      layoutSemanticDocument(part, 0, { measurer: shaped, compatibilityMode: 15 })
+    );
+    expect(lines.length).toBeGreaterThan(2);
+    for (const line of lines.slice(0, -1)) {
+      expect(edges(line, shaped)[0]).toBeCloseTo(START, 3);
+      expect(edges(line, shaped)[1]).toBeCloseTo(START + WIDTH, 3);
+    }
+  }
+});
+
+test('a distributed line before a page break still fills the measure', () => {
+  const pPr = '<w:jc w:val="distribute"/>';
+  const brk = '<w:br w:type="page"/>';
+  for (const [source, rtl] of [
+    ['lorem ipsum dolor ', false],
+    ['المستفيد من العقد ', true],
+  ] as const) {
+    const line = firstLine(body(source, rtl, false, brk, 'x', pPr));
+    expect(edges(line, shaped)[0]).toBeCloseTo(START, 3);
     expect(edges(line, shaped)[1]).toBeCloseTo(START + WIDTH, 3);
   }
 });

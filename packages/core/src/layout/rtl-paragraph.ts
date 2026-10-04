@@ -534,16 +534,33 @@ export function reorderBidiSpans(
 }
 
 /**
- * Where a shaped line's line-end whitespace starts, in logical x, or undefined when the
- * line has none or holds nothing else. Breaks after the whitespace count with it.
+ * Where a line's hanging tail starts: the trailing spans that hold only U+0020 spaces and
+ * breaks, within the line-end whitespace. A tab there is content and keeps its stop.
+ */
+function hangingTailStart(spans: readonly StyleSpanRecord[], pageBreaksIgnored: boolean): number {
+  const trailing = lineEndWhitespaceStart(spans, 0, spans.length, pageBreaksIgnored);
+  let start = spans.length;
+  while (start > trailing) {
+    const text = spans[start - 1]!.text;
+    let offset = 0;
+    while (offset < text.length && ' \n\f'.includes(text[offset]!)) offset += 1;
+    if (offset < text.length) break;
+    start -= 1;
+  }
+  return start;
+}
+
+/**
+ * Where a shaped line's hanging tail starts, in logical x, or undefined when the line has
+ * none or holds nothing else.
  */
 export function lineEndWhitespaceX(
   spans: readonly StyleSpanRecord[],
   pageBreaksIgnored = false
 ): number | undefined {
   if (!spans.some((span) => span.style.shaping)) return undefined;
-  const trailing = lineEndWhitespaceStart(spans, 0, spans.length, pageBreaksIgnored);
-  return trailing === 0 || trailing === spans.length ? undefined : spans[trailing]!.box.x;
+  const start = hangingTailStart(spans, pageBreaksIgnored);
+  return start === 0 || start === spans.length ? undefined : spans[start]!.box.x;
 }
 
 /**
@@ -556,7 +573,8 @@ export function lineEndWhitespaceX(
  * in a left-to-right line. Left in place, it pushes the whole line right by its own advance
  * and the first word past the start margin. A justified paragraph's last line, set at the
  * start margin, hangs the same whitespace for the same reason. Alignment must therefore
- * leave all of it out of the width it fills, from {@link lineEndWhitespaceX} on.
+ * leave all of it out of the width it fills, from {@link lineEndWhitespaceX} on. Only
+ * U+0020 spaces and breaks hang; a tab or no-break space there is content.
  *
  * The whitespace spans move to end where the passage's text starts; reordering then draws
  * them first, in the margin, and the text from that same start. Logical spans in, logical
@@ -567,7 +585,7 @@ export function hangRtlLineEndWhitespace(
   pageBreaksIgnored = false
 ): readonly StyleSpanRecord[] {
   if (!spans.some((span) => span.style.shaping)) return spans;
-  const trailing = lineEndWhitespaceStart(spans, 0, spans.length, pageBreaksIgnored);
+  const trailing = hangingTailStart(spans, pageBreaksIgnored);
   if (trailing === 0 || trailing === spans.length) return spans;
   let passage = trailing;
   while (passage > 0 && !((spans[passage]?.wrapAdvanceBefore ?? 0) > 0)) passage--;
