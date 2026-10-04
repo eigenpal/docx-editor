@@ -103,6 +103,10 @@ export const MODE_RULES = {
     'Note reference bands in table rows honor cell widow control and keep-lines cuts',
     'ECMA-376 Part 1 §17.11 Footnotes and Endnotes'
   ),
+  positionedTableBreaksAtMargin: modern(
+    'A page- or margin-positioned table that breaks ends its first fragment at the bottom margin, not the page edge',
+    'ECMA-376 Part 1 §17.4.57 tblpPr'
+  ),
   rowPageBreakYieldsToKeep: modern(
     'A row with a page break does not start a page when the row before it keeps with it',
     'ECMA-376 Part 1 §17.3.1.15 keepNext'
