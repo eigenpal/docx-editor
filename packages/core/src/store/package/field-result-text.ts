@@ -7,6 +7,8 @@
 // Exhausting a field's node budget returns its atom placeholder. The walk fails soft and
 // never makes a file-sized allocation.
 
+import { symbolDisplayText } from './symbol-glyph.ts';
+import { isSymbolElement } from './hyphen-text.ts';
 import {
   collectFieldRunChildren,
   FIELD_ATOM_CHAR,
@@ -42,6 +44,10 @@ export interface FieldResultRunBoundary {
 export interface FieldResultProjection {
   readonly text: string;
   readonly runs: readonly FieldResultRunBoundary[];
+  /** Offsets in `text` of the symbols (`w:sym`, read as "("), which search never matches. */
+  readonly symbols?: readonly number[];
+  /** What each of those symbols shows as plain text, in the same order. */
+  readonly symbolDisplays?: readonly string[];
 }
 
 interface ActiveComplexField {
@@ -75,11 +81,13 @@ interface CharacterBudget {
 interface MutableFieldResult {
   readonly out: string[];
   readonly runs: FieldResultRunBoundary[];
+  readonly symbols: number[];
+  readonly symbolDisplays: string[];
   length: number;
 }
 
 function emptyFieldResult(): MutableFieldResult {
-  return { out: [], runs: [], length: 0 };
+  return { out: [], runs: [], symbols: [], symbolDisplays: [], length: 0 };
 }
 
 function appendRunBoundary(
@@ -99,14 +107,19 @@ function appendRunBoundary(
 
 function appendResultText(
   result: MutableFieldResult,
-  text: string,
+  node: OoxmlNode,
   runId: string,
   budget: CharacterBudget
 ): boolean {
+  const text = fieldResultInlineTextOf(node);
   if (text.length > budget.left) return false;
   budget.left -= text.length;
   if (text.length > 0) {
     const start = result.length;
+    if (isSymbolElement(node)) {
+      result.symbols.push(start);
+      result.symbolDisplays.push(symbolDisplayText(node));
+    }
     result.out.push(text);
     result.length += text.length;
     appendRunBoundary(result, runId, start, result.length);
@@ -121,10 +134,15 @@ function appendNestedResult(result: MutableFieldResult, nested: FieldResultProje
   for (const run of nested.runs) {
     appendRunBoundary(result, run.runId, start + run.start, start + run.end);
   }
+  for (const symbol of nested.symbols ?? []) result.symbols.push(start + symbol);
+  for (const display of nested.symbolDisplays ?? []) result.symbolDisplays.push(display);
 }
 
 function finishFieldResult(result: MutableFieldResult): FieldResultProjection {
-  return { text: result.out.join(''), runs: result.runs };
+  const text = result.out.join('');
+  return result.symbols.length > 0
+    ? { text, runs: result.runs, symbols: result.symbols, symbolDisplays: result.symbolDisplays }
+    : { text, runs: result.runs };
 }
 
 const EMPTY_FIELD_RESULT: FieldResultProjection = Object.freeze({ text: '', runs: [] });
@@ -153,8 +171,7 @@ function plainFieldResultText(
       continue;
     }
     if (isInstrText(entry.node)) continue;
-    const text = fieldResultInlineTextOf(entry.node);
-    if (!appendResultText(result, text, entry.runId, chars)) return null;
+    if (!appendResultText(result, entry.node, entry.runId, chars)) return null;
   }
   return finishFieldResult(result);
 }
@@ -185,8 +202,7 @@ function scanSimpleEntries(
       appendNestedResult(result, nested);
       continue;
     }
-    const text = fieldResultInlineTextOf(node);
-    if (!appendResultText(result, text, entry.runId, chars)) return null;
+    if (!appendResultText(result, node, entry.runId, chars)) return null;
   }
   return finishFieldResult(result);
 }
@@ -227,8 +243,7 @@ function consumeComplexEntry(
   ) {
     return false;
   }
-  const text = fieldResultInlineTextOf(node);
-  if (!appendResultText(active.result, text, entry.runId, active.chars)) active.overflow = true;
+  if (!appendResultText(active.result, node, entry.runId, active.chars)) active.overflow = true;
   return false;
 }
 

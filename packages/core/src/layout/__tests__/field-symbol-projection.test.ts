@@ -268,7 +268,7 @@ describe('a complex SYMBOL field', () => {
     expect(proposed.map((piece) => piece.text)).toEqual([]);
   });
 
-  test("a demoted field's result w:sym paints as a projected zero-width glyph", () => {
+  test("a demoted field's result w:sym paints as a projected glyph over one offset", () => {
     // No end marker: the field demotes and its result is ordinary content — the sym must
     // paint exactly as it does in an ordinary run instead of vanishing with the atomic skips.
     const pieces = project(
@@ -279,11 +279,11 @@ describe('a complex SYMBOL field', () => {
     );
     expect(pieces.map((piece) => piece.text)).toEqual(['be', '✔', 'fore']);
     const glyph = pieces[1]!;
-    expect(glyph).toMatchObject({ start: 2, end: 2, projected: true });
+    expect(glyph).toMatchObject({ start: 2, end: 3, projected: true });
     expect(glyph.style.fontFamily).toBe('Wingdings');
     expect(glyph.fieldAtom).toEqual({ formField: false });
     // Surrounding demoted result text keeps its literal offsets.
-    expect(pieces[2]).toMatchObject({ start: 2, end: 6 });
+    expect(pieces[2]).toMatchObject({ start: 3, end: 7 });
   });
 });
 

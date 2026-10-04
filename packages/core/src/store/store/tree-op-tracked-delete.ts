@@ -4,7 +4,6 @@
 // wrapper-merging and adjacency rules both lanes share. The dependency runs one way: this
 // module imports the builders; nothing here is imported back.
 
-import { symbolsWithin } from './symbols-in-range.ts';
 import {
   isInlineRunContainer,
   MAX_INLINE_CONTAINER_DEPTH,
@@ -15,7 +14,6 @@ import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-
 import {
   createNodeIdAllocator,
   findNode,
-  parentNodeOf,
   replaceChildren,
   type EditOptions,
 } from '../package/ooxml-edit.ts';
@@ -114,21 +112,9 @@ export function applyDeleteTracked(
       struck.add(id);
     }
   }
-  // A symbol has no model width, so no offset places it inside the range. It is
-  // struck with a range that spans it, by identity like atom chrome.
-  // Its wrappers measure nothing either, so each one on the way down carries it.
-  const symbolCarriers = new Set<string>();
-  for (const id of symbolsWithin(paragraph, start, end)) {
-    struck.add(id);
-    for (let at = parentNodeOf(part, id); at && at.id !== paragraph.id; ) {
-      symbolCarriers.add(at.id);
-      at = parentNodeOf(part, at.id);
-    }
-  }
   /** A run carrying part of a struck atom, whether or not it carries the offset itself. */
   const carriesStruckAtom = (node: OoxmlNode): boolean =>
-    node.kind !== 'textValue' &&
-    (symbolCarriers.has(node.id) || contentOf(node).some((child) => struck.has(child.id)));
+    node.kind !== 'textValue' && contentOf(node).some((child) => struck.has(child.id));
 
   let exceedsDepth = false;
   const strike = (nodes: readonly OoxmlNode[], depth: number): OoxmlNode => {

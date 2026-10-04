@@ -1,4 +1,4 @@
-import { hyphenTextOf } from '../store/package/hyphen-text.ts';
+import { inlineCharacterTextOf } from '../store/package/hyphen-text.ts';
 import { isRunLevelMcAlternateContent } from '../store/package/drawing-projection.ts';
 // Canonical tree <-> ProseMirror binding (tasks 6.1, 6.2, 6.3).
 //
@@ -184,7 +184,7 @@ function tokensOfParagraph(paragraph: OoxmlNode): Token[] {
           grand.kind === 'drawing' ||
           isRunLevelMcAlternateContent(grand) ||
           isLegacyVmlAtom(grand) ||
-          hyphenTextOf(grand) !== null
+          inlineCharacterTextOf(grand) !== null
             ? 1
             : 0,
       });

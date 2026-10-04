@@ -4,7 +4,7 @@
 // note reference — including content nested under `w:hyperlink`. Appliers and validation
 // share this model so offsets agree across insert/delete/format/link.
 
-import { hyphenTextOf } from '../package/hyphen-text.ts';
+import { inlineCharacterTextOf } from '../package/hyphen-text.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlParagraphNode } from '../package/ooxml-tree.ts';
 import { isLegacyVmlAtom } from '../package/legacy-vml-projection.ts';
 import { isOmmlEquationAtom } from '../package/omml-display.ts';
@@ -321,7 +321,7 @@ function walkParagraph(
     }
     if (node.kind === 'generic') {
       // A non-breaking or optional hyphen is one character, like a tab.
-      if (hyphenTextOf(node) !== null) {
+      if (inlineCharacterTextOf(node) !== null) {
         segments.push({ runId, node, start: offset, end: offset + 1 });
         offset += 1;
         record(node, start);

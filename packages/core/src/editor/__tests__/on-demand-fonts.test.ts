@@ -84,7 +84,7 @@ describe('on-demand font resolution', () => {
       container: document.createElement('div'),
       document: docx(
         '<w:p><w:r><w:rPr><w:rFonts w:ascii="Garamond" w:hAnsi="Garamond"/></w:rPr>' +
-          '<w:sym w:font="Wingdings" w:char="F0A8"/><w:t>bullet</w:t></w:r></w:p>'
+          '<w:t>bullet</w:t><w:sym w:font="Wingdings" w:char="F0A8"/></w:r></w:p>'
       ),
       fonts: (request) => {
         seen.push(request);
