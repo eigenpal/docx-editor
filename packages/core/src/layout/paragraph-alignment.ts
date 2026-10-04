@@ -6,8 +6,10 @@ import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import { justifyCjkSpans } from './cjk-justify.ts';
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
+import { alignBidiTrailingSpaces, bidiTrailingSpaces } from './bidi-trailing-spaces.ts';
 
 const OVERFLOW_TOLERANCE_PT = 0.001;
+const SLACK_RESIDUE_PT = 1e-9;
 
 /** Horizontal alignment of a paragraph (`w:jc`, ECMA-376 §17.3.1.13). */
 export type Alignment = 'left' | 'center' | 'right' | 'both';
@@ -250,7 +252,8 @@ function alignLogicalSpans(
       measurer,
       hangsAfterOwnSpace ? trailingStart - 1 : spans.length - 1
     );
-  if (slack <= 0) return spans;
+  // A line that fills its measure can leave a rounding residue, which must not become spacing.
+  if (slack <= SLACK_RESIDUE_PT) return spans;
 
   // The last line of a justified paragraph is set flush left, never stretched.
   if (alignment === 'both') {
@@ -296,22 +299,38 @@ export function alignSpans(
   lastLineShrinks = false
 ): readonly StyleSpanRecord[] {
   const effective = alignment === 'both' && isLastLine && paragraphRtl ? 'right' : alignment;
-  return reorderBidiSpans(
+  const split = splitBidiTrailingWhitespace(spans, measurer);
+  const align = (
+    line: readonly StyleSpanRecord[],
+    measure: number,
+    usedWidth: number | undefined
+  ): readonly StyleSpanRecord[] =>
     alignLogicalSpans(
-      splitBidiTrailingWhitespace(spans, measurer),
+      line,
       measurer,
       indentLeft,
-      available,
+      measure,
       effective,
       isLastLine,
-      lineUsedWidth,
+      usedWidth,
       paragraphRtl,
       pageBreaksIgnored,
       lastLineShrinks
-    ),
-    paragraphRtl,
-    pageBreaksIgnored
-  );
+    );
+  const trailing = bidiTrailingSpaces(split, paragraphRtl, isLastLine, pageBreaksIgnored);
+  if (trailing) {
+    return alignBidiTrailingSpaces(
+      split,
+      trailing,
+      align,
+      indentLeft,
+      available,
+      lineUsedWidth,
+      paragraphRtl,
+      pageBreaksIgnored
+    );
+  }
+  return reorderBidiSpans(align(split, available, lineUsedWidth), paragraphRtl, pageBreaksIgnored);
 }
 
 /**

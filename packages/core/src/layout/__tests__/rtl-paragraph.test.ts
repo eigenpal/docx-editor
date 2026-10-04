@@ -112,13 +112,14 @@ test('paint keeps DOM text in logical order and places bidi runs at published ge
   }
 });
 
-test('wrapped Latin trailing spaces reset to the RTL paragraph level', () => {
+test('wrapped Latin trailing spaces stay at the right of their text', () => {
   const lines = linesOf(layout('אבג abc def ghi jkl mno pqr stu'));
   for (const line of lines.slice(0, -1)) {
     const last = line.spans.at(-1)!;
     expect(last.text.trim()).toBe('');
-    expect(last.style.shaping?.direction).toBe('rtl');
-    expect(last.box.x).toBe(line.contentX);
+    expect(last.style.shaping?.direction).toBe('ltr');
+    const textEnd = Math.max(...line.spans.slice(0, -1).map((span) => span.box.x + span.box.width));
+    expect(last.box.x).toBeCloseTo(textEnd, 6);
   }
 });
 
@@ -183,7 +184,7 @@ test('logical RTL indents apply to the inherited leading and trailing sides', ()
 });
 
 test('justified RTL spans stretch authored spaces in the native text band', () => {
-  const result = layout('مرحبا عالم '.repeat(8), '<w:jc w:val="both"/>');
+  const result = layout('مرحبا عالم '.repeat(8), '<w:jc w:val="both"/>', false, 120, '<w:rtl/>');
   const host = document.createElement('div');
   paintSemanticLayout(host, result, { scale: 1 });
   const line = linesOf(result)[0]!;
