@@ -35,11 +35,7 @@ import {
   type AnchoredDrawingRecord,
   type DrawingAnchorFrameContext,
 } from './drawing-layout.ts';
-import {
-  exclusionLayoutToken,
-  filterExclusionZonesForParagraphOrder,
-  localizeExclusionZones,
-} from './drawing-exclusion.ts';
+import { exclusionLayoutToken } from './drawing-exclusion.ts';
 import type {
   FieldLinkProjector,
   FieldPageContext,
@@ -455,21 +451,18 @@ function placeCellParagraph(
       : 0;
   const anchorScope = cellAnchorScope(options?.inTableCell, deps, paragraphId);
   const rawZones = (anchorScope.anchorsWrapText && deps.pageExclusionZones?.()) || [];
-  const paragraphOrder = deps.paragraphOrderIndex?.(paragraphId) ?? Number.MAX_SAFE_INTEGER;
-  const filtered = deps.paragraphOrderIndex
-    ? filterExclusionZonesForParagraphOrder(rawZones, paragraphOrder, (id) =>
-        deps.paragraphOrderIndex?.(id)
-      )
-    : rawZones;
   // The cell's own content box: tabs measure against it, and cell anchors resolve in it.
   const cellBoxWidth = indent.left + available + indent.right;
-  // Only zones that can reach this paragraph: one above it or beside the cell changes nothing.
-  const pageZones = zonesReachingCellParagraph(
-    localizeExclusionZones(filtered, originX, 0, { left: 0, right: cellBoxWidth }),
+  // Only zones that can reach this paragraph: one above it or beside its lines changes nothing.
+  const pageZones = zonesReachingCellParagraph(rawZones, {
+    paragraphOrderIndex: deps.paragraphOrderIndex,
+    originX,
+    width: cellBoxWidth,
     paragraphId,
     top,
-    cellBoxWidth
-  );
+    linesLeft: Math.min(0, indent.left, indent.left + firstLineOffset),
+    linesRight: Math.max(cellBoxWidth, cellBoxWidth - indent.right - Math.min(0, firstLineOffset)),
+  });
   // Zone geometry alone does NOT identify the break: these zones stay in page-content Y
   // (only x is localized to the cell), so which band a line crosses depends on where the
   // paragraph starts. Two cells of the same text and width under the same float would

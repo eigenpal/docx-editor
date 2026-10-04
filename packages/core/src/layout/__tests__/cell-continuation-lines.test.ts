@@ -145,6 +145,16 @@ const zoneAt = (
       effectInsets: { top: 0, right: 0, bottom: 0, left: 0 },
     },
   }) as unknown as ExclusionZone;
+const reaching = (zones: readonly ExclusionZone[], paragraphId = 'p', linesLeft = 0) =>
+  zonesReachingCellParagraph(zones, {
+    originX: 0,
+    width: 200,
+    paragraphId,
+    top: 100,
+    linesLeft,
+    linesRight: 200,
+  });
+
 function linesFor(held: HeldCellBreak | undefined, continuedAfter: number, startOffset: number) {
   const rest = [line(startOffset, startOffset + 3)];
   return (zones: readonly ExclusionZone[] = [], key = 'k') =>
@@ -154,7 +164,7 @@ function linesFor(held: HeldCellBreak | undefined, continuedAfter: number, start
       continuedAfter,
       legacyLineStart: 0,
       held,
-      zones: zonesReachingCellParagraph(zones, 'p', 100, 200),
+      zones: reaching(zones),
       inlineDrawingLayout: undefined,
       heldKey: () => key,
       breakRemainder: () => rest,
@@ -213,14 +223,25 @@ test('pages with and without zones that cannot reach the paragraph share one bre
   expect(linesFor(made, 1, 5)([beside]).lines).toBe(whole);
   // A zone that reaches the paragraph is passed on to the break, and stops the reuse.
   const zones = [zoneAt(0, 60), beside, zoneAt(150, 40, 20)];
-  expect(zonesReachingCellParagraph(zones, 'p', 100, 200)).toEqual([zones[2]]);
+  expect(reaching(zones).map((zone) => zone.verticalBand.x)).toEqual([20]);
   expect(linesFor(made, 1, 5)(zones).lines).not.toBe(whole);
 });
 
 test('a zone the paragraph anchors itself always reaches it', () => {
   const own = { ...zoneAt(0, 60), anchorParagraphId: 'p' } as ExclusionZone;
-  expect(zonesReachingCellParagraph([own], 'p', 100, 200)).toEqual([own]);
-  expect(zonesReachingCellParagraph([own], 'q', 100, 200)).toEqual([]);
+  expect(reaching([own])).toHaveLength(1);
+  expect(reaching([own], 'q')).toHaveLength(0);
+});
+
+test('a zone in the strip a negative indent pushes the lines into reaches them', () => {
+  // The lines start 10 pt left of the cell; a band ends 8 pt left of it, no wrap distance.
+  const strip = zoneAt(150, 40, -58);
+  const tight = {
+    ...strip,
+    input: { ...strip.input, wrapDistances: { top: 0, right: 0, bottom: 0, left: 0 } },
+  } as ExclusionZone;
+  expect(reaching([tight])).toHaveLength(0);
+  expect(reaching([tight], 'p', -10)).toHaveLength(1);
 });
 
 test('a continued paragraph that places nothing keeps its break for the next page', () => {

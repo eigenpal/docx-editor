@@ -1,5 +1,9 @@
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
-import type { ExclusionZone } from './drawing-exclusion.ts';
+import {
+  filterExclusionZonesForParagraphOrder,
+  localizeExclusionZones,
+  type ExclusionZone,
+} from './drawing-exclusion.ts';
 import { anchorsAnyDrawing } from './drawing-placement-exclusion.ts';
 import { crossesContent } from './narrow-wrap-clearance.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
@@ -17,22 +21,47 @@ export interface HeldCellBreak {
 }
 
 /**
- * The page's exclusion zones that can reach a cell paragraph's lines: those that reach below
- * its top over the cell, and any the paragraph anchors itself. A band above the paragraph, such
- * as a header logo's, wraps nothing it holds; nor does a band beside the cell, whichever side
- * it lets text pass on: the cell clips its wrap intervals to its own content box.
+ * The page's exclusion zones that can reach a cell paragraph's lines, localized to the cell:
+ * those that reach below its top across the paragraph's own horizontal extent, and any the
+ * paragraph anchors itself. A band above the paragraph, such as a header logo's, wraps nothing
+ * it holds; nor does a band beside it, whichever side it lets text pass on. The extent
+ * includes any strip a negative indent pushes the lines into past the cell content box.
  */
 export function zonesReachingCellParagraph(
   zones: readonly ExclusionZone[],
-  paragraphId: string,
-  top: number,
-  cellWidth: number
+  cell: {
+    /** Each paragraph's document order; a zone anchored later wraps only later paragraphs. */
+    readonly paragraphOrderIndex?: ((paragraphId: string) => number | undefined) | undefined;
+    readonly originX: number;
+    readonly width: number;
+    readonly paragraphId: string;
+    readonly top: number;
+    /** Where the paragraph's lines may start and end, in cell-local points. */
+    readonly linesLeft: number;
+    readonly linesRight: number;
+  }
 ): readonly ExclusionZone[] {
-  const reaches = (zone: ExclusionZone): boolean =>
-    zone.anchorParagraphId === paragraphId ||
-    (zone.verticalBand.y + zone.verticalBand.height > top - 0.001 &&
-      crossesContent(zone, 0, cellWidth));
-  return zones.every(reaches) ? zones : zones.filter(reaches);
+  if (zones.length === 0) return zones;
+  const order = cell.paragraphOrderIndex;
+  const ordered = order
+    ? filterExclusionZonesForParagraphOrder(
+        zones,
+        order(cell.paragraphId) ?? Number.MAX_SAFE_INTEGER,
+        order
+      )
+    : zones;
+  const reaching: ExclusionZone[] = [];
+  for (const zone of localizeExclusionZones(ordered, cell.originX, 0, {
+    left: 0,
+    right: cell.width,
+  }))
+    if (
+      zone.anchorParagraphId === cell.paragraphId ||
+      (zone.verticalBand.y + zone.verticalBand.height > cell.top - 0.001 &&
+        crossesContent(zone, cell.linesLeft, cell.linesRight))
+    )
+      reaching.push(zone);
+  return Object.freeze(reaching);
 }
 
 /**
