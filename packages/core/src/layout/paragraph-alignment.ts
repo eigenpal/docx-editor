@@ -342,17 +342,23 @@ export function setsLikeLastLine(
 }
 
 /**
- * {@link setsLikeLastLine} for a line in a table cell. A cell ignores page and column breaks,
- * so only a manual line break can close one of its lines.
+ * {@link setsLikeLastLine} for a line laid out in a box: a table cell, a header or footer, a
+ * note, or a text box. A table cell ignores page breaks, so there only a manual line break
+ * can close a line. In the other stories a page break still closes its line. Column breaks
+ * do not change how a line in a box aligns.
  */
-export function cellLineSetsLikeLastLine(
+export function boxLineSetsLikeLastLine(
   props: readonly OoxmlProperty[],
-  line: { readonly manualBreakAfter?: true },
+  line: { readonly pageBreakAfter?: boolean; readonly manualBreakAfter?: true },
   isLastLine: boolean,
-  compatibility?: { readonly unstretchedManualBreakLines?: true }
+  compatibility?: Parameters<typeof setsLikeLastLine>[3]
 ): boolean {
   if (isLastLine) return true;
-  return line.manualBreakAfter === true && setsLikeLastLine(props, line, false, compatibility);
+  const closing = {
+    ...(line.pageBreakAfter === true ? { pageBreakAfter: true } : {}),
+    ...(line.manualBreakAfter === true ? { manualBreakAfter: true as const } : {}),
+  };
+  return setsLikeLastLine(props, closing, false, compatibility);
 }
 
 /**

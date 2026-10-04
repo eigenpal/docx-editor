@@ -9,6 +9,7 @@ import { createLayoutSession, layoutSemanticDocument } from '../semantic-layout.
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
 import { createFixedMeasurer } from '../index.ts';
+import { layoutHeaderFooterStory } from '../hf-layout.ts';
 import type { PendingLine } from '../paragraph-flow.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -130,6 +131,40 @@ test('a line before a column break fills its column only in legacy modes', () =>
     expect(edges(firstLine(part, 14))[1]).toBeCloseTo(column, 3);
     expect(edges(firstLine(part, 15))[1]).toBeCloseTo(naturalWidth('aaa bbb'), 3);
   }
+});
+
+test('a column break in a one-column section stretches its line only in legacy modes', () => {
+  // The paragraph mark after the break takes a line on the next page, so a break that ends
+  // its paragraph still closes a line that is not the last one.
+  for (const after of ['tail', '']) {
+    const part = body('aaa bbb', { brk: COLUMN, after });
+    expect(edges(firstLine(part, 12))[1]).toBeCloseTo(WIDTH, 3);
+    expect(edges(firstLine(part, 15))[1]).toBeCloseTo(naturalWidth('aaa bbb'), 3);
+  }
+});
+
+test('a header line before a page break stretches only in legacy modes', () => {
+  // Notes and text boxes lay out through the same box flow as headers and footers.
+  const read = readOoxmlPart(
+    `<w:hdr xmlns:w="${W}"><w:p><w:pPr><w:jc w:val="both"/></w:pPr>` +
+      '<w:r><w:t xml:space="preserve">aaa bbb ccc </w:t></w:r><w:r><w:br w:type="page"/></w:r>' +
+      '<w:r><w:t>tail</w:t></w:r></w:p></w:hdr>',
+    { name: '/word/header1.xml', contentType: 'application/xml' }
+  );
+  if (!read.ok) throw new Error(read.reason);
+  const headerLine = (mode: number) => {
+    const story = layoutHeaderFooterStory(
+      read.part,
+      WIDTH,
+      measurer,
+      `h${mode}`,
+      undefined,
+      cascadeOf(mode)
+    );
+    return story.fragments.flatMap((fragment) => ('lines' in fragment ? fragment.lines : []))[0]!;
+  };
+  expect(edges(headerLine(12))[1]).toBeCloseTo(WIDTH, 3);
+  expect(edges(headerLine(15))[1]).toBeCloseTo(naturalWidth('aaa bbb ccc'), 3);
 });
 
 test('a page break that ends its paragraph leaves the line unstretched', () => {
