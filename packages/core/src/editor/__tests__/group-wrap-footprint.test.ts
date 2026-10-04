@@ -33,6 +33,10 @@ const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
 const V = 'urn:schemas-microsoft-com:vml';
 const HDR_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
 const LINK_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink';
+const STYLES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
 
 const PICTURE_MEMBER =
   '<pic:pic><pic:nvPicPr><pic:cNvPr id="2" name="Picture"/><pic:cNvPicPr/></pic:nvPicPr>' +
@@ -119,6 +123,7 @@ function docx(options: DocxOptions = {}): Uint8Array {
         '<Default Extension="png" ContentType="image/png"/>' +
         '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
         '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
         '</Types>'
     ),
     '_rels/.rels': strToU8(
@@ -126,8 +131,10 @@ function docx(options: DocxOptions = {}): Uint8Array {
     ),
     'word/_rels/document.xml.rels': strToU8(
       `<Relationships xmlns="${REL_NS}">${relationships}` +
-        `<Relationship Id="rIdHdr" Type="${HDR_REL}" Target="header1.xml"/></Relationships>`
+        `<Relationship Id="rIdHdr" Type="${HDR_REL}" Target="header1.xml"/>` +
+        `<Relationship Id="rIdStyles" Type="${STYLES_REL}" Target="styles.xml"/></Relationships>`
     ),
+    'word/styles.xml': strToU8(`<w:styles ${namespaces}>${FORMAT_DOC_DEFAULTS}</w:styles>`),
     'word/_rels/header1.xml.rels': strToU8(
       `<Relationships xmlns="${REL_NS}">${relationships}</Relationships>`
     ),

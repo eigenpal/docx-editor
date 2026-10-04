@@ -32,9 +32,12 @@ function part(xml: string, name: string) {
   if (!parsed.ok) throw new Error(parsed.reason);
   return parsed.part;
 }
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
 const styles = buildStyleCascadeTable(
   part(
-    `<w:styles xmlns:w="${W}"><w:style w:type="character" w:styleId="Base"><w:name w:val="Header Source"/></w:style><w:style w:type="character" w:styleId="Derived"><w:name w:val="Derived Source"/><w:basedOn w:val="Base"/></w:style></w:styles>`,
+    `<w:styles xmlns:w="${W}">${FORMAT_DOC_DEFAULTS}<w:style w:type="character" w:styleId="Base"><w:name w:val="Header Source"/></w:style><w:style w:type="character" w:styleId="Derived"><w:name w:val="Derived Source"/><w:basedOn w:val="Base"/></w:style></w:styles>`,
     '/word/styles.xml'
   ).root
 );
@@ -304,7 +307,10 @@ test('the character query bound covers all header parts together', () => {
     (_, i) => `<w:style w:type="character" w:styleId="S${i}"><w:name w:val="Style ${i}"/></w:style>`
   ).join('');
   const cascade = buildStyleCascadeTable(
-    part(`<w:styles xmlns:w="${W}">${definitions}</w:styles>`, '/word/styles.xml').root
+    part(
+      `<w:styles xmlns:w="${W}">${FORMAT_DOC_DEFAULTS}${definitions}</w:styles>`,
+      '/word/styles.xml'
+    ).root
   );
   const story = (start: number, count: number) =>
     layoutHeaderFooterStory(

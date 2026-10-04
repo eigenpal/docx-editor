@@ -8,7 +8,7 @@ import { PDFDocument, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { exportPdf } from '../src/index.ts';
 import { glyphPositions } from './glyph-positions.ts';
-import { docx } from './fixture.ts';
+import { formatDefaultsDocx as docx } from './fixture.ts';
 
 async function contentStreams(bytes: Uint8Array): Promise<string> {
   const pdf = await PDFDocument.load(bytes);

@@ -15,6 +15,9 @@ import type { ParagraphFragmentRecord, SemanticLayout } from '../semantic-record
 
 const W = WML_NAMESPACE_URI;
 const measurer = createFixedMeasurer(6, 14);
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
 function read(xml: string, name = '/word/footer1.xml') {
   const result = readOoxmlPart(xml, { name, contentType: 'application/xml' });
   if (!result.ok) throw Error(result.reason);
@@ -22,7 +25,7 @@ function read(xml: string, name = '/word/footer1.xml') {
 }
 const styles = buildStyleCascadeTable(
   read(
-    `<w:styles xmlns:w="${W}"><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:pPr><w:spacing w:before="120" w:after="120"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="Footer"><w:basedOn w:val="Normal"/></w:style></w:styles>`,
+    `<w:styles xmlns:w="${W}">${FORMAT_DOC_DEFAULTS}<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:pPr><w:spacing w:before="120" w:after="120"/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="Footer"><w:basedOn w:val="Normal"/></w:style></w:styles>`,
     '/word/styles.xml'
   ).root
 );
@@ -158,7 +161,7 @@ for (const enabled of [false, true]) {
   test(`fixed paragraph spacing controls the empty-anchor frame offset: ${enabled}`, () => {
     const fixedStyles = buildStyleCascadeTable(
       read(
-        `<w:styles xmlns:w="${W}"><w:style w:type="paragraph" w:styleId="Footer"><w:pPr><w:spacing w:before="120" w:after="120"/></w:pPr></w:style></w:styles>`,
+        `<w:styles xmlns:w="${W}">${FORMAT_DOC_DEFAULTS}<w:style w:type="paragraph" w:styleId="Footer"><w:pPr><w:spacing w:before="120" w:after="120"/></w:pPr></w:style></w:styles>`,
         '/word/styles.xml'
       ).root,
       undefined,

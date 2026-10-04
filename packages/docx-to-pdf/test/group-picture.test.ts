@@ -7,7 +7,7 @@ import { expect, test } from 'bun:test';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { PDFDict, PDFDocument, PDFName, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
 import { exportPdf, PdfFidelityError, type PdfDiagnostic } from '../src/index.ts';
-import { docx } from './fixture.ts';
+import { formatDefaultsDocx as docx } from './fixture.ts';
 
 const PNG_1X1 = Uint8Array.from(
   atob(

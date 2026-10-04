@@ -11,6 +11,9 @@ import { createLayoutSession } from '../layout-session.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
 
 const measurer = createFixedMeasurer(6, 14);
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
 const field =
   '<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>1</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>';
 const frame =
@@ -130,7 +133,7 @@ test('a centered footer frame does not push the final body line onto an extra pa
 
 test('a shared footer style supplies the supported indent and line spacing', () => {
   const parsed = readOoxmlPart(
-    `<w:styles xmlns:w="${WML_NAMESPACE_URI}"><w:style w:type="paragraph" w:styleId="Footer"><w:pPr>${properties}</w:pPr></w:style></w:styles>`,
+    `<w:styles xmlns:w="${WML_NAMESPACE_URI}">${FORMAT_DOC_DEFAULTS}<w:style w:type="paragraph" w:styleId="Footer"><w:pPr>${properties}</w:pPr></w:style></w:styles>`,
     { name: '/word/styles.xml', contentType: 'application/xml' }
   );
   if (!parsed.ok) throw new Error(parsed.reason);

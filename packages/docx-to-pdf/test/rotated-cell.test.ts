@@ -9,7 +9,7 @@ import { PDFDocument, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { createFontSource } from '@docx-editor.dev/core/editor';
 import { exportPdf } from '../src/index.ts';
-import { docx, paragraph } from './fixture.ts';
+import { formatDefaultsDocx as docx, paragraph } from './fixture.ts';
 
 const FAMILY = 'DejaVu Sans';
 const bytes = new Uint8Array(

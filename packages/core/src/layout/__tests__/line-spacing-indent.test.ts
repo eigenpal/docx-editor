@@ -19,6 +19,9 @@ import {
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const measurer = createFixedMeasurer(6, 14);
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
 
 function load(body: string): OoxmlPart {
   const result = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
@@ -234,7 +237,7 @@ describe('first-line indent reaches line geometry', () => {
 describe('w:contextualSpacing drops the gap between same-style paragraphs', () => {
   function cascade(): ReturnType<typeof buildStyleCascadeTable> {
     const styles = readOoxmlPart(
-      `<w:styles xmlns:w="${W}">` +
+      `<w:styles xmlns:w="${W}">${FORMAT_DOC_DEFAULTS}` +
         '<w:style w:type="paragraph" w:styleId="ListParagraph">' +
         '<w:name w:val="List Paragraph"/>' +
         '<w:pPr><w:spacing w:after="160"/><w:contextualSpacing/></w:pPr>' +

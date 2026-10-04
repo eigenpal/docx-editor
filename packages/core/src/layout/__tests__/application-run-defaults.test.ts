@@ -27,7 +27,11 @@ test('missing run defaults receive application kerning, explicit empty defaults 
   expect(isRunKerningEnabled(resolveRunStyle(missingPart.docDefaultsRun))).toBe(true);
   for (const xml of ['', '<w:docDefaults/>', '<w:docDefaults><w:pPrDefault/></w:docDefaults>']) {
     const table = cascade(xml);
-    expect(table.docDefaultsRun).toEqual([{ localName: 'kern', attributes: { val: '2' } }]);
+    expect(table.docDefaultsRun).toEqual([
+      { localName: 'kern', attributes: { val: '2' } },
+      { localName: 'sz', attributes: { val: '24' } },
+      { localName: 'szCs', attributes: { val: '24' } },
+    ]);
     expect(isRunKerningEnabled(resolveRunStyle(table.docDefaultsRun))).toBe(true);
   }
   for (const xml of ['<w:rPrDefault/>', '<w:rPrDefault><w:rPr/></w:rPrDefault>']) {

@@ -54,12 +54,16 @@ function part(name: string, xml: string): OoxmlPart {
 const body = (content: string) =>
   part('/word/document.xml', `<w:document xmlns:w="${W}"><w:body>${content}</w:body></w:document>`);
 
+// Format defaults, pinned so the fixture does not take the application defaults for omitted docDefaults.
+const FORMAT_DOC_DEFAULTS =
+  '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="2"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>';
+
 /** 12pt Normal; `Big` is a 24pt character style and `Child` inherits it through `basedOn`. */
 function styles(extra = '', bigSize = 48): StyleCascadeTable {
   return buildStyleCascadeTable(
     part(
       '/word/styles.xml',
-      `<w:styles xmlns:w="${W}">` +
+      `<w:styles xmlns:w="${W}">${FORMAT_DOC_DEFAULTS}` +
         '<w:style w:type="paragraph" w:default="1" w:styleId="Normal">' +
         '<w:rPr><w:sz w:val="24"/></w:rPr></w:style>' +
         '<w:style w:type="character" w:default="1" w:styleId="DefaultFont"/>' +
@@ -337,7 +341,7 @@ describe('a line with content ends where the mark character style stops', () => 
     const cascade = buildStyleCascadeTable(
       part(
         '/word/styles.xml',
-        `<w:styles xmlns:w="${W}" xmlns:w14="${W14}">` +
+        `<w:styles xmlns:w="${W}" xmlns:w14="${W14}">${FORMAT_DOC_DEFAULTS}` +
           '<w:style w:type="paragraph" w:default="1" w:styleId="Normal">' +
           '<w:rPr><w:sz w:val="24"/><w14:ligatures w14:val="standard"/></w:rPr></w:style>' +
           '<w:style w:type="character" w:styleId="Big">' +

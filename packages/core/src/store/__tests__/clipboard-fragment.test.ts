@@ -9,11 +9,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { zipSync, strToU8 } from 'fflate';
-import {
-  readOoxmlPackage,
-  writeOoxmlPackage,
-  type OoxmlPackage,
-} from '../package/ooxml-package.ts';
+import { writeOoxmlPackage, type OoxmlPackage } from '../package/ooxml-package.ts';
 import {
   serializeOoxmlPart,
   type OoxmlElement,
@@ -26,10 +22,19 @@ import {
   type FragmentCoverage,
 } from '../store/clipboard-fragment-extract.ts';
 import { carriesRevisionId } from '../store/tree-op-revision-ids.ts';
-import { TreePackageStore } from '../store/tree-package-store.ts';
 import { normalizedBodySignatures, referencedNoteSignatures } from './clipboard-fragment-oracle.ts';
 import { paragraphLength } from '../store/tree-op-segments.ts';
 import { attributeValueOf } from '../store/tree-op-nodes.ts';
+import {
+  bodyOf,
+  buildPackage,
+  fullBodyCoverage,
+  isElement,
+  lastParagraphOf,
+  loadPackage,
+  openStore,
+  paragraphIdsUnder,
+} from './clipboard-fragment-fixtures.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -38,74 +43,7 @@ const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
 const SAMPLE = `${import.meta.dir}/../../../../../examples/vite/public/sample.docx`;
 
-function loadPackage(bytes: Uint8Array): OoxmlPackage {
-  const result = readOoxmlPackage(bytes);
-  if (!result.ok) throw new Error(`package: ${result.reason}`);
-  return result.package;
-}
-
 const samplePackage = (): OoxmlPackage => loadPackage(new Uint8Array(readFileSync(SAMPLE)));
-
-function isElement(node: OoxmlNode): node is OoxmlElement {
-  return node.kind !== 'textValue';
-}
-
-function bodyOf(part: OoxmlPart): OoxmlElement {
-  const body =
-    part.root.kind === 'document'
-      ? part.root.children.find((child) => child.kind === 'body')
-      : null;
-  if (!body || !isElement(body)) throw new Error('no body');
-  return body;
-}
-
-function paragraphIdsUnder(node: OoxmlNode, out: string[] = []): string[] {
-  if (node.kind === 'textValue') return out;
-  if (node.kind === 'paragraph') out.push(node.id);
-  for (const child of node.children) paragraphIdsUnder(child, out);
-  return out;
-}
-
-function lastParagraphOf(part: OoxmlPart, id: string): OoxmlElement {
-  let found: OoxmlElement | null = null;
-  const walk = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue') return;
-    if (node.kind === 'paragraph' && node.id === id) found = node;
-    for (const child of node.children) walk(child);
-  };
-  walk(part.root);
-  if (!found) throw new Error(`no paragraph ${id}`);
-  return found;
-}
-
-/** Full-body coverage built straight from the part tree — no layout needed. */
-function fullBodyCoverage(pkg: OoxmlPackage): FragmentCoverage {
-  const part = pkg.parts.get(pkg.mainDocumentPart)!;
-  const ids = paragraphIdsUnder(bodyOf(part));
-  const last = lastParagraphOf(part, ids[ids.length - 1]!);
-  const fullBlocks: string[] = [];
-  const walk = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue') return;
-    if (node.kind === 'table' || node.kind === 'contentControl') {
-      const inside = paragraphIdsUnder(node);
-      if (inside.length > 0) {
-        fullBlocks.push(node.id);
-        return;
-      }
-    }
-    for (const child of node.children) walk(child);
-  };
-  walk(part.root);
-  return {
-    partName: part.name,
-    paragraphIds: ids,
-    startOffset: 0,
-    endOffset: paragraphLength(last as never),
-    coveredParagraphIds: ids,
-    fullyCoveredBlockIds: fullBlocks,
-    lastMarkCovered: true,
-  };
-}
 
 function isEmptyParagraph(node: OoxmlNode): boolean {
   if (node.kind !== 'paragraph') return false;
@@ -115,43 +53,6 @@ function isEmptyParagraph(node: OoxmlNode): boolean {
 // ---------------------------------------------------------------------------
 // Synthetic package builders
 // ---------------------------------------------------------------------------
-
-function buildPackage(bodyXml: string, extra?: Record<string, string>): OoxmlPackage {
-  const overrides = Object.keys(extra ?? {})
-    .map((name) => {
-      const type = name.includes('styles')
-        ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml'
-        : 'application/xml';
-      return `<Override PartName="/${name}" ContentType="${type}"/>`;
-    })
-    .join('');
-  const relsRows = Object.keys(extra ?? {})
-    .filter((name) => name.includes('styles'))
-    .map(
-      (name, index) => `<Relationship Id="rIdS${index}" Type="${R}/styles" Target="styles.xml"/>`
-    )
-    .join('');
-  const entries: Record<string, Uint8Array> = {
-    '[Content_Types].xml': strToU8(
-      `<Types xmlns="${CT}">` +
-        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-        overrides +
-        '</Types>'
-    ),
-    '_rels/.rels': strToU8(
-      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
-    ),
-    'word/_rels/document.xml.rels': strToU8(
-      `<Relationships xmlns="${REL}">${relsRows}</Relationships>`
-    ),
-    'word/document.xml': strToU8(
-      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${bodyXml}</w:body></w:document>`
-    ),
-  };
-  for (const [name, xml] of Object.entries(extra ?? {})) entries[name] = strToU8(xml);
-  return loadPackage(zipSync(entries));
-}
 
 /** A blank single-paragraph document whose styles part mirrors the sample's defaults. */
 function blankTargetSharingDefaults(sample: OoxmlPackage): OoxmlPackage {
@@ -171,12 +72,6 @@ function blankTargetSharingDefaults(sample: OoxmlPackage): OoxmlPackage {
     root: { ...stylesPart.root, children: kept } as OoxmlElement,
   } as OoxmlPart);
   return buildPackage('<w:p/>', { 'word/styles.xml': stylesXml });
-}
-
-function openStore(pkg: OoxmlPackage): TreePackageStore {
-  const main = pkg.parts.get(pkg.mainDocumentPart);
-  if (!main) throw new Error('no main');
-  return new TreePackageStore(pkg, main);
 }
 
 // ---------------------------------------------------------------------------

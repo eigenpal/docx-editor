@@ -17,7 +17,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // comments.xml did not travel.
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { strToU8, zipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import {
   ooxmlTreesEqual,
   relationshipsOf,
@@ -355,6 +355,42 @@ describe('clipboard paste replicates the story and package resources', () => {
     expect(
       journals.some((journal) => journal.effects.some((effect) => effect.kind === 'putXmlPart'))
     ).toBe(true);
+    expectPackagesEqual(source, peer);
+    harness.expectConverged(alice, bob);
+  });
+
+  test('application defaults materialized from omitted source defaults replicate', async () => {
+    // The fragment's styles part has no docDefaults, so it painted 12pt with 8pt after. The
+    // host authors 10pt with no spacing, so the paste stamps both onto the pasted content.
+    const host = unzipSync(hostDoc());
+    host['[Content_Types].xml'] = strToU8(
+      strFromU8(host['[Content_Types].xml']!).replace(
+        '</Types>',
+        `<Override PartName="/word/styles.xml" ContentType="${STYLES_CT}"/></Types>`
+      )
+    );
+    host['word/_rels/document.xml.rels'] = strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdS" Type="${STYLES}" Target="styles.xml"/></Relationships>`
+    );
+    host['word/styles.xml'] = strToU8(
+      `<w:styles xmlns:w="${W}"><w:docDefaults>` +
+        '<w:rPrDefault><w:rPr><w:sz w:val="20"/></w:rPr></w:rPrDefault><w:pPrDefault/>' +
+        '</w:docDefaults></w:styles>'
+    );
+    const { alice, bob } = await harness.pair(zipSync(host));
+    pasteOn(alice, styleFragment());
+    const source = harness.packageOf(alice);
+    const peer = harness.packageOf(bob);
+    const sizes = (pkg: OoxmlPackage): string[] => {
+      const found: string[] = [];
+      walk(pkg.parts.get(pkg.mainDocumentPart)!.root, (node) => {
+        if (node.kind === 'textValue' || node.localName !== 'sz') return;
+        found.push(node.attributes.find((attribute) => attribute.localName === 'val')!.value);
+      });
+      return found;
+    };
+    expect(sizes(source)).toContain('24');
+    expect(sizes(peer)).toEqual(sizes(source));
     expectPackagesEqual(source, peer);
     harness.expectConverged(alice, bob);
   });

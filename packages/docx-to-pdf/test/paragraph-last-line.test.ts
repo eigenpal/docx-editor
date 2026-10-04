@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { createFontSource } from '@docx-editor.dev/core/editor';
 import { exportPdf } from '../src/index.ts';
-import { docx } from './fixture.ts';
+import { FORMAT_DOC_DEFAULTS, formatDefaultsDocx as docx } from './fixture.ts';
 
 const GRID = 0.24;
 const FAMILY = 'DejaVu Sans';
@@ -110,6 +110,7 @@ async function shiftWithFollower(
 
 const CONTEXTUAL_STYLES =
   '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+  FORMAT_DOC_DEFAULTS +
   '<w:style w:type="paragraph" w:styleId="Body"><w:name w:val="Body"/>' +
   '<w:pPr><w:spacing w:after="120"/><w:contextualSpacing/></w:pPr></w:style>' +
   '<w:style w:type="paragraph" w:styleId="Plain"><w:name w:val="Plain"/>' +
