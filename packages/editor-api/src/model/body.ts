@@ -16,6 +16,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // creating a paragraph in a story that has none is a different operation from editing one, and this
 // slice does not implement it.
 
+import { ShapeCollection } from './shapes.ts';
 import { NoteItemCollection } from './notes.ts';
 import { InsertLocation } from './editing-enums.ts';
 import { FieldCollection } from './fields.ts';
@@ -97,6 +98,7 @@ export class Body extends ModelObject {
   #tables: TableCollection | undefined;
   #fields: FieldCollection | undefined;
   #inlinePictures: InlinePictureCollection | undefined;
+  #shapes: ShapeCollection | undefined;
   #paragraphs: ParagraphCollection | undefined;
   #bookmarks: BookmarkCollection | undefined;
   #font: Font | undefined;
@@ -399,6 +401,17 @@ export class Body extends ModelObject {
     return (this.#inlinePictures ??= InlinePictureCollection.of(
       this.context,
       `${this.path.label}.inlinePictures`,
+      this.path,
+      'body'
+    ));
+  }
+
+  /** Floating and inline shapes in this body, such as text boxes and pictures. */
+  get shapes(): ShapeCollection {
+    this.requireUsablePath();
+    return (this.#shapes ??= ShapeCollection.of(
+      this.context,
+      `${this.path.label}.shapes`,
       this.path,
       'body'
     ));

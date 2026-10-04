@@ -85,6 +85,12 @@ export type AutomationHandleTarget =
       readonly paragraphId: string;
       readonly story: AutomationStoryId;
     }
+  /** One floating shape, by its `wp:docPr/@id` and the story that anchors it. */
+  | {
+      readonly kind: 'shape';
+      readonly shapeId: number;
+      readonly owner: AutomationStoryId;
+    }
   /** One `w:sectPr`, by its position in the document. */
   | { readonly kind: 'section'; readonly index: number }
   /** One footnote or endnote, by the `w:id` the reference in the story names. */
@@ -141,6 +147,7 @@ export interface AutomationHandleTable {
     story: AutomationStoryId
   ): AutomationHandle<'field'>;
   inlinePicture(drawingNodeId: string, story: AutomationStoryId): AutomationHandle<'inlinePicture'>;
+  shape(shapeId: number, owner: AutomationStoryId): AutomationHandle<'shape'>;
   /** The handle for a canonical paragraph id, minted once and reused thereafter. */
   paragraph(paragraphId: string, story: AutomationStoryId): AutomationHandle<'paragraph'>;
   section(index: number): AutomationHandle<'section'>;
@@ -247,6 +254,13 @@ export function createHandleTable(): AutomationHandleTable {
         kind: 'inlinePicture',
         drawingNodeId,
         story,
+      });
+    },
+    shape(shapeId, owner) {
+      return named('shape', `${storyKey(owner)}:${String(shapeId)}`, {
+        kind: 'shape',
+        shapeId,
+        owner,
       });
     },
     paragraph(paragraphId, story) {

@@ -235,7 +235,7 @@
     },
     {
       "uid": "Word.Shape",
-      "reason": "Floating shapes/canvases are out of scope for the published subset; no engine lane targets them yet."
+      "reason": "Published as a partial, unmeasured surface: Body#shapes, Paragraph#shapes, Shape#id, #name, #type and #body, and ShapeCollection#items, #getFirst, #getFirstOrNullObject and #getByTypes, for floating and inline drawings and text-box stories. Not selected for conformance because these members belong to WordApiDesktop 1.2, outside the target requirement sets. Geometry, text frames, insertTextBox, and shape writes are not implemented."
     },
     {
       "uid": "Word.Body#getHtml",

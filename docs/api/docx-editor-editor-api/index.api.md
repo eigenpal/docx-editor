@@ -65,6 +65,7 @@ class Body_2 extends ModelObject {
     static promisedStory(context: RequestContext, label: string): Body_2;
     get revisions(): RevisionCollection;
     search(searchText: string, options?: SearchOptions): RangeCollection;
+    get shapes(): ShapeCollection;
     get style(): string;
     set style(value: string);
     get tables(): TableCollection;
@@ -1053,6 +1054,7 @@ export class Paragraph extends ModelObject implements PromisedItem {
     static promised(context: RequestContext, label: string, nullable: boolean): Paragraph;
     get rightIndent(): number;
     set rightIndent(value: number);
+    get shapes(): ShapeCollection;
     get spaceAfter(): number;
     set spaceAfter(value: number);
     get spaceBefore(): number;
@@ -1315,6 +1317,59 @@ export { SelectionMode_2 as SelectionMode }
 
 // @public
 export interface ServerPaginationOptions extends AutomationPaginationOptions {
+}
+
+// @public
+export class Shape extends ModelObject implements PromisedItem {
+    // @internal (undocumented)
+    static at(context: RequestContext, label: string, address: ObjectAddress): Shape;
+    get body(): Body_2;
+    // @internal (undocumented)
+    hydrateAddress(address: ObjectAddress): void;
+    // @internal (undocumented)
+    hydrateNull(): void;
+    get id(): number;
+    get name(): string;
+    // @internal
+    protected onLoad(request: ResolvedLoadOptions): void;
+    // @internal (undocumented)
+    static promised(context: RequestContext, label: string, nullable: boolean): Shape;
+    get type(): ShapeType;
+}
+
+// @public
+export class ShapeCollection extends ItemCollection<Shape> {
+    // @internal (undocumented)
+    protected addressAt(value: AutomationValue, label: string, index: number): ObjectAddress | undefined;
+    getByTypes(types: ShapeType[]): ShapeCollection;
+    getFirst(): Shape;
+    getFirstOrNullObject(): Shape;
+    // @internal (undocumented)
+    protected itemAt(label: string, address: ObjectAddress): Shape;
+    // @internal (undocumented)
+    protected listing(): AutomationOperation;
+    // @internal (undocumented)
+    static of(context: RequestContext, label: string, owner: ObjectPath, kind: SpanOwner, types?: readonly ShapeType[]): ShapeCollection;
+    // @internal (undocumented)
+    protected promised(label: string, nullable: boolean): Shape & PromisedItem;
+    // @internal (undocumented)
+    protected size(value: AutomationValue, label: string): number;
+}
+
+// @public
+export enum ShapeType {
+    // (undocumented)
+    canvas = "Canvas",
+    // (undocumented)
+    geometricShape = "GeometricShape",
+    // (undocumented)
+    group = "Group",
+    // (undocumented)
+    picture = "Picture",
+    // (undocumented)
+    textBox = "TextBox",
+    // (undocumented)
+    unsupported = "Unsupported"
 }
 
 // @public

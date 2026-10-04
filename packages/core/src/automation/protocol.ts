@@ -37,7 +37,8 @@ export type AutomationObjectKind =
   | 'tableRow'
   | 'tableCell'
   | 'field'
-  | 'inlinePicture';
+  | 'inlinePicture'
+  | 'shape';
 
 declare const AUTOMATION_HANDLE_BRAND: unique symbol;
 
@@ -207,6 +208,7 @@ export type AutomationValue =
       readonly kind: 'inlinePicture';
       readonly picture: import('./pictures.ts').AutomationInlinePictureRead;
     }
+  | { readonly kind: 'shape'; readonly shape: import('./shapes.ts').AutomationShapeRead }
   | { readonly kind: 'handle'; readonly handle: AutomationHandle }
   | { readonly kind: 'handles'; readonly handles: readonly AutomationHandle[] }
   | { readonly kind: 'text'; readonly text: string }
