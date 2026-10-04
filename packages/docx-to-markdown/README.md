@@ -64,15 +64,15 @@ For search and AI ingestion, use `{ displayMode: 'proposed' }` to show pending i
 
 Fonts determine line wrapping, table row heights, and the page boundaries in `result.pages`. Markdown does not preserve the DOCX font family, but the converter needs font measurements to calculate layout.
 
-Start with the bundled substitutes for common Word fonts. Use `fonts` to supply the author's licensed fonts or override a substitute. Use `fallbackFonts: googleFonts()` to load missing faces from Google Fonts; it requires network access and does not override faces already resolved by earlier sources.
+Start with the bundled substitutes for common document fonts. Use `fonts` to supply the author's licensed fonts or override a substitute. Use `fallbackFonts: googleFonts()` to load missing faces from Google Fonts; it requires network access and does not override faces already resolved by earlier sources.
 
-See [font setup and troubleshooting](docs/fonts.md) for runnable examples, resolution reports, and guidance on matching page references to Word.
+See [font setup and troubleshooting](docs/fonts.md) for runnable examples, resolution reports, and guidance on matching page references to the source document.
 
 ## Runtime and output
 
 For Next.js, use the Node.js runtime and [server package configuration](docs/integrations.md#nextjs). Edge runtimes are not supported.
 
-Page breaks depend on fonts, document features, and revision mode; they can differ from Microsoft Word. Store the document version with page citations. `result.warnings` reports omitted content and font problems. Images are omitted unless enabled. See [output limits](docs/api.md#markdown-limitations) before using the output as a complete transcription.
+Page breaks depend on fonts, document features, and revision mode; they can differ from the application that created the document. Store the document version with page citations. `result.warnings` reports omitted content and font problems. Images are omitted unless enabled. See [output limits](docs/api.md#markdown-limitations) before using the output as a complete transcription.
 
 The package uses the Apache 2.0 license, including comment and tracked-change extraction. Bundled fonts retain their own open-source licenses.
 

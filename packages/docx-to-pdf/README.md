@@ -73,7 +73,7 @@ Editing PDF annotations does not update the DOCX.
 ## Supported content
 
 - Searchable multilingual text, small caps, text decorations, and tab leaders.
-- Arabic joining across formatting runs and logical word order for Arabic, Persian, and Hebrew text extraction.
+- Arabic joining across formatting runs and logical text order for Arabic, Persian, and Hebrew text extraction.
 - Synthetic bold and italic when selected font faces lack those variants.
 - Static TrueType and CFF fonts, including selected faces from font collections.
 - Page sizes, page frames, headers, footers, footnotes, and endnotes.

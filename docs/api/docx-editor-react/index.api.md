@@ -34,6 +34,7 @@ import { ContentControlWidgetSession } from '@docx-editor.dev/core/editor';
 import { createDocumentRefresh } from '@docx-editor.dev/core/editor';
 import { createFontSource } from '@docx-editor.dev/core/editor';
 import { CSSProperties } from 'react';
+import { DEFAULT_FONT } from '@docx-editor.dev/core/editor';
 import { defineFontResolver } from '@docx-editor.dev/core/editor';
 import { DocumentChange } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentHandle } from '@docx-editor.dev/core/contracts/editor';
@@ -436,6 +437,8 @@ export interface ContextMenuTableRowProps extends ContextMenuCommandProps {
 export { createDocumentRefresh }
 
 export { createFontSource }
+
+export { DEFAULT_FONT }
 
 export { defineFontResolver }
 

@@ -20,9 +20,11 @@ npm install @docx-editor.dev/core
 The root is the entry point for typical editor creation and typing: create an editor over bytes, the contract it implements, fonts, and the chrome registry. See the [chrome slot reference](/docs/2.x/guides/chrome-slots) for the complete registry vocabulary and its React and Vue toolbar parts.
 
 ```ts
-import { createDocxEditor, loadFonts, WORD_DEFAULT_FONT } from '@docx-editor.dev/core';
+import { createDocxEditor, loadFonts, DEFAULT_FONT } from '@docx-editor.dev/core';
 import type { Editor, EditorSnapshot } from '@docx-editor.dev/core';
 ```
+
+`DEFAULT_FONT` is the font that the engine uses when a document does not set one: Calibri at 11 points. `WORD_DEFAULT_FONT` is a deprecated alias for the same value.
 
 Import a subpath when you need the canonical tree, the layout pass, or the paint step directly.
 

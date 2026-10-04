@@ -38,7 +38,7 @@ const require = createRequire(import.meta.url);
 const cjs = require(join(distDir, 'index.cjs'));
 const requestedUrls = [];
 const fragment = await cjs.loadDefaultFonts({
-  families: cjs.ALL_WORD_DEFAULT_FAMILIES,
+  families: cjs.ALL_DEFAULT_FONT_FAMILIES,
   fetcher: async (input) => {
     const url = new URL(String(input));
     requestedUrls.push(url.href);

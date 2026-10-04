@@ -3,8 +3,8 @@
 import { collectRenderedFontFamilyCandidates } from '../store/package/rendered-fonts.ts';
 import { symbolFontFamily, validFontFamily } from '../store/package/run-defaults.ts';
 import {
+  DEFAULT_FONT,
   MAX_RESOLVER_FAMILIES,
-  WORD_DEFAULT_FONT,
   composeFontConfiguration,
 } from '../layout/font-composition.ts';
 import {
@@ -403,7 +403,7 @@ export async function acquireDocumentExportShaping(
                 ...families,
               ]),
             ].slice(0, MAX_RESOLVER_FAMILIES),
-            defaultFamily: WORD_DEFAULT_FONT.family,
+            defaultFamily: DEFAULT_FONT.family,
             signal: controller.signal,
           },
           {

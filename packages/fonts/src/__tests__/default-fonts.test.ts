@@ -19,7 +19,9 @@ import {
   createLayoutShapedMeasurer,
 } from '@docx-editor.dev/core/layout';
 import {
+  ALL_DEFAULT_FONT_FAMILIES,
   ALL_WORD_DEFAULT_FAMILIES,
+  DEFAULT_FONT_FAMILIES,
   FONT_ASSET_MANIFEST,
   FONT_ASSET_ROOT,
   WORD_DOCUMENT_DEFAULT_FAMILIES,
@@ -56,7 +58,7 @@ describe('packaged manifest', () => {
   });
 
   test('every Word family has all four faces packaged', () => {
-    expect(ALL_WORD_DEFAULT_FAMILIES).toHaveLength(6);
+    expect(ALL_DEFAULT_FONT_FAMILIES).toHaveLength(6);
     expect(FONT_ASSET_MANIFEST).toHaveLength(24);
   });
 
@@ -64,15 +66,20 @@ describe('packaged manifest', () => {
     // Every family here costs four faces on EVERY load, whether or not the file names it.
     // Century Gothic is not a Word document default and most documents never name it, so
     // it is opt-in (`families`) or on-demand (`googleFonts()`), not a 709 KB tax on both.
-    expect([...WORD_DOCUMENT_DEFAULT_FAMILIES]).toEqual([
+    expect([...DEFAULT_FONT_FAMILIES]).toEqual([
       'Calibri',
       'Cambria',
       'Times New Roman',
       'Arial',
       'Courier New',
     ]);
-    expect(WORD_DOCUMENT_DEFAULT_FAMILIES).not.toContain('Century Gothic');
-    expect(ALL_WORD_DEFAULT_FAMILIES).toContain('Century Gothic');
+    expect(DEFAULT_FONT_FAMILIES).not.toContain('Century Gothic');
+    expect(ALL_DEFAULT_FONT_FAMILIES).toContain('Century Gothic');
+  });
+
+  test('the deprecated family list names are the same lists', () => {
+    expect(WORD_DOCUMENT_DEFAULT_FAMILIES).toBe(DEFAULT_FONT_FAMILIES);
+    expect(ALL_WORD_DEFAULT_FAMILIES).toBe(ALL_DEFAULT_FONT_FAMILIES);
   });
 });
 
@@ -110,7 +117,7 @@ describe('loadDefaultFonts', () => {
 
   test('the full family list is opt-in and adds the packaged extras', async () => {
     const { fetcher, requested } = countingFetcher();
-    const fragment = await loadDefaultFonts({ families: ALL_WORD_DEFAULT_FAMILIES, fetcher });
+    const fragment = await loadDefaultFonts({ families: ALL_DEFAULT_FONT_FAMILIES, fetcher });
     expect(requested).toHaveLength(24);
     expect(requested.filter((url) => url.includes('TeXGyreAdventor'))).toHaveLength(4);
     expect(fragment.sources).toHaveLength(24);
