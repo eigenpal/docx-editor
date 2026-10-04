@@ -4374,6 +4374,7 @@ export interface TocEntryPlan {
     readonly level: number;
     // (undocumented)
     readonly pageNumberText: string;
+    readonly symbols?: readonly TocSymbol[];
     // (undocumented)
     readonly text: string;
 }
