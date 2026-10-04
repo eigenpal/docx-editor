@@ -460,9 +460,9 @@ function placeCellParagraph(
     width: cellBoxWidth,
     paragraphId,
     top,
-    // The first-line shift moves only the leading side.
-    linesLeft: Math.min(0, indent.left + (rtl ? 0 : Math.min(0, firstLineOffset))),
-    linesRight: cellBoxWidth - Math.min(0, indent.right + (rtl ? Math.min(0, firstLineOffset) : 0)),
+    // Where the breaker places the lines: its first-line origin is `left + firstLineOffset`.
+    linesLeft: indent.left + Math.min(0, firstLineOffset),
+    linesRight: cellBoxWidth - indent.right,
   });
   // Zone geometry alone does NOT identify the break: these zones stay in page-content Y
   // (only x is localized to the cell), so which band a line crosses depends on where the

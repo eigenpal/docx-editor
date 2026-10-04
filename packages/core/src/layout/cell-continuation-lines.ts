@@ -51,8 +51,8 @@ export function zonesReachingCellParagraph(
       )
     : zones;
   // Tested in the page frame, so only the zones that reach are copied into the cell's frame.
-  // A band that ends where the paragraph starts touches no line, as the breaker's scanlines
-  // agree.
+  // A band that ends where the paragraph starts touches no line; the tolerance absorbs the
+  // rounding a table pushed below a float can leave between the two.
   const reaching = ordered.filter(
     (zone) =>
       zone.anchorParagraphId === cell.paragraphId ||
