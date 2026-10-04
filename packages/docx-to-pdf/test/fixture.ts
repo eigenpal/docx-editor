@@ -52,8 +52,10 @@ export function formatDefaultsDocx(
     );
   const rels = files['word/_rels/document.xml.rels'];
   const relsXml = rels ? strFromU8(rels) : '';
-  const relationshipTypes = Array.from(relsXml.matchAll(/\bType="([^"]*)"/g), ([, type]) => type);
-  if (!relationshipTypes.includes(STYLES_TYPE)) {
+  const hasStyles = Array.from(relsXml.matchAll(/\bType="([^"]*)"/g)).some(
+    ([, type]) => type === STYLES_TYPE
+  );
+  if (!hasStyles) {
     const stylesRel = `<Relationship Id="rIdFormatStyles" Type="${STYLES_TYPE}" Target="styles.xml"/>`;
     files['word/_rels/document.xml.rels'] = strToU8(
       relsXml
