@@ -392,7 +392,12 @@ export async function paint(
         first.paragraph.lines[0] === first.line ? first.paragraph.marker?.text : undefined;
       const logical =
         (markerText ? markerText + ' ' : '') +
-        group.map((v) => v.span.equation?.fallbackText ?? v.span.text).join('');
+        group
+          .map(
+            // A line that breaks at an optional hyphen extracts the hyphen it shows.
+            (v) => v.span.equation?.fallbackText ?? (v.span.optionalHyphenBreak ? '-' : v.span.text)
+          )
+          .join('');
       const rightToLeft = group.some((v) => (v.span.style.shaping?.level ?? 0) % 2 === 1);
       group.sort((a, b) => a.absoluteBox.x - b.absoluteBox.x);
       lineStarts.set(group[0]!, rightToLeft ? null : logical);

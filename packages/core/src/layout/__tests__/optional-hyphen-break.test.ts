@@ -96,6 +96,28 @@ test('alignment places the visible hyphen at the right edge', () => {
   }
 });
 
+test('an optional hyphen that opens its line can end it with only the hyphen', () => {
+  // Measured behavior: nothing before the hyphen still lets the line break after it.
+  expect(shown(layoutLines('|bbbbbbbbbbbbbb', 5.5))).toEqual(['-', 'bbbbb', 'bbbbb', 'bbbb']);
+  expect(shown(layoutLines('xxxxxxxxx |bbbbbbbbbbbbbb', 10.5))).toEqual([
+    'xxxxxxxxx ',
+    '-',
+    'bbbbbbbbbb',
+    'bbbb',
+  ]);
+});
+
+test('adjacent optional hyphens show one hyphen and never a line of its own', () => {
+  for (const chars of [10, 10.5]) {
+    expect(shown(layoutLines('xx aaaaaa||bbbbbbbbbbbb', chars))).toEqual([
+      'xx aaaaaa-',
+      'bbbbbbbbbb',
+      'bb',
+    ]);
+  }
+  expect(shown(layoutLines('xx aaaaaa||bb', 10.5))).toEqual(['xx aaaaaa-', 'bb']);
+});
+
 test('the paragraph text keeps one character per optional hyphen', () => {
   const lines = layoutLines('xx aa|bb|cc|dd', 9.5);
   const spans = lines.flatMap((line) => line.spans);
