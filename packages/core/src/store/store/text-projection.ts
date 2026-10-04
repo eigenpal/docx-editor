@@ -18,6 +18,7 @@ import {
   type TextOccurrence,
 } from './text-match.ts';
 import { segmentsOfWithFieldSpans } from './tree-op-segments.ts';
+import { NON_BREAKING_HYPHEN_TEXT, OPTIONAL_HYPHEN_TEXT } from '../package/hyphen-text.ts';
 
 /** One visible interval linked to one raw model interval. */
 export interface VisiblePiece {
@@ -121,11 +122,42 @@ function rawEndBoundary(piece: PositionedPiece, projectedOffset: number): number
   return piece.rawStart + projectedOffset - piece.projectedStart;
 }
 
+interface SearchText {
+  readonly text: string;
+  /** Projected offset of each search-text unit, or null when the two are the same. */
+  readonly at: readonly number[] | null;
+}
+
+/** Characters search compares as a typed hyphen, and characters it skips. */
+const SEARCH_HYPHENS = new Set([NON_BREAKING_HYPHEN_TEXT, '\u2011']);
+const SEARCH_SKIPPED = new Set([OPTIONAL_HYPHEN_TEXT, '\u00ad']);
+const SEARCH_FOLDED = /[\u001e\u001f\u2011\u00ad]/;
+
+/**
+ * Text as search compares it: a non-breaking hyphen matches a typed hyphen, and an optional
+ * hyphen matches nothing, so `rates` finds a word with an optional hyphen inside it. The
+ * characters copy writes for them (U+2011 and U+00AD) fold the same way, so copied text
+ * finds its source.
+ */
+function searchTextOf(text: string): SearchText {
+  if (!SEARCH_FOLDED.test(text)) return { text, at: null };
+  let out = '';
+  const at: number[] = [];
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index]!;
+    if (SEARCH_SKIPPED.has(char)) continue;
+    out += SEARCH_HYPHENS.has(char) ? '-' : char;
+    at.push(index);
+  }
+  return { text: out, at };
+}
+
 /** Build a mapped projection from visible pieces in raw order. */
 export function projectionFromPieces(pieces: readonly VisiblePiece[]): ProjectedParagraphText {
   const positioned = positionedPieces(pieces);
   let text = '';
   for (const piece of pieces) text += piece.text;
+  let searchText: SearchText | null = null;
   return {
     text,
     projectedOffset(rawOffset) {
@@ -189,15 +221,29 @@ export function projectionFromPieces(pieces: readonly VisiblePiece[]): Projected
       }
       const matchCase = options.matchCase === true;
       const wholeWord = options.wholeWord === true;
-      const needle = matchCase ? query : foldCase(query);
-      const haystack = matchCase ? text : foldCase(text);
+      searchText ??= searchTextOf(text);
+      const folded = searchText;
+      const wanted = searchTextOf(query).text;
+      if (wanted.length === 0) return { matches, truncated: false };
+      const needle = matchCase ? wanted : foldCase(wanted);
+      const haystack = matchCase ? folded.text : foldCase(folded.text);
+      const projectedAt = (index: number): number => folded.at?.[index] ?? index;
+      const searchIndexOf = (projected: number): number => {
+        if (!folded.at) return projected;
+        let index = 0;
+        while (index < folded.at.length && folded.at[index]! < projected) index += 1;
+        return index;
+      };
       const to = Math.min(text.length, options.to ?? text.length);
       const matchedExpansions = new Set<PositionedPiece>();
-      let cursor = haystack.indexOf(needle, Math.max(0, options.from ?? 0));
-      while (cursor >= 0) {
-        const end = cursor + needle.length;
+      let found = haystack.indexOf(needle, searchIndexOf(Math.max(0, options.from ?? 0)));
+      while (found >= 0) {
+        const foundEnd = found + needle.length;
+        const cursor = projectedAt(found);
+        const end = projectedAt(foundEnd - 1) + 1;
         if (end > to) return { matches, truncated: false };
-        if (!wholeWord || isWholeWord(text, cursor, end)) {
+        // Word boundaries are read where search compares, so an optional hyphen joins a word.
+        if (!wholeWord || isWholeWord(folded.text, found, foundEnd)) {
           const first = positioned.find(
             (piece) => cursor >= piece.projectedStart && cursor < piece.projectedEnd
           );
@@ -213,14 +259,14 @@ export function projectionFromPieces(pieces: readonly VisiblePiece[]): Projected
             if (matches.length >= limit) return { matches, truncated: true };
             matches.push({
               start: cursor,
-              length: needle.length,
+              length: end - cursor,
               rawStart: rawStartBoundary(first, cursor),
               rawEnd: rawEndBoundary(last, end),
             });
             if (containedExpansion) matchedExpansions.add(containedExpansion);
           }
         }
-        cursor = haystack.indexOf(needle, end);
+        found = haystack.indexOf(needle, foundEnd);
       }
       return { matches, truncated: false };
     },

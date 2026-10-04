@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "w:noBreakHyphen and w:softHyphen had no model offset width. Paragraph text, search, and selection skipped them, and deleting text across one or a w:sym left it between the remaining text.",
+  "after": "Each hyphen element is one model character (U+001E or U+001F), so it reads, searches, selects, and deletes like a tab, and insertText turns those characters back into hyphen elements. A deletion that spans a w:sym removes it, or strikes it when tracked.",
+  "reason": "Shared state is unchanged: hyphens stay generic tree nodes with the same identities and journal operations, and text effects address textValue positions, which do not count them. Deletions remove or wrap existing nodes inside one transaction, so they replicate and undo as one change. Model offsets do count each hyphen now. In a room that mixes released and current participants, a remote caret placed after a hyphen in the same paragraph shows one position off; presence is ephemeral and the saved room is unaffected. Experimental per-paragraph text collaboration carries hyphens as characters, and remote replicas recreate them as elements through insertText. That lane has its own contract and is not covered by the document format: a released replica there reads paragraph text without the hyphens, so mixing versions in one experimental text room can rewrite paragraphs that hold them.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-inline-characters.test.ts",
+    "packages/core/src/store/__tests__/inline-character-deletion.test.ts",
+    "packages/core/src/store/__tests__/text-projection-hyphens.test.ts",
+    "packages/pro/src/collaboration/__tests__/text-collaboration-hyphens.test.ts"
+  ],
+  "changeset": "nonbreaking-hyphen-text",
+  "migration": null
+}

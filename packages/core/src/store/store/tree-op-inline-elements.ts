@@ -1,4 +1,6 @@
+import { isValidXmlText } from '../package/sinks.ts';
 import { hardBreakAttributes } from '../package/hard-break.ts';
+import { NON_BREAKING_HYPHEN_TEXT, OPTIONAL_HYPHEN_TEXT } from '../package/hyphen-text.ts';
 import { WML_NAMESPACE_URI, type OoxmlNode } from '../package/ooxml-tree.ts';
 
 /**
@@ -44,4 +46,97 @@ export function simpleElement(
     attributes: localName === 'br' ? [...hardBreakAttributes(breakKind)] : [],
     children: [],
   } as unknown as OoxmlNode;
+}
+
+const HYPHEN_CHARACTERS = /[\u001e\u001f]/;
+const ALL_HYPHEN_CHARACTERS = /[\u001e\u001f]/g;
+
+/** Most hyphen elements one inserted text may create, so a string cannot mint a node flood. */
+export const MAX_INSERTED_HYPHENS = 4096;
+
+/** Whether inserted text holds a character that becomes a hyphen element. */
+export function holdsHyphenCharacter(text: string): boolean {
+  return HYPHEN_CHARACTERS.test(text);
+}
+
+/**
+ * Whether text can be inserted as run content: valid XML text, except that U+001E and U+001F
+ * are allowed, up to {@link MAX_INSERTED_HYPHENS}, because they become hyphen elements.
+ */
+export function isInsertableText(text: string): boolean {
+  if (!holdsHyphenCharacter(text)) return isValidXmlText(text);
+  return areInsertableTexts([text]);
+}
+
+/** A hyphen between the two halves of a surrogate pair would leave each half alone. */
+function splitsSurrogateAt(text: string, index: number): boolean {
+  const before = index > 0 ? text.charCodeAt(index - 1) : 0;
+  const after = index + 1 < text.length ? text.charCodeAt(index + 1) : 0;
+  return (before >= 0xd800 && before <= 0xdbff) || (after >= 0xdc00 && after <= 0xdfff);
+}
+
+/**
+ * {@link isInsertableText} for texts one operation writes together: the hyphen cap covers them
+ * all. Each hyphen becomes its own element, so one between the halves of a surrogate pair is
+ * refused.
+ */
+export function areInsertableTexts(texts: readonly string[]): boolean {
+  let hyphens = 0;
+  for (const text of texts) {
+    if (!holdsHyphenCharacter(text)) {
+      if (!isValidXmlText(text)) return false;
+      continue;
+    }
+    for (let index = 0; index < text.length; index += 1) {
+      const code = text.charCodeAt(index);
+      if (code !== 0x1e && code !== 0x1f) continue;
+      hyphens += 1;
+      if (hyphens > MAX_INSERTED_HYPHENS || splitsSurrogateAt(text, index)) return false;
+    }
+    if (!isValidXmlText(text.replace(ALL_HYPHEN_CHARACTERS, ''))) return false;
+  }
+  return true;
+}
+
+/** A builder for one inserted run child. */
+export type RunChildBuilder = (nextId: () => string) => OoxmlNode;
+
+function hyphenElement(nextId: () => string, char: string): OoxmlNode {
+  return {
+    id: nextId(),
+    kind: 'generic',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName: char === NON_BREAKING_HYPHEN_TEXT ? 'noBreakHyphen' : 'softHyphen',
+    prefix: 'w',
+    namespaceBindings: [],
+    attributes: [],
+    children: [],
+  } as unknown as OoxmlNode;
+}
+
+/**
+ * Run content for inserted text: `w:t` for the text, and `w:noBreakHyphen` or `w:softHyphen`
+ * for each U+001E or U+001F, the characters a text read reports for those elements.
+ */
+export function textWithHyphenBuilders(text: string): RunChildBuilder[] {
+  if (!holdsHyphenCharacter(text)) return [(nextId) => textElement(nextId, text)];
+  const builders: RunChildBuilder[] = [];
+  let from = 0;
+  for (let index = 0; index <= text.length; index += 1) {
+    const char = text[index];
+    const end = index === text.length;
+    if (!end && char !== NON_BREAKING_HYPHEN_TEXT && char !== OPTIONAL_HYPHEN_TEXT) continue;
+    if (index > from) {
+      const piece = text.slice(from, index);
+      builders.push((nextId) => textElement(nextId, piece));
+    }
+    if (!end) builders.push((nextId) => hyphenElement(nextId, char!));
+    from = index + 1;
+  }
+  return builders;
+}
+
+/** The nodes {@link textWithHyphenBuilders} describes, minted in order. */
+export function textWithHyphens(nextId: () => string, text: string): OoxmlNode[] {
+  return textWithHyphenBuilders(text).map((build) => build(nextId));
 }

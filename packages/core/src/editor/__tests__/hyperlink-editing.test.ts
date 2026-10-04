@@ -8,7 +8,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { zipSync, strToU8 } from 'fflate';
+import { strToU8, unzipSync, zipSync } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 
@@ -425,6 +425,36 @@ describe('editing a hyperlink through the editor', () => {
     );
     expect(painted.map((color) => color.toLowerCase())).toContain('#ff0000');
     expect(painted.some((color) => color.toLowerCase() === '#0563c1')).toBe(false);
+  });
+
+  test('a link label shows visible hyphens and keeps the hyphen elements', () => {
+    // "co<noBreakHyphen/>op": the popup reads and selects the label with U+2011.
+    const mounted = mount(
+      '<w:p><w:r><w:t>Visit co</w:t><w:noBreakHyphen/><w:t>op now</w:t></w:r></w:p>'
+    );
+    select(mounted, 0, 6, 11);
+    const label = mounted.editor.query({ type: 'selectedText' });
+    expect(label).toBe('co\u2011op');
+    // Creating the link with the text the popup prefilled must not rewrite the words.
+    expect(
+      mounted.editor.surface!.hyperlinks.applyHyperlink({ url: 'https://example.com', text: label })
+    ).toBe(true);
+    const link = mounted.editor.surface!.hyperlinks.linksInCaretParagraph()[0]!;
+    expect(link.text).toBe('co\u2011op');
+    // Saving the edit panel unchanged writes nothing to the label either.
+    caret(mounted, 0, 8);
+    expect(
+      mounted.editor.surface!.hyperlinks.applyHyperlink({
+        url: 'https://example.org',
+        text: link.text,
+      })
+    ).toBe(true);
+    const xml = new TextDecoder().decode(
+      unzipSync(mounted.editor.surface!.session.save())['word/document.xml']!
+    );
+    expect(xml).toContain('<w:noBreakHyphen/>');
+    expect(xml).not.toContain('\u2011');
+    expect(mounted.editor.surface!.session.bodyText()).toBe('Visit co\u001eop now');
   });
 
   test('a link survives a save and reopen with its target intact', () => {

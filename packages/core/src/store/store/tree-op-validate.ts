@@ -1,3 +1,4 @@
+import { isInsertableText } from './tree-op-inline-elements.ts';
 import { validateSetLegacyDropdown } from './legacy-dropdown-fields.ts';
 import { validateHyperlinkRange } from './tree-op-hyperlink-range.ts';
 import { validateSetFieldCode } from './tree-op-field-code.ts';
@@ -614,7 +615,8 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (!Number.isInteger(op.offset) || op.offset < 0 || op.offset > length) {
         return 'offset-out-of-range';
       }
-      if (typeof op.text !== 'string' || !isValidXmlText(op.text)) return 'invalid-text';
+      // U+001E and U+001F insert hyphen elements, which is how a text read reports them.
+      if (typeof op.text !== 'string' || !isInsertableText(op.text)) return 'invalid-text';
       if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
       if (op.bias !== undefined && op.bias !== 'left' && op.bias !== 'right') return 'invalidArgs';
       // A named automation insertion was already resolved against that owner's exact landing

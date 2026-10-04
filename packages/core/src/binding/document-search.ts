@@ -21,6 +21,7 @@
 // body and furniture text boxes follow their owners: ANCHORED ones only, because layout paints
 // no story for an inline box. Note-owned text boxes remain excluded.
 
+import { withDisplayedHyphens } from '../store/package/hyphen-text.ts';
 import {
   SEARCH_MATCH_LIMIT,
   SEARCH_QUERY_MAX,
@@ -250,7 +251,7 @@ function resultRunAddressAt(
 
 /** Bound and flatten one file-derived string on its way out of this module. */
 function bounded(raw: string, max: number): string {
-  return raw.replace(CONTROL_CHARS_ALL, ' ').slice(0, max);
+  return withDisplayedHyphens(raw).replace(CONTROL_CHARS_ALL, ' ').slice(0, max);
 }
 
 /** Most queries one multi-term search accepts. Queries are host input, so they are bounded. */

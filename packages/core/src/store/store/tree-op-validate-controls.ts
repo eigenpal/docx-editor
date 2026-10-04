@@ -1,3 +1,4 @@
+import { isInsertableText } from './tree-op-inline-elements.ts';
 import { canTrackContentControl } from './tracked-content-control-insert.ts';
 import { findNode } from '../package/ooxml-edit.ts';
 import {
@@ -19,7 +20,6 @@ import {
 // tree-op-validate.ts so importers keep one entry point.
 
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-tree.ts';
-import { isValidXmlText } from '../package/sinks.ts';
 import {
   checkboxContentWritable,
   decodeCheckboxGlyph,
@@ -282,7 +282,7 @@ export function validateSetContentControlValue(
   if (effectiveLockOf(part, control).content) return 'locked';
   // Temporary unwrap is part of a successful value write; refuse when the wrapper is locked.
   if (isTemporaryControl(control) && effectiveLockOf(part, control).wrapper) return 'locked';
-  if (typeof value !== 'string' || !isValidXmlText(value)) return 'invalidArgs';
+  if (typeof value !== 'string' || !isInsertableText(value)) return 'invalidArgs';
 
   const type = contentControlValueTypeOf(control);
   // A value becomes one run inside the structure the control wraps; content no value can stand

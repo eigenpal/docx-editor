@@ -1,3 +1,4 @@
+import { withDisplayedHyphens } from '../store/package/hyphen-text.ts';
 import { queryEditorDocument } from './docx-editor-query.ts';
 import { refreshWriteBlocked } from './refresh-write-guard.ts';
 import { registerRefreshHost, type RefreshHost } from './document-refresh-host.ts';
@@ -1625,8 +1626,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           revisionKind: item.revisionKind,
           author: item.author,
           initials: initialsOfAuthor(item.author),
-          text: item.text,
-          ...(item.replacedText ? { replacedText: item.replacedText } : {}),
+          text: withDisplayedHyphens(item.text),
+          ...(item.replacedText ? { replacedText: withDisplayedHyphens(item.replacedText) } : {}),
           replyIds: item.replyIds,
           readOnly: item.readOnly || reviewChangesLocked(surface),
           item,
