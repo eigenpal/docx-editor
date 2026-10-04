@@ -75,7 +75,8 @@ export function optionalHyphenBreakStart(
 
 /**
  * Show the optional hyphen that ends `line`: its box takes the visible hyphen's advance, and
- * the line grows by it. The caret after it sits after the drawn hyphen.
+ * the line grows by it. The span is layout-owned, so the caret reads this box, mirrored in
+ * right-to-left text, and sits after the drawn hyphen.
  */
 export function showOptionalHyphenAtLineEnd(line: PendingLine, measurer: TextMeasurer): void {
   const last = line.spans.at(-1);
@@ -84,7 +85,6 @@ export function showOptionalHyphenAtLineEnd(line: PendingLine, measurer: TextMea
   line.spans[line.spans.length - 1] = {
     ...last,
     box: { ...last.box, width },
-    caretEdges: [0, width],
     optionalHyphenBreak: true,
   };
   line.width += width - last.box.width;

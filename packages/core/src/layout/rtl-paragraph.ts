@@ -296,11 +296,16 @@ function withJoiningContext(pieces: FieldAwarePiece[], breaksIgnored: boolean): 
     return pieces;
   }
   const levelOf = (piece: FieldAwarePiece | undefined) => piece?.style.shaping?.level;
-  // The adjacent piece in `step` direction, stepping over contiguous ignored breaks.
+  // The adjacent piece in `step` direction, stepping over contiguous ignored breaks and
+  // optional hyphens, which draw nothing inside a line and so do not break joining.
   const neighbourOf = (index: number, step: -1 | 1) => {
     let at = index + step;
     let edge = step < 0 ? pieces[index]!.start : pieces[index]!.end;
-    for (; breaksIgnored && isPageBreak(pieces[at]); at += step) {
+    for (
+      ;
+      (breaksIgnored && isPageBreak(pieces[at])) || isOptionalHyphenPiece(pieces[at]);
+      at += step
+    ) {
       const next = pieces[at]!;
       if ((step < 0 ? next.end : next.start) !== edge) return undefined;
       edge = step < 0 ? next.start : next.end;

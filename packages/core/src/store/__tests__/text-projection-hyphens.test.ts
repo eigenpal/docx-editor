@@ -80,6 +80,14 @@ describe('hyphen elements in paragraph text', () => {
     expect(found(SHY)).toHaveLength(0);
   });
 
+  test('a literal U+00AD in run text matches neither a typed hyphen nor nothing', () => {
+    const { projected } = project('<w:p><w:r><w:t>xx aaaa\u00adbbbb</w:t></w:r></w:p>');
+    const found = (query: string) => projected.findOccurrences(query, 10).matches;
+    expect(found('aaaa-bbbb')).toHaveLength(0);
+    expect(found('aaaabbbb')).toHaveLength(0);
+    expect(found('aaaa')).toHaveLength(1);
+  });
+
   test('whole-word search joins a word across an optional hyphen', () => {
     const { projected } = project(ISSUE);
     const whole = (query: string) =>

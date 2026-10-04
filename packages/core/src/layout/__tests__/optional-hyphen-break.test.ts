@@ -1,12 +1,15 @@
 import { expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
-import type { LineRecord } from '../semantic-records.ts';
+import { caretAt } from '../semantic-interaction.ts';
+import { spanOffsetX } from '../semantic-hit-test.ts';
+import type { LineRecord, SemanticLayout } from '../semantic-records.ts';
 
 // At 11pt every character is 6pt wide, so a measure of `chars` characters is `chars * 120`
 // twips.
 const SOFT = '|';
 const SIZE = '<w:rPr><w:sz w:val="22"/></w:rPr>';
+const measurer = createFixedMeasurer(6, 14);
 
 function runsOf(text: string): string {
   return text
@@ -19,7 +22,7 @@ function textRun(text: string): string {
   return text ? `<w:r>${SIZE}<w:t xml:space="preserve">${text}</w:t></w:r>` : '';
 }
 
-function layoutLines(text: string, chars: number, jc?: string): readonly LineRecord[] {
+function layoutOf(text: string, chars: number, jc?: string): SemanticLayout {
   const width = Math.round(chars * 120);
   const justification =
     jc === 'bidi' ? '<w:pPr><w:bidi/></w:pPr>' : jc ? `<w:pPr><w:jc w:val="${jc}"/></w:pPr>` : '';
@@ -32,7 +35,11 @@ function layoutLines(text: string, chars: number, jc?: string): readonly LineRec
     { name: '/word/document.xml', contentType: 'app/xml' }
   );
   if (!opened.ok) throw new Error(opened.reason);
-  const layout = layoutSemanticDocument(opened.part, 1, { measurer: createFixedMeasurer(6, 14) });
+  return layoutSemanticDocument(opened.part, 1, { measurer });
+}
+
+function layoutLines(text: string, chars: number, jc?: string): readonly LineRecord[] {
+  const layout = layoutOf(text, chars, jc);
   const paragraph = layout.pages[0]!.fragments.find((fragment) => fragment.kind === 'paragraph')!;
   if (paragraph.kind !== 'paragraph') throw new Error('Missing paragraph');
   return paragraph.lines;
@@ -56,7 +63,8 @@ test('a word that does not fit breaks after its optional hyphen and shows a hyph
   expect(hyphen.range.end - hyphen.range.start).toBe(1);
   expect(hyphen.range.start).toBe(7);
   expect(hyphen.box.width).toBe(6);
-  expect(hyphen.caretEdges).toEqual([0, 6]);
+  expect(spanOffsetX(hyphen, 7, measurer)).toBeCloseTo(hyphen.box.x, 6);
+  expect(spanOffsetX(hyphen, 8, measurer)).toBeCloseTo(hyphen.box.x + 6, 6);
   expect(lines[1]!.spans[0]!.range.start).toBe(8);
 });
 
@@ -148,6 +156,39 @@ test('a literal U+00AD in run text draws a measured hyphen and is not a break', 
     'aa\u00adbb\u00adcc\u00ad',
     'dd',
   ]);
+});
+
+test('in a right-to-left line the caret before the visible hyphen is on its right', () => {
+  const layout = layoutOf('אא בבבב|גגגג', 8.5, 'bidi');
+  const paragraph = layout.pages[0]!.fragments.find((fragment) => fragment.kind === 'paragraph')!;
+  if (paragraph.kind !== 'paragraph') throw new Error('Missing paragraph');
+  const hyphen = paragraph.lines[0]!.spans.find((span) => span.optionalHyphenBreak)!;
+  const paragraphId = hyphen.range.paragraphId;
+  // Offset 7 is before the hyphen in reading order, so at its right edge.
+  expect(caretAt(layout, { paragraphId, offset: 7 }, measurer)!.x).toBeCloseTo(
+    hyphen.box.x + hyphen.box.width,
+    6
+  );
+  expect(spanOffsetX(hyphen, 8, measurer)).toBeCloseTo(hyphen.box.x, 6);
+});
+
+test('a hyphen after digits in a right-to-left line stays with the digits', () => {
+  const lines = layoutLines('אא 1234|5678', 8.5, 'bidi');
+  expect(shown(lines)).toEqual(['אא 1234-', '5678']);
+  const visual = [...lines[0]!.spans]
+    .sort((a, b) => a.box.x - b.box.x)
+    .map((span) => (span.optionalHyphenBreak ? '-' : span.text.trim()))
+    .filter((text) => text.length > 0);
+  // Measured: the digits read left to right, and the hyphen follows them.
+  expect(visual).toEqual(['1234', '-', 'אא']);
+});
+
+test('letters join across an optional hyphen that draws nothing', () => {
+  const spans = layoutLines('مرح|با', 20, 'bidi').flatMap((line) => line.spans);
+  const before = spans.find((span) => span.text === 'مرح')!;
+  const after = spans.find((span) => span.text === 'با')!;
+  expect(before.style.shaping?.context?.after).toBe('با');
+  expect(after.style.shaping?.context?.before).toBe('مرح');
 });
 
 test('the paragraph text keeps one character per optional hyphen', () => {
