@@ -709,6 +709,7 @@ export {
   type TableRowHeight,
   type TableRowHeightRule,
 } from './semantic-table.ts';
+export type { AutofitFieldContext, TableAutofitContext } from './table-autofit-widths.ts';
 export { paragraphMarkDeleted, revisionRemovesParagraph } from './revision-visibility.ts';
 export {
   MAX_TABLE_ROW_FRAGMENTS,

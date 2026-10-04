@@ -44,7 +44,8 @@ const cell = (tcPr = '') => `<w:tc>${tcPr}<w:p><w:r><w:t>x</w:t></w:r></w:p></w:
 const grid = (...cols: number[]) =>
   `<w:tblGrid>${cols.map((w) => `<w:gridCol w:w="${w}"/>`).join('')}</w:tblGrid>`;
 /** 144pt wide, leaving 324pt of slack in the text column. */
-const narrow = `${grid(1440, 1440)}<w:tr>${cell()}${cell()}</w:tr>`;
+const sized = '<w:tc><w:tcPr><w:tcW w:w="1440" w:type="dxa"/></w:tcPr><w:p/></w:tc>';
+const narrow = `${grid(1440, 1440)}<w:tr>${sized}${sized}</w:tr>`;
 
 const structureOf = (bodyXml: string) =>
   readTableStructure(tableNode(bodyXml), CONTENT_WIDTH_PT, 0)!;
@@ -158,15 +159,16 @@ describe('w:tblInd and w:jc place the table in the text column', () => {
 });
 
 describe('w:tblCellSpacing separates adjacent cells', () => {
-  test('each cell gives up half of every gap, inside its own grid slot', () => {
+  test('cells sit twice the spacing apart and from the table edge, within its width', () => {
     const fragment = firstTable(
       `<w:tbl><w:tblPr><w:tblCellSpacing w:w="120" w:type="dxa"/></w:tblPr>${narrow}</w:tbl>`
     );
     const [first, second] = fragment.rows[0]!.cells;
-    // 120tw = 6pt gap, so 3pt comes off each side of every cell.
-    expect(first!.box.x).toBeCloseTo(3, 6);
-    expect(first!.box.width).toBeCloseTo(72 - 6, 6);
-    expect(second!.box.x - (first!.box.x + first!.box.width)).toBeCloseTo(6, 6);
+    // 120tw = 6pt on each side of every cell: 12pt gaps at the three column edges come out
+    // of the 144pt table, and each 72pt column keeps (144 - 36) / 144 of its width.
+    expect(first!.box.x).toBeCloseTo(12, 6);
+    expect(first!.box.width).toBeCloseTo(54, 6);
+    expect(second!.box.x - (first!.box.x + first!.box.width)).toBeCloseTo(12, 6);
     // The grid itself does not move: the table still spans its resolved columns.
     expect(fragment.box.width).toBeCloseTo(144, 6);
   });

@@ -288,8 +288,8 @@ describe('a merged header head under a wrap band', () => {
     const header = '<w:trPr><w:tblHeader/></w:trPr>';
     return (
       `<w:p><w:r><w:t>F0</w:t></w:r></w:p><w:tbl>` +
-      '<w:tblPr><w:tblCellMar><w:left w:type="dxa" w:w="108"/><w:right w:type="dxa" w:w="108"/>' +
-      '</w:tblCellMar></w:tblPr>' +
+      '<w:tblPr><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:type="dxa" w:w="108"/>' +
+      '<w:right w:type="dxa" w:w="108"/></w:tblCellMar></w:tblPr>' +
       `<w:tr>${header}${tc(`<w:p><w:r><w:t>${HEAD_TEXT}</w:t></w:r></w:p>`, RESTART)}${tc('<w:p><w:r><w:t>s0</w:t></w:r></w:p>')}</w:tr>` +
       `<w:tr>${header}${tc('<w:p/>', CONTINUE)}${tc('<w:p><w:r><w:t>s1</w:t></w:r></w:p>')}</w:tr>` +
       `<w:tr>${tc('<w:p><w:r><w:t>a2</w:t></w:r></w:p>')}${tc('<w:p><w:r><w:t>b2</w:t></w:r></w:p>')}</w:tr>` +

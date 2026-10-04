@@ -103,8 +103,9 @@ export const NO_BREAK_CHARACTER = /[\u00a0\u2007\u202f\u2060\ufeff]/u;
 
 // Whitespace that ends a word at a seam: every JavaScript `\s` except the no-break
 // characters above, which `\s` also matches (U+2060 is not `\s`).
-const ENDS_WITH_BREAKING_SPACE = /[^\S\u00a0\u2007\u202f\ufeff]$/;
-const STARTS_WITH_BREAKING_SPACE = /^[^\S\u00a0\u2007\u202f\ufeff]/;
+/** A breaking space at a run's end or start: the break opportunities a run seam offers. */
+export const ENDS_WITH_BREAKING_SPACE = /[^\S\u00a0\u2007\u202f\ufeff]$/;
+export const STARTS_WITH_BREAKING_SPACE = /^[^\S\u00a0\u2007\u202f\ufeff]/;
 
 /** Every kinsoku member and every ideographic range sits at or above this code unit. */
 const FIRST_IDEOGRAPHIC_UNIT = 0x2e80;

@@ -443,7 +443,7 @@ describe('the table fragment box reports the table’s own width', () => {
 
   test('a table narrower than the page reports its own width, not the page’s', () => {
     const [fragment] = tableFragments(
-      `<w:tbl><w:tblPr/>${grid(1440, 1440)}<w:tr>${cell()}${cell()}</w:tr></w:tbl>`
+      `<w:tbl><w:tblPr/>${grid(1440, 1440)}<w:tr>${cell(tcW('1440'))}${cell(tcW('1440'))}</w:tr></w:tbl>`
     );
     expect(fragment!.box.width).toBeCloseTo(144, 6);
     expect(fragment!.box.width).toBeCloseTo(rightEdge(fragment!), 6);
@@ -459,7 +459,7 @@ describe('the table fragment box reports the table’s own width', () => {
   });
 
   test('every fragment of a table that paginates reports the same width', () => {
-    const row = `<w:tr>${cell()}${cell()}</w:tr>`;
+    const row = `<w:tr>${cell(tcW('1440'))}${cell(tcW('1440'))}</w:tr>`;
     const fragments = tableFragments(
       `<w:tbl><w:tblPr/>${grid(1440, 1440)}${row.repeat(300)}</w:tbl>`
     );

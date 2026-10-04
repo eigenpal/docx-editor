@@ -78,6 +78,11 @@ import { legacyRoundedCellClaims, legacyTableContentWidth } from './legacy-table
 import { legacyFixedTableContentOffset } from './legacy-fixed-table-content.ts';
 import { withLegacyTableSideRules } from './legacy-table-side-rules.ts';
 import { conditionalTypesFor, readTableLook } from './table-conditional-formats.ts';
+import {
+  autofitColumnWidthsPt,
+  narrowNestedReader,
+  type TableAutofitContext,
+} from './table-autofit-widths.ts';
 export { tableOriginX, tableFloatOriginX } from './table-origin.ts';
 // Cell padding is its own unit (`table-cell-margins.ts`); re-exported here because this is
 // where the published table surface lives.
@@ -303,11 +308,11 @@ export interface SemanticTableStructure {
    */
   readonly float?: TableFloatPosition;
   /**
-   * `w:tblCellSpacing` (17.4.45) in points: the gap between adjacent cell edges. Applied as
-   * a half-gap inset on each side of every cell, so cells separate visually without the grid
-   * itself moving. Word ALSO grows the table's overall width by the spacing it adds around
-   * the outside; that part is not modelled, so a spaced table is laid out on the same grid
-   * its file states rather than a wider one.
+   * `w:tblCellSpacing` (17.4.45) in points: the space on each side of every cell. Cells sit
+   * twice this apart and from the table edge; the gaps come out of the table width, and each
+   * column gives up its share in proportion (`table-cell-spacing.ts`). Rows do not yet get
+   * the matching gaps above and below them, so a spaced table's rows stay as tall as they
+   * would be without it.
    */
   readonly cellSpacingPt: number;
   /**
@@ -442,6 +447,16 @@ const tableStructureMemos = new WeakMap<object, TableStructureMemo>();
 const filteredTableStructureMemos = new WeakMap<object, TableStructureMemo>();
 
 /**
+ * Widened structures per base, by their widths. Readers that widen one base differently (two
+ * measurers, two field contexts) keep separate entries instead of evicting each other.
+ */
+const widenedStructureMemos = new WeakMap<
+  SemanticTableStructure,
+  Map<string, SemanticTableStructure>
+>();
+const MAX_WIDENED_PER_BASE = 4;
+
+/**
  * Read one typed table node into a bounded structure, or null when the node is not a
  * typed table or sits beyond the nesting ceiling.
  */
@@ -453,10 +468,13 @@ export function readTableStructure(
   /** Which revisions the view resolves away; only the proposed result performs the join. */
   displayMode: RevisionDisplayMode = 'all-markup',
   authorFilter?: RevisionAuthorFilter,
-  compatibilityMode?: number
+  compatibilityMode?: number,
+  /** Widens autofit columns to their content minimums; layout passes its measurer. */
+  autofit?: TableAutofitContext
 ): SemanticTableStructure | null {
   const memoStore = authorFilter ? filteredTableStructureMemos : tableStructureMemos;
   const memo = memoStore.get(table);
+  let base: SemanticTableStructure | null;
   if (
     memo &&
     memo.contentWidthPt === contentWidthPt &&
@@ -468,8 +486,47 @@ export function readTableStructure(
     memo.authorFilter === authorFilter &&
     memo.compatibilityMode === compatibilityMode
   ) {
-    return memo.structure;
+    base = memo.structure;
+  } else {
+    base = readTableStructureUncached(
+      table,
+      contentWidthPt,
+      depth,
+      styleCascade,
+      displayMode,
+      authorFilter,
+      compatibilityMode
+    );
+    memoStore.set(table, {
+      contentWidthPt,
+      depth,
+      styleCascade,
+      displayMode,
+      authorFilter,
+      compatibilityMode,
+      structure: base,
+    });
   }
+  if (!autofit || !base || (base.layoutFixed && depth === 0)) return base;
+  // Most tables already hold their content: they come back as the shared base structure.
+  const widths = autofitColumnWidthsPt(base, contentWidthPt, autofit, {
+    styleCascade,
+    displayMode,
+    authorFilter,
+    depth,
+    readNested: narrowNestedReader(
+      readTableStructure,
+      styleCascade,
+      displayMode,
+      authorFilter,
+      compatibilityMode
+    ),
+  });
+  if (widths === base.columnWidthsPt) return base;
+  const widthsKey = widths.join(',');
+  let widened = widenedStructureMemos.get(base);
+  const known = widened?.get(widthsKey);
+  if (known) return known;
   const structure = readTableStructureUncached(
     table,
     contentWidthPt,
@@ -477,18 +534,14 @@ export function readTableStructure(
     styleCascade,
     displayMode,
     authorFilter,
-    compatibilityMode
-  );
-  const entry: TableStructureMemo = {
-    contentWidthPt,
-    depth,
-    styleCascade,
-    displayMode,
-    authorFilter,
     compatibilityMode,
-    structure,
-  };
-  memoStore.set(table, entry);
+    base.bidiVisual ? [...widths].reverse() : widths
+  );
+  if (structure) {
+    if (!widened) widenedStructureMemos.set(base, (widened = new Map()));
+    if (widened.size >= MAX_WIDENED_PER_BASE) widened.delete(widened.keys().next().value!);
+    widened.set(widthsKey, structure);
+  }
   return structure;
 }
 
@@ -499,7 +552,9 @@ function readTableStructureUncached(
   styleCascade: StyleCascadeTable | undefined,
   displayMode: RevisionDisplayMode,
   authorFilter?: RevisionAuthorFilter,
-  compatibilityMode?: number
+  compatibilityMode?: number,
+  /** Logical column widths that replace the resolved ones (autofit widening). */
+  columnWidthsOverridePt?: readonly number[]
 ): SemanticTableStructure | null {
   if (depth >= MAX_TABLE_NESTING) return null;
   if (table.kind !== 'table') return null;
@@ -851,19 +906,21 @@ function readTableStructureUncached(
     floating: float !== undefined,
   });
 
-  const columnWidthsPt = resolveColumnWidthsPt({
-    gridCols,
-    claims:
-      legacyWidth === undefined
-        ? claims
-        : legacyRoundedCellClaims(claims, gridCols, (legacyWidth * tableWidth.value) / 100),
-    columnCount,
-    contentWidthPt: legacyWidth ?? contentWidthPt,
-    tableWidth,
-    layoutFixed,
-    // A hidden revision row can still account for part of the authored grid.
-    hasOmittedRows,
-  });
+  const columnWidthsPt =
+    columnWidthsOverridePt ??
+    resolveColumnWidthsPt({
+      gridCols,
+      claims:
+        legacyWidth === undefined
+          ? claims
+          : legacyRoundedCellClaims(claims, gridCols, (legacyWidth * tableWidth.value) / 100),
+      columnCount,
+      contentWidthPt: legacyWidth ?? contentWidthPt,
+      tableWidth,
+      layoutFixed,
+      // A hidden revision row can still account for part of the authored grid.
+      hasOmittedRows,
+    });
   // Project the grid visually; cell arrays retain document order for keyboard traversal.
   const visualRows = physicalTableRows(rows, columnWidthsPt.length, bidiVisual);
   let contentRows = withTableContentBorders(

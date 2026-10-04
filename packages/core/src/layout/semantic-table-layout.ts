@@ -35,6 +35,7 @@ import {
   type AnchoredDrawingRecord,
   type DrawingAnchorFrameContext,
 } from './drawing-layout.ts';
+import { cellSpacingGeometry } from './table-cell-spacing.ts';
 import {
   exclusionLayoutToken,
   filterExclusionZonesForParagraphOrder,
@@ -1300,12 +1301,10 @@ export function layoutRowFragmentBounded(
 ): LayoutRowBoundedResult {
   const detachedSpans = vMerge?.detachedSpanHeightPtByCellId;
   const total = sumCols(cols, 0, cols.length);
-  // `w:tblCellSpacing`: each cell gives up half of every gap it shares with a neighbour.
-  // `w:tblCellSpacing` (17.4.45) separates ADJACENT cell edges, so each of the two cells
-  // sharing a gap gives up half of it. Applied inside the grid slot rather than by widening
-  // the table, which keeps every column boundary, border interval and hit box where the
-  // resolved grid put it.
-  const gap = Number.isFinite(cellSpacingPt) && cellSpacingPt > 0 ? cellSpacingPt / 2 : 0;
+  // `w:tblCellSpacing` (17.4.45) is the space on each side of every cell, so neighbouring
+  // cells, and a cell and the table edge, sit twice that apart. The gaps come out of the
+  // table's own width, and every column gives up its share in proportion to its width.
+  const gap = cellSpacingGeometry(cols, cellSpacingPt);
   const defaultLineHeight = deps.measurer.lineMetrics(DEFAULT_RUN_STYLE).height;
   const heightRule = row.height;
   const exactHeightPt = heightRule.rule === 'exact' ? heightRule.valuePt : undefined;
@@ -1361,9 +1360,9 @@ export function layoutRowFragmentBounded(
     const { gridSpan: span, gridColumn } = cell;
     const slotX = left + sumCols(cols, 0, gridColumn);
     const slotW = sumCols(cols, gridColumn, Math.min(gridColumn + span, cols.length)) || total;
-    const inset = Math.min(gap, Math.max((slotW - MIN_CELL_BOX_PT) / 2, 0));
-    const cellX = slotX + inset;
-    const cellW = Math.max(slotW - 2 * inset, MIN_CELL_BOX_PT);
+    const spaced = gap && gridColumn < cols.length ? gap : null;
+    const cellX = spaced ? left + spaced.cellLeft(gridColumn) : slotX;
+    const cellW = Math.max(spaced ? spaced.cellWidth(gridColumn, span) : slotW, MIN_CELL_BOX_PT);
     const insets =
       deps.cellContentInsets?.get(cell.id) ?? cellContentInsets(cell, cellSpacingPt === 0);
     // Each page fragment retains the cell padding, even when its paragraph continues.

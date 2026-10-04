@@ -75,6 +75,18 @@ export const AUTO_PARAGRAPH_SPACING_PT = 14;
 // @public
 export const AUTO_PREFERRED_WIDTH: PreferredWidth;
 
+// @public
+export interface AutofitFieldContext {
+    readonly bodyPageFields?: BodyPageFieldContext | false;
+    readonly documentProperties?: DocumentProperties;
+    readonly fieldCodeRanges?: FieldCodeRanges;
+    readonly noteMarks?: NoteMarkContext;
+    readonly pageContext?: FieldPageContext;
+    readonly refFields?: RefFieldContext;
+    readonly showFieldCodes?: boolean;
+    readonly tocLinkStyleRanges?: TocLinkRanges;
+}
+
 // @public (undocumented)
 export type AutonumFieldKind = 'AUTONUM' | 'AUTONUMLGL' | 'AUTONUMOUT';
 
@@ -2801,7 +2813,8 @@ export function readTableBorders(tblPr: OoxmlElement | undefined): TableBorderBo
 
 // @public
 export function readTableStructure(table: OoxmlNode, contentWidthPt: number, depth: number, styleCascade?: StyleCascadeTable,
-displayMode?: RevisionDisplayMode, authorFilter?: RevisionAuthorFilter, compatibilityMode?: number): SemanticTableStructure | null;
+displayMode?: RevisionDisplayMode, authorFilter?: RevisionAuthorFilter, compatibilityMode?: number,
+autofit?: TableAutofitContext): SemanticTableStructure | null;
 
 // @public
 export interface RefFieldContext {
@@ -4309,6 +4322,17 @@ export function tabLeaderPattern(startPt: number, widthPt: number, advancePt: nu
 
 // @public
 export type TableAlignment = 'left' | 'center' | 'right';
+
+// @public
+export interface TableAutofitContext {
+    readonly defaultTabStopPt?: number;
+    readonly fields?: AutofitFieldContext;
+    readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
+    readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
+    readonly measurer: TextMeasurer;
+    readonly paragraphToken?: (paragraph: OoxmlElement) => string;
+    readonly passToken?: string;
+}
 
 // @public
 export interface TableBorderBox {
