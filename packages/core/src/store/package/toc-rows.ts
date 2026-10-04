@@ -1,3 +1,4 @@
+import { visibleHyphenText } from './hyphen-text.ts';
 import { resolveTocSources, type TocSourceHeading } from './toc-sources.ts';
 import { fldCharType, isInstrTextNode, instrTextValue } from './field-nodes.ts';
 import { sliceTocParagraph } from './toc-result.ts';
@@ -96,6 +97,13 @@ function rowTitles(paragraph: OoxmlNode): readonly string[] {
       title += '\t';
       return;
     }
+    // The same text a heading's outline entry carries, so a row matches its source.
+    const hyphen = visibleHyphenText(node);
+    if (hyphen !== null) {
+      title += hyphen;
+      return;
+    }
+    if (node.kind === 'revisionDelete') return;
     if (node.kind === 'text') {
       for (const child of node.children) if (child.kind === 'textValue') title += child.value;
       return;

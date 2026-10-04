@@ -1,5 +1,6 @@
 // Normalize comments and tracked changes onto the exact layout/package revision being published.
 
+import { withHyphenGlyphs } from '../store/package/hyphen-text.ts';
 import {
   commentBodyText,
   commentInitials,
@@ -523,8 +524,9 @@ function artifactOf(
       ...(item.markDirection ? { markDirection: item.markDirection } : {}),
       author: item.author,
       ...(item.date !== undefined ? { date: item.date } : {}),
-      text: item.text,
-      replacedText: item.replacedText,
+      // One for one, so the text still lines up with its occurrence spans.
+      text: withHyphenGlyphs(item.text),
+      replacedText: withHyphenGlyphs(item.replacedText),
       nesting: item.nesting,
       ...(item.replacedRangeCount !== undefined
         ? { replacedRangeCount: item.replacedRangeCount }

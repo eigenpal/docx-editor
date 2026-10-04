@@ -45,6 +45,15 @@ import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
 type HistoryMark = { paragraphId: string; start: number; end: number };
 
 /** What this lane borrows from the mount closure. Mutable state arrives as a getter. */
+
+/**
+ * The plain-text clipboard flavour: an optional hyphen (painted as U+00AD) is a hint for line
+ * breaking, not a character of the text, so plain text leaves it out. The HTML flavour keeps it.
+ */
+function plainCopyText(text: string): string {
+  return text.includes('\u00ad') ? text.replaceAll('\u00ad', '') : text;
+}
+
 export interface SurfaceClipboardDeps {
   session: TreeDocxSessionView;
   textFormFieldId?(): string | null;
@@ -250,7 +259,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     }
     if (rectangle) {
       return buildCopyFlavours({
-        text: cellSelectionText(deps.layout(), rectangle),
+        text: plainCopyText(cellSelectionText(deps.layout(), rectangle)),
         cellRectangle: true,
         coverage: null,
         pkg: null,
@@ -259,8 +268,10 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     const { from, to } = deps.orderedRange();
     const textPart = session.part();
     // Plain text spells each equation in its linear form instead of U+FFFC.
-    const text = selectedTextIn(deps.layout(), from, to, deps.paragraphOrder(), (id, offset) =>
-      textPart ? equationPlainText(textPart, id, offset) : null
+    const text = plainCopyText(
+      selectedTextIn(deps.layout(), from, to, deps.paragraphOrder(), (id, offset) =>
+        textPart ? equationPlainText(textPart, id, offset) : null
+      )
     );
     const scope = deps.storyScope();
     const collapsed = from.paragraphId === to.paragraphId && from.offset === to.offset;

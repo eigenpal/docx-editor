@@ -5,6 +5,7 @@
 // millions of nodes. Every walk here shares a visited-node + part budget; overflow is
 // truncated, never an unbounded finish.
 
+import { hyphenTextOf } from './hyphen-text.ts';
 import { resolveInternalTarget } from './opc-names.ts';
 import { relationshipsOf, resolveContentTypeOf } from './package-edit.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
@@ -458,7 +459,8 @@ export function collectOwnerAnchorStates(
         node.kind === 'hardBreak' ||
         node.kind === 'noteReference' ||
         node.kind === 'drawing' ||
-        isLegacyVmlAtom(node)
+        isLegacyVmlAtom(node) ||
+        hyphenTextOf(node) !== null
       ) {
         units += 1;
         return true;
@@ -531,7 +533,8 @@ export function collectOwnerCommentSpans(
         node.kind === 'hardBreak' ||
         node.kind === 'noteReference' ||
         node.kind === 'drawing' ||
-        isLegacyVmlAtom(node)
+        isLegacyVmlAtom(node) ||
+        hyphenTextOf(node) !== null
       ) {
         offset += 1;
         return true;

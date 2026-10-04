@@ -1,3 +1,4 @@
+import { withDisplayedHyphens } from '../package/hyphen-text.ts';
 import { withTailStyle } from './tree-op-paragraph-tail.ts';
 import { applySetFieldCode } from './tree-op-field-code.ts';
 import { applyTableAuthoring } from './tree-op-table-batch.ts';
@@ -18,7 +19,12 @@ import { removeCoveredTextFormDefinitions } from './text-form-field-deletion.ts'
 // validation live in sibling tree-op-* modules; tree-ops.ts re-exports the public surface.
 /* eslint-disable max-lines -- pre-existing size; furniture lifecycle only adds union narrowing */
 
-import { simpleElement, textElement } from './tree-op-inline-elements.ts';
+import {
+  simpleElement,
+  textElement,
+  textWithHyphenBuilders,
+  textWithHyphens,
+} from './tree-op-inline-elements.ts';
 import { characterStyleElement, emptyParagraphRunProperties } from './mark-character-style-run.ts';
 import { withFreshIds } from '../package/hf-lifecycle-shell.ts';
 import {
@@ -117,6 +123,7 @@ import {
   verticalMergeHeadRepairDirtyIds,
   rowRemovalEdits,
 } from './tree-op-table-vmerge-removal.ts';
+import { symbolsWithin } from './symbols-in-range.ts';
 import {
   PARAGRAPH_VOCABULARY,
   RUN_VOCABULARY,
@@ -418,7 +425,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
         part,
         paragraph,
         op.offset,
-        [(mint) => textElement(mint, op.text)],
+        textWithHyphenBuilders(op.text),
         options,
         op.inside,
         op.bias
@@ -1255,6 +1262,14 @@ function applyDeleteText(
       current = removed.part;
     }
   }
+  // A symbol has no model width, so no segment covers it: it goes with a range
+  // that spans it.
+  for (const nodeId of symbolsWithin(paragraph, start, end)) {
+    if (!findNode(current, nodeId)) continue;
+    const removed = removeNode(current, nodeId, editOptions);
+    if (!removed.ok) return fromEdit(removed, effect);
+    current = removed.part;
+  }
 
   // Drop runs left with no content. A run holding only `w:rPr` renders nothing and would
   // otherwise accumulate on every deletion. Runs inside a HYPERLINK are swept too — they
@@ -2061,7 +2076,8 @@ function setLastValueOnList(list: OoxmlElement, value: string): OoxmlNode {
         namespaceUri: WML_NAMESPACE_URI,
         prefix: 'w',
         localName: 'lastValue',
-        value,
+        // An attribute cannot hold U+001E or U+001F, so it keeps the hyphens as they are seen.
+        value: withDisplayedHyphens(value),
       },
     ],
   } as OoxmlNode;
@@ -2089,7 +2105,9 @@ function applySetContentControlValue(
       (properties) =>
         runElement(
           nextId,
-          properties ? [properties, textElement(nextId, display)] : [textElement(nextId, display)]
+          properties
+            ? [properties, ...textWithHyphens(nextId, display)]
+            : textWithHyphens(nextId, display)
         ),
       nextId,
       inline

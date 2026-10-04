@@ -50,6 +50,7 @@
 // content. `resolveStoryRefFields` returns null for the common no-REF story, which costs
 // callers nothing downstream.
 
+import { visibleHyphenText } from '../store/package/hyphen-text.ts';
 import {
   fldSimpleInstr,
   isFldSimple,
@@ -370,6 +371,17 @@ function scanParagraphRefs(paragraph: OoxmlElement): ParagraphRefScan {
             }
           } else if (grand.kind === 'tab' && pending.cached.length < MAX_REF_TEXT_CHARS) {
             pending.cached += ' ';
+          } else if (pending.cached.length < MAX_REF_TEXT_CHARS) {
+            // A hyphen joins the cache exactly when the text around it does: never in a real
+            // deletion, and never beside `w:delText`, which the cache leaves out.
+            const hyphen = visibleHyphenText(grand);
+            if (
+              hyphen &&
+              !revisions.some((revision) => revision.kind === 'delete') &&
+              !node.children.some((sibling) => sibling.kind === 'deletedText')
+            ) {
+              pending.cached += hyphen;
+            }
           }
         }
       }

@@ -23,7 +23,8 @@ import {
   threadStateOfPart,
   type CommentThreadState,
 } from '../store/store/comment-reads.ts';
-import { commentBodyText, commentItemsOf, revisionItemsOf } from '../store/store/review-reads.ts';
+import { commentItemsOf, revisionItemsOf } from '../store/store/review-reads.ts';
+import { commentBodyModelText } from '../store/store/review-text.ts';
 import type {
   ReviewCommentItem,
   ReviewRange,
@@ -211,7 +212,7 @@ export function commentReads(
     byId: (commentId: string) => byId.get(commentId) ?? null,
     textOf: (commentId: string) => {
       const item = byId.get(commentId);
-      return item ? commentBodyText(item.comment) : '';
+      return item ? commentBodyModelText(item.comment) : '';
     },
   });
 }

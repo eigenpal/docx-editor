@@ -19,6 +19,7 @@
 //     anyone else — the text never existed for them;
 //   - deleting inside an existing `w:del` does nothing, since it is already gone.
 
+import { textWithHyphens } from './tree-op-inline-elements.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlElement,
@@ -230,7 +231,10 @@ export function applyInsertTracked(
     part,
     paragraph,
     offset,
-    { length: text.length, nodes: (mint) => [textNode(mint, text, false)] },
+    {
+      length: text.length,
+      nodes: (mint) => textWithHyphens(mint, text),
+    },
     revision,
     options,
     bias

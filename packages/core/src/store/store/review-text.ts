@@ -1,14 +1,29 @@
+import { hyphenTextOf, withDisplayedHyphens } from '../package/hyphen-text.ts';
 import type { OoxmlNode } from '../package/ooxml-tree.ts';
 import { hardBreakText } from '../package/hard-break.ts';
 import { isInstrText } from '../package/field-nodes.ts';
 import type { CommentRecord } from './comment-reads.ts';
 
-/** Plain text of a comment's body, so a card never re-implements the run walk. */
+/**
+ * Plain text of a comment's body, as a card shows it: a non-breaking hyphen is U+2011 and an
+ * optional hyphen shows nothing. A card never re-implements the run walk.
+ */
 export function commentBodyText(comment: CommentRecord): string {
+  return withDisplayedHyphens(commentBodyModelText(comment));
+}
+
+/** A comment body in paragraph-text characters, as automation reads it (U+001E, U+001F). */
+export function commentBodyModelText(comment: CommentRecord): string {
   const parts: string[] = [];
   const visit = (node: OoxmlNode): void => {
     if (node.kind === 'textValue') {
       parts.push(node.value);
+      return;
+    }
+    // One character each, as in paragraph text; a card maps them for display.
+    const hyphen = hyphenTextOf(node);
+    if (hyphen !== null) {
+      parts.push(hyphen);
       return;
     }
     for (const child of node.children) visit(child);
@@ -37,6 +52,8 @@ export function textUnder(node: OoxmlNode): string {
   // model counts for them.
   if (node.kind === 'tab') return '\t';
   if (node.kind === 'hardBreak') return hardBreakText(node);
+  const hyphen = hyphenTextOf(node);
+  if (hyphen !== null) return hyphen;
   // A field's instruction is CODE, not content: it measures nothing in the offset model,
   // and a tracked page field would otherwise present its ` PAGE ` source as inserted
   // words. `isInstrText` covers all three spellings — the typed kind, the parse-demoted
