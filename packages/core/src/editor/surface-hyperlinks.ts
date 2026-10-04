@@ -10,7 +10,7 @@
 // comes BACK — for the popover to show, for a click to open — is always the sanitized
 // projection layout already resolved, never the authored string.
 
-import { hyphenTextOf } from '../store/package/hyphen-text.ts';
+import { fromHyphenGlyphs, hyphenTextOf, withHyphenGlyphs } from '../store/package/hyphen-text.ts';
 import { relationshipTargetIn, storyParagraphs, storyRootsOf } from '@docx-editor.dev/core/store';
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import {
@@ -183,7 +183,8 @@ export function hyperlinksInParagraph(
       paragraphId,
       start,
       end,
-      text: liveTextUnder(child, depth),
+      // The label a person edits: visible hyphens, never the model's control characters.
+      text: withHyphenGlyphs(liveTextUnder(child, depth)),
       kind: target.kind,
       href: target.href,
       authored: target.authored,
@@ -417,7 +418,12 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
     fieldLinkAtCaret,
     linkById,
 
-    applyHyperlink(input) {
+    applyHyperlink(requested) {
+      // Labels are shown and selected with visible hyphens; they write the hyphen elements.
+      const input =
+        requested.text === undefined
+          ? requested
+          : { ...requested, text: fromHyphenGlyphs(requested.text) };
       const wantsExternal = input.url !== undefined && input.url.length > 0;
       const wantsInternal = input.anchor !== undefined && input.anchor.length > 0;
       // Exactly one target, matching the op's own rule — a caller that supplies both does
@@ -459,7 +465,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
         const ops: TreeDocOp[] = [];
         // Replacing the display text is a delete plus an insert over the link's own range;
         // both land inside the link because the range is strictly inside it.
-        if (input.text !== undefined && input.text !== existing.text) {
+        if (input.text !== undefined && input.text !== fromHyphenGlyphs(existing.text)) {
           if (input.text.length === 0) return false;
           const landing = deps.replacementLanding?.(
             existing.paragraphId,

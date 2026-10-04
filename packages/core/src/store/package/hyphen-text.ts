@@ -46,6 +46,17 @@ export function withHyphenGlyphs(text: string): string {
     .replaceAll(OPTIONAL_HYPHEN_TEXT, '\u00ad');
 }
 
+/**
+ * The inverse of {@link withHyphenGlyphs}: U+2011 and U+00AD back to the model characters, so
+ * text shown with visible hyphens writes the hyphen elements it was read from.
+ */
+export function fromHyphenGlyphs(text: string): string {
+  if (!text.includes('\u2011') && !text.includes('\u00ad')) return text;
+  return text
+    .replaceAll('\u2011', NON_BREAKING_HYPHEN_TEXT)
+    .replaceAll('\u00ad', OPTIONAL_HYPHEN_TEXT);
+}
+
 /** Paragraph text as a person reads it: U+2011 for a non-breaking hyphen, no optional hyphen. */
 export function withDisplayedHyphens(text: string): string {
   if (!text.includes(NON_BREAKING_HYPHEN_TEXT) && !text.includes(OPTIONAL_HYPHEN_TEXT)) return text;
