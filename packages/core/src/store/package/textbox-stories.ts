@@ -51,23 +51,26 @@ function compatibleDirectChild(
 /**
  * Read only the direct WPS path that holds a drawing's text-box story.
  *
- * ANCHORED only. Layout carries a text-box story on an anchored drawing record alone, so an
- * inline box paints as a placeholder with its text nowhere on the page. Listing one would
- * report a match the reader cannot see.
+ * Anchored and inline boxes both qualify: layout lays out a story for each, and the editor
+ * reveals a match through either drawing record.
  */
-function textboxContentOf(drawing: OoxmlDrawingNode): OoxmlElement | null {
+function textboxContentOf(drawing: OoxmlDrawingNode, hiddenRun: boolean): OoxmlElement | null {
   let anchor: OoxmlElement | null = null;
   for (const child of drawing.children) {
     if (!isElement(child)) continue;
     if (
       child.kind === 'anchoredDrawing' ||
-      (child.namespaceUri === WP_NAMESPACE_URI && child.localName === 'anchor')
+      child.kind === 'inlineDrawing' ||
+      (child.namespaceUri === WP_NAMESPACE_URI &&
+        (child.localName === 'anchor' || child.localName === 'inline'))
     ) {
       anchor = child;
       break;
     }
   }
   if (!anchor) return null;
+  // A hidden run lays out no inline drawing, so its story has nothing to reveal.
+  if (hiddenRun && (anchor.kind === 'inlineDrawing' || anchor.localName === 'inline')) return null;
   // Selection is the point of this list, so a drawing layout never paints has no story to
   // offer: the match would be reported and then refuse to select.
   if (anchorHidesDrawing(anchor, true)) return null;
@@ -106,6 +109,27 @@ interface WalkFrame {
   readonly namespaceScope: ReadonlyMap<string, string>;
   readonly depth: number;
   readonly paragraphAtoms: ReadonlySet<string> | null;
+  readonly hiddenRun: boolean;
+}
+
+/** Direct `w:vanish` on a run. Style-inherited hiding is not resolved here. */
+function runIsVanished(run: OoxmlElement): boolean {
+  const wml = (parent: OoxmlElement, localName: string): OoxmlElement | undefined => {
+    for (const child of parent.children) {
+      if (
+        isElement(child) &&
+        child.namespaceUri === WML_NAMESPACE_URI &&
+        child.localName === localName
+      )
+        return child;
+    }
+    return undefined;
+  };
+  const properties = wml(run, 'rPr');
+  const vanish = properties && wml(properties, 'vanish');
+  if (!vanish) return false;
+  const value = schemaAttributeValue(vanish.attributes, 'val');
+  return value !== '0' && value !== 'false' && value !== 'off';
 }
 
 const textboxStoriesCache = new WeakMap<OoxmlElement, readonly TextboxStoryRoot[]>();
@@ -114,10 +138,11 @@ function appendTextboxStory(
   stories: TextboxStoryRoot[],
   drawing: OoxmlDrawingNode,
   drawingNodeId: string,
-  hostParagraphId: string | null
+  hostParagraphId: string | null,
+  hiddenRun: boolean
 ): void {
   if (!hostParagraphId) return;
-  const root = textboxContentOf(drawing);
+  const root = textboxContentOf(drawing, hiddenRun);
   if (!root) return;
   stories.push(Object.freeze({ root, drawingNodeId, hostParagraphId }));
 }
@@ -139,6 +164,7 @@ export function textboxStoriesInPart(part: OoxmlPart): readonly TextboxStoryRoot
       namespaceScope: emptyNamespaceScope(),
       depth: 0,
       paragraphAtoms: null,
+      hiddenRun: false,
     },
   ];
   let visited = 0;
@@ -154,9 +180,13 @@ export function textboxStoriesInPart(part: OoxmlPart): readonly TextboxStoryRoot
       frame.node.kind === 'paragraph'
         ? new Set(segmentsOf(frame.node).map((segment) => segment.node.id))
         : frame.paragraphAtoms;
+    const hiddenRun =
+      frame.node.kind === 'paragraph'
+        ? false
+        : frame.hiddenRun || (frame.node.kind === 'run' && runIsVanished(frame.node));
     if (frame.node.kind === 'drawing') {
       if (!paragraphAtoms?.has(frame.node.id)) continue;
-      appendTextboxStory(stories, frame.node, frame.node.id, paragraphId);
+      appendTextboxStory(stories, frame.node, frame.node.id, paragraphId, hiddenRun);
       continue;
     }
     if (isMcAlternateContent(frame.node)) {
@@ -168,7 +198,13 @@ export function textboxStoriesInPart(part: OoxmlPart): readonly TextboxStoryRoot
         DEFAULT_DRAWING_PROJECTION_LIMITS
       );
       if (resolved.drawing) {
-        appendTextboxStory(stories, resolved.drawing, resolved.segmentNode.id, paragraphId);
+        appendTextboxStory(
+          stories,
+          resolved.drawing,
+          resolved.segmentNode.id,
+          paragraphId,
+          hiddenRun
+        );
       }
       // Layout treats the wrapper as one atom, even when its selected branch is unsupported.
       continue;
@@ -183,6 +219,7 @@ export function textboxStoriesInPart(part: OoxmlPart): readonly TextboxStoryRoot
         namespaceScope: scope,
         depth: frame.depth + 1,
         paragraphAtoms,
+        hiddenRun,
       });
     }
   }

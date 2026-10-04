@@ -374,13 +374,16 @@ export function forEachSemanticStory(
 export interface StoryParagraphFragmentContext {
   /** Absolute origin of the immediate story containing this record. */
   readonly storyOrigin: Readonly<{ x: number; y: number }>;
-  /** Zero for the supplied story; increments for every anchored textbox boundary. */
+  /** Zero for the supplied story; increments for every textbox boundary. */
   readonly textboxDepth: number;
   /** Drawing whose textbox directly owns this fragment, or null for the root story. */
-  readonly textboxOwner: AnchoredDrawingRecord | null;
+  readonly textboxOwner: TextboxOwnerRecord | null;
   /** Root-to-leaf owning drawings, empty for the supplied story. */
-  readonly textboxPath: readonly AnchoredDrawingRecord[];
+  readonly textboxPath: readonly TextboxOwnerRecord[];
 }
+
+/** A drawing that owns a text-box story: anchored, or inline on a line. @public */
+export type TextboxOwnerRecord = InlineDrawingRecord | AnchoredDrawingRecord;
 
 /** Location of one drawing within a recursively painted story graph. @public */
 export interface StoryDrawingContext extends StoryParagraphFragmentContext {
@@ -403,7 +406,7 @@ const ZERO_STORY_ORIGIN = Object.freeze({ x: 0, y: 0 });
 
 function textboxStoryOrigin(
   origin: Readonly<{ x: number; y: number }>,
-  drawing: AnchoredDrawingRecord,
+  drawing: TextboxOwnerRecord,
   placedDrawingOrigin?: Readonly<{ x: number; y: number }>
 ): Readonly<{ x: number; y: number }> {
   const offset = drawing.textboxStory?.contentOffset ?? ZERO_STORY_ORIGIN;
@@ -418,7 +421,7 @@ type RootDrawingOrigin = (drawing: AnchoredDrawingRecord) => Readonly<{ x: numbe
 
 /**
  * Visit every drawing record one story paints — line drawings, anchored drawings, and the
- * drawings inside each anchored drawing's text-box story, recursively.
+ * drawings inside each text-box story, anchored or inline, recursively.
  *
  * The ONE recursive walk shared by furniture invalidation, export resource settlement,
  * exporter provenance, and paint reconciliation. A drawing missed here can otherwise leave a
@@ -446,15 +449,24 @@ export function forEachStoryDrawing(
     for (const line of block.lines) {
       for (const drawing of line.drawings ?? []) {
         visit(drawing, { ...context, paragraph: block, line });
+        // An inline text box is a story too, placed where the line puts its extent.
+        if (drawing.textboxStory && !drawing.accessibility.hidden) {
+          visitStory(
+            drawing.textboxStory,
+            context.textboxDepth + 1,
+            Object.freeze([...context.textboxPath, drawing]),
+            textboxStoryOrigin(context.storyOrigin, drawing)
+          );
+        }
       }
     }
   };
-  const visitStory = (
+  function visitStory(
     inner: StoryDrawingHost,
     depth: number,
-    textboxPath: readonly AnchoredDrawingRecord[],
+    textboxPath: readonly TextboxOwnerRecord[],
     storyOrigin: Readonly<{ x: number; y: number }>
-  ): void => {
+  ): void {
     if (depth > MAX_STORY_DRAWING_WALK_DEPTH) return;
     const context: StoryParagraphFragmentContext = {
       storyOrigin,
@@ -479,7 +491,7 @@ export function forEachStoryDrawing(
       }
     }
     for (const fragment of inner.fragments) visitBlock(fragment, context);
-  };
+  }
   visitStory(story, 0, Object.freeze([]), rootOrigin);
 }
 
@@ -595,7 +607,7 @@ export function forEachStoryParagraphFragment(
   const visitStory = (
     inner: StoryDrawingHost,
     depth: number,
-    textboxPath: readonly AnchoredDrawingRecord[],
+    textboxPath: readonly TextboxOwnerRecord[],
     storyOrigin: Readonly<{ x: number; y: number }>
   ): void => {
     if (depth > MAX_STORY_DRAWING_WALK_DEPTH) return;
@@ -606,6 +618,17 @@ export function forEachStoryParagraphFragment(
         textboxOwner: textboxPath[textboxPath.length - 1] ?? null,
         textboxPath,
       });
+      for (const line of fragment.lines) {
+        for (const drawing of line.drawings ?? []) {
+          if (!drawing.textboxStory || drawing.accessibility.hidden) continue;
+          visitStory(
+            drawing.textboxStory,
+            depth + 1,
+            Object.freeze([...textboxPath, drawing]),
+            textboxStoryOrigin(storyOrigin, drawing)
+          );
+        }
+      }
     }
     for (const drawing of inner.anchoredDrawings ?? []) {
       // A text box is a story of its own, nested in the drawing that anchors it.

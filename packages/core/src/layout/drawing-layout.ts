@@ -374,6 +374,13 @@ export interface InlineDrawingRecord {
    * paragraph needed no bidi resolution.
    */
   readonly bidiLevel?: number;
+  /**
+   * Laid-out textbox story for a `wps:txbx` drawing; paint renders it clipped inside the
+   * extent instead of a placeholder. Absent when the drawing carries no story or the host
+   * did not thread story layout (the record then degrades to the placeholder path). An
+   * inline text box carries one too: its story sits inside the extent the line reserves.
+   */
+  readonly textboxStory?: import('./textbox-story-layout.ts').TextboxStoryLayout;
 }
 
 export type LineLayoutAtom =
@@ -603,12 +610,6 @@ export interface AnchoredDrawingRecord extends Omit<
   readonly layoutFallback?: AnchoredDrawingLayoutFallback;
   /** Canonical document traversal index within the owner story part. */
   readonly sourceOrder?: number;
-  /**
-   * Laid-out textbox story for a `wps:txbx` drawing; paint renders it clipped inside the
-   * extent instead of a placeholder. Absent when the drawing carries no story or the host
-   * did not thread story layout (the record then degrades to the placeholder path).
-   */
-  readonly textboxStory?: import('./textbox-story-layout.ts').TextboxStoryLayout;
 }
 
 /** Every parity read goes through here so the host learns the layout depends on it. */
@@ -1336,7 +1337,14 @@ export function buildInlineDrawingRecord(options: {
   readonly contentBottom?: number;
   readonly revisions?: readonly RevisionAttribution[];
   readonly bidiLevel?: number;
+  /** Lays out a text-box story; called only for a drawing that carries one. */
+  readonly layoutTextboxStory?: import('./inline-textbox-flow.ts').TextboxStoryLayouter;
 }): InlineDrawingRecord {
+  // A hidden box paints nothing, so its story is never laid out or reported.
+  const textboxStory =
+    options.input.projection.textboxStory && !drawingAccessibility(options.input.projection).hidden
+      ? options.layoutTextboxStory?.(options.input.projection)
+      : undefined;
   const measure = measureInlineDrawing(options.input.projection);
   const extentX = options.slotX + measure.distL + measure.effectL;
   const geometry = drawingGeometryFromProjection({
@@ -1390,5 +1398,6 @@ export function buildInlineDrawingRecord(options: {
     ...drawingPaintFields(options.input.projection),
     ...(options.revisions && options.revisions.length > 0 ? { revisions: options.revisions } : {}),
     ...(options.bidiLevel !== undefined ? { bidiLevel: options.bidiLevel } : {}),
+    ...(textboxStory ? { textboxStory } : {}),
   });
 }

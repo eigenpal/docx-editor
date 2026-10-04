@@ -91,6 +91,8 @@ export interface ParagraphFlowOptions {
   readonly noteMarks?: import('./note-projection.ts').NoteMarkContext;
   /** Inline drawing projection + resource lookup for typed `w:drawing` nodes. */
   readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
+  /** Lay out the content of an inline text box. */
+  readonly layoutTextboxStory?: import('./inline-textbox-flow.ts').TextboxStoryLayouter;
   /** Column's paragraph-relative left edge; oversized inline extents clip here without scaling. */
   readonly contentLeft?: number;
   /** Right edge of the containing text column in paragraph-relative coordinates. */

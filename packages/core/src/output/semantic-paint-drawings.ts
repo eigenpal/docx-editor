@@ -581,8 +581,8 @@ function paintVectorShape(
  */
 function paintTextboxStory(
   document: Document,
-  drawing: AnchoredDrawingRecord,
-  story: NonNullable<AnchoredDrawingRecord['textboxStory']>,
+  drawing: InlineDrawingRecord | AnchoredDrawingRecord,
+  story: NonNullable<InlineDrawingRecord['textboxStory']>,
   ctx: DrawingPaintContext,
   origin?: LayoutBox
 ): HTMLElement {
@@ -722,11 +722,7 @@ function paintDrawingRecordElement(
     : drawing.paintBounds;
   if (painted.width <= 0 || painted.height <= 0) return null;
 
-  if (
-    drawing.kind === 'anchoredDrawing' &&
-    drawing.textboxStory !== undefined &&
-    ctx.paintStoryFragment !== undefined
-  ) {
+  if (drawing.textboxStory !== undefined && ctx.paintStoryFragment !== undefined) {
     return paintTextboxStory(document, drawing, drawing.textboxStory, ctx, origin);
   }
 

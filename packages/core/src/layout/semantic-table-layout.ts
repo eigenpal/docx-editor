@@ -136,6 +136,7 @@ import { cellAnchorFlow, cellAnchorScope } from './cell-anchor-layout.ts';
 export { finalizeTableRows } from './table-fragment-finalize.ts';
 import type { RowVMergeLayoutOptions, VMergeRowHeights } from './table-vmerge-heights.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
+import { inlineDrawingFlow } from './inline-textbox-flow.ts';
 
 export {
   createTableBorderOwnershipBudget,
@@ -182,9 +183,7 @@ export class TablePaginationError extends Error {
 
 /** Coupled text-box layout and cache invalidation for a hosted-story table flow lane. */
 export interface HostedStoryFlowDeps {
-  readonly layoutTextboxStoryFor: (
-    projection: import('../store/package/drawing-projection.ts').DrawingProjection
-  ) => import('./textbox-story-layout.ts').TextboxStoryLayout | null;
+  readonly layoutTextboxStoryFor: import('./inline-textbox-flow.ts').TextboxStoryLayouter;
   readonly hostedListTokenForParagraph: ((paragraph: OoxmlNode) => string) | null;
 }
 
@@ -531,7 +530,7 @@ function placeCellParagraph(
         displayMode: deps.displayMode,
         ...(deps.revisionAuthorFilter ? { revisionAuthorFilter: deps.revisionAuthorFilter } : {}),
         ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
-        ...(deps.inlineDrawingLayout ? { inlineDrawingLayout: deps.inlineDrawingLayout } : {}),
+        ...inlineDrawingFlow(deps.inlineDrawingLayout, deps.hostedStory),
         contentLeft: 0,
         contentRight: cellBoxWidth,
         paragraphStartY: top,

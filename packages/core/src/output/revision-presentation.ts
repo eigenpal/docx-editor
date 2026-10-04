@@ -479,8 +479,13 @@ function blockAuthors(blocks: readonly BlockFragmentRecord[]): readonly string[]
       if (drawings === undefined) continue;
       for (let i = 0; i < drawings.length; i += 1) {
         const revisions = drawings[i]!.revisions;
-        if (revisions === undefined) continue;
-        for (let j = 0; j < revisions.length; j += 1) see(revisions[j]!.author);
+        if (revisions !== undefined) {
+          for (let j = 0; j < revisions.length; j += 1) see(revisions[j]!.author);
+        }
+        // An inline text box paints its own story on this line. Layout gives a story inside
+        // that story no text-box layout, so this descends one level at most.
+        const story = drawings[i]!.accessibility.hidden ? undefined : drawings[i]!.textboxStory;
+        if (story) for (const author of blockAuthors(story.fragments)) see(author);
       }
     }
     // The paragraph MARK last: it carries no span of its own, and the pilcrow paints at the

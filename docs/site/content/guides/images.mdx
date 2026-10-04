@@ -180,7 +180,8 @@ The editor renders brightness, contrast, grayscale, and bilevel black-and-white 
 | Charts, SmartArt, unsupported groups, and canvases | Preserve the extent and show a labeled placeholder. In alternative content (`mc:AlternateContent`), charts, SmartArt, and unsupported groups are not shown, and a floating one with a wrapping mode still reserves its wrap area. A canvas in alternative content uses the fallback content instead |
 | Anchored text boxes | Render clipped stories, edit supported body text boxes, and drag or resize their borders |
 | Page fields in anchored header or footer text boxes | Evaluate per page |
-| Inline text boxes, linked chains, autofit, and rotation | Show a placeholder |
+| Inline text boxes | Render clipped stories on the line and edit supported body text boxes. They move with their line, so they cannot be dragged or resized |
+| Text boxes inside text boxes, linked chains, autofit, and rotation | Show a placeholder or clip |
 | Standalone VML (`w:pict`) | Render the subset described in [Legacy VML previews](#legacy-vml-previews) |
 | `w:object` and `w:altChunk` | Preserve as generic content with diagnostics |
 | Tracked image insertion and deletion | Record the change in suggesting mode |
@@ -216,7 +217,7 @@ Choose **Insert → Text Box** from a body paragraph to add an empty rectangular
 
 ## Find text in text boxes
 
-**Find** searches anchored text boxes in the body, headers, and footers. Selecting a match selects its text box. Click inside an unrotated body text box to edit its paragraphs. Use its border to select, drag, or resize it. Press **Delete** or use the context menu to delete the selected box. **Undo** restores it. Pasting into a text box inserts plain text. Table insertion is unavailable inside a text box. Text boxes with tables, and text boxes in headers or footers, remain read-only. Inline text boxes and text boxes in footnotes or endnotes are not searched.
+**Find** searches anchored and inline text boxes in the body, headers, and footers. Selecting a match selects its text box. Click inside an unrotated body text box to edit its paragraphs. Use the border of an anchored text box to select, drag, or resize it. Press **Delete** or use the context menu to delete the selected box. **Undo** restores it. Pasting into a text box inserts plain text. Table insertion is unavailable inside a text box. Text boxes with tables, and text boxes in headers or footers, remain read-only. Text boxes in footnotes or endnotes are not searched.
 
 Use `useDocumentSearch` to add Find navigation to a custom [React](/docs/2.x/react/hooks#usedocumentsearch) or [Vue](/docs/2.x/vue/composables#usedocumentsearch) interface.
 

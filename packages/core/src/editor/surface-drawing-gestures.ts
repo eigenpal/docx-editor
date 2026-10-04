@@ -2,6 +2,7 @@ import type { DrawingSelectionIntent } from './paginated-surface.ts';
 import type { PaginatedSurface } from './paginated-surface.ts';
 import type { createTextboxEditing } from './surface-textbox-editing.ts';
 import { resolveSelectedDrawingRecord } from './docx-editor-images.ts';
+import { textboxDrawingOnPage } from '../layout/textbox-drawing-records.ts';
 
 const NON_DESELECTING_KEYS = new Set([
   'Shift',
@@ -34,13 +35,15 @@ export function createDrawingGestures(deps: {
           ?.closest<HTMLElement>('[data-drawing-node-id]')
           ?.getAttribute('data-drawing-node-id');
       if (drawingId && element?.closest('.docx-drawing-textbox')) {
-        const drawing = deps.surface
-          .layout()
-          .pages.flatMap((page) => page.anchoredDrawings ?? [])
-          .find((candidate) => candidate.drawingNodeId === drawingId);
+        // Body boxes only: a header or footer box selects through its own story scope.
+        let drawing;
+        for (const page of deps.surface.layout().pages) {
+          drawing = textboxDrawingOnPage(page, drawingId);
+          if (drawing) break;
+        }
         // A textbox can extend outside the body column. Its border selects its anchor,
         // even when ordinary text hit testing would land on a nearby body paragraph.
-        if (drawing && deps.surface.selectDrawing(drawingId, drawing.anchorParagraphId)) {
+        if (drawing && deps.surface.selectDrawing(drawingId, drawing.paragraphId)) {
           event.preventDefault();
           event.stopImmediatePropagation();
           return;

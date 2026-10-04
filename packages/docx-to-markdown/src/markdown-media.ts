@@ -41,12 +41,7 @@ export function imageMarkdown(
   media: MediaRendering | undefined,
   tableCell: boolean
 ): string {
-  if (
-    !media ||
-    drawing.accessibility.hidden ||
-    (drawing.kind === 'anchoredDrawing' && drawing.textboxStory)
-  )
-    return '';
+  if (!media || drawing.accessibility.hidden || drawing.textboxStory) return '';
   const key = drawingKey(drawing);
   const asset = media.byDrawing.get(key);
   if (!asset) return '';
