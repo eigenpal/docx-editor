@@ -1,3 +1,4 @@
+import { readTableAlignment } from './table-alignment.ts';
 import { withSharedGridLineSideRules } from './legacy-table-side-rules.ts';
 import { withRowMinimumContentInsets } from './table-row-minimum-insets.ts';
 // Bounded table structure over the typed canonical tree.
@@ -149,18 +150,6 @@ export type TableAlignment = 'left' | 'center' | 'right';
  * reader (`readTableIndentPt`); the table widths and margins stay unsigned.
  */
 const MAX_TABLE_INDENT_PT = 31_680 / 20;
-
-/** `w:tblPr/w:jc`, defaulting to left when absent or unrecognised. */
-function readTableAlignment(container: OoxmlElement | undefined): TableAlignment | undefined {
-  const jc = container && childNamed(container, 'jc');
-  if (!jc) return undefined;
-  const value = attributeValue(jc, 'val');
-  // `start`/`end` are the strict-conformant spellings of `left`/`right`.
-  if (value === 'center') return 'center';
-  if (value === 'right' || value === 'end') return 'right';
-  if (value === 'left' || value === 'start') return 'left';
-  return undefined;
-}
 
 /** One anchor box, in the same coordinates layout reports fragment boxes in. */
 export interface TableAnchorFrame {
