@@ -34,6 +34,16 @@ import { comments, destinations, linkAnnotation } from './annotations.ts';
 import { ImageWriter } from './images.ts';
 import { paintEquation } from './equations.ts';
 
+/**
+ * Span text for the PDF text layer, as drawn: an optional hyphen element extracts `-` only
+ * where its line breaks, and a literal U+00AD in the run text always extracts `-`.
+ */
+function extractedText(span: SemanticSpanVisit['span']): string {
+  if (span.optionalHyphenBreak) return '-';
+  const element = span.projected === true && span.range.end - span.range.start === 1;
+  return element ? span.text : span.text.replaceAll('\u00ad', '-');
+}
+
 function rule(
   box: LayoutBox,
   colorHex: string | null,
@@ -392,12 +402,7 @@ export async function paint(
         first.paragraph.lines[0] === first.line ? first.paragraph.marker?.text : undefined;
       const logical =
         (markerText ? markerText + ' ' : '') +
-        group
-          .map(
-            // A line that breaks at an optional hyphen extracts the hyphen it shows.
-            (v) => v.span.equation?.fallbackText ?? (v.span.optionalHyphenBreak ? '-' : v.span.text)
-          )
-          .join('');
+        group.map((v) => v.span.equation?.fallbackText ?? extractedText(v.span)).join('');
       const rightToLeft = group.some((v) => (v.span.style.shaping?.level ?? 0) % 2 === 1);
       group.sort((a, b) => a.absoluteBox.x - b.absoluteBox.x);
       lineStarts.set(group[0]!, rightToLeft ? null : logical);

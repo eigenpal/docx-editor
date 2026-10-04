@@ -13,18 +13,31 @@ import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import { carryPartialWord, type WordCarryContext, type WordStart } from './word-carry.ts';
 
 /** How an optional hyphen lays out: U+00AD with no advance. */
-const OPTIONAL_HYPHEN_GLYPH = '­';
+const OPTIONAL_HYPHEN_GLYPH = '\u00ad';
 /** The glyph drawn where a line breaks at an optional hyphen. */
 export const VISIBLE_OPTIONAL_HYPHEN = '-';
 
-/** Whether a laid-out span is one optional hyphen, which owns exactly one model character. */
+/**
+ * Whether a laid-out span is one optional hyphen element. Layout owns its glyph (`projected`),
+ * which tells it apart from a literal U+00AD in `w:t`, an ordinary visible hyphen.
+ */
 export function isOptionalHyphenSpan(span: StyleSpanRecord): boolean {
-  return span.text === OPTIONAL_HYPHEN_GLYPH && span.range.end - span.range.start === 1;
+  return (
+    span.text === OPTIONAL_HYPHEN_GLYPH &&
+    span.range.end - span.range.start === 1 &&
+    span.projected === true
+  );
 }
 
-/** The text paint and export draw for a span: a hyphen where a line breaks at an optional one. */
+/**
+ * The text paint draws for a span, one character per model character: a hyphen where a line
+ * breaks at an optional hyphen, nothing visible for any other optional hyphen, and a hyphen
+ * for a literal U+00AD in `w:t`.
+ */
 export function paintedSpanText(span: StyleSpanRecord): string {
-  return span.optionalHyphenBreak ? VISIBLE_OPTIONAL_HYPHEN : span.text;
+  if (span.optionalHyphenBreak) return VISIBLE_OPTIONAL_HYPHEN;
+  if (isOptionalHyphenSpan(span) || !span.text.includes(OPTIONAL_HYPHEN_GLYPH)) return span.text;
+  return span.text.replaceAll(OPTIONAL_HYPHEN_GLYPH, VISIBLE_OPTIONAL_HYPHEN);
 }
 
 function visibleHyphenWidth(span: StyleSpanRecord, measurer: TextMeasurer): number {

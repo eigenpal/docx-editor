@@ -360,7 +360,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'Document hyphenation settings round-trip; the layout engine does not hyphenate automatically. A line can break at an optional hyphen in the text. The line then ends with a visible hyphen, which counts toward the line width.',
+      'Document hyphenation settings round-trip; the layout engine does not hyphenate automatically. A line can break at an optional hyphen in the text. The line then ends with a visible hyphen, which counts toward the line width. A U+00AD character in run text shows as a hyphen and is not a break opportunity.',
   },
 
   // --- Lists & numbering -------------------------------------------------

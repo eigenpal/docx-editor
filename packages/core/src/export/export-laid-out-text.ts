@@ -2,7 +2,7 @@
 
 import type { ResolvedFont } from '../layout/font-resource.ts';
 import { displayText } from '../layout/run-style.ts';
-import { paintedSpanText } from '../layout/optional-hyphen-break.ts';
+import { isOptionalHyphenSpan, paintedSpanText } from '../layout/optional-hyphen-break.ts';
 import { styleForFontSlot } from '../layout/script-itemization.ts';
 import { layoutFaceHasSmallCaps, shapeLayoutStyleRun } from '../layout/layout-run-shape.ts';
 import type { ShapedRun } from '../layout/shaped-run.ts';
@@ -63,7 +63,10 @@ export function bindExportLaidOutText(
   const smallCapsSupportByFont = new WeakMap<ResolvedFont, boolean>();
   return (span: StyleSpanRecord): ExportLaidOutText | null => {
     const faceStyle = styleForFontSlot(span.style, span.fontSlot);
-    const text = displayText(paintedSpanText(span), faceStyle);
+    // An optional hyphen draws `-` only where its line breaks; displayText would always.
+    const text = isOptionalHyphenSpan(span)
+      ? paintedSpanText(span)
+      : displayText(span.text, faceStyle);
     if (text.length === 0) return null;
     const family = faceStyle.fontFamily ?? shaping.defaultFont.family;
     const font = resolveShapingFontFace(shaping, resolved, family, faceStyle);

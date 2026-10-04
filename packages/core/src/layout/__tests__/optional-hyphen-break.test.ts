@@ -21,7 +21,8 @@ function textRun(text: string): string {
 
 function layoutLines(text: string, chars: number, jc?: string): readonly LineRecord[] {
   const width = Math.round(chars * 120);
-  const justification = jc ? `<w:pPr><w:jc w:val="${jc}"/></w:pPr>` : '';
+  const justification =
+    jc === 'bidi' ? '<w:pPr><w:bidi/></w:pPr>' : jc ? `<w:pPr><w:jc w:val="${jc}"/></w:pPr>` : '';
   const opened = readOoxmlPart(
     '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
       `<w:p>${justification}${runsOf(text)}</w:p>` +
@@ -41,7 +42,7 @@ function layoutLines(text: string, chars: number, jc?: string): readonly LineRec
 function shown(lines: readonly LineRecord[]): string[] {
   return lines.map((line) =>
     line.spans
-      .map((span) => (span.optionalHyphenBreak ? '-' : span.text.replaceAll('­', '')))
+      .map((span) => (span.optionalHyphenBreak ? '-' : span.text.replaceAll('\u00ad', '')))
       .join('')
   );
 }
@@ -51,7 +52,7 @@ test('a word that does not fit breaks after its optional hyphen and shows a hyph
   expect(shown(lines)).toEqual(['xx aaaa-', 'bbbb']);
   const hyphen = lines[0]!.spans.at(-1)!;
   // Still one model character, painted from U+00AD.
-  expect(hyphen.text).toBe('­');
+  expect(hyphen.text).toBe('\u00ad');
   expect(hyphen.range.end - hyphen.range.start).toBe(1);
   expect(hyphen.range.start).toBe(7);
   expect(hyphen.box.width).toBe(6);
@@ -118,9 +119,40 @@ test('adjacent optional hyphens show one hyphen and never a line of its own', ()
   expect(shown(layoutLines('xx aaaaaa||bb', 10.5))).toEqual(['xx aaaaaa-', 'bb']);
 });
 
+test('a right-to-left line shows the hyphen at its left end and keeps visual order', () => {
+  const lines = layoutLines('אא בבבב|גגגג', 8.5, 'bidi');
+  expect(shown(lines)).toEqual(['אא בבבב-', 'גגגג']);
+  const visual = (line: LineRecord) =>
+    [...line.spans]
+      .sort((a, b) => a.box.x - b.box.x)
+      .map((span) => (span.optionalHyphenBreak ? '-' : span.text.trim()))
+      .filter((text) => text.length > 0);
+  // Read from the right: אא, then בבבב, then the hyphen at the line end on the left.
+  expect(visual(lines[0]!)).toEqual(['-', 'בבבב', 'אא']);
+  const hidden = layoutLines('אא בבבב|גגגג', 12, 'bidi');
+  expect(shown(hidden)).toEqual(['אא בבבבגגגג']);
+  // Without a break the hyphen draws nothing, and the word still reads right to left.
+  expect(visual(hidden[0]!).filter((text) => text !== '\u00ad')).toEqual(['גגגג', 'בבבב', 'אא']);
+});
+
+test('a literal U+00AD in run text draws a measured hyphen and is not a break', () => {
+  const text = (line: LineRecord) => line.spans.map((span) => span.text).join('');
+  const width = (line: LineRecord) => line.spans.reduce((sum, span) => sum + span.box.width, 0);
+  const lines = layoutLines('xx aaaa\u00adbbbb', 10);
+  expect(lines.map(text)).toEqual(['xx ', 'aaaa\u00adbbbb']);
+  expect(width(lines[1]!)).toBeCloseTo(54, 6);
+  expect(lines.flatMap((line) => line.spans).some((span) => span.optionalHyphenBreak)).toBe(false);
+  // Only a word too long for any line is cut, after the characters that fit.
+  expect(layoutLines('xx aa\u00adbb\u00adcc\u00addd', 9.5).map(text)).toEqual([
+    'xx ',
+    'aa\u00adbb\u00adcc\u00ad',
+    'dd',
+  ]);
+});
+
 test('the paragraph text keeps one character per optional hyphen', () => {
   const lines = layoutLines('xx aa|bb|cc|dd', 9.5);
   const spans = lines.flatMap((line) => line.spans);
-  expect(spans.map((span) => span.text).join('')).toBe('xx aa­bb­cc­dd');
+  expect(spans.map((span) => span.text).join('')).toBe('xx aa\u00adbb\u00adcc\u00addd');
   expect(spans.at(-1)!.range.end).toBe(14);
 });

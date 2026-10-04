@@ -32,3 +32,21 @@ test('a line that breaks at an optional hyphen paints and extracts a hyphen', as
     await pdf.destroy();
   }
 });
+
+test('a literal U+00AD extracts as a hyphen and an unbroken optional hyphen extracts nothing visible', async () => {
+  const source = docx(
+    `<w:p>${RUN}<w:t>xx aaaa\u00adbbbb</w:t></w:r></w:p>` +
+      `<w:p>${RUN}<w:t>cccc</w:t></w:r>${RUN}<w:softHyphen/></w:r>${RUN}<w:t>dddd</w:t></w:r></w:p>`
+  );
+  const result = await exportPdf(source, { useSystemFonts: false });
+  expect(result.diagnostics).toEqual([]);
+  const pdf = await getDocument({ data: result.bytes.slice(), useSystemFonts: false }).promise;
+  try {
+    const content = await (await pdf.getPage(1)).getTextContent();
+    const text = content.items.map((item) => ('str' in item ? item.str : '')).join('');
+    expect(text).toContain('aaaa-bbbb');
+    expect(text).toContain('ccccdddd');
+  } finally {
+    await pdf.destroy();
+  }
+});

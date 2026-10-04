@@ -82,23 +82,29 @@ export function bidiPieces(
   if (
     pieces.some(
       (p) =>
-        p.projected ||
+        (!isOptionalHyphenPiece(p) && p.projected) ||
         p.inlineDrawing ||
         p.equation ||
         p.positionalTab ||
-        p.measureText !== undefined ||
+        (!isOptionalHyphenPiece(p) && p.measureText !== undefined) ||
         p.end - p.start !== p.text.length
     )
   )
     return pieces;
   const ignored = pageBreaksIgnored && pieces.some(isPageBreak);
-  const items = ignored
-    ? withoutIgnoredBreaks(pieces, rtl, sourceBoundaries)
+  // An optional hyphen is resolved like an ignored break: absent, then at a neighbour's level.
+  const neutral = (piece: FieldAwarePiece | undefined) =>
+    (ignored && isPageBreak(piece)) || isOptionalHyphenPiece(piece);
+  const items = pieces.some(neutral)
+    ? withoutIgnoredBreaks(pieces, rtl, sourceBoundaries, neutral)
     : resolvedItems(pieces, rtl, sourceBoundaries);
   return items ? withJoiningContext(items, ignored) : pieces;
 }
 
 const isPageBreak = (piece: FieldAwarePiece | undefined) => piece?.text === PAGE_BREAK_CHAR;
+/** A `w:softHyphen`: one model character laid out as U+00AD with no advance. */
+const isOptionalHyphenPiece = (piece: FieldAwarePiece | undefined) =>
+  piece?.text === '\u00ad' && piece.measureText === '' && piece.end - piece.start === 1;
 
 /**
  * Resolve the pieces as though every page break were absent, then put the breaks back.
@@ -114,7 +120,8 @@ const isPageBreak = (piece: FieldAwarePiece | undefined) => piece?.text === PAGE
 function withoutIgnoredBreaks(
   pieces: readonly FieldAwarePiece[],
   rtl: boolean,
-  sourceBoundaries: ReadonlySet<number> | undefined
+  sourceBoundaries: ReadonlySet<number> | undefined,
+  isNeutral: (piece: FieldAwarePiece | undefined) => boolean
 ): FieldAwarePiece[] | null {
   // Each break is one UTF-16 unit (the caller refuses pieces whose text and range differ);
   // `at` is where it sits in the offsets without breaks.
@@ -122,7 +129,7 @@ function withoutIgnoredBreaks(
   const kept: FieldAwarePiece[] = [];
   for (const piece of pieces) {
     const removed = breaks.length;
-    if (isPageBreak(piece)) breaks.push({ piece, at: piece.start - removed });
+    if (isNeutral(piece)) breaks.push({ piece, at: piece.start - removed });
     else
       kept.push(
         removed ? { ...piece, start: piece.start - removed, end: piece.end - removed } : piece
@@ -174,10 +181,10 @@ function withoutIgnoredBreaks(
   // text. A caret at an offset sits on the span that starts there, so a break placed at the
   // leading edge of the text after it keeps each caret where the text without it puts it.
   let neighbour: FieldAwarePiece | undefined;
-  for (const piece of result) if (!isPageBreak(piece)) neighbour = piece;
+  for (const piece of result) if (!isNeutral(piece)) neighbour = piece;
   for (let index = result.length - 1; index >= 0; index--) {
     const piece = result[index]!;
-    if (!isPageBreak(piece)) {
+    if (!isNeutral(piece)) {
       neighbour = piece;
       continue;
     }
