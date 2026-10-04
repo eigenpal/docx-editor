@@ -8,7 +8,7 @@ const EPSILON = 0.001;
 const MAX_CLEARANCE_STEPS = 32;
 const MAX_CURVED_SCANLINES = 128;
 
-function crossesContent(zone: ExclusionZone, left: number, right: number): boolean {
+export function crossesContent(zone: ExclusionZone, left: number, right: number): boolean {
   if (zone.input.mode === 'topAndBottom') return true;
   const input = zone.input;
   let start = input.contentBounds.x;

@@ -36,11 +36,7 @@ import {
   type DrawingAnchorFrameContext,
 } from './drawing-layout.ts';
 import { cellSpacingGeometry } from './table-cell-spacing.ts';
-import {
-  exclusionLayoutToken,
-  filterExclusionZonesForParagraphOrder,
-  localizeExclusionZones,
-} from './drawing-exclusion.ts';
+import { exclusionLayoutToken } from './drawing-exclusion.ts';
 import type {
   FieldLinkProjector,
   FieldPageContext,
@@ -51,6 +47,19 @@ import {
   withDrawingContext,
   type ParagraphLayoutCache,
 } from './layout-cache.ts';
+import {
+  cellParagraphLines,
+  zonesReachingCellParagraph,
+  type HeldCellBreak,
+} from './cell-continuation-lines.ts';
+import {
+  continuedCellCursor,
+  initialCellCursor,
+  initialCellCursors,
+  unplacedHeldBreak,
+  type CellPlaceCursor,
+} from './table-cell-cursor.ts';
+export { initialCellCursors, type CellPlaceCursor } from './table-cell-cursor.ts';
 import { alignSpans, type PendingLine } from './paragraph-flow.ts';
 import { alignLineWithPictures } from './line-picture-alignment.ts';
 import { lineAlignOffset } from './paragraph-alignment.ts';
@@ -327,44 +336,6 @@ export interface TableFlowDeps {
   readonly onCellBreakKey?: (key: string) => void;
 }
 
-/**
- * Per-cell progress through a row that may span pages. Indices are into the authored
- * cell.blocks list and the paragraph's broken lines — never DOM geometry.
- */
-export interface CellPlaceCursor {
-  readonly blockIndex: number;
-  readonly lineIndex: number;
-  /** Resume by model position when the next page changes line wrapping. */
-  readonly startOffset?: number;
-  /** Row-boundary continuation of the nested table at blockIndex. */
-  readonly nestedTable?: { readonly nextRowIndex: number; readonly fragmentIndex: number };
-  readonly previousSpaceAfter: number;
-  readonly paragraphFragmentIndex: number;
-  /**
-   * Did the block before `blockIndex` actually PUT a table on the page?
-   *
-   * Carried rather than re-derived, because the only thing left to re-derive it from is the
-   * source node's kind — and a `w:tbl` past the nesting ceiling, or one with no `w:tr` at
-   * all, is a table that emits nothing. Reading the kind on a continuation would let the
-   * terminator collapse behind a table that never appeared on that page.
-   */
-  readonly precededByEmittedTable: boolean;
-}
-
-export function initialCellCursors(row: SemanticTableRow): CellPlaceCursor[] {
-  return row.cells.map(initialCellCursor);
-}
-
-function initialCellCursor(): CellPlaceCursor {
-  return {
-    blockIndex: 0,
-    lineIndex: 0,
-    previousSpaceAfter: 0,
-    paragraphFragmentIndex: 0,
-    precededByEmittedTable: false,
-  };
-}
-
 function sumCols(cols: readonly number[], from: number, to: number): number {
   let sum = 0;
   for (let index = from; index < to && index < cols.length; index += 1) sum += cols[index]!;
@@ -395,6 +366,8 @@ function placeCellParagraph(
   readonly spaceAfter: number;
   readonly nextLineIndex: number;
   readonly nextStartOffset: number;
+  /** The break the page that continues this paragraph indexes; see `cellParagraphLines`. */
+  readonly heldBreak?: HeldCellBreak;
   readonly complete: boolean;
   readonly fitted: boolean;
 } {
@@ -480,15 +453,19 @@ function placeCellParagraph(
       : 0;
   const anchorScope = cellAnchorScope(options?.inTableCell, deps, paragraphId);
   const rawZones = (anchorScope.anchorsWrapText && deps.pageExclusionZones?.()) || [];
-  const paragraphOrder = deps.paragraphOrderIndex?.(paragraphId) ?? Number.MAX_SAFE_INTEGER;
-  const filtered = deps.paragraphOrderIndex
-    ? filterExclusionZonesForParagraphOrder(rawZones, paragraphOrder, (id) =>
-        deps.paragraphOrderIndex?.(id)
-      )
-    : rawZones;
   // The cell's own content box: tabs measure against it, and cell anchors resolve in it.
   const cellBoxWidth = indent.left + available + indent.right;
-  const pageZones = localizeExclusionZones(filtered, originX, 0, { left: 0, right: cellBoxWidth });
+  // Only zones that can reach this paragraph: one above it or beside its lines changes nothing.
+  const pageZones = zonesReachingCellParagraph(rawZones, {
+    paragraphOrderIndex: deps.paragraphOrderIndex,
+    originX,
+    width: cellBoxWidth,
+    paragraphId,
+    top,
+    // Where the breaker places the lines: its first-line origin is `left + firstLineOffset`.
+    linesLeft: indent.left + Math.min(0, firstLineOffset),
+    linesRight: cellBoxWidth - indent.right,
+  });
   // Zone geometry alone does NOT identify the break: these zones stay in page-content Y
   // (only x is localized to the cell), so which band a line crosses depends on where the
   // paragraph starts. Two cells of the same text and width under the same float would
@@ -496,69 +473,85 @@ function placeCellParagraph(
   // the wrapped break of the one that does not.
   const exclusionToken = exclusionLayoutToken(pageZones);
   const positionedExclusionToken = positionedParagraphExclusionToken(exclusionToken, top);
-  const key = keyFor({
+  // `positioned` false names the break apart from where the paragraph sits, for a held break.
+  const keyFrom = (offset: number, positioned = true): string =>
+    keyFor({
+      paragraph,
+      properties: breakProperties,
+      width: available,
+      producer: deps.producer,
+      // The inline-drawing CONTEXT joins the token exactly as it does in the body flow: the
+      // context changes how a paragraph breaks (drawings become measured atoms), so a
+      // token-less pass with the context may not share cell entries with one without it.
+      // `||`, not `??`: a per-paragraph callback answering `''` falls through to the
+      // document-wide token, as it always has.
+      drawingToken: withDrawingContext(
+        deps.drawingTokenForParagraph?.(paragraph) || deps.drawingLayoutToken || '',
+        deps.inlineDrawingLayout !== undefined
+      ),
+      projectionToken: `${deps.projectionTokenForParagraph?.(paragraph) ?? ''}|inTableCell:${options?.inTableCell === true}|cellEndMark:${options?.cellEndMark === true}|from:${offset}|rowsClear:${anchorScope.rowsClearOutOfCellFloats}`,
+      ...(positioned && positionedExclusionToken
+        ? { exclusionToken: positionedExclusionToken }
+        : {}),
+    });
+  const breakRemainder = (): readonly PendingLine[] => {
+    const key = keyFrom(startOffset);
+    if (deps.cache) deps.onCellBreakKey?.(key);
+    return breakPreparedParagraph({
+      compatibilityMode: deps.compatibilityMode,
+      paragraph,
+      paragraphId,
+      indentLeft: indent.left,
+      available,
+      measurer: deps.measurer,
+      cache: deps.cache,
+      cacheKey: deps.cache ? key : null,
+      formatting: layoutInputs,
+      producer: deps.producer,
+      styleCascade: deps.styleCascade,
+      tabStops,
+      ...(deps.pageContext ? { pageContext: deps.pageContext } : {}),
+      flow: {
+        paragraphMarkIsCellEnd: options?.cellEndMark,
+        firstLineOffset,
+        ...(startOffset === 0 ? listMarkerFirstLineMetrics(listItem, deps.measurer) : {}),
+        startOffset,
+        marginExtent: { left: 0, right: cellBoxWidth },
+        ...(deps.projectLink ? { projectLink: deps.projectLink } : {}),
+        ...(deps.projectFieldLink ? { projectFieldLink: deps.projectFieldLink } : {}),
+        showFieldCodes: deps.showFieldCodes,
+        fieldCodeRanges: deps.fieldCodeRanges?.get(paragraphId),
+        tocLinkStyleRanges: deps.tocLinkStyleRanges?.get(paragraphId),
+        suppressEmptyPlaceholderLine: deps.fieldCodeRanges
+          ?.get(paragraphId)
+          ?.some((range) => range.suppressParagraph),
+        ...(deps.documentProperties ? { documentProperties: deps.documentProperties } : {}),
+        ...(deps.bodyPageFields ? { bodyPageFields: deps.bodyPageFields } : {}),
+        ...(deps.refFields ? { refFields: deps.refFields } : {}),
+        displayMode: deps.displayMode,
+        ...(deps.revisionAuthorFilter ? { revisionAuthorFilter: deps.revisionAuthorFilter } : {}),
+        ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
+        ...(deps.inlineDrawingLayout ? { inlineDrawingLayout: deps.inlineDrawingLayout } : {}),
+        contentLeft: 0,
+        contentRight: cellBoxWidth,
+        paragraphStartY: top,
+        ...cellAnchorFlow(cellBoxWidth, available, anchorScope),
+        ...(pageZones.length > 0 ? { pageExclusionZones: pageZones } : {}),
+      },
+    });
+  };
+  const placement = cellParagraphLines({
     paragraph,
-    properties: breakProperties,
-    width: available,
-    producer: deps.producer,
-    // The inline-drawing CONTEXT joins the token exactly as it does in the body flow: the
-    // context changes how a paragraph breaks (drawings become measured atoms), so a
-    // token-less pass with the context may not share cell entries with one without it.
-    // `||`, not `??`: a per-paragraph callback answering `''` falls through to the
-    // document-wide token, as it always has.
-    drawingToken: withDrawingContext(
-      deps.drawingTokenForParagraph?.(paragraph) || deps.drawingLayoutToken || '',
-      deps.inlineDrawingLayout !== undefined
-    ),
-    projectionToken: `${deps.projectionTokenForParagraph?.(paragraph) ?? ''}|inTableCell:${options?.inTableCell === true}|cellEndMark:${options?.cellEndMark === true}|from:${startOffset}|rowsClear:${anchorScope.rowsClearOutOfCellFloats}`,
-    ...(positionedExclusionToken ? { exclusionToken: positionedExclusionToken } : {}),
+    startOffset,
+    continuedAfter: options?.startOffset !== undefined ? (options?.lineStart ?? 0) : undefined,
+    legacyLineStart: options?.lineStart ?? 0,
+    held: options?.heldBreak,
+    zones: pageZones,
+    inlineDrawingLayout: deps.inlineDrawingLayout,
+    heldKey: () => keyFrom(0, false),
+    breakRemainder,
   });
-  if (deps.cache) deps.onCellBreakKey?.(key);
-  const brokenLines = breakPreparedParagraph({
-    compatibilityMode: deps.compatibilityMode,
-    paragraph,
-    paragraphId,
-    indentLeft: indent.left,
-    available,
-    measurer: deps.measurer,
-    cache: deps.cache,
-    cacheKey: deps.cache ? key : null,
-    formatting: layoutInputs,
-    producer: deps.producer,
-    styleCascade: deps.styleCascade,
-    tabStops,
-    ...(deps.pageContext ? { pageContext: deps.pageContext } : {}),
-    flow: {
-      paragraphMarkIsCellEnd: options?.cellEndMark,
-      firstLineOffset,
-      ...(startOffset === 0 ? listMarkerFirstLineMetrics(listItem, deps.measurer) : {}),
-      startOffset,
-      marginExtent: { left: 0, right: cellBoxWidth },
-      ...(deps.projectLink ? { projectLink: deps.projectLink } : {}),
-      ...(deps.projectFieldLink ? { projectFieldLink: deps.projectFieldLink } : {}),
-      showFieldCodes: deps.showFieldCodes,
-      fieldCodeRanges: deps.fieldCodeRanges?.get(paragraphId),
-      tocLinkStyleRanges: deps.tocLinkStyleRanges?.get(paragraphId),
-      suppressEmptyPlaceholderLine: deps.fieldCodeRanges
-        ?.get(paragraphId)
-        ?.some((range) => range.suppressParagraph),
-      ...(deps.documentProperties ? { documentProperties: deps.documentProperties } : {}),
-      ...(deps.bodyPageFields ? { bodyPageFields: deps.bodyPageFields } : {}),
-      ...(deps.refFields ? { refFields: deps.refFields } : {}),
-      displayMode: deps.displayMode,
-      ...(deps.revisionAuthorFilter ? { revisionAuthorFilter: deps.revisionAuthorFilter } : {}),
-      ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
-      ...(deps.inlineDrawingLayout ? { inlineDrawingLayout: deps.inlineDrawingLayout } : {}),
-      contentLeft: 0,
-      contentRight: cellBoxWidth,
-      paragraphStartY: top,
-      ...cellAnchorFlow(cellBoxWidth, available, anchorScope),
-      ...(pageZones.length > 0 ? { pageExclusionZones: pageZones } : {}),
-    },
-  });
-
-  const lineStart = options?.startOffset !== undefined ? 0 : (options?.lineStart ?? 0);
-  const priorLineCount = options?.startOffset !== undefined ? (options?.lineStart ?? 0) : 0;
+  const { lines: brokenLines, lineStart, priorLineCount } = placement;
   const fragmentIndex = options?.fragmentIndex ?? 0;
   const maxBottom = options?.maxBottom ?? Number.POSITIVE_INFINITY;
   const includeAfter = options?.includeAfter ?? true;
@@ -595,7 +588,8 @@ function placeCellParagraph(
       ),
     deps.measurer,
     layoutInputs.lineSpacing,
-    listItem
+    // The marker belongs to the paragraph's first line, whichever break the page places.
+    priorLineCount === 0 ? listItem : undefined
   );
   const collapseHeight = (options?.collapseHeight ?? false) && !publishesPlacedGlyphs();
 
@@ -999,6 +993,7 @@ function placeCellParagraph(
     spaceAfter: deps.styleCascade?.fixedParagraphSpacing ? 0 : appliedAfter,
     nextLineIndex: priorLineCount + nextLineIndex,
     nextStartOffset: lines[nextLineIndex]?.start ?? lines.at(-1)!.end,
+    ...(complete ? {} : { heldBreak: placement.carry() }),
     complete,
     fitted: true,
   };
@@ -1065,6 +1060,7 @@ function flowBlocksInBoxBounded(
   let blockIndex = cursor.blockIndex;
   let lineIndex = cursor.lineIndex;
   let startOffset = cursor.startOffset;
+  const heldBreak = cursor.heldBreak;
   let nestedTable = cursor.nestedTable;
   let paragraphFragmentIndex = cursor.paragraphFragmentIndex;
   let fitted = false;
@@ -1144,6 +1140,8 @@ function flowBlocksInBoxBounded(
         inTableCell,
         lineStart: lineIndex,
         startOffset,
+        // Only the cursor's own paragraph continues; every later block starts fresh.
+        heldBreak: blockIndex === cursor.blockIndex ? heldBreak : undefined,
         applyWidowControl,
         aloneOnPage: !fitted && deps.rowAtPageStart !== false,
         fragmentIndex: paragraphFragmentIndex,
@@ -1183,14 +1181,7 @@ function flowBlocksInBoxBounded(
       return {
         blocks: fragments,
         bottom: y,
-        cursor: {
-          blockIndex,
-          lineIndex: placed.nextLineIndex,
-          startOffset: placed.nextStartOffset,
-          previousSpaceAfter: 0,
-          paragraphFragmentIndex: paragraphFragmentIndex + 1,
-          precededByEmittedTable: lastEmittedTable,
-        },
+        cursor: continuedCellCursor(blockIndex, placed, paragraphFragmentIndex, lastEmittedTable),
         complete: false,
         fitted: true,
         nestedSplitBlocked: false,
@@ -1205,6 +1196,7 @@ function flowBlocksInBoxBounded(
       blockIndex,
       lineIndex,
       startOffset,
+      ...unplacedHeldBreak(cursor, blockIndex, startOffset),
       ...(nestedTable ? { nestedTable } : {}),
       previousSpaceAfter,
       paragraphFragmentIndex,

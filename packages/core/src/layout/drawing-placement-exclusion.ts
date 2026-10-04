@@ -28,6 +28,28 @@ export function anchorsTopAndBottomDrawing(
   return value;
 }
 
+// By context first: whether an atom is anchored can depend on `projectionForAtom`.
+const anyAnchorMemo = new WeakMap<InlineDrawingLayoutContext, WeakMap<OoxmlElement, boolean>>();
+
+/** True when the paragraph anchors any drawing, whose own band then moves with the paragraph. */
+export function anchorsAnyDrawing(
+  paragraph: OoxmlElement,
+  context: InlineDrawingLayoutContext | undefined
+): boolean {
+  if (!context) return false;
+  let byParagraph = anyAnchorMemo.get(context);
+  if (!byParagraph) {
+    byParagraph = new WeakMap();
+    anyAnchorMemo.set(context, byParagraph);
+  }
+  let value = byParagraph.get(paragraph);
+  if (value === undefined) {
+    value = anchoredDrawingAtomsInParagraph(paragraph, context).length > 0;
+    byParagraph.set(paragraph, value);
+  }
+  return value;
+}
+
 /** Placeholder lines preceding a floating atom do not inherit its placement skip. */
 export function anchorLineSkipsExclusion(
   paragraph: OoxmlElement,
