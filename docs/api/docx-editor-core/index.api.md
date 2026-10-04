@@ -945,6 +945,9 @@ export interface CustomFontsOptions extends Omit<LoadFontsRequest, 'signal'> {
 export type CustomFontsResolver = MarkedFontResolver<(request: FontResolutionRequest) => Promise<LoadFontsResult>>;
 
 // @public
+export const DEFAULT_FONT: FontConfiguration['defaultFont'];
+
+// @public
 export function defineFontResolver<T extends FontResolver>(resolve: T): MarkedFontResolver<T>;
 
 // @public
@@ -3397,7 +3400,7 @@ export interface Watermark {
     readonly text?: string;
 }
 
-// @public
+// @public @deprecated (undocumented)
 export const WORD_DEFAULT_FONT: FontConfiguration['defaultFont'];
 
 // @public

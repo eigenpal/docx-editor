@@ -72,6 +72,7 @@ export type * from './contracts/editor.ts';
 
 // ─── Fonts: what line and page breaks are measured against ───────────────────
 export {
+  DEFAULT_FONT,
   WORD_DEFAULT_FONT,
   loadFonts,
   customFonts,

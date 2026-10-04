@@ -1155,6 +1155,9 @@ export interface CustomFontsOptions extends Omit<LoadFontsRequest, 'signal'> {
 export type CustomFontsResolver = MarkedFontResolver<(request: FontResolutionRequest) => Promise<LoadFontsResult>>;
 
 // @public
+export const DEFAULT_FONT: FontConfiguration['defaultFont'];
+
+// @public
 export const DEFAULT_IMAGE_RESOURCE_LIMITS: ImageResourceLimits;
 
 // @public
@@ -3468,7 +3471,7 @@ export interface WatchHighlightsOptions extends HighlightOptions {
 // @public
 export function withTabStop(stops: readonly ParagraphTabStop[], stop: ParagraphTabStop): readonly ParagraphTabStop[];
 
-// @public
+// @public @deprecated (undocumented)
 export const WORD_DEFAULT_FONT: FontConfiguration['defaultFont'];
 
 // @public

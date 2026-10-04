@@ -14,7 +14,7 @@
 
 # @docx-editor.dev/react
 
-A visual `.docx` editor for React. Open a Word document, edit its paginated layout, and save a DOCX file. Parsing and serialization run in the browser.
+A visual `.docx` editor for React. Open a DOCX document, edit its paginated layout, and save a DOCX file. Parsing and serialization run in the browser.
 
 Saving preserves untouched content, unsupported OOXML, and package payloads. Continuous integration (CI) checks document structure and save-and-reopen behavior.
 
@@ -113,14 +113,14 @@ Use `className`, `data-active`, and `icon` for appearance changes. Use `asChild`
 | `useFontFamily()` / `useParagraphStyle()` | Value controls: current value, options, setter |
 | `usePageSetup()` | Margins, orientation, paper size |
 | `useDocumentOutline()` / `useDocumentSearch()` | The navigation pane, headless |
-| `useContentControl()` | Word content controls at the caret |
+| `useContentControl()` | Content controls at the caret |
 
 Read `isEnabled` to set the disabled state. Show `disabledReason` when the command is unavailable.
 
 ## Companion packages
 
 - [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro) — tracked changes, comments, custom nodes
-- [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) — A supported subset of the Word Office.js API for server and browser editing
+- [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) — A supported subset of the Office.js API for server and browser editing
 - [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core) — the engine this adapter renders
 
 ## Documentation

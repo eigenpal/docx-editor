@@ -391,6 +391,7 @@ export type {
 // never needs a core import.
 export {
   MAX_RESOLVER_FAMILIES,
+  DEFAULT_FONT,
   WORD_DEFAULT_FONT,
   composeFontConfiguration,
   composeFontOrigins,

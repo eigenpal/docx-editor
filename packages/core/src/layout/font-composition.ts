@@ -138,11 +138,14 @@ export function normalizeFontResolverResult(
  */
 export const MAX_RESOLVER_FAMILIES = 64;
 
-/** Word's document default when nothing else says otherwise: Calibri at 11pt. */
-export const WORD_DEFAULT_FONT: FontConfiguration['defaultFont'] = Object.freeze({
+/** The document default font when nothing else says otherwise: Calibri at 11pt. */
+export const DEFAULT_FONT: FontConfiguration['defaultFont'] = Object.freeze({
   family: 'Calibri',
   sizeHalfPoints: 22,
 });
+
+/** @deprecated Use {@link DEFAULT_FONT}. */
+export const WORD_DEFAULT_FONT: FontConfiguration['defaultFont'] = DEFAULT_FONT;
 
 /**
  * Merge a base and any number of fragments into one frozen `FontConfiguration`.
@@ -197,7 +200,7 @@ export function composeFontConfiguration(
     maxFontBytes: base.maxFontBytes ?? HARD_MAX_FONT_BYTES,
     sources: Object.freeze(sources),
     ...(substitutions.length > 0 ? { substitutions: Object.freeze(substitutions) } : {}),
-    defaultFont: base.defaultFont ?? WORD_DEFAULT_FONT,
+    defaultFont: base.defaultFont ?? DEFAULT_FONT,
     ...(base.language !== undefined ? { language: base.language } : {}),
   });
 }
@@ -218,5 +221,5 @@ export type FontCatalogConfiguration = FontConfiguration | FontConfigurationBase
  */
 export function configuredDefaultFontFamily(configuration?: FontCatalogConfiguration): string {
   const family = configuration?.defaultFont?.family;
-  return family !== undefined && FONT_NAME.test(family) ? family : WORD_DEFAULT_FONT.family;
+  return family !== undefined && FONT_NAME.test(family) ? family : DEFAULT_FONT.family;
 }

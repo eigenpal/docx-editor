@@ -14,9 +14,9 @@
 
 # @docx-editor.dev/editor-api
 
-Edit DOCX files through a supported subset of Word's JavaScript object model. The API includes paragraphs, ranges, comments, and revisions. Use `load()` to queue reads and `sync()` to apply each batch atomically.
+Edit DOCX files through a supported subset of the Office.js object model. The API includes paragraphs, ranges, comments, and revisions. Use `load()` to queue reads and `sync()` to apply each batch atomically.
 
-Run the API on a server over DOCX bytes or in the browser against an open editor. See [Office.js compatibility](https://www.docx-editor.dev/docs/2.x/editor-api/office-js-api) for supported members and differences from Word.
+Run the API on a server over DOCX bytes or in the browser against an open editor. See [Office.js compatibility](https://www.docx-editor.dev/docs/2.x/editor-api/office-js-api) for supported members and differences from Office.js.
 
 ```bash
 npm install @docx-editor.dev/editor-api @docx-editor.dev/core
@@ -77,7 +77,7 @@ try {
 
 Start with the [Office.js developer guide](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/OFFICE_JS_GUIDE.md) for a complete server example and batching conventions.
 
-Set `document.changeTrackingMode = 'TrackMineOnly'`, then use standard Word editing methods. Supply the agent's `author` when opening the server or collaborative runtime:
+Set `document.changeTrackingMode = 'TrackMineOnly'`, then use standard Office.js editing methods. Supply the agent's `author` when opening the server or collaborative runtime:
 
 ```ts
 await runtime.run(async (context) => {
@@ -140,7 +140,7 @@ See [Batching, loading, and errors](https://www.docx-editor.dev/docs/2.x/editor-
 
 ## Office.js compatibility
 
-The API implements a documented subset of Word's JavaScript object model. It runs independently of Office and does not require a Microsoft package. See [Office.js compatibility](https://www.docx-editor.dev/docs/2.x/editor-api/office-js-api) for supported operations, runtime differences, and compatibility reports.
+The API implements a documented subset of the Office.js object model. It runs independently of Office and does not require a Microsoft package. See [Office.js compatibility](https://www.docx-editor.dev/docs/2.x/editor-api/office-js-api) for supported operations, runtime differences, and compatibility reports.
 
 Server page-field updates require a measurer configured with font resources. See [Fields and pagination](https://www.docx-editor.dev/docs/2.x/editor-api/fields) for setup and a runnable report agent.
 

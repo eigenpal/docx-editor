@@ -94,9 +94,9 @@ Supply licensed font bytes when pixels must match the original face.
 `defaultFonts()` loads the five families Word applies to a document by default. Century Gothic is not one of them, and its four assets add about 709 KB to every load, so you opt in:
 
 ```ts
-import { ALL_WORD_DEFAULT_FAMILIES, defaultFonts } from '@docx-editor.dev/fonts';
+import { ALL_DEFAULT_FONT_FAMILIES, defaultFonts } from '@docx-editor.dev/fonts';
 
-const fonts = await defaultFonts({ families: ALL_WORD_DEFAULT_FAMILIES });
+const fonts = await defaultFonts({ families: ALL_DEFAULT_FONT_FAMILIES });
 ```
 
 `googleFonts()` covers it on demand instead. It serves Century Gothic from the same packaged bytes, and only when a document names the family, so it makes no third-party request for it.

@@ -25,6 +25,7 @@ export {
 export { LOADING_SNAPSHOT } from './loading-snapshot.ts';
 export {
   MAX_RESOLVER_FAMILIES,
+  DEFAULT_FONT,
   WORD_DEFAULT_FONT,
   composeFontConfiguration,
   type FontConfigurationBase,

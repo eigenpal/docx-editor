@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The default font constant was exported only under its previous name.",
+  "after": "The same constant is also exported as DEFAULT_FONT. The previous name is a deprecated alias.",
+  "reason": "The change only adds an export name for an existing value. Document operations and the collaboration format remain unchanged.",
+  "tests": ["packages/core/src/editor/__tests__/font-composition.test.ts"],
+  "changeset": "default-font-name",
+  "migration": null
+}

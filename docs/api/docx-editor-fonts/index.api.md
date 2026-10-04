@@ -5,7 +5,13 @@
 ```ts
 
 // @public
-export const ALL_WORD_DEFAULT_FAMILIES: readonly WordDefaultFamily[];
+export const ALL_DEFAULT_FONT_FAMILIES: readonly DefaultFontFamily[];
+
+// @public @deprecated (undocumented)
+export const ALL_WORD_DEFAULT_FAMILIES: readonly DefaultFontFamily[];
+
+// @public
+export const DEFAULT_FONT_FAMILIES: readonly DefaultFontFamily[];
 
 // @public
 export interface DefaultFontFaceRequest {
@@ -16,6 +22,9 @@ export interface DefaultFontFaceRequest {
     // (undocumented)
     readonly weight: number;
 }
+
+// @public
+export type DefaultFontFamily = 'Calibri' | 'Cambria' | 'Times New Roman' | 'Arial' | 'Courier New' | 'Century Gothic';
 
 // @public
 export interface DefaultFontLoadFailure {
@@ -105,7 +114,7 @@ export function loadDefaultFonts(options?: LoadDefaultFontsOptions): Promise<Def
 
 // @public
 export interface LoadDefaultFontsOptions {
-    readonly families?: readonly WordDefaultFamily[];
+    readonly families?: readonly DefaultFontFamily[];
     readonly fetcher?: typeof fetch;
     readonly signal?: AbortSignal;
 }
@@ -115,13 +124,13 @@ export function packagedFonts(options?: PackagedFontsOptions): PackagedFontsReso
 
 // @public
 export interface PackagedFontsFragment extends DefaultFontsFragment {
-    readonly families: readonly WordDefaultFamily[];
-    readonly supportedFamilies?: readonly WordDefaultFamily[];
+    readonly families: readonly DefaultFontFamily[];
+    readonly supportedFamilies?: readonly DefaultFontFamily[];
 }
 
 // @public
 export interface PackagedFontsOptions {
-    readonly allow?: readonly WordDefaultFamily[];
+    readonly allow?: readonly DefaultFontFamily[];
     readonly fetcher?: typeof fetch;
     // @deprecated
     readonly install?: boolean;
@@ -138,11 +147,11 @@ export interface ResolvedFontFace {
     readonly weight: number;
 }
 
-// @public
-export const WORD_DOCUMENT_DEFAULT_FAMILIES: readonly WordDefaultFamily[];
+// @public @deprecated (undocumented)
+export const WORD_DOCUMENT_DEFAULT_FAMILIES: readonly DefaultFontFamily[];
 
-// @public
-export type WordDefaultFamily = 'Calibri' | 'Cambria' | 'Times New Roman' | 'Arial' | 'Courier New' | 'Century Gothic';
+// @public @deprecated (undocumented)
+export type WordDefaultFamily = DefaultFontFamily;
 
 // (No @packageDocumentation comment for this package)
 

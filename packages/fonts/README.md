@@ -1,8 +1,8 @@
 # @docx-editor.dev/fonts
 
-Load open-licensed substitutes for common Word fonts. The docx-editor engine uses these fonts to measure and render text.
+Load open-licensed substitutes for common document fonts. The docx-editor engine uses these fonts to measure and render text.
 
-| Word font       | Substitute        | License           |
+| Document font   | Substitute        | License           |
 | --------------- | ----------------- | ----------------- |
 | Calibri         | Carlito           | SIL OFL           |
 | Cambria         | Caladea           | SIL OFL           |
@@ -15,7 +15,7 @@ The first five substitutes target matching advance widths for the glyphs they co
 
 Packaged faces do not cover every script. Liberation Sans has no Arabic glyphs. The editor keeps native family fallback available for missing glyphs. Exact metrics still depend on the font available for that script.
 
-`loadDefaultFonts()` and `defaultFonts()` load the five default families. To include Century Gothic, pass `families: ALL_WORD_DEFAULT_FAMILIES`. Its substitute adds about 709 KB. Alternatively, `googleFonts()` loads it from packaged assets when the document requests it.
+`loadDefaultFonts()` and `defaultFonts()` load the five default families. To include Century Gothic, pass `families: ALL_DEFAULT_FONT_FAMILIES`. Its substitute adds about 709 KB. Alternatively, `googleFonts()` loads it from packaged assets when the document requests it.
 
 ## Install the package
 
@@ -73,7 +73,7 @@ The package reads this setting when its module loads. Setting it after importing
 
 ## Custom fonts for the editor
 
-Use `customFonts()` to supply brand fonts or licensed Word fonts to the editor. Put it first so your supplied faces take precedence.
+Use `customFonts()` to supply brand fonts or the licensed original fonts to the editor. Put it first so your supplied faces take precedence.
 
 ```tsx
 import { customFonts } from '@docx-editor.dev/core/editor';
@@ -180,7 +180,7 @@ bun run google:catalog
 bun run google:verify
 ```
 
-From the repository root, run `bun run check:google-catalog` to check the committed catalog offline. CI runs the same check. `bun run check:font-width-fidelity` compares synthetic text measurements with font subsets embedded in Word PDF exports.
+From the repository root, run `bun run check:google-catalog` to check the committed catalog offline. CI runs the same check. `bun run check:font-width-fidelity` compares synthetic text measurements with font subsets embedded in reference PDF exports.
 
 ## Licenses
 

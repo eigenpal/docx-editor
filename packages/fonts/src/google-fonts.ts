@@ -68,7 +68,7 @@ import {
   FACES,
   FAMILY_PLANS,
   PACKAGED_ONLY_FAMILIES,
-  type WordDefaultFamily,
+  type DefaultFontFamily,
 } from './family-plans.ts';
 import {
   GOOGLE_FONTS_REVISION,
@@ -92,7 +92,7 @@ import type {
  * it from the bundle here is what makes `googleFonts()` the ON-DEMAND path for it, so
  * `defaultFonts()` does not have to load ~709 KB of it for every document that never asks.
  */
-const PACKAGED_ONLY_BY_NAME: ReadonlyMap<string, WordDefaultFamily> = new Map(
+const PACKAGED_ONLY_BY_NAME: ReadonlyMap<string, DefaultFontFamily> = new Map(
   PACKAGED_ONLY_FAMILIES.map((family) => [family.toLowerCase(), family] as const)
 );
 
@@ -462,7 +462,7 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
     const substitutions: DefaultFontSubstitution[] = [];
     const failures: GoogleFontLoadFailure[] = [];
     /** Declared spelling -> the packaged Word family whose bundled bytes answer it. */
-    const packaged = new Map<string, WordDefaultFamily>();
+    const packaged = new Map<string, DefaultFontFamily>();
 
     for (const declared of [request.defaultFamily, ...request.families]) {
       const target = substitutes.get(declared.toLowerCase());

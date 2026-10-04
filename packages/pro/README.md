@@ -18,7 +18,7 @@ Add review, collaboration, and custom content to the [docx-editor.dev](https://d
 - [Tracked changes](https://www.docx-editor.dev/docs/2.x/pro/tracked-changes): Suggesting mode, markup rendering, accept, and reject.
 - [Comments](https://www.docx-editor.dev/docs/2.x/pro/comments): Threads anchored to a range, with replies.
 - [Collaboration](https://www.docx-editor.dev/docs/2.x/pro/collaboration): Provider-neutral sessions with WebRTC and Hocuspocus helpers.
-- [Custom nodes](https://www.docx-editor.dev/docs/2.x/pro/custom-nodes): Inline node types stored as Word content controls.
+- [Custom nodes](https://www.docx-editor.dev/docs/2.x/pro/custom-nodes): Inline node types stored as content controls.
 
 ```bash
 npm install @docx-editor.dev/react @docx-editor.dev/core @docx-editor.dev/pro
@@ -106,7 +106,7 @@ Items come from the document tree. Anchors come from layout records. These sourc
 
 ## Custom nodes
 
-Define inline nodes such as citations, mentions, and merge fields. Each node uses a Word content control with its identity and attributes in `w:tag`. Word displays the node's text and preserves the control.
+Define inline nodes such as citations, mentions, and merge fields. Each node uses a content control with its identity and attributes in `w:tag`. Other DOCX editors display the node's text and preserve the control.
 
 ```ts
 import { defineCustomNode, customNodesModule } from '@docx-editor.dev/pro';

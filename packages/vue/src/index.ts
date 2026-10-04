@@ -383,6 +383,7 @@ export type {
 } from './types';
 export {
   MAX_RESOLVER_FAMILIES,
+  DEFAULT_FONT,
   WORD_DEFAULT_FONT,
   composeFontConfiguration,
   composeFontOrigins,

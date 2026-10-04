@@ -35,9 +35,11 @@ Node.js requires `^20.16.0 || >=22.3.0`.
 Import editor creation, font helpers, and contract types from the package root:
 
 ```ts
-import { createDocxEditor, loadFonts, WORD_DEFAULT_FONT } from '@docx-editor.dev/core';
+import { createDocxEditor, loadFonts, DEFAULT_FONT } from '@docx-editor.dev/core';
 import type { Editor, EditorSnapshot } from '@docx-editor.dev/core';
 ```
+
+`DEFAULT_FONT` is the font that the engine uses when a document does not set one: Calibri at 11 points.
 
 The root exports editor creation, contracts, font helpers, control definitions, and document types. Use subpaths to access storage, layout, and rendering.
 
@@ -112,7 +114,7 @@ Anything you render from document data (a font name, a hyperlink target, a comme
 
 - [Core overview](https://www.docx-editor.dev/docs/2.x/core)
 - [Architecture](https://www.docx-editor.dev/docs/2.x/core/architecture)
-- [Word fidelity](https://www.docx-editor.dev/docs/2.x/word-fidelity)
+- [Feature support and fidelity](https://www.docx-editor.dev/docs/2.x/word-fidelity)
 
 ## License
 
