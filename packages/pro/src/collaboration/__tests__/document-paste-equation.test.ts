@@ -23,7 +23,7 @@ const FRACTION =
   '<m:den><m:r><m:t xml:space="preserve">b</m:t></m:r></m:den></m:f></m:oMath>';
 
 /** The fragment the clipboard projection writes for one inline or display fraction. */
-function equationFragment(display = false): Uint8Array {
+function equationFragment(display = false, paragraphNamespace = false): Uint8Array {
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}">` +
@@ -36,7 +36,8 @@ function equationFragment(display = false): Uint8Array {
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
     ),
     'word/document.xml': strToU8(
-      `<w:document xmlns:w="${W}" xmlns:m="${M}"><w:body><w:p>` +
+      `<w:document xmlns:w="${W}"${paragraphNamespace ? '' : ` xmlns:m="${M}"`}><w:body>` +
+        `<w:p${paragraphNamespace ? ` xmlns:m="${M}"` : ''}>` +
         (display ? `<m:oMathPara>${FRACTION}</m:oMathPara>` : FRACTION) +
         '</w:p></w:body></w:document>'
     ),
@@ -93,6 +94,35 @@ function expectSame(left: OoxmlPackage, right: OoxmlPackage): void {
 }
 
 describe('pasted Word equations in collaboration', () => {
+  test('paragraph-local equation namespaces survive paste, undo, redo, and reconnect', async () => {
+    const { alice, bob } = await harness.pair(zipDocument('<w:p><w:r><w:t>Host</w:t></w:r></w:p>'));
+    const result = alice.store.applyFragmentPaste(
+      { kind: 'body' },
+      {
+        paragraphId: harness.paragraphIdAt(alice, 0),
+        offset: 2,
+        fragmentBytes: equationFragment(false, true),
+        lastMarkCovered: false,
+      }
+    );
+    expect(result.ok).toBe(true);
+    alice.port.flushPendingJournals();
+    harness.expectConverged(alice, bob);
+    expect(equationsOf(harness.packageOf(bob))).toHaveLength(1);
+    expectSame(harness.packageOf(alice), harness.packageOf(bob));
+
+    expect(alice.room.session.undo()).toBe(true);
+    harness.expectConverged(alice, bob);
+    expect(equationsOf(harness.packageOf(bob))).toHaveLength(0);
+    expect(alice.room.session.redo()).toBe(true);
+    harness.expectConverged(alice, bob);
+    expect(equationsOf(harness.packageOf(bob))).toHaveLength(1);
+
+    const rejoined = await harness.remount(bob);
+    harness.expectConverged(alice, rejoined);
+    expectSame(harness.packageOf(alice), harness.packageOf(rejoined));
+  });
+
   test('the equation atom reaches the peer and survives save and reopen', async () => {
     const { alice, bob } = await harness.pair(zipDocument('<w:p><w:r><w:t>Host</w:t></w:r></w:p>'));
     pasteEquation(alice, harness.paragraphIdAt(alice, 0), 2);

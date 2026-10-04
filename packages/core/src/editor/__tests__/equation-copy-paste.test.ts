@@ -22,7 +22,7 @@ type Surface = ReturnType<typeof mount>['surface'];
 
 function count(surface: Surface, tag: 'oMath' | 'oMathPara'): number {
   const xml = serializeOoxmlPart(surface.session.part());
-  return (xml.match(new RegExp(`<m:${tag}>`, 'g')) ?? []).length;
+  return (xml.match(new RegExp(`<m:${tag}(?:\\s|>)`, 'g')) ?? []).length;
 }
 
 function select(surface: Surface, anchor: [number, number], head: [number, number]): void {
@@ -76,7 +76,8 @@ describe('equations through editor copy and paste', () => {
     const beside = mount(paragraph('XY'));
     putCaret(beside.surface, 1);
     beside.surface.pasteRich(flavours.text, flavours.html);
-    expect(beside.surface.session.bodyText()).toBe('X￼Y');
+    // Selecting the complete display paragraph also copies its paragraph mark.
+    expect(beside.surface.session.bodyText()).toBe('X￼\nY');
     expect(count(beside.surface, 'oMath')).toBe(1);
     expect(count(beside.surface, 'oMathPara')).toBe(0);
 
