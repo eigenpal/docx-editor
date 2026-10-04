@@ -386,3 +386,27 @@ test('an inline box hidden by its character style is not offered by Find', () =>
     container.remove();
   }
 });
+
+test('Find does not force a layout pass while the published layout lags', () => {
+  const editor = createDocxEditor({
+    container: document.createElement('div'),
+    document: inlineTextboxDocx(),
+  });
+  try {
+    const surface = editor.surface!;
+    // A document revision the published layout has not reached yet, as between keystrokes.
+    const ahead = surface.session.packageRevision() + 1;
+    const session = surface.session as { packageRevision: () => number };
+    session.packageRevision = () => ahead;
+    let passes = 0;
+    const layout = surface.layout.bind(surface);
+    surface.layout = () => {
+      passes += 1;
+      return layout();
+    };
+    expect(editor.findMatches('boxed needle')[0]?.scope?.kind).toBe('frame');
+    expect(passes).toBe(0);
+  } finally {
+    editor.destroy();
+  }
+});

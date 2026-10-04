@@ -14,7 +14,10 @@ export function withoutUnplacedFrameMatches<T extends HighlightRange>(
   matches: readonly T[]
 ): readonly T[] {
   if (!matches.some((match) => match.scope?.kind === 'frame')) return matches;
-  const layout = surface.layout();
+  // The published layout: Find must never force a layout pass. While it lags the document,
+  // frame matches stay, and selecting one still checks the current layout.
+  const layout = surface.publishedLayout();
+  if (layout.revision !== surface.session.packageRevision()) return matches;
   const placed = new Map<string, boolean>();
   return matches.filter((match) => {
     const scope = match.scope;
