@@ -8,7 +8,7 @@
 // change. Only paint and export draw a different glyph, from `optionalHyphenBreak`.
 
 import type { PendingLine } from './pending-line.ts';
-import { displayText } from './run-style.ts';
+import { joiningCutDelta, trimJoiningAtHyphen } from './optional-hyphen-joining.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import { carryPartialWord, type WordCarryContext, type WordStart } from './word-carry.ts';
@@ -47,8 +47,9 @@ function visibleHyphenWidth(span: StyleSpanRecord, measurer: TextMeasurer): numb
 
 /**
  * Where an overflowing word may break instead of moving whole: just after the last optional
- * hyphen at or after span `wordStart` whose visible hyphen fits on the line. The result is the
- * start of the word's remainder, for `carryPartialWord`. Null when no optional hyphen fits.
+ * hyphen at or after span `wordStart` whose visible hyphen fits on the line, with the letters
+ * before it in their unjoined forms. The result is the start of the word's remainder, for
+ * `carryPartialWord`. Null when no optional hyphen fits.
  */
 export function optionalHyphenBreakStart(
   line: PendingLine,
@@ -62,7 +63,10 @@ export function optionalHyphenBreakStart(
     const span = line.spans[index]!;
     if (!isOptionalHyphenSpan(span)) continue;
     const width = span.box.x + span.box.width - lineOrigin;
-    if (width + visibleHyphenWidth(span, measurer) > lineAvailable + tolerance) continue;
+    const unjoined = joiningCutDelta(line.spans[index - 1], 'after', measurer);
+    if (width + unjoined + visibleHyphenWidth(span, measurer) > lineAvailable + tolerance) {
+      continue;
+    }
     return {
       span: index + 1,
       width,
@@ -90,53 +94,6 @@ export function showOptionalHyphenAtLineEnd(line: PendingLine, measurer: TextMea
     optionalHyphenBreak: true,
   };
   line.width += width - last.box.width;
-}
-
-/**
- * Cut the joining context a span reads across an optional hyphen where the line breaks there,
- * so the letters on each side take their unjoined forms. The span is measured again, and the
- * spans after it on the line move by the change.
- */
-function trimJoiningAtHyphen(
-  line: PendingLine,
-  index: number,
-  side: 'before' | 'after',
-  measurer: TextMeasurer
-): void {
-  const span = line.spans[index];
-  const shaping = span?.style.shaping;
-  const context = shaping?.context;
-  if (!span || !shaping || !context) return;
-  const text = context[side];
-  if (
-    !(side === 'after'
-      ? text.startsWith(OPTIONAL_HYPHEN_GLYPH)
-      : text.endsWith(OPTIONAL_HYPHEN_GLYPH))
-  )
-    return;
-  const trimmed = { ...context, [side]: '' };
-  const { context: _cut, ...unjoined } = shaping;
-  const style = {
-    ...span.style,
-    shaping: trimmed.before || trimmed.after ? { ...unjoined, context: trimmed } : unjoined,
-  };
-  const face = styleForFontSlot(style, span.fontSlot);
-  const width = measurer.measure(displayText(span.text, face), face);
-  const delta = width - span.box.width;
-  line.spans[index] = { ...span, style, box: { ...span.box, width } };
-  for (let after = index + 1; after < line.spans.length; after += 1) {
-    const moved = line.spans[after]!;
-    line.spans[after] = { ...moved, box: { ...moved.box, x: moved.box.x + delta } };
-  }
-  line.width += delta;
-}
-
-/**
- * A line that opens after a break at an optional hyphen: its first span no longer joins back
- * across the hyphen. Called when the line closes, after its spans are placed.
- */
-export function trimJoiningAtLineStart(line: PendingLine, measurer: TextMeasurer): void {
-  trimJoiningAtHyphen(line, 0, 'before', measurer);
 }
 
 /**
@@ -179,6 +136,8 @@ export function carryWordAtOptionalHyphens(
     const line = context.line();
     next = carryPartialWord(atHyphen, hyphen, pendingWidth);
     if (context.line() === line) break;
+    // The carried letters no longer join back across the hyphen; the next fit sees that.
+    trimJoiningAtHyphen(context.line(), 0, 'before', context.measurer);
     hyphen = hyphenStart(next.span);
   }
   return next;

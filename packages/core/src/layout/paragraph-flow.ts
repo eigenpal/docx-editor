@@ -97,7 +97,8 @@ import { anchorLineStartsByModelOffset } from './anchor-line-probe.ts';
 import * as lineEndSpaces from './line-end-whitespace.ts';
 import { chopOversizedWord } from './oversized-word-break.ts';
 import type { WordCarryContext } from './word-carry.ts';
-import { carryWordAtOptionalHyphens, trimJoiningAtLineStart } from './optional-hyphen-break.ts';
+import { carryWordAtOptionalHyphens } from './optional-hyphen-break.ts';
+import { measuredWidth, styleCutAtHyphen } from './optional-hyphen-joining.ts';
 import { collectLineChangeSites } from './paragraph-change-sites.ts';
 
 /**
@@ -781,7 +782,6 @@ export function breakParagraph(
   };
 
   const closeLine = (options?: { readonly includeParagraphMark?: boolean }): void => {
-    trimJoiningAtLineStart(line, measurer);
     placeLeadingIgnoredBreaks(line, pageBreaksIgnored);
     const empty =
       line.drawings.length === 0 && line.spans.every((span) => isHeightlessWhitespace(span.text));
@@ -1430,6 +1430,14 @@ export function breakParagraph(
       applyNarrowWrapSkipIfNeeded(candidate, faceStyle);
       // A protected group that moves must also fit against its destination line.
       if (!opticalFit && line !== opticalSourceLine) opticalFit = applyOpticalFit?.();
+      // A word opening the line after a break at an optional hyphen no longer joins back
+      // across it, so it is placed, and may be cut, at its unjoined width.
+      const lineStartStyle =
+        consumed === 0 && line.spans.length === 0 && !clippedWordEnd
+          ? styleCutAtHyphen(piece.style, 'before')
+          : null;
+      if (lineStartStyle)
+        width = measuredWidth(candidate, lineStartStyle, piece.fontSlot, measurer);
       // Layout-owned and measureText pieces have ranges or widths that cannot be sliced.
       let remaining = candidate;
       let remainingStart = piece.start + consumed;
@@ -1504,7 +1512,7 @@ export function breakParagraph(
             : { paragraphId, start: remainingStart, end: piece.start + boundary },
           text: remaining,
           props: piece.props,
-          style: piece.style,
+          style: lineStartStyle ?? piece.style,
           box: {
             x: lineOrigin() + line.width,
             y: 0,

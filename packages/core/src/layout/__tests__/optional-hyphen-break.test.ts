@@ -3,7 +3,7 @@ import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { caretAt } from '../semantic-interaction.ts';
 import { spanOffsetX } from '../semantic-hit-test.ts';
-import type { LineRecord, SemanticLayout } from '../semantic-records.ts';
+import type { LineRecord, SemanticLayout, TextMeasurer } from '../semantic-records.ts';
 
 // At 11pt every character is 6pt wide, so a measure of `chars` characters is `chars * 120`
 // twips.
@@ -22,10 +22,21 @@ function textRun(text: string): string {
   return text ? `<w:r>${SIZE}<w:t xml:space="preserve">${text}</w:t></w:r>` : '';
 }
 
-function layoutOf(text: string, chars: number, jc?: string): SemanticLayout {
+function layoutOf(
+  text: string,
+  chars: number,
+  jc?: string,
+  using: TextMeasurer = measurer
+): SemanticLayout {
   const width = Math.round(chars * 120);
   const justification =
-    jc === 'bidi' ? '<w:pPr><w:bidi/></w:pPr>' : jc ? `<w:pPr><w:jc w:val="${jc}"/></w:pPr>` : '';
+    jc === 'bidi'
+      ? '<w:pPr><w:bidi/></w:pPr>'
+      : jc === 'bidi-both'
+        ? '<w:pPr><w:bidi/><w:jc w:val="both"/></w:pPr>'
+        : jc
+          ? `<w:pPr><w:jc w:val="${jc}"/></w:pPr>`
+          : '';
   const opened = readOoxmlPart(
     '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
       `<w:p>${justification}${runsOf(text)}</w:p>` +
@@ -35,7 +46,13 @@ function layoutOf(text: string, chars: number, jc?: string): SemanticLayout {
     { name: '/word/document.xml', contentType: 'app/xml' }
   );
   if (!opened.ok) throw new Error(opened.reason);
-  return layoutSemanticDocument(opened.part, 1, { measurer });
+  return layoutSemanticDocument(opened.part, 1, { measurer: using });
+}
+
+function paragraphOf(layout: SemanticLayout) {
+  const paragraph = layout.pages[0]!.fragments.find((fragment) => fragment.kind === 'paragraph')!;
+  if (paragraph.kind !== 'paragraph') throw new Error('Missing paragraph');
+  return paragraph;
 }
 
 function layoutLines(text: string, chars: number, jc?: string): readonly LineRecord[] {
@@ -206,4 +223,43 @@ test('the paragraph text keeps one character per optional hyphen', () => {
   const spans = lines.flatMap((line) => line.spans);
   expect(spans.map((span) => span.text).join('')).toBe('xx aa\u00adbb\u00adcc\u00addd');
   expect(spans.at(-1)!.range.end).toBe(14);
+});
+
+// Unjoined Arabic forms are wider: 4pt more at an edge with no joining context.
+const unjoinedWider: TextMeasurer = {
+  ...measurer,
+  measure(text, style) {
+    let width = measurer.measure(text, style);
+    const context = style.shaping?.context;
+    if (style.shaping && /[\u0600-\u06ff]$/u.test(text) && !context?.after) width += 4;
+    if (style.shaping && /^[\u0600-\u06ff]/u.test(text) && !context?.before) width += 4;
+    return width;
+  },
+};
+
+test('a break at an optional hyphen fits the unjoined letters on both lines', () => {
+  const cases = [
+    ['bidi', 'ا مرحمرح|بابا ب ب ب'],
+    ['bidi', 'ا مرحمرح|بابا'],
+    ['bidi-both', 'ا مرحمرح|بابا'],
+  ] as const;
+  for (const [jc, text] of cases) {
+    for (const chars of [8, 9, 9.5, 10, 11]) {
+      const lines = paragraphOf(layoutOf(text, chars, jc, unjoinedWider)).lines;
+      for (const line of lines) {
+        const ink = line.spans.filter((span) => span.box.width > 0 && span.text.trim() !== '');
+        const right = Math.max(...ink.map((span) => span.box.x + span.box.width));
+        const left = Math.min(...ink.map((span) => span.box.x));
+        expect(left).toBeGreaterThanOrEqual(-0.01);
+        expect(right).toBeLessThanOrEqual(chars * 6 + 0.01);
+      }
+      const broken = lines.find((line) => line.spans.some((span) => span.optionalHyphenBreak));
+      if (!broken) continue;
+      // The letters on each side of the break are laid out without joining across it.
+      const before = broken.spans.find((span) => span.text === 'مرحمرح')!;
+      expect(before.style.shaping?.context?.after ?? '').toBe('');
+      const next = lines[lines.indexOf(broken) + 1]!;
+      expect(next.spans[0]!.style.shaping?.context?.before ?? '').toBe('');
+    }
+  }
 });
