@@ -67,10 +67,14 @@ const START = 0;
 const font10 =
   '<w:rFonts w:ascii="DejaVu Sans" w:hAnsi="DejaVu Sans" w:cs="DejaVu Sans"/>' +
   '<w:sz w:val="20"/><w:szCs w:val="20"/>';
-function body(text: string, rtl: boolean, table = false) {
+/** One justified paragraph; with `brk`, the text, that break, then `after`. */
+function body(text: string, rtl: boolean, table = false, brk = '', after = '') {
+  const run = (content: string) =>
+    `<w:r><w:rPr>${font10}${rtl ? '<w:rtl/>' : ''}</w:rPr>${content}</w:r>`;
+  const words = (value: string) => run(`<w:t xml:space="preserve">${value}</w:t>`);
   const paragraph =
-    `<w:p><w:pPr>${rtl ? '<w:bidi/>' : ''}<w:jc w:val="both"/></w:pPr><w:r><w:rPr>${font10}` +
-    `${rtl ? '<w:rtl/>' : ''}</w:rPr><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
+    `<w:p><w:pPr>${rtl ? '<w:bidi/>' : ''}<w:jc w:val="both"/></w:pPr>${words(text)}` +
+    `${brk ? run(brk) + words(after) : ''}</w:p>`;
   const cell =
     `<w:tbl><w:tblPr><w:tblW w:w="${WIDTH * 20}" w:type="dxa"/><w:tblLayout w:type="fixed"/>` +
     '<w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>' +
@@ -177,6 +181,42 @@ test('the painted line starts its text at the margin', () => {
   expect(space[1]).toBeCloseTo(START, 3);
   expect(Math.min(...words.map((box) => box[0]))).toBeCloseTo(START, 3);
   expect(Math.max(...words.map((box) => box[1]))).toBeCloseTo(START + WIDTH, 3);
+});
+
+const firstLine = (part: ReturnType<typeof body>) =>
+  linesOf(layoutSemanticDocument(part, 0, { measurer: shaped, compatibilityMode: 15 }))[0]!;
+
+test('a justified line before a line break fills the measure and hangs its space', () => {
+  const rtl = firstLine(body('المستفيد من العقد ', true, false, '<w:br/>', 'يلتزم بتقديم'));
+  expect(edges(rtl, shaped)[0]).toBeCloseTo(START, 3);
+  expect(edges(rtl, shaped)[1]).toBeCloseTo(START + WIDTH, 3);
+  const space = rtl.spans.find((span) => span.text === ' ')!;
+  expect(space.box.x + space.box.width).toBeCloseTo(START, 3);
+  const ltr = firstLine(body('lorem ipsum dolor ', false, false, '<w:br/>', 'sit amet'));
+  expect(edges(ltr, shaped)[0]).toBeCloseTo(START, 3);
+  expect(edges(ltr, shaped)[1]).toBeCloseTo(START + WIDTH, 3);
+});
+
+test.each([
+  ['page', '<w:br w:type="page"/>'],
+  ['column', '<w:br w:type="column"/>'],
+])('a justified line before a %s break sets like a last line', (_, brk) => {
+  const rtl = firstLine(body('المستفيد من العقد ', true, false, brk, 'يلتزم بتقديم'));
+  expect(edges(rtl, shaped)[0]).toBeGreaterThan(START + 1);
+  expect(edges(rtl, shaped)[1]).toBeCloseTo(START + WIDTH, 3);
+  const space = rtl.spans.find((span) => span.text === ' ')!;
+  expect(space.box.x + space.box.width).toBeCloseTo(edges(rtl, shaped)[0], 3);
+  const ltr = firstLine(body('lorem ipsum dolor ', false, false, brk, 'sit amet'));
+  expect(edges(ltr, shaped)[0]).toBeCloseTo(START, 3);
+  expect(edges(ltr, shaped)[1]).toBeLessThan(START + WIDTH - 1);
+  expect(ltr.spans.every((span) => !span.style.shaping?.wordSpacingPt)).toBe(true);
+});
+
+test("a justified right-to-left paragraph's last line hangs its trailing spaces", () => {
+  for (const source of ['المستفيد من العقد ', 'المستفيد من العقد  ']) {
+    const line = firstLine(body(source, true));
+    expect(edges(line, shaped)[1]).toBeCloseTo(START + WIDTH, 3);
+  }
 });
 
 test('an unchanged relayout returns the same pages', () => {

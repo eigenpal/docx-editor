@@ -2,6 +2,7 @@ import { shrinkJustifiedSpans } from './paragraph-space-shrink.ts';
 import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import {
   hangRtlLineEndWhitespace,
+  lineEndWhitespaceX,
   paragraphIsRtl,
   reorderBidiSpans,
   splitBidiTrailingWhitespace,
@@ -159,8 +160,9 @@ function alignLogicalSpans(
   // Clipped whitespace runs hang past the content: with two of them the last one is a
   // zero-width span AT the measure, so last-span arithmetic reports no slack at all. The
   // content ends where the first hanging span starts, whatever hangs after it.
+  // Breaks alone do not hang: the content then ends where its own whitespace starts.
   const hangingStart =
-    trailingStart < spans.length ? spans[trailingStart]!.box.x - indentLeft : undefined;
+    trailingStart < trailingEnd ? spans[trailingStart]!.box.x - indentLeft : undefined;
   const spansReachLineEnd =
     lineUsedWidth !== undefined &&
     lastContentSpan !== undefined &&
@@ -202,8 +204,16 @@ function alignLogicalSpans(
       ? 0
       : span.box.width -
         measureDisplayText(visible, styleForFontSlot(span.style, span.fontSlot), measurer);
+  // A break closing the line is not content: the whitespace before it is what hangs.
+  const contentEnd = lastContentSpan ?? last;
   const contentEndWithoutTrailingWhitespace = (): number =>
-    last.box.x - indentLeft + last.box.width - trailingWhitespaceOf(last);
+    contentEnd.box.x - indentLeft + contentEnd.box.width - trailingWhitespaceOf(contentEnd);
+  // A right-to-left line hangs ALL of its line-end whitespace (`alignSpans`), so the
+  // width it fills ends where that whitespace starts.
+  const rtlWhitespaceX =
+    paragraphRtl && lineUsedWidth === undefined
+      ? lineEndWhitespaceX(spans, pageBreaksIgnored)
+      : undefined;
   // A justified line's hanging spaces may follow a word that keeps its own space (a double
   // space split across runs). That space hangs too: it is neither content nor a slot.
   // Only U+0020 hangs; a tab or a no-break space before the hanging spaces is content.
@@ -215,6 +225,7 @@ function alignLogicalSpans(
     trailingStart < trailingEnd;
   let used =
     lineUsedWidth ??
+    (rtlWhitespaceX === undefined ? undefined : rtlWhitespaceX - indentLeft) ??
     (hangingStart !== undefined && hangsAfterOwnSpace
       ? hangingStart -
         trailingWhitespaceOf(
@@ -300,23 +311,27 @@ export function alignSpans(
   pageBreaksIgnored = false,
   lastLineShrinks = false
 ): readonly StyleSpanRecord[] {
-  const effective = alignment === 'both' && isLastLine && paragraphRtl ? 'right' : alignment;
+  // A line closed by a page break sets like the paragraph's last line.
+  const endsLikeParagraph =
+    isLastLine || (!pageBreaksIgnored && spans[spans.length - 1]?.text === PAGE_BREAK_CHAR);
+  const effective = alignment === 'both' && endsLikeParagraph && paragraphRtl ? 'right' : alignment;
   const aligned = alignLogicalSpans(
     splitBidiTrailingWhitespace(spans, measurer),
     measurer,
     indentLeft,
     available,
     effective,
-    isLastLine,
+    endsLikeParagraph,
     lineUsedWidth,
     paragraphRtl,
     pageBreaksIgnored,
     lastLineShrinks
   );
-  // A justified line fills the measure with its text; its line-end spaces hang in the
-  // end margin, which a right-to-left paragraph has on the left.
+  // A justified line fills the measure with its text, and its last line ends at the start
+  // margin; either way its line-end spaces hang in the end margin, which a right-to-left
+  // paragraph has on the left.
   return reorderBidiSpans(
-    effective === 'both' && paragraphRtl && Number.isFinite(available)
+    alignment === 'both' && paragraphRtl && Number.isFinite(available)
       ? hangRtlLineEndWhitespace(aligned, pageBreaksIgnored)
       : aligned,
     paragraphRtl,

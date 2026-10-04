@@ -2777,7 +2777,7 @@ function layoutBlocksPass(
         measure.indent,
         measure.available,
         alignment,
-        isLastLine,
+        isLastLine || pendingLine.columnBreakAfter === true,
         alignment === 'center' || alignment === 'right' ? measure.used : undefined,
         rtl,
         false,

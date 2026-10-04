@@ -9,6 +9,22 @@ import type { SemanticSpanVisit } from '@docx-editor.dev/core/layout';
 const PDF_PAINT_GRID_PT = 0.24;
 
 /**
+ * Where a justified line's text starts. A justified right-to-left line hangs its line-end
+ * whitespace in the left margin, so `contentX` is that whitespace, not the text: the
+ * leftmost span before the whitespace is.
+ */
+function justifiedTextStartX(line: SemanticSpanVisit['line']): number {
+  const spans = line.spans;
+  if (!spans.some((span) => span.style.shaping?.baseLevel === 1)) return line.contentX;
+  let end = spans.length;
+  while (end > 0 && spans[end - 1]!.text.trim() === '') end -= 1;
+  if (end === 0 || end === spans.length) return line.contentX;
+  let start = Infinity;
+  for (let index = 0; index < end; index += 1) start = Math.min(start, spans[index]!.box.x);
+  return start;
+}
+
+/**
  * Horizontal shift that puts a line's text origin on the device grid.
  *
  * The reference rounds a text origin to the same 0.24pt grid it puts baselines on, then
@@ -33,8 +49,10 @@ const PDF_PAINT_GRID_PT = 0.24;
 export function paragraphGridOffsetX(visit: SemanticSpanVisit): number {
   const alignment = visit.paragraph.alignment;
   const origin =
-    alignment === 'left' || alignment === 'both'
-      ? visit.storyOrigin.x + visit.line.contentX
-      : visit.storyOrigin.x + visit.paragraph.box.x;
+    alignment === 'both'
+      ? visit.storyOrigin.x + justifiedTextStartX(visit.line)
+      : alignment === 'left'
+        ? visit.storyOrigin.x + visit.line.contentX
+        : visit.storyOrigin.x + visit.paragraph.box.x;
   return Math.round(origin / PDF_PAINT_GRID_PT) * PDF_PAINT_GRID_PT - origin;
 }

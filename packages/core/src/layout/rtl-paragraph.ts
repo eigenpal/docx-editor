@@ -534,6 +534,19 @@ export function reorderBidiSpans(
 }
 
 /**
+ * Where a shaped line's line-end whitespace starts, in logical x, or undefined when the
+ * line has none or holds nothing else. Breaks after the whitespace count with it.
+ */
+export function lineEndWhitespaceX(
+  spans: readonly StyleSpanRecord[],
+  pageBreaksIgnored = false
+): number | undefined {
+  if (!spans.some((span) => span.style.shaping)) return undefined;
+  const trailing = lineEndWhitespaceStart(spans, 0, spans.length, pageBreaksIgnored);
+  return trailing === 0 || trailing === spans.length ? undefined : spans[trailing]!.box.x;
+}
+
+/**
  * Hang a right-to-left line's line-end whitespace before the start of its passage.
  *
  * UAX #9 L1 puts that whitespace at the paragraph level, so in a right-to-left paragraph
@@ -541,7 +554,9 @@ export function reorderBidiSpans(
  * passage's leftmost x. A justified line already fills its measure with the visible text
  * alone, so the whitespace must hang past the end margin as it does past the right margin
  * in a left-to-right line. Left in place, it pushes the whole line right by its own advance
- * and the first word past the start margin.
+ * and the first word past the start margin. A justified paragraph's last line, set at the
+ * start margin, hangs the same whitespace for the same reason. Alignment must therefore
+ * leave all of it out of the width it fills, from {@link lineEndWhitespaceX} on.
  *
  * The whitespace spans move to end where the passage's text starts; reordering then draws
  * them first, in the margin, and the text from that same start. Logical spans in, logical
