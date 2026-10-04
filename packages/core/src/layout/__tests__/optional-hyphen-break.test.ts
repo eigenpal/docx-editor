@@ -263,3 +263,16 @@ test('a break at an optional hyphen fits the unjoined letters on both lines', ()
     }
   }
 });
+
+test('a cut word opening the line after a hyphen break fits at its unjoined width', () => {
+  const lines = paragraphOf(layoutOf('مرح|بببببببب ب', 400 / 120, 'bidi', unjoinedWider)).lines;
+  const broken = lines.findIndex((line) => line.spans.some((span) => span.optionalHyphenBreak));
+  expect(broken).toBeGreaterThanOrEqual(0);
+  const opening = lines[broken + 1]!.spans[0]!;
+  // The first piece of the cut word no longer joins back across the hyphen, and fits.
+  expect(opening.style.shaping?.context?.before ?? '').toBe('');
+  expect(opening.box.width).toBeLessThanOrEqual(20 + 0.01);
+  // A later piece is inside the word, so it keeps the word's own context.
+  const later = lines[broken + 2]!.spans[0]!;
+  expect(later.style.shaping?.context?.before ?? '').not.toBe('');
+});

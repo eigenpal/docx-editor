@@ -1442,6 +1442,7 @@ export function breakParagraph(
       let remaining = candidate;
       let remainingStart = piece.start + consumed;
       let remainingWidth = width;
+      let remainingStyle = lineStartStyle ?? piece.style;
       const canChopWord = !layoutOwned && piece.measureText === undefined;
       if (
         canChopWord &&
@@ -1449,10 +1450,13 @@ export function breakParagraph(
         (!holdsContent() || (!opensWord && wordOpensLine()) || chopsAfterLeadingTabs) &&
         width > remainingLineWidth() + OVERFLOW_TOLERANCE_PT
       ) {
+        // Only the cut word's first piece opens the line after a hyphen break.
+        let opening = lineStartStyle;
+        const prefixFace = () => (opening ? styleForFontSlot(opening, piece.fontSlot) : faceStyle);
         const chopped = chopOversizedWord(candidate, remainingStart, width, {
           remainingLineWidth,
           lineHasText: holdsContent,
-          measureText: (text) => measurer.measure(displayText(text, faceStyle), faceStyle),
+          measureText: (text) => measurer.measure(displayText(text, prefixFace()), prefixFace()),
           appendPrefix: (prefix) => {
             const metrics = measurer.lineMetrics(faceStyle, displayText(prefix.text, faceStyle));
             line.spans.push({
@@ -1463,7 +1467,7 @@ export function breakParagraph(
               },
               text: prefix.text,
               props: piece.props,
-              style: piece.style,
+              style: opening ?? piece.style,
               box: {
                 x: lineOrigin() + line.width,
                 y: 0,
@@ -1479,6 +1483,7 @@ export function breakParagraph(
             line.width += prefix.width;
             growLineMetricsForText(line, metrics, prefix.text, faceStyle);
             line.end = prefix.modelStart + prefix.text.length;
+            opening = null;
           },
           closeLine,
           overflowTolerancePt: OVERFLOW_TOLERANCE_PT,
@@ -1492,6 +1497,7 @@ export function breakParagraph(
         remaining = chopped.text;
         remainingStart = chopped.modelStart;
         remainingWidth = chopped.width;
+        remainingStyle = opening ?? piece.style;
         if (chopped.brokeLine) {
           wordStartSpan = 0;
           wordStartWidth = 0;
@@ -1512,7 +1518,7 @@ export function breakParagraph(
             : { paragraphId, start: remainingStart, end: piece.start + boundary },
           text: remaining,
           props: piece.props,
-          style: lineStartStyle ?? piece.style,
+          style: remainingStyle,
           box: {
             x: lineOrigin() + line.width,
             y: 0,
