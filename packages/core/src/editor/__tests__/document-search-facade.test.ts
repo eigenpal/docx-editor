@@ -233,14 +233,18 @@ describe('document search facade', () => {
     editor.destroy();
   });
 
-  test('does not report a match inside an inline text box, which paints no story', () => {
+  test('reports and selects a match inside an inline text box', () => {
     const inline = textbox('inline needle').replace(/wp:anchor/g, 'wp:inline');
     const editor = createDocxEditor({
       container: document.createElement('div'),
       document: docx(`<w:p><w:r><w:t>body needle</w:t></w:r></w:p><w:p>${inline}</w:p>`),
     });
 
-    expect(editor.findMatches('needle').map((match) => match.scope?.kind)).toEqual([undefined]);
+    const matches = editor.findMatches('needle');
+    expect(matches.map((match) => match.scope?.kind)).toEqual([undefined, 'frame']);
+    const frame = matches[1]!.scope?.kind === 'frame' ? matches[1]!.scope : null;
+    expect(editor.selectMatch(matches[1]!)).toEqual({ ok: true, changed: false });
+    expect(resolveSelectedDrawingRecord(editor.surface)?.drawingNodeId).toBe(frame?.drawingNodeId);
     editor.destroy();
   });
 

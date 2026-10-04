@@ -51,9 +51,8 @@ function compatibleDirectChild(
 /**
  * Read only the direct WPS path that holds a drawing's text-box story.
  *
- * ANCHORED only. These stories feed search and in-place editing, and both reveal a match
- * through the anchored drawing record. An inline box renders its story read-only on its
- * line, with no editing scope to enter, so it stays out of this list.
+ * Anchored and inline boxes both qualify: layout lays out a story for each, and the editor
+ * reveals a match through either drawing record.
  */
 function textboxContentOf(drawing: OoxmlDrawingNode): OoxmlElement | null {
   let anchor: OoxmlElement | null = null;
@@ -61,7 +60,9 @@ function textboxContentOf(drawing: OoxmlDrawingNode): OoxmlElement | null {
     if (!isElement(child)) continue;
     if (
       child.kind === 'anchoredDrawing' ||
-      (child.namespaceUri === WP_NAMESPACE_URI && child.localName === 'anchor')
+      child.kind === 'inlineDrawing' ||
+      (child.namespaceUri === WP_NAMESPACE_URI &&
+        (child.localName === 'anchor' || child.localName === 'inline'))
     ) {
       anchor = child;
       break;

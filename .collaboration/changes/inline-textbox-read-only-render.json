@@ -1,12 +1,14 @@
 {
-  "impact": "no-impact",
+  "impact": "compatible",
   "fields": [],
-  "before": "Inline text boxes painted a placeholder, and anchored text box content ignored the outline width.",
-  "after": "Inline text boxes paint their content read-only inside the extent on the line, and text box content is inset by half the outline width.",
-  "reason": "Layout and paint read the shared document only. Inline text boxes stay read-only, so no new edit, operation, or shared state reaches collaboration.",
+  "before": "Inline text boxes painted a placeholder, Find skipped them, and anchored text box content ignored the outline width.",
+  "after": "Inline text boxes render their content on the line, Find searches them, and body inline boxes can be entered and edited like anchored ones. Text box content is inset by half the outline width.",
+  "reason": "Inline box edits reuse the text-box story operations that anchored boxes already synchronize: paragraph text, run properties, and paragraph splits inside w:txbxContent. No new operation or shared field is added, so released participants read the same updates.",
   "tests": [
-    "packages/core/src/layout/__tests__/inline-textbox-layout.test.ts",
-    "packages/core/src/editor/__tests__/textbox-editing.test.ts"
+    "packages/pro/src/collaboration/__tests__/document-inline-textboxes.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-textboxes.test.ts",
+    "packages/core/src/editor/__tests__/inline-textbox-editing.test.ts",
+    "packages/core/src/layout/__tests__/inline-textbox-layout.test.ts"
   ],
   "changeset": "inline-textbox-read-only-render",
   "migration": null

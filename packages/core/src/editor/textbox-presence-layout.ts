@@ -1,5 +1,6 @@
 import type { SemanticLayout } from '../layout/semantic-records.ts';
 import { translateParagraphFragment } from '../layout/paragraph-frame.ts';
+import { textboxDrawingsOnPage } from './textbox-drawing-records.ts';
 
 const cache = new WeakMap<SemanticLayout, SemanticLayout>();
 
@@ -8,9 +9,8 @@ export function textboxPresenceLayout(layout: SemanticLayout): SemanticLayout {
   const cached = cache.get(layout);
   if (cached) return cached;
   const pages = layout.pages.map((page) => {
-    const fragments = (page.anchoredDrawings ?? []).flatMap((drawing) => {
+    const fragments = textboxDrawingsOnPage(page).flatMap((drawing) => {
       const story = drawing.textboxStory;
-      if (!story || drawing.accessibility.hidden) return [];
       return story.fragments.flatMap((fragment) =>
         fragment.kind === 'paragraph'
           ? [

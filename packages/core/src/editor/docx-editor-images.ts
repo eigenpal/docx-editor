@@ -221,9 +221,11 @@ function capabilityFlags(
   projection: DrawingProjection
 ): Pick<SelectedImageState, 'canResize' | 'canMove' | 'canChangeWrap' | 'canCrop'> {
   const locks = projection.locks;
+  // An inline text box flows with its line: it is neither dragged nor resized in place.
+  const fixed = projection.kind === 'inline' && projection.textboxStory !== null;
   return Object.freeze({
-    canResize: !locks.resize && !projection.hidden,
-    canMove: !locks.move && !projection.hidden,
+    canResize: !fixed && !locks.resize && !projection.hidden,
+    canMove: !fixed && !locks.move && !projection.hidden,
     canChangeWrap:
       projection.picture !== null &&
       !locks.move &&
@@ -247,9 +249,7 @@ function wrapOf(record: SelectedDrawingRecord): ImageWrapTarget {
 export function selectedImageStateOf(surface: PaginatedSurface | null): SelectedImageState | null {
   const record = resolveSelectedDrawingRecord(surface);
   if (!record) return null;
-  // An inline text box renders read-only; only an anchored box is a selectable object.
-  const textbox = record.kind === 'anchoredDrawing' && record.textboxStory;
-  if (record.placeholderGraphicKind !== null && !textbox) return null;
+  if (record.placeholderGraphicKind !== null && !record.textboxStory) return null;
   const projection = surface ? projectDrawingForRecord(surface, record) : null;
   if (!projection) return null;
   if (projection.hidden || projection.locks.select) return null;
@@ -1150,10 +1150,7 @@ export function selectedDrawingOverlayTargetOf(
     return null;
   const record =
     scope.kind === 'frame'
-      ? surface
-          .layout()
-          .pages.flatMap((page) => page.anchoredDrawings ?? [])
-          .find((drawing) => drawing.drawingNodeId === scope.drawingNodeId)
+      ? findDrawingOverlayFrameInLayout(surface.layout(), scope.drawingNodeId)?.record
       : resolveSelectedDrawingRecord(surface);
   if (!record) return null;
   if (record.accessibility.hidden) return null;
