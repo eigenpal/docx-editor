@@ -5,6 +5,7 @@
 // each sit inside one paragraph, so this walk buckets them by paragraph first: a line costs
 // one map lookup plus the ranges that actually sit on it.
 
+import { textboxDrawingsOnPage } from './textbox-drawing-records.ts';
 import { lineSegments } from './line-segments.ts';
 import { rangeBandsWithinLine } from './line-geometry.ts';
 import { clipParagraphBox } from './paragraph-frame-clip.ts';
@@ -136,12 +137,8 @@ function pagePlacedIds(page: PageRecord): readonly string[] {
     }
   };
   forEachStory(page, (blocks) => collect(blocks));
-  // Anchored text boxes paint their own story on the page.
-  for (const drawing of page.anchoredDrawings ?? []) {
-    if (drawing.textboxStory && !drawing.accessibility.hidden) {
-      collect(drawing.textboxStory.fragments);
-    }
-  }
+  // Body text boxes, anchored or inline, paint their own story on the page.
+  for (const drawing of textboxDrawingsOnPage(page)) collect(drawing.textboxStory.fragments);
   const placed = [...ids];
   pagePlacedCache.set(page, placed);
   return placed;

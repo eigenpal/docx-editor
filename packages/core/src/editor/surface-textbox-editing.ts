@@ -11,7 +11,7 @@ import { translateParagraphFragment } from '../layout/paragraph-frame.ts';
 import type { SemanticLayout, SemanticSelection } from '../layout/index.ts';
 import { storyParagraphs } from '../store/package/story-blocks.ts';
 import { textboxStoriesInPart } from '../store/package/textbox-stories.ts';
-import { textboxDrawingOnPage } from './textbox-drawing-records.ts';
+import { textboxDrawingOnPage } from '../layout/textbox-drawing-records.ts';
 
 type FrameScope = Extract<ViewScope, { kind: 'frame' }>;
 

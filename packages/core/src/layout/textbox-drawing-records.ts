@@ -4,9 +4,9 @@
 // coordinates: an anchored record is placed there, and an inline record's extent is placed
 // there by the line that holds it, including a line in a table cell.
 
-import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
-import type { PageRecord } from '../layout/semantic-records.ts';
-import { paragraphFragmentsOfBlocks } from '../layout/semantic-record-queries.ts';
+import type { AnchoredDrawingRecord, InlineDrawingRecord } from './drawing-layout.ts';
+import type { PageRecord } from './semantic-records.ts';
+import { paragraphFragmentsOfBlocks } from './semantic-record-queries.ts';
 
 /** A drawing that carries a laid-out text-box story. */
 export type TextboxDrawingRecord = (InlineDrawingRecord | AnchoredDrawingRecord) & {

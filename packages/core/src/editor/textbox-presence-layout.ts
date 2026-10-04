@@ -1,6 +1,6 @@
 import type { SemanticLayout } from '../layout/semantic-records.ts';
 import { translateParagraphFragment } from '../layout/paragraph-frame.ts';
-import { textboxDrawingsOnPage } from './textbox-drawing-records.ts';
+import { textboxDrawingsOnPage } from '../layout/textbox-drawing-records.ts';
 
 const cache = new WeakMap<SemanticLayout, SemanticLayout>();
 

@@ -4,9 +4,10 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { expect, test } from 'bun:test';
-import { strToU8, zipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { createDocxEditor } from '../docx-editor.ts';
 import { selectedDrawingOverlayTargetOf, selectedImageStateOf } from '../docx-editor-images.ts';
+import { mountAnchorEditor } from './scroll-to-anchor-fixture.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -237,6 +238,85 @@ test('an inline box in a header is found but stays read-only', () => {
     expect(match.scope?.kind).toBe('frame');
     expect(match.scope?.kind === 'frame' && match.scope.owner).toBeTruthy();
     expect(editor.surface!.setActiveScope(match.scope!)).toBe(false);
+  } finally {
+    editor.destroy();
+  }
+});
+
+/** Turn the inline box of one part into a column-anchored, wrap-none box. */
+function anchoredBox(xml: string): string {
+  return xml
+    .replace(
+      '<wp:inline distT="0" distB="0" distL="0" distR="0">',
+      '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1" ' +
+        'behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/>' +
+        '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>' +
+        '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>'
+    )
+    .replace(
+      '<wp:effectExtent l="0" t="0" r="0" b="0"/>',
+      '<wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/>'
+    )
+    .replace('</wp:inline>', '</wp:anchor>');
+}
+
+function withPart(bytes: Uint8Array, name: string, edit: (xml: string) => string): Uint8Array {
+  const parts = unzipSync(bytes);
+  parts[name] = strToU8(edit(strFromU8(parts[name]!)));
+  return zipSync(parts);
+}
+
+for (const kind of ['inline', 'anchored'] as const) {
+  test(`a press on a ${kind} header box border keeps body typing in the body`, () => {
+    const source = inlineTextboxDocx({ inHeader: true });
+    const bytes = kind === 'anchored' ? withPart(source, 'word/header1.xml', anchoredBox) : source;
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({ container, document: bytes });
+    try {
+      const box = [...container.querySelectorAll<HTMLElement>('.docx-drawing-textbox')].find(
+        (element) => element.closest('[data-docx-hf]')
+      );
+      expect(box).toBeDefined();
+      box!.dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, cancelable: true, button: 0 })
+      );
+      expect(editor.surface!.activeScope().kind).toBe('body');
+      expect(editor.exec({ type: 'insertText', text: 'QQ' })).toEqual({ ok: true, changed: true });
+      const typed = editor.findMatches('QQ');
+      expect(typed).toHaveLength(1);
+      expect(typed[0]!.scope).toBeUndefined();
+    } finally {
+      editor.destroy();
+      container.remove();
+    }
+  });
+}
+
+test('Find highlights paint inside an inline box', () => {
+  const mounted = mountAnchorEditor(inlineTextboxDocx());
+  try {
+    const matches = mounted.editor.findMatches('needle');
+    expect(matches.map((match) => match.scope?.kind)).toEqual(['frame']);
+    expect(mounted.editor.setHighlights('search', matches)).toMatchObject({
+      applied: 1,
+      unavailable: 0,
+    });
+  } finally {
+    mounted.destroy();
+  }
+});
+
+test('an inline box in a hidden run is not offered by Find', () => {
+  const vanish = (xml: string) =>
+    xml.replace('<w:r><mc:AlternateContent', '<w:r><w:rPr><w:vanish/></w:rPr><mc:AlternateContent');
+  const editor = createDocxEditor({
+    container: document.createElement('div'),
+    document: withPart(inlineTextboxDocx(), 'word/document.xml', vanish),
+  });
+  try {
+    expect(editor.findMatches('boxed needle')).toHaveLength(0);
+    expect(editor.findMatches('before')).toHaveLength(1);
   } finally {
     editor.destroy();
   }
