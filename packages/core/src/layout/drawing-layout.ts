@@ -3,6 +3,9 @@
 // DOM-free points everywhere. `wp:extent` EMUs convert at this boundary; intrinsic pixel
 // dimensions never resize layout. Paint and hit testing consume the published records only.
 
+import { clipBoxToRegion } from './drawing-clip-box.ts';
+export { clipBoxHorizontally, clipBoxToRegion } from './drawing-clip-box.ts';
+
 import type { DrawingImageEffects } from '../store/package/drawing-image-effects.ts';
 import { anchorLaidOutInCell, type CellAnchorScope } from './cell-anchor-layout.ts';
 import {
@@ -275,40 +278,6 @@ export function repositionInlineDrawingsForBaseline(
 }
 
 /** Clip `box` to a horizontal content band; preserves authored size, zeroes clipped axes. */
-export function clipBoxHorizontally(
-  box: LayoutBox,
-  contentLeft: number,
-  contentRight: number
-): LayoutBox {
-  const left = Math.max(box.x, contentLeft);
-  const right = Math.min(box.x + box.width, contentRight);
-  if (right <= left) {
-    return Object.freeze({ x: left, y: box.y, width: 0, height: box.height });
-  }
-  return Object.freeze({
-    x: left,
-    y: box.y,
-    width: right - left,
-    height: box.height,
-  });
-}
-
-/** Clip `box` to a rectangular region on both axes. */
-export function clipBoxToRegion(box: LayoutBox, region: LayoutBox): LayoutBox {
-  const x = Math.max(box.x, region.x);
-  const y = Math.max(box.y, region.y);
-  const right = Math.min(box.x + box.width, region.x + region.width);
-  const bottom = Math.min(box.y + box.height, region.y + region.height);
-  // A box with no width (or height) of its own, such as a straight vertical line, stays when
-  // it lies inside the region; a box that had size and lost it all is empty.
-  const emptyX = box.width > 0 ? right <= x : right < x;
-  const emptyY = box.height > 0 ? bottom <= y : bottom < y;
-  if (emptyX || emptyY) {
-    return Object.freeze({ x, y, width: 0, height: 0 });
-  }
-  return Object.freeze({ x, y, width: right - x, height: bottom - y });
-}
-
 /** How a drawing record holds the picture member of a shape group. */
 export interface DrawingGroupPictureRecord {
   /**
@@ -374,6 +343,13 @@ export interface InlineDrawingRecord {
    * paragraph needed no bidi resolution.
    */
   readonly bidiLevel?: number;
+  /**
+   * Laid-out textbox story for a `wps:txbx` drawing; paint renders it clipped inside the
+   * extent instead of a placeholder. Absent when the drawing carries no story or the host
+   * did not thread story layout (the record then degrades to the placeholder path). An
+   * inline text box carries one too: its story sits inside the extent the line reserves.
+   */
+  readonly textboxStory?: import('./textbox-story-layout.ts').TextboxStoryLayout;
 }
 
 export type LineLayoutAtom =
@@ -603,12 +579,6 @@ export interface AnchoredDrawingRecord extends Omit<
   readonly layoutFallback?: AnchoredDrawingLayoutFallback;
   /** Canonical document traversal index within the owner story part. */
   readonly sourceOrder?: number;
-  /**
-   * Laid-out textbox story for a `wps:txbx` drawing; paint renders it clipped inside the
-   * extent instead of a placeholder. Absent when the drawing carries no story or the host
-   * did not thread story layout (the record then degrades to the placeholder path).
-   */
-  readonly textboxStory?: import('./textbox-story-layout.ts').TextboxStoryLayout;
 }
 
 /** Every parity read goes through here so the host learns the layout depends on it. */
@@ -1336,7 +1306,14 @@ export function buildInlineDrawingRecord(options: {
   readonly contentBottom?: number;
   readonly revisions?: readonly RevisionAttribution[];
   readonly bidiLevel?: number;
+  /** Lays out a text-box story; called only for a drawing that carries one. */
+  readonly layoutTextboxStory?: import('./inline-textbox-flow.ts').TextboxStoryLayouter;
 }): InlineDrawingRecord {
+  // A hidden box paints nothing, so its story is never laid out or reported.
+  const textboxStory =
+    options.input.projection.textboxStory && !drawingAccessibility(options.input.projection).hidden
+      ? options.layoutTextboxStory?.(options.input.projection)
+      : undefined;
   const measure = measureInlineDrawing(options.input.projection);
   const extentX = options.slotX + measure.distL + measure.effectL;
   const geometry = drawingGeometryFromProjection({
@@ -1390,5 +1367,6 @@ export function buildInlineDrawingRecord(options: {
     ...drawingPaintFields(options.input.projection),
     ...(options.revisions && options.revisions.length > 0 ? { revisions: options.revisions } : {}),
     ...(options.bidiLevel !== undefined ? { bidiLevel: options.bidiLevel } : {}),
+    ...(textboxStory ? { textboxStory } : {}),
   });
 }

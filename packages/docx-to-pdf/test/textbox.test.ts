@@ -119,3 +119,28 @@ test('a behind-text textbox paints before the body text', async () => {
   expect(underAt).toBeGreaterThan(-1);
   expect(underAt).toBeLessThan(first);
 });
+
+test('an inline textbox paints its fill and text on the line instead of a placeholder', async () => {
+  const fill = '<a:solidFill><a:srgbClr val="2F1D79"/></a:solidFill>';
+  const inline =
+    `<w:drawing ${NS}><wp:inline distT="0" distB="0" distL="0" distR="0">` +
+    '<wp:extent cx="1828800" cy="457200"/><wp:effectExtent l="0" t="0" r="0" b="0"/>' +
+    '<wp:docPr id="1" name="TB"/>' +
+    `<a:graphic><a:graphicData uri="${WPS}"><wps:wsp>` +
+    '<wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1828800" cy="457200"/></a:xfrm>' +
+    `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${fill}</wps:spPr>` +
+    `<wps:txbx><w:txbxContent>${paragraph('Inline')}</w:txbxContent></wps:txbx>` +
+    '<wps:bodyPr lIns="0" tIns="0" rIns="0" bIns="0"/>' +
+    '</wps:wsp></a:graphicData></a:graphic></wp:inline></w:drawing>';
+  const { result, stream, text } = await exported(
+    `<w:p><w:r><w:t xml:space="preserve">Before </w:t></w:r><w:r>${inline}</w:r></w:p>`
+  );
+  expect(result.diagnostics.filter((entry) => entry.code === 'drawing')).toEqual([]);
+  expect(text).toContain('Before');
+  expect(text).toContain('Inline');
+  // The fill covers the 144pt x 36pt extent, and the story's glyphs follow it.
+  const fillAt = stream.indexOf('0.184314 0.113725 0.47451 rg');
+  expect(fillAt).toBeGreaterThan(-1);
+  expect(stream.slice(fillAt, fillAt + 80)).toMatch(/ 144 36 re f/);
+  expect(stream.indexOf(' Tm ', fillAt)).toBeGreaterThan(fillAt);
+});

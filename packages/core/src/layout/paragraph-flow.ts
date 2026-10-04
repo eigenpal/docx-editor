@@ -976,10 +976,8 @@ export function breakParagraph(
       piece.text === '\uFFFC'
     ) {
       recordTopAndBottomAnchorLineTop(piece.start);
-      // A tracked anchored drawing paints from the page layer and leaves no span on its
-      // anchor line, so the line records the attribution itself \u2014 that is all the margin
-      // change bar has to read. Gated exactly like the published record: a drawing the
-      // display mode resolves away must cue no bar.
+      // A tracked anchored drawing leaves no span on its anchor line, so the line records the
+      // attribution for the margin change bar. A drawing the display mode hides cues no bar.
       if (
         piece.anchoredAtom &&
         piece.revisions !== undefined &&
@@ -1033,6 +1031,7 @@ export function breakParagraph(
           contentRight: contentOriginX + rightEdge,
           ...(piece.revisions ? { revisions: piece.revisions } : {}),
           ...(piece.style.shaping ? { bidiLevel: piece.style.shaping.level } : {}),
+          layoutTextboxStory: flow?.layoutTextboxStory,
         })
       );
       // A picture a resolved view kept has no span to carry its site; the line takes it.

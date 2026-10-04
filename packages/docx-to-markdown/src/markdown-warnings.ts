@@ -37,7 +37,7 @@ export function markdownWarnings(
     const warn = (drawing: InlineDrawingRecord | AnchoredDrawingRecord): void => {
       // A hidden record (an MC wrap footprint) has no content to omit.
       if (drawing.accessibility.hidden || media?.represented.has(drawingKey(drawing))) return;
-      const textbox = drawing.kind === 'anchoredDrawing' && drawing.textboxStory !== undefined;
+      const textbox = drawing.textboxStory !== undefined;
       const code = textbox ? 'omitted-textbox' : 'omitted-drawing';
       const key = `${page.index}:${code}`;
       if (warned.has(key)) return;

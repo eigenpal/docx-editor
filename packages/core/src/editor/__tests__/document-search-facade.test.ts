@@ -213,17 +213,28 @@ describe('document search facade', () => {
     editor.destroy();
   });
 
-  test('leaves the header closed when its text box has no painted frame', () => {
+  test('does not offer, or open the header for, a text box with no painted frame', () => {
     const editor = createDocxEditor({
       container: document.createElement('div'),
       document: textboxDocx(true, false, 12_000_000),
     });
     if (!editor.surface) throw new Error('surface did not open');
-    const match = editor.findMatches('needle')[0];
-    if (!match) throw new Error('frame match missing');
     const before = editor.surface.state().selection;
+    expect(editor.findMatches('needle')).toEqual([]);
+    const unplaced = {
+      blockId: 'missing',
+      start: 0,
+      length: 6,
+      scope: {
+        kind: 'frame' as const,
+        id: 'missing',
+        drawingNodeId: 'missing-drawing',
+        hostParagraphId: 'missing-host',
+        owner: { kind: 'headerFooter' as const, rId: 'rHeader' },
+      },
+    };
 
-    expect(editor.selectMatch(match)).toEqual({
+    expect(editor.selectMatch(unplaced)).toEqual({
       ok: false,
       code: 'unsupported',
       reason: 'the text box drawing could not be selected',
@@ -233,14 +244,18 @@ describe('document search facade', () => {
     editor.destroy();
   });
 
-  test('does not report a match inside an inline text box, which paints no story', () => {
+  test('reports and selects a match inside an inline text box', () => {
     const inline = textbox('inline needle').replace(/wp:anchor/g, 'wp:inline');
     const editor = createDocxEditor({
       container: document.createElement('div'),
       document: docx(`<w:p><w:r><w:t>body needle</w:t></w:r></w:p><w:p>${inline}</w:p>`),
     });
 
-    expect(editor.findMatches('needle').map((match) => match.scope?.kind)).toEqual([undefined]);
+    const matches = editor.findMatches('needle');
+    expect(matches.map((match) => match.scope?.kind)).toEqual([undefined, 'frame']);
+    const frame = matches[1]!.scope?.kind === 'frame' ? matches[1]!.scope : null;
+    expect(editor.selectMatch(matches[1]!)).toEqual({ ok: true, changed: false });
+    expect(resolveSelectedDrawingRecord(editor.surface)?.drawingNodeId).toBe(frame?.drawingNodeId);
     editor.destroy();
   });
 

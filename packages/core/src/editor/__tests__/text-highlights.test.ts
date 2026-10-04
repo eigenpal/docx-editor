@@ -194,7 +194,7 @@ describe('setHighlights', () => {
     expect(marks()).toHaveLength(1);
   });
 
-  test('a match in a header text box counts as unavailable, because it cannot paint', () => {
+  test('a match in a header text box paints with the header', () => {
     const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
     const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
     const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
@@ -224,8 +224,8 @@ describe('setHighlights', () => {
     const { editor, marks } = mount(zipSync(parts));
     const matches = editor.findMatches('needle');
     expect(matches).toHaveLength(1);
-    expect(editor.setHighlights('search', matches)).toEqual({ applied: 0, unavailable: 1 });
-    expect(marks()).toHaveLength(0);
+    expect(editor.setHighlights('search', matches)).toEqual({ applied: 1, unavailable: 0 });
+    expect(marks().length).toBeGreaterThan(0);
     // A header edit moves the package revision but not the body revision. The count must
     // still read the laid-out stories, not treat the layout as lagging from then on.
     expect(editor.focus({ kind: 'headerFooter', rId: 'rHeader' }).ok).toBe(true);
@@ -233,8 +233,8 @@ describe('setHighlights', () => {
     const session = editor.surface!.session;
     expect(session.packageRevision()).not.toBe(session.revision());
     expect(editor.setHighlights('search', editor.findMatches('needle'))).toEqual({
-      applied: 0,
-      unavailable: 1,
+      applied: 1,
+      unavailable: 0,
     });
   });
 

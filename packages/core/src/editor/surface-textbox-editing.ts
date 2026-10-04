@@ -11,6 +11,7 @@ import { translateParagraphFragment } from '../layout/paragraph-frame.ts';
 import type { SemanticLayout, SemanticSelection } from '../layout/index.ts';
 import { storyParagraphs } from '../store/package/story-blocks.ts';
 import { textboxStoriesInPart } from '../store/package/textbox-stories.ts';
+import { textboxDrawingOnPage } from '../layout/textbox-drawing-records.ts';
 
 type FrameScope = Extract<ViewScope, { kind: 'frame' }>;
 
@@ -98,10 +99,11 @@ export function createTextboxEditing(deps: {
       (vertical && vertical !== 'horz')
     )
       return false;
-    const drawing = deps
-      .layout()
-      .pages.flatMap((page) => page.anchoredDrawings ?? [])
-      .find((candidate) => candidate.drawingNodeId === scope.drawingNodeId);
+    let drawing;
+    for (const page of deps.layout().pages) {
+      drawing = textboxDrawingOnPage(page, scope.drawingNodeId);
+      if (drawing) break;
+    }
     if (
       !story ||
       !drawing?.textboxStory ||
@@ -153,9 +155,11 @@ export function createTextboxEditing(deps: {
     ): Partial<Pick<SurfaceCaretInput, 'scopedHost' | 'scopedHostKind' | 'scopedOrigin'>> {
       if (!active) return {};
       const id = active.drawingNodeId;
-      const drawing = base.pages
-        .flatMap((page) => page.anchoredDrawings ?? [])
-        .find((candidate) => candidate.drawingNodeId === id);
+      let drawing;
+      for (const page of base.pages) {
+        drawing = textboxDrawingOnPage(page, id);
+        if (drawing) break;
+      }
       const story = drawing?.textboxStory;
       const box = [...deps.pagesLayer.querySelectorAll<HTMLElement>('.docx-drawing-textbox')].find(
         (element) => element.dataset.drawingNodeId === id
@@ -178,9 +182,7 @@ export function createTextboxEditing(deps: {
       const layout: SemanticLayout = {
         ...base,
         pages: base.pages.map((page) => {
-          const drawing = page.anchoredDrawings?.find(
-            (candidate) => candidate.drawingNodeId === id
-          );
+          const drawing = textboxDrawingOnPage(page, id);
           const story = drawing?.textboxStory;
           return {
             ...page,

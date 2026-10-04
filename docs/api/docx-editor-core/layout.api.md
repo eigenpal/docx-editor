@@ -40,7 +40,6 @@ export interface AnchoredDrawingRecord extends Omit<InlineDrawingRecord, 'kind' 
     // (undocumented)
     readonly relativeHeight: number;
     readonly sourceOrder?: number;
-    readonly textboxStory?: TextboxStoryLayout;
     // (undocumented)
     readonly verticalFrame: DrawingVerticalReferenceFrame;
     // (undocumented)
@@ -1538,6 +1537,7 @@ export interface InlineDrawingRecord {
     readonly revisions?: readonly RevisionAttribution[];
     // (undocumented)
     readonly start: number;
+    readonly textboxStory?: TextboxStoryLayout;
     // (undocumented)
     readonly transform: DrawingTransform;
     readonly vectorShape: VectorShapeProjection | null;
@@ -3733,8 +3733,8 @@ export interface SemanticSpanVisit {
         y: number;
     }>;
     readonly textboxDepth: number;
-    readonly textboxOwner: AnchoredDrawingRecord | null;
-    readonly textboxPath: readonly AnchoredDrawingRecord[];
+    readonly textboxOwner: TextboxOwnerRecord | null;
+    readonly textboxPath: readonly TextboxOwnerRecord[];
 }
 
 // @public
@@ -4182,8 +4182,8 @@ export interface StoryParagraphFragmentContext {
         y: number;
     }>;
     readonly textboxDepth: number;
-    readonly textboxOwner: AnchoredDrawingRecord | null;
-    readonly textboxPath: readonly AnchoredDrawingRecord[];
+    readonly textboxOwner: TextboxOwnerRecord | null;
+    readonly textboxPath: readonly TextboxOwnerRecord[];
 }
 
 // @public
@@ -4523,6 +4523,9 @@ export interface TabStop {
 
 // @public
 export function tabStopsFingerprint(tabs: ResolvedTabStops): string;
+
+// @public
+export type TextboxOwnerRecord = InlineDrawingRecord | AnchoredDrawingRecord;
 
 // @public
 export type TextboxStoryFallbackReason = 'textbox-nesting-limit' | 'textbox-fragment-limit'

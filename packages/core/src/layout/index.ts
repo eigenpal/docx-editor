@@ -225,6 +225,7 @@ export {
   type StoryDrawingContext,
   type StoryDrawingHost,
   type StoryParagraphFragmentContext,
+  type TextboxOwnerRecord,
 } from './export-traversal.ts';
 export { lineSegments, type LineSegment } from './line-segments.ts';
 export { vectorShapeInkClip } from './vector-shape-ink.ts';
