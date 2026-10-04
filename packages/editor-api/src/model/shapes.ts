@@ -3,7 +3,7 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// Floating shapes, and the text-box stories they hold.
+// Floating and inline shapes, and the text-box stories they hold.
 //
 // A SHAPE IS NAMED BY THE DOCUMENT. Its `id` is the number the file gives the drawing, and it is
 // listed by the body or paragraph that anchors it. A text box's `body` is an ordinary `Body`:
@@ -41,7 +41,7 @@ const FIELDS = ['id', 'name', 'type'] as const;
 const SHAPE_TYPES: ReadonlySet<string> = new Set(Object.values(ShapeType));
 
 /**
- * One floating shape anchored in a body or paragraph.
+ * One floating or inline shape in a body or paragraph.
  *
  * `id`, `name` and `type` are read-only. {@link Shape.body} is the text-box story for a
  * `TextBox` shape; any other shape refuses it at the sync.
@@ -131,7 +131,7 @@ export class Shape extends ModelObject implements PromisedItem {
 }
 
 /**
- * The floating shapes a body or paragraph anchors, in reading order.
+ * The floating and inline shapes in a body or paragraph, in reading order.
  *
  * @public
  */

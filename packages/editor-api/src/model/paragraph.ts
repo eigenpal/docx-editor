@@ -137,7 +137,7 @@ export class Paragraph extends ModelObject implements PromisedItem {
     this.#authorFormat('style', requireStyleName(value, `${this.path.label}.style`));
   }
 
-  /** Floating shapes anchored in this paragraph, such as text boxes. */
+  /** Floating and inline shapes in this paragraph, such as text boxes and pictures. */
   get shapes(): ShapeCollection {
     this.#shapes ??= ShapeCollection.of(
       this.context,

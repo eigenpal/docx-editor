@@ -1,12 +1,12 @@
-// Floating shapes a story's paragraphs anchor, and the text-box stories they hold.
+// Shapes in a story's paragraphs, and the text-box stories they hold.
 //
-// INTERNAL. A shape is a floating drawing (`wp:anchor`) anchored in one of a story's own
-// paragraphs, named by its `wp:docPr/@id` — the number a document gives it and the one
+// INTERNAL. A shape is a DrawingML drawing in one of a story's own paragraphs, floating
+// (`wp:anchor`) or inline (`wp:inline`), as the shape collection lists both. It is named by its `wp:docPr/@id` — the number a document gives it and the one
 // `Shape.id` reports. A `wps:wsp` that holds a `wps:txbx/w:txbxContent` has a story of its own,
 // with its own paragraphs, edited through the owning story's transaction scope. It is a text box
 // when `wps:cNvSpPr/@txBox` says so, and a geometric shape with text otherwise.
 //
-// Inline drawings are inline pictures, not shapes, and stay out of this list. A run-level
+// An inline picture is a shape of type Picture here and also an inline picture. A run-level
 // `mc:AlternateContent` is read through the branch layout selects for it: a shape whose selected
 // branch is a VML fallback has no DrawingML story and is not listed. The VML fallback of a
 // DrawingML text box follows its story on save (`textbox-fallback-export.ts`).
@@ -46,9 +46,9 @@ export interface AutomationShapeRead {
   readonly type: AutomationShapeType;
 }
 
-/** One floating shape in a story, with where it sits. */
+/** One shape in a story, with where it sits. */
 export interface AutomationShapeEntry extends AutomationShapeRead {
-  /** The paragraph whose run anchors the drawing. */
+  /** The paragraph whose run holds the drawing. */
   readonly hostParagraphId: string;
   /**
    * The shape's own `w:txbxContent` story, or null when it has none. A text box or a geometric
@@ -87,10 +87,14 @@ function child(parent: OoxmlElement, namespaceUri: string, localName: string): O
 
 type ShapeOf = { readonly read: AutomationShapeRead; readonly root: OoxmlElement | null };
 
-/** A floating drawing's identity and type, or null for an inline one; 'malformed' if unnamed. */
+/** A drawing's identity and type, or null for no drawing frame; 'malformed' if unnamed. */
 function shapeOf(drawing: OoxmlElement): ShapeOf | 'malformed' | null {
   const anchor = drawing.children.find(
-    (node) => node.kind === 'anchoredDrawing' || named(node, WP_NAMESPACE_URI, 'anchor')
+    (node) =>
+      node.kind === 'anchoredDrawing' ||
+      node.kind === 'inlineDrawing' ||
+      named(node, WP_NAMESPACE_URI, 'anchor') ||
+      named(node, WP_NAMESPACE_URI, 'inline')
   );
   if (!anchor || anchor.kind === 'textValue') return null;
   const docPr = child(anchor, WP_NAMESPACE_URI, 'docPr');
@@ -119,7 +123,7 @@ function shapeOf(drawing: OoxmlElement): ShapeOf | 'malformed' | null {
 }
 
 /**
- * The floating shapes a story's paragraphs anchor, in reading order.
+ * The shapes in a story's paragraphs, floating and inline, in reading order.
  *
  * Fails closed: a drawing with no usable `wp:docPr/@id`, two shapes sharing an id, or a scan past
  * its bounds refuses the whole list rather than answer one a handle could not name again.

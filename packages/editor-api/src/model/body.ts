@@ -406,7 +406,7 @@ export class Body extends ModelObject {
     ));
   }
 
-  /** Floating shapes anchored in this body, such as text boxes. */
+  /** Floating and inline shapes in this body, such as text boxes and pictures. */
   get shapes(): ShapeCollection {
     this.requireUsablePath();
     return (this.#shapes ??= ShapeCollection.of(

@@ -187,7 +187,7 @@ export interface AutomationPackageReads {
    */
   noteIds(noteKind: NoteKind): AutomationNoteIdsRead;
   /**
-   * The floating shapes one story's paragraphs anchor, by `wp:docPr/@id`, or an ambiguity that
+   * The shapes, floating and inline, in one story's paragraphs, by `wp:docPr/@id`, or an ambiguity that
    * makes that story's shapes unaddressable.
    */
   shapes(story: AutomationStoryId): AutomationShapesRead;

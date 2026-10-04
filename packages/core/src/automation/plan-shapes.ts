@@ -1,4 +1,4 @@
-// Floating shapes and text-box stories: the reads behind `Body.shapes`, `Paragraph.shapes`,
+// Floating and inline shapes and text-box stories: the reads behind `Body.shapes`, `Paragraph.shapes`,
 // `Shape` and `Shape.body`.
 //
 // A shape is named by its `wp:docPr/@id` within the story that anchors it. A text box's body is

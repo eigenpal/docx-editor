@@ -60,6 +60,37 @@ function textbox(
   );
 }
 
+/** The same text box as `textbox`, placed inline (`wp:inline`) instead of floating. */
+function inlineTextbox(id: number, text: string): string {
+  const floating = textbox(id, text);
+  const start = floating.indexOf('<wp:anchor ');
+  const end = floating.indexOf('</wp:anchor>') + '</wp:anchor>'.length;
+  const anchorXml = floating.slice(start, end);
+  const graphic = anchorXml.slice(
+    anchorXml.indexOf('<a:graphic>'),
+    anchorXml.indexOf('</wp:anchor>')
+  );
+  const inline =
+    '<wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="2743200" cy="457200"/>' +
+    `<wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="${id}" name="Text Box ${id}"/>` +
+    `<wp:cNvGraphicFramePr/>${graphic}</wp:inline>`;
+  return floating.slice(0, start) + inline + floating.slice(end);
+}
+
+function inlinePicture(id: number): string {
+  const graphic =
+    '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+    '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+    `<pic:nvPicPr><pic:cNvPr id="${id}" name="Picture ${id}"/><pic:cNvPicPr/></pic:nvPicPr>` +
+    '<pic:blipFill><a:blip/></pic:blipFill><pic:spPr/></pic:pic></a:graphicData></a:graphic>';
+  return (
+    `<w:r><w:drawing ${DRAWING_NS}><wp:inline distT="0" distB="0" distL="0" distR="0">` +
+    '<wp:extent cx="914400" cy="914400"/><wp:effectExtent l="0" t="0" r="0" b="0"/>' +
+    `<wp:docPr id="${id}" name="Picture ${id}"/><wp:cNvGraphicFramePr/>${graphic}` +
+    '</wp:inline></w:drawing></w:r>'
+  );
+}
+
 function rectangle(id: number): string {
   const graphic =
     '<a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">' +
@@ -382,6 +413,41 @@ describe('shapes and text-box stories', () => {
     const xml = savedMainXml(target);
     expect(xml).toContain('Shown</w:t></w:r></w:ins>');
     expect(xml).not.toContain('Hidden</w:t></w:r></w:ins>');
+  });
+
+  test('inline shapes are listed with floating ones, in reading order', () => {
+    const target = open(
+      docx(`<w:p>${inlinePicture(7)}${textbox(1, 'Float')}${inlineTextbox(4, 'Inline')}</w:p>`)
+    );
+    const { body } = roots(target);
+    expect(shapesOf(target, { body }).map((shape) => shapeRead(target, shape))).toEqual([
+      { id: 7, name: 'Picture 7', type: 'Picture' },
+      { id: 1, name: 'Text Box 1', type: 'TextBox' },
+      { id: 4, name: 'Text Box 4', type: 'TextBox' },
+    ]);
+  });
+
+  test('an inline text box body reads, edits, and saves both copies', () => {
+    const target = open(docx(`<w:p><w:r><w:t>Cover</w:t></w:r>${inlineTextbox(4, 'Acme')}</w:p>`));
+    const { body } = roots(target);
+    const [box] = shapesOf(target, { body });
+    const boxBody = handleAt(
+      target.execute({ operations: [{ op: 'getShapeBody', shape: box! }] }),
+      0
+    );
+    expect(storyText(target, boxBody)).toBe('Acme');
+    const [match] = spansAt(
+      target.execute({ operations: [{ op: 'search', scope: { body: boxBody }, text: 'Acme' }] }),
+      0
+    );
+    expect(
+      target.execute({ operations: [{ op: 'replaceSpan', span: match!, text: 'Beta' }] }).results[0]
+        ?.status
+    ).toBe('ok');
+    expect(storyText(target, boxBody)).toBe('Beta');
+    const xml = savedMainXml(target);
+    expect(xml.match(/Beta/g)).toHaveLength(2);
+    expect(xml).not.toContain('Acme');
   });
 
   test('duplicate shape ids make the story’s shapes unaddressable', () => {
