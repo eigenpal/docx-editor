@@ -341,7 +341,8 @@ export function paragraphContentWidthsPt(
   const { left, right, firstLine, hanging } = layoutInputs.indent;
   const tabs = withDefaultTabInterval(layoutInputs.tabStops, context.defaultTabStopPt);
   // Tab stops count from the leading indent, which is the right one in right-to-left text.
-  const leading = paragraphIsRtl(layoutInputs.props) ? right : left;
+  // The line breaker clamps a negative leading indent at the content edge.
+  const leading = Math.max(0, paragraphIsRtl(layoutInputs.props) ? right : left);
   // Where a tab at `at` lands: the next stop the paragraph states, else the default grid.
   const nextTabStop = (at: number): number => {
     for (const stop of tabs.stops)
@@ -517,40 +518,77 @@ function nestedTableMinimumPt(
   // cell-relative width shrinks with the cell, and the same resolver decides both.
   // A fixed table counts only the words it holds, not its stated width: the column narrows
   // to its content around it. An autofit one keeps its resolved width as well.
-  let width = 0;
-  if (!nested.layoutFixed) for (const column of nested.columnWidthsPt) width += column;
-  const ifWidened: number[] = [];
-  const content: AutofitColumnContent = {
-    maximums: [],
-    sizedByContent: [],
-    preferredWidths: [],
-    spans: [],
-  };
-  autofitColumnMinimumsPt(nested, context, { ...view, depth }, ifWidened, content);
-  // A spanning cell of the nested table asks the outer column for its room too.
+  const nestedView = { ...view, depth };
   let minimums = spacingGapsPt(nested);
-  for (const minimum of spanAdjustedMinimums(
-    // A fixed table gives its stated widths up to its content; an autofit one keeps them.
-    nested.layoutFixed ? ifWidened : spacedCellWidths(nested),
+  if (nested.layoutFixed) {
+    for (const minimum of fixedTableCellMinimums(nested, context, nestedView)) minimums += minimum;
+    return minimums + leadingIndentPt(nested);
+  }
+  let width = 0;
+  for (const column of nested.columnWidthsPt) width += column;
+  const ifWidened: number[] = [];
+  const content = emptyColumnContent();
+  autofitColumnMinimumsPt(nested, context, nestedView, ifWidened, content);
+  // A spanning cell of the nested table asks the outer column for its room too.
+  const held = spanAdjustedMinimums(
+    spacedCellWidths(nested),
     ifWidened,
     content.maximums,
     content.spans
-  ))
-    minimums += minimum;
+  );
+  for (const minimum of held) minimums += minimum;
   return Math.max(width, minimums) + leadingIndentPt(nested);
 }
 
-/** A nested fixed table's columns once they give way to fit the cell's room. */
-function fixedNestedWidths(
-  columns: readonly number[],
-  minimums: readonly number[],
-  roomPt: number
+function emptyColumnContent(): AutofitColumnContent {
+  return { maximums: [], sizedByContent: [], preferredWidths: [], spans: [], measured: [] };
+}
+
+/**
+ * A fixed table's cell minimums when it must narrow inside a cell: the content each column
+ * holds, raised for its spanning cells. A column only spanning cells cover asks for nothing
+ * of its own, since the table gives up its stated widths.
+ */
+function fixedTableCellMinimums(
+  structure: SemanticTableStructure,
+  context: TableAutofitContext,
+  view: AutofitView
 ): readonly number[] {
+  const ifWidened: number[] = [];
+  const content = emptyColumnContent();
+  autofitColumnMinimumsPt(structure, context, view, ifWidened, content);
+  const own = ifWidened.map((minimum, column) => (content.measured[column] ? minimum : 0));
+  return spanAdjustedMinimums(own, own, own, content.spans);
+}
+
+/**
+ * A nested fixed table's columns once they give way to fit the cell's room: each down to its
+ * own content, measured as cells with any spacing gaps outside them.
+ */
+function fixedNestedWidths(
+  structure: SemanticTableStructure,
+  roomPt: number,
+  minimumsOf: () => readonly number[]
+): readonly number[] {
+  const columns = structure.columnWidthsPt;
   let total = 0;
   for (const width of columns) total += width;
   if (!(roomPt > 0) || total <= roomPt + WIDTH_EPSILON_PT) return columns;
-  const stated = columns.map(() => false);
-  return contentSizedWidths(columns, stated, minimums, minimums, roomPt, roomPt, roomPt);
+  const minimums = minimumsOf();
+  const gaps = spacingGapsPt(structure);
+  const room = Math.max(0, roomPt - gaps);
+  // No column is sized by content here: every one gives way from its stated width.
+  const sizedByContent = columns.map(() => false);
+  const cells = contentSizedWidths(
+    spacedCellWidths(structure),
+    sizedByContent,
+    minimums,
+    minimums,
+    room,
+    room,
+    room
+  );
+  return gaps > 0 ? columnsAroundCells(cells, gaps) : cells;
 }
 
 /** How often a table settles again for spans its settled columns no longer hold. */
@@ -720,6 +758,7 @@ export function autofitColumnMinimumsPt(
   // A column only spanning cells cover has no minimum of its own; it keeps its width.
   const cellWidths = spacedCellWidths(structure);
   for (const [column, minimum] of minimums.entries()) {
+    if (content) content.measured[column] = minimum >= 0;
     if (minimum < 0) minimums[column] = cellWidths[column]!;
     if (ifWidened) ifWidened[column] = wide[column]! < 0 ? minimums[column]! : wide[column]!;
     if (content) {
@@ -739,6 +778,8 @@ export interface AutofitColumnContent {
   readonly sizedByContent: boolean[];
   /** The widest absolute preferred width a single-column cell states, where one does. */
   readonly preferredWidths: (number | undefined)[];
+  /** Columns a single-column cell measured; the others only spanning cells cover. */
+  readonly measured: boolean[];
   /** What each cell spanning several columns needs across them. */
   readonly spans: SpanRequirement[];
 }
@@ -839,10 +880,10 @@ export function autofitColumnWidthsPt(
   if (structure.layoutFixed) {
     // A nested fixed table paints no wider than the cell that holds it, after its indent: its
     // columns give way down to their own minimums. A top-level fixed table never reaches here.
-    const ifWidened: number[] = [];
-    autofitColumnMinimumsPt(structure, context, view, ifWidened);
     const room = Math.max(0, contentWidthPt - Math.max(0, leadingIndentPt(structure)));
-    const widths = fixedNestedWidths(structure.columnWidthsPt, ifWidened, room);
+    const widths = fixedNestedWidths(structure, room, () =>
+      fixedTableCellMinimums(structure, context, view)
+    );
     byStructure.set(structure, { contentWidthPt, widths });
     return widths;
   }
@@ -850,12 +891,7 @@ export function autofitColumnWidthsPt(
   // cell, which can change every cell's insets, so once it widens every column is sized for
   // the geometry widening can bring.
   const ifWidened: number[] = [];
-  const content: AutofitColumnContent = {
-    maximums: [],
-    sizedByContent: [],
-    preferredWidths: [],
-    spans: [],
-  };
+  const content = emptyColumnContent();
   const minimumsNow = autofitColumnMinimumsPt(structure, context, view, ifWidened, content);
   // Everything below works on cell widths; a spaced table's gaps come back at the end.
   const cellWidths = spacedCellWidths(structure);

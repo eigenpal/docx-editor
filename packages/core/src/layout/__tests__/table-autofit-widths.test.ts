@@ -254,6 +254,45 @@ describe('autofit layout', () => {
     expect(inner.box.x + inner.box.width).toBeLessThanOrEqual(host.box.x + host.box.width + 0.01);
   });
 
+  const nestedRows = (grid: readonly number[], rows: string, extra = '') =>
+    `<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/>${extra}${zeroMargins}</w:tblPr><w:tblGrid>` +
+    grid.map((w) => `<w:gridCol w:w="${w}"/>`).join('') +
+    `</w:tblGrid>${rows}</w:tbl>`;
+  const plain = (twips: number, text: string) =>
+    `<w:tc><w:tcPr><w:tcW w:w="${twips}" w:type="dxa"/></w:tcPr><w:p>${run(text)}</w:p></w:tc>`;
+  const spanning = (count: number, text: string) =>
+    `<w:tc><w:tcPr><w:gridSpan w:val="${count}"/></w:tcPr><w:p>${run(text)}</w:p></w:tc>`;
+
+  test('a narrowed nested fixed table keeps room for its spanning word', () => {
+    const nested = nestedRows(
+      [2000, 2000, 4000],
+      `<w:tr>${plain(2000, 'a')}${plain(2000, 'b')}${plain(4000, 'c')}</w:tr>` +
+        `<w:tr>${spanning(2, 'W'.repeat(12))}${plain(4000, 'c')}</w:tr>`
+    );
+    const inner = innerOf(hostOf(nested, 'A'.repeat(18)));
+    expect(lineCount(inner.rows[1]!.cells[0]!)).toBe(1);
+  });
+
+  test('a nested fixed column only spanning cells cover asks for no width of its own', () => {
+    const nested = nestedRows(
+      [400, 3000, 400],
+      `<w:tr>${plain(400, 'a')}${spanning(2, 'b')}</w:tr>` +
+        `<w:tr>${spanning(2, 'c')}${plain(400, 'd')}</w:tr>`
+    );
+    const host = hostOf(nested, 'A'.repeat(14));
+    expect(host.box.width).toBeLessThan(60);
+  });
+
+  test('a spaced nested fixed table narrows with its gaps outside its cells', () => {
+    const nested = nestedRows(
+      [4000, 400],
+      `<w:tr>${plain(4000, 'a')}${plain(400, 'BBBBBB')}</w:tr>`,
+      '<w:tblCellSpacing w:w="100" w:type="dxa"/>'
+    );
+    const inner = innerOf(hostOf(nested, 'A'.repeat(14)));
+    expect(lineCount(inner.rows[0]!.cells[1]!)).toBe(1);
+  });
+
   test('a span the cells’ stated widths hold but the grid does not still widens', () => {
     const table = laidOut(
       `<w:tbl><w:tblPr><w:tblW w:w="2400" w:type="dxa"/>${zeroMargins}</w:tblPr>` +
