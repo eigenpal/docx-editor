@@ -139,20 +139,21 @@ export function selectedTextIn(
   layout: SemanticLayout,
   from: SemanticPosition,
   to: SemanticPosition,
-  order?: readonly string[]
+  order?: readonly string[],
+  paragraphText: (layout: SemanticLayout, paragraphId: string) => string = paragraphTextFromLayout
 ): string {
   if (from.paragraphId === to.paragraphId) {
-    return paragraphTextFromLayout(layout, from.paragraphId).slice(from.offset, to.offset);
+    return paragraphText(layout, from.paragraphId).slice(from.offset, to.offset);
   }
   const effectiveOrder = order ?? documentOrder(layout);
   const firstIndex = effectiveOrder.indexOf(from.paragraphId);
   const lastIndex = effectiveOrder.indexOf(to.paragraphId);
   if (firstIndex === -1 || lastIndex === -1) return '';
   const ids = effectiveOrder.slice(firstIndex, lastIndex + 1);
-  let text = paragraphTextFromLayout(layout, from.paragraphId).slice(from.offset);
+  let text = paragraphText(layout, from.paragraphId).slice(from.offset);
   for (let index = 1; index < ids.length; index += 1) {
     const paragraphId = ids[index]!;
-    const whole = paragraphTextFromLayout(layout, paragraphId);
+    const whole = paragraphText(layout, paragraphId);
     // A break the reader cannot SEE is not one to copy. A resolved display mode draws a run
     // of paragraphs as one, so a newline here pasted two paragraphs out of a line that was
     // drawn as one — and the file the reader is looking at says the break is gone.
