@@ -145,14 +145,21 @@ const zoneAt = (
       effectInsets: { top: 0, right: 0, bottom: 0, left: 0 },
     },
   }) as unknown as ExclusionZone;
-const reaching = (zones: readonly ExclusionZone[], paragraphId = 'p', linesLeft = 0) =>
+const reaching = (
+  zones: readonly ExclusionZone[],
+  paragraphId = 'p',
+  linesLeft = 0,
+  linesRight = 200,
+  paragraphOrderIndex?: (id: string) => number | undefined
+) =>
   zonesReachingCellParagraph(zones, {
+    paragraphOrderIndex,
     originX: 0,
     width: 200,
     paragraphId,
     top: 100,
     linesLeft,
-    linesRight: 200,
+    linesRight,
   });
 
 function linesFor(held: HeldCellBreak | undefined, continuedAfter: number, startOffset: number) {
@@ -251,4 +258,26 @@ test('a continued paragraph that places nothing keeps its break for the next pag
   // Once the walk moves past it, or the cursor carries none, nothing is kept.
   expect(unplacedHeldBreak(cursor, 3, undefined)).toEqual({});
   expect(unplacedHeldBreak(initialCellCursor(), 0, undefined)).toEqual({});
+});
+
+test('a band that ends exactly at the paragraph top does not reach it', () => {
+  expect(reaching([zoneAt(40, 60, 20)])).toHaveLength(0);
+  expect(reaching([zoneAt(40, 61, 20)])).toHaveLength(1);
+});
+
+test('a zone in the strip a negative right indent pushes the lines into reaches them', () => {
+  const strip = zoneAt(150, 40, 208);
+  const tight = {
+    ...strip,
+    input: { ...strip.input, wrapDistances: { top: 0, right: 0, bottom: 0, left: 0 } },
+  } as ExclusionZone;
+  expect(reaching([tight])).toHaveLength(0);
+  expect(reaching([tight], 'p', 0, 210)).toHaveLength(1);
+});
+
+test('a zone anchored in a later paragraph does not reach an earlier one', () => {
+  const later = { ...zoneAt(150, 40, 20), anchorParagraphId: 'later' } as ExclusionZone;
+  const order = (id: string) => ({ p: 1, later: 2 })[id];
+  expect(reaching([later], 'p', 0, 200, order)).toHaveLength(0);
+  expect(reaching([later], 'p')).toHaveLength(1);
 });

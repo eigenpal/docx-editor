@@ -50,18 +50,16 @@ export function zonesReachingCellParagraph(
         order
       )
     : zones;
-  const reaching: ExclusionZone[] = [];
-  for (const zone of localizeExclusionZones(ordered, cell.originX, 0, {
-    left: 0,
-    right: cell.width,
-  }))
-    if (
+  // Tested in the page frame, so only the zones that reach are copied into the cell's frame.
+  // A band that ends where the paragraph starts touches no line, as the breaker's scanlines
+  // agree.
+  const reaching = ordered.filter(
+    (zone) =>
       zone.anchorParagraphId === cell.paragraphId ||
-      (zone.verticalBand.y + zone.verticalBand.height > cell.top - 0.001 &&
-        crossesContent(zone, cell.linesLeft, cell.linesRight))
-    )
-      reaching.push(zone);
-  return Object.freeze(reaching);
+      (zone.verticalBand.y + zone.verticalBand.height > cell.top + 0.001 &&
+        crossesContent(zone, cell.originX + cell.linesLeft, cell.originX + cell.linesRight))
+  );
+  return localizeExclusionZones(reaching, cell.originX, 0, { left: 0, right: cell.width });
 }
 
 /**
