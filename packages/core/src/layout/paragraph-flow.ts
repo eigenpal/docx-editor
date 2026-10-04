@@ -97,7 +97,7 @@ import { anchorLineStartsByModelOffset } from './anchor-line-probe.ts';
 import * as lineEndSpaces from './line-end-whitespace.ts';
 import { chopOversizedWord } from './oversized-word-break.ts';
 import type { WordCarryContext } from './word-carry.ts';
-import { carryWordAtOptionalHyphens } from './optional-hyphen-break.ts';
+import { carryWordAtOptionalHyphens, trimJoiningAtLineStart } from './optional-hyphen-break.ts';
 import { collectLineChangeSites } from './paragraph-change-sites.ts';
 
 /**
@@ -781,6 +781,7 @@ export function breakParagraph(
   };
 
   const closeLine = (options?: { readonly includeParagraphMark?: boolean }): void => {
+    trimJoiningAtLineStart(line, measurer);
     placeLeadingIgnoredBreaks(line, pageBreaksIgnored);
     const empty =
       line.drawings.length === 0 && line.spans.every((span) => isHeightlessWhitespace(span.text));

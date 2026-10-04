@@ -296,11 +296,16 @@ function withJoiningContext(pieces: FieldAwarePiece[], breaksIgnored: boolean): 
     return pieces;
   }
   const levelOf = (piece: FieldAwarePiece | undefined) => piece?.style.shaping?.level;
+  // Optional hyphens stepped over on the way to a neighbour, kept in the context as U+00AD:
+  // the shaper treats it as transparent, so letters join across it inside a line, and a line
+  // that breaks there trims it with the context beyond (`trimJoiningAtHyphen`).
+  let hyphens = '';
   // The adjacent piece in `step` direction, stepping over contiguous ignored breaks and
-  // optional hyphens, which draw nothing inside a line and so do not break joining.
+  // optional hyphens.
   const neighbourOf = (index: number, step: -1 | 1) => {
     let at = index + step;
     let edge = step < 0 ? pieces[index]!.start : pieces[index]!.end;
+    hyphens = '';
     for (
       ;
       (breaksIgnored && isPageBreak(pieces[at])) || isOptionalHyphenPiece(pieces[at]);
@@ -309,6 +314,7 @@ function withJoiningContext(pieces: FieldAwarePiece[], breaksIgnored: boolean): 
       const next = pieces[at]!;
       if ((step < 0 ? next.end : next.start) !== edge) return undefined;
       edge = step < 0 ? next.start : next.end;
+      if (isOptionalHyphenPiece(next)) hyphens += next.text;
     }
     const neighbour = pieces[at];
     return neighbour && (step < 0 ? neighbour.end : neighbour.start) === edge
@@ -323,21 +329,23 @@ function withJoiningContext(pieces: FieldAwarePiece[], breaksIgnored: boolean): 
       return;
     }
     const previous = neighbourOf(index, -1);
+    const hyphensBefore = hyphens;
     const next = neighbourOf(index, 1);
+    const hyphensAfter = hyphens;
     // Nothing joins across whitespace, so a boundary with a space on either side needs none.
     const before =
       previous &&
       levelOf(previous) === shaping.level &&
       !BREAKS_JOINING.test(previous.text.slice(-1)) &&
       !BREAKS_JOINING.test(piece.text.slice(0, 1))
-        ? previous.text.slice(-MAX_SHAPING_CONTEXT)
+        ? (previous.text + hyphensBefore).slice(-MAX_SHAPING_CONTEXT)
         : '';
     const after =
       next &&
       levelOf(next) === shaping.level &&
       !BREAKS_JOINING.test(piece.text.slice(-1)) &&
       !BREAKS_JOINING.test(next.text.slice(0, 1))
-        ? next.text.slice(0, MAX_SHAPING_CONTEXT)
+        ? (hyphensAfter + next.text).slice(0, MAX_SHAPING_CONTEXT)
         : '';
     if (!before && !after) {
       result.push(piece);

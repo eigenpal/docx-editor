@@ -187,8 +187,18 @@ test('letters join across an optional hyphen that draws nothing', () => {
   const spans = layoutLines('مرح|با', 20, 'bidi').flatMap((line) => line.spans);
   const before = spans.find((span) => span.text === 'مرح')!;
   const after = spans.find((span) => span.text === 'با')!;
-  expect(before.style.shaping?.context?.after).toBe('با');
-  expect(after.style.shaping?.context?.before).toBe('مرح');
+  // The hyphen stays in the context; the shaper treats it as transparent.
+  expect(before.style.shaping?.context?.after).toBe('\u00adبا');
+  expect(after.style.shaping?.context?.before).toBe('مرح\u00ad');
+});
+
+test('letters do not join across an optional hyphen where the line breaks', () => {
+  const lines = layoutLines('ا مرحمرح|بابا', 9.5, 'bidi');
+  expect(shown(lines)).toEqual(['ا مرحمرح-', 'بابا']);
+  const before = lines[0]!.spans.find((span) => span.text === 'مرحمرح')!;
+  const after = lines[1]!.spans.find((span) => span.text === 'بابا')!;
+  expect(before.style.shaping?.context?.after ?? '').toBe('');
+  expect(after.style.shaping?.context?.before ?? '').toBe('');
 });
 
 test('the paragraph text keeps one character per optional hyphen', () => {

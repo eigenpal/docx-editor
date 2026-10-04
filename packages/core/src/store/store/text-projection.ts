@@ -130,24 +130,21 @@ interface SearchText {
 
 /** Characters search compares as a typed hyphen, and characters it skips. */
 const SEARCH_HYPHENS = new Set([NON_BREAKING_HYPHEN_TEXT, '\u2011']);
-const SEARCH_SKIPPED = new Set([OPTIONAL_HYPHEN_TEXT, '\u00ad']);
-/** In document text a U+00AD is a literal character that draws as a hyphen, so it is kept. */
-const DOCUMENT_SKIPPED = new Set([OPTIONAL_HYPHEN_TEXT]);
-const SEARCH_FOLDED = /[\u001e\u001f\u2011\u00ad]/;
+const SEARCH_FOLDED = /[\u001e\u001f\u2011]/;
 
 /**
- * Text as search compares it: a non-breaking hyphen matches a typed hyphen, and an optional
- * hyphen matches nothing, so `rates` finds a word with an optional hyphen inside it. The
- * characters copy writes for them (U+2011 and U+00AD) fold the same way in the search text,
- * so copied text finds its source. A literal U+00AD in the document is not skipped.
+ * Text as search compares it, for the document and the search text alike: a non-breaking
+ * hyphen (U+001E or U+2011) matches a typed hyphen, and an optional hyphen element (U+001F)
+ * matches nothing, so `rates` finds a word with an optional hyphen inside it. A U+00AD is a
+ * literal character: it matches only itself and separates words.
  */
-function searchTextOf(text: string, skipped: ReadonlySet<string> = SEARCH_SKIPPED): SearchText {
+function searchTextOf(text: string): SearchText {
   if (!SEARCH_FOLDED.test(text)) return { text, at: null };
   let out = '';
   const at: number[] = [];
   for (let index = 0; index < text.length; index += 1) {
     const char = text[index]!;
-    if (skipped.has(char)) continue;
+    if (char === OPTIONAL_HYPHEN_TEXT) continue;
     out += SEARCH_HYPHENS.has(char) ? '-' : char;
     at.push(index);
   }
@@ -223,7 +220,7 @@ export function projectionFromPieces(pieces: readonly VisiblePiece[]): Projected
       }
       const matchCase = options.matchCase === true;
       const wholeWord = options.wholeWord === true;
-      searchText ??= searchTextOf(text, DOCUMENT_SKIPPED);
+      searchText ??= searchTextOf(text);
       const folded = searchText;
       const wanted = searchTextOf(query).text;
       if (wanted.length === 0) return { matches, truncated: false };

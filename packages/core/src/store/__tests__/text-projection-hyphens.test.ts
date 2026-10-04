@@ -80,12 +80,19 @@ describe('hyphen elements in paragraph text', () => {
     expect(found(SHY)).toHaveLength(0);
   });
 
-  test('a literal U+00AD in run text matches neither a typed hyphen nor nothing', () => {
+  test('a literal U+00AD in run text matches only itself', () => {
     const { projected } = project('<w:p><w:r><w:t>xx aaaa\u00adbbbb</w:t></w:r></w:p>');
     const found = (query: string) => projected.findOccurrences(query, 10).matches;
     expect(found('aaaa-bbbb')).toHaveLength(0);
     expect(found('aaaabbbb')).toHaveLength(0);
     expect(found('aaaa')).toHaveLength(1);
+    // A U+00AD in the search text matches the literal one, and only that.
+    expect(found('aaaa\u00adbbbb')).toMatchObject([{ start: 3, length: 9 }]);
+    expect(found('\u00ad')).toHaveLength(1);
+    // It separates words.
+    expect(projected.findOccurrences('aaaa', 10, { wholeWord: true }).matches).toHaveLength(1);
+    const element = project(ISSUE).projected;
+    expect(element.findOccurrences('rate\u00ads', 10).matches).toHaveLength(0);
   });
 
   test('whole-word search joins a word across an optional hyphen', () => {
