@@ -32,7 +32,6 @@ export interface AnchoredDrawingRecord extends Omit<InlineDrawingRecord, 'kind' 
     // (undocumented)
     readonly relativeHeight: number;
     readonly sourceOrder?: number;
-    readonly textboxStory?: TextboxStoryLayout;
     // (undocumented)
     readonly verticalFrame: DrawingVerticalReferenceFrame;
     // (undocumented)
@@ -405,6 +404,7 @@ export interface InlineDrawingRecord {
     readonly revisions?: readonly RevisionAttribution[];
     // (undocumented)
     readonly start: number;
+    readonly textboxStory?: TextboxStoryLayout;
     // (undocumented)
     readonly transform: DrawingTransform;
     readonly vectorShape: VectorShapeProjection | null;
