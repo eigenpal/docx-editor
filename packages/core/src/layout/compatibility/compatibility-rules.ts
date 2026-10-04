@@ -165,6 +165,12 @@ export const PROFILE_RULES = {
     source: '[MS-DOCX] 2.3.1 overrideTableStyleFontSizeAndJustification',
     applies: (p) => p.settings.overrideTableStyleFontSizeAndJustification === true,
   },
+  unstretchedManualBreakLines: {
+    behavior:
+      'A justified line that ends in a manual line break keeps its natural spacing, as a last line does. A distributed line still stretches',
+    source: 'ECMA-376 Part 4 §14.8.3 doNotExpandShiftReturn',
+    applies: (p) => p.legacy.doNotExpandShiftReturn === true,
+  },
 } as const satisfies Record<string, ProfileRule>;
 
 export type ModeRuleName = keyof typeof MODE_RULES;

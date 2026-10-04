@@ -2785,7 +2785,7 @@ function layoutBlocksPass(
             measure.indent,
             measure.available,
             alignment,
-            setsLikeLastLine(entry.props, pendingLine, isLastLine),
+            setsLikeLastLine(entry.props, pendingLine, isLastLine, styleCascade),
             alignment === 'center' || alignment === 'right' ? measure.used : undefined,
             rtl,
             false,

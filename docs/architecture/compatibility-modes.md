@@ -61,6 +61,7 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `optionalLigatures` | `enableOpenTypeFeatures`, else `modern` | Optional OpenType ligatures apply |
 | `preserveExactLineBaseline` | `w:noExtraLineSpacing` in `legacy`, mode not refused | An exact-height line keeps the face baseline |
 | `strictTableStyleHierarchy` | `overrideTableStyleFontSizeAndJustification` | Table style size and justification win |
+| `unstretchedManualBreakLines` | `w:doNotExpandShiftReturn` | A justified line before a manual line break keeps its spacing |
 
 Each rule in `compatibility-rules.ts` also names the specification section of the construct it acts on.
 

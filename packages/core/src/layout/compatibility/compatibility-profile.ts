@@ -34,6 +34,7 @@ type Reading = readonly ['on-or-missing' | 'not-off' | 'explicit-on', 'last' | '
 const LEGACY_OPTIONS = {
   adjustLineHeightInTable: ['not-off', 'last'],
   doNotBreakWrappedTables: ['on-or-missing', 'first'],
+  doNotExpandShiftReturn: ['on-or-missing', 'last'],
   doNotUseHTMLParagraphAutoSpacing: ['on-or-missing', 'first'],
   doNotUseIndentAsNumberingTabStop: ['on-or-missing', 'first'],
   noExtraLineSpacing: ['on-or-missing', 'last'],
