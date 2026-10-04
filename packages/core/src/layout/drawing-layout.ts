@@ -1333,9 +1333,11 @@ export function buildInlineDrawingRecord(options: {
   /** Lays out a text-box story; called only for a drawing that carries one. */
   readonly layoutTextboxStory?: import('./inline-textbox-flow.ts').TextboxStoryLayouter;
 }): InlineDrawingRecord {
-  const textboxStory = options.input.projection.textboxStory
-    ? options.layoutTextboxStory?.(options.input.projection)
-    : undefined;
+  // A hidden box paints nothing, so its story is never laid out or reported.
+  const textboxStory =
+    options.input.projection.textboxStory && !drawingAccessibility(options.input.projection).hidden
+      ? options.layoutTextboxStory?.(options.input.projection)
+      : undefined;
   const measure = measureInlineDrawing(options.input.projection);
   const extentX = options.slotX + measure.distL + measure.effectL;
   const geometry = drawingGeometryFromProjection({

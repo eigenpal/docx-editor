@@ -450,7 +450,7 @@ export function forEachStoryDrawing(
       for (const drawing of line.drawings ?? []) {
         visit(drawing, { ...context, paragraph: block, line });
         // An inline text box is a story too, placed where the line puts its extent.
-        if (drawing.textboxStory) {
+        if (drawing.textboxStory && !drawing.accessibility.hidden) {
           visitStory(
             drawing.textboxStory,
             context.textboxDepth + 1,
@@ -620,7 +620,7 @@ export function forEachStoryParagraphFragment(
       });
       for (const line of fragment.lines) {
         for (const drawing of line.drawings ?? []) {
-          if (!drawing.textboxStory) continue;
+          if (!drawing.textboxStory || drawing.accessibility.hidden) continue;
           visitStory(
             drawing.textboxStory,
             depth + 1,

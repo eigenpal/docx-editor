@@ -484,7 +484,7 @@ function blockAuthors(blocks: readonly BlockFragmentRecord[]): readonly string[]
         }
         // An inline text box paints its own story on this line. Layout gives a story inside
         // that story no text-box layout, so this descends one level at most.
-        const story = drawings[i]!.textboxStory;
+        const story = drawings[i]!.accessibility.hidden ? undefined : drawings[i]!.textboxStory;
         if (story) for (const author of blockAuthors(story.fragments)) see(author);
       }
     }

@@ -14,6 +14,7 @@ import {
   layoutSemanticDocument,
   type InlineDrawingRecord,
   geometryOfSection,
+  type BlockFragmentRecord,
   type LineRecord,
   type SemanticLayout,
 } from '../index.ts';
@@ -33,6 +34,9 @@ import {
   projectDrawing,
 } from '../../store/package/drawing-projection.ts';
 import { paintSemanticLayout } from '../../output/semantic-paint.ts';
+import { collectPageChangeBars } from '../../output/semantic-paint-change-bars.ts';
+import { authorSlotsOf } from '../../output/revision-presentation.ts';
+import { projectReviewArtifacts } from '../../export/review-artifact-projection.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -66,6 +70,8 @@ function inlineTextbox(
     readonly fill?: string;
     /** Outline width in points, drawn in black. */
     readonly outlinePt?: number;
+    /** Marks the drawing `wp:docPr hidden="1"`. */
+    readonly hidden?: boolean;
   } = {}
 ): string {
   const cx = (options.widthPt ?? 120) * EMU_PER_PT;
@@ -80,7 +86,7 @@ function inlineTextbox(
   return (
     '<w:r><mc:AlternateContent><mc:Choice Requires="wps"><w:drawing>' +
     `<wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/>` +
-    '<wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="1" name="Text Box 1"/>' +
+    `<wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="1" name="Text Box 1"${options.hidden ? ' hidden="1"' : ''}/>` +
     `<a:graphic><a:graphicData uri="${WPS}"><wps:wsp><wps:cNvSpPr txBox="1"/>` +
     `<wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>` +
     `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${fill}</wps:spPr>` +
@@ -345,5 +351,77 @@ describe('inline text box in a header', () => {
       .flatMap((line) => line.drawings ?? [])[0];
     expect(drawing?.textboxStory).toBeDefined();
     expect(storyTexts(drawing!)).toEqual(['Header box']);
+  });
+});
+
+describe('hidden inline text box', () => {
+  const tracked =
+    '<w:p><w:ins w:id="1" w:author="Reviewer" w:date="2026-03-26T11:00:00Z">' +
+    '<w:r><w:t>Tracked</w:t></w:r></w:ins></w:p>';
+
+  function trackedBoxPackage(hidden: boolean): OoxmlPackage {
+    const body = `<w:p>${run('Host ')}${inlineTextbox(tracked, { hidden })}</w:p>`;
+    const result = readOoxmlPackage(
+      zipSync({
+        '[Content_Types].xml': strToU8(
+          `<Types xmlns="${CT}">` +
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+            '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+            '</Types>'
+        ),
+        '_rels/.rels': strToU8(
+          `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+        ),
+        'word/document.xml': strToU8(`<w:document ${NS}><w:body>${body}</w:body></w:document>`),
+      })
+    );
+    if (!result.ok) throw new Error(result.reason);
+    return result.package;
+  }
+
+  function reviewData(hidden: boolean) {
+    const pkg = trackedBoxPackage(hidden);
+    const part = pkg.parts.get(pkg.mainDocumentPart)!;
+    const layout = layoutBody(part);
+    const bars = collectPageChangeBars(layout.pages[0]!, 1, 'all-markup').runs;
+    const occurrences = projectReviewArtifacts(layout, pkg).flatMap((item) => [
+      ...item.occurrences,
+    ]);
+    return { layout, bars, occurrences, authors: [...authorSlotsOf(layout).keys()] };
+  }
+
+  test('a visible box reports its tracked text to change bars and author slots', () => {
+    const { bars, authors } = reviewData(false);
+    expect(bars.length).toBeGreaterThan(0);
+    expect(authors).toEqual(['Reviewer']);
+  });
+
+  test('a docPr-hidden box publishes no drawing and feeds no review data', () => {
+    const { layout, bars, occurrences, authors } = reviewData(true);
+    expect(allLines(layout).flatMap((line) => line.drawings ?? [])).toEqual([]);
+    expect(bars).toEqual([]);
+    expect(occurrences).toEqual([]);
+    expect(authors).toEqual([]);
+  });
+
+  test('a hidden owner record keeps its story out of change bars and author slots', () => {
+    const { layout } = reviewData(false);
+    const page = layout.pages[0]!;
+    const hide = (block: BlockFragmentRecord): BlockFragmentRecord =>
+      block.kind !== 'paragraph'
+        ? block
+        : {
+            ...block,
+            lines: block.lines.map((line) => ({
+              ...line,
+              drawings: line.drawings?.map((drawing) => ({
+                ...drawing,
+                accessibility: { ...drawing.accessibility, hidden: true },
+              })),
+            })),
+          };
+    const hiddenPage = { ...page, fragments: page.fragments.map(hide) };
+    expect(collectPageChangeBars(hiddenPage, 1, 'all-markup').runs).toEqual([]);
+    expect([...authorSlotsOf({ ...layout, pages: [hiddenPage] }).keys()]).toEqual([]);
   });
 });
