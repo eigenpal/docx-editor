@@ -533,6 +533,46 @@ export function reorderBidiSpans(
   return result;
 }
 
+/**
+ * Hang a right-to-left line's line-end whitespace before the start of its passage.
+ *
+ * UAX #9 L1 puts that whitespace at the paragraph level, so in a right-to-left paragraph
+ * {@link reorderBidiSpans} draws it at the physical left of the passage, from the
+ * passage's leftmost x. A justified line already fills its measure with the visible text
+ * alone, so the whitespace must hang past the end margin as it does past the right margin
+ * in a left-to-right line. Left in place, it pushes the whole line right by its own advance
+ * and the first word past the start margin.
+ *
+ * The whitespace spans move to end where the passage's text starts; reordering then draws
+ * them first, in the margin, and the text from that same start. Logical spans in, logical
+ * spans out.
+ */
+export function hangRtlLineEndWhitespace(
+  spans: readonly StyleSpanRecord[],
+  pageBreaksIgnored = false
+): readonly StyleSpanRecord[] {
+  if (!spans.some((span) => span.style.shaping)) return spans;
+  const trailing = lineEndWhitespaceStart(spans, 0, spans.length, pageBreaksIgnored);
+  if (trailing === 0 || trailing === spans.length) return spans;
+  let passage = trailing;
+  while (passage > 0 && !((spans[passage]?.wrapAdvanceBefore ?? 0) > 0)) passage--;
+  if (passage === trailing) return spans;
+  let start = Infinity;
+  for (let index = passage; index < trailing; index++) {
+    start = Math.min(start, spans[index]!.box.x);
+  }
+  let hang = 0;
+  for (let index = trailing; index < spans.length; index++) hang += spans[index]!.box.width;
+  if (hang <= 0) return spans;
+  let x = start - hang;
+  return spans.map((span, index) => {
+    if (index < trailing) return span;
+    const placed = { ...span, box: { ...span.box, x } };
+    x += span.box.width;
+    return placed;
+  });
+}
+
 export function spanContentX(spans: readonly StyleSpanRecord[], fallback: number): number {
   return spans.length ? spans.reduce((x, s) => Math.min(x, s.box.x), Infinity) : fallback;
 }

@@ -1,6 +1,11 @@
 import { shrinkJustifiedSpans } from './paragraph-space-shrink.ts';
 import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store';
-import { paragraphIsRtl, reorderBidiSpans, splitBidiTrailingWhitespace } from './rtl-paragraph.ts';
+import {
+  hangRtlLineEndWhitespace,
+  paragraphIsRtl,
+  reorderBidiSpans,
+  splitBidiTrailingWhitespace,
+} from './rtl-paragraph.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
@@ -296,19 +301,24 @@ export function alignSpans(
   lastLineShrinks = false
 ): readonly StyleSpanRecord[] {
   const effective = alignment === 'both' && isLastLine && paragraphRtl ? 'right' : alignment;
+  const aligned = alignLogicalSpans(
+    splitBidiTrailingWhitespace(spans, measurer),
+    measurer,
+    indentLeft,
+    available,
+    effective,
+    isLastLine,
+    lineUsedWidth,
+    paragraphRtl,
+    pageBreaksIgnored,
+    lastLineShrinks
+  );
+  // A justified line fills the measure with its text; its line-end spaces hang in the
+  // end margin, which a right-to-left paragraph has on the left.
   return reorderBidiSpans(
-    alignLogicalSpans(
-      splitBidiTrailingWhitespace(spans, measurer),
-      measurer,
-      indentLeft,
-      available,
-      effective,
-      isLastLine,
-      lineUsedWidth,
-      paragraphRtl,
-      pageBreaksIgnored,
-      lastLineShrinks
-    ),
+    effective === 'both' && paragraphRtl && Number.isFinite(available)
+      ? hangRtlLineEndWhitespace(aligned, pageBreaksIgnored)
+      : aligned,
     paragraphRtl,
     pageBreaksIgnored
   );
