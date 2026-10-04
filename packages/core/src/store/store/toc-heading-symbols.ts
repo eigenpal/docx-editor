@@ -16,6 +16,30 @@ const CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/g;
 /** The outline's own bound on heading text (`binding/document-outline.ts`). */
 const HEADING_TEXT_MAX = 200;
 
+/**
+ * The outline's bound applied to marked text: marks do not count, and leading whitespace
+ * after a mark does not either, since the outline trims the text with its symbols left out.
+ */
+function sliceUnmarked(text: string): string {
+  let kept = '';
+  let counted = 0;
+  let started = false;
+  for (let at = 0; at < text.length; at += 1) {
+    const char = text[at]!;
+    if (char !== TOC_SYMBOL_MARK && !started && /\s/.test(char)) {
+      kept += char;
+      continue;
+    }
+    if (char !== TOC_SYMBOL_MARK) {
+      if (counted === HEADING_TEXT_MAX) break;
+      started = true;
+      counted += 1;
+    }
+    kept += char;
+  }
+  return kept;
+}
+
 /** The entry with its heading's symbols, or the entry unchanged when there are none. */
 export function withHeadingSymbols(part: OoxmlPart, entry: TocEntryPlan): TocEntryPlan {
   const heading = findNode(part, entry.headingParagraphId);
@@ -23,7 +47,7 @@ export function withHeadingSymbols(part: OoxmlPart, entry: TocEntryPlan): TocEnt
   const marked = withSymbolMarks(heading, paragraphModelTextOf(heading), TOC_SYMBOL_MARK);
   if (marked.symbols.length === 0) return entry;
   const rowText = tocEntryText(
-    withDisplayedHyphens(marked.text).replace(CONTROL_CHARS, ' ').trim().slice(0, HEADING_TEXT_MAX)
+    sliceUnmarked(withDisplayedHyphens(marked.text).replace(CONTROL_CHARS, ' ').trim())
   );
   // Only a row that is this heading's text gets its symbols; any other text is kept as given.
   if (tocEntryText(rowText.replaceAll(TOC_SYMBOL_MARK, '')) !== entry.text) return entry;

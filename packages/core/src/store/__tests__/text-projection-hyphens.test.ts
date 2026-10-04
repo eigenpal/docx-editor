@@ -231,6 +231,25 @@ describe('hyphen elements in paragraph text', () => {
     expect(withHeadingSymbols(part, { ...plain, text: 'Other' }).symbols).toBeUndefined();
   });
 
+  test('a long heading keeps its symbols in the bounded table of contents row', () => {
+    const long = 'x'.repeat(205);
+    const part = load(
+      '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r>' +
+        `<w:sym w:font="Wingdings" w:char="F0FC"/><w:t xml:space="preserve"> ${long}</w:t>` +
+        '</w:r></w:p>'
+    );
+    const heading = part.root.children[0]!.children.find((node) => node.kind === 'paragraph')!;
+    const entry = withHeadingSymbols(part, {
+      level: 0,
+      text: 'x'.repeat(200),
+      headingParagraphId: heading.id,
+      bookmarkName: '_Toc1',
+      pageNumberText: '1',
+    });
+    expect(entry.symbols).toHaveLength(1);
+    expect(entry.text).toBe(`\ufdd0 ${'x'.repeat(200)}`);
+  });
+
   test('a content control value written back keeps its hyphens', () => {
     const part = load(
       '<w:sdt><w:sdtPr><w:id w:val="5"/><w:text/></w:sdtPr><w:sdtContent><w:p><w:r><w:t>co</w:t>' +

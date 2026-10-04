@@ -44,13 +44,19 @@ export function symbolRunStyle(
   themeFonts?: ThemeFonts
 ): { readonly props: readonly OoxmlProperty[]; readonly style: ResolvedRunStyle } {
   if (!glyph.font) return { props: runProps, style: resolveRunStyle(runProps, themeFonts) };
-  // The glyph names its own font. Reset the hint and override the East Asian slot too,
-  // because neighboring Han can select that slot independently of the hint.
+  // The glyph names its own font. Reset the hint and override the East Asian and complex
+  // script slots too, because neighboring Han or a right-to-left run selects them on its own.
   const props: readonly OoxmlProperty[] = [
     ...runProps,
     {
       localName: 'rFonts',
-      attributes: { ascii: glyph.font, hAnsi: glyph.font, eastAsia: glyph.font, hint: 'default' },
+      attributes: {
+        ascii: glyph.font,
+        hAnsi: glyph.font,
+        eastAsia: glyph.font,
+        cs: glyph.font,
+        hint: 'default',
+      },
     },
   ];
   symbolRuns.set(props, { props: runProps, style: resolveRunStyle(runProps, themeFonts) });
