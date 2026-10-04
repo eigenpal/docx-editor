@@ -43,6 +43,7 @@ function load(body: string): OoxmlPart {
 const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 const tc = (content: string, tcPr = '') => `<w:tc>${tcPr}${content}</w:tc>`;
 const tr = (cells: string, trPr = '') => `<w:tr>${trPr}${cells}</w:tr>`;
+const W2000 = '<w:tcPr><w:tcW w:w="2000" w:type="dxa"/></w:tcPr>';
 
 const GEOMETRY: PageGeometry = {
   width: 400,
@@ -399,7 +400,7 @@ describe('table interaction geometry', () => {
   test('hit identity includes sourceRevision and full occurrence fields', () => {
     const part = load(
       `<w:tbl><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>` +
-        `${tr(tc(p('a')) + tc(p('b')))}${tr(tc(p('c')) + tc(p('d')))}</w:tbl>`
+        `${tr(tc(p('a'), W2000) + tc(p('b'), W2000))}${tr(tc(p('c'), W2000) + tc(p('d'), W2000))}</w:tbl>`
     );
     const result = layout(part, 3);
     const table = tablesOf(result)[0]!;

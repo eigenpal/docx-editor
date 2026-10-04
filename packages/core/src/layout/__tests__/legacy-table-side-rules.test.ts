@@ -16,7 +16,7 @@ function source(
   widthType = 'dxa',
   rightStyle = style
 ) {
-  const xml = `<w:tbl><w:tblPr><w:tblW w:w="2880" w:type="${widthType}"/>${extra}<w:tblBorders><w:left w:val="${style}" w:sz="4"/><w:right w:val="${rightStyle}" w:sz="${rightWidth}"/></w:tblBorders><w:tblCellMar><w:left w:type="dxa" w:w="${margin * 20}"/><w:right w:type="dxa" w:w="${margin * 20}"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="2880"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>Left</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`;
+  const xml = `<w:tbl><w:tblPr><w:tblW w:w="2880" w:type="${widthType}"/>${extra}<w:tblBorders><w:left w:val="${style}" w:sz="4"/><w:right w:val="${rightStyle}" w:sz="${rightWidth}"/></w:tblBorders><w:tblCellMar><w:left w:type="dxa" w:w="${margin * 20}"/><w:right w:type="dxa" w:w="${margin * 20}"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="2880"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:w="2880" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>Left</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`;
   const parsed = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${xml}</w:body></w:document>`, {
     name: '/word/document.xml',
     contentType: 'app/xml',

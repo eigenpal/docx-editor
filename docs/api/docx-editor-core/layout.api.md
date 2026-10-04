@@ -4323,6 +4323,7 @@ export type TableAlignment = 'left' | 'center' | 'right';
 
 // @public
 export interface TableAutofitContext {
+    readonly defaultTabStopPt?: number;
     readonly fields?: AutofitFieldContext;
     readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
     readonly listItems?: ReadonlyMap<string, ResolvedListItem>;

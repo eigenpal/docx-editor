@@ -44,12 +44,15 @@ function docx(body: string): Uint8Array {
 }
 
 const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
-const tc = (content: string) => `<w:tc>${content}</w:tc>`;
+const tc = (content: string, twips?: number) =>
+  twips === undefined
+    ? `<w:tc>${content}</w:tc>`
+    : `<w:tc><w:tcPr><w:tcW w:w="${twips}" w:type="dxa"/></w:tcPr>${content}</w:tc>`;
 const tr = (cells: string) => `<w:tr>${cells}</w:tr>`;
 
 const TABLE =
   '<w:tbl><w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid>' +
-  `${tr(tc(p('A1')) + tc(p('B1')))}${tr(tc(p('A2')) + tc(p('B2')))}</w:tbl>`;
+  `${tr(tc(p('A1'), 3000) + tc(p('B1'), 3000))}${tr(tc(p('A2'), 3000) + tc(p('B2'), 3000))}</w:tbl>`;
 
 const NESTED_TABLE =
   '<w:tbl><w:tblGrid><w:gridCol w:w="4000"/><w:gridCol w:w="2000"/></w:tblGrid>' +

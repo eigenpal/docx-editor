@@ -15,7 +15,7 @@ function fixture(alignment: string, layout = 'autofit') {
     `<w:document xmlns:w="${W}"><w:body>
     <w:tbl><w:tblPr><w:tblW w:w="10206" w:type="dxa"/><w:jc w:val="${alignment}"/><w:tblLayout w:type="${layout}"/></w:tblPr>
     <w:tblGrid><w:gridCol w:w="5015"/><w:gridCol w:w="5191"/></w:tblGrid>
-    <w:tr><w:tc><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Right cell</w:t></w:r></w:p></w:tc></w:tr>
+    <w:tr><w:tc><w:tcPr><w:tcW w:w="5015" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc><w:tc><w:tcPr><w:tcW w:w="5191" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>Right cell</w:t></w:r></w:p></w:tc></w:tr>
     </w:tbl></w:body></w:document>`,
     { name: '/word/document.xml', contentType: 'app/xml' }
   );

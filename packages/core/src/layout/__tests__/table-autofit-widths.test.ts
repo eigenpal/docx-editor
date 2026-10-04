@@ -103,6 +103,42 @@ describe('autofit layout', () => {
     };
   };
 
+  const unsized = (tblW: string, texts: readonly string[]) =>
+    `<w:tbl><w:tblPr>${tblW}<w:tblCellMar><w:left w:w="0" w:type="dxa"/>` +
+    '<w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+    '<w:tblGrid><w:gridCol w:w="1200"/><w:gridCol w:w="600"/><w:gridCol w:w="600"/></w:tblGrid><w:tr>' +
+    texts.map((text) => `<w:tc><w:p>${run(text)}</w:p></w:tc>`).join('') +
+    '</w:tr></w:tbl>';
+
+  test('cells that state no width size their columns by their content, not the grid', () => {
+    // Widest lines 6, 24 and 12 pt share the 120 pt table in that proportion.
+    const { widths } = columns(unsized('<w:tblW w:w="2400" w:type="dxa"/>', ['a', 'bbbb', 'cc']));
+    expect(widths).toEqual([17.14, 68.57, 34.29]);
+  });
+
+  test('a table with no width of its own takes its content’s widths', () => {
+    expect(columns(unsized('', ['a', 'bbbb', 'cc'])).widths).toEqual([6, 24, 12]);
+  });
+
+  test('a cell spanning two columns widens them to hold its word', () => {
+    const spanned =
+      '<w:tbl><w:tblPr><w:tblW w:w="2400" w:type="dxa"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/>' +
+      '<w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="1200"/><w:gridCol w:w="600"/><w:gridCol w:w="600"/></w:tblGrid><w:tr>' +
+      ['1200', '600', '600']
+        .map(
+          (w, i) =>
+            `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/></w:tcPr><w:p>${run(['ab', 'cd', 'ef'][i]!)}</w:p></w:tc>`
+        )
+        .join('') +
+      '</w:tr><w:tr><w:tc><w:tcPr><w:tcW w:w="1200" w:type="dxa"/></w:tcPr><w:p/></w:tc>' +
+      `<w:tc><w:tcPr><w:tcW w:w="1200" w:type="dxa"/><w:gridSpan w:val="2"/></w:tcPr><w:p>${run('A'.repeat(14))}</w:p></w:tc>` +
+      '</w:tr></w:tbl>';
+    // The 84 pt word needs both 30 pt columns; equal weights share it, and the first column
+    // gives the rest.
+    expect(columns(spanned).widths).toEqual([36, 42, 42]);
+  });
+
   test('widens a column to keep a 10-letter word whole', () => {
     // A 60 pt word in a 30 pt column. The others give the 30 pt in proportion to their
     // slack above their 12 pt minimums: 48 and 18 pt.
@@ -156,7 +192,7 @@ describe('autofit layout', () => {
     expect(columns(table('', split)).widths[1]).toBe(48);
   });
 
-  test('a nested table keeps its own grid width', () => {
+  test('a fixed nested table gives up its stated width to the column beside it', () => {
     const nested =
       '<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="1000"/></w:tblGrid>' +
       `<w:tr><w:tc><w:tcPr><w:tcW w:w="1000" w:type="dxa"/></w:tcPr><w:p>${run('n')}</w:p></w:tc></w:tr></w:tbl>`;
@@ -168,7 +204,8 @@ describe('autofit layout', () => {
       `<w:tc><w:tcPr><w:tcW w:w="1200" w:type="dxa"/></w:tcPr><w:p>${run('A'.repeat(14))}</w:p></w:tc>` +
       '</w:tr></w:tbl>';
     const { widths } = columns(body);
-    expect(widths[0]).toBeGreaterThanOrEqual(50);
+    // The column narrows below the nested table's 50 pt to the content it holds.
+    expect(widths[0]).toBeCloseTo(36, 6);
     expect(widths[1]).toBe(84);
   });
 
@@ -533,7 +570,9 @@ describe('autofit layout', () => {
       `<w:tc><w:tcPr><w:tcW w:w="600" w:type="dxa"/></w:tcPr>${nested}<w:p/></w:tc>` +
       `<w:tc><w:tcPr><w:tcW w:w="1800" w:type="dxa"/></w:tcPr><w:p>${run('A'.repeat(14))}</w:p></w:tc>` +
       '</w:tr></w:tbl>';
-    expect(columns(outer).widths[0]).toBeGreaterThanOrEqual(50 - 0.01);
+    // Its 20 pt indent and the content it holds, whatever its stated 30 pt.
+    expect(columns(outer).widths[0]).toBeGreaterThan(20 + 6);
+    expect(columns(outer).widths[0]).toBeLessThan(50 - 0.01);
   });
 
   const outerWith = (nested: string, second: string) =>
@@ -554,11 +593,13 @@ describe('autofit layout', () => {
     expect(columns(outerWith(nested, run('cd'))).widths).toEqual([30, 90]);
   });
 
-  test('a fixed nested table keeps the width it paints at', () => {
+  test('a fixed nested table needs only the content it holds', () => {
     const nested =
       '<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol/></w:tblGrid>' +
       `<w:tr><w:tc><w:tcPr><w:tcW w:w="1200" w:type="dxa"/></w:tcPr><w:p>${run('n')}</w:p></w:tc></w:tr></w:tbl>`;
-    expect(columns(outerWith(nested, run('A'.repeat(30)))).widths[0]).toBeGreaterThanOrEqual(60);
+    const { widths } = columns(outerWith(nested, run('A'.repeat(30))));
+    expect(widths[0]).toBeGreaterThanOrEqual(6);
+    expect(widths[0]).toBeLessThan(60);
   });
 
   const halfAndHalf = (nested: string, second: string) =>

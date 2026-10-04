@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Widen an AutoFit table column to hold its widest unbroken word, such as a long URL, taking the width from the other columns in proportion to their spare room. Fixes #1067
+Size AutoFit table columns from their content: a column widens to hold its widest unbroken word, columns whose cells state no width take their content's width, a spanning cell widens the columns it spans, and cell spacing separates cells by twice its value. Fixes #1067

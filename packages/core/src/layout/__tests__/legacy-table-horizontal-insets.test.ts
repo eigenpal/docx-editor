@@ -142,8 +142,11 @@ test('an admitted 45.5 pt grid cell keeps seven digits on one line, including ex
 test('cell spacing disables the exception even when a caller retains the legacy marker', () => {
   const { structure, tableId } = specimen();
   const spaced = renderStructure({ ...structure, cellSpacingPt: 2 }, tableId);
-  expect(spaced.rows[0]!.cells[0]!.box.width).toBeCloseTo(43.5, 6);
-  expect(firstParagraph(spaced).lines[0]!.box.width).toBeCloseTo(31.7, 6);
+  // Gaps of twice the spacing at the three column edges come out of the 210.8 pt row, so the
+  // 45.5 pt column gives a 45.5 * (210.8 - 12) / 210.8 pt cell, less the ordinary insets.
+  const cell = (45.5 * (210.8 - 12)) / 210.8;
+  expect(spaced.rows[0]!.cells[0]!.box.width).toBeCloseTo(cell, 1);
+  expect(firstParagraph(spaced).lines[0]!.box.width).toBeCloseTo(cell - 11.8, 1);
   expect(firstParagraph(spaced).lines).toHaveLength(2);
 });
 
