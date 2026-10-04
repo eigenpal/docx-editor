@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A field result refresh refused text with a line break, so a REF whose bookmark held one kept its stale saved result.",
+  "after": "A field result refresh writes each line break as w:br inside the plain result run, and treats result runs with line breaks as plain.",
+  "reason": "The refresh writes ordinary w:t, w:tab and w:br nodes that released participants already read and synchronize. No shared format field changes. Form field edits keep the earlier plain-run rules.",
+  "tests": [
+    "packages/core/src/layout/__tests__/field-result-line-break.test.ts",
+    "packages/core/src/editor/__tests__/ref-field-save-refresh.test.ts"
+  ],
+  "changeset": "field-result-line-breaks",
+  "migration": null
+}

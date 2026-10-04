@@ -115,6 +115,9 @@ export function validateSetLegacyDropdown(
         )?.value
       : undefined;
   if (raw !== field.entries[op.selectedIndex]) return 'unsupported';
+  // A dropdown result is one line of text: a line break would leave a result the next
+  // selection cannot rewrite.
+  if (/[\r\n]/.test(raw)) return 'invalidArgs';
   if (!field.enabled) return 'locked';
   const refusal = fieldResultUpdateRefusal(part, op.paragraphId);
   if (refusal) return refusal;

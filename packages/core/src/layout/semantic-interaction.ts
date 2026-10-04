@@ -56,7 +56,7 @@ import {
   earlierSegmentHolds,
   headerRepeatLinesOnPage,
   isNonNavigableInterior,
-  endsWithLineBreak,
+  breakEndsLineBefore,
   isDrawingOnlySegment,
 } from './semantic-caret-line.ts';
 import { bottomToTopCaretInLayout } from './table-cell-text-direction.ts';
@@ -145,7 +145,7 @@ function pushSegmentCaretStops(
     if (
       offset === segment.end &&
       offset > segment.start &&
-      ((!mixed && endsWithLineBreak(line) && laterLineOwns(layout, line, offset)) ||
+      ((!mixed && breakEndsLineBefore(line, offset) && laterLineOwns(layout, line, offset)) ||
         laterSegmentHolds(layout, line, segment.paragraphId, offset))
     ) {
       continue;
@@ -360,9 +360,9 @@ export function caretAt(
     if (position.offset < segment.start || position.offset > segment.end) continue;
     if (
       position.offset === segment.end &&
-      position.offset > segment.start &&
       lineSegments(line).length === 1 &&
-      (endsWithLineBreak(line) || isDrawingOnlySegment(line, segment))
+      (breakEndsLineBefore(line, position.offset) ||
+        (position.offset > segment.start && isDrawingOnlySegment(line, segment)))
     ) {
       // Remember it, but keep looking for the line that STARTS here. Falling back to it
       // keeps a caret placed rather than lost if no such line was laid out — for the

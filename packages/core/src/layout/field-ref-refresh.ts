@@ -186,9 +186,9 @@ function collectStaleResultUpdates(
       }
       if (value === null || value === located.cachedText) continue;
       // The op's own bounds, applied per field so one outlier cannot refuse the whole plan:
-      // length-capped, and no line breaks (a rewrite expresses tabs, never `w:br`).
+      // length-capped, and no carriage return (a rewrite writes tabs and line breaks only).
       if (value.length > MAX_FIELD_RESULT_TEXT_CHARS) continue;
-      if (value.includes('\n') || value.includes('\r')) continue;
+      if (value.includes('\r')) continue;
       updates.push({ paragraphId: paragraph.id, fieldNodeId: located.fieldNodeId, text: value });
     }
   }
