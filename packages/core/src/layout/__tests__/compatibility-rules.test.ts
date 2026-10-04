@@ -111,6 +111,7 @@ const PROFILE_MATRIX: Record<
     options: setting('overrideTableStyleFontSizeAndJustification', '1'),
     on: EVERY_MODE,
   },
+  unstretchedManualBreakLines: { options: '<w:doNotExpandShiftReturn/>', on: EVERY_MODE },
 };
 
 test('each option rule applies with its option, in its modes', () => {
