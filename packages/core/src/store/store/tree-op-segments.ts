@@ -6,6 +6,7 @@
 
 import type { OoxmlElement, OoxmlNode, OoxmlParagraphNode } from '../package/ooxml-tree.ts';
 import { isLegacyVmlAtom } from '../package/legacy-vml-projection.ts';
+import { isOmmlEquationAtom } from '../package/omml-display.ts';
 import {
   DEFAULT_SUPPORTED_MC_REQUIRES,
   emptyNamespaceScope,
@@ -35,17 +36,11 @@ import {
   isContentControlNode,
 } from './tree-op-nodes.ts';
 
-/** Office Math Markup Language namespace (ECMA-376 Part 1, §22.1). */
-const OMML_NAMESPACE_URI = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
-
-/** A paragraph-level inline equation. Its internal OMML is one editable model atom. */
-function isMathEquation(node: OoxmlNode): boolean {
-  return (
-    node.kind !== 'textValue' &&
-    node.namespaceUri === OMML_NAMESPACE_URI &&
-    node.localName === 'oMath'
-  );
-}
+/**
+ * A paragraph-level equation: inline `m:oMath` or a display `m:oMathPara`. Its internal OMML
+ * is one editable model atom.
+ */
+const isMathEquation = isOmmlEquationAtom;
 
 /** One addressable unit of paragraph text: text, tab, hard break, or atomic field. */
 export interface Segment {

@@ -167,6 +167,14 @@ export {
   scrubExport,
 } from './sinks.ts';
 export {
+  displayMathAlignment,
+  equationsOfAtom,
+  isOmmlDisplay,
+  isOmmlEquationAtom,
+  projectOmmlAtom,
+  projectOmmlDisplay,
+} from './omml-display.ts';
+export {
   DEFAULT_OMML_LIMITS,
   OFFICE_MATH_NAMESPACE_URI,
   equationExpressionToLinearMath,

@@ -15,7 +15,7 @@ import {
 } from './clipboard-html-table-styles.ts';
 import { tableSide } from './clipboard-table-direction.ts';
 import { parseInlineStyle, tagOf } from './clipboard-html-styles.ts';
-import type { FlowContext, Projection } from './clipboard-html-read.ts';
+import type { FlowContext, Projection } from './clipboard-html-projection.ts';
 
 const TABLE_TOTAL_TWIPS = 9360; // 6.5 inches, Word's default content width.
 

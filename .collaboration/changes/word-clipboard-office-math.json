@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Word clipboard equations pasted as fallback pictures or loose text, and equations inside m:oMathPara had no paragraph offset, layout, or editing.",
+  "after": "Clipboard equations paste as canonical m:oMath or m:oMathPara. A display m:oMathPara is one paragraph atom of length one, and removing its last equation removes the display.",
+  "reason": "Rooms replicate canonical node primitives, not paragraph offsets, and the pasted and edited nodes are ordinary OMML elements that released readers already store. Only remote caret offsets inside paragraphs with display equations differ by one between versions; presence is ephemeral and re-resolves on the next caret move.",
+  "tests": [
+    "packages/core/src/editor/__tests__/clipboard-html-equations.test.ts",
+    "packages/core/src/editor/__tests__/equation-display.test.ts",
+    "packages/core/src/editor/__tests__/equation-copy-paste.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-paste-equation.test.ts"
+  ],
+  "changeset": "word-clipboard-equations",
+  "migration": null
+}

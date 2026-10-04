@@ -11,7 +11,7 @@ import {
   hardBreakKind,
   hasLegacyFormFieldData,
   isFldSimple,
-  projectOmmlEquation,
+  projectOmmlAtom,
   type DocumentProperties,
   type OoxmlElement,
   type OoxmlNode,
@@ -913,7 +913,7 @@ export function unmergedPiecesOfParagraphForDisplay(
     // Match `segmentsOf`: every transparent container consumes one level, and a child reached
     // at the cap is opaque. Check before runs and atoms so hidden content cannot reach layout.
     if (containerDepth >= MAX_INLINE_CONTAINER_DEPTH) return;
-    const equation = projectOmmlEquation(child);
+    const equation = projectOmmlAtom(child);
     if (equation) {
       const start = offset++;
       if (revisionsAreDeletion(revisions) && deletedRanges)

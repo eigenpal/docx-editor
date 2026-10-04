@@ -9,7 +9,7 @@ import {
   type HtmlListKind,
 } from './clipboard-html-numbering.ts';
 import { isElement, isMsoListIgnoreMarker } from './clipboard-html-styles.ts';
-import type { FlowContext, Projection } from './clipboard-html-read.ts';
+import type { FlowContext, Projection } from './clipboard-html-projection.ts';
 
 type ParaProps = FlowContext['para'];
 

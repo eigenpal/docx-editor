@@ -5,6 +5,7 @@ import type { SemanticPosition, SemanticSelection } from '@docx-editor.dev/core/
 import {
   OFFICE_MATH_NAMESPACE_URI,
   equationExpressionToLinearMath,
+  equationsOfAtom,
   findNode,
   parentNodeOf as parentOf,
   projectOmmlEquation,
@@ -50,32 +51,42 @@ function equationsInParagraph(part: OoxmlPart, paragraphId: string): readonly Su
   if (cached) return cached;
   const equations: SurfaceEquation[] = [];
   for (const segment of segmentsOf(paragraph)) {
-    const node = segment.node;
-    if (
-      node.kind === 'textValue' ||
-      node.kind !== 'generic' ||
-      node.namespaceUri !== OFFICE_MATH_NAMESPACE_URI ||
-      node.localName !== 'oMath'
-    ) {
-      continue;
+    // A display atom shares its one offset between its equations.
+    for (const node of equationsOfAtom(segment.node)) {
+      const projection = projectOmmlEquation(node);
+      if (!projection) continue;
+      equations.push(
+        Object.freeze({
+          id: node.id,
+          paragraphId,
+          start: segment.start,
+          end: segment.end,
+          linear: equationExpressionToLinearMath(projection.expression),
+          fallbackText: projection.fallbackText,
+          supported: expressionIsSupported(projection.expression),
+        })
+      );
     }
-    const projection = projectOmmlEquation(node);
-    if (!projection) continue;
-    equations.push(
-      Object.freeze({
-        id: node.id,
-        paragraphId,
-        start: segment.start,
-        end: segment.end,
-        linear: equationExpressionToLinearMath(projection.expression),
-        fallbackText: projection.fallbackText,
-        supported: expressionIsSupported(projection.expression),
-      })
-    );
   }
   const result = Object.freeze(equations);
   paragraphEquationCache.set(paragraph, result);
   return result;
+}
+
+/**
+ * The plain-text spelling of the equation atom at a paragraph offset: its linear form,
+ * with the equations of one display separated by spaces. Null when no equation sits there.
+ */
+export function equationPlainText(
+  part: OoxmlPart,
+  paragraphId: string,
+  offset: number
+): string | null {
+  const here = equationsInParagraph(part, paragraphId).filter(
+    (equation) => equation.start === offset
+  );
+  if (here.length === 0) return null;
+  return here.map((equation) => equation.linear || equation.fallbackText).join(' ');
 }
 
 function expressionIsSupported(expression: EquationExpression): boolean {

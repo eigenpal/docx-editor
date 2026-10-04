@@ -139,17 +139,34 @@ export function selectedTextIn(
   layout: SemanticLayout,
   from: SemanticPosition,
   to: SemanticPosition,
-  order?: readonly string[]
+  order?: readonly string[],
+  atomText?: (paragraphId: string, offset: number) => string | null
 ): string {
+  // An atom paints as U+FFFC in the model text; a caller can spell it for plain text.
+  const spell = (paragraphId: string, text: string, start: number): string =>
+    atomText === undefined || !text.includes('\uFFFC')
+      ? text
+      : text.replace(
+          /\uFFFC/g,
+          (atom, index: number) => atomText(paragraphId, start + index) ?? atom
+        );
   if (from.paragraphId === to.paragraphId) {
-    return paragraphTextFromLayout(layout, from.paragraphId).slice(from.offset, to.offset);
+    return spell(
+      from.paragraphId,
+      paragraphTextFromLayout(layout, from.paragraphId).slice(from.offset, to.offset),
+      from.offset
+    );
   }
   const effectiveOrder = order ?? documentOrder(layout);
   const firstIndex = effectiveOrder.indexOf(from.paragraphId);
   const lastIndex = effectiveOrder.indexOf(to.paragraphId);
   if (firstIndex === -1 || lastIndex === -1) return '';
   const ids = effectiveOrder.slice(firstIndex, lastIndex + 1);
-  let text = paragraphTextFromLayout(layout, from.paragraphId).slice(from.offset);
+  let text = spell(
+    from.paragraphId,
+    paragraphTextFromLayout(layout, from.paragraphId).slice(from.offset),
+    from.offset
+  );
   for (let index = 1; index < ids.length; index += 1) {
     const paragraphId = ids[index]!;
     const whole = paragraphTextFromLayout(layout, paragraphId);
@@ -159,7 +176,9 @@ export function selectedTextIn(
     const separator = mergedPredecessorsOf(layout, paragraphId).includes(ids[index - 1]!)
       ? ''
       : '\n';
-    text += separator + (index === ids.length - 1 ? whole.slice(0, to.offset) : whole);
+    text +=
+      separator +
+      spell(paragraphId, index === ids.length - 1 ? whole.slice(0, to.offset) : whole, 0);
   }
   return text;
 }
