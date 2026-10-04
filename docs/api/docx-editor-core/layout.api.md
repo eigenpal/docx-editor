@@ -4210,6 +4210,7 @@ export interface StyleCascadeTable {
     readonly themeFonts: ThemeFonts;
     // (undocumented)
     readonly typography?: CjkTypographySettings;
+    readonly unstretchedManualBreakLines?: true;
 }
 
 // @public (undocumented)

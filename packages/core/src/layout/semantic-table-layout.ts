@@ -51,7 +51,7 @@ import {
   type ParagraphLayoutCache,
 } from './layout-cache.ts';
 import { alignDrawings, alignSpans, type PendingLine } from './paragraph-flow.ts';
-import { lineAlignOffset } from './paragraph-alignment.ts';
+import { cellLineSetsLikeLastLine, lineAlignOffset } from './paragraph-alignment.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
 import { resolvedParagraphMarkChangeSites } from './revision-formatting-projection.ts';
 import { isEmptyCellTerminator, paragraphMergeGroupOf } from './story-roots.ts';
@@ -681,7 +681,7 @@ function placeCellParagraph(
       lineIndent,
       lineAvailableWidth,
       alignment,
-      isLastLine,
+      cellLineSetsLikeLastLine(props, pendingLine, isLastLine, deps.styleCascade),
       alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined,
       rtl,
       options?.inTableCell === true,

@@ -6,6 +6,7 @@ import { numberingParagraphProperties } from './numbering-paragraph-properties.t
 import { numberingLevelRank } from './numbering-level-tier.ts';
 import { withLineGrid } from './line-grid.ts';
 import { compatibilityProfileFromSettings } from './compatibility/compatibility-profile.ts';
+import { cascadeCompatibility } from './compatibility/cascade-compatibility.ts';
 // Layout-side paragraph style cascade (styles.xml → semantic layout).
 //
 // The canonical tree keeps `w:pStyle` / `w:rStyle` and direct `rPr`/`pPr` as authored. Layout
@@ -98,6 +99,11 @@ export interface StyleCascadeTable {
    * spacing is a fixed 5pt before and 10pt after.
    */
   readonly fixedParagraphSpacing?: true;
+  /**
+   * `w:doNotExpandShiftReturn`: a justified line ending in a manual line break keeps its
+   * natural spacing, as a last line does.
+   */
+  readonly unstretchedManualBreakLines?: true;
   /** Explicit compatibility opt-in to the unmodified ISO table style hierarchy. */
   readonly strictTableStyleHierarchy?: boolean;
   readonly typography?: CjkTypographySettings;
@@ -456,21 +462,7 @@ export function buildStyleCascadeTable(
   const ligaturesEnabled = compatibility.has('optionalLigatures');
   const ligatureCompatibility = ligaturesEnabled ? {} : { disableOptionalLigatures: true as const };
   const strictTableHierarchy = compatibility.has('strictTableStyleHierarchy');
-  const settingsCompatibility = {
-    ...(compatibility.has('preserveExactLineBaseline')
-      ? { preserveExactLineBaseline: true as const }
-      : {}),
-    ...(compatibility.has('adjustLineHeightInTable')
-      ? { adjustLineHeightInTable: true as const }
-      : {}),
-    ...(compatibility.has('ignoreIndentAsNumberingTabStop')
-      ? { ignoreIndentAsNumberingTabStop: true as const }
-      : {}),
-    ...(compatibility.has('doNotBreakWrappedTables')
-      ? { doNotBreakWrappedTables: true as const }
-      : {}),
-    ...(compatibility.has('fixedParagraphSpacing') ? { fixedParagraphSpacing: true as const } : {}),
-  };
+  const settingsCompatibility = cascadeCompatibility(compatibility);
   const styles = new Map<string, StyleDefinition>();
   const theme = themeCacheMaterial(themeFonts);
   if (!stylesRoot) {
