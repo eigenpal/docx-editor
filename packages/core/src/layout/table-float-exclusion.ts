@@ -382,15 +382,13 @@ function breaksAtPageBottom(
     return false;
   // The opening rows are the header prefix, which moves as one group, and the first body row.
   let top = flowTop(flow) + float.yPt;
-  // Measured as placed: a floating table's cells never wrap around another floating table.
-  const cellDeps = withoutFloatingTableZones(deps);
   for (const [index, row] of structure.rows.entries()) {
     top += measureRowHeight(
       row,
       structure.columnWidthsPt,
       left,
       0,
-      index === 0 ? firstRowContentDeps(structure, row, cellDeps) : cellDeps,
+      index === 0 ? firstRowContentDeps(structure, row, deps) : deps,
       structure.cellSpacingPt
     );
     if (top > flow.bottom + 0.001) return false;
@@ -601,32 +599,25 @@ export function placedFloatObstacles(
   fragments: readonly BlockFragmentRecord[],
   deps: TableFlowDeps
 ): NoOverlapObstacle[] {
-  const obstacles: NoOverlapObstacle[] = [];
-  // Floating tables an earlier section left on this sheet. Their own setting is not known
-  // here, so only a table that itself refuses overlap moves off them.
-  for (const zone of deps.pageExclusionZones?.() ?? []) {
-    if (!zone.earlierSection || zone.sourceKind !== 'table') continue;
-    const band = zone.verticalBand;
-    obstacles.push({
-      left: band.x,
-      top: band.y,
-      right: band.x + band.width,
-      bottom: band.y + band.height,
-      refusesOverlap: false,
-    });
-  }
-  for (const fragment of fragments) {
-    if (fragment.kind !== 'table' || !fragment.floatingWrap) continue;
-    const distances = fragment.floatingWrap.float.distances ?? NO_DISTANCES;
-    obstacles.push({
-      left: fragment.box.x - distances.left,
-      top: fragment.box.y - distances.top,
-      right: fragment.box.x + fragment.box.width + distances.right,
-      bottom: fragment.box.y + fragment.box.height + distances.bottom,
-      refusesOverlap: deps.floatRefusesOverlap?.(fragment.tableId) ?? false,
-    });
-  }
-  return obstacles;
+  // The wrap bands text already avoids, outer rules included. Floating tables an earlier
+  // section left on this sheet join them; their own setting is not known here, so only a
+  // table that itself refuses overlap moves off them.
+  const layout = Object.freeze({ columnCount: 1, columnGapPt: 0, contentWidth: Infinity });
+  const zones = [
+    ...(deps.pageExclusionZones?.() ?? []).filter(
+      (zone) => zone.earlierSection && zone.sourceKind === 'table'
+    ),
+    ...(addFloatingTableExclusions([{ fragments }], new Map(), layout).get(0) ?? []),
+  ];
+  return zones.map((zone) => ({
+    left: zone.verticalBand.x,
+    top: zone.verticalBand.y,
+    right: zone.verticalBand.x + zone.verticalBand.width,
+    bottom: zone.verticalBand.y + zone.verticalBand.height,
+    refusesOverlap:
+      !zone.earlierSection &&
+      (deps.floatRefusesOverlap?.(zone.drawingNodeId.slice('table:'.length)) ?? false),
+  }));
 }
 
 /**

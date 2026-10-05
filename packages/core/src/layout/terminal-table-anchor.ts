@@ -9,7 +9,6 @@ import {
 import { framedTokenJoin } from './layout-cache.ts';
 import { readTableStructure, type TableAnchorFrames } from './semantic-table.ts';
 import { positionedTableOriginX } from './table-origin.ts';
-import { withoutFloatingTableZones } from './table-float-overlap.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import {
   createTableBorderOwnershipBudget,
@@ -292,7 +291,7 @@ export function placeTerminalTextTables(
   let bottom = cursorY + anchorHeight;
   let probeLine = 0;
   const probeDeps: TableFlowDeps = {
-    ...stripAnchorSinksForProbe(withoutFloatingTableZones(input.deps)),
+    ...stripAnchorSinksForProbe(input.deps),
     onCellBreakKey: undefined,
     borderOwnershipBudget: createTableBorderOwnershipBudget(),
     vMergeResolveBudget: createTableVMergeResolveBudget(),
