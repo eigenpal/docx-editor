@@ -1,5 +1,39 @@
 # @docx-editor.dev/core
 
+## 2.26.0
+
+### Minor Changes
+
+- 5799fda: Rename the default font exports to `DEFAULT_FONT`, `DefaultFontFamily`, `DEFAULT_FONT_FAMILIES`, and `ALL_DEFAULT_FONT_FAMILIES`. The previous names still work and are deprecated.
+- 6f356f2: Inline pictures take their correct position, caret, and paragraph mark in left-to-right and right-to-left text and beside floating objects. Fixes #1058
+- 9cceda8: The automation API exposes floating and inline shapes through `Body.shapes` and `Paragraph.shapes`, and a text box's `Shape.body` reads, searches, edits, and reviews its text like any body, so the owner story's tracked changes, `acceptAll`, and `rejectAll` no longer include text box changes. Saving writes edited text box text into the legacy VML copy too, and a paragraph that anchors a floating shape no longer reads an object character. Fixes #1070
+- ffe4071: Render display equations, paste equations from Microsoft Word and MathML as editable equations, and copy equations to Microsoft Word and other applications. Fixes #1063
+
+### Patch Changes
+
+- 2a6d159: Size AutoFit table columns from their content: a column widens to hold its widest unbroken word, columns whose cells state no width take their content's width, a spanning cell widens the columns it spans, a nested fixed table fits its cell, and cell spacing separates cells by twice its value. Fixes #1067
+- 4e9e3ef: Lay out a table cell paragraph that continues across many pages in time linear in its length, and keep a cell paragraph's indents next to a floating picture that sits beside the cell or above the paragraph. Fixes #1068
+- ffe4071: Preserve equations and optional hyphens when rich paste merges paragraphs with local namespace declarations.
+- 42c6c26: Lay out documents that declare compatibility mode 16 or later as mode 15, align fixed table content in every legacy mode, and split footnotes below their references in every mode.
+- 03edc1d: Read decimal and unit-suffixed twips values in page, column, paragraph, tab, and table properties, so a document with decimal column widths no longer lays out one character per line, and keep stated column widths and gaps when they do not fit the page.
+- 2399ed9: Documents that set `w:doNotExpandShiftReturn` keep the natural spacing of a justified line that ends in a manual line break. Fixes #1093
+- 6da4b6a: Fix invisible input-method composition text in empty paragraphs and beside inline pictures on lines without text.
+- 6da4b6a: Use available fallback fonts when an earlier export font exceeds the shaping limit, and report the rejected source.
+- 5e6c3c5: Line breaks and page breaks inside a field result now break the line or page, and REF fields keep line breaks from their bookmarked text.
+- 5955c48: Wrap an unbroken field result, such as a URL in a HYPERLINK field, at the line edge instead of painting it across neighboring table cells or past the right margin. A space after a word that is cut at the line edge now stays at the end of that line instead of starting the next one. Fixes #1065
+- 8c2b7ed: Render, edit, and search inline text boxes, and inset text box content by half its outline width.
+- 7803d5c: Justified right-to-left lines now fit between the margins, and the space at the end of a justified line hangs in the margin, also before a line break. A justified line that ends in a page or column break is no longer stretched. Fixes #1092
+- 6cf7b9f: Lay out, copy, and paste documents that omit their default run or paragraph properties with 12pt text and the default paragraph spacing, instead of 10pt text with no spacing. Fixes #1075
+- 774ea4d: Non-breaking and optional hyphens are now characters of paragraph text (U+001E and U+001F), so text reads, search, selection, and deletion include them, inserted U+001E and U+001F become hyphens, and deleting text across a symbol removes it. Paragraph offsets after a hyphen move by one. Fixes #1071
+- a4d6f8d: Lines now break at optional hyphens when a word does not fit, and the line ends with a visible hyphen, including in right-to-left paragraphs. A U+00AD character in run text shows as a hyphen, copies as itself, and in search matches only itself.
+- c6a061c: Documents that declare compatibility mode 14 or earlier, or no mode, stretch a justified line that ends in a page or column break to both margins. Fixes #1095
+- cd0202f: Break tables positioned against the page or margin across pages when they reach below the bottom margin, so rows past the first page are no longer hidden below it. Fixes #1074
+- 6da4b6a: Preserve right-to-left word order around field and note marks displayed with ASCII decimal digits. Fixes #1079
+- 77e1010: Place the trailing spaces of mixed-direction lines beside the text they follow, so right-to-left paragraph lines no longer run past the right margin, and spaces whose direction differs from their run or paragraph take room on the line instead of hanging. Fixes #1061
+- 7b96dfc: A symbol is now one character of paragraph text that reads as "(", so the caret steps over it in one move, Backspace and Delete remove it, and search never matches it. Paragraph offsets after a symbol move by one.
+- 36390bf: Deleting the row where a vertical merge starts now moves the merge start to the next row instead of leaving a continuation with nothing to continue, `Table.deleteRows()` accepts tables with merged cells, and a continuation cell with no merged cell above it starts its own merge instead of hiding its content. Fixes #1069
+- Updated dependencies: @docx-editor.dev/i18n@2.26.0
+
 ## 2.25.0
 
 ### Minor Changes

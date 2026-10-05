@@ -1,5 +1,11 @@
 # @docx-editor.dev/pro
 
+## 2.26.0
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.26.0, @docx-editor.dev/react@2.26.0, @docx-editor.dev/vue@2.26.0
+
 ## 2.25.0
 
 ### Minor Changes
