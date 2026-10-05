@@ -711,9 +711,8 @@ function layoutBlocksPass(
   /**
    * What the body flow measures a page-field placeholder against.
    *
-   * The section's `w:pgNumType/@w:fmt` rides along because the placeholder and the value that
-   * replaces it have to agree about whether a `\#` picture applies — see
-   * {@link numericPictureApplies}. A section is one format, so this is fixed for the pass.
+   * The section's `w:pgNumType/@w:fmt` rides along as the format a PAGE field without
+   * switches renders in. A section is one format, so this is fixed for the pass.
    */
   const bodyPageFieldContext: BodyPageFieldContext = Object.freeze(
     options.bodyPageNumberFormat !== undefined ? { format: options.bodyPageNumberFormat } : {}

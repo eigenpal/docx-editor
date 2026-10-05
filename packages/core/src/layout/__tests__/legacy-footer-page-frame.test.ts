@@ -188,7 +188,7 @@ test('an instruction split across instrText runs still takes the frame lane', ()
 test('switches the page-field projection does not evaluate stay in ordinary flow', () => {
   // The lane must never claim a field whose value the page context will not refresh; the
   // cached text would then repeat on every page.
-  for (const instruction of ['PAGE \\* roman \\* MERGEFORMAT', ' PAGE \\* Arabic ']) {
+  for (const instruction of ['PAGE \\* Ordinal \\* MERGEFORMAT', ' PAGE \\* CardText ']) {
     const story = layoutHeaderFooterStory(
       partOf(body.replace(' PAGE ', instruction)),
       400,

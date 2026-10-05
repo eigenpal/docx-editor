@@ -515,7 +515,7 @@ export function unmergedPiecesOfParagraphForDisplay(
           const formData = legacyFormFieldDataOf(grand);
           pending = {
             kind: null,
-            picture: null,
+            pageSwitches: {},
             symbolSpec: null,
             linkSpec: null,
             formSpec: null,
@@ -570,9 +570,9 @@ export function unmergedPiecesOfParagraphForDisplay(
           // Capture the allowlisted kind whether or not a page context is present. With one
           // (header/footer) the flush projects the live value; without one (body) it paints a
           // placeholder the kind marks, and document finalize substitutes the page's value.
-          // The `\#` picture rides along: it decides how that computed value is rendered.
+          // The `\#` picture and `\*` number format ride along: they decide how it renders.
           pending.kind = match?.kind ?? null;
-          pending.picture = match?.picture ?? null;
+          pending.pageSwitches = match ?? {};
           // Capture the SYMBOL / HYPERLINK / form-field spec while the machine still holds the
           // raw instruction (`onFldCharEnd` resets the buffer before the flush reads anything).
           // Nesting overflow refuses exactly as PAGE projection does: a >4-deep hostile field

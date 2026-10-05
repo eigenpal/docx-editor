@@ -21,6 +21,7 @@ import type { ButtonFieldSpec } from './field-button.ts';
 import type { DocPropertyField } from './field-doc-property.ts';
 import type { FormFieldKind } from './field-form.ts';
 import type { AllowlistedPageField } from './field-instruction.ts';
+import type { PageFieldNumberFormat, PageFieldSwitches } from './field-page-switches.ts';
 import type { AutonumFieldSpec } from './field-autonum.ts';
 import type { HyperlinkFieldSpec } from './field-link.ts';
 import type { PageRefFieldProjection, RefFieldSpec } from './field-ref.ts';
@@ -98,6 +99,8 @@ export interface FieldAtomMarker {
     readonly kind: AllowlistedPageField;
     /** The field's `\#` numeric picture, applied when finalize substitutes the value. */
     readonly picture?: string;
+    /** The field's `\*` number format, applied when finalize substitutes the value. */
+    readonly numberFormat?: PageFieldNumberFormat;
   };
   /**
    * A BODY `PAGEREF` atom whose value is the page number its bookmark target lands on.
@@ -371,12 +374,12 @@ export interface PendingFieldProjection {
   /** Allowlisted kind when live-projecting; null paints inert cached text at the atom. */
   kind: AllowlistedPageField | null;
   /**
-   * The `\#` numeric picture of {@link kind}, or null when the field states none.
+   * The `\#` picture and `\*` number format of {@link kind}; empty when the field states none.
    *
    * Captured beside the kind, and for the same reason the specs below are: the machine's
    * instruction buffer is reset before the flush runs.
    */
-  picture: string | null;
+  pageSwitches: PageFieldSwitches;
   /**
    * Parsed SYMBOL instruction, or null when the field is not one.
    *
