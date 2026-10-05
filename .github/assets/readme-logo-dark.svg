@@ -1,5 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="320" height="90" viewBox="0 0 284 80" fill="none" role="img" aria-labelledby="title">
   <title id="title">DOCX Editor by EigenPal</title>
+  <rect width="284" height="80" rx="8" fill="#0d1117" />
   <!-- Artwork shared with examples/shared/BrandLogo.tsx. -->
   <svg x="8" y="13" width="38" height="54" viewBox="0 0 70 100">
       <path
