@@ -76,7 +76,7 @@ function lastSegmentEndingAt(offsets: ParagraphOffsetIndex, runId: string, offse
 const holdsControl = new WeakMap<OoxmlParagraphNode, boolean>();
 
 /** Whether any content control sits inside the paragraph. Paragraph nodes are immutable. */
-function holdsContentControl(paragraph: OoxmlParagraphNode): boolean {
+export function holdsContentControl(paragraph: OoxmlParagraphNode): boolean {
   let held = holdsControl.get(paragraph);
   if (held === undefined) {
     const walk = (node: OoxmlNode): boolean =>
@@ -105,4 +105,27 @@ function parentWithin(parent: OoxmlElement, id: string): OoxmlElement | null {
     if (found) return found;
   }
   return null;
+}
+
+/**
+ * Every control in the paragraph that typing cannot enter and whose content starts or ends at
+ * `offset`, wrapped in a revision or a hyperlink or not.
+ */
+export function restrictedControlsWithEdgeAt(
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  offsets: ParagraphOffsetIndex
+): OoxmlElement[] {
+  if (!holdsContentControl(paragraph)) return [];
+  const found: OoxmlElement[] = [];
+  const walk = (node: OoxmlNode): void => {
+    if (node.kind === 'textValue') return;
+    if (isContentControlNode(node) && refusesTypedContent(node)) {
+      const span = offsets.spanOf(node);
+      if (span !== null && (span.start === offset || span.end === offset)) found.push(node);
+    }
+    node.children.forEach(walk);
+  };
+  paragraph.children.forEach(walk);
+  return found;
 }

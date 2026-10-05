@@ -66,6 +66,9 @@ const control = (properties: string, held: string): string =>
   `<w:sdt><w:sdtPr>${properties}</w:sdtPr>` +
   `<w:sdtContent><w:r><w:t>${held}</w:t></w:r></w:sdtContent></w:sdt>`;
 const run = (text: string): string => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
+const ins = (inner: string): string =>
+  `<w:ins w:id="9" w:author="A" w:date="2026-01-01T00:00:00Z">${inner}</w:ins>`;
+const link = (inner: string): string => `<w:hyperlink w:anchor="target">${inner}</w:hyperlink>`;
 
 /** Paragraph layouts that put a restricted control's edge at `offset`. */
 function layouts(properties: string) {
@@ -79,6 +82,23 @@ function layouts(properties: string) {
       offset: 2,
     },
     { name: 'at the trailing edge', body: run('ab') + control(properties, 'CC'), offset: 4 },
+    // A tracked insertion of a chip writes exactly this shape.
+    {
+      name: 'inside w:ins at the paragraph start',
+      body: ins(control(properties, 'CC')),
+      offset: 0,
+    },
+    {
+      name: 'inside w:ins after text',
+      body: run('ab') + ins(control(properties, 'CC')),
+      offset: 2,
+    },
+    {
+      name: 'between two w:ins chips',
+      body: ins(control(properties, 'CC')) + ins(control(properties, 'DD')),
+      offset: 2,
+    },
+    { name: 'inside a hyperlink', body: link(control(properties, 'CC')), offset: 0 },
   ];
 }
 
@@ -134,6 +154,7 @@ describe('an insertion at the edge of a control that typing cannot enter', () =>
       });
 
       test(`${kind} ${layout.name}: no point insert reaches inside`, () => {
+        let written = 0;
         for (const [name, build] of POINT_OPS) {
           const part = parseDoc(`<w:p>${layout.body}</w:p>`);
           const before = contentControlsIn(part.root).map(
@@ -141,6 +162,7 @@ describe('an insertion at the edge of a control that typing cannot enter', () =>
           );
           const result = applyTreeOp(part, build(firstParagraph(part).id, layout.offset));
           if (!result.ok) continue;
+          written += 1;
           // Compared by id: `insertInlineContentControl` adds a control of its own beside them.
           const after = new Map(
             contentControlsIn(result.part.root).map((entry) => [
@@ -151,6 +173,8 @@ describe('an insertion at the edge of a control that typing cannot enter', () =>
           for (const [id, text] of before)
             expect({ name, text: after.get(id) }).toEqual({ name, text });
         }
+        // Refusing every op would pass the loop above vacuously.
+        expect(written).toBeGreaterThan(0);
       });
     }
 

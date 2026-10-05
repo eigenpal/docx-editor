@@ -36,7 +36,11 @@ import {
   inlineContainersOf,
   isContentControlNode,
 } from './tree-op-nodes.ts';
-import { besideRestrictedControl } from './tree-op-restricted-edge.ts';
+import {
+  besideRestrictedControl,
+  holdsContentControl,
+  restrictedControlsWithEdgeAt,
+} from './tree-op-restricted-edge.ts';
 
 /**
  * A paragraph-level equation: inline `m:oMath` or a display `m:oMathPara`. Its internal OMML
@@ -521,16 +525,21 @@ function besideRestrictedControlAt(
 }
 
 /**
- * Whether an unowned insertion at `offset` lands beside a restricted control's edge rather
- * than where the default rule puts it. Validation reads this so it checks the same place.
+ * Whether an unowned insertion at `offset` lands beside a control that typing cannot enter,
+ * at that control's edge, rather than in the run the default rule reads. Validation then
+ * checks the place the insert actually lands. That covers a control wrapped in a revision or
+ * a hyperlink too, where the default site already leaves the wrapper.
  */
 export function insertsBesideRestrictedControl(
   paragraph: OoxmlParagraphNode,
   offset: number,
   bias: 'left' | 'right' = 'left'
 ): boolean {
-  const site = rawInsertionSite(paragraph, offset, null, bias);
-  return besideRestrictedControlAt(paragraph, offset, site) !== null;
+  if (!holdsContentControl(paragraph)) return false;
+  const controls = restrictedControlsWithEdgeAt(paragraph, offset, paragraphOffsetIndex(paragraph));
+  if (controls.length === 0) return false;
+  const landingId = siteLandingNodeId(insertionSite(paragraph, offset, null, bias));
+  return controls.every((control) => !containsNode(control, landingId));
 }
 
 /** The closing marker at a legacy text form's trailing caret boundary. */
