@@ -2,6 +2,7 @@ import { afterEach, expect, test } from 'bun:test';
 import { getReleasePlan } from '@changesets/get-release-plan';
 import { execFileSync } from 'node:child_process';
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -32,6 +33,10 @@ test('releases public packages without versioning private workspaces', async () 
   const read = (path: string) => JSON.parse(readFileSync(join(root, path), 'utf8'));
   const config = read('.changeset/config.json');
   write('.changeset/config.json', config);
+  // The config names the repository changelog generator by relative path.
+  const generator = 'scripts/changesets/changelog.mjs';
+  mkdirSync(join(directory, dirname(generator)), { recursive: true });
+  copyFileSync(join(root, generator), join(directory, generator));
   // Workspace discovery uses the lockfile to identify Bun projects.
   write('bun.lock', {});
   write('package.json', {
@@ -86,6 +91,16 @@ test('releases public packages without versioning private workspaces', async () 
     expect(manifest.version).toBe(version);
     expect(existsSync(join(directory, dirname(path), 'CHANGELOG.md'))).toBe(false);
   }
+  // A dependent package gets one dependency line, not one line per changeset.
+  const markdownChangelog = readFileSync(
+    join(directory, 'packages/docx-to-markdown/CHANGELOG.md'),
+    'utf8'
+  );
+  const fonts = plan.releases.find((r) => r.name === '@docx-editor.dev/fonts');
+  expect(markdownChangelog).toContain(
+    `- Updated dependencies: ${fonts?.name}@${fonts?.newVersion}`
+  );
+  expect(markdownChangelog).not.toContain('Updated dependencies [');
   // Nuxt follows the local Vue package without a versioned range that can drift
   // when Changesets updates dependencies but leaves private package versions alone.
   const nuxt = JSON.parse(readFileSync(join(directory, 'packages/nuxt/package.json'), 'utf8'));
