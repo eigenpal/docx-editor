@@ -516,8 +516,8 @@ export function requiredAnchorBand(
   const placed = here.length > 0 ? placedFloatObstacles(placement.earlier, deps) : [];
   // Overlap avoidance only runs when a table involved refuses overlap.
   const avoids =
-    [...here, ...waiting.map((entry) => entry.anchor)].some((anchor) =>
-      tableRefusesOverlap(anchor.table)
+    [...here, ...waiting.map((entry) => entry.anchor)].some(
+      (anchor) => deps.floatRefusesOverlap?.(anchor.table.id) ?? tableRefusesOverlap(anchor.table)
     ) || placed.some((obstacle) => obstacle.refusesOverlap);
   const prospective: NoOverlapObstacle[] = [];
   if (avoids) {
@@ -583,9 +583,14 @@ export function positionedTableStart(
 ): { readonly anchorY: number; readonly dx: number } {
   const earlier = pageFragments.slice(0, anchorFragmentIndex);
   const clearedY = clearEarlierText(table, anchorY, width, frames, earlier, deps);
-  const obstacles = placedFloatObstacles(pageFragments, deps);
-  if (!tableRefusesOverlap(table) && !obstacles.some((obstacle) => obstacle.refusesOverlap))
+  const refuses = (fragment: BlockFragmentRecord) =>
+    fragment.kind === 'table' &&
+    !!fragment.floatingWrap &&
+    (deps.floatRefusesOverlap?.(fragment.tableId) ?? false);
+  // The common story has no no-overlap table: skip building obstacles at all.
+  if (!tableRefusesOverlap(table) && !pageFragments.some(refuses))
     return { anchorY: clearedY, dx: 0 };
+  const obstacles = placedFloatObstacles(pageFragments, deps);
   const shift = noOverlapPlacement(table, clearedY, width, frames, deps, obstacles);
   // The anchor's band priced the moves it could see. A table that a later move would push
   // below the page keeps its authored place rather than painting into the bottom margin.

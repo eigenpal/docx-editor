@@ -37,6 +37,38 @@ export function earlierSectionZones(
   drawingLayout: InlineDrawingLayoutContext | undefined
 ): readonly ExclusionZone[] {
   if (!host.contentBox || !host.fragments) return Object.freeze([]);
+  // The host sheet record is reused while nothing on it changes, so every pass of this section
+  // (reflow, column balance, the next keystroke) shares one result.
+  const memo = earlierZonesMemo.get(host);
+  if (
+    memo &&
+    memo.contentLeft === contentLeft &&
+    memo.contentWidth === contentWidth &&
+    memo.drawingLayout === drawingLayout
+  )
+    return memo.zones;
+  const zones = collectEarlierSectionZones(host, contentLeft, contentWidth, drawingLayout);
+  earlierZonesMemo.set(host, { contentLeft, contentWidth, drawingLayout, zones });
+  return zones;
+}
+
+const earlierZonesMemo = new WeakMap<
+  object,
+  {
+    readonly contentLeft: number;
+    readonly contentWidth: number;
+    readonly drawingLayout: InlineDrawingLayoutContext | undefined;
+    readonly zones: readonly ExclusionZone[];
+  }
+>();
+
+function collectEarlierSectionZones(
+  host: ContinuedPageHost,
+  contentLeft: number,
+  contentWidth: number,
+  drawingLayout: InlineDrawingLayoutContext | undefined
+): readonly ExclusionZone[] {
+  if (!host.contentBox || !host.fragments) return Object.freeze([]);
   const hostWidth = host.contentBox.width;
   const layout = Object.freeze({ columnCount: 1, columnGapPt: 0, contentWidth: hostWidth });
   const drawings =
