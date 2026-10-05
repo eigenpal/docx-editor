@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "An insertion at the leading edge of a content-locked, data-bound, checkbox or picture control resolved inside the control, so it was refused or wrote into a checkbox glyph.",
+  "after": "The insertion lands in a run beside the control at either edge. Inserts strictly inside a locked or bound control are still refused.",
+  "reason": "Peers replicate the resulting tree primitives, a run inserted beside a control, which released participants already apply with the same meaning. No shared format field changes.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-locked-control-edges.test.ts",
+    "packages/core/src/store/__tests__/content-control-restricted-edges.test.ts"
+  ],
+  "changeset": "type-beside-restricted-control-edge",
+  "migration": null
+}

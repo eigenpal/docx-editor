@@ -366,6 +366,21 @@ export function contentControlValueTypeOf(control: OoxmlNode): ContentControlVal
   return 'richText';
 }
 
+/**
+ * Whether typing can never enter this control: its content is locked (`contentLocked`,
+ * `sdtContentLocked`), bound to a data store (`w:dataBinding`), or a glyph or picture rather
+ * than text (`w14:checkbox`, `w:picture`).
+ *
+ * An unowned insertion at the outer edge of such a control lands beside it (`insertionSite`),
+ * and the keyboard never names one as the owner of a keystroke (`insertOwnerOf`). Entering it
+ * would be refused, or would write text into a checkbox glyph.
+ */
+export function refusesTypedContent(control: OoxmlNode): boolean {
+  if (declaredLockOf(control).content || isBoundContentControl(control)) return true;
+  const type = contentControlValueTypeOf(control);
+  return type === 'checkbox' || type === 'picture';
+}
+
 /** Ancestor content controls of a node, outermost first. */
 export function contentControlAncestorsOf(part: OoxmlPart, nodeId: string): OoxmlElement[] {
   const chain: OoxmlElement[] = [];

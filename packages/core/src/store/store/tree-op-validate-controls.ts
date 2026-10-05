@@ -47,7 +47,12 @@ import {
   listItemsOf,
   parseCheckboxValue,
 } from './tree-op-nodes.ts';
-import { insertionDestination, segmentsOf, fieldInsertionEndAt } from './tree-op-segments.ts';
+import {
+  insertionDestination,
+  insertsBesideRestrictedControl,
+  segmentsOf,
+  fieldInsertionEndAt,
+} from './tree-op-segments.ts';
 import type { TreeOpRejection } from './tree-op-types.ts';
 
 /**
@@ -70,7 +75,10 @@ export function contentControlAtCaret(
   if (start !== end) {
     return innermostContentControlAround(part, paragraph.id);
   }
-  if (fieldInsertionEndAt(paragraph, start)) {
+  if (
+    fieldInsertionEndAt(paragraph, start) ||
+    insertsBesideRestrictedControl(paragraph, start, bias)
+  ) {
     return innermostContentControlAround(
       part,
       insertionDestination(paragraph, start, null, bias).landingNodeId
@@ -128,7 +136,13 @@ export function rangeTouchesContentRestriction(
   end: number,
   bias?: 'left' | 'right'
 ): TreeOpRejection | null {
-  if (start === end && fieldInsertionEndAt(paragraph, start)) {
+  // The landing resolver moved this insert out of where the run rule below would put it, so
+  // validate the place it actually lands.
+  if (
+    start === end &&
+    (fieldInsertionEndAt(paragraph, start) ||
+      insertsBesideRestrictedControl(paragraph, start, bias))
+  ) {
     return nodeTouchesContentRestriction(
       part,
       insertionDestination(paragraph, start, null, bias).landingNodeId

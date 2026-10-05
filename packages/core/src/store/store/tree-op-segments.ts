@@ -36,6 +36,7 @@ import {
   inlineContainersOf,
   isContentControlNode,
 } from './tree-op-nodes.ts';
+import { besideRestrictedControl } from './tree-op-restricted-edge.ts';
 
 /**
  * A paragraph-level equation: inline `m:oMath` or a display `m:oMathPara`. Its internal OMML
@@ -477,8 +478,11 @@ export function insertionSite(
   owner: OoxmlNode | null,
   bias: 'left' | 'right' = 'left'
 ): InsertionSite {
-  const site = rawInsertionSite(paragraph, offset, owner, bias);
-  if (owner !== null || (site.kind !== 'newRun' && site.kind !== 'atRunIndex')) return site;
+  const raw = rawInsertionSite(paragraph, offset, owner, bias);
+  if (owner !== null) return raw;
+  // Beside a control typing cannot enter, then out of a deletion around wherever that is.
+  const site = besideRestrictedControlAt(paragraph, offset, raw) ?? raw;
+  if (site.kind !== 'newRun' && site.kind !== 'atRunIndex') return site;
   const target = site.kind === 'newRun' ? site.holder : site.run;
   const ancestors = [target, ...inlineContainersOf(paragraph, target.id)];
   if (
@@ -493,6 +497,40 @@ export function insertionSite(
   const index = holder.children.findIndex((child) => child.id === revision.id);
   const span = paragraphOffsetIndex(paragraph).spanOf(revision);
   return { kind: 'newRun', holder, index: index + (span && offset > span.start ? 1 : 0) };
+}
+
+/** The node a site writes into: the run it joins, or the node a run is minted in. */
+function siteLandingNodeId(site: InsertionSite): string {
+  if (site.kind === 'withinValue' || site.kind === 'atBoundary') {
+    return segmentAncestryNodeId(site.segment);
+  }
+  return site.kind === 'newRun' ? site.holder.id : site.run.id;
+}
+
+function besideRestrictedControlAt(
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  site: InsertionSite
+): InsertionSite | null {
+  return besideRestrictedControl(
+    paragraph,
+    offset,
+    siteLandingNodeId(site),
+    paragraphOffsetIndex(paragraph)
+  );
+}
+
+/**
+ * Whether an unowned insertion at `offset` lands beside a restricted control's edge rather
+ * than where the default rule puts it. Validation reads this so it checks the same place.
+ */
+export function insertsBesideRestrictedControl(
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  bias: 'left' | 'right' = 'left'
+): boolean {
+  const site = rawInsertionSite(paragraph, offset, null, bias);
+  return besideRestrictedControlAt(paragraph, offset, site) !== null;
 }
 
 /** The closing marker at a legacy text form's trailing caret boundary. */

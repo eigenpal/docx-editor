@@ -1385,8 +1385,9 @@ describe('showingPlcHdr first-input replacement', () => {
         '<w:text/>' +
         '</w:sdtPr><w:sdtContent><w:r><w:t>Prompt</w:t></w:r></w:sdtContent></w:sdt></w:p>'
     );
+    // Inside the prompt: at an outer edge the insert lands beside a bound control instead.
     expect(
-      rejectV2(part, { op: 'insertText', paragraphId: V2_PARAGRAPH, offset: 0, text: 'x' })
+      rejectV2(part, { op: 'insertText', paragraphId: V2_PARAGRAPH, offset: 2, text: 'x' })
     ).toBe('bound');
     expect(isShowingPlaceholder(firstSdtV2(part))).toBe(true);
   });
@@ -1482,30 +1483,29 @@ describe('boundary carets beside locked controls', () => {
     '<w:sdtContent><w:r><w:t>LOCK</w:t></w:r></w:sdtContent></w:sdt>' +
     '<w:r><w:t>zz</w:t></w:r></w:p>';
 
-  test('bias-right insert at the locked chip LEFT edge is refused, matching apply', () => {
-    // Apply honors bias: 'right' by joining the run AFTER the caret — the chip's own run.
-    // Validation must attribute the caret the same way, or the keystroke lands INSIDE the
-    // locked control (the exact bypass the shared leavesInlineContainer rule exists to
-    // prevent).
-    const part = loadV2(LOCKED);
-    expect(
-      rejectV2(part, {
+  test('an insert at the locked chip LEFT edge lands beside it, with either bias', () => {
+    // Entering a content-locked chip can only be refused, so the leading edge resolves beside
+    // the chip for both biases. Validation reads the same landing, so the write is allowed and
+    // the chip keeps its text. Before this, a chip at a paragraph start had no position before
+    // it that accepted a keystroke.
+    for (const bias of [undefined, 'right'] as const) {
+      const part = loadV2(LOCKED);
+      const next = applyV2(part, {
         op: 'insertText',
         paragraphId: V2_PARAGRAPH,
         offset: 2,
         text: 'X',
-        bias: 'right',
-      })
-    ).toBe('locked');
+        ...(bias ? { bias } : {}),
+      });
+      expect(paragraphTextOf(next, V2_PARAGRAPH)).toBe('aaXLOCKzz');
+      expect(collectTextV2(firstSdtV2(next))).toBe('LOCK');
+    }
   });
 
-  test('bias-left insert at the chip LEFT edge ENTERS the control, so a locked one refuses', () => {
-    // Word's rule: at a control's leading edge the run STARTING at the caret owns the
-    // insertion, so typing enters the control — and a content-locked chip refuses the
-    // keystroke rather than letting it in. Apply and validate agree.
+  test('an insert strictly inside the locked chip is still refused', () => {
     const part = loadV2(LOCKED);
     expect(
-      rejectV2(part, { op: 'insertText', paragraphId: V2_PARAGRAPH, offset: 2, text: 'X' })
+      rejectV2(part, { op: 'insertText', paragraphId: V2_PARAGRAPH, offset: 4, text: 'X' })
     ).toBe('locked');
   });
 

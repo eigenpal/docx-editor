@@ -151,9 +151,8 @@ describe('insertCustomNode', () => {
     expect(editor.surface!.session.bodyText()).toContain('LABELx');
   });
 
-  test('typing at the chip LEFT edge is refused — the caret would enter the locked label', () => {
-    // Word's rule: at a control's leading edge the insertion enters the control, and the
-    // content lock refuses it. One caret-step left types normally.
+  test('typing at the chip LEFT edge lands before the chip, never in its locked label', () => {
+    // A locked chip takes no typing, so its leading edge belongs to the text before it.
     const editor = mount('<w:p><w:r><w:t>before </w:t></w:r></w:p>');
     insertCustomNode(editor, citation, {
       attrs: { sourceId: 's1' },
@@ -165,9 +164,61 @@ describe('insertCustomNode', () => {
       head: { paragraphId: firstParagraphId(editor), offset: 7 },
     });
     editor.surface!.type('x');
+    editor.surface!.type('y');
     const [node] = recognizeCustomNodes(editor.surface!.session.part(), [citation]);
     expect(node?.text).toBe('LABEL');
-    expect(editor.surface!.session.bodyText()).toBe('before LABEL');
+    expect(editor.surface!.session.bodyText()).toBe('before xyLABEL');
+    expect(editor.surface!.state().lastRejection).toBeNull();
+  });
+
+  // #1121: a chip at the very start of a paragraph left no position before it that accepted a
+  // keystroke, because the only caret there was the chip's own leading edge.
+  test('typing before a chip at the start of a paragraph lands before it', () => {
+    const editor = mount('<w:p/>');
+    const paragraphId = firstParagraphId(editor);
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 's1' },
+      text: 'LABEL',
+      at: { paragraphId, offset: 0 },
+    });
+    const at = { paragraphId: firstParagraphId(editor), offset: 0 };
+    editor.surface!.setSelection({ anchor: at, head: at });
+    editor.surface!.type('S');
+    editor.surface!.type('o');
+    expect(editor.surface!.state().lastRejection).toBeNull();
+    expect(editor.surface!.session.bodyText()).toBe('SoLABEL');
+    expect(editor.surface!.state().selection.head.offset).toBe(2);
+    const [node] = recognizeCustomNodes(editor.surface!.session.part(), [citation]);
+    expect(node?.text).toBe('LABEL');
+    // Undoing the keystrokes restores the paragraph and leaves the chip whole.
+    editor.surface!.undo();
+    editor.surface!.undo();
+    expect(editor.surface!.session.bodyText()).toBe('LABEL');
+    expect(recognizeCustomNodes(editor.surface!.session.part(), [citation])[0]?.text).toBe('LABEL');
+  });
+
+  test('typing between two adjacent chips lands between them', () => {
+    const editor = mount('<w:p/>');
+    const paragraphId = firstParagraphId(editor);
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 'a' },
+      text: 'AAA',
+      at: { paragraphId, offset: 0 },
+    });
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 'b' },
+      text: 'BBB',
+      at: { paragraphId: firstParagraphId(editor), offset: 3 },
+    });
+    const at = { paragraphId: firstParagraphId(editor), offset: 3 };
+    editor.surface!.setSelection({ anchor: at, head: at });
+    editor.surface!.type(' ');
+    expect(editor.surface!.state().lastRejection).toBeNull();
+    expect(editor.surface!.session.bodyText()).toBe('AAA BBB');
+    const texts = recognizeCustomNodes(editor.surface!.session.part(), [citation]).map(
+      (n) => n.text
+    );
+    expect(texts).toEqual(['AAA', 'BBB']);
   });
 
   test('Backspace after the chip deletes the WHOLE node', () => {

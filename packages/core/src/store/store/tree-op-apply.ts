@@ -742,6 +742,16 @@ function applyInsertContent(
   }
 
   if (site.kind === 'atRunIndex') {
+    // Text right before the index takes plain typing in place, rather than gaining a sibling
+    // `w:t` per keystroke. Only that node: an earlier one would sit before the index.
+    const prior = site.run.children[site.index - 1];
+    const joined = prior
+      ? findLast(segments, (segment) => segment.runId === site.run.id && segment.end === offset)
+      : undefined;
+    if (joined && prior && contains(prior, joined.node.id)) {
+      const plain = insertIntoText(joined);
+      if (plain) return plain;
+    }
     return finishContentEdit(
       fromEdit(
         insertChildren(part, site.run.id, site.index, nodes, deferOptions(options, control)),
