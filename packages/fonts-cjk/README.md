@@ -1,3 +1,13 @@
+<p align="center">
+  <a href="https://www.docx-editor.dev/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/readme-logo-dark.svg" />
+      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/readme-logo-light.svg" />
+      <img src="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/readme-logo-light.svg" alt="DOCX Editor by EigenPal" width="320" height="90" />
+    </picture>
+  </a>
+</p>
+
 # @docx-editor.dev/fonts-cjk
 
 This package supplies Noto Sans CJK JP for Chinese, Japanese, and Korean text. The [`@docx-editor.dev/docx-to-pdf`](https://www.npmjs.com/package/@docx-editor.dev/docx-to-pdf) package uses it as an optional fallback. The font file is about 16 MB, so it ships separately.
