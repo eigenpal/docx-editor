@@ -28,6 +28,7 @@ import {
   type OoxmlPart,
 } from '../store/index.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
+import { PRO_REVIEW_REASON } from './opening-editing-mode.ts';
 
 /** Why `setActiveReviewItem` refused an item that `activatable` reports false for. */
 export function reviewActivationRefusal(item: ReviewItem): string {
@@ -38,7 +39,6 @@ export function reviewActivationRefusal(item: ReviewItem): string {
   const kind = item.kind === 'revision' ? item.revisionKind : item.kind;
   return `review items of kind '${kind}' are excluded from activation`;
 }
-import { PRO_REVIEW_REASON } from './opening-editing-mode.ts';
 
 interface ReviewCommandDependencies {
   surface(): PaginatedSurface | null;

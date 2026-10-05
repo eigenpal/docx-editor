@@ -616,9 +616,8 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights {
    * REPORTS, like {@link acceptReviewItem} and for the same reason. Activation is refused for
    * an item with no resolvable range, for a kind the host's rail excluded (see
    * {@link setReviewActivationExclusions}), for a custom node without `reviewCard`, and when
-   * the story it lives in will not open —
-   * and a host walking a queue with next/previous controls has no other way to learn that a
-   * step did nothing. Consult {@link ReviewItemPlacement.activatable} to avoid asking.
+   * the story it lives in will not open — and a host walking a queue with next/previous
+   * controls has no other way to learn that a step did nothing. Consult {@link ReviewItemPlacement.activatable} to avoid asking.
    */
   setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult;
 
@@ -877,8 +876,8 @@ export interface ReviewItemPlacementBase {
    * Whether {@link Editor.setActiveReviewItem} would take this key.
    *
    * False for an item with no resolvable range, for a custom node without `reviewCard`
-   * (`carded: false`), and for a revision kind the host's rail
-   * excluded through {@link Editor.setReviewActivationExclusions} — the queue still LISTS
+   * (`carded: false`), and for a revision kind the host's rail excluded through
+   * {@link Editor.setReviewActivationExclusions} — the queue still LISTS
    * those, because `getReviewItems` answers "what does this document hold" rather than "what
    * may be clicked", and a host filtering the two apart needs to be told which is which. A
    * card drawn for an item that cannot be activated is a card that does nothing when clicked.

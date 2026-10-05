@@ -183,6 +183,34 @@ describe('the active band', () => {
     expect(activation.ok ? '' : activation.reason).toContain('reviewCard');
     expect(pinnedKey).toBeNull();
   });
+
+  test('an enclosing comment stays active when the caret is in an uncarded node', () => {
+    // The uncarded node is the innermost item there. Skipping it must hand the caret to the
+    // comment around it, not leave nothing active.
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const bare = defineCustomNode({ name: 'citation', tagPrefix: 'acme' });
+    const editor = createDocxEditor({
+      container,
+      document: CITED,
+      modules: [reviewModule(), customNodesModule({ nodes: [bare] })],
+    });
+    const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 0 },
+      head: { paragraphId, offset: 35 },
+    });
+    expect(editor.addComment('check this', 'A').ok).toBe(true);
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 8 },
+      head: { paragraphId, offset: 8 },
+    });
+    const comment = editor.getReviewItems().find((entry) => entry.kind === 'comment');
+    expect(comment).toBeDefined();
+    expect(editor.surface!.activeReviewKey()).toBe(comment!.key);
+    editor.destroy();
+    container.remove();
+  });
 });
 
 describe('the review rail', () => {
