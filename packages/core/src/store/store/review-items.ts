@@ -221,7 +221,8 @@ export interface ReviewCustomItem {
    *
    * False for a definition with no `reviewCard`: the item exists so the chip's own surfaces can
    * read `attrs`, `text` and `data` off it, and the rail leaves it out. A surface listing cards
-   * filters on this rather than on an empty `title`.
+   * filters on this rather than on an empty `title`. An uncarded node never becomes the active
+   * review item, so it never shows the active highlight.
    */
   readonly carded: boolean;
   /** Card title, from the definition's `reviewCard` hook. Empty when `carded` is false. */

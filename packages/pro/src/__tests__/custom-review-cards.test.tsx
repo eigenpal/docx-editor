@@ -143,9 +143,17 @@ describe('the active band', () => {
       anchor: { paragraphId, offset: 8 },
       head: { paragraphId, offset: 8 },
     });
-    const result = {
+    const caret = {
       activeKey: editor.surface!.activeReviewKey(),
       activeBands: container.querySelectorAll('.docx-comment-band--active').length,
+    };
+    const placement = editor.getReviewItems().find((entry) => entry.kind === 'custom')!;
+    const activation = editor.setActiveReviewItem(placement.key);
+    const result = {
+      ...caret,
+      activatable: placement.activatable,
+      activation,
+      pinnedKey: editor.surface!.activeReviewKey(),
     };
     editor.destroy();
     container.remove();
@@ -153,18 +161,27 @@ describe('the active band', () => {
   }
 
   test('a carded node lights the band while the caret is inside it', () => {
-    const { activeKey, activeBands } = caretInsideNode(citation);
+    const { activeKey, activeBands, activatable, activation, pinnedKey } =
+      caretInsideNode(citation);
     expect(activeKey).not.toBeNull();
     expect(activeBands).toBeGreaterThan(0);
+    expect(activatable).toBe(true);
+    expect(activation.ok).toBe(true);
+    expect(pinnedKey).toBe(activeKey);
   });
 
-  test('a node without reviewCard never becomes active', () => {
+  test('a node without reviewCard never becomes active, by caret or by key', () => {
     // It used to: the item exists for the chip's own surfaces, so the caret activated it and
     // the band lit up for a card the rail never draws.
     const bare = defineCustomNode({ name: 'citation', tagPrefix: 'acme' });
-    const { activeKey, activeBands } = caretInsideNode(bare);
+    const { activeKey, activeBands, activatable, activation, pinnedKey } = caretInsideNode(bare);
     expect(activeKey).toBeNull();
     expect(activeBands).toBe(0);
+    // Refused out loud, and the placement says so up front, so a host never asks.
+    expect(activatable).toBe(false);
+    expect(activation).toMatchObject({ ok: false, code: 'unsupported' });
+    expect(activation.ok ? '' : activation.reason).toContain('reviewCard');
+    expect(pinnedKey).toBeNull();
   });
 });
 
