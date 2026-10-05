@@ -24,14 +24,11 @@ export function positionedTableOriginX(
   if (!float) return frames.text.left + tableOriginX(structure, frames.text.width);
   const width = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
   const origin = tableFloatOriginX(float, width, frames);
-  const cells = structure.rows[0]?.cells;
-  const first = cells?.[0];
+  const first = structure.rows[0]?.cells[0];
   if (
     !hasCompatibilityRule(compatibilityMode, 'floatingTableContentOrigin') ||
     structure.bidiVisual ||
-    structure.cellSpacingPt !== 0 ||
-    !first ||
-    first.gridColumn !== 0
+    structure.cellSpacingPt !== 0
   )
     return origin;
   // A right alignment moves by the table's own right cell margin, not a cell's `w:tcMar`.
@@ -39,6 +36,7 @@ export function positionedTableOriginX(
     if (origin - (float.distances?.left ?? 0) <= frames.text.left) return origin;
     return origin + structure.defaultMargins.right;
   }
+  if (!first || first.gridColumn !== 0) return origin;
   if (float.horzAnchor !== 'text' || float.vertAnchor !== 'text' || float.xSpec !== undefined)
     return origin;
   const inset = contentInsets(first.margins, first.contentBorders ?? first.borders).left;

@@ -545,7 +545,9 @@ export function positionedTableStart(
   frames: TableAnchorFrames,
   pageFragments: readonly BlockFragmentRecord[],
   anchorFragmentIndex: number,
-  deps: TableFlowDeps
+  deps: TableFlowDeps,
+  /** The page content bottom. A move down never takes the table past it. */
+  bottom: number
 ): { readonly anchorY: number; readonly dx: number } {
   const earlier = pageFragments.slice(0, anchorFragmentIndex);
   const clearedY = clearEarlierText(table, anchorY, width, frames, earlier, deps);
@@ -553,6 +555,10 @@ export function positionedTableStart(
   if (!tableRefusesOverlap(table) && !obstacles.some((obstacle) => obstacle.refusesOverlap))
     return { anchorY: clearedY, dx: 0 };
   const shift = noOverlapPlacement(table, clearedY, width, frames, deps, obstacles);
+  // The anchor's band priced the moves it could see. A table that a later move would push
+  // below the page keeps its authored place rather than painting into the bottom margin.
+  if (shift.dy > 0 && (shift.band?.bottom ?? 0) > bottom + 0.001)
+    return { anchorY: clearedY, dx: 0 };
   return { anchorY: clearedY + shift.dy, dx: shift.dx };
 }
 
@@ -562,6 +568,19 @@ export function placedFloatObstacles(
   deps: TableFlowDeps
 ): NoOverlapObstacle[] {
   const obstacles: NoOverlapObstacle[] = [];
+  // Floating tables an earlier section left on this sheet. Their own setting is not known
+  // here, so only a table that itself refuses overlap moves off them.
+  for (const zone of deps.pageExclusionZones?.() ?? []) {
+    if (!zone.earlierSection || zone.sourceKind !== 'table') continue;
+    const band = zone.verticalBand;
+    obstacles.push({
+      left: band.x,
+      top: band.y,
+      right: band.x + band.width,
+      bottom: band.y + band.height,
+      refusesOverlap: false,
+    });
+  }
   for (const fragment of fragments) {
     if (fragment.kind !== 'table' || !fragment.floatingWrap) continue;
     const distances = fragment.floatingWrap.float.distances ?? NO_DISTANCES;

@@ -802,7 +802,7 @@ function layoutBlocksPass(
     const hostZones = index === 0 ? continuedZones : undefined;
     if (hostZones) {
       if (hostZones.length) currentPageZones = Object.freeze([...bodyZones, ...hostZones]);
-    } else if (furnitureHasWrap) {
+    } else if (furnitureHoldsTables) {
       const box = pageBox(index);
       const insets = insetsFor(index);
       // Resolve furniture on the page being filled, including newly minted pages.
@@ -1960,7 +1960,8 @@ function layoutBlocksPass(
             anchorFrames(),
             pageFragments,
             anchorFragmentIndex,
-            tableDeps
+            tableDeps,
+            contentHeight()
           );
           layoutTableInFlow(table, start.anchorY, true, undefined, start.dx);
           registerTableCellBreakKeys(table, collectingCellBreakKeys);

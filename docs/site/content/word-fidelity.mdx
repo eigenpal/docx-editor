@@ -140,11 +140,11 @@ The table moves with its following paragraph when its first rows do not fit. The
 
 Text-anchored tables that use vertical alignment retain their normal flow behavior. Tables whose cells can wrap around earlier floating pictures or frames retain row pagination.
 
-A text-anchored table marked no-overlap floats like other tables, and text wraps around it. If it would cover an earlier floating table, it moves right of that table, so that their text distances touch. In compatibility mode 15 and later, it can also move left of that table. If neither side has room between the margins, it moves below that table. Floating tables without this setting can overlap one another. The cell text of a floating table never wraps around another floating table.
+A text-anchored table marked no-overlap floats like other tables, and text wraps around it. If it would cover an earlier floating table, it moves right of that table, so that their text distances touch. In compatibility mode 15 and later, it can also move left of that table. If neither side has room between the margins, it moves below that table. Floating tables without this setting can overlap one another. The cell text of a floating table placed at its anchor never wraps around another floating table.
 
 A continuous section that starts on the same page wraps its text beside the floating tables and wrapping pictures of earlier sections on that page. An ordinary table that would cover a floating table starts below it. A narrower table stays beside it.
 
-Before compatibility mode 15, a right-aligned floating table moves right by the right cell margin of the table, so that its cell text ends at the frame edge. Simple tables can share a terminal empty paragraph without shrinking that paragraph or adding a blank page. The editor preserves floating-table properties when you save. There are no controls for editing those properties.
+Before compatibility mode 15, a right-aligned floating table in the body moves right by the right cell margin of the table, so that its cell text ends at the frame edge. Simple tables can share a terminal empty paragraph without shrinking that paragraph or adding a blank page. The editor preserves floating-table properties when you save. There are no controls for editing those properties.
 
 When you compare a multipage table, check the space between each repeated header and its first body row. The table pagination note lists the shared-border measurement limits. Keep the original document when you report a spacing issue.
 

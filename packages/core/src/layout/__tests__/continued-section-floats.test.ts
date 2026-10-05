@@ -195,4 +195,25 @@ describe('continuous section beside an earlier float', () => {
       expect(warm.pages).toEqual(cold.pages);
     }
   });
+
+  test('a no-overlap table of the continued section moves off the earlier float', () => {
+    const noOverlap = table(
+      2880,
+      4,
+      'w:leftFromText="180" w:rightFromText="180" w:vertAnchor="text" w:tblpX="4320" w:tblpY="1"'
+    ).replace('<w:tblW', '<w:tblOverlap w:val="never"/><w:tblW');
+    const layout = layoutSemanticDocument(
+      document({ following: noOverlap + p('Anchor') + p(words('First')) }),
+      0,
+      { measurer, compatibilityMode: 15 }
+    );
+    const tables = fragments(layout).filter(
+      (fragment): fragment is TableFragmentRecord =>
+        fragment.kind === 'table' && isOutOfFlowTableFragment(fragment)
+    );
+    expect(tables).toHaveLength(2);
+    const [float, moved] = tables;
+    // No room on the right of the earlier float, so the table moves left of it.
+    expect(moved!.box.x + moved!.box.width).toBeLessThanOrEqual(float!.box.x - 18 + 0.001);
+  });
 });

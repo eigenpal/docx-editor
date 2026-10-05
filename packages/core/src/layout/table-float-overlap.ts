@@ -12,9 +12,10 @@
 // - Otherwise down, so that its band starts where the earlier band ends. It keeps its
 //   horizontal position, and the next collision is resolved the same way.
 //
-// Known limits: page- and margin-anchored tables keep their authored position, floats that an
-// earlier section left on a shared sheet are not obstacles here, and a page with more than
-// `MAX_NO_OVERLAP_OBSTACLES` refusing obstacles keeps every table where it was authored.
+// Known limits: page- and margin-anchored tables keep their authored position. A floating table
+// an earlier section left on a shared sheet moves only a later table that refuses overlap. A
+// table whose move down would cross the page bottom keeps its authored position, and so does
+// every table on a page with more than `MAX_NO_OVERLAP_OBSTACLES` refusing obstacles.
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import type { ExclusionZone } from './drawing-exclusion.ts';
@@ -134,9 +135,11 @@ export function noOverlapShift(
 export function withoutFloatingTableZones(deps: TableFlowDeps): TableFlowDeps {
   const zonesOf = deps.pageExclusionZones;
   if (!zonesOf) return deps;
+  const cached = withoutTableZones.get(deps);
+  if (cached) return cached;
   let source: readonly ExclusionZone[] | undefined;
   let filtered: readonly ExclusionZone[] = [];
-  return {
+  const derived: TableFlowDeps = {
     ...deps,
     pageExclusionZones: () => {
       const zones = zonesOf();
@@ -149,4 +152,9 @@ export function withoutFloatingTableZones(deps: TableFlowDeps): TableFlowDeps {
       return filtered;
     },
   };
+  withoutTableZones.set(deps, derived);
+  return derived;
 }
+
+/** One derived deps object per body pass, so memos keyed by deps keep working. */
+const withoutTableZones = new WeakMap<TableFlowDeps, TableFlowDeps>();

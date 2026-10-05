@@ -185,7 +185,29 @@ describe('tblOverlap never', () => {
       expect(warm.pages).toEqual(cold.pages);
     }
   });
+
+  test('a move down never takes a table past the page bottom', () => {
+    const lead = Array.from({ length: 38 }, (_, index) => p(`Lead${index}`)).join('');
+    const wide = { width: 5040, position: 'w:tblpXSpec="center"' };
+    const layout = layoutOf(part(lead + pairBody(wide, wide, p('Middle'))));
+    for (const page of layout.pages)
+      for (const fragment of page.fragments)
+        expect(fragment.box.y + fragment.box.height).toBeLessThanOrEqual(
+          page.contentBox.height + 0.001
+        );
+  });
 });
+
+/** The body of {@link pair}, without its own lead paragraph. */
+function pairBody(first: Partial<FloatSpec>, second: Partial<FloatSpec>, between = ''): string {
+  return (
+    table({ width: 4320, position: 'w:tblpX="0"', overlap: 'never', ...first }) +
+    between +
+    table({ width: 4320, position: 'w:tblpX="2880"', overlap: 'never', ...second }) +
+    p('Anchor') +
+    p('Next')
+  );
+}
 
 describe('noOverlapShift', () => {
   const distances = { top: 0, right: 9, bottom: 0, left: 9 };
