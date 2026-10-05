@@ -666,7 +666,7 @@ The replica rejects two write paths. It rejects an edited ProseMirror document. 
 
 The replica rejects tree edits when the session is destroyed, not ready, or not attached. A transport interruption pauses editing until reconnection. To continue editing, enable [`offlineEditing`](#edit-offline).
 
-The session undo manager treats one typing run as one undo step.
+The session undo manager treats one typing run as one undo step. Runs end at the same points as local undo steps. For the rules, see [Typing and undo](/docs/2.x/core#typing-and-undo).
 
 Repeated concurrent formatting, typing, deletion, and undo preserve document text across participants.
 

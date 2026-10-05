@@ -280,6 +280,7 @@ import { notePropertiesStateOf, notePreviewTextOf } from './surface-note-state.t
 import { createDerivationPrewarmSteps, scheduleDerivationPrewarm } from './derivation-prewarm.ts';
 import { runWithTransactionActor } from '../store/package/actor-scoped-ids.ts';
 import { CommitHistoryGroup, runWithHistoryGroup } from './history-group-scope.ts';
+import { TypingHistory } from './typing-history.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
@@ -552,6 +553,7 @@ export function mountPaginatedSurface(
     return false;
   }
   const commitHistoryGroup = new CommitHistoryGroup();
+  const typingHistory = new TypingHistory(() => session.currentPackage());
   const AUTHOR_WRITE_REFUSAL = 'suggesting needs an author before it can propose a change';
   /** Show-all content-control boundary chrome — surface furniture, never a layout input. */
   let showAllContentControls = false;
@@ -1057,6 +1059,7 @@ export function mountPaginatedSurface(
         );
       pendingFormats = { position: head, properties: next, base };
     }
+    typingHistory.end();
     // Not document state, but observable state: the toolbar's Bold must light up NOW,
     // and the snapshot cache invalidates on this report.
     caret.update();
@@ -1432,10 +1435,10 @@ export function mountPaginatedSurface(
     typeBuffer = '';
     flushingTypeBuffer = true;
     try {
-      // `surface` is assigned below; a flush can only run once a caller holds it. The
-      // keystrokes are their own undo step: a flush at the head of a grouped command must
-      // not fold them into that command's gesture.
-      runWithHistoryGroup(surface, undefined, () => surface.type(text));
+      // `surface` is assigned below; a flush can only run once a caller holds it. The flush
+      // binds the typing run's own group, never a grouped command's (`typing-history.ts`).
+      runWithHistoryGroup(surface, typingHistory.groupAt(selection), () => surface.type(text));
+      typingHistory.landed(selection);
     } catch (error) {
       // A throwing commit must not eat the keystrokes: put them back (ahead of
       // anything enqueued meanwhile, preserving order) for the next flush point.
@@ -1598,6 +1601,7 @@ export function mountPaginatedSurface(
     // re-arm afterwards, which happens after this fires), so this is only ever the
     // external case.
     pendingFormats = null;
+    if (!flushingTypeBuffer) typingHistory.noteForeignChange(modelChange);
     scheduler.notify(modelChange);
   });
   const collaborationPort = collaborationSession
@@ -3021,6 +3025,7 @@ export function mountPaginatedSurface(
     // the document and selection the user saw. Reentrancy-guarded: the flush
     // itself commits through here with an empty buffer.
     flushTypeBuffer();
+    if (!flushingTypeBuffer) typingHistory.end();
     // An edit invalidates the rectangle: its cells' content has changed, and the collapsed
     // DOM selection it installed still points at the PRE-edit anchor. Left standing it kept
     // painting a highlight over text that had moved, kept suppressing selection adoption, and
@@ -3181,12 +3186,11 @@ export function mountPaginatedSurface(
     // typing then clicking must not teleport the typed text to the click. A
     // same-position set (the selection mirror re-adopting the caret it painted,
     // which a browser echoes after every keystroke) is not a move and must not
-    // break the batch.
-    if (typeBuffer.length > 0 && moved) {
-      flushTypeBuffer();
-    }
+    // break the batch. A move also ends the typing run, even one that comes back later.
+    if (moved && typeBuffer.length > 0) flushTypeBuffer();
     const fieldSelection = textFormInteraction?.beforeSelect(next);
     if (fieldSelection === null) return;
+    if (moved && !flushingTypeBuffer) typingHistory.end();
     next = fieldSelection ?? next;
     // Moving the caret discards a stored caret format — Word's rule. Landing back on the
     // exact armed position (the mirror re-adopting the same caret) keeps it.
@@ -5469,6 +5473,7 @@ export function mountPaginatedSurface(
       // Batched typing becomes its own undo step BEFORE the rewind, so undo
       // first removes what was just typed rather than skipping past it.
       flushTypeBuffer();
+      typingHistory.end();
       if (collaborationSession) {
         if (collaborationSession.undo()) restoreSelection(null);
         return;
@@ -5484,6 +5489,7 @@ export function mountPaginatedSurface(
         return;
       }
       flushTypeBuffer();
+      typingHistory.end();
       if (collaborationSession) {
         if (collaborationSession.redo()) restoreSelection(null);
         return;
