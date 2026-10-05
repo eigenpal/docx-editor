@@ -14,6 +14,7 @@ import { packageFingerprint, saveReopenDigest } from './document-support.ts';
 
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 const harness = createPeerHarness('typing-history');
+const offlineHarness = createPeerHarness('typing-history-offline', { offlineEditing: true });
 type Editor = ReturnType<typeof createDocxEditor>;
 type Mounted = { readonly editor: Editor; readonly container: HTMLElement };
 const mounted: Mounted[] = [];
@@ -23,6 +24,7 @@ afterEach(() => {
     container.remove();
   }
   harness.cleanup();
+  offlineHarness.cleanup();
 });
 
 function mount(options: Parameters<typeof createDocxEditor>[0]): Mounted {
@@ -69,8 +71,8 @@ const WITH_HEADER = zipDocument(
   }
 );
 
-async function pair(bytes = WITH_HEADER) {
-  const peers = await harness.pair(bytes);
+async function pair(bytes = WITH_HEADER, peerHarness = harness) {
+  const peers = await peerHarness.pair(bytes);
   const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
     peer.detach();
     return mount({
@@ -87,7 +89,7 @@ async function pair(bytes = WITH_HEADER) {
     );
     expect(text(alice)).toBe(text(bob));
   };
-  return { alice, bob, text, converge };
+  return { alice, bob, text, converge, peers };
 }
 
 test('concurrent typing runs are one shared undo item each, and survive reopen', async () => {
@@ -202,4 +204,29 @@ test('a collaborator typing in a header keeps the body run open', async () => {
   expect(alice.editor.exec({ type: 'undo' }).ok).toBe(true);
   converge();
   expect(text(bob)).toBe('one\ntwo');
+});
+
+test('a run typed while disconnected is one step after reconnect', async () => {
+  const { alice, bob, text, converge, peers } = await pair(WITH_HEADER, offlineHarness);
+  peers.pause();
+  peers.alice.room.session.setTransportStatus(
+    'disconnected',
+    'transport-disconnected',
+    'test-drop'
+  );
+  expect(peers.alice.room.session.statusSnapshot().status).toBe('disconnected');
+  caret(alice.editor, 0, 3);
+  await typeSlowly(alice, ' offline');
+  caret(bob.editor, 1, 3);
+  await typeSlowly(bob, '!');
+  peers.alice.room.session.setTransportStatus('ready');
+  peers.resume();
+  converge();
+  expect(text(bob)).toBe('one offline\ntwo!');
+  expect(alice.editor.exec({ type: 'undo' }).ok).toBe(true);
+  converge();
+  expect(text(bob)).toBe('one\ntwo!');
+  expect(alice.editor.exec({ type: 'redo' }).ok).toBe(true);
+  converge();
+  expect(text(bob)).toBe('one offline\ntwo!');
 });

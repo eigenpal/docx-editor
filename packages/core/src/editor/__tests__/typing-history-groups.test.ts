@@ -115,6 +115,24 @@ describe('typing history groups', () => {
     ]);
   });
 
+  test('each forward Delete is its own step', async () => {
+    const { surface, container } = mount(paragraph(''));
+    await typeSlowly(container, 'Hello there');
+    putCaret(surface, 8);
+    surface.deleteForward();
+    surface.deleteForward();
+    expect(surface.session.bodyText()).toBe('Hello the');
+    expect(undoTrail(surface, 3)).toEqual(['Hello thre', 'Hello there', '']);
+  });
+
+  test('a long run with spaces and punctuation is still one step', async () => {
+    const { surface, container } = mount(paragraph(''));
+    const sentence = 'The cat sat on the mat, and then it ran away to sleep.';
+    await typeSlowly(container, sentence);
+    expect(surface.session.bodyText()).toBe(sentence);
+    expect(undoTrail(surface, 1)).toEqual(['']);
+  });
+
   test('Enter is its own step between two typing runs', async () => {
     const { surface, container } = mount(paragraph(''));
     await typeSlowly(container, 'First');
