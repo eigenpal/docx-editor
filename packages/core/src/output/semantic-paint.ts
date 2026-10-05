@@ -32,6 +32,7 @@ import {
   TAB_LEADER_GLYPH,
 } from '@docx-editor.dev/core/layout';
 import { DEFAULT_CANVAS_FONT_STACK } from '../layout/canvas-measurer.ts';
+import { isolatePageFromHost } from './page-host-isolation.ts';
 import { styleForFontSlot } from '../layout/script-itemization.ts';
 import {
   REVIEW_AUTHOR_SLOTS,
@@ -2009,11 +2010,7 @@ function paintPage(
   // sheet keeps the canvas colour its token names and only `.docx-page-content` below is
   // inverted, so the theme and print rules name that class instead.
   element.className = 'docx-page';
-  // The measurer's own fallback stack, so an unstyled run — or one whose declared family
-  // the platform cannot resolve — RENDERS in the same face it was MEASURED in. Left to
-  // inherit, the page picked up the host UI font, and every measured overlay (caret,
-  // selection, revision bands, strikes) drifted along the line against the painted glyphs.
-  element.style.fontFamily = DEFAULT_CANVAS_FONT_STACK;
+  isolatePageFromHost(element);
   element.dataset.pageIndex = String(page.index);
   if (options.ariaHidden) {
     // The painted page is a PICTURE of the document; the editable projection is what

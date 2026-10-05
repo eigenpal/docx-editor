@@ -87,6 +87,16 @@ const direction = formatting?.direction ?? (formatting?.disagrees?.direction ? '
 
 To build your own buttons, use the `direction.ltr` and `direction.rtl` [chrome slots](/docs/2.x/guides/chrome-slots#alignment-direction-lists-and-formatting).
 
+## Host pages with RTL direction
+
+You can mount the editor in a page that sets `dir="rtl"` or `direction: rtl`. You don't need to override the direction on the editor components.
+
+The painted pages and the `DocxEditor.Viewport` scroll container keep a left-to-right base whatever direction the host page sets. Text direction comes only from the document's `w:bidi` and `w:rtl` properties. Page layout, caret placement, selection, zoom, and horizontal scrolling are the same in left-to-right and right-to-left host pages.
+
+Controls inside the viewport, such as comment cards, also use a left-to-right base. The toolbar, menus, and other controls outside the viewport inherit the host page direction.
+
+If you attach the editor to your own scroll container instead of `DocxEditor.Viewport`, set `direction: ltr` on it. Otherwise horizontal scrolling and zoom follow the host direction.
+
 ## Export RTL text to PDF
 
 PDF export preserves Arabic joining across formatting runs and uses fonts that support Arabic shaping. The PDF text layer keeps Arabic, Persian, and Hebrew words in logical order for text extraction. Default fallback fonts cover Arabic and Hebrew when the selected font lacks those characters.
