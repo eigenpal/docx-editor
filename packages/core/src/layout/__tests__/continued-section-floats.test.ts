@@ -75,6 +75,22 @@ function document(options: {
   );
 }
 
+/** A 144pt by 216pt square-wrapped picture at the right margin. */
+const PICTURE =
+  '<w:p><w:pPr>' +
+  LINE +
+  '</w:pPr><w:r><w:drawing>' +
+  '<wp:anchor distT="0" distB="0" distL="114300" distR="114300" simplePos="0" relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1">' +
+  '<wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="margin"><wp:align>right</wp:align></wp:positionH>' +
+  '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
+  '<wp:extent cx="1828800" cy="2743200"/><wp:effectExtent l="0" t="0" r="0" b="0"/>' +
+  '<wp:wrapSquare wrapText="bothSides"/><wp:docPr id="1" name="pic"/>' +
+  '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic>' +
+  '<pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr>' +
+  '<pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
+  '<pic:spPr><a:xfrm><a:ext cx="1828800" cy="2743200"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>' +
+  '</pic:pic></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r></w:p>';
+
 const fragments = (layout: SemanticLayout, page = 0) => layout.pages[page]!.fragments;
 const floatOf = (layout: SemanticLayout): TableFragmentRecord =>
   fragments(layout).find(
@@ -151,21 +167,7 @@ describe('continuous section beside an earlier float', () => {
   });
 
   test('wraps beside a square-wrapped picture of the earlier section', () => {
-    const picture =
-      '<w:p><w:pPr>' +
-      LINE +
-      '</w:pPr><w:r><w:drawing>' +
-      '<wp:anchor distT="0" distB="0" distL="114300" distR="114300" simplePos="0" relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1">' +
-      '<wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="margin"><wp:align>right</wp:align></wp:positionH>' +
-      '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
-      '<wp:extent cx="1828800" cy="2743200"/><wp:effectExtent l="0" t="0" r="0" b="0"/>' +
-      '<wp:wrapSquare wrapText="bothSides"/><wp:docPr id="1" name="pic"/>' +
-      '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic>' +
-      '<pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr>' +
-      '<pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
-      '<pic:spPr><a:xfrm><a:ext cx="1828800" cy="2743200"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>' +
-      '</pic:pic></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r></w:p>';
-    const source = document({ float: picture });
+    const source = document({ float: PICTURE });
     const layout = layoutSemanticDocument(source, 0, {
       measurer,
       inlineDrawingLayout: layoutContext(source),
@@ -193,6 +195,29 @@ describe('continuous section beside an earlier float', () => {
       const warm = layoutSemanticDocument(source, revision, { measurer, session });
       const cold = layoutSemanticDocument(source, revision, { measurer });
       expect(warm.pages).toEqual(cold.pages);
+    }
+  });
+
+  test('an earlier picture keeps a table it wraps in row flow, on the shared page only', () => {
+    const floating = table(
+      2880,
+      2,
+      'w:leftFromText="180" w:rightFromText="180" w:vertAnchor="text" w:horzAnchor="margin" w:tblpXSpec="right" w:tblpY="1"'
+    );
+    const pageBreak = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+    for (const [lead, floats] of [
+      ['', false],
+      [pageBreak, true],
+    ] as const) {
+      const source = document({ float: PICTURE, following: lead + floating + p('Anchor') });
+      const layout = layoutSemanticDocument(source, 0, {
+        measurer,
+        inlineDrawingLayout: layoutContext(source),
+      });
+      const placed = layout.pages
+        .flatMap((page) => page.fragments)
+        .find((fragment): fragment is TableFragmentRecord => fragment.kind === 'table')!;
+      expect(isOutOfFlowTableFragment(placed)).toBe(floats);
     }
   });
 

@@ -99,14 +99,48 @@ export function continuedPageZones(
 export function continuedWrapFlags(
   ownFurnitureWraps: boolean,
   continuedZones: readonly ExclusionZone[] | undefined
-): { readonly furnitureHasWrap: boolean; readonly furnitureHoldsTables: boolean } {
+): {
+  readonly furnitureHasWrap: boolean;
+  readonly furnitureHoldsTables: boolean;
+  /** The zones a positioned table's admission reads: page 0 adds earlier pictures. */
+  readonly admission: (
+    zones: ReadonlyMap<number, readonly ExclusionZone[]> | undefined
+  ) => ReadonlyMap<number, readonly ExclusionZone[]> | undefined;
+} {
   return {
     furnitureHasWrap: ownFurnitureWraps || (continuedZones?.length ?? 0) > 0,
-    // Earlier floating tables stay out of this section's table cells. Earlier pictures can
-    // wrap them, which the admission of a table at its anchor does not price.
     furnitureHoldsTables:
-      ownFurnitureWraps ||
-      (continuedZones?.some((zone) => !zone.earlierSection || zone.sourceKind !== 'table') ??
-        false),
+      ownFurnitureWraps || (continuedZones?.some((zone) => !zone.earlierSection) ?? false),
+    admission: (zones) => withEarlierPictures(zones, continuedZones),
   };
+}
+
+const admissionMemo = new WeakMap<
+  readonly ExclusionZone[],
+  {
+    readonly zones: ReadonlyMap<number, readonly ExclusionZone[]> | undefined;
+    readonly merged: ReadonlyMap<number, readonly ExclusionZone[]> | undefined;
+  }
+>();
+
+/**
+ * Body zones for admission, with the pictures an earlier section left on page 0. A table whose
+ * cells such a picture can wrap keeps row pagination, as with pictures of its own section.
+ * Earlier floating tables are left out: they never wrap a floating table's cells. Stable for
+ * equal inputs, since the admission check memoizes on the map.
+ */
+function withEarlierPictures(
+  zones: ReadonlyMap<number, readonly ExclusionZone[]> | undefined,
+  continuedZones: readonly ExclusionZone[] | undefined
+): ReadonlyMap<number, readonly ExclusionZone[]> | undefined {
+  const pictures = continuedZones?.filter((zone) => zone.earlierSection && !zone.sourceKind);
+  if (!continuedZones || !pictures?.length) return zones;
+  const memo = admissionMemo.get(continuedZones);
+  if (memo && memo.zones === zones) return memo.merged;
+  const merged = new Map(zones);
+  // Anchored before every paragraph of this section.
+  const earlier = pictures.map((zone) => Object.freeze({ ...zone, sourceOrder: -1 }));
+  merged.set(0, Object.freeze([...(zones?.get(0) ?? []), ...earlier]));
+  admissionMemo.set(continuedZones, { zones, merged });
+  return merged;
 }

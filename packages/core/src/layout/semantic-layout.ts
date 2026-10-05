@@ -787,7 +787,7 @@ function layoutBlocksPass(
   });
   const { pageBox, furnitureFor, overflowShellAt } = sectionFurniture;
 
-  const { furnitureHasWrap, furnitureHoldsTables } = continuedWrapFlags(
+  const { furnitureHasWrap, furnitureHoldsTables, admission } = continuedWrapFlags(
     hasFurnitureDrawingExclusions(furniture, options.yieldHiddenFurnitureZones),
     continuedZones
   );
@@ -2136,7 +2136,7 @@ function layoutBlocksPass(
         !furnitureHoldsTables &&
         tableWrap.admitsAtAnchor(entry.table, tableDeps, {
           allowBreak: columns.count === 1 && positionedTablePolicy.get(entry.table.id),
-          zones: options.drawingExclusionZonesByPage,
+          zones: admission(options.drawingExclusionZonesByPage),
           page: pages.length,
           width: Math.min(...columns.widths),
           frames: anchorFrames(),

@@ -370,7 +370,7 @@ function breaksAtPageBottom(
   const float = structure?.float;
   // A negative offset collides with earlier text. Only anchor placement displaces it.
   if (!structure || float?.vertAnchor !== 'text' || float.ySpec || float.yPt < 0) return false;
-  const distances = float.distances ?? { top: 0, right: 0, bottom: 0, left: 0 };
+  const distances = float.distances ?? NO_DISTANCES;
   if (distances.top > 0 || distances.bottom > 0) return false;
   const left = positionedTableOriginX(structure, flow.frames, deps.compatibilityMode);
   const width = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
@@ -382,13 +382,15 @@ function breaksAtPageBottom(
     return false;
   // The opening rows are the header prefix, which moves as one group, and the first body row.
   let top = flowTop(flow) + float.yPt;
+  // Measured as placed: a floating table's cells never wrap around another floating table.
+  const cellDeps = withoutFloatingTableZones(deps);
   for (const [index, row] of structure.rows.entries()) {
     top += measureRowHeight(
       row,
       structure.columnWidthsPt,
       left,
       0,
-      index === 0 ? firstRowContentDeps(structure, row, deps) : deps,
+      index === 0 ? firstRowContentDeps(structure, row, cellDeps) : cellDeps,
       structure.cellSpacingPt
     );
     if (top > flow.bottom + 0.001) return false;
@@ -452,7 +454,7 @@ function pageFramedAnchorBand(
   const structure = floatTableStructure(anchor.table, width, deps);
   const float = structure?.float;
   if (!structure || !float || float.vertAnchor === 'text' || float.ySpec === 'inline') return 0;
-  const distances = float.distances ?? { top: 0, right: 0, bottom: 0, left: 0 };
+  const distances = float.distances ?? NO_DISTANCES;
   const left = positionedTableOriginX(structure, placement.frames, deps.compatibilityMode);
   const tableWidth = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
   const bandLeft = left - distances.left;
@@ -507,9 +509,11 @@ export function requiredAnchorBand(
     (byParagraph.get(anchorId) ?? []).filter((anchor) => pending.has(anchor.table.id));
   const here = pendingOf(paragraphId);
   // Tables of earlier anchors on this page are placed first, at the flush, in anchor order.
-  const before = here.length > 0 ? (placement.signals ?? []) : [];
+  // Only in one column: a waiting table in another column is placed against other frames.
+  const singleColumn = placement.frames.text.width >= placement.frames.margin.width - 0.5;
+  const before = here.length > 0 && singleColumn ? (placement.signals ?? []) : [];
   const waiting = before.flatMap((signal) =>
-    pendingOf(signal.anchorId).map((anchor) => ({ anchor, anchorY: signal.anchorY }))
+    pendingOf(signal.anchorId).map((anchor) => ({ anchor, signal }))
   );
   const placed = here.length > 0 ? placedFloatObstacles(placement.earlier, deps) : [];
   // Overlap avoidance only runs when a table involved refuses overlap.
@@ -519,13 +523,14 @@ export function requiredAnchorBand(
     ) || placed.some((obstacle) => obstacle.refusesOverlap);
   const prospective: NoOverlapObstacle[] = [];
   if (avoids) {
-    for (const { anchor, anchorY } of waiting) {
+    for (const { anchor, signal } of waiting) {
+      // The same text the flush clears: what preceded that anchor on the page.
       const y = clearEarlierText(
         anchor.table,
-        anchorY,
+        signal.anchorY,
         width,
         placement.frames,
-        placement.earlier,
+        placement.earlier.slice(0, signal.fragmentIndex),
         deps
       );
       const shift = noOverlapPlacement(anchor.table, y, width, placement.frames, deps, [
@@ -684,7 +689,7 @@ export function clearEarlierText(
   const float = structure?.float;
   if (!structure || !float || float.vertAnchor !== 'text' || float.ySpec) return anchorY;
   const tableWidth = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
-  const distances = float.distances ?? { top: 0, right: 0, bottom: 0, left: 0 };
+  const distances = float.distances ?? NO_DISTANCES;
   const left = positionedTableOriginX(structure, frames, deps.compatibilityMode) - distances.left;
   const height = floatingTableBand(table, width, deps) - Math.max(0, float.yPt) + distances.top;
   let top = anchorY + float.yPt - distances.top;

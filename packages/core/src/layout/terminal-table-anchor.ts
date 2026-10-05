@@ -9,6 +9,8 @@ import {
 import { framedTokenJoin } from './layout-cache.ts';
 import { readTableStructure, type TableAnchorFrames } from './semantic-table.ts';
 import { positionedTableOriginX } from './table-origin.ts';
+import { withoutFloatingTableZones } from './table-float-overlap.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import {
   createTableBorderOwnershipBudget,
   createTableVMergeResolveBudget,
@@ -290,7 +292,7 @@ export function placeTerminalTextTables(
   let bottom = cursorY + anchorHeight;
   let probeLine = 0;
   const probeDeps: TableFlowDeps = {
-    ...stripAnchorSinksForProbe(input.deps),
+    ...stripAnchorSinksForProbe(withoutFloatingTableZones(input.deps)),
     onCellBreakKey: undefined,
     borderOwnershipBudget: createTableBorderOwnershipBudget(),
     vMergeResolveBudget: createTableVMergeResolveBudget(),
@@ -309,7 +311,8 @@ export function placeTerminalTextTables(
       // A legacy right-aligned table may hang its right cell margin past the column.
       left + width >
         contentWidth +
-          (structure.float.xSpec === 'right' || structure.float.xSpec === 'outside'
+          ((structure.float.xSpec === 'right' || structure.float.xSpec === 'outside') &&
+          hasCompatibilityRule(input.deps.compatibilityMode, 'floatingTableContentOrigin')
             ? structure.defaultMargins.right
             : 0) +
           0.001 ||
