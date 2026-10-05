@@ -2,7 +2,7 @@
 
 import { inlineCharacterTextOf, isSymbolElement, SYMBOL_TEXT } from '../package/hyphen-text.ts';
 import { fieldAtomText } from '../package/field-nodes.ts';
-import { hardBreakText } from '../package/hard-break.ts';
+import { hardBreakKind, hardBreakText } from '../package/hard-break.ts';
 import type { OoxmlParagraphNode } from '../package/ooxml-tree.ts';
 import { segmentsOf } from './tree-op-segments.ts';
 
@@ -78,4 +78,29 @@ export function withSymbolMarks(
     at = segment.end;
   }
   return { text: marked + text.slice(at).replaceAll(mark, ''), symbols };
+}
+
+/** How a text read spells a manual line break: the character a text write uses for one. */
+export const LINE_BREAK_READ_TEXT = '\v';
+/** How a text read spells a column break. Text writes refuse it, so it is never rewritten. */
+export const COLUMN_BREAK_READ_TEXT = '\u000e';
+
+/**
+ * Paragraph model text with each break spelled as a text read spells it: `\v` for a line break
+ * and U+000E for a column break. Model text spells both `\n`; every spelling is one UTF-16 unit,
+ * so offsets do not change. A break of a kind this engine does not model keeps `\n`. @internal
+ */
+export function withBreakReadText(paragraph: OoxmlParagraphNode, text: string): string {
+  if (!text.includes('\n')) return text;
+  let read = '';
+  let at = 0;
+  for (const segment of segmentsOf(paragraph)) {
+    if (segment.node.kind !== 'hardBreak' || text[segment.start] !== '\n') continue;
+    const kind = hardBreakKind(segment.node);
+    const spelled =
+      kind === 'line' ? LINE_BREAK_READ_TEXT : kind === 'column' ? COLUMN_BREAK_READ_TEXT : '\n';
+    read += text.slice(at, segment.start) + spelled;
+    at = segment.start + 1;
+  }
+  return read + text.slice(at);
 }

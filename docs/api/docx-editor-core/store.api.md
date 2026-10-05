@@ -752,7 +752,7 @@ export function contentControlsIn(root: OoxmlNode, options?: {
 }): readonly ContentControlEntry[];
 
 // @public
-export function contentControlTextOf(control: OoxmlNode): string;
+export function contentControlTextOf(control: OoxmlNode, lineBreak?: string): string;
 
 // @public
 export interface ContentItem {

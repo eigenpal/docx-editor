@@ -497,7 +497,7 @@ describe('a section is the page a story is laid out on', () => {
     });
     expect(found).toEqual([
       { type: 'Footnote', text: '' },
-      { type: 'Footnote', text: 'first\t<unsafe>\nline\rsecond' },
+      { type: 'Footnote', text: 'first\t<unsafe>\vline\rsecond' },
       { type: 'Endnote', text: 'end note' },
     ]);
   });
@@ -520,7 +520,7 @@ describe('a section is the page a story is laid out on', () => {
     });
     expect(found).toEqual([
       ['', ''],
-      ['first\t<unsafe>\nline\rsecond', 'first\t<unsafe>\nline\rsecond'],
+      ['first\t<unsafe>\vline\rsecond', 'first\t<unsafe>\vline\rsecond'],
     ]);
   });
 

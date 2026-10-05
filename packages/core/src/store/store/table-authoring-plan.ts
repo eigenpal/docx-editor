@@ -1,5 +1,5 @@
 import type { RevisionAttributionInput } from './tree-op-revision-attribution.ts';
-import { paragraphModelTextOf } from './paragraph-model-text.ts';
+import { paragraphModelTextOf, withBreakReadText } from './paragraph-model-text.ts';
 // Canonical table reads and host-neutral mutation plans. No browser/editor dependencies.
 import { collectStoryParagraphs } from '../package/story-blocks.ts';
 import type {
@@ -90,7 +90,7 @@ function paragraphsOf(cell: OoxmlNode): OoxmlParagraphNode[] {
 }
 function cellText(cell: OoxmlNode): string {
   return paragraphsOf(cell)
-    .map((p) => paragraphModelTextOf(p))
+    .map((p) => withBreakReadText(p, paragraphModelTextOf(p)))
     .join('\r');
 }
 function prop(
@@ -301,7 +301,8 @@ export function planTableMutation(
     )
       return 'unsupported-cell-content';
     const p = paragraphs[0]!;
-    const old = paragraphModelTextOf(p);
+    // Compared as a read spells it, so a value read back unchanged is not rewritten.
+    const old = withBreakReadText(p, paragraphModelTextOf(p));
     if (old === text) return null;
     let error: string | null = null;
     // Insert while the original first run still supplies its formatting. Deleting

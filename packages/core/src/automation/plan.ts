@@ -17,7 +17,7 @@ import { isTextHyperlink } from '../store/store/tree-op-hyperlink-range.ts';
 import type { ContentControlLock } from '../store/package/content-control-nodes.ts';
 import type { PlannedOperation } from './plan-types.ts';
 export type { PlannedOperation } from './plan-types.ts';
-import { delimiterOccurrences, anchorForSection, placeable, trimmed } from './plan-read-helpers.ts';
+import { delimitedText, anchorForSection, placeable, trimmed } from './plan-read-helpers.ts';
 import { planContentControlInsertion } from './plan-content-control-insert.ts';
 import { ownsInsertedControl } from './tracked-content-controls.ts';
 import { planFields } from './plan-fields.ts';
@@ -893,8 +893,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
 
     const slot = plan.slotById.get(paragraph.paragraphId);
     if (!slot) return refuse('invalid-handle', 'that paragraph is not in the body');
-    const text = reads.rawText(paragraph.paragraphId) ?? '';
-    const occurrences = delimiterOccurrences(text, delimiters);
+    const { text, occurrences } = delimitedText(reads, paragraph.paragraphId, delimiters);
 
     const ops: TreeDocOp[] = [];
     const offsets: number[] = [];

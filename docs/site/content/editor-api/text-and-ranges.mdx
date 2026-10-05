@@ -37,7 +37,8 @@ Some document elements use a single character in API text, regardless of their d
 | Non-breaking hyphen | U+001E   | One UTF-16 unit | Restores the non-breaking hyphen element    |
 | Optional hyphen     | U+001F   | One UTF-16 unit | Restores the optional hyphen element        |
 | Symbol (`w:sym`)    | `(`      | One UTF-16 unit | Inserts a literal parenthesis, not a symbol |
-| Manual line break   | `\n`     | One UTF-16 unit | Refused; write the break as `\v`            |
+| Manual line break   | `\v`     | One UTF-16 unit | Inserts a manual line break                 |
+| Column break        | U+000E   | One UTF-16 unit | Refused                                     |
 
 Hyphen elements can survive a text read and write through these characters. This does not preserve arbitrary document structure, such as symbols or fields. Convert the hyphen characters before passing text to readers that require ordinary text.
 
@@ -59,7 +60,7 @@ The exported aliases are `BodyInsertTextLocation`, `BodyInsertParagraphLocation`
 
 `insertText()` returns the inserted `Range`. `insertParagraph()` returns the created `Paragraph`. Sync before configuring or reading the returned object. Use one paragraph insertion per new paragraph; newline-containing insertion text is refused.
 
-To keep lines in one paragraph, such as an address block, write a manual line break as `\v` (U+000B). Every `insertText()` and `insertParagraph()` writes each `\v` as a line break, and text reads report it as `\n`. A single-line content control, such as plain text without multiple lines, a list, or a date, refuses a line break. You can also insert one break with `Range.insertBreak('Line', location)`.
+To keep lines in one paragraph, such as an address block, write a manual line break as `\v` (U+000B). Every `insertText()` and `insertParagraph()` writes each `\v` as a line break, and text reads report it as `\v`, so text you read can be written back unchanged. A search for `\n` also finds a line break. A single-line content control, such as plain text without multiple lines, a list, or a date, refuses a line break. You can also insert one break with `Range.insertBreak('Line', location)`.
 
 Text inserted into an empty paragraph takes the character style that the paragraph mark names. It does not take the mark's direct run properties, such as a direct font size. To apply those, set `font` on the returned range after sync.
 

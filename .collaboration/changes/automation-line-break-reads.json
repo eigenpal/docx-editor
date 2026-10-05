@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Automation text reads report a manual line break as \\n, which writes refuse.",
+  "after": "Automation text reads report a manual line break as \\v, the character writes use, and a search for \\n also finds one.",
+  "reason": "The change affects how reads spell one character. Nothing is written, so no shared field, operation, snapshot, or protocol message changes.",
+  "tests": ["packages/core/src/automation/__tests__/automation-line-breaks.test.ts"],
+  "changeset": "automation-line-break-reads",
+  "migration": null
+}

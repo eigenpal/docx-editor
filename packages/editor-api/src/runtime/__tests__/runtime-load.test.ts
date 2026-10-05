@@ -85,7 +85,7 @@ describe('a property is only readable once a sync has filled it', () => {
       ]);
       expect(notes.map((note) => note.text)).toEqual([
         '',
-        'first\t<unsafe>\nline\rsecond',
+        'first\t<unsafe>\vline\rsecond',
         'end note',
       ]);
     });

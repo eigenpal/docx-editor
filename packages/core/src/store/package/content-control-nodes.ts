@@ -23,6 +23,7 @@
 // zero-click load of a target an untrusted file chose.
 
 import { inlineCharacterTextOf } from './hyphen-text.ts';
+import { hardBreakKind } from './hard-break.ts';
 import { nextStripedDecimalId, resolveAllocationActor } from './actor-scoped-ids.ts';
 import { isInlineRunContainer, W14_NAMESPACE_URI, WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import type {
@@ -688,8 +689,10 @@ export function findContentControl(root: OoxmlNode, nodeId: string): ContentCont
  *
  * `w:delText` is excluded: struck text is not the control's value, and a dropdown whose
  * old item is still present as a tracked deletion would otherwise report both.
+ *
+ * A manual line break is left out unless `lineBreak` names the text to report it as.
  */
-export function contentControlTextOf(control: OoxmlNode): string {
+export function contentControlTextOf(control: OoxmlNode, lineBreak?: string): string {
   const content = contentControlContentNodeOf(control);
   if (!content) return '';
   let text = '';
@@ -705,6 +708,14 @@ export function contentControlTextOf(control: OoxmlNode): string {
     if (node.kind === 'tab') {
       text += '\t';
       return;
+    }
+    if (lineBreak !== undefined) {
+      // Struck content is not the value; `w:delText` above already says so for text.
+      if (node.kind === 'revisionDelete' || node.kind === 'revisionMoveFrom') return;
+      if (node.kind === 'hardBreak') {
+        if (hardBreakKind(node) === 'line') text += lineBreak;
+        return;
+      }
     }
     const hyphen = inlineCharacterTextOf(node);
     if (hyphen !== null) {
