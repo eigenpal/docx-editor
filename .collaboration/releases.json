@@ -360,6 +360,42 @@
         "package-lock.json": "af25c2e236dd9e12b9835890cdd7077931a1e5c79985769fc370b658fbc4b2af",
         "fixture.json": "707abf35490a2cc2246f04a303a8c521c0b5d2ef4f65235c1da9ac44246bd223"
       }
+    },
+    {
+      "version": "2.26.0",
+      "commit": "a6add1191d28a80f9e7a26830f9796f188618b0f",
+      "sourceLockHash": "921c759896f3e984c65311f0e2eb88fe5407b5277868e1d635a2891e795c186b",
+      "format": "docx-collaboration:1.3.1.1",
+      "versions": {
+        "protocolVersion": 1,
+        "sharedSchemaVersion": 3,
+        "repairVersion": 1,
+        "canonicalModelVersion": 1
+      },
+      "directory": ".collaboration/releases/2.26.0",
+      "packages": {
+        "@docx-editor.dev/i18n": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/i18n/-/i18n-2.26.0.tgz",
+          "integrity": "sha512-qzGopAOBrdlwaqA+CI4tc3wFI9y+lOzw4AzxkSQ1SoehFrpIC3jkdeFkPTtI4oGrv8W0k9mQYqvxW4/phMVkqQ=="
+        },
+        "@docx-editor.dev/core": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/core/-/core-2.26.0.tgz",
+          "integrity": "sha512-f/wKUB4vBmgRSFsaUc/2f3DP13W2kFjk6z2y0KugFM+zetpONpB+F//b62OwuOc8TzXvWEKyL4e1VSalo71tHQ=="
+        },
+        "@docx-editor.dev/editor-api": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/editor-api/-/editor-api-2.26.0.tgz",
+          "integrity": "sha512-mIyK/inWz/8c12GU3Ozw7hpXBIr5+EZPxXGUdRrvrCbq4r1eES+qR3wZF6jkW39y/q6fji6piuPEyKULQiFXNA=="
+        },
+        "@docx-editor.dev/pro": {
+          "tarball": "https://registry.npmjs.org/@docx-editor.dev/pro/-/pro-2.26.0.tgz",
+          "integrity": "sha512-xWLq1wm9UvIG63d6ZBH54F8Bl740CR2sXDmADMvfzAKtVYtbzXvuTwjQXL5m1iKsoUDmHhFqQL1gFq0RffJCWg=="
+        }
+      },
+      "hashes": {
+        "package.json": "0af147f3162add6b1cf354ac58acb72182fbb2ca9a137fe95586571295c6c225",
+        "package-lock.json": "20f2eb8aafbedf39e18640cc80f5e72d243f051cd646261e3e56b7e320776a13",
+        "fixture.json": "2e523cc5e81e5bcef18c8289722edab8d3857060050238d2dac522c8bfd41657"
+      }
     }
   ]
 }
