@@ -13,7 +13,7 @@ import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { finalizePageFieldProjection, withPageFieldSources } from './field-projection.ts';
 import { pageRefAssignmentToken } from './field-page-furniture.ts';
 import { framedTokenJoin } from './layout-cache.ts';
-import type { ContinuedPageFurniture } from './furniture-drawing-exclusion.ts';
+import type { ContinuedPageHost } from './continued-page-zones.ts';
 import { numericPictureApplies } from './field-page-furniture.ts';
 import { framedStoryEntry, remapPage, type HeaderFooterStoryLayout } from './hf-layout.ts';
 import {
@@ -90,7 +90,7 @@ export type LayoutSectionFn = (
     readonly sectionMarkCollapses?: boolean;
     readonly markJoinsBreakSheet?: boolean;
     readonly continuedPageInsets?: PageContentInsets;
-    readonly continuedPageFurniture?: ContinuedPageFurniture;
+    readonly continuedPageFurniture?: ContinuedPageHost;
     readonly bodyPageNumberFormat?: string;
   }
 ) => SectionLayoutResult;
@@ -526,7 +526,10 @@ export function layoutMultiSectionDocument(
     // on both sections the host resolves `default` and this section would resolve `first`, and
     // the taller box packs content past the host's content bottom.
     const continuedPageInsets = continues ? contentInsetsOf(pages[pages.length - 1]!) : undefined;
-    // For the same reason its text wraps around the drawings the host sheet paints.
+    // For the same reason its text wraps around the drawings the host sheet paints, and around
+    // the floating tables and wrapping pictures earlier sections left there
+    // (`continued-page-zones.ts`). So the section starts below the host's last text line, not
+    // below those floats.
     const continuedPageFurniture = continues ? pages[pages.length - 1] : undefined;
 
     // The page-number format a body page-field placeholder is MEASURED against.

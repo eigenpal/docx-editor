@@ -41,7 +41,8 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `anchorOnlyParagraphWrapExclusion` | `modern` | An anchor-only paragraph wraps around its own anchors |
 | `anchorsLayOutInCell` | `modern` | Every anchored object in a table cell lays out in its cell |
 | `fixedTableContentEdgeOrigin` | `legacy` | A fixed left table aligns its first content edge with the text column |
-| `floatingTableContentOrigin` | `legacy` | A floating table with a numeric text anchor positions its first cell content |
+| `floatingTableContentOrigin` | `legacy` | A floating table with a numeric text anchor or a right alignment positions its cell content |
+| `floatingTableOverlapMovesLeft` | `modern` | A floating table that may not overlap tries the left side before it moves down |
 | `headerFooterAnchorsWrapText` | `modern` | Header and footer text wraps around anchored objects |
 | `headerRowsKeepWithBody` | `modern` | Header rows keep with the opening body rows |
 | `justifiedSpaceShrink` | `modern` | Justified lines may shrink spaces |

@@ -74,6 +74,11 @@ export {
 export interface ExclusionZone {
   /** Objects outside body drawing flow publish their exclusion directly instead of synthesizing it. */
   readonly sourceKind?: 'table' | 'frame' | 'furniture';
+  /**
+   * Placed by an earlier section on the sheet a `continuous` section continues on. Its anchor
+   * is not in the continued section, so the zone reaches every line and column there.
+   */
+  readonly earlierSection?: boolean;
   readonly drawingNodeId: string;
   readonly anchorParagraphId: string;
   /** UTF-16 model offset of the anchor atom — exclusions apply at/after this point in the paragraph. */
@@ -436,7 +441,7 @@ export function filterExclusionZonesForParagraphOrder(
 ): readonly ExclusionZone[] {
   return Object.freeze(
     zones.filter((zone) => {
-      if (zone.sourceKind === 'furniture') return true;
+      if (zone.sourceKind === 'furniture' || zone.earlierSection) return true;
       const anchorOrder = orderOfParagraph(zone.anchorParagraphId);
       if (anchorOrder === undefined) return zone.sourceOrder <= paragraphOrder;
       return anchorOrder <= paragraphOrder;
@@ -679,7 +684,7 @@ export function exclusionLayoutToken(zones: readonly ExclusionZone[]): string {
       );
       return [
         zone.drawingNodeId,
-        zone.sourceKind ?? '',
+        `${zone.sourceKind ?? ''}${zone.earlierSection ? '+earlier' : ''}`,
         String(zone.sourceOrder),
         String(zone.columnIndex),
         zone.y.toFixed(3),

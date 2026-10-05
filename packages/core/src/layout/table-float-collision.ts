@@ -7,9 +7,10 @@
 // is already open, so a fragment never gets a gap between its rows.
 //
 // Obstacles are pictures in the page header or footer, and body pictures anchored before the
-// table in document order. In a multi-column section a body picture reaches only its own
-// column. A picture clear of the table's horizontal extent, wrap distances included, does not
-// move it. Paragraphs keep wrapping beside every float as before.
+// table in document order, including those an earlier section left on a shared sheet. In a
+// multi-column section a body picture reaches only its own column. A picture clear of the
+// table's horizontal extent, wrap distances included, does not move it. Paragraphs keep
+// wrapping beside every float as before.
 //
 // The band is the float's wrap outline: a tight or through outline ends at its polygon, not
 // at the picture's extent, plus the wrap distances. Floats anchored inside the table keep
@@ -185,7 +186,10 @@ export function tableFloatClearance(
   const width = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
   const reaches = (zone: ExclusionZone, column: number | undefined): boolean => {
     if (zone.sourceKind === 'furniture') return true;
-    if (zone.sourceKind !== undefined || start === undefined || !orderOf) return false;
+    if (zone.sourceKind !== undefined && zone.sourceKind !== 'table') return false;
+    // A float an earlier section left on this sheet is anchored before every table here.
+    if (zone.earlierSection) return true;
+    if (start === undefined || !orderOf) return false;
     if (column !== undefined && zone.columnIndex !== column) return false;
     if (zone.anchorParagraphId.startsWith(ownPrefix)) return false;
     const order = orderOf(zone.anchorParagraphId);

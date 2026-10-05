@@ -174,14 +174,14 @@ describe('terminal empty text-table anchors', () => {
     );
   });
 
-  test('preserves explicit no-overlap positioning on the row-flow path', () => {
+  test('moves a no-overlap table on the same anchor below the one it would cover', () => {
     const noOverlap = table().replace('<w:tblPr>', '<w:tblPr><w:tblOverlap w:val="never"/>');
-    for (const tables of [noOverlap + noOverlap]) {
-      const layout = render(fixture(tables, p(31.2), 400));
-      const [first, second] = tablesOf(layout);
-      expect(tablesOf(layout).some(isOutOfFlowTableFragment)).toBe(false);
-      expect(first!.box.y + first!.box.height).toBeLessThanOrEqual(second!.box.y);
-    }
+    const layout = render(fixture(noOverlap + noOverlap, p(31.2), 400));
+    const [first, second] = tablesOf(layout);
+    expect(tablesOf(layout).every(isOutOfFlowTableFragment)).toBe(true);
+    expect(second!.box.x).toBe(first!.box.x);
+    expect(second!.box.y).toBeCloseTo(first!.box.y + first!.box.height, 3);
+    expect(paragraphsOf(layout).at(-1)!.box.y).toBe(400);
   });
 
   test('positions text tables while a sheet-positioned table awaits publication', () => {
@@ -384,35 +384,29 @@ describe('terminal empty text-table anchors', () => {
     expect(tablesOf(layout)).toHaveLength(2);
   });
 
-  test('reserves the float bottom when a continuous section follows the empty section mark', () => {
-    const source = part(
-      p(400, 'Lead') +
-        table() +
-        p(31.2, '', section()) +
-        p(31.2, 'FOLLOWING') +
-        section('continuous')
-    );
-    const layout = render(source);
-    expect(layout.pages).toHaveLength(1);
-    const floating = tablesOf(layout)[0]!;
-    expect(isOutOfFlowTableFragment(floating)).toBe(true);
-    const following = paragraphsOf(layout).at(-1)!;
-    expect(following.box.y).toBeGreaterThanOrEqual(floating.box.y + floating.box.height);
-  });
-
-  test('reserves vertical text distance before the following continuous section', () => {
-    const source = part(
-      p(400, 'Lead') +
-        table(230, 'w:bottomFromText="720"') +
-        p(31.2, '', section()) +
-        p(31.2, 'FOLLOWING') +
-        section('continuous')
-    );
-    const layout = render(source);
-    expect(tablesOf(layout).some(isOutOfFlowTableFragment)).toBe(true);
-    const floating = tablesOf(layout)[0]!;
-    expect(paragraphsOf(layout).at(-1)!.lines[0]!.box.y).toBeGreaterThanOrEqual(
-      floating.box.y + floating.box.height + 36
-    );
-  });
+  // The float stays on the shared sheet, so the continued section wraps beside it rather
+  // than starting below it. Its first line keeps the flow position the section mark left.
+  for (const extra of ['', 'w:bottomFromText="720"']) {
+    test(`a continuous section after the empty section mark wraps beside the float ${extra}`, () => {
+      const source = part(
+        p(400, 'Lead') +
+          table(230, extra) +
+          p(31.2, '', section()) +
+          p(31.2, 'FOLLOWING') +
+          section('continuous')
+      );
+      const layout = render(source);
+      expect(layout.pages).toHaveLength(1);
+      const floating = tablesOf(layout)[0]!;
+      expect(isOutOfFlowTableFragment(floating)).toBe(true);
+      const following = paragraphsOf(layout).at(-1)!;
+      const line = following.lines[0]!;
+      expect(line.box.y).toBeLessThan(floating.box.y + floating.box.height);
+      const span = line.spans.find((candidate) => candidate.text.includes('FOLLOWING'))!;
+      const beside =
+        span.box.x + span.box.width <= floating.box.x ||
+        span.box.x >= floating.box.x + floating.box.width;
+      expect(beside || line.box.y + line.box.height <= floating.box.y).toBe(true);
+    });
+  }
 });

@@ -68,8 +68,12 @@ export const MODE_RULES = {
     'ECMA-376 Part 1 §17.4.52 tblLayout'
   ),
   floatingTableContentOrigin: legacy(
-    'A floating table with a numeric text anchor positions its first cell content, not its outer edge',
+    'A floating table with a numeric text anchor or a right alignment positions its cell content, not its outer edge',
     'ECMA-376 Part 1 §17.4.57 tblpPr'
+  ),
+  floatingTableOverlapMovesLeft: modern(
+    'A floating table that may not overlap moves left of the table it meets when the right side has no room',
+    'ECMA-376 Part 1 §17.4.56 tblOverlap'
   ),
   headerFooterAnchorsWrapText: modern(
     'Header and footer text outside tables wraps around anchored objects',
