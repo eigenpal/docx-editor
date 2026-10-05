@@ -41,22 +41,26 @@ function leaves(registry: SplitTextRecordingRegistry, root: string): readonly Te
   return found;
 }
 
-/** A pure split partitions existing text; it must not mint a second shared character sequence. */
+/**
+ * A pure split partitions existing text; it must not mint a second shared character sequence.
+ *
+ * Answers whether the products ARE a pure partition of the source, aliased or not.
+ */
 export function recordSplitTextSources(
   registry: SplitTextRecordingRegistry,
   source: string,
   products: readonly string[]
-): void {
+): boolean {
   const before = leaves(registry, source);
   const after: TextLeaf[] = [];
-  if (!before || before.length === 0) return;
+  if (!before || before.length === 0) return false;
   for (const product of products) {
     const parts = leaves(registry, product);
-    if (!parts) return;
+    if (!parts) return false;
     for (const part of parts) after.push(part);
   }
   if (before.map((leaf) => leaf.value).join('') !== after.map((leaf) => leaf.value).join(''))
-    return;
+    return false;
   const aliases: { product: string; source: string; start: number; end: number }[] = [];
   let sourceIndex = 0;
   let start = 0;
@@ -66,7 +70,7 @@ export function recordSplitTextSources(
       start = 0;
     }
     const original = before[sourceIndex];
-    if (!original || start + leaf.value.length > original.value.length) return;
+    if (!original || start + leaf.value.length > original.value.length) return false;
     if (leaf.id !== original.id) {
       aliases.push({
         product: leaf.id,
@@ -79,4 +83,22 @@ export function recordSplitTextSources(
   }
   for (const alias of aliases)
     registry.registerSplitText(alias.product, alias.source, alias.start, alias.end);
+  return true;
+}
+
+/**
+ * The nodes that replace `removedKind` in one splice when the edit only partitions its text.
+ *
+ * A format split replaces a RUN with runs. An inline element (a line break or a tab) inserted
+ * inside a run keeps the run and replaces its `w:t` with the `w:t` on either side of the element.
+ * Both are partitions of the same characters, so both alias the text they came from; any other
+ * kind of replacement is not a split.
+ */
+export function splitProductsOf(
+  removedKind: string | null,
+  childIds: readonly string[],
+  kindOf: (id: string) => string | null
+): readonly string[] | null {
+  if (removedKind !== 'run' && removedKind !== 'text') return null;
+  return childIds.filter((id) => kindOf(id) === removedKind);
 }

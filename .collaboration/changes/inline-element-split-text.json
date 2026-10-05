@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Inserting a line break or tab inside a run replaced the run's w:t without recording which text the new w:t nodes came from. A concurrent edit to that text was lost, and two peers splitting the same w:t at once kept its text twice.",
+  "after": "The new w:t nodes record the text slices they partition, and the replacement joins the split dedup, as a format split already does for runs. Concurrent typing and deletion in that text follow the split. When two peers split the same w:t at once, one replacement is kept, so the text appears once and the other peer's line break or tab is not kept. If the peer whose split lost undoes it, the restored text supersedes both splits, as it does for format splits.",
+  "reason": "The change writes the existing split-text alias and split-origin records for one more kind of partition. The record shape, keys, and meaning are unchanged, and released participants already read both at the node level. The candidate passes the cross-version check against 2.26.0.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-inline-element-split.test.ts"],
+  "changeset": "inline-element-split-text",
+  "migration": null
+}

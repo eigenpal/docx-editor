@@ -11,7 +11,11 @@ import type {
 } from '@docx-editor.dev/core/collaboration/replication';
 import { validateEffect, type ApplyJournalResult } from './journal.ts';
 import { JournalProjection, projectEffect } from './journal-projection.ts';
-import { recordSplitTextSources, type SplitTextRecordingRegistry } from './split-text-recording.ts';
+import {
+  recordSplitTextSources,
+  splitProductsOf,
+  type SplitTextRecordingRegistry,
+} from './split-text-recording.ts';
 import { SplitTextSources, type SplitTextRange } from './split-text-sources.ts';
 import { captureInsertionBoundary } from './split-text-boundaries.ts';
 import { PACKAGE_NODES_KEY, NODE_TEXT_FIELD, makeTextRecord, type SharedRecord } from './schema.ts';
@@ -379,10 +383,11 @@ export function projectJournalToShared(
           }
         }
         if (!refusal && effect.childLogicalIds.length > 0) {
-          const runs = effect.childLogicalIds.filter((id) => kindOf(id) === 'run');
-          for (const id of removed)
-            if (kindOf(id) === 'run' && (!reinserted.has(id) || descriptors.has(id)))
-              recordSplitTextSources(recording, id, runs);
+          for (const id of removed) {
+            if (reinserted.has(id) && !descriptors.has(id)) continue;
+            const products = splitProductsOf(kindOf(id), effect.childLogicalIds, kindOf);
+            if (products) recordSplitTextSources(recording, id, products);
+          }
         }
       } else if (effect.kind === 'moveNode') {
         // moveNode's destination index is measured AFTER unlinking the source.
