@@ -128,6 +128,46 @@ describe('customItemsOf', () => {
   });
 });
 
+describe('the active band', () => {
+  /** Mounts CITED with `definition`, puts the caret inside the node, reports what lights up. */
+  function caretInsideNode(definition: typeof citation) {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const editor = createDocxEditor({
+      container,
+      document: CITED,
+      modules: [reviewModule(), customNodesModule({ nodes: [definition] })],
+    });
+    const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 8 },
+      head: { paragraphId, offset: 8 },
+    });
+    const result = {
+      activeKey: editor.surface!.activeReviewKey(),
+      activeBands: container.querySelectorAll('.docx-comment-band--active').length,
+    };
+    editor.destroy();
+    container.remove();
+    return result;
+  }
+
+  test('a carded node lights the band while the caret is inside it', () => {
+    const { activeKey, activeBands } = caretInsideNode(citation);
+    expect(activeKey).not.toBeNull();
+    expect(activeBands).toBeGreaterThan(0);
+  });
+
+  test('a node without reviewCard never becomes active', () => {
+    // It used to: the item exists for the chip's own surfaces, so the caret activated it and
+    // the band lit up for a card the rail never draws.
+    const bare = defineCustomNode({ name: 'citation', tagPrefix: 'acme' });
+    const { activeKey, activeBands } = caretInsideNode(bare);
+    expect(activeKey).toBeNull();
+    expect(activeBands).toBe(0);
+  });
+});
+
 describe('the review rail', () => {
   test('shows the custom card, informational only, and refuses review verbs on it', () => {
     let instance: DocxEditorInstance | null = null;
