@@ -221,10 +221,19 @@ describe('bounded legacy VML projections', () => {
         'mso-width-percent:0;mso-width-percent:0',
         'mso-width-percent:0;mso-width-percent:50'
       ),
-      content.replace('mso-position-horizontal:absolute', 'mso-position-horizontal:center'),
+      content.replace('mso-position-horizontal:absolute', 'mso-position-horizontal:middle'),
+      content.replace('text-align:left', 'rotation:30'),
       content.replace('anchorx="page"', 'anchorx="unknown"'),
     ])
       expect(projectDrawingsInPart(parse(altered))).toHaveLength(0);
+    const centered = onlyProjection(
+      parse(content.replace('mso-position-horizontal:absolute', 'mso-position-horizontal:center'))
+    );
+    expect(centered.position?.horizontal).toEqual({
+      relativeFrom: 'page',
+      align: 'center',
+      offsetEmu: null,
+    });
   });
 
   test('does not project a dead VML fallback beside the selected DrawingML picture', () => {

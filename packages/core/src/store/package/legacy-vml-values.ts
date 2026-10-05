@@ -67,25 +67,45 @@ export function color(value: string | undefined, fallback: string): string | nul
   const indexed = input.match(/^(\S+)\s+\[\d+\]$/);
   const raw = (indexed?.[1] ?? input).toLowerCase();
   if (/^#[\da-f]{6}$/.test(raw)) return raw;
-  return (
-    new Map([
-      ['black', '#000000'],
-      ['white', '#ffffff'],
-      ['red', '#ff0000'],
-      ['blue', '#0000ff'],
-      ['green', '#008000'],
-    ]).get(raw) ?? null
-  );
+  // The three-digit form doubles each digit, as in CSS.
+  if (/^#[\da-f]{3}$/.test(raw)) return '#' + Array.from(raw.slice(1), (d) => d + d).join('');
+  return NAMED_COLORS.get(raw) ?? null;
 }
 
-/** Bound the complete input before doing any splitting, recursion or SVG allocation. */
-export function boundedVml(node: OoxmlNode): boolean {
+/** The sixteen basic color names a VML color attribute can spell. */
+const NAMED_COLORS: ReadonlyMap<string, string> = new Map([
+  ['black', '#000000'],
+  ['silver', '#c0c0c0'],
+  ['gray', '#808080'],
+  ['white', '#ffffff'],
+  ['maroon', '#800000'],
+  ['red', '#ff0000'],
+  ['purple', '#800080'],
+  ['fuchsia', '#ff00ff'],
+  ['green', '#008000'],
+  ['lime', '#00ff00'],
+  ['olive', '#808000'],
+  ['yellow', '#ffff00'],
+  ['navy', '#000080'],
+  ['blue', '#0000ff'],
+  ['teal', '#008080'],
+  ['aqua', '#00ffff'],
+]);
+
+/**
+ * Bound the complete input before doing any splitting, recursion or SVG allocation.
+ *
+ * `story` is a validated text-box story root inside the shape. It is ordinary WML content that
+ * the story layout bounds by its own limits, so this graphic budget counts only its element.
+ */
+export function boundedVml(node: OoxmlNode, story?: OoxmlNode): boolean {
   const stack = [{ node, depth: 0 }];
   let visited = 0,
     characters = 0;
   while (stack.length) {
     const current = stack.pop()!;
     if (++visited > 512 || current.depth > 16) return false;
+    if (current.node === story) continue;
     if (!element(current.node)) {
       if (current.node.value.trim()) return false;
       characters += current.node.value.length;

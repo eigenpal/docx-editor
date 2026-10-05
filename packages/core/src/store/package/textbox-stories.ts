@@ -14,6 +14,7 @@ import {
 } from './drawing-projection.ts';
 import { findDirectChild } from './drawing-shape-projection.ts';
 import { findDirectKind, isElement } from './drawing-projection-walk.ts';
+import { isLegacyVmlAtom, projectLegacyVml } from './legacy-vml-projection.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import {
   DRAWINGML_MAIN_NAMESPACE_URI,
@@ -187,6 +188,27 @@ export function textboxStoriesInPart(part: OoxmlPart): readonly TextboxStoryRoot
     if (frame.node.kind === 'drawing') {
       if (!paragraphAtoms?.has(frame.node.id)) continue;
       appendTextboxStory(stories, frame.node, frame.node.id, paragraphId, hiddenRun);
+      continue;
+    }
+    if (isLegacyVmlAtom(frame.node)) {
+      // A VML shape is one atom. Layout skips one in a hidden run, and a hidden shape paints
+      // nothing, so neither offers a story to reveal.
+      const story = projectLegacyVml(frame.node, part.name);
+      if (
+        paragraphId &&
+        paragraphAtoms?.has(frame.node.id) &&
+        story?.textboxStory &&
+        !story.hidden &&
+        !hiddenRun
+      ) {
+        stories.push(
+          Object.freeze({
+            root: story.textboxStory.content,
+            drawingNodeId: frame.node.id,
+            hostParagraphId: paragraphId,
+          })
+        );
+      }
       continue;
     }
     if (isMcAlternateContent(frame.node)) {

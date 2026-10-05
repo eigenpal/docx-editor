@@ -17,7 +17,7 @@ import {
   MAX_PART_SCAN_ELEMENTS,
 } from '../store/package/drawing-projection.ts';
 import { MAX_XML_DEPTH } from '../store/package/ooxml-drawing-rules.ts';
-import { isLegacyVmlAtom } from '../store/package/legacy-vml-projection.ts';
+import { isLegacyVmlAtom, projectLegacyVml } from '../store/package/legacy-vml-projection.ts';
 
 /** Source content that cannot be certified by the layout snapshot. @public */
 export interface ExportContentWarning {
@@ -87,7 +87,12 @@ function inspectPart(
     }
     // Supported legacy atoms produce drawing records and are diagnosed by the exporter.
     // Legacy atoms selected through MC are not projected by the modern drawing path.
-    if (!mcSelected && isLegacyVmlAtom(node) && !(framed && node.localName === 'object')) continue;
+    if (!mcSelected && isLegacyVmlAtom(node) && !(framed && node.localName === 'object')) {
+      // A laid-out text box story is scanned like a modern one: content it drops still warns.
+      const story = projectLegacyVml(node, part.name)?.textboxStory?.content;
+      if (story) stack.push({ node: story, scope, depth: depth + 1, mcSelected, framed });
+      continue;
+    }
     if (node.namespaceUri === 'urn:schemas-microsoft-com:vml' && node.localName === 'textbox') {
       codes.add('legacy-textbox');
       continue;

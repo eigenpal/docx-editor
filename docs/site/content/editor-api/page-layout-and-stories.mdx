@@ -148,7 +148,7 @@ Sync after accessing `shape.body` and before searching it. Separate writes to di
 
 Repeated `getByTypes()` calls keep only types allowed by every filter. Unknown type values refuse with `InvalidArgument`. Duplicate or missing drawing IDs refuse shape enumeration.
 
-The API reads alternate drawing content through the branch selected for layout. Shapes selected through a legacy VML fallback are not listed. For supported DrawingML text-box stories, saving also updates the retained VML copy.
+The API reads alternate drawing content through the branch selected for layout. Shapes selected through a legacy VML fallback are not listed. A standalone legacy VML shape has no drawing ID, so the API does not list it, and its text box story is not reachable through `shape.body`. For supported DrawingML text-box stories, saving also updates the retained VML copy.
 
 ## Next steps
 
