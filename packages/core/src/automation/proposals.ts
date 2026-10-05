@@ -1,6 +1,7 @@
 // Explicit proposals must remain independent review decisions. Adjacent Word revisions
 // can coalesce, so pending revision boundaries are excluded as well as their interiors.
 import { isInsertableText } from '../store/store/tree-op-inline-elements.ts';
+import { PARAGRAPH_MARK_IN_TEXT } from './line-break-text.ts';
 import type { AutomationOperation } from './operations.ts';
 import type { AutomationError, AutomationErrorCode } from './protocol.ts';
 import type { AutomationStoryReads } from './reads.ts';
@@ -14,7 +15,6 @@ type Proposal = Extract<
   AutomationOperation,
   { op: 'proposeInsertion' | 'proposeDeletion' | 'proposeReplacement' }
 >;
-const PARAGRAPH_BREAKING = /[\r\n\v\f\u2028\u2029]/;
 function invalid(code: AutomationErrorCode, message: string, detail: string): AutomationError {
   return { code, message, detail };
 }
@@ -35,7 +35,7 @@ export function proposalInputError(
     !deletion &&
     (typeof operation.text !== 'string' ||
       (!allowEmpty && !operation.text.length) ||
-      PARAGRAPH_BREAKING.test(operation.text) ||
+      PARAGRAPH_MARK_IN_TEXT.test(operation.text) ||
       !isInsertableText(operation.text))
   ) {
     return invalid('unsupported-content', 'proposals need non-empty inline XML-safe text', 'text');

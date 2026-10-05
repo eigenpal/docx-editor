@@ -88,9 +88,12 @@ export const selectionMode = (value: unknown, target: string): SelectionMode =>
  * habit of splitting paragraphs on an embedded newline is a different operation
  * (`insertParagraph`). Accepting the character and writing it into a run would produce a document
  * whose text reads back with a break that the layout does not honour.
+ *
+ * `\v` is not a paragraph mark: it is a manual line break (`w:br`) inside the paragraph, which
+ * the host writes as one. A control that holds one line refuses it at sync.
  */
 export function insertableText(value: unknown, target: string): string {
   if (typeof value !== 'string') fail({ code: 'InvalidArgument', target });
-  if (/[\r\n\v\f\u2028\u2029]/.test(value)) fail({ code: 'InvalidArgument', target });
+  if (/[\r\n\f\u2028\u2029]/.test(value)) fail({ code: 'InvalidArgument', target });
   return value;
 }

@@ -1,4 +1,5 @@
-import type { AutomationOperation } from './operations.ts';
+import type { AutomationOperation, AutomationPoint } from './operations.ts';
+import { LINE_BREAK_CHAR } from './line-break-text.ts';
 import type { AutomationHandleTable } from './handles.ts';
 import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
 import type { PlannedOperation } from './plan.ts';
@@ -22,7 +23,7 @@ export function planBreakOperation(
     error: { code: 'unsupported-content', message },
   });
   if (operation.breakType !== 'Page' && operation.breakType !== 'SectionNext')
-    return refuse('only Page and SectionNext breaks are supported');
+    return refuse('only Line, Page, and SectionNext breaks are supported');
   if (!['Before', 'After', 'Start', 'End', 'Replace'].includes(operation.location))
     return refuse('invalid break insertion location');
   const resolved = resolveSpanRef(operation.span, handles, reads);
@@ -61,4 +62,45 @@ export function planBreakOperation(
     ops,
     answer: () => ({ kind: 'applied' }),
   };
+}
+
+/**
+ * A `Line` break planned as the text write it is: `\v` inserted at the break position, or
+ * written over the span for `Replace`.
+ *
+ * It then composes with other text edits in its paragraph, records a tracked insertion when an
+ * author is tracking, and creates a missing header or footer, on the same terms as text. The
+ * answer stays `applied`, as for every break type.
+ */
+export function planLineBreak(
+  operation: AutomationOperation,
+  plan: (text: AutomationOperation) => PlannedOperation
+): PlannedOperation | null {
+  if (operation.op !== 'insertBreak' || operation.breakType !== 'Line') return null;
+  const { span, location } = operation;
+  const edge = (at: 'start' | 'end'): AutomationPoint =>
+    'body' in span
+      ? { body: span.body, at }
+      : 'paragraph' in span
+        ? { paragraph: span.paragraph, at }
+        : at === 'start'
+          ? span.start
+          : span.end;
+  const write: AutomationOperation | null =
+    location === 'Replace'
+      ? { op: 'replaceSpan', span, text: LINE_BREAK_CHAR }
+      : location === 'Before' || location === 'Start'
+        ? { op: 'insertText', at: edge('start'), text: LINE_BREAK_CHAR }
+        : location === 'After' || location === 'End'
+          ? { op: 'insertText', at: edge('end'), text: LINE_BREAK_CHAR }
+          : null;
+  if (!write)
+    return {
+      ok: false,
+      error: { code: 'unsupported-content', message: 'invalid break insertion location' },
+    };
+  const planned = plan(write);
+  return planned.ok && planned.kind === 'command'
+    ? { ...planned, answer: () => ({ kind: 'applied' as const }) }
+    : planned;
 }

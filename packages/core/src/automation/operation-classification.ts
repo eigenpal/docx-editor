@@ -142,6 +142,10 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
  * that as its own undo unit rather than as ops inside a story transaction. Two of them, or one
  * beside a story command, would be two commits: two revisions, and a moment where half the
  * caller's batch is published. Refused while planning instead.
+ *
+ * Some operations are solitary only in some forms: an `insertBreak` with `Line` is a text write
+ * and shares its batch, and some `updateTable` mutations travel alone. Classify one operation
+ * with {@link isSolitaryAutomationCommand}, not by membership here.
  */
 export const AUTOMATION_SOLITARY_OPERATIONS = [
   'removeDocumentInformation',
@@ -165,7 +169,9 @@ const SOLITARY: ReadonlySet<string> = new Set(AUTOMATION_SOLITARY_OPERATIONS);
 /** Whether an operation must be the only one in its batch. */
 export function isSolitaryAutomationCommand(operation: AutomationOperation): boolean {
   return (
-    SOLITARY.has(operation.op) ||
+    // A line break is an inline insertion, like text, so it shares its batch.
+    (SOLITARY.has(operation.op) &&
+      !(operation.op === 'insertBreak' && operation.breakType === 'Line')) ||
     (operation.op === 'updateTable' &&
       ['addRows', 'addColumns', 'deleteRows', 'deleteColumns', 'delete'].includes(
         operation.mutation.kind

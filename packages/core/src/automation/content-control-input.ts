@@ -12,6 +12,10 @@ import {
   type ContentControlProperties,
 } from '../store/package/content-control-nodes.ts';
 import type { ContentControlValueInput } from '../store/store/tree-op-content-controls.ts';
+import {
+  LINE_BREAK_TEXT,
+  propertiesHoldLineBreaks,
+} from '../store/store/tree-op-inline-elements.ts';
 import type { AutomationError, AutomationErrorCode } from './protocol.ts';
 
 /**
@@ -56,10 +60,11 @@ const MAX_CONTROL_STRING = 4_096;
 
 /** Text insertion cannot replace or append to a typed control value. */
 export function contentControlTextInsertionError(
-  type: ContentControlProperties['type'],
+  properties: Pick<ContentControlProperties, 'type' | 'multiLine'>,
   text: unknown,
   at: unknown
 ): AutomationError | null {
+  const { type } = properties;
   if (!['richText', 'plainText', 'comboBox', 'untyped'].includes(type))
     return {
       code: 'unsupported-capability',
@@ -68,6 +73,13 @@ export function contentControlTextInsertionError(
     };
   if (typeof text !== 'string')
     return { code: 'unsupported-content', message: 'text is required', detail: 'text' };
+  // A line break is for rich text and multi-line plain text; a single-line field holds one line.
+  if (text.includes(LINE_BREAK_TEXT) && !propertiesHoldLineBreaks(properties))
+    return {
+      code: 'unsupported-content',
+      message: 'a single-line control cannot hold a line break',
+      detail: 'line-break-in-single-line-control',
+    };
   if (at !== 'replace' && at !== 'start' && at !== 'end')
     return {
       code: 'unsupported-content',

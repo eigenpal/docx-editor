@@ -449,7 +449,11 @@ export class Range extends ModelObject implements PromisedItem {
     return picture;
   }
 
-  /** Page and next-page section breaks are supported; other break types refuse at sync. */
+  /**
+   * Line, page, and next-page section breaks are supported; other break types refuse at sync.
+   * TrackMineOnly records a line break as a tracked insertion. Page and section breaks refuse
+   * while tracking.
+   */
   insertBreak(
     breakType:
       | BreakType

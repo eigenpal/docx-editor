@@ -58,11 +58,15 @@ await runtime.run(async (context) => {
 
 Use the returned body's paragraph, search, bookmark, field, and review accessors for that story. `Body.bookmarks` and `Body.revisions` do not combine separate stories. The public surface does not expose header/footer linkage or first-page layout toggles.
 
-## Insert page and section breaks
+## Insert line, page, and section breaks
 
-`Range.insertBreak(breakType, insertLocation)` supports `Page` and `SectionNext`. The insertion location must be `Before` or `After`. A next-page section break requires a main-body paragraph outside a table. The exported `BreakType` also names unsupported kinds. The runtime rejects `Line`, `Next`, and other section break kinds.
+`Range.insertBreak(breakType, insertLocation)` supports `Line`, `Page`, and `SectionNext`. The insertion location must be `Before` or `After`. The exported `BreakType` also names unsupported kinds. The runtime rejects `Next` and other section break kinds.
 
-Queue break insertion alone in its write transaction:
+A `Line` break is a manual line break inside the paragraph. It works in every story, including headers, footers, notes, table cells, and text boxes. It can share a sync with other edits, including text edits in the same paragraph. With `TrackMineOnly`, it becomes a tracked insertion.
+
+A next-page section break requires a main-body paragraph outside a table. `Page` and `SectionNext` refuse while change tracking is on.
+
+Queue a page or section break alone in its write transaction:
 
 ```ts
 await runtime.run(async (context) => {

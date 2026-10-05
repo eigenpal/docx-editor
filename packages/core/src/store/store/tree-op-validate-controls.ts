@@ -1,4 +1,9 @@
-import { isInsertableText } from './tree-op-inline-elements.ts';
+import {
+  isInsertableText,
+  LINE_BREAK_TEXT,
+  propertiesHoldLineBreaks,
+} from './tree-op-inline-elements.ts';
+import { contentControlPropertiesOf } from '../package/content-control-nodes.ts';
 import { canTrackContentControl } from './tracked-content-control-insert.ts';
 import { findNode } from '../package/ooxml-edit.ts';
 import {
@@ -283,6 +288,11 @@ export function validateSetContentControlValue(
   // Temporary unwrap is part of a successful value write; refuse when the wrapper is locked.
   if (isTemporaryControl(control) && effectiveLockOf(part, control).wrapper) return 'locked';
   if (typeof value !== 'string' || !isInsertableText(value)) return 'invalidArgs';
+  if (
+    value.includes(LINE_BREAK_TEXT) &&
+    !propertiesHoldLineBreaks(contentControlPropertiesOf(control))
+  )
+    return 'invalidArgs';
 
   const type = contentControlValueTypeOf(control);
   // A value becomes one run inside the structure the control wraps; content no value can stand

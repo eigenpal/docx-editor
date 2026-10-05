@@ -25,7 +25,8 @@ import { planTableOperation } from './plan-tables.ts';
 import { planVirtualFurniture } from './virtual-furniture.ts';
 import { isAutomationCommand } from './operations.ts';
 import { planPictures } from './plan-pictures.ts';
-import { planBreakOperation } from './plan-breaks.ts';
+import { planBreakOperation, planLineBreak } from './plan-breaks.ts';
+import { insertTextOps, lineBreakRefusal, PARAGRAPH_MARK_IN_TEXT } from './line-break-text.ts';
 import { automationListLevelExists } from './list-authoring.ts';
 import { planListAuthoring } from './plan-list-authoring.ts';
 // What each operation MEANS, as reads off a snapshot and `TreeDocOp`s for one transaction.
@@ -149,9 +150,6 @@ import {
   customNodeWriteOf,
 } from './custom-node-plan.ts';
 import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
-
-/** Paragraph-breaking characters cannot be authored as ordinary run text. */
-const PARAGRAPH_BREAKING = /[\r\n\v\f\u2028\u2029]/;
 
 /** Most delimiters one split accepts, and the longest each may be. Both are host input. */
 const MAX_DELIMITERS = 16;
@@ -561,8 +559,10 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     text: string,
     prepend = false
   ): PlannedOperation => {
-    if (typeof text !== 'string' || PARAGRAPH_BREAKING.test(text))
+    if (typeof text !== 'string' || PARAGRAPH_MARK_IN_TEXT.test(text))
       return refuse('unsupported-content', 'insertText needs text without paragraph marks', 'text');
+    const lineBreak = lineBreakRefusal(plan.reads.part, at.paragraphId, at.offset, at.offset, text);
+    if (lineBreak) return lineBreak;
     const pin = pinWrite(plan);
     if (pin) return pin;
     const tracked = host.replacementLanding?.(at.paragraphId, at.offset, at.offset) != null;
@@ -573,9 +573,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       return planPlainText(plan, { start: at, end: at }, text, prepend);
     const conflict = claim(plan, at.paragraphId);
     if (conflict) return conflict;
-    const ops: TreeDocOp[] = text.length
-      ? [{ op: 'insertText', paragraphId: at.paragraphId, offset: at.offset, text }]
-      : [];
+    const ops = insertTextOps(at.paragraphId, at.offset, text);
     return {
       ok: true,
       kind: 'command',
@@ -596,7 +594,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     const reads = plan.reads;
     if (typeof text !== 'string')
       return refuse('unsupported-content', 'replaceSpan needs text', 'text');
-    if (PARAGRAPH_BREAKING.test(text)) {
+    if (PARAGRAPH_MARK_IN_TEXT.test(text)) {
       return refuse(
         'unsupported-content',
         'text carrying a paragraph mark is not written by this host',
@@ -607,6 +605,9 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     const ids = spanParagraphIds(range, reads);
     const first = range.start.paragraphId;
     const ops: TreeDocOp[] = [];
+    const textEnd = ids.length === 1 ? range.end.offset : range.start.offset;
+    const lineBreak = lineBreakRefusal(reads.part, first, range.start.offset, textEnd, text);
+    if (lineBreak) return lineBreak;
 
     const pin = pinWrite(plan);
     if (pin) return pin;
@@ -662,7 +663,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     // Tracked deletions retain text. Their host-provided landing has no plain
     // length delta, so these edits claim their paragraph and cannot compose.
     const at = landing ?? range.start.offset;
-    if (text.length > 0) ops.push({ op: 'insertText', paragraphId: first, offset: at, text });
+    ops.push(...insertTextOps(first, at, text));
 
     const start: ResolvedPoint = { ...range.start, paragraphId: first, offset: at };
     const answer = (): AutomationValue => ({
@@ -680,7 +681,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     const reads = plan.reads;
     if (typeof text !== 'string')
       return refuse('unsupported-content', 'replaceSpan needs text', 'text');
-    if (PARAGRAPH_BREAKING.test(text)) {
+    if (PARAGRAPH_MARK_IN_TEXT.test(text)) {
       return refuse(
         'unsupported-content',
         'text carrying a paragraph mark is not written by this host',
@@ -744,7 +745,9 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     // offset 0 the store relocates it anyway, and the span answered here then named the
     // struck words rather than what replaced them.
     const at = host.replacementLanding?.(target, 0, targetLength) ?? 0;
-    if (text.length > 0) ops.push({ op: 'insertText', paragraphId: target, offset: at, text });
+    const lineBreak = lineBreakRefusal(reads.part, target, 0, targetLength, text);
+    if (lineBreak) return lineBreak;
+    ops.push(...insertTextOps(target, at, text));
 
     for (const block of removed) {
       if (block.id === keeper?.id) continue;
@@ -775,7 +778,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       !Array.isArray(paragraphs) ||
       paragraphs.length < 1 ||
       paragraphs.length > 10_000 ||
-      paragraphs.some((text) => typeof text !== 'string' || PARAGRAPH_BREAKING.test(text)) ||
+      paragraphs.some((text) => typeof text !== 'string' || PARAGRAPH_MARK_IN_TEXT.test(text)) ||
       !areInsertableTexts(paragraphs)
     ) {
       return refuse(
@@ -818,7 +821,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     const reads = plan.reads;
     if (typeof text !== 'string')
       return refuse('unsupported-content', 'insertParagraph needs text', 'text');
-    if (PARAGRAPH_BREAKING.test(text)) {
+    if (PARAGRAPH_MARK_IN_TEXT.test(text)) {
       return refuse(
         'unsupported-content',
         'a paragraph mark inside a paragraph\u2019s text is not written by this host',
@@ -833,18 +836,19 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     const anchorSlot = plan.slotById.get(anchor.paragraphId);
     if (!anchorSlot) return refuse('invalid-handle', 'that paragraph is not in the body');
     const anchorLength = (reads.rawText(anchor.paragraphId) ?? '').length;
+    const edge = where === 'after' ? anchorLength : 0;
+    const lineBreak = lineBreakRefusal(reads.part, anchor.paragraphId, edge, edge, text);
+    if (lineBreak) return lineBreak;
     const ops: TreeDocOp[] = [];
     // One paragraph becomes two by splitting one: `splitParagraph` leaves the HEAD on the
     // original node and puts the TAIL on a new one. So "after" writes the new text at the end
     // and cuts it off, and "before" writes it at the start and cuts everything else off —
     // which moves the ANCHOR'S content to the new node, and its identity with it.
     if (where === 'after') {
-      if (text.length > 0)
-        ops.push({ op: 'insertText', paragraphId: anchor.paragraphId, offset: anchorLength, text });
+      ops.push(...insertTextOps(anchor.paragraphId, anchorLength, text));
       ops.push({ op: 'splitParagraph', paragraphId: anchor.paragraphId, offset: anchorLength });
     } else {
-      if (text.length > 0)
-        ops.push({ op: 'insertText', paragraphId: anchor.paragraphId, offset: 0, text });
+      ops.push(...insertTextOps(anchor.paragraphId, 0, text));
       ops.push({ op: 'splitParagraph', paragraphId: anchor.paragraphId, offset: text.length });
     }
     const fresh = insertSlot(plan, positionOf(plan, anchorSlot) + 1);
@@ -1531,6 +1535,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
   };
 
   const plan = (operation: AutomationOperation, trackingAuthor?: string): PlannedOperation => {
+    const lineBreak = planLineBreak(operation, (text) => plan(text, trackingAuthor));
+    if (lineBreak) return lineBreak;
     const virtual = planVirtualFurniture(operation, host, (reads) =>
       createBatchPlanner({ ...host, reads })
     );
@@ -2719,7 +2725,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         const found = controlOf(operation.contentControl);
         if (!('control' in found)) return found;
         const error = contentControlTextInsertionError(
-          found.control.properties.type,
+          found.control.properties,
           operation.text,
           operation.at
         );

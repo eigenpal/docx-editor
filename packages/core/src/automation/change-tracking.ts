@@ -53,6 +53,12 @@ export function trackingStep(
 export function supportsTrackedAutomationOperation(operation: AutomationOperation): boolean {
   if (!isAutomationCommand(operation) || operation.op === 'setChangeTrackingMode') return true;
   if (operation.op === 'insertText') return true;
+  // A line break is a text write; a tracked whole-story replacement is not supported.
+  if (operation.op === 'insertBreak')
+    return (
+      operation.breakType === 'Line' &&
+      !(operation.location === 'Replace' && 'body' in operation.span)
+    );
   if (operation.op === 'insertTable' || operation.op === 'insertTableRows') return true;
   if (operation.op === 'updateTable' || operation.op === 'updateTableCell') return true;
   if (operation.op === 'replaceSpan' && !('body' in operation.span)) return true;
