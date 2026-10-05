@@ -151,30 +151,50 @@ function paintedBox(element: HTMLElement, sheet: HTMLElement) {
   return null;
 }
 
-/** The element a browser gives the event to at `point`, given the body element under it. */
+function contains(box: { x: number; y: number; width: number; height: number }, point: Point) {
+  return (
+    point.x >= box.x &&
+    point.x < box.x + box.width &&
+    point.y >= box.y &&
+    point.y < box.y + box.height
+  );
+}
+
+/** The topmost pointer-active element of `layer` whose painted box contains `point`. */
+function layerTarget(layer: HTMLElement, sheet: HTMLElement, point: Point): HTMLElement | null {
+  const nodes = [layer, ...layer.querySelectorAll<HTMLElement>('*')].reverse();
+  for (const node of nodes) {
+    if (pointerEvents(node) === 'none') continue;
+    const box = paintedBox(node, sheet);
+    if (box && contains(box, point)) return node;
+  }
+  return null;
+}
+
+/**
+ * The element a browser gives the event to at `point`, given the body element under it.
+ *
+ * Layers painted after the one holding `under` are searched first, then `under` itself, then
+ * the layers painted before it (the header and footer layer sits under the body). A press
+ * nothing takes lands on the sheet.
+ */
 function browserTarget(sheet: HTMLElement, under: HTMLElement, point: Point): HTMLElement {
   const layers = [...sheet.children] as HTMLElement[];
   const host = layers.findIndex((layer) => layer.contains(under));
   expect(host).toBeGreaterThanOrEqual(0);
   for (let index = layers.length - 1; index > host; index -= 1) {
-    const layer = layers[index]!;
-    const nodes = [layer, ...layer.querySelectorAll<HTMLElement>('*')].reverse();
-    for (const node of nodes) {
-      if (pointerEvents(node) === 'none') continue;
-      const box = paintedBox(node, sheet);
-      if (
-        box &&
-        point.x >= box.x &&
-        point.x < box.x + box.width &&
-        point.y >= box.y &&
-        point.y < box.y + box.height
-      ) {
-        return node;
-      }
-    }
+    const hit = layerTarget(layers[index]!, sheet, point);
+    if (hit) return hit;
   }
-  expect(pointerEvents(under)).not.toBe('none');
-  return under;
+  // The caller names the body element under the point. A whole sheet layer (the content box)
+  // only takes the press inside its own box.
+  const underBox = under === layers[host] ? paintedBox(under, sheet) : null;
+  if (pointerEvents(under) !== 'none' && (!underBox || contains(underBox, point))) return under;
+  for (let index = host - 1; index >= 0; index -= 1) {
+    const hit = layerTarget(layers[index]!, sheet, point);
+    if (hit) return hit;
+  }
+  return sheet;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -214,6 +234,8 @@ interface FixtureOptions {
   readonly top?: number;
   /** Extra header content after the right-aligned lines. */
   readonly headerExtra?: string;
+  /** Extra body content before the first paragraph. */
+  readonly bodyExtra?: string;
 }
 
 const PARAGRAPH = { cite: 1, picture: 2, link: 3, checkbox: 4 } as const;
@@ -222,6 +244,7 @@ function overlapDocx(options: FixtureOptions = {}): Uint8Array {
   const header = Array.from({ length: 12 }, (_, i) => right(`H${i + 1}`)).join('');
   const footer = Array.from({ length: 8 }, (_, i) => right(`F${i + 1}`)).join('');
   const body =
+    (options.bodyExtra ?? '') +
     para('Body word 1') +
     '<w:p><w:r><w:t>Cite</w:t></w:r><w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr>' +
     '<w:footnoteReference w:id="1"/></w:r></w:p>' +
@@ -396,9 +419,12 @@ describe('a closed header over body lines passes body presses through', () => {
     const header = band(mounted, 'header');
     expect(header.hasAttribute('data-docx-hf-over-body')).toBe(true);
     expect(browserTarget(mounted.sheet, cite, point) === cite).toBe(true);
-    // Control: without the marker the painted band covers the citation, as before the fix.
+    // The band paints under the body, so the citation stays on top without the marker too.
+    const layers = [...mounted.sheet.children];
+    const body = mounted.sheet.querySelector(':scope > .docx-page-content')!;
+    expect(layers.indexOf(header)).toBeLessThan(layers.indexOf(body));
     header.removeAttribute('data-docx-hf-over-body');
-    expect(header.contains(browserTarget(mounted.sheet, cite, point))).toBe(true);
+    expect(browserTarget(mounted.sheet, cite, point) === cite).toBe(true);
     mounted.surface.destroy();
   });
 
@@ -529,7 +555,11 @@ describe('hover over a band that overlaps the body', () => {
     expect(header.hasAttribute('data-docx-hf-over-body')).toBe(false);
     // The footer still overlaps (negative bottom); only the header stays in its margin.
     expect(mounted.sheet.querySelector('[data-docx-hf-hover="header"]') === null).toBe(true);
-    expect(header.nextElementSibling?.getAttribute('data-docx-hf-hint')).toBe('header');
+    // The pill is painted after the body, so body text never covers it.
+    const layers = [...mounted.sheet.children];
+    const hint = mounted.sheet.querySelector(':scope > [data-docx-hf-hint="header"]')!;
+    const body = mounted.sheet.querySelector(':scope > .docx-page-content')!;
+    expect(layers.indexOf(hint)).toBeGreaterThan(layers.indexOf(body));
     expect(pointerEvents(header)).toBe('auto');
     mounted.surface.destroy();
   });
@@ -567,6 +597,33 @@ describe('an open header or footer over body lines', () => {
     mounted.surface.destroy();
   });
 
+  test('a body drawing over the open header does not take its presses', () => {
+    // The body paints over the header layer, so its drawings sit over the open story.
+    const mounted = mount({ bodyExtra: floatingPicture(61, 300, 120) });
+    expect(mounted.surface.enterHeaderFooter({ rId: 'rIdHdr', pageIndex: 0 })).toBe(true);
+    const open = band(mounted, 'header');
+    const drawing = mounted.sheet.querySelector<HTMLElement>(
+      ':scope > .docx-drawing-layer-front:not([data-docx-hf-front]) > *'
+    )!;
+    expect(drawing === null).toBe(false);
+    const layers = [...mounted.sheet.children];
+    expect(layers.indexOf(open)).toBeLessThan(layers.indexOf(drawing.parentElement!));
+    expect(pointerEvents(drawing)).toBe('none');
+    const story = mounted.page.header!;
+    const lines = paragraphs(story.fragments);
+    const line = lines[8]!.lines[0]!;
+    const span = line.spans.at(-1)!;
+    const point = {
+      x: story.box.x + span.box.x + span.box.width - 1,
+      y: story.box.y + line.box.y + line.box.height / 2,
+    };
+    const body = mounted.sheet.querySelector<HTMLElement>(':scope > .docx-page-content')!;
+    expect(open.contains(browserTarget(mounted.sheet, body, point))).toBe(true);
+    mounted.surface.exitHeaderFooter();
+    expect(pointerEvents(drawing)).toBe('auto');
+    mounted.surface.destroy();
+  });
+
   test('a click on footnote text under the open footer leaves the footer for the note', () => {
     const mounted = mount();
     const footer = mounted.page.footer! as HeaderFooterStoryRecord;
@@ -581,8 +638,8 @@ describe('an open header or footer over body lines', () => {
     expect(mounted.surface.enterHeaderFooter({ rId: 'rIdFtr', pageIndex: 0 })).toBe(true);
     const noteEl = mounted.sheet.querySelector<HTMLElement>('.docx-note[data-docx-note-id="1"]')!;
     const target = browserTarget(mounted.sheet, noteEl, point);
-    // The open footer is on top; the geometry gives the press to the note.
-    expect(band(mounted, 'footer').contains(target)).toBe(true);
+    // The note area belongs to the main document, which paints over the open footer.
+    expect(target === noteEl || noteEl.contains(target)).toBe(true);
     press(target, point);
     expect(mounted.surface.activeScope()).toEqual({ kind: 'note', id: 'footnote:1' });
     mounted.surface.destroy();

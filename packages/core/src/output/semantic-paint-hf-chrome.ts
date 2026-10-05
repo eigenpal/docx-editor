@@ -74,7 +74,9 @@ function headerFooterOverlapsBody(page: PageRecord, story: HeaderFooterStoryReco
  * Hover chrome for a painted header or footer band: the tint target and the edit pill.
  *
  * A band that stays in its margin tints its own box on hover. The pill sits just outside the
- * box and shows through `.docx-hf:hover + .docx-hf-edit-hint`, so it must follow the band.
+ * box and shows through `.docx-hf:hover ~ .docx-hf-edit-hint` of the same kind, so the
+ * caller appends the returned pill after the band: after the body, so the body never
+ * covers it, because the band itself paints under the body.
  *
  * A band over body lines is marked `data-docx-hf-over-body`. While it is closed, the
  * stylesheet makes it and every descendant transparent to the pointer. Body links, note
@@ -85,17 +87,16 @@ function headerFooterOverlapsBody(page: PageRecord, story: HeaderFooterStoryReco
  */
 export function appendHeaderFooterHoverChrome(
   document: Document,
-  sheet: HTMLElement,
   band: HTMLElement,
   page: PageRecord,
   story: HeaderFooterStoryRecord,
   scale: number
-): void {
+): HTMLElement | null {
   let anchor: LayoutBox = story.box;
   if (headerFooterOverlapsBody(page, story)) {
     band.dataset.docxHfOverBody = '';
     const margin = headerFooterMarginPart(page, story);
-    if (!margin) return;
+    if (!margin) return null;
     const hover = document.createElement('div');
     hover.className = 'docx-hf-hover';
     hover.dataset.docxHfHover = story.kind;
@@ -120,7 +121,7 @@ export function appendHeaderFooterHoverChrome(
       ? `${(anchor.y + anchor.height - page.box.y) * scale}px`
       : `${(anchor.y - page.box.y) * scale}px`;
   if (story.kind === 'footer') hint.style.transform = 'translateY(-100%)';
-  sheet.append(hint);
+  return hint;
 }
 
 /** Retint furniture chrome on retained pages. Newly painted pages go through the same path. */

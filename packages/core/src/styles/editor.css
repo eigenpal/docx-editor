@@ -1399,6 +1399,22 @@ a.docx-hyperlink:focus-visible {
   z-index: 2;
 }
 
+/* The header and footer layer paints under the main document, so its page-anchored
+ * in-front drawings stay at the body's level and in the sheet's child order instead of
+ * rising over the body. `0`, not `auto`, keeps the layer a stacking context, so a raised
+ * table border or tab leader inside a drawing cannot escape over the body either. The
+ * band's own in-front drawings are contained by the band, whose clip makes it a stacking
+ * context. */
+.docx-page > .docx-drawing-layer-front[data-docx-hf-front] {
+  z-index: 0;
+}
+
+/* A `front` page border is over every drawing on the sheet, the body's in-front drawings
+ * included: the same level as their layer, and later in the sheet's child order. */
+.docx-page > .docx-page-borders[data-docx-z-order='front'] {
+  z-index: 2;
+}
+
 .docx-drawing-placeholder-card {
   display: flex;
   align-items: center;
@@ -3138,7 +3154,7 @@ a.docx-hyperlink:focus-visible {
 
 /* Hovering an EXISTING inactive band tints it and floats an edit invitation beside it —
  * without this the enterable header answered a hover with nothing at all. The pill is a
- * sibling because the `+` selector below needs it right after the band. */
+ * sibling of the band so the `~` selector below can reach it. */
 .docx-pages .docx-hf:not([data-docx-hf-active]):not(.docx-hf--placeholder):hover {
   background: var(--doc-primary-light);
   border-radius: 4px;
@@ -3152,7 +3168,14 @@ a.docx-hyperlink:focus-visible {
   transition: opacity 0.1s ease;
 }
 
-.docx-pages .docx-hf:not([data-docx-hf-active]):hover + .docx-hf-edit-hint {
+/* The pill is a LATER sibling, not the next one: the band paints under the body and the
+ * pill over it, so the kinds are matched here instead of by adjacency. */
+.docx-pages
+  .docx-hf[data-docx-hf='header']:not([data-docx-hf-active]):hover
+  ~ .docx-hf-edit-hint[data-docx-hf-hint='header'],
+.docx-pages
+  .docx-hf[data-docx-hf='footer']:not([data-docx-hf-active]):hover
+  ~ .docx-hf-edit-hint[data-docx-hf-hint='footer'] {
   opacity: 1;
 }
 
@@ -3271,6 +3294,21 @@ a.docx-hyperlink:focus-visible {
   transition: opacity 0.15s ease;
 }
 
+/* The header and footer layer paints UNDER the body, so the body's own anchored drawings and
+ * inline objects sit over the open story. While it is open they dim with the body text and
+ * never take a press meant for it. `!important` and the universal child selector beat the
+ * explicit `auto` that drawings carry inline. */
+.docx-pages--hf-editing .docx-page > .docx-drawing-layer:not([data-docx-hf-front]) {
+  opacity: var(--doc-hf-dim-opacity);
+  transition: opacity 0.15s ease;
+}
+
+.docx-pages--hf-editing .docx-page-content *,
+.docx-pages--hf-editing .docx-page > .docx-drawing-layer:not([data-docx-hf-front]),
+.docx-pages--hf-editing .docx-page > .docx-drawing-layer:not([data-docx-hf-front]) * {
+  pointer-events: none !important;
+}
+
 .docx-pages--hf-editing .docx-hf:not([data-docx-hf-active]) {
   opacity: var(--doc-hf-dim-opacity);
   cursor: default;
@@ -3308,6 +3346,7 @@ a.docx-hyperlink:focus-visible {
 
 @media print {
   .docx-pages--hf-editing .docx-page-content,
+  .docx-pages--hf-editing .docx-page > .docx-drawing-layer:not([data-docx-hf-front]),
   .docx-pages--hf-editing .docx-hf {
     opacity: 1 !important;
     pointer-events: auto !important;

@@ -322,11 +322,15 @@ describe('header band ink overflows instead of clipping', () => {
     }
   });
 
-  test('an inFront header shape still paints in the band, above the body', () => {
+  test('an inFront header shape paints in the band, and the band paints under the body', () => {
     const painted = paint(layout);
     const band = painted.querySelector<HTMLElement>('[data-docx-hf="header"]')!;
     expect(band.querySelector('.docx-drawing-layer > *')).toBeTruthy();
     expect(painted.querySelector('[data-docx-hf-behind="header"]')).toBeNull();
+    // In front of the header text only: header content is a layer under the main document.
+    const children = [...painted.querySelector<HTMLElement>('.docx-page')!.children];
+    const content = painted.querySelector<HTMLElement>('.docx-page-content')!;
+    expect(children.indexOf(band)).toBeLessThan(children.indexOf(content));
   });
 
   test('a nested drawing inside inert furniture is inert too', () => {

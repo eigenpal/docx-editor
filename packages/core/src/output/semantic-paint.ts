@@ -46,12 +46,10 @@ import { applyParagraphFormatAnchor } from './paragraph-format-anchor.ts';
 import type {
   BlockFragmentRecord,
   ContentControlBoundaryRecord,
-  LayoutBox,
   LineRecord,
   PageRecord,
   ParagraphBorderStrokeRecord,
   ParagraphFragmentRecord,
-  HeaderFooterStoryRecord,
   ResolvedRunStyle,
   SemanticLayout,
   SpanLinkRecord,
@@ -66,17 +64,12 @@ import {
   reconcilePageChangeBars,
   type ChangeBarsMode,
 } from './semantic-paint-change-bars.ts';
-import {
-  appendHeaderFooterHoverChrome,
-  applyHeaderFooterPaintChrome,
-  headerFooterBandHeightPt,
-  headerFooterBandIsActive,
-} from './semantic-paint-hf-chrome.ts';
+import { applyHeaderFooterPaintChrome } from './semantic-paint-hf-chrome.ts';
+import { paintHeaderFooterLayer } from './semantic-paint-hf-layer.ts';
 import { anchoredDrawingsOf } from '../layout/semantic-records.ts';
 import { lineSegments } from '../layout/line-segments.ts';
 import { pictureIsRtl } from '../layout/inline-picture-caret.ts';
 import { type AnchoredDrawingRecord } from '../layout/drawing-layout.ts';
-import { headerFooterAnchoredDrawingOrigin } from '../layout/header-footer-drawing-origin.ts';
 import {
   collectUsedDrawingElementKeys,
   collectUsedDrawingResourceKeys,
@@ -412,9 +405,9 @@ function appendAnchoredDrawingsForRecords(
   },
   layer: 'behind' | 'inFront',
   // Inert drawings paint but never take a click. Header/footer bands pass `false` while
-  // the band is not being edited: their box overflows are VISIBLE (Word draws header ink
-  // into the margins and over the body), so a shape hanging past the band must not
-  // swallow clicks meant for the document text underneath (#856).
+  // the band is not being edited: their box overflows are VISIBLE (header ink reaches into
+  // the margins and under the body), so a shape hanging past the band must not swallow
+  // clicks meant for the document (#856).
   interactive = true,
   /** Marks a page-relative furniture layer so in-place chrome can retint hit-testing. */
   hfFrontKind?: 'header' | 'footer'
@@ -453,114 +446,6 @@ function appendAnchoredDrawingsForRecords(
     layerElement.append(element);
   }
   if (layerElement.childElementCount > 0) parent.append(layerElement);
-}
-
-function isPageRelativeHfAnchor(drawing: AnchoredDrawingRecord): boolean {
-  return drawing.horizontalFrame === 'page' || drawing.verticalFrame === 'page';
-}
-
-function hfAnchorOnPageSheet(
-  story: HeaderFooterStoryRecord,
-  drawing: AnchoredDrawingRecord,
-  pageBox: { readonly x: number; readonly y: number }
-): AnchoredDrawingRecord {
-  const pb = drawing.paintBounds;
-  // Layout resolves page-frame axes in page-CONTENT coordinates; the record's frame origin is
-  // the page edge in that space (−margin), so the sheet position needs the page box, not the
-  // story box — a footer story's own Y would double-count most of the page height. Axes on
-  // story-relative frames keep the story box base.
-  const absoluteOrigin = headerFooterAnchoredDrawingOrigin(drawing, story.box, pageBox);
-  const dx = absoluteOrigin.x - drawing.x;
-  const dy = absoluteOrigin.y - drawing.y;
-  const shift = (box: LayoutBox): LayoutBox =>
-    Object.freeze({ x: box.x + dx, y: box.y + dy, width: box.width, height: box.height });
-  return Object.freeze({
-    ...drawing,
-    x: drawing.x + dx,
-    y: drawing.y + dy,
-    paintBounds: shift(pb),
-    hitBounds: shift(drawing.hitBounds),
-    geometry: Object.freeze({
-      ...drawing.geometry,
-      contentBounds: shift(drawing.geometry.contentBounds),
-      paintBounds: shift(drawing.geometry.paintBounds),
-      ...(drawing.geometry.clipPolygon
-        ? {
-            clipPolygon: Object.freeze(
-              drawing.geometry.clipPolygon.map((point) =>
-                Object.freeze({ x: point.x + dx, y: point.y + dy })
-              )
-            ),
-          }
-        : {}),
-    }),
-  });
-}
-
-/**
- * Every header/footer BEHIND drawing, lifted onto the sheet and clipped to it.
- *
- * Both frames go through `hfAnchorOnPageSheet`: it resolves a page-frame axis against the
- * page box and a story-relative one against the story box, which is what makes one layer
- * able to carry both. Inert always — furniture behind the body must never take a click
- * meant for the text over it, and the band, not this layer, is what editing activates.
- */
-function appendHfBehindDrawingLayer(
-  document: Document,
-  pageElement: HTMLElement,
-  story: HeaderFooterStoryRecord,
-  drawings: readonly AnchoredDrawingRecord[],
-  ctx: ResolvedPaintContext,
-  pageOrigin: {
-    readonly x: number;
-    readonly y: number;
-    readonly width: number;
-    readonly height: number;
-  }
-): void {
-  const lifted = drawings.map((drawing) => hfAnchorOnPageSheet(story, drawing, pageOrigin));
-  // The wrapper spans the sheet exactly, so `overflow: hidden` on it is the paper edge:
-  // furniture ink can reach anywhere on this page and nowhere on the next.
-  const clip = document.createElement('div');
-  clip.className = 'docx-hf-behind-layer';
-  clip.dataset.docxHfBehind = story.kind;
-  clip.setAttribute('contenteditable', 'false');
-  clip.style.position = 'absolute';
-  clip.style.inset = '0';
-  clip.style.overflow = 'hidden';
-  clip.style.pointerEvents = 'none';
-  appendAnchoredDrawingsForRecords(document, clip, lifted, ctx, pageOrigin, 'behind', false);
-  if (clip.childElementCount > 0) pageElement.append(clip);
-}
-
-function appendHfPageRelativeDrawingLayer(
-  document: Document,
-  pageElement: HTMLElement,
-  story: HeaderFooterStoryRecord,
-  drawings: readonly AnchoredDrawingRecord[],
-  ctx: ResolvedPaintContext,
-  pageOrigin: {
-    readonly x: number;
-    readonly y: number;
-    readonly width: number;
-    readonly height: number;
-  },
-  layer: 'behind' | 'inFront',
-  interactive = false
-): void {
-  const pageRelative = drawings
-    .filter(isPageRelativeHfAnchor)
-    .map((drawing) => hfAnchorOnPageSheet(story, drawing, pageOrigin));
-  appendAnchoredDrawingsForRecords(
-    document,
-    pageElement,
-    pageRelative,
-    ctx,
-    pageOrigin,
-    layer,
-    interactive,
-    layer === 'inFront' ? story.kind : undefined
-  );
 }
 
 const HEX = /^[0-9A-Fa-f]{6}$/;
@@ -2027,12 +1912,6 @@ function paintPage(
   element.dataset.materialized = String(materialize);
   if (!materialize) return element;
 
-  const pageOrigin = Object.freeze({
-    x: page.box.x,
-    y: page.box.y,
-    width: page.box.width,
-    height: page.box.height,
-  });
   // Body anchored records are per-page CONTENT-relative (a page-frame drawing at offset 0
   // publishes paintBounds x/y = -margin). The layer lives on the page element, so the
   // origin is the negated content inset — never page.box, which is absolute and would
@@ -2043,32 +1922,44 @@ function paintPage(
     width: page.box.width,
     height: page.box.height,
   });
-  appendAnchoredDrawingLayer(document, element, page, options, bodyAnchorOrigin, 'behind');
-
-  // FURNITURE INK THAT GOES BEHIND THE TEXT IS PAINTED BEFORE THE TEXT.
-  //
-  // `behindDoc` means behind the DOCUMENT, and a letterhead or watermark anchored in a
-  // header routinely reaches down over the body. Painted from inside the band — which the
-  // page appends after its content box — it covered the first body lines instead, the one
-  // thing `behindDoc` exists to prevent. Every header/footer behind-drawing is lifted onto
-  // the sheet here, ahead of the content, exactly as the body's own behind layer is.
-  for (const story of [page.header, page.footer]) {
-    if (!story?.anchoredDrawings?.length) continue;
-    appendHfBehindDrawingLayer(document, element, story, story.anchoredDrawings, options, {
-      x: page.box.x,
-      y: page.box.y,
-      width: page.box.width,
-      height: page.box.height,
-    });
-  }
-
-  // `w:zOrder` is a position in the sheet's child order, not a z-index: `back` goes under the
-  // content (but over the behind-doc drawings already appended, which are the paper's own
-  // watermarks), `front` over it and still under the in-front drawing layer.
+  // PAINT ORDER IS THE SHEET'S CHILD ORDER, bottom to top: a `back` page border, the header
+  // and footer layer, the body's behind-text drawings, the body, the body's in-front
+  // drawings, and a `front` page border. Header and footer content is one layer under the
+  // main document: a header drawing set in front of text covers the header text only, never
+  // a body line or a body drawing, and `behindDoc` orders it within that layer alone.
   const borderLayer = page.pageBorders
     ? paintPageBorderFrame(document, page.pageBorders, options.scale)
     : null;
+  if (borderLayer && page.pageBorders) borderLayer.dataset.docxZOrder = page.pageBorders.zOrder;
   if (borderLayer && page.pageBorders?.zOrder === 'back') element.append(borderLayer);
+  // One furniture context per tab-leader origin: a story's fragments all share one.
+  const furnitureCtxs = new Map<number, ResolvedPaintContext>();
+  const hfHints = paintHeaderFooterLayer(document, element, page, {
+    chrome: options,
+    // Furniture links paint styled but inert — see `paintHyperlinkAnchor`.
+    paintFragment: (fragment, tabLeaderOriginXPt) => {
+      let furnitureCtx = furnitureCtxs.get(tabLeaderOriginXPt);
+      if (!furnitureCtx) {
+        furnitureCtx = { ...options, inertLinks: true, tabLeaderOriginXPt };
+        furnitureCtxs.set(tabLeaderOriginXPt, furnitureCtx);
+      }
+      return fragment.kind === 'table'
+        ? paintTableFragment(document, fragment, furnitureCtx)
+        : paintFragment(document, fragment, furnitureCtx);
+    },
+    appendDrawings: (parent, drawings, origin, layer, interactive, hfFrontKind) =>
+      appendAnchoredDrawingsForRecords(
+        document,
+        parent,
+        drawings,
+        options,
+        origin,
+        layer,
+        interactive,
+        hfFrontKind
+      ),
+  });
+  appendAnchoredDrawingLayer(document, element, page, options, bodyAnchorOrigin, 'behind');
 
   const content = document.createElement('div');
   content.className = 'docx-page-content';
@@ -2107,9 +1998,9 @@ function paintPage(
     painted.blocks = blocks;
   }
   element.append(content);
-  if (borderLayer && page.pageBorders?.zOrder === 'front') element.append(borderLayer);
-
   appendAnchoredDrawingLayer(document, element, page, options, bodyAnchorOrigin, 'inFront');
+  // A `front` page border is over every drawing on the sheet, in-front ones included.
+  if (borderLayer && page.pageBorders?.zOrder === 'front') element.append(borderLayer);
 
   // Footnotes / endnotes — editable stories inside the sheet (not [data-docx-hf] furniture).
   paintPageNoteAreas(document, element, page, options, paintFragment, paintTableFragment);
@@ -2150,97 +2041,8 @@ function paintPage(
     element.append(band);
   }
 
-  for (const story of [page.header, page.footer]) {
-    if (!story) continue;
-    const anchored = story.anchoredDrawings ?? [];
-    // Ahead of the layers below, which BOTH need it: furniture ink is inert while the band
-    // is not being edited, wherever on the sheet it was lifted to.
-    const active = headerFooterBandIsActive(story, page.index, options);
-    // The BEHIND half was already painted, on the sheet and ahead of the body content —
-    // see `appendHfBehindDrawingLayer`. Only the in-front ink belongs to the band.
-    const container = document.createElement('div');
-    container.className = 'docx-hf';
-    container.dataset.docxHf = story.kind;
-    if (story.rId) container.dataset.docxRId = story.rId;
-    if (active) {
-      container.dataset.docxHfActive = '';
-      container.setAttribute('contenteditable', 'true');
-    } else {
-      container.setAttribute('contenteditable', 'false');
-    }
-    container.style.position = 'absolute';
-    container.style.left = `${(story.box.x - page.box.x) * options.scale}px`;
-    container.style.top = `${(story.box.y - page.box.y) * options.scale}px`;
-    container.style.width = `${story.box.width * options.scale}px`;
-    // A footer whose only direct content is the empty paragraph hosting a floating shape
-    // flows to a hairline, which makes the ACTIVE edit band invisible. Editing extends the
-    // band down to the sheet edge — origin unchanged, so fragment and caret geometry stay
-    // put, and normal-mode sizing keeps the flow-height rule (#856) intact.
-    const bandHeight = headerFooterBandHeightPt(story, page, active);
-    container.style.height = `${bandHeight * options.scale}px`;
-    // VISIBLE, exactly because the box is sized by flow height alone (#856). Word paints
-    // header ink wherever it lands — a negative indent hangs into the left margin, an
-    // anchored shape offset past the content width sits in the right margin and reaches
-    // below the header text. Clipping to the band silently deleted both. The band's
-    // GEOMETRY still stops at flow height, so hit-testing and the body's effective top
-    // margin are untouched; overflowing drawings stay inert below via `interactive`.
-    container.style.overflow = 'visible';
-    // BUT NEVER PAST THE PAPER. Word clips ink at the sheet edge, and the band's own
-    // records are story-relative: a footer shape anchored far above its paragraph, or a
-    // header one reaching far below, resolves to a paint box that runs off the sheet and
-    // would paint across the inter-page gutter onto the neighbouring page. The clip is the
-    // SHEET expressed in the band's own coordinates, so ink still escapes the band (the
-    // whole point) and still stops at the paper.
-    const sheetLeft = (page.box.x - story.box.x) * options.scale;
-    const sheetTop = (page.box.y - story.box.y) * options.scale;
-    const sheetRight = sheetLeft + page.box.width * options.scale;
-    const sheetBottom = sheetTop + page.box.height * options.scale;
-    container.style.clipPath =
-      `polygon(${sheetLeft}px ${sheetTop}px, ${sheetRight}px ${sheetTop}px, ` +
-      `${sheetRight}px ${sheetBottom}px, ${sheetLeft}px ${sheetBottom}px)`;
-    const storyOrigin = Object.freeze({
-      x: 0,
-      y: 0,
-      width: story.box.width,
-      height: story.box.height,
-    });
-    const storyRelative = anchored.filter((drawing) => !isPageRelativeHfAnchor(drawing));
-    // Furniture links paint styled but inert — see `paintHyperlinkAnchor`.
-    const furnitureCtx: ResolvedPaintContext = {
-      ...options,
-      inertLinks: true,
-      tabLeaderOriginXPt: story.box.x - page.box.x,
-    };
-    for (const fragment of story.fragments) {
-      container.append(
-        fragment.kind === 'table'
-          ? paintTableFragment(document, fragment, furnitureCtx)
-          : paintFragment(document, fragment, furnitureCtx)
-      );
-    }
-    appendAnchoredDrawingsForRecords(
-      document,
-      container,
-      storyRelative,
-      asResolvedPaintContext(options),
-      storyOrigin,
-      'inFront',
-      active
-    );
-    element.append(container);
-    // Hover tint target and edit pill. Adjacency is load-bearing: keep this right after the band.
-    appendHeaderFooterHoverChrome(document, element, container, page, story, options.scale);
-    appendHfPageRelativeDrawingLayer(
-      document,
-      element,
-      story,
-      anchored,
-      options,
-      pageOrigin,
-      'inFront',
-      active
-    );
-  }
+  // Edit pills over the body text: the bands they invite into paint under the body.
+  for (const hint of hfHints) element.append(hint);
 
   paintContentControlChrome(document, element, page, options);
   // CHANGE BARS. Word draws a rule in the margin beside every line a revision touches, in

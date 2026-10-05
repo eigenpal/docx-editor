@@ -228,16 +228,32 @@ export async function paint(
   const text = new TextWriter(doc, session, work, layout.displayMode === 'all-markup');
   const images = new ImageWriter(doc, session, work);
   const names = destinations(doc, pages, layout);
+  // Bottom to top: a `back` page border, then the header and footer as one layer under the
+  // main document (their own behind-text drawings, text, and in-front drawings, in that
+  // order), then the body's behind-text drawings, the body, and a `front` page border.
+  // A header or footer drawing set in front of text is in front of the header text only;
+  // it never covers body text or a body drawing.
+  const backBorders = pages.map(() => new Commands(work));
+  const furnitureBehind = pages.map(() => new Commands(work));
+  const furniture = pages.map(() => new Commands(work));
   const behindStreams = pages.map(() => new Commands(work));
   const streams = pages.map(() => new Commands(work));
   const frontBorders = pages.map(() => new Commands(work));
+  const isFurniture = (rootStory: string): boolean =>
+    rootStory === 'header' || rootStory === 'footer';
+  const textStream = (rootStory: string, page: number): Commands =>
+    (isFurniture(rootStory) ? furniture : streams)[page]!;
+  const behindStream = (rootStory: string, page: number): Commands =>
+    (isFurniture(rootStory) ? furnitureBehind : behindStreams)[page]!;
   for (const record of layout.pages) {
     const out = streams[record.index]!;
     // Chrome flips y from the same gridded page height the text uses. `record.box.height` is
     // the ungridded layout value, and the two differ by up to half a device unit on A4.
     const height = pageHeight(pages[record.index]!);
     if (record.pageBorders) {
-      const borderOut = record.pageBorders.zOrder === 'front' ? frontBorders[record.index]! : out;
+      const borderOut = (record.pageBorders.zOrder === 'front' ? frontBorders : backBorders)[
+        record.index
+      ]!;
       for (const border of record.pageBorders.strokes) {
         if (
           !['single', 'thick', 'dashed', 'dotted', 'double'].includes(border.edge.val) ||
@@ -283,7 +299,7 @@ export async function paint(
     drawings.push(visit);
   });
   forEachSemanticStory(layout, (root) => {
-    streams[root.page.index]!.push(
+    textStream(root.story, root.page.index).push(
       ...decorations(
         root.host.fragments,
         root.origin.x - root.page.box.x,
@@ -331,13 +347,15 @@ export async function paint(
       x: number;
       y: number;
       page: number;
+      /** Root story of the cell, which picks the page layer its ink joins. */
+      rootStory: string;
       commands: Commands;
       /** Behind-text drawings of the cell, turned with it but painted under the page's text. */
       behind: Commands;
     }
   >();
   const outFor = (
-    visit: Pick<SemanticSpanVisit, 'story' | 'textboxOwner' | 'page'> & {
+    visit: Pick<SemanticSpanVisit, 'story' | 'rootStory' | 'textboxOwner' | 'page'> & {
       readonly paragraph?: SemanticSpanVisit['paragraph'] | null;
       readonly storyOrigin?: SemanticSpanVisit['storyOrigin'];
     }
@@ -352,6 +370,7 @@ export async function paint(
           x: visit.storyOrigin.x - visit.page.box.x,
           y: visit.storyOrigin.y - visit.page.box.y,
           page: visit.page.index,
+          rootStory: visit.rootStory,
           commands: new Commands(work),
           behind: new Commands(work),
         };
@@ -359,7 +378,8 @@ export async function paint(
       }
       return entry.commands;
     }
-    if (visit.story !== 'textbox' || !visit.textboxOwner) return streams[visit.page.index]!;
+    if (visit.story !== 'textbox' || !visit.textboxOwner)
+      return textStream(visit.rootStory, visit.page.index);
     let owners = textboxBuffers.get(visit.page.index);
     if (!owners) {
       owners = new Map();
@@ -562,16 +582,17 @@ export async function paint(
       (visit.paintLayer === 'behind-text' ? entry.behind : entry.commands).push(commands);
       continue;
     }
-    (visit.paintLayer === 'behind-text' ? behindStreams : streams)[visit.page.index]!.push(
-      commands
-    );
+    (visit.paintLayer === 'behind-text'
+      ? behindStream(visit.rootStory, visit.page.index)
+      : textStream(visit.rootStory, visit.page.index)
+    ).push(commands);
   }
   // Each rotated cell's ink turns as one: behind-text drawings under the page's text, the
   // text and in-front drawings over it, both under the same matrix.
-  for (const { cell, x, y, page, commands, behind } of rotatedBuffers.values()) {
+  for (const { cell, x, y, page, rootStory, commands, behind } of rotatedBuffers.values()) {
     const matrix = rotatedCellMatrix(cell.box, x, y, pageHeight(pages[page]!));
-    if (behind.length) behindStreams[page]!.push('q', matrix, ...behind, 'Q');
-    if (commands.length) streams[page]!.push('q', matrix, ...commands, 'Q');
+    if (behind.length) behindStream(rootStory, page).push('q', matrix, ...behind, 'Q');
+    if (commands.length) textStream(rootStory, page).push('q', matrix, ...commands, 'Q');
   }
   // `w:zOrder="front"` puts the page frame over EVERYTHING on the page, in-front drawings
   // included, so it goes into the stream after them, not before.
@@ -580,7 +601,12 @@ export async function paint(
     work.check();
     pages[i]!.node.addContentStream(
       doc.context.register(
-        flateStream(doc.context, behindStreams[i]!.join('\n') + '\n' + streams[i]!.join('\n'))
+        flateStream(
+          doc.context,
+          [backBorders, furnitureBehind, furniture, behindStreams, streams]
+            .map((layer) => layer[i]!.join('\n'))
+            .join('\n')
+        )
       )
     );
   }
