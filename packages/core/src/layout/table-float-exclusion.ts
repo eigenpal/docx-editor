@@ -13,6 +13,7 @@ import {
   positionedTableAnchors,
   tableFloatOriginY,
   type PositionedTableAnchor,
+  type PositionedTableAnchorSignal,
   type TableVerticalAnchorFrames,
 } from './table-float-position.ts';
 import {
@@ -34,6 +35,7 @@ import { pinnedTableBreak } from './table-pinned-break.ts';
 import {
   noOverlapShift,
   tableRefusesOverlap,
+  withoutFloatingTableZones,
   type NoOverlapObstacle,
 } from './table-float-overlap.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
@@ -401,8 +403,9 @@ function probeTableHeight(
   deps: TableFlowDeps
 ): number {
   let line = 0;
+  // Measured as placed: a floating table's cells never wrap around another floating table.
   return layoutTableFragment(structure, 0, 0, 0, tableId, 0, {
-    ...stripAnchorSinksForProbe(deps),
+    ...stripAnchorSinksForProbe(withoutFloatingTableZones(deps)),
     onCellBreakKey: undefined,
     borderOwnershipBudget: createTableBorderOwnershipBudget(),
     vMergeResolveBudget: createTableVMergeResolveBudget(),
@@ -493,19 +496,45 @@ export function requiredAnchorBand(
     readonly frames: TableAnchorFrames;
     readonly verticalFrames: TableVerticalAnchorFrames;
     readonly earlier: readonly BlockFragmentRecord[];
+    /** Anchors already laid on this page whose tables wait for the page flush. */
+    readonly signals?: readonly PositionedTableAnchorSignal[];
   }
 ): number {
   if (pending.size === 0) return 0;
   let height = 0;
-  const here = (positionedTablesByAnchor(anchors).get(paragraphId) ?? []).filter((anchor) =>
-    pending.has(anchor.table.id)
+  const byParagraph = positionedTablesByAnchor(anchors);
+  const pendingOf = (anchorId: string) =>
+    (byParagraph.get(anchorId) ?? []).filter((anchor) => pending.has(anchor.table.id));
+  const here = pendingOf(paragraphId);
+  // Tables of earlier anchors on this page are placed first, at the flush, in anchor order.
+  const before = here.length > 0 ? (placement.signals ?? []) : [];
+  const waiting = before.flatMap((signal) =>
+    pendingOf(signal.anchorId).map((anchor) => ({ anchor, anchorY: signal.anchorY }))
   );
   const placed = here.length > 0 ? placedFloatObstacles(placement.earlier, deps) : [];
   // Overlap avoidance only runs when a table involved refuses overlap.
   const avoids =
-    here.some((anchor) => tableRefusesOverlap(anchor.table)) ||
-    placed.some((obstacle) => obstacle.refusesOverlap);
+    [...here, ...waiting.map((entry) => entry.anchor)].some((anchor) =>
+      tableRefusesOverlap(anchor.table)
+    ) || placed.some((obstacle) => obstacle.refusesOverlap);
   const prospective: NoOverlapObstacle[] = [];
+  if (avoids) {
+    for (const { anchor, anchorY } of waiting) {
+      const y = clearEarlierText(
+        anchor.table,
+        anchorY,
+        width,
+        placement.frames,
+        placement.earlier,
+        deps
+      );
+      const shift = noOverlapPlacement(anchor.table, y, width, placement.frames, deps, [
+        ...placed,
+        ...prospective,
+      ]);
+      if (shift.band) prospective.push(shift.band);
+    }
+  }
   for (const anchor of here) {
     const clearedY = clearEarlierText(
       anchor.table,

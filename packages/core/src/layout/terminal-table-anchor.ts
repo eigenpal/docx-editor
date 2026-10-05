@@ -306,7 +306,13 @@ export function placeTerminalTextTables(
       ![left, top, width].every(Number.isFinite) ||
       width <= 0 ||
       left < 0 ||
-      left + width > contentWidth + 0.001 ||
+      // A legacy right-aligned table may hang its right cell margin past the column.
+      left + width >
+        contentWidth +
+          (structure.float.xSpec === 'right' || structure.float.xSpec === 'outside'
+            ? structure.defaultMargins.right
+            : 0) +
+          0.001 ||
       // Upward offsets need collision checks against preceding paragraph text.
       top < cursorY ||
       top > contentHeight

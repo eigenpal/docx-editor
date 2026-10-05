@@ -2313,6 +2313,7 @@ function layoutBlocksPass(
               frames: anchorFrames(),
               verticalFrames: tableVerticalFrames(prospectiveFirstTop),
               earlier: pageFragments,
+              signals: floatSignals,
             }
           )
         );

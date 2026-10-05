@@ -186,7 +186,7 @@ describe('tblOverlap never', () => {
     }
   });
 
-  test('a move down never takes a table past the page bottom', () => {
+  test('a table that cannot move down on its page takes its anchor to the next page', () => {
     const lead = Array.from({ length: 38 }, (_, index) => p(`Lead${index}`)).join('');
     const wide = { width: 5040, position: 'w:tblpXSpec="center"' };
     const layout = layoutOf(part(lead + pairBody(wide, wide, p('Middle'))));
@@ -195,6 +195,10 @@ describe('tblOverlap never', () => {
         expect(fragment.box.y + fragment.box.height).toBeLessThanOrEqual(
           page.contentBox.height + 0.001
         );
+    expect(tables(layout)).toHaveLength(1);
+    const next = layout.pages[1]!.fragments.filter((fragment) => fragment.kind === 'table');
+    expect(next).toHaveLength(1);
+    expect(next[0]!.box.y).toBe(0);
   });
 });
 

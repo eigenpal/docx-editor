@@ -93,8 +93,8 @@ export function continuedPageZones(
 
 /**
  * Whether page furniture wraps this pass's text (`furnitureHasWrap`), and whether it keeps the
- * pass's positioned tables in flow (`furnitureHoldsTables`). Floats an earlier section left on
- * the host sheet wrap text but do not keep this section's floating tables in flow.
+ * pass's positioned tables in flow (`furnitureHoldsTables`). Floating tables an earlier section
+ * left on the host sheet wrap text but do not keep this section's floating tables in flow.
  */
 export function continuedWrapFlags(
   ownFurnitureWraps: boolean,
@@ -102,7 +102,11 @@ export function continuedWrapFlags(
 ): { readonly furnitureHasWrap: boolean; readonly furnitureHoldsTables: boolean } {
   return {
     furnitureHasWrap: ownFurnitureWraps || (continuedZones?.length ?? 0) > 0,
+    // Earlier floating tables stay out of this section's table cells. Earlier pictures can
+    // wrap them, which the admission of a table at its anchor does not price.
     furnitureHoldsTables:
-      ownFurnitureWraps || (continuedZones?.some((zone) => !zone.earlierSection) ?? false),
+      ownFurnitureWraps ||
+      (continuedZones?.some((zone) => !zone.earlierSection || zone.sourceKind !== 'table') ??
+        false),
   };
 }

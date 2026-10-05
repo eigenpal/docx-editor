@@ -17,7 +17,7 @@
 // table whose move down would cross the page bottom keeps its authored position, and so does
 // every table on a page with more than `MAX_NO_OVERLAP_OBSTACLES` refusing obstacles.
 
-import type { OoxmlElement } from '@docx-editor.dev/core/store';
+import { WML_NAMESPACE_URI, type OoxmlElement } from '@docx-editor.dev/core/store';
 import type { ExclusionZone } from './drawing-exclusion.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
 
@@ -66,7 +66,12 @@ export function tableRefusesOverlap(table: OoxmlElement): boolean {
     (node) =>
       node.kind !== 'textValue' &&
       node.localName === 'tblOverlap' &&
-      node.attributes.some((attr) => attr.localName === 'val' && attr.value === 'never')
+      node.attributes.some(
+        (attr) =>
+          attr.namespaceUri === WML_NAMESPACE_URI &&
+          attr.localName === 'val' &&
+          attr.value === 'never'
+      )
   );
 }
 
