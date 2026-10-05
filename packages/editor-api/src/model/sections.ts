@@ -221,11 +221,12 @@ export class PageSetup extends ModelObject {
  * {@link Section.pageSetup}. The section itself is mostly navigation: the story it governs, the
  * header and footer stories it declares, and the section after it.
  *
- * `getHeader` and `getFooter` answer a body that may not exist yet, and say so. A section with no
- * first-page header inherits the previous section's; one at the start of a document with none at
- * all is refused with `ItemNotFound` rather than minting the part. Word creates the header when a
- * script asks for it — doing that here would make a READ write to the document, and a header that
- * exists only because it was asked about is a header the author never added.
+ * `getHeader` and `getFooter` answer a body that may not exist yet. A section with no first-page
+ * header inherits the previous section's. When no section declares one, the answer is an empty
+ * body: every read on it answers as an empty story, and asking does not create the part. The
+ * first text written into it creates the header or footer; asking alone would make a READ write
+ * to the document, and a header that exists only because it was asked about is a header the
+ * author never added.
  *
  * @public
  */

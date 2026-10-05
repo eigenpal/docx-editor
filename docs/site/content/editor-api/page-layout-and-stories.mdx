@@ -40,7 +40,7 @@ Assignments on one page-setup proxy coalesce per sync. The engine validates dime
 
 ## Address headers and footers
 
-`Section.getHeader(type)` and `getFooter(type)` return `Body` proxies. `HeaderFooterType` accepts `Primary`, `FirstPage`, or `EvenPages`. Each variant is its own story scope. A missing header or footer returns a deferred empty body. Its first supported content insertion creates the missing story.
+`Section.getHeader(type)` and `getFooter(type)` return `Body` proxies. `HeaderFooterType` accepts `Primary`, `FirstPage`, or `EvenPages`. Each variant is its own story scope. A missing header or footer returns a deferred empty body. Every read on it answers as an empty story, so its collections and searches are empty. Reading does not create the story. Its first supported content insertion creates the missing story.
 
 This example writes a primary footer after resolving its body:
 

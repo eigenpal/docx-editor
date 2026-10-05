@@ -2880,7 +2880,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           return refuse('conflicting-operations', 'header/footer creation must commit alone');
         dynamicSolitary = true;
       }
-      if (planned.ok) commandPolicy.note(operation);
+      // A command that plans to an answer writes nothing, so it does not count as a write.
+      if (planned.ok && planned.kind !== 'query') commandPolicy.note(operation);
       return planned;
     },
     get hasCommands() {

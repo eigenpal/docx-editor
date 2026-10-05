@@ -53,11 +53,11 @@
   },
   "Word.Section#getHeader": {
     "status": "partial",
-    "notes": "Existing and inherited stories keep their linkage. An absent story returns a virtual body: text and paragraph/list collections read empty without changing the package. Its first insertText or insertParagraph creates the part, reference, and content atomically and must be the only mutation in that sync. FirstPage and EvenPages creation enables the matching rendering flags. Unsupported virtual-body operations refuse until content exists."
+    "notes": "Existing and inherited stories keep their linkage. An absent story returns a virtual body: every read answers as an empty story (text, paragraphs, lists, tables, shapes, pictures, fields, controls, comments, bookmarks, revisions, and search) without changing the package. Its first insertText or insertParagraph creates the part, reference, and content atomically and must be the only mutation in that sync. FirstPage and EvenPages creation enables the matching rendering flags. Other writes that would change the body refuse until content exists; writes that change nothing succeed."
   },
   "Word.Section#getFooter": {
     "status": "partial",
-    "notes": "Existing and inherited stories keep their linkage. An absent story returns a virtual body: text and paragraph/list collections read empty without changing the package. Its first insertText or insertParagraph creates the part, reference, and content atomically and must be the only mutation in that sync. FirstPage and EvenPages creation enables the matching rendering flags. Unsupported virtual-body operations refuse until content exists."
+    "notes": "Existing and inherited stories keep their linkage. An absent story returns a virtual body: every read answers as an empty story (text, paragraphs, lists, tables, shapes, pictures, fields, controls, comments, bookmarks, revisions, and search) without changing the package. Its first insertText or insertParagraph creates the part, reference, and content atomically and must be the only mutation in that sync. FirstPage and EvenPages creation enables the matching rendering flags. Other writes that would change the body refuse until content exists; writes that change nothing succeed."
   },
   "Word.Document#changeTrackingMode": {
     "status": "partial",
