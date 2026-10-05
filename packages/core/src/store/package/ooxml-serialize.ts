@@ -5,7 +5,7 @@
 // backs `ooxmlTreesEqual`. It is a projection of the tree in ooxml-tree.ts; the read path
 // stays there, and importers keep reaching everything through that module's re-exports.
 
-import { isValidNCName } from './qname.ts';
+import { isXmlNCName } from './qname.ts';
 import { escapeXmlAttributeChecked, escapeXmlChecked } from './sinks.ts';
 import {
   MC_NAMESPACE_URI,
@@ -25,7 +25,7 @@ import {
 import type { OoxmlAttribute, OoxmlElement, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 
 function assertSerializableName(localName: string): void {
-  if (!isValidNCName(localName))
+  if (!isXmlNCName(localName))
     throw new Error(`invalid local name for OOXML serialization: ${JSON.stringify(localName)}`);
 }
 
@@ -127,7 +127,7 @@ function preferredAuthoredPrefix(
   for (const [prefix, uris] of aliasUris) {
     if (
       prefix !== '' &&
-      isValidNCName(prefix) &&
+      isXmlNCName(prefix) &&
       !used.has(prefix) &&
       uris.size === 1 &&
       uris.has(namespaceUri)
@@ -367,7 +367,7 @@ function serializeNode(
       })
       .map((binding) => {
         if (
-          (binding.prefix !== '' && !isValidNCName(binding.prefix)) ||
+          (binding.prefix !== '' && !isXmlNCName(binding.prefix)) ||
           binding.prefix === 'xmlns' ||
           seenDeclarationPrefixes.has(binding.prefix)
         )

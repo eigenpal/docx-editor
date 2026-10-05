@@ -48,11 +48,6 @@ describe('server resource limits', () => {
   const cases: [string, DocumentLimits, string][] = [
     ['archive entries', { zip: { maxEntries: 1, maxTotalBytes: 100_000 } }, 'zip.maxEntries'],
     ['archive bytes', { zip: { maxEntries: 10, maxTotalBytes: 1 } }, 'zip.maxTotalBytes'],
-    [
-      'compression ratio',
-      { zip: { maxEntries: 10, maxTotalBytes: 100_000, maxRatio: 1 } },
-      'zip.maxRatio',
-    ],
     ['XML bytes', { xml: { maxBytes: 1 } }, 'xml.maxBytes'],
     ['content types elements', { xml: { maxBytes: 100_000, maxElements: 1 } }, 'xml.maxElements'],
     ['document elements', { xml: { maxBytes: 100_000, maxElements: 4 } }, 'xml.maxElements'],
@@ -67,6 +62,21 @@ describe('server resource limits', () => {
     expect(error).toMatchObject({ code: 'ResourceLimitExceeded', target: 'createServer', limit });
     expect((error as Error).message).not.toContain('private document text');
     expect((error as Error).message).not.toContain('word/document.xml');
+  });
+
+  test('identifies the exceeded compression ratio above the 8 MiB exemption', async () => {
+    const entries = unzipSync(docx(p('private document text')));
+    entries['word/media/padding.bin'] = new Uint8Array(8 * 1024 * 1024 + 1);
+    const padded = zipSync(entries, { level: 9 });
+    const limits = { zip: { maxEntries: 10, maxTotalBytes: 64 * 1024 * 1024, maxRatio: 1 } };
+    await expect(DocxEditor.createServer(padded, { limits })).rejects.toMatchObject({
+      code: 'ResourceLimitExceeded',
+      target: 'createServer',
+      limit: 'zip.maxRatio',
+    });
+    // Below the exemption a small archive is never refused for compressing well.
+    const small = await DocxEditor.createServer(docx(p('text')), { limits });
+    small.dispose();
   });
 
   test('identifies the hard XML depth limit', async () => {

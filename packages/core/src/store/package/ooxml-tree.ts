@@ -6,7 +6,7 @@
 // re-exported from here, so importers keep one module to reach for.
 
 import { readXml, type XmlLimits, type XmlNode, type XmlRejection } from './xml-reader.ts';
-import { isValidNCName } from './qname.ts';
+import { isXmlNCName } from './qname.ts';
 import { candidateSdtKind } from './ooxml-sdt.ts';
 import {
   TreeReadError,
@@ -1629,7 +1629,7 @@ function namespaceDeclarations(
     bindings ??= new Map(inherited);
     const prefix = name === 'xmlns' ? '' : name.slice('xmlns:'.length);
     if (
-      (prefix !== '' && !isValidNCName(prefix)) ||
+      (prefix !== '' && !isXmlNCName(prefix)) ||
       prefix === 'xmlns' ||
       (prefix === 'xml' && namespaceUri !== XML_NAMESPACE_URI) ||
       (prefix !== 'xml' && namespaceUri === XML_NAMESPACE_URI) ||
