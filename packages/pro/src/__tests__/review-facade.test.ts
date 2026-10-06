@@ -1501,7 +1501,9 @@ describe('the caret activates the card the rail actually renders', () => {
   }
 
   test('a caret in either half of a replacement opens the ONE paired card', () => {
-    const editor = mount({ body: REPLACEMENT_DAYS_APART });
+    const editor = mount({
+      body: REPLACEMENT_DAYS_APART.replace('2026-01-02T09:00:00Z', '2026-01-01T10:00:00Z'),
+    });
     const cards = editor.getReviewItems();
     expect(cards).toHaveLength(1);
     expect(cards[0]!.kind === 'revision' && cards[0]!.revisionKind).toBe('replace');

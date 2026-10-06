@@ -81,3 +81,18 @@ for (const options of [{ gap: 'Kept gap' }, { secondAuthor: 'Someone else' }, { 
     expect(editor.getReviewItems().length).toBeGreaterThan(1);
   });
 }
+
+test('a replacement does not split an independent inserted block containing field wrappers', () => {
+  const replacement =
+    '<w:p><w:del w:id="90" w:author="Reviewer" w:date="2026-01-02T10:00:00Z"><w:r><w:delText>old</w:delText></w:r></w:del>' +
+    '<w:ins w:id="91" w:author="Reviewer" w:date="2026-01-02T10:00:00Z"><w:r><w:t>new</w:t></w:r></w:ins></w:p>';
+  const editor = mount(sample() + replacement);
+  const items = revisionItemsOf(editor.surface!.session.part());
+  expect(items.map((item) => item.revisionKind)).toEqual(['insert', 'replace']);
+  expect(items[0]!.text).toBe('See 2.\nMore text.\n');
+  const card = editor
+    .getReviewItems()
+    .find((item) => item.kind === 'revision' && item.revisionKind === 'insert')!;
+  expect(editor.acceptReviewItem(card.key).ok).toBe(true);
+  expect(editor.getReviewItems()).toHaveLength(1);
+});

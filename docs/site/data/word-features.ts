@@ -885,7 +885,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'premium',
     notes:
-      'Review actions require the EigenPal Pro License. Accept or reject one change with acceptReviewItem, rejectReviewItem, or the sidebar. The Review menu also resolves changes shown by active filters. Hidden authors and unsupported changes remain pending. The automation API supports individual decisions and strict or partial batches. Opening and saving existing revisions require no review module.',
+      'Review actions require the EigenPal Pro License. Accept or reject one change with acceptReviewItem, rejectReviewItem, or the sidebar. The Review menu also resolves changes shown by active filters. Hidden authors and unsupported changes remain pending. The automation API supports individual decisions and strict or partial batches. Adjacent deletion and insertion fragments form one replacement only when their author and editing time match. Different times keep independent accept and reject decisions. Source revision dates survive save. Opening and saving existing revisions require no review module.',
     docsLink: '/docs/2.x/pro/tracked-changes',
   },
   {

@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Adjacent deletion and insertion revisions share one review decision even when their editing times differ.",
+  "after": "Replacement decisions require matching editing times and preserve independent adjacent revisions.",
+  "reason": "Review grouping changes only derived decisions. Source revision attributes, shared nodes, operation journals, and collaboration versions remain unchanged. Existing clients can read and apply every operation.",
+  "tests": [
+    "packages/core/src/store/__tests__/review-replacement-times.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-replacement-times.test.ts"
+  ],
+  "changeset": "revision-replacement-times",
+  "migration": null
+}

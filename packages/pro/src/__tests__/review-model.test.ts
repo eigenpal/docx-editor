@@ -333,27 +333,26 @@ describe('a replacement says where its halves divide', () => {
     expect(item.replacedRangeCount).toBeUndefined();
   });
 
-  test('halves stamped a day apart still pair — Word pairs on adjacency, not time', () => {
-    // Foreign files routinely hold a deletion struck one day and its replacement typed the
-    // next. One author, end to start: one Replaced card.
+  test('halves stamped a day apart stay independent', () => {
     const part = story(
       `<w:p>${run('keep ')}${delAt('2', delRun('old'), '2024-01-01T10:00:00Z')}` +
         `${insAt('1', run('new'), '2024-01-02T09:00:00Z')}</w:p>`
     );
     const items = revisionsOf(collectReviewItems({ storyPart: part }));
-    expect(items).toHaveLength(1);
-    expect(items[0]!.revisionKind).toBe('replace');
-    expect(items[0]!.addresses).toHaveLength(2);
-    expect(items[0]!.replacedRangeCount).toBe(1);
+    expect(items.map((item) => item.revisionKind)).toEqual(['delete', 'insert']);
+    expect(items.every((item) => item.addresses.length === 1)).toBe(true);
   });
 
-  test('the paired card is dated when the replacement was completed', () => {
+  test('independent halves keep their source dates', () => {
     const part = story(
       `<w:p>${delAt('2', delRun('old'), '2024-01-01T10:00:00Z')}` +
         `${insAt('1', run('new'), '2024-01-02T09:00:00Z')}</w:p>`
     );
-    const item = revisionsOf(collectReviewItems({ storyPart: part }))[0]!;
-    expect(item.date).toBe('2024-01-02T09:00:00Z');
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items.map((item) => item.date)).toEqual([
+      '2024-01-01T10:00:00Z',
+      '2024-01-02T09:00:00Z',
+    ]);
   });
 
   test('adjacent halves by different authors stay two cards', () => {
@@ -368,14 +367,12 @@ describe('a replacement says where its halves divide', () => {
   });
 
   test('a word struck in three gestures pairs whole against its replacement', () => {
-    // Three sibling `w:del` elements under three ids, then the insertion typed a day later:
-    // one decision, one card — never `Deleted "mor"`, `Deleted "ni"`, `Deleted "ng"`,
-    // `Added "evening"`.
+    // Split source wrappers from one editing time remain one replacement.
     const part = story(
       `<w:p>${run('at ')}${delAt('3', delRun('mor'), '2024-01-01T10:00:00Z')}` +
         `${delAt('4', delRun('ni'), '2024-01-01T10:00:00Z')}` +
-        `${delAt('5', delRun('ng'), '2024-01-01T10:00:01Z')}` +
-        `${insAt('6', run('evening'), '2024-01-02T09:00:00Z')}</w:p>`
+        `${delAt('5', delRun('ng'), '2024-01-01T10:00:00Z')}` +
+        `${insAt('6', run('evening'), '2024-01-01T10:00:00Z')}</w:p>`
     );
     const items = revisionsOf(collectReviewItems({ storyPart: part }));
     expect(items).toHaveLength(1);
@@ -415,7 +412,7 @@ describe('a replacement says where its halves divide', () => {
       `<w:p>${run('keep ')}${delAt('2', delRun('old'), '2024-01-01T10:00:00Z')}` +
         `<w:ins w:id="3" w:author="QA" w:date="2024-01-01T10:00:00Z">` +
         `<w:r><w:rPr><w:b/></w:rPr></w:r></w:ins>` +
-        `${insAt('4', run('new'), '2024-01-02T09:00:00Z')}</w:p>`
+        `${insAt('4', run('new'), '2024-01-01T10:00:00Z')}</w:p>`
     );
     const replaced = revisionsOf(collectReviewItems({ storyPart: part })).find(
       (item) => item.revisionKind === 'replace'
