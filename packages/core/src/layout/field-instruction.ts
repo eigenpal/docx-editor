@@ -1,10 +1,10 @@
 // Bounded complex-field instruction recognition for PAGE / NUMPAGES / SECTIONPAGES.
 //
 // Field instructions are attacker-controlled and MUST NEVER execute. This module recognizes
-// only exact normalized allowlisted `PAGE`, `NUMPAGES`, and `SECTIONPAGES` instructions
-// (after stripping the inert Word formatting switch `\* MERGEFORMAT`). Everything else stays
-// inert. Legacy form-field payloads under `w:fldChar` (`w:ffData`, entry/exit macros) are
-// never read or auto-resolved.
+// only exact normalized allowlisted `PAGE`, `NUMPAGES`, and `SECTIONPAGES` instructions with
+// the numeric picture and number-format switches `field-page-switches.ts` accepts. Everything
+// else stays inert. Legacy form-field payloads under `w:fldChar` (`w:ffData`, entry/exit
+// macros) are never read or auto-resolved.
 //
 // Detection and piece projection share one bounded complex-field machine: no recursive walk
 // over hostile OOXML, and node/depth/character budgets apply to instruction extraction.
@@ -22,6 +22,11 @@ import {
   MAX_FIELD_INSTRUCTION_CHARS,
   MAX_FIELD_NESTING,
 } from '../store/package/field-nodes.ts';
+import {
+  parsePageFieldInstruction,
+  type PageFieldSwitches,
+  type ParsedPageFieldInstruction,
+} from './field-page-switches.ts';
 
 /**
  * Caps hostile instruction blobs and nesting depth (fail closed → inert).
@@ -84,61 +89,40 @@ export function normalizeFieldInstruction(raw: string): string | null {
   return collapsed.replace(MERGEFORMAT_SUFFIX, '').trim();
 }
 
-/**
- * A trailing `\#` numeric picture switch: quoted, or bare up to the next switch.
- *
- * Anchored at the end and, unquoted, stops at a backslash, so an instruction that carries a
- * SECOND switch (`PAGE \n 3 \# 0#`) keeps that switch in the keyword remainder and stays
- * inert. Both alternatives are linear over a length-capped instruction.
- */
-const NUMERIC_PICTURE_SWITCH = /\s*\\#\s*(?:"([^"]*)"|([^\\"]+))$/;
-
-/** An allowlisted page field with the `\#` picture that renders its value. */
-export interface AllowlistedPageFieldMatch {
+/** An allowlisted page field with the switches that render its value. */
+export interface AllowlistedPageFieldMatch extends PageFieldSwitches {
   readonly kind: AllowlistedPageField;
-  /** The field's `\#` numeric picture, when it states one. */
-  readonly picture?: string;
 }
 
 /**
- * Split one instruction into its keyword and its `\#` picture, in ONE read.
+ * Split one instruction into its keyword and its switches, in ONE read.
  *
- * The keyword is uppercased for matching; the PICTURE is not, because it may hold literal text
- * whose case is the author's. Every question asked about a page-field instruction routes
- * through here, so a `fldChar separate` on the paragraph walk pays for one whitespace collapse
- * and one regex rather than one of each per question.
+ * Every question asked about a page-field instruction routes through here, so a
+ * `fldChar separate` on the paragraph walk pays for one whitespace collapse and one bounded
+ * scan rather than one of each per question. See `field-page-switches.ts` for the grammar.
  */
-function splitPageFieldInstruction(
-  raw: string
-): { readonly keyword: string; readonly picture: string | undefined } | null {
+function splitPageFieldInstruction(raw: string): ParsedPageFieldInstruction | null {
   if (raw.length > MAX_FIELD_INSTRUCTION_CHARS) return null;
   const collapsed = raw.replace(/\s+/g, ' ').trim();
   if (collapsed.length > MAX_FIELD_INSTRUCTION_CHARS) return null;
-  const instruction = collapsed.replace(MERGEFORMAT_SUFFIX, '').trim();
-  const match = NUMERIC_PICTURE_SWITCH.exec(instruction);
-  if (!match) return { keyword: instruction.toUpperCase(), picture: undefined };
-  const picture = match[1] ?? match[2] ?? '';
-  return {
-    keyword: instruction.slice(0, match.index).trim().toUpperCase(),
-    picture: picture.length > 0 ? picture : undefined,
-  };
+  return parsePageFieldInstruction(collapsed);
 }
 
 /**
- * The allowlisted kind and its picture, from ONE read of the instruction.
+ * The allowlisted kind and its switches, from ONE read of the instruction.
  *
- * A trailing `\#` numeric picture rides along: the keyword still has to match exactly, and the
- * picture only decides how the computed value is rendered — it is undefined when the field
- * states none. Broader keywords (DATE, TOC,
+ * The keyword has to match exactly. A `\#` picture and the `\*` number formats
+ * (`Arabic`, `roman`, `alphabetic`, `ArabicDash`) only decide how the computed value is
+ * rendered; `\* MERGEFORMAT` and `\* CHARFORMAT` are inert. Broader keywords (DATE, TOC,
  * INCLUDE*, DDE, …) remain unevaluated here on purpose, and so does every other switch —
- * `\n`, `\* Arabic` and friends leave the field inert.
+ * `\n`, `\* Ordinal`, `\* Upper` and a stray word leave the field inert.
  */
 export function matchAllowlistedPageField(instruction: string): AllowlistedPageFieldMatch | null {
   const split = splitPageFieldInstruction(instruction);
   if (split === null) return null;
-  const { keyword, picture } = split;
+  const { keyword, ...switches } = split;
   if (keyword !== 'PAGE' && keyword !== 'NUMPAGES' && keyword !== 'SECTIONPAGES') return null;
-  return picture === undefined ? { kind: keyword } : { kind: keyword, picture };
+  return { kind: keyword, ...switches };
 }
 
 /** Exact allowlist for live page-field projection — {@link matchAllowlistedPageField}'s kind. */

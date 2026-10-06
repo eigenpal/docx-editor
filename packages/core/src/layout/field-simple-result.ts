@@ -59,14 +59,14 @@ import {
   onFldCharEnd,
   onFldCharSeparate,
   matchAllowlistedPageField,
-  type AllowlistedPageField,
+  type AllowlistedPageFieldMatch,
   type FieldScanBudget,
 } from './field-instruction.ts';
 import { isInsideOpenFieldInstruction } from './field-instruction-scope.ts';
 import { createNestedPageTracker } from './field-nested-page.ts';
 import {
-  numericPictureApplies,
   PAGE_FIELD_PLACEHOLDER,
+  pageFieldMarker,
   pageFieldPlaceholder,
   projectPageFieldValue,
   type BodyPageFieldContext,
@@ -309,7 +309,7 @@ export function collectSimpleFieldDisplay(args: {
       const beforeLen = text.length;
       collect(child, nodeDepth + 1, local);
       text = text.slice(0, beforeLen);
-      text += projectPageFieldValue(simplePageField.kind, pageContext, simplePageField.picture);
+      text += projectPageFieldValue(simplePageField.kind, pageContext, simplePageField);
       return;
     }
     collect(child, nodeDepth + 1, local);
@@ -331,11 +331,7 @@ export interface SimpleFieldProjection {
    * Present when this is a BODY page-field placeholder (no page context): {@link text} is the
    * measurement digit and document finalize substitutes the real value for this kind.
    */
-  readonly pageField?: {
-    readonly kind: AllowlistedPageField;
-    /** The field's `\#` numeric picture, carried to the substitute pass. */
-    readonly picture?: string;
-  };
+  readonly pageField?: AllowlistedPageFieldMatch;
   /**
    * Present when this is a BODY `PAGEREF`: the cached display paints now and document
    * finalize substitutes the number of the page the resolved target lands on.
@@ -413,7 +409,7 @@ function projectSimpleFieldDisplay(
     const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
     if (style.hidden) return null;
     return {
-      text: projectPageFieldValue(pageField.kind, pageContext, pageField.picture),
+      text: projectPageFieldValue(pageField.kind, pageContext, pageField),
       props,
       style,
     };
@@ -430,18 +426,13 @@ function projectSimpleFieldDisplay(
   ) {
     const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
     if (style.hidden) return null;
-    // The same ONE decision the complex-field flush takes, recorded the same way: the picture
-    // travels to finalize only when this placeholder was measured through it.
-    const applied =
-      pageField.picture !== undefined &&
-      numericPictureApplies(pageField.kind, args.bodyPageFields.format);
-    const picture = applied ? pageField.picture : undefined;
+    // The same marker the complex-field flush records: finalize renders the value through
+    // the switches this placeholder was measured through.
     return {
-      text: pageFieldPlaceholder(pageField.kind, picture, args.bodyPageFields.format),
+      text: pageFieldPlaceholder(pageField),
       props,
       style,
-      pageField:
-        picture === undefined ? { kind: pageField.kind } : { kind: pageField.kind, picture },
+      pageField: pageFieldMarker(pageField.kind, pageField),
     };
   }
 

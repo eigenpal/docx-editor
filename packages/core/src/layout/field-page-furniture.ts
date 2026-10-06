@@ -11,9 +11,18 @@
 // (`field-projection` re-exports these so existing importers keep one import site), so the two
 // shared types live here rather than there.
 
-import type { AllowlistedPageField, StoryPageFieldNeeds } from './field-instruction.ts';
+import type {
+  AllowlistedPageField,
+  AllowlistedPageFieldMatch,
+  StoryPageFieldNeeds,
+} from './field-instruction.ts';
 import { NO_STORY_PAGE_FIELDS } from './field-instruction.ts';
 import { formatNumericPicture } from './field-numeric-picture.ts';
+import {
+  formatPageFieldNumber,
+  isPageFieldNumberFormat,
+  type PageFieldSwitches,
+} from './field-page-switches.ts';
 import { formatDecimal, formatNumFmt } from './numbering-format.ts';
 import type {
   BlockFragmentRecord,
@@ -44,8 +53,8 @@ export const PAGE_FIELD_PLACEHOLDER = '0';
 /**
  * What the BODY flow knows about page numbering while it MEASURES a page-field placeholder.
  *
- * Carried instead of a bare boolean because the placeholder and the value it is replaced by
- * have to agree about whether the picture applies at all, and only the section knows that.
+ * The section's `w:pgNumType/@w:fmt` binds a PAGE field with no `\#` picture and no `\*`
+ * number format. A field that states either renders through it on every section.
  */
 export interface BodyPageFieldContext {
   /** The section's `w:pgNumType/@w:fmt`; absent when the section authors none. */
@@ -53,43 +62,46 @@ export interface BodyPageFieldContext {
 }
 
 /**
- * Whether a `\#` picture renders a `kind` value under `format`.
+ * The placeholder a body page field with `switches` should be MEASURED at.
  *
- * ONE decision, read by the placeholder and by the value, or the two disagree about how wide
- * the field is: a non-decimal page format has no digits for a numeric picture to place, and a
- * placeholder measured through the picture would then reserve a width the roman numeral that
- * replaces it never fills.
- *
- * `w:pgNumType/@w:fmt` binds PAGE ALONE. NUMPAGES and SECTIONPAGES are counts, not page
- * numbers, and stay decimal whatever the section's format says — so their picture applies
- * either way, and gating them on the format would measure `{ NUMPAGES \# "000" }` at one digit
- * and then paint three.
+ * The switches decide how wide the substituted value is, and finalize swaps the text in
+ * without re-measuring. `PAGE \# "Page 0 of"` paints about ten characters, so measuring it
+ * at one would overprint whatever follows it on the line. Rendering zero through the picture
+ * gives a placeholder the same shape as every value it can be replaced by — `0#` measures
+ * `00`, the width of `02` — and a number format measures its rendering of one, so
+ * `\* ArabicDash` reserves `- 1 -`. A field with neither keeps the historical single digit.
  */
-export function numericPictureApplies(
-  kind: AllowlistedPageField,
-  format: string | undefined
-): boolean {
-  return kind !== 'PAGE' || !format || format === 'decimal';
+export function pageFieldPlaceholder(switches: PageFieldSwitches = {}): string {
+  let shape: string;
+  if (switches.numberFormat !== undefined) {
+    shape =
+      switches.numberFormat === 'decimal'
+        ? PAGE_FIELD_PLACEHOLDER
+        : formatPageFieldNumber(1, switches.numberFormat);
+  } else if (switches.picture === undefined) {
+    return PAGE_FIELD_PLACEHOLDER;
+  } else {
+    shape = formatNumericPicture(0, switches.picture) ?? PAGE_FIELD_PLACEHOLDER;
+  }
+  // No-break spaces keep the placeholder one word. A space would split it into several spans
+  // that all carry the same field marker, and finalize would paint the value into each one.
+  return shape.replaceAll(' ', NO_BREAK_SPACE);
 }
 
+const NO_BREAK_SPACE = '\u00a0';
+
 /**
- * The placeholder a body page field with `picture` should be MEASURED at.
- *
- * A picture decides how wide the substituted value is, and finalize swaps the text in without
- * re-measuring. `PAGE \# "Page 0 of"` paints about ten characters, so measuring it at one
- * would overprint whatever follows it on the line. Rendering zero through the picture gives a
- * placeholder the same shape as every value it can be replaced by — `0#` measures `00`, the
- * width of `02` — while a pictureless field keeps the historical single digit.
+ * The finalize marker for a body page field: its kind and only the switches it states.
  */
-export function pageFieldPlaceholder(
+export function pageFieldMarker(
   kind: AllowlistedPageField,
-  picture: string | undefined,
-  format?: string
-): string {
-  if (picture === undefined || !numericPictureApplies(kind, format)) {
-    return PAGE_FIELD_PLACEHOLDER;
-  }
-  return formatNumericPicture(0, picture) ?? PAGE_FIELD_PLACEHOLDER;
+  switches: PageFieldSwitches
+): AllowlistedPageFieldMatch {
+  return {
+    kind,
+    ...(switches.picture !== undefined ? { picture: switches.picture } : {}),
+    ...(switches.numberFormat !== undefined ? { numberFormat: switches.numberFormat } : {}),
+  };
 }
 
 /**
@@ -136,33 +148,38 @@ export function formatPageNumber(value: number, format: string | undefined): str
 /**
  * Digit / formatted string for an allowlisted page field under a page context.
  *
- * `picture` is the field's `\#` switch. It renders the computed value and outranks nothing
- * else: an unusable picture falls back to the plain number, never to the cached result. A
- * NON-DECIMAL `w:pgNumType/@w:fmt` on PAGE wins instead, because a roman or alphabetic page
- * number has no digits for a numeric picture to place. An authored `w:fmt="decimal"` — which
- * Word writes — is decimal, so the picture still applies.
+ * `switches` are the field's own. A `\*` number format renders the value first; the parser
+ * already dropped a `\#` picture it outranks. Otherwise a `\#` picture renders it, and an
+ * unusable picture falls back to the plain number, never to the cached result. Either one
+ * outranks the section's `w:pgNumType/@w:fmt`, which binds a PAGE field without switches
+ * only. NUMPAGES and SECTIONPAGES are counts and ignore the section format.
  */
 export function projectPageFieldValue(
   kind: AllowlistedPageField,
   context: FieldPageContext,
-  picture?: string
+  switches: PageFieldSwitches = {}
 ): string {
-  if (kind === 'PAGE') {
-    if (picture !== undefined && numericPictureApplies(kind, context.format)) {
-      const painted = formatNumericPicture(context.pageNumber, picture);
-      if (painted !== null) return painted;
-    }
-    return formatPageNumber(context.pageNumber, context.format);
-  }
   const value =
-    kind === 'NUMPAGES' ? context.pageCount : (context.sectionPageCount ?? context.pageCount);
-  // Layout-derived counts are already bounded by pagination; still refuse non-finite junk.
+    kind === 'PAGE'
+      ? context.pageNumber
+      : kind === 'NUMPAGES'
+        ? context.pageCount
+        : (context.sectionPageCount ?? context.pageCount);
+  // Layout-derived values are already bounded by pagination; still refuse non-finite junk.
   if (!Number.isFinite(value) || value < 0) return '';
-  if (picture !== undefined) {
-    const painted = formatNumericPicture(value, picture);
+  if (switches.numberFormat !== undefined) {
+    return formatPageFieldNumber(value, switches.numberFormat);
+  }
+  if (switches.picture !== undefined) {
+    const painted = formatNumericPicture(value, switches.picture);
     if (painted !== null) return painted;
   }
-  return formatDecimal(Math.floor(value));
+  if (kind !== 'PAGE') return formatDecimal(Math.floor(value));
+  // A roman or letter section format follows the page-field rules, not the list-marker ones:
+  // thousands repeat `M`, letters repeat one letter, and zero is a space.
+  return context.format !== undefined && isPageFieldNumberFormat(context.format)
+    ? formatPageFieldNumber(value, context.format)
+    : formatPageNumber(value, context.format);
 }
 
 /**
@@ -472,15 +489,22 @@ export function pageRefAssignmentToken(pages: readonly PageRecord[]): string {
  * already paints. The span's model `range` stays its reserved one-unit width whatever the
  * substituted text length is — paint and the offset accounting clamp to that width, so a
  * multi-digit page number never lengthens the model.
+ *
+ * A page-field placeholder can still reach layout as several spans (a font or script change
+ * inside a picture's literal text, or a break inside it). They all carry the same marker, so
+ * only the first paints the value and the rest paint nothing. `previous` is the last span of
+ * the line before, so a placeholder that continues onto this line is recognized too.
  */
 function substituteBodyPageFieldLine(
   line: LineRecord,
   context: FieldPageContext,
-  pageRefs?: PageRefSubstitution
+  pageRefs: PageRefSubstitution | undefined,
+  previous: StyleSpanRecord | undefined
 ): LineRecord {
   let spans: StyleSpanRecord[] | null = null;
   for (let index = 0; index < line.spans.length; index += 1) {
     const span = line.spans[index]!;
+    const before = index > 0 ? line.spans[index - 1] : previous;
     const pageRef = span.fieldAtom?.pageRef;
     if (pageRef) {
       // The target never placed (deleted target, or a bookmark in furniture): keep the cache.
@@ -506,12 +530,23 @@ function substituteBodyPageFieldLine(
     }
     const marker = span.fieldAtom?.pageField;
     if (!marker) continue;
-    const text = projectPageFieldValue(marker.kind, context, marker.picture);
+    const text = samePageFieldAtom(before, span)
+      ? ''
+      : projectPageFieldValue(marker.kind, context, marker);
     if (text === span.text) continue;
     if (!spans) spans = line.spans.slice();
     spans[index] = { ...span, text };
   }
   return spans ? { ...line, spans } : line;
+}
+
+/** True when `before` is an earlier piece of the same body page-field atom as `span`. */
+function samePageFieldAtom(before: StyleSpanRecord | undefined, span: StyleSpanRecord): boolean {
+  return (
+    before?.fieldAtom?.pageField !== undefined &&
+    before.range.paragraphId === span.range.paragraphId &&
+    before.range.start === span.range.start
+  );
 }
 
 /**
@@ -543,7 +578,8 @@ export function substituteBodyPageFields(
       let mutatedLines: LineRecord[] | null = null;
       for (let lineIndex = 0; lineIndex < block.lines.length; lineIndex += 1) {
         const line = block.lines[lineIndex]!;
-        const nextLine = substituteBodyPageFieldLine(line, context, pageRefs);
+        const previous = block.lines[lineIndex - 1]?.spans.at(-1);
+        const nextLine = substituteBodyPageFieldLine(line, context, pageRefs, previous);
         if (nextLine === line) continue;
         if (!mutatedLines) mutatedLines = block.lines.slice();
         mutatedLines[lineIndex] = nextLine;

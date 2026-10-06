@@ -1021,6 +1021,7 @@ export interface FieldAtomMarker {
     readonly formField: boolean;
     readonly pageField?: {
         readonly kind: AllowlistedPageField;
+        readonly numberFormat?: PageFieldNumberFormat;
         readonly picture?: string;
     };
     readonly pageRef?: PageRefFieldProjection;

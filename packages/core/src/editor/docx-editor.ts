@@ -12,6 +12,7 @@ import { createEditorPopupChrome } from './text-form-field-chrome.ts';
 import {
   createReviewCommands,
   dateOfReviewItem as dateOfItem,
+  reviewActivationRefusal,
   reviewModelOption,
 } from './docx-editor-review-commands.ts';
 import { canEditorViewCommand, createEditorParagraphMarks } from './docx-editor-view-commands.ts';
@@ -1275,9 +1276,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     return item.range;
   }
 
-  /** Shared by the placement flag and activation: an addressable, non-excluded range. */
+  /** Shared by the placement flag and activation: an addressable, non-excluded range with a card. */
   function reviewItemActivatable(item: ReviewItem): boolean {
-    if (firstReviewRange(item) === null) return false;
+    if (firstReviewRange(item) === null || (item.kind === 'custom' && !item.carded)) return false;
     return !(
       item.kind === 'revision' &&
       reviewActivationExclusions !== null &&
@@ -2362,7 +2363,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         return {
           ok: false,
           code: 'unsupported',
-          reason: `review items of kind '${(item as { revisionKind?: string }).revisionKind}' are excluded from activation`,
+          reason: reviewActivationRefusal(item),
         };
       }
       // A card whose range lives in a header/footer opens that scope, exactly as Word does:

@@ -7,9 +7,13 @@ import type {
   DrawingVerticalReferenceFrame,
   DrawingWrapProjection,
 } from './drawing-projection.ts';
+import { legacyTextbox, legacyTextboxStory } from './legacy-vml-textbox.ts';
 import {
+  legacyLineReach,
   legacyPictureBorder,
   legacyShapeFragment,
+  legacyLineShape,
+  type LegacyLineEnds,
   type LegacyBox,
   type LegacyGraphicFragment,
   type LegacyPictureBorder,
@@ -46,6 +50,11 @@ function layerOrder(raw = '0'): number {
 }
 const commonStyles = new Set([
   'text-align',
+  'mso-left-percent',
+  'mso-top-percent',
+  'mso-width-relative',
+  'mso-height-relative',
+  'v-text-anchor',
   'mso-wrap-edited',
   'mso-width-percent',
   'mso-height-percent',
@@ -70,23 +79,56 @@ const commonStyles = new Set([
   'mso-wrap-distance-bottom',
 ]);
 
+const relativeSizeFrames = [
+  'margin',
+  'page',
+  'left-margin-area',
+  'right-margin-area',
+  'inner-margin-area',
+  'outer-margin-area',
+  'top-margin-area',
+  'bottom-margin-area',
+];
+/** Style values this subset reads or can ignore; any other value refuses the shape. */
+const knownValues: Readonly<Record<string, readonly string[]>> = {
+  'text-align': ['left', 'center', 'right', 'justify'],
+  'mso-wrap-edited': ['f', 't'],
+  // -10001 is the writer's "no percentage position" value.
+  'mso-left-percent': ['-10001'],
+  'mso-top-percent': ['-10001'],
+  'mso-width-relative': relativeSizeFrames,
+  'mso-height-relative': relativeSizeFrames,
+  'mso-position-horizontal': ['absolute', 'left', 'center', 'right', 'inside', 'outside'],
+  'mso-position-vertical': ['absolute', 'top', 'center', 'bottom', 'inside', 'outside'],
+  'mso-wrap-style': ['square', 'none'],
+  'v-text-anchor': [
+    'top',
+    'middle',
+    'bottom',
+    'top-center',
+    'middle-center',
+    'bottom-center',
+    'top-baseline',
+    'bottom-baseline',
+    'top-center-baseline',
+    'bottom-center-baseline',
+  ],
+  visibility: ['visible', 'hidden'],
+};
+
 function supportedStyle(node: OoxmlElement, root: boolean): ReadonlyMap<string, string> | null {
   const styles = styleOf(node);
   if (!styles || a(node, 'opacity') || a(node, 'href') || a(node, 'src')) return null;
   for (const key of styles.keys()) if (!commonStyles.has(key)) return null;
-  const inertValues: Record<string, readonly string[]> = {
-    'text-align': ['left'],
-    'mso-wrap-edited': ['f', 't'],
-    'mso-width-percent': ['0'],
-    'mso-height-percent': ['0'],
-    'mso-position-horizontal': ['absolute'],
-    'mso-position-vertical': ['absolute'],
-    'mso-wrap-style': ['square'],
-    visibility: ['visible', 'hidden'],
-  };
-  for (const [key, allowed] of Object.entries(inertValues)) {
+  for (const [key, allowed] of Object.entries(knownValues)) {
     const value = styles.get(key);
     if (value !== undefined && !allowed.includes(value)) return null;
+  }
+  // A relative size is stored beside the absolute size that the writer computed from it; the
+  // absolute size is the one laid out.
+  for (const key of ['mso-width-percent', 'mso-height-percent']) {
+    const value = styles.get(key);
+    if (value !== undefined && !/^\d{1,4}$/.test(value)) return null;
   }
   if (styles.has('position') && !['absolute', 'relative'].includes(styles.get('position')!))
     return null;
@@ -188,53 +230,135 @@ function pictureOutline(
   });
 }
 
+/** The first `w:txbxContent` of a `v:textbox` child, found with bounded direct-child scans. */
+function storyCandidate(root: OoxmlElement): OoxmlNode | undefined {
+  if (root.children.length > 512) return undefined;
+  for (const child of root.children) {
+    if (!named(child, VML, 'textbox') || child.kind === 'textValue') continue;
+    if (child.children.length > 512) return undefined;
+    return child.children.find((inner) => named(inner, WML_NAMESPACE_URI, 'txbxContent'));
+  }
+  return undefined;
+}
+
+/** A `v:line` length pair (`x,y`) in points, or null. */
+function lengthPair(value: string | undefined): [number, number] | null {
+  const parts = value?.split(',');
+  if (parts?.length !== 2) return null;
+  const pair = parts.map((part) => points(part.trim()));
+  return pair.every((n) => Number.isFinite(n) && Math.abs(n) <= 100_000)
+    ? (pair as [number, number])
+    : null;
+}
+
+interface LineGeometry {
+  /** The box origin relative to the shape's own offset, in points. */
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly ends: LegacyLineEnds;
+}
+
+/**
+ * The box of a floating `v:line`, from its `from` and `to` points. A horizontal or vertical
+ * line has no width or height, as a modern line can. Null for an inline line, a line without
+ * both points, or one whose points coincide.
+ */
+function lineGeometry(root: OoxmlElement, floating: boolean): LineGeometry | null {
+  const from = lengthPair(a(root, 'from')),
+    to = lengthPair(a(root, 'to'));
+  if (!floating || !from || !to) return null;
+  const x = Math.min(from[0], to[0]),
+    y = Math.min(from[1], to[1]);
+  const width = Math.abs(to[0] - from[0]),
+    height = Math.abs(to[1] - from[1]);
+  if (width + height <= 0) return null;
+  return Object.freeze({
+    x,
+    y,
+    width,
+    height,
+    ends: Object.freeze([
+      Object.freeze([from[0] - x, from[1] - y] as const),
+      Object.freeze([to[0] - x, to[1] - y] as const),
+    ] as const),
+  });
+}
+
 /**
  * `preview` is the validated cached-preview shape of a `w:object`. Its projection is a static
  * read-only graphic: no picture member, so picture edits never reach the embedded object.
  */
 function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProjection | null {
-  if (!boundedVml(preview ?? node)) return null;
   const roots = preview ? [preview] : children(node).filter((c) => !named(c, VML, 'shapetype'));
   if (roots.length !== 1) return null;
+  const root = roots[0]!;
+  if (
+    root.namespaceUri !== VML ||
+    !['shape', 'rect', 'roundrect', 'oval', 'line', 'group'].includes(root.localName)
+  )
+    return null;
+  // The text box story is ordinary WML content, bounded by story layout rather than here.
+  // Everything else is bounded before the text box is read.
+  if (!boundedVml(preview ?? node, preview ? undefined : storyCandidate(root))) return null;
+  const textbox = preview ? undefined : legacyTextbox(root);
+  if (textbox === null) return null;
   // Built-in templates are metadata, not a second drawing. Unknown custom
   // templates may redefine geometry and are outside this bounded subset.
   if (
     children(node).some((child) => named(child, VML, 'shapetype') && !isStandardVmlTemplate(child))
   )
     return null;
-  const root = roots[0]!;
-  if (
-    root.namespaceUri !== VML ||
-    !['shape', 'rect', 'oval', 'line', 'group'].includes(root.localName)
-  )
-    return null;
   const style = supportedStyle(root, true);
   if (!style) return null;
-  const width = points(style.get('width')),
-    height = points(style.get('height'));
-  if (![width, height].every((n) => Number.isFinite(n) && n > 0 && n <= 10_000)) return null;
+  const floating = style.get('position') === 'absolute';
+  // A line spans its `from` and `to` points.
+  const line = root.localName === 'line' ? lineGeometry(root, floating) : undefined;
+  if (line === null) return null;
+  const width = line?.width ?? points(style.get('width')),
+    height = line?.height ?? points(style.get('height'));
+  const extentOk = (n: number) => Number.isFinite(n) && (line ? n >= 0 : n > 0) && n <= 10_000;
+  if (![width, height].every(extentOk)) return null;
   // A picture outline widens the drawing by its full weight on every side; the picture keeps
   // its authored size inside it.
-  const border = root.localName === 'shape' ? legacyPictureBorder(root) : undefined;
+  const border = root.localName === 'shape' && !textbox ? legacyPictureBorder(root) : undefined;
   if (border === null || (preview && border)) return null;
-  const inset = border?.weight ?? 0,
+  // A line is a vector shape, which paints in every output and whose outline reaches past its
+  // box as a modern line's does. The other shapes are a graphic preview, which grows by the
+  // outline's reach on every side to keep the outline inside its image.
+  const vector = !!line;
+  const strokeReach =
+    !textbox && !border && (line || ['rect', 'roundrect', 'oval'].includes(root.localName))
+      ? legacyLineReach(root, !line)
+      : 0;
+  if (strokeReach === null) return null;
+  const inset = border?.weight ?? strokeReach,
     outerWidth = width + 2 * inset,
     outerHeight = height + 2 * inset;
+  const grow = vector ? 0 : inset;
   const fragments: LegacyGraphicFragment[] = [];
   const box = { x: 0, y: 0, width, height };
-  if (root.localName === 'group') {
+  // The story paints the shape's fill and outline itself, so a text box has no graphic.
+  const textboxStory = textbox ? legacyTextboxStory(root, textbox, style) : null;
+  if (textbox && !textboxStory) return null;
+  if (!textboxStory && root.localName === 'group') {
     if (!groupLayers(root, box, fragments, 0) || !fragments.length) return null;
-  } else {
+  } else if (!textboxStory) {
     const fragment = legacyShapeFragment(
       root,
       { x: inset, y: inset, width, height },
       { x: 0, y: 0, width: outerWidth, height: outerHeight },
-      !!border
+      !!border,
+      line?.ends
     );
     if (fragment === null) return null;
     if ((border || preview) && (typeof fragment === 'string' || !fragment.nativeCrop)) return null;
-    fragments.push(fragment);
+    // A vector shape is validated by the same reading and painted from its own projection.
+    if (!vector) fragments.push(fragment);
   }
+  const vectorShape = line ? legacyLineShape(root, width, height, line.ends) : null;
+  if (line && !vectorShape) return null;
   const wrapNodes = children(root).filter((n) => named(n, WORD_VML, 'wrap'));
   if (wrapNodes.length > 1) return null;
   const wrapNode = wrapNodes[0];
@@ -242,12 +366,6 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
   const anchorY = wrapNode ? a(wrapNode, 'anchory') : undefined;
   if (anchorX && !['page', 'margin', 'text', 'char'].includes(anchorX)) return null;
   if (anchorY && !['page', 'margin', 'text', 'line'].includes(anchorY)) return null;
-  const floating =
-    style.get('position') === 'absolute' ||
-    style.has('mso-position-horizontal-relative') ||
-    style.has('mso-position-vertical-relative') ||
-    !!anchorX ||
-    !!anchorY;
   if ((border || preview) && floating) return null;
   const horizontal = new Map<string, DrawingHorizontalReferenceFrame>([
     ['text', 'column'],
@@ -265,8 +383,13 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
     ['top-margin-area', 'topMargin'],
     ['bottom-margin-area', 'bottomMargin'],
   ]).get(style.get('mso-position-vertical-relative') ?? anchorY ?? 'text');
-  const left = points(style.get('margin-left') ?? style.get('left') ?? '0'),
-    top = points(style.get('margin-top') ?? style.get('top') ?? '0');
+  const left = points(style.get('margin-left') ?? style.get('left') ?? '0') + (line?.x ?? 0) - grow,
+    top = points(style.get('margin-top') ?? style.get('top') ?? '0') + (line?.y ?? 0) - grow;
+  // An aligned position replaces the offset, as `wp:align` does for a modern drawing.
+  const alignOf = (value: string | undefined) =>
+    value === undefined || value === 'absolute' ? null : value;
+  const horizontalAlign = alignOf(style.get('mso-position-horizontal')),
+    verticalAlign = alignOf(style.get('mso-position-vertical'));
   const z = layerOrder(style.get('z-index'));
   if (
     !horizontal ||
@@ -317,8 +440,8 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
     fragments[0]?.nativeCrop
       ? fragments[0]
       : undefined;
-  const outerCx = Math.round(outerWidth * 12700),
-    outerCy = Math.round(outerHeight * 12700);
+  const outerCx = Math.round((vector ? width : outerWidth) * 12700),
+    outerCy = Math.round((vector ? height : outerHeight) * 12700);
   return Object.freeze({
     drawingNodeId: node.id,
     ownerPartName: '',
@@ -361,13 +484,13 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
           simplePosition: Object.freeze({ xEmu: 0, yEmu: 0 }),
           horizontal: Object.freeze({
             relativeFrom: horizontal,
-            align: null,
-            offsetEmu: Math.round(left * 12700),
+            align: horizontalAlign,
+            offsetEmu: horizontalAlign ? null : Math.round(left * 12700),
           }),
           vertical: Object.freeze({
             relativeFrom: vertical,
-            align: null,
-            offsetEmu: Math.round(top * 12700),
+            align: verticalAlign,
+            offsetEmu: verticalAlign ? null : Math.round(top * 12700),
           }),
         })
       : null,
@@ -402,7 +525,7 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
             }),
           })
         : null,
-    vectorShape: border ? pictureOutline(border, outerCx, outerCy) : null,
+    vectorShape: border ? pictureOutline(border, outerCx, outerCy) : vectorShape,
     groupPicture:
       photo && border
         ? Object.freeze({
@@ -419,9 +542,16 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
             alternateContent: false,
           })
         : null,
-    textboxStory: null,
-    ...(!photo
-      ? { legacyGraphic: Object.freeze({ width, height, fragments: Object.freeze(fragments) }) }
+    textboxStory,
+    // The graphic covers the whole drawing, outline reach included.
+    ...(!photo && !textboxStory && !vectorShape
+      ? {
+          legacyGraphic: Object.freeze({
+            width: outerWidth,
+            height: outerHeight,
+            fragments: Object.freeze(fragments),
+          }),
+        }
       : {}),
     locks: Object.freeze({ select: true, move: true, resize: true, changeAspect: true }),
     effects: Object.freeze({ grayscale: false, brightness: 0, contrast: 0 }),
@@ -444,6 +574,11 @@ export function isLegacyVmlAtom(node: OoxmlNode): boolean {
   }
   return memo.get(node) !== null;
 }
+/** Whether a supported VML atom floats; false for anything else. Reads the memo, no copy. */
+export function isFloatingLegacyVmlAtom(node: OoxmlNode): boolean {
+  return isLegacyVmlAtom(node) && memo.get(node)!.kind === 'anchored';
+}
+
 export function projectLegacyVml(node: OoxmlNode, ownerPartName: string): DrawingProjection | null {
   if (!isLegacyVmlAtom(node)) return null;
   return Object.freeze({ ...memo.get(node)!, ownerPartName });

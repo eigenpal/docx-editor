@@ -2444,9 +2444,15 @@ a.docx-hyperlink:focus-visible {
   padding-left: 18px;
 }
 
+/* The scroller keeps a left-to-right base whatever the host page declares. Under an
+ * inherited `rtl`, `scrollLeft` runs from 0 to negative values and overflow grows
+ * leftward, which breaks every horizontal offset the editor derives from it: zoom
+ * anchoring, rulers, the review rail and popups. Document text direction comes only
+ * from the document; the pages pin their own base as well. */
 .docx-editor__scroll-container {
   display: flex;
   flex-direction: column;
+  direction: ltr;
 }
 
 .docx-editor__content {

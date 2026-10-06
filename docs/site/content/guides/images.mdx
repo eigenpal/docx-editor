@@ -223,7 +223,9 @@ Use `useDocumentSearch` to add Find navigation to a custom [React](/docs/2.x/rea
 
 ## Legacy VML previews
 
-Standalone `w:pict` can render unrotated embedded photos and bounded groups of photos, solid rectangles/ellipses, straight line segments with arrows, and straight fit-to-box WordArt (`_x0000_t136`). Group-local coordinates, picture crops, supported text wrapping, and source order are retained. WordArt uses the authored font when available on the host; curved or rotated WordArt is not supported.
+Standalone `w:pict` can render unrotated embedded photos and bounded groups of photos, solid rectangles, rounded rectangles, and ellipses, straight line segments with arrows, and straight fit-to-box WordArt (`_x0000_t136`). A floating `v:line` spans its `from` and `to` points and also renders in PDF export. Group-local coordinates, picture crops, supported text wrapping, aligned positions, and source order are retained. A shape without `position:absolute` in its style is inline. WordArt uses the authored font when available on the host; curved or rotated WordArt is not supported.
+
+A text box (`v:textbox`) on a rectangle, rounded rectangle, or text box shape lays out its story inside the shape with the `inset` margins, floating or inline, in the body, headers, and footers. It paints the solid fill and outline of the shape. **Find** reaches its text, and a body box takes the same text editing as other text boxes. Rounded corners, shadows, and dash patterns of a text box are not painted. Vertical text flow keeps the shape opaque.
 
 Previews are read-only. Saving preserves the original VML, media, and relationships without adding generated SVG parts or converting the source to DrawingML. Deleting another picture preserves shared photo relationships.
 

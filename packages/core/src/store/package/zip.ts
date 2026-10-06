@@ -1,7 +1,8 @@
 // Bounded ZIP read/write over fflate (document-engine task 2.3 / design D14).
-// Reading enforces entry-count and total-decompressed-size ceilings (zip-bomb
-// guard) and normalizes every entry name through the OPC profile (path-traversal
-// guard) BEFORE the bytes are handed on. Writing produces a deterministic archive.
+// Reading enforces entry-count, total-decompressed-size and archive-ratio ceilings
+// (zip-bomb guard) and normalizes every entry name through the OPC profile
+// (path-traversal guard) BEFORE the bytes are handed on. Writing produces a
+// deterministic archive.
 
 import { unzipSync, zipSync } from 'fflate';
 import { normalizePartName, partNameKey } from './opc-names.ts';
@@ -14,12 +15,28 @@ import { normalizePartName, partNameKey } from './opc-names.ts';
  */
 export type ZipRejection = 'too-many-entries' | 'too-large' | 'bad-name' | 'inflate-error';
 
+/**
+ * Declared uncompressed bytes an archive may reach before `maxRatio` applies: 8 MiB.
+ *
+ * Small parts are where legitimate documents carry extreme ratios: a few kilobytes of zero
+ * bytes, or a metafile drawn from long uniform runs, stores in a few dozen bytes. Above this
+ * size the ratio applies to the whole archive, so splitting a bomb across many small entries
+ * does not evade it. The most any archive may expand to is therefore the larger of 8 MiB and
+ * `maxRatio` times its own length, and never more than `maxTotalBytes`: a tiny upload costs
+ * the reader at most 8 MiB.
+ */
+export const ZIP_RATIO_EXEMPT_BYTES = 8 * 1024 * 1024;
+
 /** Archive caps: entry count, total decompressed bytes, and the decompression ratio. */
 export interface ZipLimits {
   readonly maxEntries: number;
   /** Max total UNCOMPRESSED bytes across the archive. */
   readonly maxTotalBytes: number;
-  /** Max per-entry uncompressed:compressed ratio (zip-bomb guard). */
+  /**
+   * Max ratio of the archive's total declared uncompressed bytes to the archive's own byte
+   * length (zip-bomb guard). Applies once that total exceeds 8 MiB, so a small archive is
+   * never refused for compressing well.
+   */
   readonly maxRatio?: number;
 }
 
@@ -50,11 +67,16 @@ class ZipViolation extends Error {
 }
 
 /**
- * Inflate a ZIP archive with bounds + OPC name normalization. Entry name, count,
- * compression-ratio, and total-uncompressed-size limits are enforced BEFORE each
- * entry is decompressed (via fflate's pre-inflation filter), so a zip bomb or a
- * traversal name is rejected without ever being inflated. Keys are canonical part
- * names.
+ * Inflate a ZIP archive with bounds + OPC name normalization. Entry name, count, archive
+ * ratio, and total-uncompressed-size limits are enforced BEFORE each entry is decompressed
+ * (via fflate's pre-inflation filter), so a zip bomb or a traversal name is rejected without
+ * ever being inflated. Keys are canonical part names.
+ *
+ * The budgets count each entry's DECLARED sizes, and the declared size is also a hard cap on
+ * what the entry may produce: fflate inflates into a buffer of exactly `originalSize` bytes
+ * and never grows it, so an entry whose stream holds more than it declares is truncated (or
+ * refused as `inflate-error`), never expanded past its budget. A stored entry is copied at
+ * its compressed size, so the larger of its two declared sizes is what counts.
  */
 export function readZip(bytes: Uint8Array, limits: ZipLimits = DEFAULT_ZIP_LIMITS): ZipReadResult {
   const maxRatio = limits.maxRatio ?? 200;
@@ -85,12 +107,16 @@ export function readZip(bytes: Uint8Array, limits: ZipLimits = DEFAULT_ZIP_LIMIT
           throw new ZipViolation('bad-name');
         }
         seenNorms.add(key);
-        // Compression-ratio zip-bomb guard, checked before decompressing.
-        if (file.originalSize / Math.max(1, file.size) > maxRatio)
-          throw new ZipViolation('too-large', 'zip.maxRatio');
-        totalUncompressed += file.originalSize;
+        // Both budgets are checked before this entry is decompressed. A stored entry is
+        // copied at `size` bytes whatever it declares as `originalSize`.
+        totalUncompressed += Math.max(file.originalSize, file.size);
         if (totalUncompressed > limits.maxTotalBytes)
           throw new ZipViolation('too-large', 'zip.maxTotalBytes');
+        if (
+          totalUncompressed > ZIP_RATIO_EXEMPT_BYTES &&
+          totalUncompressed / Math.max(1, bytes.byteLength) > maxRatio
+        )
+          throw new ZipViolation('too-large', 'zip.maxRatio');
         return true;
       },
     });

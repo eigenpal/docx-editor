@@ -1710,6 +1710,8 @@ function collectDrawingsInPartBounded(
     if (legacy) {
       out.push(legacy);
       atomIndex?.set(frame.node.id, legacy);
+      // Walk through the shape, as for a modern drawing, so namespace scope and depth stay exact.
+      if (legacy.textboxStory) descendIntoTextboxStory(frame.node, frame, scope);
       continue;
     }
 

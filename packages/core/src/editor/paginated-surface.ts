@@ -3693,7 +3693,7 @@ export function mountPaginatedSurface(
       a.paragraphId === b.paragraphId && a.offset === b.offset;
     if (!same(selection.anchor, pin.anchor) || !same(selection.head, pin.head)) return null;
     const found = visibleReviewItems().find((item) => reviewItemKey(item) === pin.key);
-    if (!found) return null;
+    if (!found || (found.kind === 'custom' && !found.carded)) return null;
     // Explicit activation can inspect a resolved comment. The caret path below still ignores
     // resolved comments, so they never reopen from ordinary document navigation.
     if (
@@ -3729,6 +3729,8 @@ export function mountPaginatedSurface(
       (item) =>
         !(item.kind === 'comment' && item.resolved) &&
         !dismissedReviewKeys.has(reviewItemKey(item)) &&
+        // A custom node with no `reviewCard` has no card, so it never becomes the active one.
+        !(item.kind === 'custom' && !item.carded) &&
         // Kinds the host's rail hides must not become active from a click: the band
         // would light a card nothing on screen renders (see the contract note on
         // `setReviewActivationExclusions`).

@@ -5,7 +5,7 @@
 // read path establishes at construction; importers keep reaching `validateOoxmlPart` and
 // `validateOoxmlPartDelta` through that module's re-exports.
 
-import { isValidNCName } from './qname.ts';
+import { isXmlNCName } from './qname.ts';
 import { isValidXmlText } from './sinks.ts';
 import {
   W14_NAMESPACE_URI,
@@ -226,7 +226,7 @@ function runValidation(part: OoxmlPart, previous: OoxmlPart | null): OoxmlInvari
       for (const binding of node.namespaceBindings) {
         const valid =
           !localPrefixes.has(binding.prefix) &&
-          (binding.prefix === '' || isValidNCName(binding.prefix)) &&
+          (binding.prefix === '' || isXmlNCName(binding.prefix)) &&
           binding.prefix !== 'xmlns' &&
           isValidXmlText(binding.namespaceUri) &&
           binding.namespaceUri !== XMLNS_NAMESPACE_URI &&
@@ -240,27 +240,27 @@ function runValidation(part: OoxmlPart, previous: OoxmlPart | null): OoxmlInvari
       bindings = own;
     }
 
-    if (!isValidNCName(node.localName)) report('invalid-name', node.id);
+    if (!isXmlNCName(node.localName)) report('invalid-name', node.id);
     if (!isValidXmlText(node.namespaceUri) || node.namespaceUri === XMLNS_NAMESPACE_URI)
       report('invalid-namespace', node.id);
     const elementPrefixValid =
       node.prefix === undefined
         ? (bindings.get('') ?? '') === node.namespaceUri
-        : isValidNCName(node.prefix) && bindings.get(node.prefix) === node.namespaceUri;
+        : isXmlNCName(node.prefix) && bindings.get(node.prefix) === node.namespaceUri;
     if (!elementPrefixValid) report('invalid-qname', node.id);
 
     // A single attribute cannot collide with itself, so the duplicate-tracking set is only
     // allocated once a second attribute exists.
     const expandedAttributes = node.attributes.length > 1 ? new Set<string>() : null;
     for (const attribute of node.attributes) {
-      if (!isValidNCName(attribute.localName)) report('invalid-name', node.id);
+      if (!isXmlNCName(attribute.localName)) report('invalid-name', node.id);
       if (!isValidXmlText(attribute.namespaceUri) || attribute.namespaceUri === XMLNS_NAMESPACE_URI)
         report('invalid-namespace', node.id);
       if (!isValidXmlText(attribute.value)) report('invalid-xml-value', node.id);
       const attributePrefixValid =
         attribute.prefix === undefined
           ? attribute.namespaceUri === ''
-          : isValidNCName(attribute.prefix) &&
+          : isXmlNCName(attribute.prefix) &&
             bindings.get(attribute.prefix) === attribute.namespaceUri;
       if (!attributePrefixValid) report('invalid-qname', node.id);
       if (expandedAttributes) {

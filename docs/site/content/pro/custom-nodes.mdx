@@ -399,7 +399,9 @@ if (built.ok) template.replace('{{citation}}', built.xml);
 
 ### Add a review sidebar card
 
-`reviewCard` contributes one card per node, anchored at its range. `useReviewItem()` supplies the item for the card containing your component:
+`reviewCard` contributes one card per node, anchored at its range. While the card is open, the editor highlights the node. If you leave out `reviewCard`, the node has no card and no active highlight.
+
+`useReviewItem()` supplies the item for the card containing your component:
 
 <FrameworkTabs>
 <Framework value="react">

@@ -134,7 +134,7 @@ const survey = Citation.dataOf(popoverState); // { data } is enough
 
 Inside `text`, `reviewCard` and `fromDocx`, `data` is already the schema's output type. Everywhere else it is `unknown`, because those surfaces carry every definition's nodes under one type.
 
-A definition does not need `reviewCard` to be read. A node without one is still recognized and still carries its payload; it contributes nothing to the sidebar.
+A definition does not need `reviewCard` to be read. A node without one is still recognized and still carries its payload; it contributes nothing to the sidebar. It never becomes the active review item, so placing the cursor inside it shows no active highlight, and `setActiveReviewItem` refuses its key with `unsupported`.
 
 ### Review items
 
