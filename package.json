@@ -213,7 +213,7 @@
     "vite": {
       "postcss": "8.5.26"
     },
-    "prosemirror-view": "1.41.8",
+    "prosemirror-view": "1.42.3",
     "prosemirror-state": "1.4.4",
     "prosemirror-model": "1.25.4",
     "prosemirror-transform": "1.12.0",
@@ -222,7 +222,7 @@
     "vue": "3.5.33"
   },
   "resolutions": {
-    "prosemirror-view": "1.41.8",
+    "prosemirror-view": "1.42.3",
     "prosemirror-state": "1.4.4",
     "prosemirror-model": "1.25.4",
     "prosemirror-transform": "1.12.0",
