@@ -842,7 +842,7 @@ export interface ReviewItemQuery {
  * framework.
  */
 export interface ReviewItemPlacementBase {
-  /** Stable and unique per DECISION — a revision with three ranges is one entry. */
+  /** Stable and unique per decision within this editor instance. */
   readonly key: string;
   /** The engine's own id for the comment, the revision, or the custom node. */
   readonly id: string;
@@ -935,11 +935,8 @@ export interface ReviewRevisionPlacement extends ReviewItemPlacementBase {
   /** Which decision this is. */
   readonly revisionKind: ReviewRevisionKind;
   /**
-   * The words a REPLACEMENT removes, when {@link revisionKind} is `'replace'`.
-   *
-   * Paired with {@link ReviewItemPlacementBase.text}, which holds the words it puts in
-   * their place, so a card can say `Replaced "x" with "y"` — one decision, the way Word
-   * presents it.
+   * The words a custom replacement decision removes when {@link revisionKind} is `'replace'`.
+   * The built-in reader exposes separate deletion and insertion cards.
    */
   readonly replacedText?: string;
   readonly item: ReviewRevisionItem;

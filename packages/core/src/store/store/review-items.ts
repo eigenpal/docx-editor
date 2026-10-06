@@ -45,11 +45,8 @@ export type ReviewRevisionKind =
   | 'insert'
   | 'delete'
   /**
-   * A deletion and an insertion that are one edit: text typed over a selection.
-   *
-   * Word shows these as a single `Replaced "x" with "y"` card, and resolving one half
-   * without the other is never what the reviewer meant — accepting the deletion alone
-   * leaves the replacement text unproposed, rejecting it alone leaves both.
+   * A combined decision supplied by a custom review provider.
+   * The built-in reader exposes text replacements as separate deletion and insertion decisions.
    */
   | 'replace'
   | 'moveFrom'
@@ -69,14 +66,14 @@ export type ReviewRevisionKind =
  */
 export interface ReviewRevisionItem {
   readonly kind: 'revision';
-  /** Stable across renders and unique per DECISION, not per site. */
+  /** Stable across renders and unique per decision within this editor instance. */
   readonly id: string;
   /** The payload `acceptRevision` / `rejectRevision` take. */
   readonly address: RevisionAddress;
   /**
    * EVERY address this decision covers, `address` first.
    *
-   * Replacements, table fragments, and adjacent formatting changes can combine multiple
+   * Adjacent text fragments, table fragments, and formatting changes can combine multiple
    * original revisions into one decision. Review commands resolve the complete decision
    * in one transaction while preserving independent changes outside the group.
    */

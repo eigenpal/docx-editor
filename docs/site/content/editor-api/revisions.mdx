@@ -142,7 +142,7 @@ Keep `resolve()` as the only write in its sync batch; reads can share the batch.
 | `skipped` | Requested decisions left pending, with a key, reason, and `revision` metadata when known. |
 | `remaining` | Number of pending decisions in the story, including excluded and unsupported changes. |
 
-A decision can contain several XML markers, such as both halves of a replacement. A successful batch can leave changes pending:
+A decision can contain several XML markers, such as split deletion fragments. A replacement keeps its deletion and addition decisions separate. A successful batch can leave changes pending:
 
 | Skip reason | Next step |
 | --- | --- |

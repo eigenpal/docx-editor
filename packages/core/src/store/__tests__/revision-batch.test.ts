@@ -115,15 +115,15 @@ for (const action of ['accept', 'reject'] as const) {
     expect(revisionItemsOf(applied.part)).toEqual([]);
     expect(serializeOoxmlPart(applied.part).match(/moved/g)).toHaveLength(1);
   });
-  test(`${action}: selecting a replacement leaves same-address formatting pending`, () => {
+  test(`${action}: selecting replacement halves leaves same-address formatting pending`, () => {
     const part = load(
       '<w:p><w:r><w:rPr><w:b/><w:rPrChange w:id="1" w:author="Ada"><w:rPr/></w:rPrChange></w:rPr><w:t>Base</w:t></w:r><w:del w:id="1" w:author="Ada"><w:r><w:delText>Old</w:delText></w:r></w:del><w:ins w:id="2" w:author="Ada"><w:r><w:t>New</w:t></w:r></w:ins></w:p>'
     );
     const keys = revisionItemsOf(part)
-      .filter((item) => item.revisionKind === 'replace')
+      .filter((item) => item.revisionKind === 'insert' || item.revisionKind === 'delete')
       .map(reviewItemKey);
     const batch = planRevisionBatch(part, action, keys);
-    expect(batch.result.resolved).toHaveLength(1);
+    expect(batch.result.resolved).toHaveLength(2);
     const applied = applyTreeOp(part, batch.ops[0]!);
     if (!applied.ok) throw new Error(applied.reason);
     expect(revisionItemsOf(applied.part).map((item) => item.revisionKind)).toEqual(['format']);

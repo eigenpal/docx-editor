@@ -1,11 +1,6 @@
 import { sharesItsPart } from './stories.ts';
-import { ordinaryMoveRanges } from '../store/store/revision-move-ranges.ts';
 import { collectRevisionSites } from '../store/store/tree-op-revisions.ts';
-import {
-  reviewItemKey,
-  revisionSiteNodeIdsOf,
-  type ReviewRevisionItem,
-} from '../store/store/review-items.ts';
+import { reviewItemKey, type ReviewRevisionItem } from '../store/store/review-items.ts';
 import type { PlannedOperation } from './plan-types.ts';
 import { planRevisionBatch, type RevisionBatchResult } from '../store/store/revision-batch.ts';
 import { storyKey } from './stories.ts';
@@ -215,27 +210,17 @@ export function planRevisionDecision(
   };
 }
 
-/** Resolve grouped table sites together; a row removal can consume later constituents. */
+/** Resolve only this decision's source sites, with shared dependency preflight. */
 export function revisionItemOps(
   reads: AutomationStoryReads,
   item: ReviewRevisionItem,
   action: 'accept' | 'reject'
 ): readonly TreeDocOp[] {
-  if (
-    item.revisionKind === 'structural' ||
-    ordinaryMoveRanges(reads.root).length > 0 ||
-    (item.revisionKind === 'format' && revisionSiteNodeIdsOf(item).length > 1)
-  ) {
-    const decision = planRevisionBatch(
-      reads.part,
-      action,
-      [reviewItemKey(item)],
-      sharesItsPart(reads.story) ? reads.root : undefined
-    );
-    return decision.result.skipped.length ? [] : decision.ops;
-  }
-  return item.addresses.map((revision) => ({
-    op: action === 'accept' ? 'acceptRevision' : 'rejectRevision',
-    revision,
-  }));
+  const decision = planRevisionBatch(
+    reads.part,
+    action,
+    [reviewItemKey(item)],
+    sharesItsPart(reads.story) ? reads.root : undefined
+  );
+  return decision.result.skipped.length ? [] : decision.ops;
 }

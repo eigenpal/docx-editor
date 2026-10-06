@@ -15,7 +15,7 @@ This feature requires the review module from [`@docx-editor.dev/pro`](/docs/2.x/
 
 Use **Review > Next Change** or **Previous Change** to move between visible changes. Navigation skips comments and hidden authors, and wraps at the end. A continuous insertion stays in one card when it crosses field markers or tracked paragraph breaks. Accepting or rejecting that card resolves its field instructions, results, and surrounding text together. Accepting or rejecting a card preserves the caret. Use **Next Change** to continue review.
 
-Adjacent deletion and insertion fragments form one replacement card when their author and editing time match. Different times keep the revisions separate, so you can accept or reject each revision independently. Equal instants with explicit time zones match. Missing dates match only other missing dates. Unzoned or invalid dates match only identical source values. The editor keeps all source revision dates when you save. Adjacent additions, deletions, and equal formatting changes can each form one card across different editing times.
+Tracked text replacements appear as separate deletion and addition cards. You can accept or reject either half independently, even when their author, ID, and editing time match. Unchanged text separates inline cards even when their source revision attributes match. The editor preserves all source revision dates when you save. Adjacent additions, deletions, and equal formatting changes can each form one card across different editing times.
 
 Use **Review > Accept all changes shown** or **Reject all changes shown** to resolve changes selected by your active filters. These controls include offscreen changes in supported stories and leave hidden or unsupported changes pending. A successful operation preserves comments and creates one undo step. To resolve all authors or require every selected change to resolve, configure the [bulk review command](/docs/2.x/editor-api/revisions#resolve-changes-shown-in-the-editor).
 
@@ -181,7 +181,7 @@ const modules = [reviewModule()];
 
 | Change | Support and display |
 | --- | --- |
-| Text | Tracks insertions, deletions, and replacements. A replacement uses one card. |
+| Text | Tracks insertions, deletions, and replacements. A replacement uses separate deletion and addition cards. |
 | Paragraph structure | Tracks inserted and deleted paragraph marks. |
 | Paragraph properties | Tracks alignment, indents, spacing, and style in a separate card. |
 | Tables | Tracks row and cell insertion, deletion, and property changes. |
@@ -350,9 +350,10 @@ The predicate receives one complete `ReviewRevisionItem` for each revision decis
 | --- | --- | --- |
 | `insert`, `moveTo` | Proposed content remains as ordinary content. | Proposed content is omitted. |
 | `delete`, `moveFrom` | Deleted content is omitted. | Deleted content returns as ordinary content. |
-| `replace` | Replacement remains; replaced content is omitted. | Replacement is omitted; replaced content returns. |
 | `paragraphMark`, inserted/deleted row | Accepted structure is rendered. | Original structure is rendered. |
 | `format`, other structural/property | Current values remain without tracked-change markup. | Current values remain without tracked-change markup. |
+
+The `replace` kind remains in the public type for compatibility with custom review providers. The built-in reader does not infer this kind from adjacent deletion and addition revisions.
 
 ### Predicate data
 

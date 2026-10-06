@@ -180,11 +180,8 @@ export interface ReviewRevisionItem {
 // @public
 export type ReviewRevisionKind = 'insert' | 'delete'
 /**
-* A deletion and an insertion that are one edit: text typed over a selection.
-*
-* Word shows these as a single `Replaced "x" with "y"` card, and resolving one half
-* without the other is never what the reviewer meant — accepting the deletion alone
-* leaves the replacement text unproposed, rejecting it alone leaves both.
+* A combined decision supplied by a custom review provider.
+* The built-in reader exposes text replacements as separate deletion and insertion decisions.
 */
 | 'replace' | 'moveFrom' | 'moveTo'
 /** `w:rPrChange` / `w:pPrChange` — the words are unchanged, their formatting is not. */

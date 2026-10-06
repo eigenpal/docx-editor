@@ -1,159 +1,11 @@
 // Inline review grouping retains the source sites for independent resolution.
-import { normalizeSdtFullDate } from './tree-op-nodes.ts';
-import type { RevisionAddress } from './tree-op-types.ts';
 import {
   registerRevisionSiteNodeIds,
   revisionSiteNodeIdsOf,
   type ReviewPosition,
-  type ReviewRange,
   type ReviewRevisionItem,
 } from './review-items.ts';
-
-/** Compare explicit-zone instants without losing sub-millisecond precision. */
-function momentKey(date: string | undefined): string {
-  if (date === undefined) return 'undated';
-  // Unzoned or malformed source values must not depend on the participant's timezone.
-  const normalized =
-    date.length <= 64 && /(Z|[+-]\d{2}:\d{2})$/.test(date.trim())
-      ? normalizeSdtFullDate(date)
-      : null;
-  if (normalized === null) return `literal:${date}`;
-  const instant = Date.parse(normalized);
-  if (Number.isNaN(instant)) return `literal:${date}`;
-  const fraction = /\.(\d+)/.exec(normalized)?.[1] ?? '';
-  const remainder = fraction.slice(3).replace(/0+$/, '');
-  return `instant:${instant}:${remainder}`;
-}
-
-/** A combined fragment can represent several editing times. */
-function replacementMoment(item: ReviewRevisionItem): string | null {
-  const moment = momentKey(item.date);
-  return item.addresses.every((address) => momentKey(address.date) === moment) ? moment : null;
-}
-
-/**
- * Adjacent deletion and insertion fragments form one replacement only when their
- * author, nesting, and editing time agree. Source IDs can differ across fragments.
- * Every source address and site remains attached for atomic resolution.
- */
-export function pairReplacements(
-  allItems: readonly ReviewRevisionItem[],
-  order: ReadonlyMap<string, number>
-): ReviewRevisionItem[] {
-  const items = mergeAdjacentSameKindEdits(allItems, order, true);
-  // Not `ranges.length === 1`. One tracked edit becomes SEVERAL `w:del` elements whenever the
-  // struck text crosses something that is not text — an endnote or footnote reference, a
-  // field, a break — because those cannot go inside the same wrapper. Requiring a single range
-  // meant striking across an endnote mark and typing over it showed a Deleted card and an
-  // Inserted card instead of one Replaced, on an edit the user made in one gesture.
-  const pairable = items.filter(
-    (item) =>
-      (item.revisionKind === 'insert' || item.revisionKind === 'delete') &&
-      !item.readOnly &&
-      item.ranges.length > 0
-  );
-  const taken = new Set<string>();
-  const replacements = new Map<string, ReviewRevisionItem>();
-
-  // Insertions indexed by where their FIRST range starts. Pairing is exact end-to-start
-  // position equality — DELETION FIRST, same paragraph only. The cross-paragraph case is
-  // gone deliberately: it checked that the insertion's paragraph followed the deletion's,
-  // never that the deletion sat at the END of its own, so routine mid-paragraph edits
-  // folded into one card. Order matters too: this engine only ever writes
-  // delete-then-insert, so an insertion FOLLOWED by a deletion is a foreign file where
-  // pairing them would be an invention. The index makes the lookup exact rather than a
-  // scan of every insertion per deletion, which was quadratic in a heavily edited document.
-  const insertionsByStart = new Map<string, ReviewRevisionItem[]>();
-  for (const insertion of pairable) {
-    if (insertion.revisionKind !== 'insert') continue;
-    const start = insertion.ranges[0]!.start;
-    const key = `${start.paragraphId}\u0000${start.offset}`;
-    const bucket = insertionsByStart.get(key);
-    if (bucket) bucket.push(insertion);
-    else insertionsByStart.set(key, [insertion]);
-  }
-
-  for (const deletion of pairable) {
-    if (deletion.revisionKind !== 'delete' || taken.has(deletion.id)) continue;
-    // The deletion's LAST range end: the end that actually meets the insertion's first
-    // start when the halves span more than one range each.
-    const end = deletion.ranges[deletion.ranges.length - 1]!.end;
-    const bucket = insertionsByStart.get(`${end.paragraphId}\u0000${end.offset}`) ?? [];
-    // A ZERO-WIDTH insertion is not the replacement, even when it starts exactly here.
-    // Several legal shapes cover no characters: an empty run carrying only run properties,
-    // a comment reference, a bookmark pair. Taking the first candidate in the bucket paired
-    // the deletion with one of those, so the card read Replaced-old-with-nothing while the
-    // real insertion beside it was orphaned into an Inserted card of its own. Text-bearing
-    // candidates go first; order within each group is preserved.
-    const candidates =
-      bucket.length > 1
-        ? [...bucket].sort((a, b) => (a.text.length > 0 ? 0 : 1) - (b.text.length > 0 ? 0 : 1))
-        : bucket;
-    for (const insertion of candidates) {
-      if (taken.has(insertion.id) || !coversCharacters(insertion)) continue;
-      // Author and adjacency do not identify one editing operation.
-      const moment = replacementMoment(deletion);
-      if (
-        insertion.author !== deletion.author ||
-        insertion.nesting !== deletion.nesting ||
-        moment === null ||
-        replacementMoment(insertion) !== moment
-      )
-        continue;
-      taken.add(deletion.id);
-      taken.add(insertion.id);
-      // Anchored at whichever half comes FIRST, so the card sits where the edit starts.
-      const first = before(deletion.ranges[0]!, insertion.ranges[0]!, order) ? deletion : insertion;
-      const date = insertion.date;
-      replacements.set(
-        deletion.id,
-        registerRevisionSiteNodeIds(
-          {
-            ...first,
-            id: `replace-${deletion.id}-${insertion.id}`,
-            revisionKind: 'replace',
-            ...(date === undefined ? {} : { date }),
-            // DEDUPED: a replacement this engine wrote before it numbered the halves
-            // separately (#691) shares one identity across both, and applying the same
-            // `acceptRevision` twice in one transaction refuses the second — which refused the
-            // whole thing and left the replacement unresolved.
-            addresses: dedupeAddresses([...deletion.addresses, ...insertion.addresses]),
-            text: insertion.text,
-            replacedText: deletion.text,
-            ranges: [...deletion.ranges, ...insertion.ranges],
-            // Struck half first, so the split point is simply how many the deletion contributed.
-            replacedRangeCount: deletion.ranges.length,
-            readOnly: deletion.readOnly || insertion.readOnly,
-          },
-          [...revisionSiteNodeIdsOf(deletion), ...revisionSiteNodeIdsOf(insertion)]
-        )
-      );
-      break;
-    }
-  }
-
-  // Restore unpaired source items before broad same-kind grouping. Time-separated
-  // zero-width field fragments can overlap and cannot be folded a second time.
-  const replacementBySite = new Map<string, ReviewRevisionItem>();
-  for (const replacement of replacements.values()) {
-    for (const site of revisionSiteNodeIdsOf(replacement)) {
-      replacementBySite.set(site, replacement);
-    }
-  }
-  const out: ReviewRevisionItem[] = [];
-  const emitted = new Set<string>();
-  for (const item of allItems) {
-    const replacement = revisionSiteNodeIdsOf(item)
-      .map((site) => replacementBySite.get(site))
-      .find((candidate) => candidate !== undefined);
-    if (!replacement) out.push(item);
-    else if (!emitted.has(replacement.id)) {
-      out.push(replacement);
-      emitted.add(replacement.id);
-    }
-  }
-  return out;
-}
+import type { RevisionAddress } from './tree-op-types.ts';
 
 /**
  * Fold chains of ADJACENT items of one kind by one author into single cards.
@@ -161,7 +13,7 @@ export function pairReplacements(
  * A word struck in several gestures — or re-struck around something a `w:del` cannot
  * contain — lands in the file as several sibling elements under distinct ids. They are one
  * decision to the reviewer. Adjacency uses the same exact
- * end-to-start test the replacement pairing uses, so an untracked character between two
+ * end-to-start test, so an untracked character between two
  * deletions keeps them apart.
  *
  * ZERO-WIDTH members are why this is a sweep rather than a lookup keyed by start position.
@@ -175,8 +27,7 @@ export function pairReplacements(
  */
 export function mergeAdjacentSameKindEdits(
   items: readonly ReviewRevisionItem[],
-  order: ReadonlyMap<string, number>,
-  separateMoments = false
+  order: ReadonlyMap<string, number>
 ): readonly ReviewRevisionItem[] {
   const mergeable = items.filter(
     (item) =>
@@ -196,8 +47,7 @@ export function mergeAdjacentSameKindEdits(
   // the list claims. Checking costs one pass and sorting is skipped whenever it holds.
   const buckets = new Map<string, ReviewRevisionItem[]>();
   for (const item of mergeable) {
-    const moment = separateMoments ? replacementMoment(item) : '';
-    const key = JSON.stringify([item.revisionKind, item.author, item.nesting, moment ?? item.id]);
+    const key = JSON.stringify([item.revisionKind, item.author, item.nesting]);
     const bucket = buckets.get(key);
     if (bucket) bucket.push(item);
     else buckets.set(key, [item]);
@@ -314,24 +164,7 @@ function laterStamp(a: string | undefined, b: string | undefined): string | unde
   return second > first ? b : a;
 }
 
-/** Every address once, keeping first-seen order. */
-function dedupeAddresses(addresses: readonly RevisionAddress[]): RevisionAddress[] {
-  const out: RevisionAddress[] = [];
-  for (const address of addresses) {
-    if (!out.some((known) => sameAddress(known, address))) out.push(address);
-  }
-  return out;
-}
-
 /** Two addresses naming one revision. */
 function sameAddress(a: RevisionAddress, b: RevisionAddress): boolean {
   return a.id === b.id && a.author === b.author && (a.date ?? '') === (b.date ?? '');
-}
-
-/** Document order of two ranges' starts. */
-function before(a: ReviewRange, b: ReviewRange, order: ReadonlyMap<string, number>): boolean {
-  const first = order.get(a.start.paragraphId) ?? 0;
-  const second = order.get(b.start.paragraphId) ?? 0;
-  if (first !== second) return first < second;
-  return a.start.offset <= b.start.offset;
 }

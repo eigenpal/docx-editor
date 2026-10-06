@@ -129,7 +129,7 @@ test('writer edits synchronize, reject stale targets, and survive undo, redo, an
           matches.items[0]!.font.load('bold');
           await context.sync();
           expect(matches.items[0]!.font.bold).toBe(true);
-          expect(context.document.revisions.items).toHaveLength(2);
+          expect(context.document.revisions.items).toHaveLength(3);
         });
       } finally {
         reopened.dispose();

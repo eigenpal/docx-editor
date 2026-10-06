@@ -81,7 +81,7 @@
   },
   "Word.Revision#type": {
     "status": "partial",
-    "notes": "The type union is declared in full and seven of its members occur: Insert, Delete, Replace, Property, ParagraphProperty, MovedFrom and MovedTo. A change to a table row, a cell, the grid or a section's properties is STRUCTURAL, and the canonical accept/reject ops refuse it \u2014 so reporting it would list a change with an accept() and a reject() that both fail. Such revisions are therefore not reported at all rather than reported and un-actionable; the document's own markup is untouched either way, and a save round-trips it."
+    "notes": "The type union remains declared in full. The built-in reader emits Insert, Delete, Property, ParagraphProperty, MovedFrom, and MovedTo. Text replacements expose separate Insert and Delete revisions, including matching author, ID, and date. Replace remains declared but is not inferred from adjacent revisions. A change to a table row, a cell, the grid or a section's properties is STRUCTURAL, and the canonical accept/reject ops refuse it \u2014 so reporting it would list a change with an accept() and a reject() that both fail. Such revisions are therefore not reported at all rather than reported and un-actionable; the document's own markup is untouched either way, and a save round-trips it."
   },
   "Word.List#insertParagraph": {
     "status": "partial",
@@ -577,11 +577,11 @@
   },
   "Word.Revision#accept": {
     "status": "partial",
-    "notes": "Resolves the addressed supported revision by stable identity. Unsupported revision structures, including malformed content wrappers, refuse without partial changes. Browser decisions require the review module and an editable document."
+    "notes": "Resolves the addressed supported revision by stable identity. Unsupported revision structures, including malformed content wrappers, refuse without partial changes. Browser decisions require the review module and an editable document. Individual decisions resolve only the selected source revision sites. Matching deletion and insertion IDs do not combine their decisions."
   },
   "Word.Revision#reject": {
     "status": "partial",
-    "notes": "Resolves the addressed supported revision by stable identity. Unsupported revision structures, including malformed content wrappers, refuse without partial changes. Browser decisions require the review module and an editable document."
+    "notes": "Resolves the addressed supported revision by stable identity. Unsupported revision structures, including malformed content wrappers, refuse without partial changes. Browser decisions require the review module and an editable document. Individual decisions resolve only the selected source revision sites. Matching deletion and insertion IDs do not combine their decisions."
   },
   "Word.RevisionCollection#acceptAll": {
     "status": "partial",

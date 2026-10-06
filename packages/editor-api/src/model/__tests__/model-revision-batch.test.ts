@@ -189,3 +189,96 @@ test('batch rejects objects from another request context without changing either
     target.dispose();
   }
 });
+
+for (const sharedId of [false, true]) {
+  for (const action of ['accept', 'reject'] as const) {
+    for (const type of ['Delete', 'Insert'] as const) {
+      test(`${action} ${type} keeps the other replacement half pending, shared ID: ${sharedId}`, async () => {
+        const date = '2026-01-01T10:00:00Z';
+        const runtime = await createServer(
+          docx(
+            `<w:p><w:del w:id="1" w:author="Reviewer" w:date="${date}"><w:r><w:delText>old</w:delText></w:r></w:del>` +
+              `<w:ins w:id="${sharedId ? 1 : 2}" w:author="Reviewer" w:date="${date}"><w:r><w:t>new</w:t></w:r></w:ins></w:p>`
+          )
+        );
+        const remainingType = type === 'Delete' ? 'Insert' : 'Delete';
+        try {
+          await runtime.run(async (context) => {
+            const revisions = context.document.revisions;
+            revisions.load('items');
+            await context.sync();
+            expect(revisions.items).toHaveLength(2);
+            for (const item of revisions.items) item.load('type,date');
+            await context.sync();
+            expect(revisions.items.map((item) => item.type)).toEqual(['Delete', 'Insert']);
+            const target = revisions.items.find((item) => item.type === type)!;
+            expect(target.date?.toISOString()).toBe(date.replace('Z', '.000Z'));
+            target[action]();
+            await context.sync();
+            revisions.load('items');
+            await context.sync();
+            expect(revisions.items).toHaveLength(1);
+            revisions.items[0]!.load('type,date');
+            await context.sync();
+            expect(revisions.items[0]!.type).toBe(remainingType);
+            expect(revisions.items[0]!.date?.toISOString()).toBe(date.replace('Z', '.000Z'));
+          });
+          const saved = await runtime.save();
+          const reopened = await createServer(saved);
+          try {
+            await reopened.run(async (context) => {
+              const revisions = context.document.revisions;
+              revisions.load('items');
+              await context.sync();
+              expect(revisions.items).toHaveLength(1);
+              revisions.items[0]!.load('type');
+              await context.sync();
+              expect(revisions.items[0]!.type).toBe(remainingType);
+            });
+          } finally {
+            reopened.dispose();
+          }
+        } finally {
+          runtime.dispose();
+        }
+      });
+    }
+  }
+}
+
+for (const action of ['accept', 'reject'] as const) {
+  for (const kind of ['ins', 'del'] as const) {
+    test(`${action} keeps same-ID decisions across unchanged text independently addressable`, async () => {
+      const textTag = kind === 'ins' ? 't' : 'delText';
+      const wrapper = (text: string) =>
+        `<w:${kind} w:id="1" w:author="Reviewer"><w:r><w:${textTag}>${text}</w:${textTag}></w:r></w:${kind}>`;
+      const runtime = await createServer(
+        docx(`<w:p>${wrapper('A')}<w:r><w:t> and </w:t></w:r>${wrapper('B')}</w:p>`)
+      );
+      try {
+        await runtime.run(async (context) => {
+          const revisions = context.document.revisions;
+          revisions.load('items');
+          await context.sync();
+          expect(revisions.items).toHaveLength(2);
+          const [first, second] = revisions.items;
+          first![action]();
+          await context.sync();
+          revisions.load('items');
+          await context.sync();
+          expect(revisions.items).toHaveLength(1);
+          second![action]();
+          await context.sync();
+          revisions.load('items');
+          await context.sync();
+          expect(revisions.items).toHaveLength(0);
+        });
+        const saved = xml(await runtime.save());
+        expect(saved).toContain(' and ');
+        expect(saved).not.toContain(`<w:${kind} `);
+      } finally {
+        runtime.dispose();
+      }
+    });
+  }
+}

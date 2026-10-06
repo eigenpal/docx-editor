@@ -103,7 +103,7 @@ test('binds real Core comment occurrences through escaping and UTF-16 text', asy
   ]);
 });
 
-test('binds both real Core replacement roles in every revision view', async () => {
+test('binds independent replacement revisions in every revision view', async () => {
   const source = docx(
     '<w:p><w:del w:id="1" w:author="A"><w:r><w:delText>Old*</w:delText></w:r></w:del>' +
       '<w:ins w:id="2" w:author="A"><w:r><w:t>New&amp;</w:t></w:r></w:ins></w:p>'
@@ -113,31 +113,27 @@ test('binds both real Core replacement roles in every revision view', async () =
       displayMode: 'all-markup',
       markdown: '<del>Old\\*</del>New&amp;',
       expected: [
-        ['replaced', 'Old\\*'],
-        ['replacement', 'New&amp;'],
+        ['delete', 'Old\\*'],
+        ['insert', 'New&amp;'],
       ],
     },
-    { displayMode: 'original', markdown: 'Old\\*', expected: [['replaced', 'Old\\*']] },
-    { displayMode: 'proposed', markdown: 'New&amp;', expected: [['replacement', 'New&amp;']] },
+    { displayMode: 'original', markdown: 'Old\\*', expected: [['delete', 'Old\\*']] },
+    { displayMode: 'proposed', markdown: 'New&amp;', expected: [['insert', 'New&amp;']] },
   ] as const;
 
   for (const { displayMode, markdown, expected } of cases) {
     const result = await exportMarkdown(source, { displayMode });
     expect(result.markdown).toBe(markdown);
-    const change = result.reviewArtifacts.find(
-      (artifact) => artifact.kind === 'tracked-change' && artifact.change === 'replace'
-    )!;
-    expect(change.occurrences.map((occurrence) => occurrence.revisionRole)).toEqual(
-      expected.map(([role]) => role)
-    );
-    for (const [occurrenceIndex, [, selected]] of expected.entries()) {
+    for (const [kind, selected] of expected) {
+      const change = result.reviewArtifacts.find(
+        (artifact) => artifact.kind === 'tracked-change' && artifact.change === kind
+      )!;
+      expect(change.occurrences).toHaveLength(1);
       const bindings = result.reviewBindings.filter(
-        (binding) => binding.artifactId === change.id && binding.occurrenceIndex === occurrenceIndex
+        (binding) => binding.artifactId === change.id && binding.occurrenceIndex === 0
       );
       expect(bindings).toHaveLength(2);
-      expect(bindings.every((binding) => selectedBindingText(result, binding) === selected)).toBe(
-        true
-      );
+      expect(bindings.every((binding) => selectedBindingText(result, binding) === selected)).toBe(true);
     }
   }
 });

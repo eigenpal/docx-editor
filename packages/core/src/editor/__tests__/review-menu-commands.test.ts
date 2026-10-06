@@ -90,15 +90,17 @@ describe('shared Review menu commands', () => {
       editor.destroy();
     });
 
-    test(`${action} on a replacement preserves formatting with the same revision address`, () => {
+    test(`${action} on replacement halves preserves formatting with the same revision address`, () => {
       const editor = mountEditor(
         '<w:p><w:r><w:rPr><w:b/><w:rPrChange w:id="1" w:author="Ada"><w:rPr/></w:rPrChange></w:rPr><w:t>Base</w:t></w:r><w:del w:id="1" w:author="Ada"><w:r><w:delText>Old</w:delText></w:r></w:del><w:ins w:id="2" w:author="Ada"><w:r><w:t>New</w:t></w:r></w:ins></w:p>'
       );
-      const replacement = editor
+      const halves = editor
         .getReviewItems()
-        .find((item) => item.kind === 'revision' && item.revisionKind === 'replace');
-      expect(replacement).toBeDefined();
-      expect(editor[action](replacement!.key).ok).toBe(true);
+        .filter(
+          (item) => item.kind === 'revision' && ['delete', 'insert'].includes(item.revisionKind)
+        );
+      expect(halves).toHaveLength(2);
+      for (const half of halves) expect(editor[action](half.key).ok).toBe(true);
       const remaining = editor.getReviewItems();
       expect(remaining).toHaveLength(1);
       expect(remaining[0]!.kind === 'revision' && remaining[0]!.revisionKind).toBe('format');

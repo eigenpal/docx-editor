@@ -351,10 +351,10 @@ describe('a replacement', () => {
     expect(xml(out)).toMatch(
       /<w:delText>abc<\/w:delText><\/w:r><\/w:del><w:ins[^>]*><w:r><w:t>X<\/w:t><\/w:r><\/w:ins><w:del[^>]*><w:r><w:delText>de<\/w:delText>/
     );
-    // Two decisions: the replacement, and the deletion it left alone.
+    // The addition and both deletions remain separate review decisions.
     const items = revisionItemsOf(out);
-    expect(items.map((item) => item.revisionKind)).toEqual(['replace', 'delete']);
-    expect(items[0]).toMatchObject({ text: 'X', replacedText: 'abc' });
+    expect(items.map((item) => item.revisionKind)).toEqual(['delete', 'insert', 'delete']);
+    expect(items.map((item) => item.text)).toEqual(['abc', 'X', 'de']);
   });
 
   test('a strike split by a bookmark edge keeps the replacement after its LAST piece', () => {
@@ -384,13 +384,20 @@ describe('a replacement', () => {
     expect(xml(atFront)).toMatch(
       /<w:delText>e<\/w:delText><\/w:r><\/w:del><w:ins[^>]*><w:r><w:t>Q<\/w:t><\/w:r><\/w:ins><w:r><w:t>f<\/w:t>/
     );
-    // Ada's two pieces share one id and read as one card: one Replaced beside Grace's Deleted.
+    // The intervening author's deletion separates the two source decisions.
     const items = revisionItemsOf(atFront);
-    expect(items.map((item) => item.revisionKind).sort()).toEqual(['delete', 'replace']);
-    expect(items.find((item) => item.revisionKind === 'replace')).toMatchObject({
-      text: 'Q',
-      replacedText: 'be',
-    });
+    expect(items.map((item) => item.revisionKind).sort()).toEqual([
+      'delete',
+      'delete',
+      'delete',
+      'insert',
+    ]);
+    expect(
+      items
+        .filter((item) => item.author === 'Ada Lovelace' && item.revisionKind === 'delete')
+        .map((item) => item.text)
+    ).toEqual(['b', 'e']);
+    expect(items.find((item) => item.revisionKind === 'insert')).toMatchObject({ text: 'Q' });
   });
 
   test('a replacement inside a formatted run keeps the formatting from either edge', () => {
@@ -458,25 +465,20 @@ describe('a replacement', () => {
     expect(atFront).toBe(xml(replaced(before, 2, 5, 5, 'XYZ')));
   });
 
-  test('the review lane reads the two ids back as ONE replacement card', () => {
-    // Distinct ids do not split the pair: the reader pairs a deletion with the insertion that
-    // starts where it ends, and hands both addresses to accept and reject.
+  test('the review lane keeps a tracked replacement as two decisions', () => {
+    // A replacement writes distinct source revisions and keeps their decisions separate.
     const before = part(
       '<w:p><w:r><w:t xml:space="preserve">The Receiving Party shall</w:t></w:r></w:p>'
     );
     const items = revisionItemsOf(replaced(before, 4, 19, 4, 'Recipient'));
-    expect(items).toHaveLength(1);
-    const card = items[0]!;
-    expect(card.revisionKind).toBe('replace');
-    expect(card.text).toBe('Recipient');
-    expect(card.replacedText).toBe('Receiving Party');
-    expect(card.addresses).toHaveLength(2);
-    expect(new Set(card.addresses.map((address) => address.id)).size).toBe(2);
+    expect(items.map((item) => item.revisionKind)).toEqual(['delete', 'insert']);
+    expect(items.map((item) => item.text)).toEqual(['Receiving Party', 'Recipient']);
+    expect(items.every((item) => item.addresses.length === 1)).toBe(true);
+    expect(new Set(items.map((item) => item.address.id)).size).toBe(2);
   });
 
-  test('a replacement this engine wrote under ONE id still reads as one card', () => {
-    // Files written before the halves were numbered separately share one identity across
-    // both. The address is deduplicated, or accept would refuse the second resolve of one id.
+  test('a replacement with a shared ID still reads as two decisions', () => {
+    // Source element kinds keep decisions separate when their revision addresses match.
     const legacy = part(
       '<w:p><w:r><w:t xml:space="preserve">The </w:t></w:r>' +
         `<w:del w:id="0" w:author="Ada Lovelace" w:date="${ADA.date}">` +
@@ -485,9 +487,9 @@ describe('a replacement', () => {
         '<w:r><w:t>new</w:t></w:r></w:ins><w:r><w:t xml:space="preserve"> tail</w:t></w:r></w:p>'
     );
     const items = revisionItemsOf(legacy);
-    expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({ revisionKind: 'replace', text: 'new', replacedText: 'old' });
-    expect(items[0]!.addresses).toHaveLength(1);
+    expect(items.map((item) => item.revisionKind)).toEqual(['delete', 'insert']);
+    expect(items.map((item) => item.text)).toEqual(['old', 'new']);
+    expect(items.every((item) => item.addresses.length === 1)).toBe(true);
     const accepted = xml(
       apply(legacy, {
         op: 'acceptRevision',

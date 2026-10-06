@@ -228,11 +228,11 @@ describe('tracked table rows', () => {
       paragraphId: firstParagraph,
       offset: 7,
     });
-    const replacement = editor
-      .getReviewItems()
-      .find((item) => item.kind === 'revision' && item.revisionKind === 'replace');
-    expect(rev(replacement).replacedText).toBe('first');
-    expect(replacement?.text).toBe('se');
+    const revisions = editor.getReviewItems().filter((item) => item.kind === 'revision');
+    expect(revisions.map((item) => [rev(item).revisionKind, item.text])).toEqual([
+      ['delete', 'first'],
+      ['insert', 'se'],
+    ]);
   });
 
   test('inserting a row paints immediately, opens one review card, and keeps typing', () => {
@@ -774,11 +774,10 @@ describe('suggesting mode', () => {
     expect(bodyTextOf(editor)).toContain('alpha beta');
   });
 
-  test('a MID-SENTENCE replacement is one card too, and reads in Word order', () => {
+  test('a mid-sentence replacement has independent deletion and addition cards', () => {
     const editor = mount({ body: PLAIN });
     editor.setEditingMode('suggesting');
-    // "alpha beta": replace "ha be" — a selection that starts inside a run, which is where
-    // the insertion used to land BEFORE the struck words and split the pair into two cards.
+    // Replace a selection that starts inside a run.
     editor.surface!.setSelection({
       anchor: { paragraphId: paragraphIdOf(editor), offset: 3 },
       head: { paragraphId: paragraphIdOf(editor), offset: 8 },
@@ -786,19 +785,17 @@ describe('suggesting mode', () => {
     editor.surface!.type('XX');
 
     const cards = editor.getReviewItems();
-    expect(cards).toHaveLength(1);
-    expect(rev(cards[0]).revisionKind).toBe('replace');
-    expect(rev(cards[0]).replacedText).toBe('ha be');
-    expect(cards[0]!.text).toBe('XX');
+    expect(cards.map((item) => [rev(item).revisionKind, item.text])).toEqual([
+      ['delete', 'ha be'],
+      ['insert', 'XX'],
+    ]);
     // Struck words first, replacement after — the order the sentence reads in.
     const body = editor.surface!.session.bodyText();
     expect(body.indexOf('ha be')).toBeLessThan(body.indexOf('XX'));
   });
 
-  test('a replacement over an endnote mark is still ONE card', () => {
-    // The struck text crosses a run that holds an `w:endnoteReference` and no text, so the
-    // deletion cannot be one `w:del` — it becomes several. That is a fact about the markup,
-    // not about the edit: the user selected once and typed once, and Word shows one card.
+  test('a replacement over an endnote mark keeps each half complete', () => {
+    // Split deletion wrappers remain one deletion decision beside the addition.
     const editor = mount({
       body:
         `<w:p><w:r><w:t xml:space="preserve">First endnote reference</w:t></w:r>` +
@@ -815,16 +812,15 @@ describe('suggesting mode', () => {
     for (const character of 'note') editor.surface!.type(character);
 
     const cards = editor.getReviewItems();
-    expect(cards).toHaveLength(1);
-    expect(rev(cards[0]).revisionKind).toBe('replace');
+    expect(cards.map((item) => rev(item).revisionKind)).toEqual(['delete', 'insert']);
     // The reference measures ONE model unit, exactly as `segmentsOf` counts it, so [19, 39)
     // is "ence" + the reference + " and second end". Counting it as nothing shifted every
     // offset past it by one and struck a character the user had not selected.
-    expect(rev(cards[0]).replacedText).toBe('ence and second end');
-    expect(cards[0]!.text).toBe('note');
+    expect(cards[0]!.text).toBe('ence and second end');
+    expect(cards[1]!.text).toBe('note');
   });
 
-  test('accepting a replacement that spans several elements resolves all of them', () => {
+  test('accepting split deletion wrappers leaves the replacement addition pending', () => {
     const editor = mount({
       body:
         `<w:p><w:r><w:t xml:space="preserve">First endnote reference</w:t></w:r>` +
@@ -840,15 +836,11 @@ describe('suggesting mode', () => {
     editor.surface!.type('note');
 
     expect(editor.acceptReviewItem(editor.getReviewItems()[0]!.key).ok).toBe(true);
-    // Nothing left pending: every `w:del` the one edit produced is resolved, not just the
-    // first. The struck words are gone and "note" took their place \u2014 the endnote reference
-    // among them, because the selection covered the one model unit it occupies and Word
-    // deletes a note whose mark a deletion runs through.
-    expect(editor.getReviewItems()).toHaveLength(0);
+    expect(editor.getReviewItems().map((item) => rev(item).revisionKind)).toEqual(['insert']);
     expect(bodyTextOf(editor)).toBe('First endnote refernotenote');
   });
 
-  test('typing over a selection is ONE card: replaced x with y', () => {
+  test('typing over a selection creates two decisions in one undo step', () => {
     const editor = mount({ body: PLAIN });
     editor.setEditingMode('suggesting');
     editor.surface!.setSelection({
@@ -858,13 +850,16 @@ describe('suggesting mode', () => {
     editor.surface!.type('omega');
 
     const cards = editor.getReviewItems();
-    expect(cards).toHaveLength(1);
-    expect(rev(cards[0]).revisionKind).toBe('replace');
-    expect(rev(cards[0]).replacedText).toBe('alpha');
-    expect(cards[0]!.text).toBe('omega');
+    expect(cards.map((item) => [rev(item).revisionKind, item.text])).toEqual([
+      ['delete', 'alpha'],
+      ['insert', 'omega'],
+    ]);
+    expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+    expect(editor.getReviewItems()).toHaveLength(0);
+    expect(bodyTextOf(editor)).toBe('alpha beta');
   });
 
-  test('accepting a replacement resolves BOTH halves in one step', () => {
+  test('accepting a replacement deletion leaves its addition pending', () => {
     const editor = mount({ body: PLAIN });
     editor.setEditingMode('suggesting');
     editor.surface!.setSelection({
@@ -874,12 +869,11 @@ describe('suggesting mode', () => {
     editor.surface!.type('omega');
 
     expect(editor.acceptReviewItem(editor.getReviewItems()[0]!.key).ok).toBe(true);
-    // Nothing left pending, and the document reads as the replacement intended.
-    expect(editor.getReviewItems()).toHaveLength(0);
+    expect(editor.getReviewItems().map((item) => rev(item).revisionKind)).toEqual(['insert']);
     expect(bodyTextOf(editor)).toBe('omega beta');
   });
 
-  test('rejecting a replacement puts the original words back', () => {
+  test('rejecting a replacement addition leaves its deletion pending', () => {
     const editor = mount({ body: PLAIN });
     editor.setEditingMode('suggesting');
     editor.surface!.setSelection({
@@ -888,8 +882,8 @@ describe('suggesting mode', () => {
     });
     editor.surface!.type('omega');
 
-    expect(editor.rejectReviewItem(editor.getReviewItems()[0]!.key).ok).toBe(true);
-    expect(editor.getReviewItems()).toHaveLength(0);
+    expect(editor.rejectReviewItem(editor.getReviewItems()[1]!.key).ok).toBe(true);
+    expect(editor.getReviewItems().map((item) => rev(item).revisionKind)).toEqual(['delete']);
     expect(bodyTextOf(editor)).toBe('alpha beta');
   });
 
@@ -1500,13 +1494,12 @@ describe('the caret activates the card the rail actually renders', () => {
     });
   }
 
-  test('a caret in either half of a replacement opens the ONE paired card', () => {
+  test('a caret opens only its replacement half with matching timestamps', () => {
     const editor = mount({
       body: REPLACEMENT_DAYS_APART.replace('2026-01-02T09:00:00Z', '2026-01-01T10:00:00Z'),
     });
     const cards = editor.getReviewItems();
-    expect(cards).toHaveLength(1);
-    expect(cards[0]!.kind === 'revision' && cards[0]!.revisionKind).toBe('replace');
+    expect(cards.map((item) => rev(item).revisionKind)).toEqual(['delete', 'insert']);
 
     // "keep " is 5 characters, then the struck "old", then the typed "new".
     caretAt(editor, 6);
@@ -1514,7 +1507,8 @@ describe('the caret activates the card the rail actually renders', () => {
     caretAt(editor, 0);
     expect(editor.getReviewItems()[0]!.isActive).toBe(false);
     caretAt(editor, 9);
-    expect(editor.getReviewItems()[0]!.isActive).toBe(true);
+    expect(editor.getReviewItems()[0]!.isActive).toBe(false);
+    expect(editor.getReviewItems()[1]!.isActive).toBe(true);
   });
 
   test('an excluded kind cannot take the activation from a kind the rail shows', () => {

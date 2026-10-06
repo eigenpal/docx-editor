@@ -291,7 +291,14 @@ test('tracks text, refuses edits across pending text revisions, and handles revi
       await context.sync();
       expect(context.document.changeTrackingMode).toBe('TrackMineOnly');
     });
-    expect(await read(runtime, 'revisions')).toHaveLength(1);
+    expect(await read(runtime, 'revisions')).toHaveLength(2);
+    await call(
+      runtime,
+      'edit_review',
+      { operation: { action: 'rejectRevision', revision: 0 } },
+      'suggest'
+    );
+    await read(runtime, 'revisions');
     await call(
       runtime,
       'edit_review',

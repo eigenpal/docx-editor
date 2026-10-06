@@ -1,6 +1,6 @@
 import { unboundTableHistories } from './revision-table-unbound-history.ts';
 import { ordinaryMoveRanges, ordinaryMoveInsertionSites } from './revision-move-ranges.ts';
-import { mergeAdjacentSameKindEdits, pairReplacements } from './review-inline-groups.ts';
+import { mergeAdjacentSameKindEdits } from './review-inline-groups.ts';
 import { groupTableRevisions } from './review-table-groups.ts';
 import { structuralChangeOf } from './review-structural-details.ts';
 import { textUnder } from './review-text.ts';
@@ -96,8 +96,8 @@ const interactiveReviewDerivation: ReviewDerivationDependencies = {
 /**
  * Every revision in one story, one card per DECISION.
  *
- * Sites sharing an `(id, author, date)` and revision kind coalesce into one decision
- * containing every canonical site and affected range.
+ * Sites sharing an `(id, author, date)` and revision kind retain their source sites.
+ * Unchanged text separates inline decisions even when their source attributes match.
  *
  * Cached by part root except for paragraph-scoped synthetic roots. Results are shared
  * and readonly; part names are checked because ranges embed them.
@@ -152,6 +152,7 @@ function computeRevisionItemsOf(
       address: RevisionAddress;
       revisionKind: ReviewRevisionKind;
       localName: string;
+      identitySuffix?: string;
       markDirection?: 'insert' | 'delete' | 'moveFrom' | 'moveTo';
       author: string;
       date?: string;
@@ -159,7 +160,7 @@ function computeRevisionItemsOf(
       structuralChanges?: NonNullable<ReviewRevisionItem['structuralChanges']>[number][];
       formattingLanguages?: string[];
       formattingChanges?: ReviewFormattingChange[];
-      /** Kept apart from `text`: a replacement needs both halves to word its card. */
+      /** Deletion previews remain separate from inserted text. */
       deletedText: string;
       ranges: ReviewRange[];
       siteNodeIds: string[];
@@ -169,6 +170,7 @@ function computeRevisionItemsOf(
     }
   >();
 
+  const currentInlineGroup = new Map<string, string>();
   const unboundHistories = unboundTableHistories(part, sites);
   for (const site of sites) {
     if (unboundHistories.has(site.node.id)) continue;
@@ -225,10 +227,24 @@ function computeRevisionItemsOf(
     // date per editing burst, so an insertion and a deletion can legally share the triple —
     // and grouping on it alone showed them as one `insert` card with both texts run together,
     // whose Accept deleted the half the card claimed to be inserting.
-    const key =
+    const sourceKey =
       kind === 'structural'
         ? `structural\u0000${addressKey(address)}`
         : `${kind}\u0000${site.node.localName}\u0000${addressKey(address)}`;
+    // Same attributes do not join text across an unchanged character.
+    let key = currentInlineGroup.get(sourceKey) ?? sourceKey;
+    const previous = byAddress.get(key);
+    const previousEnd = previous?.ranges[previous.ranges.length - 1]?.end;
+    if (
+      (kind === 'insert' || kind === 'delete') &&
+      range &&
+      previousEnd &&
+      previousEnd.paragraphId === range.start.paragraphId &&
+      previousEnd.offset < range.start.offset
+    ) {
+      key = `${sourceKey}\u0000site-${site.node.id}`;
+    }
+    if (kind === 'insert' || kind === 'delete') currentInlineGroup.set(sourceKey, key);
     const existing = byAddress.get(key);
     if (existing) {
       existing.siteNodeIds.push(site.node.id);
@@ -264,15 +280,6 @@ function computeRevisionItemsOf(
       if (kind !== 'structural' && existing.revisionKind === 'structural') {
         existing.revisionKind = kind;
       }
-      // Adjacency pairs insertions and deletions later; a shared ID alone does
-      // not make them a replacement. This branch handles already-combined kinds.
-      if (
-        (kind === 'insert' && existing.revisionKind === 'delete') ||
-        (kind === 'delete' && existing.revisionKind === 'insert') ||
-        existing.revisionKind === 'replace'
-      ) {
-        existing.revisionKind = 'replace';
-      }
       // ANY refused site refuses the whole decision, matching `resolveRevisions`: resolving
       // only the sites the engine understands would leave a row half-tracked.
       existing.readOnly ||= site.refused || authorless;
@@ -286,6 +293,9 @@ function computeRevisionItemsOf(
     byAddress.set(key, {
       address,
       localName: site.node.localName,
+      ...(kind === 'insert' || kind === 'delete'
+        ? { identitySuffix: `\u0000site-${site.node.id}` }
+        : {}),
       ...(structuralChange ? { structuralChanges: [structuralChange] } : {}),
       ...(site.propertyChange
         ? {
@@ -316,7 +326,7 @@ function computeRevisionItemsOf(
         {
           kind: 'revision' as const,
           // Include the part: body/header revisions can share id, author, and date.
-          id: `${entry.revisionKind}${entry.revisionKind === 'format' || entry.revisionKind === 'paragraphMark' ? `-${entry.localName}` : ''}-${part.name}\u0000${addressKey(entry.address)}`,
+          id: `${entry.revisionKind}${entry.revisionKind === 'format' || entry.revisionKind === 'paragraphMark' ? `-${entry.localName}` : ''}-${part.name}\u0000${addressKey(entry.address)}${entry.identitySuffix ?? ''}`,
           address: entry.address,
           addresses: [entry.address],
           revisionKind: entry.revisionKind,
@@ -333,10 +343,8 @@ function computeRevisionItemsOf(
           ...(entry.markDirection ? { markDirection: entry.markDirection } : {}),
           author: entry.author,
           ...(entry.date === undefined ? {} : { date: entry.date }),
-          // A pure deletion shows the words it removes as its text; a replacement shows what
-          // takes their place, with the removed half beside it.
-          text: entry.revisionKind === 'replace' ? entry.text : entry.text || entry.deletedText,
-          replacedText: entry.revisionKind === 'replace' ? entry.deletedText : '',
+          text: entry.text || entry.deletedText,
+          replacedText: '',
           ranges: entry.ranges,
           nesting: entry.nesting,
           readOnly: entry.readOnly,
@@ -351,10 +359,9 @@ function computeRevisionItemsOf(
   // cross-paragraph group jumps past the zero-width instruction/result wrappers inside
   // an atomic field, leaving those wrappers as separate review decisions.
   const tableItems = groupTableRevisions(part, items, sites, located, order);
-  const paired = pairReplacements(tableItems, order);
   // Same-kind fragments remain one decision even when their source dates differ.
   return mergeParagraphBreakEdits(
-    mergeAdjacentSameKindEdits(paired, order),
+    mergeAdjacentSameKindEdits(tableItems, order),
     part,
     order,
     previewByNode

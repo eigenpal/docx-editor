@@ -36,8 +36,8 @@ for (const type of ['PlainText', 'RichText', 'DatePicker'] as const) {
             const revisions = c.document.body.revisions;
             revisions.load('items');
             await c.sync();
-            expect(revisions.items).toHaveLength(1);
-            revisions.items[0]![decision]();
+            expect(revisions.items).toHaveLength(2);
+            for (const revision of revisions.items) revision[decision]();
             await c.sync();
             const controls = c.document.contentControls;
             controls.load('items');
@@ -243,13 +243,14 @@ test('separate control suggestions keep independent review decisions after reope
         const revisions = context.document.body.revisions;
         revisions.load('items');
         await context.sync();
-        expect(revisions.items).toHaveLength(2);
+        expect(revisions.items).toHaveLength(4);
         revisions.items[0]!.accept();
+        revisions.items[1]!.accept();
         await context.sync();
         revisions.load('items');
         await context.sync();
-        expect(revisions.items).toHaveLength(1);
-        revisions.items[0]!.reject();
+        expect(revisions.items).toHaveLength(2);
+        for (const revision of revisions.items) revision.reject();
         await context.sync();
         const controls = context.document.contentControls;
         controls.load('items');

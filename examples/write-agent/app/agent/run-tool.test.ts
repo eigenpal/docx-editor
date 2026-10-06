@@ -337,8 +337,9 @@ describe('writer agent browser tools', () => {
     });
     expect(revisions.map((revision) => revision.type).sort()).toEqual([
       'Delete',
+      'Delete',
       'Insert',
-      'Replace',
+      'Insert',
     ]);
     expect(revisions.every((revision) => revision.author === 'Writer agent')).toBe(true);
   });
@@ -453,9 +454,9 @@ test('browser writer creates a reviewable date control through the document API'
       c.document.body.revisions.load('items');
       c.document.contentControls.load('items');
       await c.sync();
-      expect(c.document.body.revisions.items).toHaveLength(1);
+      expect(c.document.body.revisions.items).toHaveLength(2);
       expect(c.document.contentControls.items).toHaveLength(1);
-      c.document.body.revisions.items[0]!.reject();
+      for (const revision of c.document.body.revisions.items) revision.reject();
       await c.sync();
       c.document.contentControls.load('items');
       c.document.body.load('text');

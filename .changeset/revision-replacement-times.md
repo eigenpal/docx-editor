@@ -2,4 +2,4 @@
 '@docx-editor.dev/pro': patch
 ---
 
-Keep adjacent deletion and insertion revisions from different editing times as independent review decisions. Fixes #1139
+Keep replacement halves and revisions separated by unchanged text independently reviewable. Fixes #1139

@@ -168,12 +168,12 @@ describe('changes that decorate no characters still get a card', () => {
 });
 
 describe('one decision is one card', () => {
-  test('sites sharing a triple coalesce, listing every range', () => {
+  test('unchanged text separates sites sharing a triple', () => {
     const part = story(`<w:p>${ins('1', run('one'))}${run(' and ')}${ins('1', run('two'))}</w:p>`);
     const items = revisionsOf(collectReviewItems({ storyPart: part }));
-    expect(items).toHaveLength(1);
-    expect(items[0]!.ranges).toHaveLength(2);
-    expect(items[0]!.text).toBe('onetwo');
+    expect(items).toHaveLength(2);
+    expect(items.map((item) => item.ranges.length)).toEqual([1, 1]);
+    expect(items.map((item) => item.text)).toEqual(['one', 'two']);
   });
 
   test('two authors sharing an id are two cards', () => {
@@ -183,7 +183,7 @@ describe('one decision is one card', () => {
     expect(revisionsOf(collectReviewItems({ storyPart: part }))).toHaveLength(2);
   });
 
-  test('empty deleted field controls join their visible replacement', () => {
+  test('empty deleted field controls join the deletion beside an addition', () => {
     const part = story(
       `<w:p><w:del w:id="33" w:author="QA" w:date="D">` +
         `<w:r><w:fldChar w:fldCharType="separate"/></w:r></w:del>` +
@@ -193,11 +193,10 @@ describe('one decision is one card', () => {
         `${ins('36', run('new'), 'QA')}</w:p>`
     );
     const items = revisionsOf(collectReviewItems({ storyPart: part }));
-    expect(items).toHaveLength(1);
-    expect(items[0]!.revisionKind).toBe('replace');
-    expect(items[0]!.replacedText).toBe('old');
-    expect(items[0]!.text).toBe('new');
-    expect(items[0]!.addresses.map((address) => address.id)).toEqual(['33', '34', '35', '36']);
+    expect(items.map((item) => item.revisionKind)).toEqual(['delete', 'insert']);
+    expect(items.map((item) => item.text)).toEqual(['old', 'new']);
+    expect(items[0]!.addresses.map((address) => address.id)).toEqual(['33', '34', '35']);
+    expect(items[1]!.addresses.map((address) => address.id)).toEqual(['36']);
   });
 
   // Word wraps every part of a struck field in its own `w:del`: the two `w:fldChar` runs,
@@ -297,34 +296,30 @@ describe('one decision is one card', () => {
   });
 });
 
-describe('a replacement says where its halves divide', () => {
-  test('the struck ranges come first, and the card counts them', () => {
+describe('replacement halves remain independent', () => {
+  test('each half has its own range and card', () => {
     // Two independent revisions by one author, meeting end to start — the shape a foreign
     // editor writes a replacement in.
     const part = story(
       `<w:p>${run('keep ')}${del('2', delRun('old'), 'QA')}${ins('1', run('new'), 'QA')}</w:p>`
     );
-    const item = revisionsOf(collectReviewItems({ storyPart: part }))[0]!;
-    expect(item.revisionKind).toBe('replace');
-    expect(item.ranges).toHaveLength(2);
-    // Without this a surface painting the pair has to pick one colour for both halves.
-    expect(item.replacedRangeCount).toBe(1);
-    const struck = item.ranges[0]!;
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items.map((item) => item.revisionKind)).toEqual(['delete', 'insert']);
+    expect(items.every((item) => item.ranges.length === 1)).toBe(true);
+    const struck = items[0]!.ranges[0]!;
     expect(struck.start.offset).toBe(5);
     expect(struck.end.offset).toBe(8);
   });
 
-  test('a deletion split across several elements is counted in full', () => {
-    // A `w:del` cannot hold the `w:tab` between the words it strikes, so one edit becomes
-    // two elements under one id — and the split point is 2, not 1.
+  test('an unchanged tab separates deletion decisions beside an addition', () => {
+    // The unchanged tab separates deletion sites with matching source attributes.
     const part = story(
       `<w:p>${del('2', delRun('one'), 'QA')}<w:r><w:tab/></w:r>` +
         `${del('2', delRun('two'), 'QA')}${ins('1', run('new'), 'QA')}</w:p>`
     );
-    const item = revisionsOf(collectReviewItems({ storyPart: part }))[0]!;
-    expect(item.revisionKind).toBe('replace');
-    expect(item.replacedRangeCount).toBe(2);
-    expect(item.ranges).toHaveLength(3);
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items.map((item) => item.revisionKind)).toEqual(['delete', 'delete', 'insert']);
+    expect(items.map((item) => item.ranges.length)).toEqual([1, 1, 1]);
   });
 
   test('a plain insertion has no split point at all', () => {
@@ -366,8 +361,8 @@ describe('a replacement says where its halves divide', () => {
     expect(kinds).toEqual(['delete', 'insert']);
   });
 
-  test('a word struck in three gestures pairs whole against its replacement', () => {
-    // Split source wrappers from one editing time remain one replacement.
+  test('split deletion wrappers stay separate from the addition', () => {
+    // The deletion remains complete while the addition has its own decision.
     const part = story(
       `<w:p>${run('at ')}${delAt('3', delRun('mor'), '2024-01-01T10:00:00Z')}` +
         `${delAt('4', delRun('ni'), '2024-01-01T10:00:00Z')}` +
@@ -375,12 +370,10 @@ describe('a replacement says where its halves divide', () => {
         `${insAt('6', run('evening'), '2024-01-01T10:00:00Z')}</w:p>`
     );
     const items = revisionsOf(collectReviewItems({ storyPart: part }));
-    expect(items).toHaveLength(1);
-    expect(items[0]!.revisionKind).toBe('replace');
-    expect(items[0]!.replacedText).toBe('morning');
-    expect(items[0]!.text).toBe('evening');
-    expect(items[0]!.addresses).toHaveLength(4);
-    expect(items[0]!.replacedRangeCount).toBe(3);
+    expect(items.map((item) => item.revisionKind)).toEqual(['delete', 'insert']);
+    expect(items.map((item) => item.text)).toEqual(['morning', 'evening']);
+    expect(items.map((item) => item.addresses.length)).toEqual([3, 1]);
+    expect(items.map((item) => item.ranges.length)).toEqual([3, 1]);
   });
 
   test('adjacent same-author deletions with no insertion are one Deleted card', () => {
@@ -404,22 +397,18 @@ describe('a replacement says where its halves divide', () => {
     expect(revisionsOf(collectReviewItems({ storyPart: part }))).toHaveLength(2);
   });
 
-  test('a zero-width insertion does not steal the pairing from the real one', () => {
-    // An inserted run carrying only run properties covers no characters, and it starts at
-    // exactly the offset the deletion ends at. Pairing with it produced a card that read
-    // Replaced "old" with nothing, and orphaned the words that actually replaced it.
+  test('a zero-width addition joins only the real addition', () => {
+    // Empty addition fragments stay with the added text, apart from the deletion.
     const part = story(
       `<w:p>${run('keep ')}${delAt('2', delRun('old'), '2024-01-01T10:00:00Z')}` +
         `<w:ins w:id="3" w:author="QA" w:date="2024-01-01T10:00:00Z">` +
         `<w:r><w:rPr><w:b/></w:rPr></w:r></w:ins>` +
         `${insAt('4', run('new'), '2024-01-01T10:00:00Z')}</w:p>`
     );
-    const replaced = revisionsOf(collectReviewItems({ storyPart: part })).find(
-      (item) => item.revisionKind === 'replace'
-    );
-    expect(replaced).toBeDefined();
-    expect(replaced!.replacedText).toBe('old');
-    expect(replaced!.text).toBe('new');
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items.map((item) => item.revisionKind)).toEqual(['delete', 'insert']);
+    expect(items.map((item) => item.text)).toEqual(['old', 'new']);
+    expect(items.map((item) => item.addresses.length)).toEqual([1, 2]);
   });
 
   test('an insertion followed by a deletion stays two cards', () => {

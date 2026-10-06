@@ -23,7 +23,7 @@ const fixture = zipDocument(
     '<w:ins w:id="2" w:author="Reviewer" w:date="2026-01-01T10:00:00Z"><w:r><w:t>new</w:t></w:r></w:ins>' +
     '<w:r><w:t xml:space="preserve"> tail</w:t></w:r></w:p>'
 );
-async function peer(name: string, host?: { ydoc: Y.Doc }) {
+async function peer(name: string, host?: { ydoc: Y.Doc }, source = fixture) {
   const ydoc = new Y.Doc();
   const awareness = new Awareness(ydoc);
   if (host) Y.applyUpdate(ydoc, Y.encodeStateAsUpdate(host.ydoc));
@@ -32,7 +32,7 @@ async function peer(name: string, host?: { ydoc: Y.Doc }) {
     awareness,
     documentId: 'replacement-times',
     identity: { actorId: name, name },
-    bootstrap: host ? { kind: 'join' } : { kind: 'create', document: fixture },
+    bootstrap: host ? { kind: 'join' } : { kind: 'create', document: source },
     offlineEditing: true,
   });
   const container = document.createElement('div');
@@ -75,7 +75,16 @@ async function converged(a: Peer, b: Peer) {
   expect(canonicalOoxmlFingerprint(await savedPart(a))).toBe(
     canonicalOoxmlFingerprint(await savedPart(b))
   );
-  expect(a.editor.getReviewItems()).toEqual(b.editor.getReviewItems());
+  // Caret state and source-site keys belong to each editor instance.
+  // Compare the shared source attributes, ranges, and decision contents.
+  const decisions = (peer: Peer) =>
+    peer.editor
+      .getReviewItems()
+      .map(({ isActive: _isActive, key: _key, id: _id, item: source, ...item }) => {
+        const { id: _sourceId, ...revision } = source;
+        return { ...item, item: revision };
+      });
+  expect(decisions(a)).toEqual(decisions(b));
 }
 function card(peer: Peer, kind: 'insert' | 'delete') {
   const item = peer.editor
@@ -85,20 +94,79 @@ function card(peer: Peer, kind: 'insert' | 'delete') {
   return item;
 }
 
-for (const action of ['acceptReviewItem', 'rejectReviewItem'] as const) {
+const matchingTime = zipDocument(
+  '<w:p><w:del w:id="1" w:author="Reviewer" w:date="2026-01-01T10:00:00Z"><w:r><w:delText>old</w:delText></w:r></w:del>' +
+    '<w:ins w:id="2" w:author="Reviewer" w:date="2026-01-01T10:00:00Z"><w:r><w:t>new</w:t></w:r></w:ins>' +
+    '<w:r><w:t xml:space="preserve"> tail</w:t></w:r></w:p>'
+);
+const sharedAddress = zipDocument(
+  '<w:p><w:del w:id="1" w:author="Reviewer" w:date="2026-01-01T10:00:00Z"><w:r><w:delText>old</w:delText></w:r></w:del>' +
+    '<w:ins w:id="1" w:author="Reviewer" w:date="2026-01-01T10:00:00Z"><w:r><w:t>new</w:t></w:r></w:ins>' +
+    '<w:r><w:t xml:space="preserve"> tail</w:t></w:r></w:p>'
+);
+for (const [label, source] of [
+  ['different times', fixture],
+  ['matching times', matchingTime],
+  ['shared address', sharedAddress],
+] as const) {
+  for (const action of ['acceptReviewItem', 'rejectReviewItem'] as const) {
+    for (const kind of ['insert', 'delete'] as const) {
+      test(`${label}: ${action} of independent ${kind} synchronizes, undoes, redoes, and reopens`, async () => {
+        const a = await peer('Alice', undefined, source);
+        const b = await peer('Bob', a);
+        let joined: Peer | undefined;
+        try {
+          expect(a.editor.getReviewItems()).toHaveLength(2);
+          expect(a.editor[action](card(a, kind).key).ok).toBe(true);
+          sync(a, b);
+          await converged(a, b);
+          const remainingKind = kind === 'insert' ? 'delete' : 'insert';
+          expect(revisionItemsOf(await savedPart(b)).map((item) => item.revisionKind)).toEqual([
+            remainingKind,
+          ]);
+          expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
+          sync(a, b);
+          await converged(a, b);
+          expect(b.editor.getReviewItems()).toHaveLength(2);
+          expect(a.editor.exec({ type: 'redo' }).ok).toBe(true);
+          sync(a, b);
+          await converged(a, b);
+          expect(b.editor.getReviewItems()).toHaveLength(1);
+          joined = await peer('Rejoined', b);
+          await converged(a, joined);
+          expect(joined.editor.getReviewItems()).toHaveLength(1);
+        } finally {
+          joined?.close();
+          b.close();
+          a.close();
+        }
+      });
+    }
+  }
+}
+
+for (const action of ['accept', 'reject'] as const) {
   for (const kind of ['insert', 'delete'] as const) {
-    test(`${action} of independent ${kind} synchronizes, undoes, redoes, and reopens`, async () => {
-      const a = await peer('Alice');
+    test(`API ${action} scopes shared IDs to the selected ${kind} across peers`, async () => {
+      const a = await peer('Alice', undefined, sharedAddress);
       const b = await peer('Bob', a);
-      let joined: Peer | undefined;
       try {
-        expect(a.editor.getReviewItems()).toHaveLength(2);
-        expect(a.editor[action](card(a, kind).key).ok).toBe(true);
+        await a.runtime.run(async (context) => {
+          const revisions = context.document.revisions;
+          revisions.load('items');
+          await context.sync();
+          for (const revision of revisions.items) revision.load('type');
+          await context.sync();
+          const target = revisions.items.find(
+            (revision) => revision.type === (kind === 'insert' ? 'Insert' : 'Delete')
+          )!;
+          target[action]();
+          await context.sync();
+        });
         sync(a, b);
         await converged(a, b);
-        const remainingKind = kind === 'insert' ? 'delete' : 'insert';
         expect(revisionItemsOf(await savedPart(b)).map((item) => item.revisionKind)).toEqual([
-          remainingKind,
+          kind === 'insert' ? 'delete' : 'insert',
         ]);
         expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
         sync(a, b);
@@ -108,11 +176,7 @@ for (const action of ['acceptReviewItem', 'rejectReviewItem'] as const) {
         sync(a, b);
         await converged(a, b);
         expect(b.editor.getReviewItems()).toHaveLength(1);
-        joined = await peer('Rejoined', b);
-        await converged(a, joined);
-        expect(joined.editor.getReviewItems()).toHaveLength(1);
       } finally {
-        joined?.close();
         b.close();
         a.close();
       }
@@ -205,7 +269,85 @@ test('a caret activates only its independent revision', async () => {
     expect(activeAt(1)).toEqual(['delete']);
     expect(activeAt(4)).toEqual(['insert']);
     expect(activeAt(7)).toEqual([]);
+    a.editor.setActiveReviewItem(card(a, 'delete').key);
+    expect(a.editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
+    expect(card(a, 'insert').isActive).toBe(true);
+    expect(a.editor.exec({ type: 'navigateReviewChange', direction: 'previous' }).ok).toBe(true);
+    expect(card(a, 'delete').isActive).toBe(true);
   } finally {
     a.close();
   }
 });
+
+test('one tracked replacement edit synchronizes two independent decisions and one undo step', async () => {
+  const a = await peer('Alice');
+  const b = await peer('Bob', a);
+  try {
+    a.editor.setEditingMode('suggesting');
+    const paragraphId = a.editor.surface!.session.paragraphIds()[0]!;
+    a.editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 6 },
+      head: { paragraphId, offset: 11 },
+    });
+    a.editor.surface!.type(' end');
+    sync(a, b);
+    await converged(a, b);
+    const own = b.editor.getReviewItems().filter((item) => item.author === 'Alice');
+    expect(own.map((item) => (item.kind === 'revision' ? item.revisionKind : item.kind))).toEqual([
+      'delete',
+      'insert',
+    ]);
+    expect(own.map((item) => item.text)).toEqual([' tail', ' end']);
+    expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
+    sync(a, b);
+    await converged(a, b);
+    expect(b.editor.getReviewItems()).toHaveLength(2);
+    expect(a.editor.exec({ type: 'redo' }).ok).toBe(true);
+    sync(a, b);
+    await converged(a, b);
+    expect(b.editor.getReviewItems()).toHaveLength(4);
+  } finally {
+    b.close();
+    a.close();
+  }
+});
+
+for (const kind of ['ins', 'del'] as const) {
+  for (const action of ['accept', 'reject'] as const) {
+    test(`API ${action} of same-ID ${kind} across unchanged text stays independent`, async () => {
+      const textTag = kind === 'ins' ? 't' : 'delText';
+      const wrapper = (text: string) =>
+        `<w:${kind} w:id="1" w:author="Reviewer" w:date="2026-01-01T10:00:00Z"><w:r><w:${textTag}>${text}</w:${textTag}></w:r></w:${kind}>`;
+      const source = zipDocument(
+        `<w:p>${wrapper('A')}<w:r><w:t> and </w:t></w:r>${wrapper('B')}</w:p>`
+      );
+      const a = await peer('Alice', undefined, source);
+      const b = await peer('Bob', a);
+      try {
+        expect(a.editor.getReviewItems()).toHaveLength(2);
+        await a.runtime.run(async (context) => {
+          const revisions = context.document.revisions;
+          revisions.load('items');
+          await context.sync();
+          expect(revisions.items).toHaveLength(2);
+          revisions.items[0]![action]();
+          await context.sync();
+        });
+        sync(a, b);
+        await converged(a, b);
+        expect(revisionItemsOf(await savedPart(b)).map((item) => item.text)).toEqual(['B']);
+        expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
+        sync(a, b);
+        await converged(a, b);
+        expect(b.editor.getReviewItems()).toHaveLength(2);
+        expect(a.editor.exec({ type: 'redo' }).ok).toBe(true);
+        sync(a, b);
+        await converged(a, b);
+        expect(b.editor.getReviewItems()).toHaveLength(1);
+      } finally {
+        b.close();
+        a.close();
+      }
+    });
+  }
+}
