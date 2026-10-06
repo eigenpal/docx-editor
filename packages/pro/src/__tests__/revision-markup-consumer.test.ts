@@ -47,3 +47,42 @@ test('a host restores preferences, changes them in the dialog, and saves the sam
     container.remove();
   }
 });
+
+test.each(['detach', 'destroy', 'load'] as const)(
+  'custom dialog session closes on facade %s',
+  (operation) => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({ container, document: 'blank', modules: [reviewModule({})] });
+    let session: import('@docx-editor.dev/core/editor').RevisionMarkupDialogSession | undefined;
+    const dispose = editor.setRevisionMarkupChrome({
+      onRequest: (value) => {
+        session = value;
+      },
+    });
+    try {
+      expect(editor.exec({ type: 'openRevisionMarkupDialog' }).ok).toBe(true);
+      expect(session).toBeDefined();
+      session!.set({ trackMoves: false });
+      expect(editor.snapshot().revisionMarkup.trackMoves).toBe(true);
+      if (operation === 'load') editor.load('blank');
+      else editor[operation]();
+      expect(session!.signal.aborted).toBe(true);
+      expect(session!.apply()).toBe(false);
+      if (operation === 'detach') {
+        editor.attach(container);
+        expect(editor.snapshot().revisionMarkup.trackMoves).toBe(true);
+        editor.exec({ type: 'openRevisionMarkupDialog' });
+        expect(session!.canApply()).toBe(true);
+        dispose();
+        expect(session!.signal.aborted).toBe(true);
+        editor.exec({ type: 'openRevisionMarkupDialog' });
+        expect(getByRole(container, 'dialog')).toBeDefined();
+      }
+    } finally {
+      dispose();
+      editor.destroy();
+      container.remove();
+    }
+  }
+);

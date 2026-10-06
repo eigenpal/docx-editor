@@ -1330,6 +1330,7 @@ export interface DocxEditorInstance extends Editor {
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setReviewAuthorVisible(author: string, visible: boolean): void;
     setRevisionMarkup(options: RevisionMarkupOptions): void;
+    setRevisionMarkupChrome(handlers: RevisionMarkupChromeHandlers | null, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setRevisionStyles(styles: RevisionStyles): void;
     setTextFormFieldChrome(handlers: TextFormFieldChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setTranslate(translate: ((key: string, params?: Record<string, string | number>) => string) | undefined): void;
@@ -2742,6 +2743,12 @@ export type RevisionChangedLinesMark = 'none' | 'leftBorder' | 'rightBorder' | '
 // @public (undocumented)
 export type RevisionDeletionMark = RevisionMarkupMark | 'hidden' | 'caret' | 'pound';
 
+// @public
+export interface RevisionMarkupChromeHandlers {
+    // (undocumented)
+    readonly onRequest?: (session: RevisionMarkupDialogSession) => void;
+}
+
 // @public (undocumented)
 export type RevisionMarkupColor = RevisionMarkupNamedColor | 'byAuthor' | 'auto';
 
@@ -2754,17 +2761,24 @@ export interface RevisionMarkupDialog {
 }
 
 // @public
-export interface RevisionMarkupDialogHost {
+export interface RevisionMarkupDialogHost extends RevisionMarkupDialogSession {
     // (undocumented)
     readonly container: HTMLElement;
     // (undocumented)
-    get(): ResolvedRevisionMarkup;
-    // (undocumented)
-    set(options: RevisionMarkupOptions): void;
-    // (undocumented)
-    subscribe(listener: () => void): () => void;
-    // (undocumented)
     readonly translate?: (key: string) => string | undefined;
+}
+
+// @public
+export interface RevisionMarkupDialogSession {
+    apply(): boolean;
+    // (undocumented)
+    canApply(): boolean;
+    cancel(): void;
+    get(): ResolvedRevisionMarkup;
+    reset(): void;
+    set(options: RevisionMarkupOptions): void;
+    readonly signal: AbortSignal;
+    subscribe(listener: () => void): () => void;
 }
 
 // @public (undocumented)

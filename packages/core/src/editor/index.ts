@@ -482,6 +482,8 @@ export {
 } from '../contracts/revision-markup.ts';
 export type {
   RevisionMarkupOptions,
+  RevisionMarkupDialogSession,
+  RevisionMarkupChromeHandlers,
   ResolvedRevisionMarkup,
   RevisionMarkupNamedColor,
   RevisionMarkupColor,

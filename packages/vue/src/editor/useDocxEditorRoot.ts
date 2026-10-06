@@ -338,9 +338,11 @@ export function useDocxEditorRootOwner(
     () => [editorRef.value, toValue(props).revisionMarkup, markupRevision.value] as const,
     ([editor, settings]) => {
       if (!editor || settings === undefined) return;
+      const resolved = resolveRevisionMarkup(settings);
+      if (JSON.stringify(resolved) === JSON.stringify(editor.snapshot().revisionMarkup)) return;
       applyingMarkup = true;
       try {
-        editor.setRevisionMarkup(resolveRevisionMarkup(settings));
+        editor.setRevisionMarkup(resolved);
       } finally {
         applyingMarkup = false;
       }

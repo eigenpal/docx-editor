@@ -7,39 +7,31 @@ import { afterEach, expect, test } from 'bun:test';
 import { fireEvent, getByLabelText, getByRole } from '@testing-library/react';
 import {
   DEFAULT_REVISION_MARKUP,
-  resolveRevisionMarkup,
+  createDocxEditor,
+  type RevisionMarkupOptions,
   type ResolvedRevisionMarkup,
 } from '@docx-editor.dev/core/editor';
-import { createRevisionMarkupDialog } from '../review/revision-markup-dialog';
+import { reviewModule } from '../review/review-module';
 
 let cleanup = () => {};
 afterEach(() => cleanup());
 function setup() {
   const container = document.createElement('div');
   document.body.append(container);
-  let state = DEFAULT_REVISION_MARKUP;
-  const listeners = new Set<() => void>();
   const changes: ResolvedRevisionMarkup[] = [];
-  const set = (value: Parameters<typeof resolveRevisionMarkup>[0]) => {
-    state = resolveRevisionMarkup(value, state);
-    changes.push(state);
-    listeners.forEach((listener) => listener());
+  const editor = createDocxEditor({ container, document: 'blank', modules: [reviewModule({})] });
+  editor.on('revisionMarkupChange', (value) => changes.push(value));
+  const set = (value: RevisionMarkupOptions) => editor.setRevisionMarkup(value);
+  const dialog = {
+    open: () => editor.exec({ type: 'openRevisionMarkupDialog' }),
+    destroy: () => editor.destroy(),
   };
-  const dialog = createRevisionMarkupDialog({
-    container,
-    get: () => state,
-    set,
-    subscribe(listener) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-  });
   cleanup = () => {
-    dialog.destroy();
+    editor.destroy();
     container.remove();
   };
   dialog.open();
-  return { container, dialog, changes, set, get: () => state, listeners };
+  return { container, dialog, changes, set, get: () => editor.snapshot().revisionMarkup };
 }
 
 test('stages settings, applies once, and reflects API changes in an open dialog', () => {
@@ -83,7 +75,7 @@ test('labels controls, exposes the preview, closes with Escape, and removes its 
   expect(host.container.querySelector('dialog')).toBeNull();
   expect(host.changes).toHaveLength(0);
   host.dialog.destroy();
-  expect(host.listeners.size).toBe(0);
+  expect(host.container.querySelector('dialog')).toBeNull();
 });
 
 test('shows selected cell and line colors without sending editing keys to the page', () => {

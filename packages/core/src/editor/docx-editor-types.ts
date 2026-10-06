@@ -1,4 +1,7 @@
-import type { RevisionMarkupOptions } from '../contracts/revision-markup.ts';
+import type {
+  RevisionMarkupOptions,
+  RevisionMarkupChromeHandlers,
+} from '../contracts/revision-markup.ts';
 import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
 import type {
   PopupChromeRegistrationOptions,
@@ -205,6 +208,15 @@ export interface DocxEditorInstance extends Editor {
    * command needs.
    */
   setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
+  /**
+   * Register local revision settings chrome. Disposal cancels its active sessions.
+   * Manual renderers take priority over fallback renderers. Pass null to use native chrome
+   * until disposal restores the previous registration.
+   */
+  setRevisionMarkupChrome(
+    handlers: RevisionMarkupChromeHandlers | null,
+    options?: PopupChromeRegistrationOptions
+  ): Unsubscribe;
   /** Register Field Options chrome. Disposal closes sessions owned by this registration. */
   setTextFormFieldChrome(
     handlers: TextFormFieldChromeHandlers,

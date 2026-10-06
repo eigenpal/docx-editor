@@ -6,9 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { createRevisionColorPicker } from './revision-markup-colors';
 import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
 import {
-  DEFAULT_REVISION_MARKUP,
   REVISION_MARKUP_COLORS,
-  resolveRevisionMarkup,
   type RevisionMarkupDialogHost,
   type RevisionMarkupDialog,
   type RevisionMarkupOptions,
@@ -89,8 +87,7 @@ export function createRevisionMarkupDialog(host: RevisionMarkupDialogHost): Revi
     }
   };
   const update = (patch: RevisionMarkupOptions) => {
-    draft = resolveRevisionMarkup(patch, draft);
-    refresh();
+    host.set(patch);
   };
   const unsubscribe = host.subscribe(() => {
     draft = host.get();
@@ -163,6 +160,7 @@ export function createRevisionMarkupDialog(host: RevisionMarkupDialogHost): Revi
   };
   return {
     open() {
+      if (host.signal.aborted) return;
       if (dialog) {
         dialog.focus();
         return;
@@ -182,7 +180,7 @@ export function createRevisionMarkupDialog(host: RevisionMarkupDialogHost): Revi
       dialog.append(title);
       dialog.addEventListener('cancel', (event) => {
         event.preventDefault();
-        close();
+        host.cancel();
       });
       const body = el('div');
       body.className = 'docx-revision-markup-body';
@@ -226,14 +224,10 @@ export function createRevisionMarkupDialog(host: RevisionMarkupDialogHost): Revi
         node.addEventListener('click', action);
         footer.append(node);
       };
-      button('reset', () => {
-        draft = DEFAULT_REVISION_MARKUP;
-        refresh();
-      });
-      button('cancel', close);
+      button('reset', () => host.reset());
+      button('cancel', () => host.cancel());
       button('ok', () => {
-        host.set(draft);
-        close();
+        host.apply();
       });
       dialog.append(footer);
       host.container.append(dialog);

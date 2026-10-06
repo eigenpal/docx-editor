@@ -1,3 +1,4 @@
+import type { DocxEditorRevisionMarkupDialogProps } from './DocxEditorRevisionMarkupDialog';
 import type { DocxEditorExportDialogProps } from './DocxEditorExportDialog';
 import type { DocxEditorPrintDialogProps } from './DocxEditorPrintDialog';
 import { renderPopup, type DocxEditorPopup } from './popup-renderer';
@@ -31,6 +32,8 @@ import { useTranslation } from '../i18n';
 
 /** Render overrides for automatically hosted editor popups. False disables a popup. @public */
 export interface DocxEditorPopups {
+  /** Change tracking options. False cancels the requested settings session. */
+  revisionMarkup?: DocxEditorPopup<DocxEditorRevisionMarkupDialogProps>;
   /** File export progress and errors. False hides feedback without stopping conversion. */
   export?: DocxEditorPopup<DocxEditorExportDialogProps>;
   /** File print progress and errors. False hides feedback; printing still runs. */

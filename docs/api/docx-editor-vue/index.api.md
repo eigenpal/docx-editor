@@ -133,7 +133,9 @@ import { RevisionAuthorAssignments } from '@docx-editor.dev/core/editor';
 import { RevisionAuthorStyle } from '@docx-editor.dev/core/editor';
 import { RevisionChangedLinesMark } from '@docx-editor.dev/core/editor';
 import { RevisionDeletionMark } from '@docx-editor.dev/core/editor';
+import { RevisionMarkupChromeHandlers } from '@docx-editor.dev/core/editor';
 import { RevisionMarkupColor } from '@docx-editor.dev/core/editor';
+import { RevisionMarkupDialogSession } from '@docx-editor.dev/core/editor';
 import { RevisionMarkupMark } from '@docx-editor.dev/core/editor';
 import { RevisionMarkupNamedColor } from '@docx-editor.dev/core/editor';
 import { RevisionMarkupOptions } from '@docx-editor.dev/core/editor';
@@ -3105,6 +3107,8 @@ export interface DocxEditorNamespace {
     // (undocumented)
     readonly RevisionMarkup: typeof DocxEditorRevisionMarkup;
     // (undocumented)
+    readonly RevisionMarkupDialog: typeof DocxEditorRevisionMarkupDialog;
+    // (undocumented)
     readonly Root: typeof DocxEditorRoot;
     // (undocumented)
     readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
@@ -3515,7 +3519,7 @@ export const DocxEditorPageSetupDialog: {
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
     className: string;
     preset: boolean;
-}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Apply" | "Body" | "Cancel" | "Error" | "Footer" | "Header" | "Title", vue.DefineComponent<DialogPartProps>> & {
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Apply" | "Body" | "Cancel" | "Error" | "Footer" | "Header" | "Reset" | "Title", vue.DefineComponent<DialogPartProps>> & {
     Field: vue.DefineComponent<DialogPartProps & {
         name: "marginBottom" | "marginLeft" | "marginRight" | "marginTop" | "orientation" | "pageSize" | "scope";
     }>;
@@ -3608,7 +3612,7 @@ export const DocxEditorParagraphDialog: {
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
     className: string;
     preset: boolean;
-}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Apply" | "Body" | "Cancel" | "Error" | "Footer" | "Header" | "Title", vue.DefineComponent<DialogPartProps>> & {
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Apply" | "Body" | "Cancel" | "Error" | "Footer" | "Header" | "Reset" | "Title", vue.DefineComponent<DialogPartProps>> & {
     Field: vue.DefineComponent<DialogPartProps & {
         name: "alignment" | "contextualSpacing" | "direction" | "indentLeft" | "indentRight" | "keepLines" | "keepNext" | "lineRule" | "lineValue" | "pageBreakBefore" | "spaceAfter" | "spaceBefore" | "special" | "specialBy" | "tabStops" | "widowControl";
     }>;
@@ -3657,6 +3661,7 @@ export interface DocxEditorPopups {
     // (undocumented)
     paragraph?: DocxEditorPopup<DocxEditorParagraphDialogProps>;
     print?: DocxEditorPopup<DocxEditorPrintDialogProps>;
+    revisionMarkup?: DocxEditorPopup<DocxEditorRevisionMarkupDialogProps>;
     // (undocumented)
     textFormField?: DocxEditorPopup<DocxEditorTextFormFieldDialogProps>;
 }
@@ -3827,6 +3832,76 @@ export const DocxEditorRevisionMarkup: vue.DefineComponent<vue.ExtractPropTypes<
     trackFormatting: boolean;
     trackMoves: boolean;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export const DocxEditorRevisionMarkupDialog: {
+    new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
+        children: PropType<DocxEditorChildren>;
+        className: StringConstructor;
+        preset: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        session: {
+            default: null;
+            type: PropType<RevisionMarkupDialogSession | null>;
+        };
+        style: PropType<CSSProperties>;
+    }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        preset: boolean;
+        session: RevisionMarkupDialogSession | null;
+    }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
+        B: {};
+        C: {};
+        D: {};
+        Defaults: {};
+        M: {};
+        P: {};
+    }, Readonly<vue.ExtractPropTypes<{
+        children: PropType<DocxEditorChildren>;
+        className: StringConstructor;
+        preset: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        session: {
+            default: null;
+            type: PropType<RevisionMarkupDialogSession | null>;
+        };
+        style: PropType<CSSProperties>;
+    }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
+        preset: boolean;
+        session: RevisionMarkupDialogSession | null;
+    }>;
+    __isFragment?: never;
+    __isTeleport?: never;
+    __isSuspense?: never;
+} & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
+    children: PropType<DocxEditorChildren>;
+    className: StringConstructor;
+    preset: {
+        default: boolean;
+        type: BooleanConstructor;
+    };
+    session: {
+        default: null;
+        type: PropType<RevisionMarkupDialogSession | null>;
+    };
+    style: PropType<CSSProperties>;
+}>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    preset: boolean;
+    session: RevisionMarkupDialogSession | null;
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Apply" | "Body" | "Cancel" | "Error" | "Footer" | "Header" | "Reset" | "Title", vue.DefineComponent<DialogPartProps>> & {
+    Field: vue.DefineComponent<DialogPartProps & {
+        name: keyof ResolvedRevisionMarkup;
+    }>;
+};
+
+// @public
+export interface DocxEditorRevisionMarkupDialogProps extends DialogCustomizationProps {
+    // (undocumented)
+    session: RevisionMarkupDialogSession | null;
+}
 
 // @public
 export interface DocxEditorRevisionMarkupProps extends RevisionMarkupOptions {
@@ -4074,7 +4149,7 @@ export const DocxEditorTextFormFieldDialog: {
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
     preset: boolean;
     session: TextFormFieldDialogSession | null;
-}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Apply" | "Body" | "Cancel" | "Error" | "Footer" | "Header" | "Title", vue.DefineComponent<DialogPartProps>> & {
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Apply" | "Body" | "Cancel" | "Error" | "Footer" | "Header" | "Reset" | "Title", vue.DefineComponent<DialogPartProps>> & {
     Field: vue.DefineComponent<DialogPartProps & {
         name: keyof TextFormFieldDialogFields;
     }>;
@@ -5793,7 +5868,11 @@ export { RevisionChangedLinesMark }
 
 export { RevisionDeletionMark }
 
+export { RevisionMarkupChromeHandlers }
+
 export { RevisionMarkupColor }
+
+export { RevisionMarkupDialogSession }
 
 export { RevisionMarkupMark }
 
@@ -6451,6 +6530,8 @@ export interface UseDialogReturn<T extends object> {
     // (undocumented)
     readonly isEnabled: Readonly<Ref<boolean>>;
     // (undocumented)
+    reset?(): void;
+    // (undocumented)
     setValue<K extends keyof T>(name: K, value: T[K]): void;
     // (undocumented)
     readonly values: Readonly<Ref<T>>;
@@ -6748,6 +6829,15 @@ export function useReviewAuthors(): Readonly<ShallowRef<readonly ReviewAuthorInf
 
 // @public
 export function useReviewGutter(): ShallowRef<ReviewGutter>;
+
+// @public
+export function useRevisionMarkupDialog(): UseRevisionMarkupDialogReturn;
+
+// @public
+export interface UseRevisionMarkupDialogReturn extends UseDialogReturn<ResolvedRevisionMarkup> {
+    // (undocumented)
+    reset(): void;
+}
 
 // @public (undocumented)
 export function useScopeClassName(): '' | 'docx-editor ';

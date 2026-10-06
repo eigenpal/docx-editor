@@ -36,10 +36,13 @@ export const DocxEditorRevisionMarkup = defineComponent({
       },
       { immediate: true }
     );
-    watch([editor, () => props], ([instance]) => instance?.setRevisionMarkup(props), {
-      immediate: true,
-      deep: true,
-    });
+    watch(
+      [editor, () => JSON.stringify(props)],
+      ([instance, serialized]) => {
+        instance?.setRevisionMarkup(JSON.parse(serialized) as RevisionMarkupOptions);
+      },
+      { immediate: true }
+    );
     return () => null;
   },
 });

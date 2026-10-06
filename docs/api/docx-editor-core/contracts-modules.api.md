@@ -216,15 +216,9 @@ export interface RevisionMarkupDialog {
 }
 
 // @public
-export interface RevisionMarkupDialogHost {
+export interface RevisionMarkupDialogHost extends RevisionMarkupDialogSession {
     // (undocumented)
     readonly container: HTMLElement;
-    // (undocumented)
-    get(): ResolvedRevisionMarkup;
-    // (undocumented)
-    set(options: RevisionMarkupOptions): void;
-    // (undocumented)
-    subscribe(listener: () => void): () => void;
     // (undocumented)
     readonly translate?: (key: string) => string | undefined;
 }

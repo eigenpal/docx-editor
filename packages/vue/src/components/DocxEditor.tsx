@@ -1,3 +1,4 @@
+import { DocxEditorRevisionMarkupDialog } from '../editor/DocxEditorRevisionMarkupDialog';
 import { DocxEditorRevisionMarkup } from '../editor/DocxEditorRevisionMarkup';
 import type {
   RevisionMarkupOptions,
@@ -202,6 +203,7 @@ export interface DocxEditorNamespace {
   readonly ContextMenu: typeof ContextMenu;
   readonly ContentControl: typeof DocxEditorContentControl;
   readonly RevisionMarkup: typeof DocxEditorRevisionMarkup;
+  readonly RevisionMarkupDialog: typeof DocxEditorRevisionMarkupDialog;
   readonly AuthorStyle: typeof DocxEditorAuthorStyle;
   readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
 }
@@ -613,6 +615,7 @@ export const DocxEditor = Object.assign(DocxEditorImpl, {
   ContextMenu: DocxEditorContextMenu,
   ContentControl: DocxEditorContentControl,
   RevisionMarkup: DocxEditorRevisionMarkup,
+  RevisionMarkupDialog: DocxEditorRevisionMarkupDialog,
   AuthorStyle: DocxEditorAuthorStyle,
   ColorByChangeType: DocxEditorColorByChangeType,
 }) as unknown as DocxEditorNamespace;

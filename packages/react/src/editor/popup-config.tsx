@@ -1,3 +1,4 @@
+import type { DocxEditorRevisionMarkupDialogProps } from './DocxEditorRevisionMarkupDialog';
 import type { DocxEditorExportDialogProps } from './DocxEditorExportDialog';
 import type { DocxEditorPrintDialogProps } from './DocxEditorPrintDialog';
 import type { DocxEditorContentControlWidgetProps } from './DocxEditorContentControlWidget';
@@ -48,6 +49,7 @@ export interface DocxEditorPopups {
   notesContextMenu?: DocxEditorPopup<DocxEditorNotesContextMenuProps>;
   pageSetup?: DocxEditorPopup<DocxEditorPageSetupDialogProps>;
   paragraph?: DocxEditorPopup<DocxEditorParagraphDialogProps>;
+  revisionMarkup?: DocxEditorPopup<DocxEditorRevisionMarkupDialogProps>;
   textFormField?: DocxEditorPopup<DocxEditorTextFormFieldDialogProps>;
   hyperlink?: DocxEditorPopup<HyperLinkProps>;
   contentControl?: DocxEditorPopup<ContentControlProps>;

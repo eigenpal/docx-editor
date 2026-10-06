@@ -380,9 +380,11 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
 
   useEffect(() => {
     if (!editor || props.revisionMarkup === undefined) return;
+    const settings = resolveRevisionMarkup(props.revisionMarkup);
+    if (JSON.stringify(settings) === JSON.stringify(editor.snapshot().revisionMarkup)) return;
     applyingMarkup.current = true;
     try {
-      editor.setRevisionMarkup(resolveRevisionMarkup(props.revisionMarkup));
+      editor.setRevisionMarkup(settings);
     } finally {
       applyingMarkup.current = false;
     }

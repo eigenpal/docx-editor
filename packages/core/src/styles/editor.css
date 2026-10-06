@@ -7636,19 +7636,26 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* Change tracking options dialog. */
+.docx-editor .docx-revision-markup-dialog,
+.docx-editor.docx-revision-markup-dialog,
 .docx-revision-markup-dialog {
+  max-width: 39rem;
   width: min(39rem, calc(100vw - 2rem));
   position: fixed;
   inset: 0;
   margin: auto;
   max-height: calc(100dvh - 3rem);
   overflow: hidden;
-  padding: 1.25rem;
+  padding: var(--doc-dialog-padding, 1.25rem);
   border: 1px solid var(--doc-border);
-  border-radius: 0.75rem;
+  border-radius: var(--doc-dialog-radius, 0.75rem);
   color: var(--doc-text);
   background: var(--doc-bg);
-  font: inherit;
+  font: var(--doc-dialog-font-size, 13px) / 1.5
+    var(--doc-dialog-font-family, var(--doc-font-ui, system-ui, sans-serif));
+}
+.docx-revision-markup-dialog > [data-docx-part='header'] {
+  flex: none;
 }
 .docx-revision-markup-dialog[open] {
   display: flex;

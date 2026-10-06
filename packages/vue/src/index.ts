@@ -549,3 +549,14 @@ export type {
   RevisionChangedLinesMark,
   ReviewDisplayMode,
 } from '@docx-editor.dev/core/editor';
+
+export {
+  DocxEditorRevisionMarkupDialog,
+  useRevisionMarkupDialog,
+  type DocxEditorRevisionMarkupDialogProps,
+  type UseRevisionMarkupDialogReturn,
+} from './editor/DocxEditorRevisionMarkupDialog';
+export type {
+  RevisionMarkupDialogSession,
+  RevisionMarkupChromeHandlers,
+} from '@docx-editor.dev/core/editor';

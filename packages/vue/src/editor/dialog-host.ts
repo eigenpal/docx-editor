@@ -14,25 +14,32 @@ import {
   type PropType,
 } from 'vue';
 import type { DocxEditorPopups } from './popup-config';
-import type { TextFormFieldDialogSession } from '@docx-editor.dev/core/editor';
+import type {
+  TextFormFieldDialogSession,
+  RevisionMarkupDialogSession,
+} from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from './context';
 import { DocxEditorPageSetupDialog } from './DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from './DocxEditorParagraphDialog';
 import { DocxEditorTextFormFieldDialog } from './DocxEditorTextFormFieldDialog';
+import { DocxEditorRevisionMarkupDialog } from './DocxEditorRevisionMarkupDialog';
 const key: InjectionKey<ReturnType<typeof createHost>> = Symbol('docx.dialogs');
 function createHost(config: () => DocxEditorPopups | undefined) {
   const target = shallowRef<HTMLElement | null>(null);
   const active = shallowRef<'pageSetup' | 'paragraph' | null>(null);
   const session = shallowRef<TextFormFieldDialogSession | null>(null);
+  const revisionSession = shallowRef<RevisionMarkupDialogSession | null>(null);
   let opener: HTMLElement | null = null;
   const close = () => {
     active.value = null;
     session.value?.cancel();
     session.value = null;
+    revisionSession.value?.cancel();
+    revisionSession.value = null;
     const returnFocusTo = opener;
     opener = null;
     void nextTick(() => {
-      if (!active.value && !session.value && returnFocusTo?.isConnected)
+      if (!active.value && !session.value && !revisionSession.value && returnFocusTo?.isConnected)
         returnFocusTo.focus({ preventScroll: true });
     });
   };
@@ -47,6 +54,7 @@ function createHost(config: () => DocxEditorPopups | undefined) {
     target,
     active,
     session,
+    revisionSession,
     open,
     close,
     get ownsPageSetup() {
@@ -66,7 +74,8 @@ export const DialogHost = defineComponent({
       (config) => {
         if (
           (host.active.value && config?.[host.active.value] === false) ||
-          (host.session.value && config?.textFormField === false)
+          (host.session.value && config?.textFormField === false) ||
+          (host.revisionSession.value && config?.revisionMarkup === false)
         )
           host.close();
       },
@@ -112,6 +121,38 @@ export const DialogHost = defineComponent({
       },
       { immediate: true }
     );
+    watch(
+      [editor, host.target, () => p.popups?.revisionMarkup === false],
+      ([value, target, disabled], _old, onCleanup) => {
+        if (!value || (!target && !disabled)) return;
+        const disposeRevision = value.setRevisionMarkupChrome(
+          {
+            onRequest: (session) => {
+              host.close();
+              if (p.popups?.revisionMarkup === false) {
+                session.cancel();
+                return;
+              }
+              host.revisionSession.value = session;
+              session.signal.addEventListener(
+                'abort',
+                () => {
+                  if (host.revisionSession.value === session) host.revisionSession.value = null;
+                },
+                { once: true }
+              );
+            },
+          },
+          { fallback: true }
+        );
+        onCleanup(() => {
+          disposeRevision();
+          host.revisionSession.value?.cancel();
+          host.revisionSession.value = null;
+        });
+      },
+      { immediate: true }
+    );
     return () => [
       slots.default?.(),
       host.target.value
@@ -125,6 +166,15 @@ export const DialogHost = defineComponent({
               ? p.popups?.paragraph
                 ? renderPopup(p.popups.paragraph, { open: true, onClose: host.close })
                 : h(DocxEditorParagraphDialog, { open: true, onClose: host.close })
+              : null,
+            host.revisionSession.value && p.popups?.revisionMarkup !== false
+              ? p.popups?.revisionMarkup
+                ? renderPopup(
+                    p.popups.revisionMarkup,
+                    { session: host.revisionSession.value },
+                    host.revisionSession.value
+                  )
+                : h(DocxEditorRevisionMarkupDialog, { session: host.revisionSession.value })
               : null,
             host.session.value && p.popups?.textFormField !== false
               ? p.popups?.textFormField

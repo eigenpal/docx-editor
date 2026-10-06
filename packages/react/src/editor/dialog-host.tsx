@@ -1,3 +1,5 @@
+import { DocxEditorRevisionMarkupDialog } from './DocxEditorRevisionMarkupDialog';
+import type { RevisionMarkupDialogSession } from '@docx-editor.dev/core/editor';
 import { renderPopup } from './popup-renderer';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -30,6 +32,9 @@ export function DialogProvider({
   const [container, setContainer] = useState<HTMLElement | null>(null);
   const [active, setActive] = useState<'pageSetup' | 'paragraph' | null>(null);
   const [session, setSession] = useState<TextFormFieldDialogSession | null>(null);
+  const [markupSession, setMarkupSession] = useState<RevisionMarkupDialogSession | null>(null);
+  const markupSessionRef = useRef(markupSession);
+  markupSessionRef.current = markupSession;
   const popupsRef = useRef(popups);
   popupsRef.current = popups;
   const opener = useRef<HTMLElement | null>(null);
@@ -51,6 +56,7 @@ export function DialogProvider({
             request.cancel();
             return;
           }
+          markupSessionRef.current?.cancel();
           setActive(null);
           setSession(request);
           request.signal.addEventListener(
@@ -64,10 +70,38 @@ export function DialogProvider({
     );
   }, [editor]);
   useEffect(() => {
+    if (!editor || (!container && popups?.revisionMarkup !== false)) return;
+    const unregister = editor.setRevisionMarkupChrome(
+      {
+        onRequest(request) {
+          if (popupsRef.current?.revisionMarkup === false) {
+            request.cancel();
+            return;
+          }
+          sessionRef.current?.cancel();
+          setActive(null);
+          setMarkupSession(request);
+          request.signal.addEventListener(
+            'abort',
+            () => setMarkupSession((previous) => (previous === request ? null : previous)),
+            { once: true }
+          );
+        },
+      },
+      { fallback: true }
+    );
+    return () => {
+      markupSessionRef.current?.cancel();
+      unregister();
+    };
+  }, [editor, container, popups?.revisionMarkup === false]);
+  useEffect(() => {
     setActive(null);
     setSession(null);
+    setMarkupSession(null);
   }, [editor, generation]);
   useEffect(() => {
+    if (popups?.revisionMarkup === false) markupSessionRef.current?.cancel();
     if (popups?.textFormField === false) sessionRef.current?.cancel();
     if (active && popups?.[active] === false) setActive(null);
   }, [popups, active]);
@@ -78,6 +112,7 @@ export function DialogProvider({
       ownsPageSetup: popups?.pageSetup !== undefined,
       open(kind, returnFocusTo) {
         sessionRef.current?.cancel();
+        markupSessionRef.current?.cancel();
         if (popupsRef.current?.[kind] === false) return;
         opener.current =
           returnFocusTo ?? (container?.ownerDocument.activeElement as HTMLElement | null);
@@ -99,6 +134,12 @@ export function DialogProvider({
         renderPopup(popups.paragraph, props)
       ) : (
         <DocxEditorParagraphDialog {...props} />
+      )
+    ) : markupSession && popups?.revisionMarkup !== false ? (
+      popups?.revisionMarkup ? (
+        renderPopup(popups.revisionMarkup, { session: markupSession }, markupSession)
+      ) : (
+        <DocxEditorRevisionMarkupDialog session={markupSession} />
       )
     ) : session && popups?.textFormField !== false ? (
       popups?.textFormField ? (

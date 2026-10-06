@@ -58,6 +58,7 @@ export interface UseDialogReturn<T extends object> {
   setValue<K extends keyof T>(name: K, value: T[K]): void;
   apply(): void;
   cancel(): void;
+  reset?(): void;
 }
 const props = {
   className: String,
@@ -76,7 +77,7 @@ export function createDialogComposition<
   name: string
 ): {
   parts: Record<
-    'Header' | 'Title' | 'Body' | 'Footer' | 'Apply' | 'Cancel' | 'Error',
+    'Header' | 'Title' | 'Body' | 'Footer' | 'Apply' | 'Cancel' | 'Error' | 'Reset',
     DefineComponent<DialogPartProps>
   > & { Field: DefineComponent<DialogPartProps & { name: Name }> };
   useContext: () => UseDialogReturn<T>;
@@ -113,7 +114,9 @@ export function createDialogComposition<
                 ? { type: 'button', disabled: !ctx.isEnabled.value, onClick: ctx.apply }
                 : partName === 'Cancel'
                   ? { type: 'button', onClick: ctx.cancel }
-                  : {};
+                  : partName === 'Reset'
+                    ? { type: 'button', disabled: !ctx.isEnabled.value, onClick: ctx.reset }
+                    : {};
             const merged = {
               // Host attributes fill gaps; the part's own wiring outranks them, so a stray
               // `onClick` or `data-docx-part` cannot silently detach the control from the
@@ -145,7 +148,7 @@ export function createDialogComposition<
             if (partName === 'Error' && !Object.keys(ctx.errors.value).length && !children)
               return null;
             return h(
-              partName === 'Apply' || partName === 'Cancel'
+              partName === 'Apply' || partName === 'Cancel' || partName === 'Reset'
                 ? 'button'
                 : partName === 'Title'
                   ? 'h2'
@@ -168,6 +171,7 @@ export function createDialogComposition<
     Apply: part('Apply'),
     Cancel: part('Cancel'),
     Error: part('Error'),
+    Reset: part('Reset'),
     Field: part('Field'),
   };
   function provideContext(context: UseDialogReturn<T>) {
@@ -215,7 +219,7 @@ export function createDialogComposition<
   }
   return {
     parts: parts as unknown as Record<
-      'Header' | 'Title' | 'Body' | 'Footer' | 'Apply' | 'Cancel' | 'Error',
+      'Header' | 'Title' | 'Body' | 'Footer' | 'Apply' | 'Cancel' | 'Error' | 'Reset',
       DefineComponent<DialogPartProps>
     > & { Field: DefineComponent<DialogPartProps & { name: Name }> },
     useContext,

@@ -155,6 +155,7 @@ export function createDialogParts<Name extends string, State>() {
   const Footer = makePart('footer');
   const Apply = makePart('apply');
   const Cancel = makePart('cancel');
+  const Reset = makePart('reset');
   const Error = makePart('error');
   const Field = makePart('field') as (props: DialogPartProps & { name: Name }) => ReactNode;
   function Composition({
@@ -200,7 +201,7 @@ export function createDialogParts<Name extends string, State>() {
       </Context.Provider>
     );
   }
-  return { Header, Title, Body, Footer, Apply, Cancel, Error, Field, Composition, useState };
+  return { Header, Title, Body, Footer, Apply, Cancel, Reset, Error, Field, Composition, useState };
 }
 
 /** Native modal lifecycle shared by packaged dialog renderers. */
@@ -218,7 +219,14 @@ export function DialogFrame({
   sessionSignal,
   restoreFocus = true,
 }: {
-  kind: 'pageSetup' | 'paragraph' | 'textFormField' | 'invalidTextFormField' | 'export' | 'print';
+  kind:
+    | 'revisionMarkup'
+    | 'pageSetup'
+    | 'paragraph'
+    | 'textFormField'
+    | 'invalidTextFormField'
+    | 'export'
+    | 'print';
   role?: 'dialog' | 'alertdialog';
   className?: string;
   style?: CSSProperties;

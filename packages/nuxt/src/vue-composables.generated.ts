@@ -35,6 +35,7 @@ export const VUE_COMPOSABLES = [
   'useParagraphStyle',
   'useReviewAuthors',
   'useReviewGutter',
+  'useRevisionMarkupDialog',
   'useScopeClassName',
   'useScopedChromeAnchor',
   'useTableBorderTargetLabel',

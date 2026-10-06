@@ -1,10 +1,15 @@
 import type { CanResult, ExecResult } from '../contracts/editor.ts';
 import type { RevisionMarkupDialog, ReviewModuleContribution } from '../contracts/modules.ts';
 import {
+  DEFAULT_REVISION_MARKUP,
   resolveRevisionMarkup,
+  type RevisionMarkupChromeHandlers,
+  type RevisionMarkupDialogSession,
   type RevisionMarkupOptions,
   type ResolvedRevisionMarkup,
 } from '../contracts/revision-markup.ts';
+import { createSessionChrome } from './text-form-field-chrome.ts';
+import type { PopupChromeRegistrationOptions } from './popup-sessions.ts';
 
 /** Owns viewer preferences and disposable review chrome outside the document store. */
 export function createRevisionMarkupState(
@@ -20,7 +25,9 @@ export function createRevisionMarkupState(
 ) {
   let value = resolveRevisionMarkup(initial);
   let dialog: RevisionMarkupDialog | null = null;
-  const listeners = new Set<() => void>();
+  let active: RevisionMarkupDialogSession | null = null;
+  let refreshDraft: (() => void) | null = null;
+  const chrome = createSessionChrome<RevisionMarkupDialogSession>();
   const canOpen = (): CanResult => {
     if (host.destroyed())
       return { ok: false, code: 'notFound', reason: 'the editor was destroyed' };
@@ -40,34 +47,97 @@ export function createRevisionMarkupState(
     if (JSON.stringify(next) === JSON.stringify(value)) return;
     value = next;
     host.apply(value);
-    for (const listener of [...listeners]) listener();
+    refreshDraft?.();
     host.changed(value);
+  };
+  const destroyDialog = (): void => {
+    if (active) {
+      active.cancel();
+      return;
+    }
+    const previous = dialog;
+    dialog = null;
+    previous?.destroy();
+  };
+  const createSession = (): RevisionMarkupDialogSession => {
+    const controller = new AbortController();
+    const listeners = new Set<() => void>();
+    let draft = value;
+    const publishDraft = (next: ResolvedRevisionMarkup): void => {
+      if (controller.signal.aborted || JSON.stringify(next) === JSON.stringify(draft)) return;
+      draft = next;
+      for (const listener of [...listeners]) listener();
+    };
+    const session: RevisionMarkupDialogSession = {
+      signal: controller.signal,
+      get: () => draft,
+      set(options) {
+        if (!controller.signal.aborted) publishDraft(resolveRevisionMarkup(options, draft));
+      },
+      reset: () => publishDraft(DEFAULT_REVISION_MARKUP),
+      subscribe(listener) {
+        if (controller.signal.aborted) return () => {};
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+      canApply: () => active === session && !controller.signal.aborted && canOpen().ok,
+      apply() {
+        if (!session.canApply()) return false;
+        set(draft);
+        session.cancel();
+        return true;
+      },
+      cancel() {
+        if (controller.signal.aborted) return;
+        if (active === session) {
+          active = null;
+          refreshDraft = null;
+        }
+        listeners.clear();
+        const previous = dialog;
+        dialog = null;
+        controller.abort();
+        previous?.destroy();
+      },
+    };
+    refreshDraft = () => publishDraft(value);
+    return session;
+  };
+  const showNative = (session: RevisionMarkupDialogSession): void => {
+    dialog = host.contribution()!.createRevisionMarkupDialog!({
+      ...session,
+      container: host.container()!,
+      translate: (key) => host.translate()?.(key),
+    });
+    if (session.signal.aborted) destroyDialog();
+    else dialog.open();
   };
   return {
     current: () => value,
     set,
     canOpen,
+    register(
+      handlers: RevisionMarkupChromeHandlers | null,
+      options?: PopupChromeRegistrationOptions
+    ) {
+      return chrome.register(handlers ?? { onRequest: showNative }, options);
+    },
     open(): ExecResult {
       const result = canOpen();
       if (!result.ok) return result;
-      dialog ??= host.contribution()!.createRevisionMarkupDialog!({
-        container: host.container()!,
-        get: () => value,
-        set,
-        subscribe(listener) {
-          listeners.add(listener);
-          return () => {
-            listeners.delete(listener);
-          };
-        },
-        translate: (key) => host.translate()?.(key),
-      });
-      dialog.open();
+      destroyDialog();
+      const session = createSession();
+      active = session;
+      try {
+        if (!chrome.request(session)) showNative(session);
+      } catch (error) {
+        session.cancel();
+        throw error;
+      }
       return { ok: true, changed: false };
     },
-    destroyDialog() {
-      dialog?.destroy();
-      dialog = null;
-    },
+    destroyDialog,
   };
 }

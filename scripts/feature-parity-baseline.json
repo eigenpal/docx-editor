@@ -35,6 +35,7 @@
     "components/ui/ZoomControl",
     "components/ui/fontPickerValue",
     "components/ui/normalizeFontFamilies",
+    "editor/revision-markup-fields",
     "hooks/useFixedDropdown",
     "index",
     "lib/watermark",
@@ -288,6 +289,12 @@
       ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": ["revision-markup-change"]
+    },
+    "editor/DocxEditorRevisionMarkupDialog": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["children", "className", "name", "preset", "props", "style"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
     },
     "editor/DocxEditorRoot": {
       "propsAddedInReact": [

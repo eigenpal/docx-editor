@@ -184,3 +184,26 @@ export function revisionMarkupStyle(
       return settings.formatting;
   }
 }
+
+/** A local settings draft owned by the editor. @public */
+export interface RevisionMarkupDialogSession {
+  /** Aborts on close, replacement, load, detach, destroy, or renderer disposal. */
+  readonly signal: AbortSignal;
+  /** Read the immutable draft. */
+  get(): ResolvedRevisionMarkup;
+  /** Merge validated options into the draft without committing preferences. */
+  set(options: RevisionMarkupOptions): void;
+  /** Restore default preferences in the draft only. */
+  reset(): void;
+  /** Observe draft changes, including effective external preference changes. */
+  subscribe(listener: () => void): () => void;
+  canApply(): boolean;
+  /** Commit the draft and close. Returns false after cancellation. */
+  apply(): boolean;
+  /** Close without committing the draft. */
+  cancel(): void;
+}
+/** Host rendering for the change tracking options dialog. @public */
+export interface RevisionMarkupChromeHandlers {
+  readonly onRequest?: (session: RevisionMarkupDialogSession) => void;
+}

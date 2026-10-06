@@ -1,4 +1,4 @@
-import type { RevisionMarkupOptions, ResolvedRevisionMarkup } from './revision-markup.ts';
+import type { RevisionMarkupDialogSession } from './revision-markup.ts';
 /**
  * `@docx-editor.dev/core/contracts/modules` — the `EditorModule` seam.
  *
@@ -68,11 +68,8 @@ export interface RevisionMarkupDialog {
 }
 
 /** Local settings access for review chrome. No document mutations occur here. @public */
-export interface RevisionMarkupDialogHost {
+export interface RevisionMarkupDialogHost extends RevisionMarkupDialogSession {
   readonly container: HTMLElement;
-  get(): ResolvedRevisionMarkup;
-  set(options: RevisionMarkupOptions): void;
-  subscribe(listener: () => void): () => void;
   readonly translate?: (key: string) => string | undefined;
 }
 

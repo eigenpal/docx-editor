@@ -99,6 +99,7 @@ Each entry accepts a `definePopup()` result, render callback, or `false`. Each p
 | `print`                  | `DocxEditorPrintDialogProps`               |
 | `pageSetup`, `paragraph` | Controlled dialog props: `open`, `onClose` |
 | `textFormField`          | `{ session: TextFormFieldDialogSession }`  |
+| `revisionMarkup`         | `{ session: RevisionMarkupDialogSession }` |
 | `hyperlink`              | `HyperLinkProps`                           |
 | `contentControl`         | `ContentControlProps`                      |
 | `equation`               | No state props                             |
@@ -116,6 +117,91 @@ Each entry accepts a `definePopup()` result, render callback, or `false`. Each p
 Omitted entries retain default behavior, including native widget and invalid-field dialogs. The packaged editor supplies defaults. `Root` mounts configured popups. Image and note overrides use their existing triggers. Explicit entries override `menu.onPageSetup`, `hyperlinkPopup`, and `contextMenu` shortcuts.
 
 To manage opening and closing yourself, set the entry to `false` and mount the popup. Use `definePopup()` to customize components while the editor manages opening. Toolbar menus and pickers use their compound `.Content` parts, outside this map.
+
+## Customize change tracking options
+
+The Pro review module opens **Change tracking options** through `popups.revisionMarkup`. Register your component with `definePopup()` to keep the toolbar trigger and editor session.
+
+In React, wrap the packaged dialog and replace its parts:
+
+```tsx
+import { DocxEditor, definePopup } from '@docx-editor.dev/react';
+import type { DocxEditorPopups, DocxEditorRevisionMarkupDialogProps } from '@docx-editor.dev/react';
+
+function ReviewOptions(props: DocxEditorRevisionMarkupDialogProps) {
+  return (
+    <DocxEditor.RevisionMarkupDialog {...props} className="review-options">
+      <DocxEditor.RevisionMarkupDialog.Field name="cells" hidden />
+      <DocxEditor.RevisionMarkupDialog.Apply asChild>
+        <button type="button" className="primary-button">
+          Save preferences
+        </button>
+      </DocxEditor.RevisionMarkupDialog.Apply>
+    </DocxEditor.RevisionMarkupDialog>
+  );
+}
+
+const popups: DocxEditorPopups = {
+  revisionMarkup: definePopup(ReviewOptions),
+};
+```
+
+In Vue, create a wrapper named `ReviewOptions.vue`:
+
+```vue
+<script setup lang="ts">
+import { DocxEditorRevisionMarkupDialog as Dialog } from '@docx-editor.dev/vue';
+import type { DocxEditorRevisionMarkupDialogProps } from '@docx-editor.dev/vue';
+
+const props = withDefaults(defineProps<DocxEditorRevisionMarkupDialogProps>(), { preset: true });
+const Apply = Dialog.Apply;
+const Field = Dialog.Field;
+</script>
+
+<template>
+  <Dialog v-bind="props" class-name="review-options">
+    <Field name="cells" hidden />
+    <Apply as-child>
+      <button type="button" class="primary-button">Save preferences</button>
+    </Apply>
+  </Dialog>
+</template>
+```
+
+Register the wrapper with `revisionMarkup: definePopup(ReviewOptions)`. Keep `preset: true` when forwarding Boolean props.
+
+The dialog exposes `Header`, `Title`, `Body`, `Footer`, `Apply`, `Cancel`, `Error`, `Field`, and `Reset`. `Field` names match the top-level `ResolvedRevisionMarkup` keys. Each style field contains its mark and color controls. The `cells` field contains all four cell colors.
+
+Use `useRevisionMarkupDialog()` inside the dialog to read its draft. It provides the shared dialog actions and `reset()`. `setValue()` replaces one top-level value. Spread the existing value when changing a nested property:
+
+```tsx
+import { useRevisionMarkupDialog } from '@docx-editor.dev/react';
+
+function RedInsertions() {
+  const draft = useRevisionMarkupDialog();
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        draft.setValue('insertions', {
+          ...draft.values.insertions,
+          color: 'red',
+        })
+      }
+    >
+      Use red insertions
+    </button>
+  );
+}
+```
+
+In Vue, read `draft.values.value`. Set `preset={false}` to arrange the named parts yourself. Keep an accessible title and dismissal control. Hidden fields retain their draft values.
+
+**Reset to defaults** changes the draft. **OK** applies it once through the editor settings. **Cancel** discards it. An external API update refreshes the open draft.
+
+Set `popups.revisionMarkup` to `false` to disable automatic rendering. To supply your own renderer outside React or Vue, register `setRevisionMarkupChrome({ onRequest })`. The request supplies the same draft session. Call `session.cancel()` when you dismiss it. Unregister the renderer when your host unmounts.
+
+Manual registrations take priority over adapter fallbacks. Pass `null` to select native rendering until you dispose that registration. The session signal aborts on dismissal, replacement, document load, detach, destroy, or renderer disposal. Stop using the session after it aborts.
 
 ## Customize export feedback
 
@@ -255,7 +341,7 @@ For handler setup and browser requirements, see [Print documents](/docs/2.x/guid
 
 ## Arrange parts and custom fields
 
-Page Setup, Paragraph Options, and Field Options expose compound parts. These include `Header`, `Title`, `Body`, `Footer`, `Apply`, `Cancel`, `Error`, and typed `Field` parts. Parts accept `className`, `style`, `hidden`, and `asChild`. Other popups retain their existing parts.
+Page Setup, Paragraph Options, Field Options, and Change tracking options expose compound parts. These include `Header`, `Title`, `Body`, `Footer`, `Apply`, `Cancel`, `Error`, and typed `Field` parts. Parts accept `className`, `style`, `hidden`, and `asChild`. Other popups retain their existing parts.
 
 Parts forward attributes such as `id`, `aria-*`, and `data-*` to the rendered element. Built-in behavior takes precedence: passing `onClick` to `Apply` does not replace its handler. Use `asChild` for a custom element, and preserve the supplied behavior.
 
@@ -265,7 +351,7 @@ Page Setup's `pageSize` part is its size selector. Paragraph's `tabStops` part c
 
 Paragraph's `direction` field selects left-to-right or right-to-left paragraph direction. Include it when you build a custom paragraph dialog. For direction behavior and limits, see [Right-to-left text](/docs/2.x/guides/right-to-left).
 
-Call `usePageSetupDialog()`, `useParagraphDialog()`, or `useTextFormFieldDialog()` inside a child of the matching dialog. Each supplies `values`, `setValue(name, value)`, `errors`, `isEnabled`, `apply()`, and `cancel()`. Vue exposes state as refs. Use these draft APIs to keep the editor's form session.
+Call `usePageSetupDialog()`, `useParagraphDialog()`, `useTextFormFieldDialog()`, or `useRevisionMarkupDialog()` inside a child of the matching dialog. Each supplies `values`, `setValue(name, value)`, `errors`, `isEnabled`, `apply()`, and `cancel()`. Vue exposes state as refs. Use these draft APIs to keep the editor's form session.
 
 A `Field` represents the labeled row; `asChild` does not adapt input value events. Page Setup dimensions use twips: 1,440 per inch. Paragraph also exposes mixed-selection state. See [React hooks](/docs/2.x/react/hooks#dialog-draft-contexts) or [Vue composables](/docs/2.x/vue/composables#dialog-draft-contexts) for types.
 

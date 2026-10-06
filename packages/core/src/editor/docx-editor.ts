@@ -2309,6 +2309,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       surface?.setRemoteCaretLabelHost(host);
     },
     setRevisionMarkup: revisionMarkupState.set,
+    setRevisionMarkupChrome: revisionMarkupState.register,
     setRevisionStyles(colors) {
       revisionStyleState.set(colors);
       surface?.setRevisionStyles(colors);
