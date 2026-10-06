@@ -95,13 +95,23 @@ export function projectBufferedRevisionMarkup(
 ): FieldAwarePiece[] {
   if (mode !== 'all-markup' || !filter?.revisionMarkup) return pieces;
   const result: FieldAwarePiece[] = [];
-  for (const piece of pieces) {
+  for (let piece of pieces) {
+    const revision = markupRevisionOf(piece, paragraph, filter);
+    const mark = revision && revisionMarkupStyle(filter.revisionMarkup, revision.kind).mark;
+    if (mark === 'caret' || mark === 'pound') {
+      // Replacement glyphs are final text. Pagination must not restore a live field value.
+      piece = { ...piece, measureText: undefined };
+      if (piece.fieldAtom) {
+        const { pageField: _pageField, pageRef: _pageRef, ...fieldAtom } = piece.fieldAtom;
+        piece = { ...piece, fieldAtom };
+      }
+    }
     const projected = projectRevisionMarkup(
       piece.text,
       piece.style,
       !!piece.projected,
       filter.revisionMarkup,
-      markupRevisionOf(piece, paragraph, filter)
+      revision
     );
     if (projected.hidden) {
       recordHiddenMarkup(sites, piece.start, piece.end, piece);

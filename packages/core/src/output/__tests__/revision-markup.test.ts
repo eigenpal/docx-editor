@@ -308,3 +308,19 @@ test.each([
   if (text) expect(spans[0]!.range.end).toBe(7);
   expect(root.querySelector('.docx-change-bar')).not.toBeNull();
 });
+
+test.each(['caret', 'pound'] as const)(
+  'deleted PAGE fields retain the %s replacement after pagination',
+  (mark) => {
+    const { layout } = render(
+      '<w:p><w:del w:id="1" w:author="Reviewer"><w:fldSimple w:instr="PAGE"/></w:del></w:p>',
+      { deletions: { mark } }
+    );
+    expect(
+      linesOf(layout)
+        .flatMap((line) => line.spans)
+        .map((span) => span.text)
+        .join('')
+    ).toBe(mark === 'caret' ? '^' : '#');
+  }
+);

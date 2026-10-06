@@ -30,9 +30,9 @@ export type {
   HighlightResult,
 } from './editor-highlights.ts';
 export type { DocumentChange, EditorEvents } from './editor-events.ts';
-import type { ResolveReviewChangesOptions } from './editor-review.ts';
+import type { DocumentEditingMode, ResolveReviewChangesOptions } from './editor-review.ts';
 import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
-export type { ResolveReviewChangesOptions } from './editor-review.ts';
+export type { DocumentEditingMode, ResolveReviewChangesOptions } from './editor-review.ts';
 export type { RevisionBatchResult } from '../store/store/revision-batch.ts';
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from './document.ts';
 import type { EditorExecOptions, EditorScope, HistoryGroup, ViewScope } from './editor-scope.ts';
@@ -961,15 +961,6 @@ export type ReviewItemPlacement =
   | ReviewCommentPlacement
   | ReviewRevisionPlacement
   | ReviewCustomPlacement;
-
-/**
- * How a keystroke reaches the document.
- *
- * `'suggesting'` changes what an edit MEANS rather than whether it is allowed: typing writes
- * `w:ins` and deleting writes `w:del` over the words it would have removed, so every change
- * arrives as a proposal somebody else accepts or rejects.
- */
-export type DocumentEditingMode = 'editing' | 'suggesting' | 'viewing';
 
 import type {
   TableBorderEdgeTarget,

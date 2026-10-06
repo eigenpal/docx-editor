@@ -56,3 +56,33 @@ test('markup emphasis preserves distinct authored formatting when visual styles 
   expect(bold.bold).toBe(true);
   expect(runStylesEqual(plain, bold)).toBe(false);
 });
+
+test.each(['caret', 'pound'] as const)(
+  'deleted PAGE fields keep %s markup after page finalization',
+  (mark) => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const opened = mountPaginatedSurface(
+      container,
+      docx(
+        '<w:p><w:del w:id="1" w:author="Reviewer"><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText>PAGE</w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/><w:fldChar w:fldCharType="end"/></w:r></w:del></w:p>'
+      ),
+      {
+        revisionDisplayMode: 'all-markup',
+        revisionMarkup: resolveRevisionMarkup({ deletions: { mark } }),
+      }
+    );
+    if (!opened.ok) throw new Error(opened.reason);
+    try {
+      expect(
+        linesOf(opened.surface.layout())
+          .flatMap((line) => line.spans)
+          .map((span) => span.text)
+          .join('')
+      ).toBe(mark === 'caret' ? '^' : '#');
+    } finally {
+      opened.surface.destroy();
+      container.remove();
+    }
+  }
+);

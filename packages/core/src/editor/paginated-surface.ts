@@ -1,4 +1,8 @@
-import { createSurfaceRevisionMarkup, revisionFacingPages } from './surface-revision-markup.ts';
+import {
+  createSurfaceRevisionMarkup,
+  revisionFacingPages,
+  revisionParagraphMarkVisible,
+} from './surface-revision-markup.ts';
 import { createDrawingGestures } from './surface-drawing-gestures.ts';
 import { createTextboxEditing } from './surface-textbox-editing.ts';
 import { createCaretComplexScriptResolver } from './surface-complex-script.ts';
@@ -89,7 +93,6 @@ import {
   findNode,
   isContentControl,
   ORIGIN_IDS,
-  parentNodeOf,
   parseTocInstruction,
   planTocEntries,
   resolveTocRowHeadings,
@@ -146,14 +149,12 @@ import {
 import { attachListResolveChangeEvidence } from '../layout/list-resolve.ts';
 import { refreshSurfaceRefFieldResults } from './surface-ref-field-refresh.ts';
 import { type RevisionAuthorFilter } from '../layout/revision-projection.ts';
-import { markRemovedInMode } from '../layout/revision-visibility.ts';
 import {
   createRevisionAuthorVisibility,
   type RevisionAuthorVisibility,
 } from './revision-author-visibility.ts';
 import { PROPERTY_CHANGE_WRAPPER_OF_OP } from '../store/store/tree-op-tracked-properties.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
-import { mergedFlowBlocks } from '../layout/story-roots.ts';
 import { selectionMarkRects } from '../layout/selection-rects.ts';
 import { paintSelectionOverlay, type OverlayRect } from '@docx-editor.dev/core/output';
 // By module path, like the roster walk below: dropping a retained paint is an engine
@@ -909,16 +910,7 @@ export function mountPaginatedSurface(
   );
   const paragraphMarkVisible = (paragraphId: string): boolean => {
     const part = partOfNodeId(session, paragraphId) ?? session.part();
-    const paragraph = findNode(part, paragraphId);
-    if (paragraph?.kind !== 'paragraph') return false;
-    const displayMode = revisionDisplayMode();
-    const authorFilter = revisionFilter();
-    if (!markRemovedInMode(paragraph, displayMode, authorFilter)) return true;
-    const parent = parentNodeOf(part, paragraphId);
-    if (!parent) return false;
-    return mergedFlowBlocks(parent.children, displayMode, authorFilter).some(
-      (block) => block.kind === 'paragraph' && block.id === paragraphId
-    );
+    return revisionParagraphMarkVisible(part, paragraphId, revisionDisplayMode(), revisionFilter());
   };
 
   let furnitureSource: ReturnType<typeof createFurnitureSource>;

@@ -3,7 +3,10 @@ import {
   type ResolvedRevisionMarkup,
 } from '../contracts/revision-markup.ts';
 import type { RevisionAuthorFilter } from '../layout/revision-projection.ts';
-import type { OoxmlPart } from '@docx-editor.dev/core/store';
+import { findNode, parentNodeOf, type OoxmlPart } from '@docx-editor.dev/core/store';
+import { markRemovedInMode } from '../layout/revision-visibility.ts';
+import { mergedFlowBlocks } from '../layout/story-roots.ts';
+import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
 
 /** Viewer settings participate in layout cache identity without changing the package. */
 export function createSurfaceRevisionMarkup(
@@ -52,5 +55,22 @@ export function revisionFacingPages(settings: OoxmlPart | null): boolean {
             attribute.localName === 'val' && ['0', 'false', 'off'].includes(attribute.value)
         )
     ) ?? false
+  );
+}
+
+/** Keep paragraph-mark editing aligned with revision paragraph joins. */
+export function revisionParagraphMarkVisible(
+  part: OoxmlPart,
+  paragraphId: string,
+  displayMode: RevisionDisplayMode,
+  authorFilter: RevisionAuthorFilter
+): boolean {
+  const paragraph = findNode(part, paragraphId);
+  if (paragraph?.kind !== 'paragraph') return false;
+  if (!markRemovedInMode(paragraph, displayMode, authorFilter)) return true;
+  const parent = parentNodeOf(part, paragraphId);
+  if (!parent) return false;
+  return mergedFlowBlocks(parent.children, displayMode, authorFilter).some(
+    (block) => block.kind === 'paragraph' && block.id === paragraphId
   );
 }
