@@ -719,6 +719,7 @@ export interface TableRowFragmentRecord {
  * blocks — its content belongs to the cell that started the merge.
  */
 export interface TableCellFragmentRecord {
+  readonly revisionShading?: 'inserted' | 'deleted' | 'merged' | 'split';
   /** Canonical node id of the `w:tc`. */
   readonly id: string;
   /** First grid column this cell occupies. */

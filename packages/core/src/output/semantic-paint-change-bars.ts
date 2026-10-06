@@ -1,3 +1,6 @@
+import type { RevisionStyleContext } from './revision-presentation.ts';
+import { reviewAuthorSlotColor } from './revision-presentation.ts';
+import { revisionMarkupColor, type ResolvedRevisionMarkup } from '../contracts/revision-markup.ts';
 // Change bars: the rule Word draws in the margin beside every line a tracked change touches.
 //
 // Measured against Word 16 (PDF export of tracked fixtures under 0.5", 1" and 2" margins,
@@ -46,7 +49,7 @@ import { isCarriedHeadRow } from '../layout/table-carried-head-row.ts';
 export const CHANGE_BARS_CLASS = 'docx-change-bars';
 const CHANGE_BAR_CLASS = 'docx-change-bar';
 
-/** Which bars a paint draws: the view's own, or none for the resolved views. */
+/** Which bars a paint draws. @public */
 export type ChangeBarsMode = 'all-markup' | 'simple-markup' | 'none';
 type DrawnChangeBarsMode = Exclude<ChangeBarsMode, 'none'>;
 
@@ -55,6 +58,8 @@ type BarStory = Exclude<SemanticRootStoryKind, 'note-separator'>;
 
 /** One rule in sheet coordinates (points from the page's top-left corner). */
 interface BarRun {
+  author?: string;
+  color?: string;
   top: number;
   bottom: number;
   story: BarStory;
@@ -63,9 +68,10 @@ interface BarRun {
   format: boolean;
 }
 
-/** The page's rules before they become DOM, so an unchanged set can skip the DOM. */
+/** Page change bars in page coordinates. @public */
 export interface PageChangeBars {
   readonly mode: ChangeBarsMode;
+  readonly color?: string;
   /** Whether the bars take the pointer as Word's toggle. */
   readonly toggle: boolean;
   /** Sheet-relative x of the column, already scaled and snapped to a whole pixel. */
@@ -83,6 +89,7 @@ const JOIN_TOLERANCE_PT = 0.5;
 
 function markKinds(run: BarRun, revisions: readonly RevisionAttribution[]): void {
   for (const revision of revisions) {
+    run.author ??= revision.author;
     switch (revision.kind) {
       case 'insert':
       case 'moveTo':
@@ -134,6 +141,7 @@ function collectParagraph(
       if (revisions.length > 0) pushLine(fragment, lines, index, frame, revisions, runs);
       continue;
     }
+    if (line.changeSites) revisions.push(...line.changeSites);
     for (const span of line.spans) {
       if (span.revisions) revisions.push(...span.revisions);
       // A run-property change is a revision with no wrapper: it lives in the run's own
@@ -212,6 +220,7 @@ function collectTable(fragment: TableFragmentRecord, frame: StoryFrame, runs: Ba
         top: row.box.y + frame.dy,
         bottom: Math.min(rowBottom + frame.dy, frame.limit),
         story: frame.story,
+        author: row.revisionAuthor,
         insertion: row.revisionKind === 'insert',
         deletion: row.revisionKind === 'delete',
         format: false,
@@ -275,6 +284,7 @@ function mergeRuns(runs: BarRun[]): BarRun[] {
     if (
       previous &&
       previous.story === run.story &&
+      previous.author === run.author &&
       run.top <= previous.bottom + JOIN_TOLERANCE_PT
     ) {
       previous.bottom = Math.max(previous.bottom, run.bottom);
@@ -292,15 +302,20 @@ function mergeRuns(runs: BarRun[]): BarRun[] {
  * The rules one page needs, in sheet coordinates: every root story the page paints, the
  * blocks of each (tracked rows and rotated cells included), and the text-box stories its
  * anchored drawings carry, each at the origin the painter places it at.
+ * @public
  */
 export function collectPageChangeBars(
   page: PageRecord,
   scale: number,
   mode: ChangeBarsMode,
-  toggle = false
+  toggle = false,
+  markup?: ResolvedRevisionMarkup,
+  facingPages = false,
+  colors?: RevisionStyleContext
 ): PageChangeBars {
   const runs: BarRun[] = [];
-  if (mode === 'none') return { mode, toggle, left: 0, runs, signature: 'none' };
+  if (mode === 'none' || markup?.changedLines.mark === 'none')
+    return { mode, toggle, left: 0, runs, signature: 'none' };
   const sheetHeight = page.box.height;
   const contentBottom = page.contentBox.y - page.box.y + page.contentBox.height;
   const pageOrigin = { x: page.box.x, y: page.box.y };
@@ -337,15 +352,38 @@ export function collectPageChangeBars(
   // Word's column: half the left margin in from the sheet edge, whatever the paragraph's
   // indent. A sheet with no left margin keeps the rule on the paper. Snapped to a whole
   // pixel: a one-pixel rule at a fractional x is two faint ones.
-  const left = Math.round(Math.max(0, (page.contentBox.x - page.box.x) / 2) * scale);
+  const right =
+    markup?.changedLines.mark === 'rightBorder' ||
+    (markup?.changedLines.mark === 'outsideBorder' && facingPages && page.index % 2 === 0);
+  const left = Math.round(
+    (right
+      ? page.box.width -
+        Math.max(0, (page.box.width - page.contentBox.width - (page.contentBox.x - page.box.x)) / 2)
+      : Math.max(0, (page.contentBox.x - page.box.x) / 2)) * scale
+  );
+  const color = markup
+    ? revisionMarkupColor(
+        markup.changedLines.color,
+        'var(--doc-review-author-0)',
+        mode === 'simple-markup'
+          ? 'var(--doc-review-change-bar-simple)'
+          : 'var(--doc-review-change-bar)'
+      )
+    : undefined;
   const merged = mergeRuns(runs);
-  let signature = `${mode}|${toggle ? 't' : ''}|${left}`;
+  if (markup?.changedLines.color === 'byAuthor') {
+    for (const run of merged)
+      run.color =
+        colors?.styles.get(run.author ?? '')?.color ??
+        reviewAuthorSlotColor(colors?.authorSlots.get(run.author ?? '') ?? 0);
+  }
+  let signature = `${mode}|${toggle ? 't' : ''}|${left}|${color ?? ''}`;
   for (const run of merged) {
     signature +=
       `|${run.story}:${run.top.toFixed(3)}-${run.bottom.toFixed(3)}` +
-      `${run.insertion ? 'i' : ''}${run.deletion ? 'd' : ''}${run.format ? 'f' : ''}`;
+      `${run.insertion ? 'i' : ''}${run.deletion ? 'd' : ''}${run.format ? 'f' : ''}:${run.color ?? ''}`;
   }
-  return { mode, toggle, left, runs: merged, signature };
+  return { mode, toggle, left, runs: merged, signature, ...(color ? { color } : {}) };
 }
 
 /**
@@ -391,9 +429,10 @@ export function renderPageChangeBars(
     bar.style.width = simple
       ? 'var(--doc-review-change-bar-simple-width)'
       : 'var(--doc-review-change-bar-width)';
-    bar.style.backgroundColor = simple
-      ? 'var(--doc-review-change-bar-simple)'
-      : 'var(--doc-review-change-bar)';
+    bar.style.backgroundColor =
+      run.color ??
+      bars.color ??
+      (simple ? 'var(--doc-review-change-bar-simple)' : 'var(--doc-review-change-bar)');
     if (bars.toggle) {
       // Word's toggle: the bar takes the pointer, and the surface swaps the view on a press.
       bar.dataset.docxChangeBarToggle = '';
@@ -413,9 +452,16 @@ export function paintPageChangeBars(
   page: PageRecord,
   scale: number,
   mode: ChangeBarsMode,
-  toggle = false
+  toggle = false,
+  markup?: ResolvedRevisionMarkup,
+  facingPages = false,
+  colors?: RevisionStyleContext
 ): HTMLElement | null {
-  return renderPageChangeBars(document, collectPageChangeBars(page, scale, mode, toggle), scale);
+  return renderPageChangeBars(
+    document,
+    collectPageChangeBars(page, scale, mode, toggle, markup, facingPages, colors),
+    scale
+  );
 }
 
 /**
@@ -429,10 +475,13 @@ export function reconcilePageChangeBars(
   page: PageRecord,
   scale: number,
   mode: ChangeBarsMode,
-  toggle = false
+  toggle = false,
+  markup?: ResolvedRevisionMarkup,
+  facingPages = false,
+  colors?: RevisionStyleContext
 ): void {
   const previous = sheet.querySelector<HTMLElement>(`:scope > .${CHANGE_BARS_CLASS}`);
-  const bars = collectPageChangeBars(page, scale, mode, toggle);
+  const bars = collectPageChangeBars(page, scale, mode, toggle, markup, facingPages, colors);
   if (previous && previous.dataset.docxChangeBars === bars.signature) return;
   previous?.remove();
   const next = renderPageChangeBars(document, bars, scale);

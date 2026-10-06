@@ -3,6 +3,7 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
+import { resolveRevisionMarkup } from '@docx-editor.dev/core/editor';
 import { MAX_OUTPUT_BYTES, positiveLimit } from './context.ts';
 import type { PdfExportOptions } from './types.ts';
 
@@ -17,7 +18,7 @@ export function validateOptions(options: PdfExportOptions): {
   for (const [name, choices] of [
     ['fidelityPolicy', ['strict', 'best-effort']],
     ['fontPolicy', ['strict', 'best-effort']],
-    ['displayMode', ['proposed', 'original', 'all-markup']],
+    ['displayMode', ['proposed', 'original', 'all-markup', 'simple-markup']],
   ] as const) {
     const value = options[name];
     if (value !== undefined && !(choices as readonly unknown[]).includes(value))
@@ -55,6 +56,18 @@ export function validateOptions(options: PdfExportOptions): {
   for (const name of ['measurer', 'producer', 'reuseAcrossRevisions'] as const) {
     if ((options as Record<string, unknown>)[name] !== undefined)
       throw new TypeError(`${name} is not supported by exportPdf`);
+  }
+  if (options.revisionMarkup !== undefined) resolveRevisionMarkup(options.revisionMarkup);
+  if (options.revisionAuthorSlots !== undefined) {
+    if (
+      !options.revisionAuthorSlots ||
+      typeof options.revisionAuthorSlots !== 'object' ||
+      Array.isArray(options.revisionAuthorSlots) ||
+      Object.values(options.revisionAuthorSlots).some(
+        (slot) => !Number.isSafeInteger(slot) || slot < 0
+      )
+    )
+      throw new TypeError('revisionAuthorSlots values must be nonnegative safe integers.');
   }
   const { timeoutMs = 60_000, maxOutputBytes = MAX_OUTPUT_BYTES, maxPages = 10_000 } = options;
   return {

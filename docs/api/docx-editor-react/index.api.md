@@ -123,9 +123,17 @@ import { RefreshLocation } from '@docx-editor.dev/core/editor';
 import { RefreshResult } from '@docx-editor.dev/core/editor';
 import { RefreshSubmission } from '@docx-editor.dev/core/editor';
 import { RefreshUpdate } from '@docx-editor.dev/core/editor';
+import { ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
 import { ReviewAuthorInfo } from '@docx-editor.dev/core/editor';
+import { ReviewDisplayMode } from '@docx-editor.dev/core/editor';
 import { RevisionAuthorAssignments } from '@docx-editor.dev/core/editor';
 import { RevisionAuthorStyle } from '@docx-editor.dev/core/editor';
+import { RevisionChangedLinesMark } from '@docx-editor.dev/core/editor';
+import { RevisionDeletionMark } from '@docx-editor.dev/core/editor';
+import { RevisionMarkupColor } from '@docx-editor.dev/core/editor';
+import { RevisionMarkupMark } from '@docx-editor.dev/core/editor';
+import { RevisionMarkupNamedColor } from '@docx-editor.dev/core/editor';
+import { RevisionMarkupOptions } from '@docx-editor.dev/core/editor';
 import { RevisionStyles } from '@docx-editor.dev/core/editor';
 import { RulerIndent } from '@docx-editor.dev/core/editor';
 import { rulerPageBox } from '@docx-editor.dev/core/editor';
@@ -943,6 +951,8 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
     readonly PrintDialog: typeof DocxEditorPrintDialog;
     // (undocumented)
+    readonly RevisionMarkup: typeof DocxEditorRevisionMarkup;
+    // (undocumented)
     readonly Root: typeof DocxEditorRoot;
     readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
     // (undocumented)
@@ -1221,12 +1231,15 @@ export interface DocxEditorProps {
     onFontError?: (error: EditorFontError) => void;
     onOpen?: () => void;
     onReady?: (editor: Editor) => void;
+    onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
     onSave?: () => void;
     onTitleChange?: (title: string) => void;
     popups?: DocxEditorPopups;
     readonly renderTitleBarLeft?: () => DocxEditorChildren;
     // (undocumented)
     readonly renderTitleBarRight?: () => DocxEditorChildren;
+    reviewDisplayMode?: ReviewDisplayMode;
+    revisionMarkup?: RevisionMarkupOptions;
     rulers?: boolean;
     t?: (key: string, params?: Record<string, string | number>) => string;
     title?: string;
@@ -1249,6 +1262,15 @@ export interface DocxEditorRef {
 }
 
 // @public
+export function DocxEditorRevisionMarkup(props: DocxEditorRevisionMarkupProps): null;
+
+// @public
+export interface DocxEditorRevisionMarkupProps extends RevisionMarkupOptions {
+    // (undocumented)
+    onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
+}
+
+// @public
 export function DocxEditorRoot(props: DocxEditorRootProps): react.JSX.Element;
 
 // @public
@@ -1259,6 +1281,8 @@ export interface DocxEditorRootListeners {
     onFontError?: (error: EditorFontError) => void;
     // (undocumented)
     onReady?: (editor: Editor) => void;
+    // (undocumented)
+    onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
 }
 
 // @public
@@ -1275,7 +1299,10 @@ export interface DocxEditorRootProps {
     onChange?: (change: DocumentChange) => void;
     onFontError?: (error: EditorFontError) => void;
     onReady?: (editor: Editor) => void;
+    onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
     popups?: DocxEditorPopups;
+    reviewDisplayMode?: ReviewDisplayMode;
+    revisionMarkup?: RevisionMarkupOptions;
     tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
     translate?: (key: string, params?: Record<string, string | number>) => string;
     zoom?: number;
@@ -2268,6 +2295,8 @@ export { RefreshSubmission }
 
 export { RefreshUpdate }
 
+export { ResolvedRevisionMarkup }
+
 // @public
 export const REVIEW_MARKERS_GUTTER = 44;
 
@@ -2275,6 +2304,8 @@ export const REVIEW_MARKERS_GUTTER = 44;
 export const REVIEW_PANE_GUTTER = 316;
 
 export { ReviewAuthorInfo }
+
+export { ReviewDisplayMode }
 
 // @public
 export interface ReviewGutter {
@@ -2314,6 +2345,18 @@ export interface ReviewRailRegistry {
 export { RevisionAuthorAssignments }
 
 export { RevisionAuthorStyle }
+
+export { RevisionChangedLinesMark }
+
+export { RevisionDeletionMark }
+
+export { RevisionMarkupColor }
+
+export { RevisionMarkupMark }
+
+export { RevisionMarkupNamedColor }
+
+export { RevisionMarkupOptions }
 
 export { RevisionStyles }
 

@@ -1,3 +1,5 @@
+import type { ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
+import { markupColor, spanMarkup } from './revision-markup.ts';
 /*
 Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
@@ -271,7 +273,9 @@ export class TextWriter {
     readonly doc: PDFDocument,
     readonly session: FontBackedExportCapabilities,
     readonly work: Work,
-    readonly showRevisionMarkup: boolean
+    readonly showRevisionMarkup: boolean,
+    readonly revisionMarkup?: ResolvedRevisionMarkup,
+    readonly authorSlots: ReadonlyMap<string, number> = new Map()
   ) {}
   paint(visit: SemanticSpanVisit, page: PDFPage): string {
     const { span, line, storyOrigin, absoluteBox } = visit;
@@ -361,6 +365,26 @@ export class TextWriter {
     const deleted = revisions.some((r) => r.kind === 'delete' || r.kind === 'moveFrom');
     if (insert) foreground = '008000';
     if (deleted) foreground = 'C00000';
+    const markup =
+      this.showRevisionMarkup && this.revisionMarkup
+        ? spanMarkup(visit, this.revisionMarkup)
+        : null;
+    if (markup)
+      foreground =
+        markup.mark === 'none'
+          ? style.color
+          : markupColor(
+              markup.color,
+              this.authorSlots.get(markup.author) ?? 0,
+              style.color ?? '000000'
+            );
+    const revisionUnderline = markup
+      ? markup.mark === 'underline' || markup.mark === 'doubleUnderline'
+      : insert;
+    const revisionStrike = markup
+      ? markup.mark === 'strikethrough' || markup.mark === 'doubleStrikethrough'
+      : deleted;
+    const replacesAuthoredDecoration = markup !== null && (revisionUnderline || revisionStrike);
     // A color face is never selected as a text font: its glyphs are painted as layers below.
     const out = [`${color(foreground)} rg`, 'BT'];
     if (!face.colorLayers) out.push(`/${face.name} ${n(size)} Tf`);
@@ -614,8 +638,13 @@ export class TextWriter {
         `${color(c)} rg ${n(left)} ${n(y - thickness / 2)} ${n(painted)} ${n(thickness)} re f`
       );
     };
-    if (style.underline || insert) {
-      const variant = style.underline?.variant ?? 'single';
+    if (revisionUnderline || (!replacesAuthoredDecoration && style.underline)) {
+      const variant =
+        revisionUnderline && markup
+          ? markup.mark === 'doubleUnderline'
+            ? 'double'
+            : 'single'
+          : (style.underline?.variant ?? 'single');
       // `post.underlinePosition` is the TOP of the stroke, not its centre, and the reference
       // puts both the offset and the thickness on whole device units. Times New Roman at
       // 10.5pt suggests 1.1433pt and 0.5127pt; the reference draws every underline in
@@ -644,7 +673,7 @@ export class TextWriter {
       const position =
         baseline - Math.round(rawOffset / PDF_PAINT_GRID_PT) * PDF_PAINT_GRID_PT - thickness / 2;
       {
-        const c = style.underline?.color ?? foreground;
+        const c = replacesAuthoredDecoration ? foreground : (style.underline?.color ?? foreground);
         const supported = [
           'single',
           'double',
@@ -721,7 +750,7 @@ export class TextWriter {
         }
       }
     }
-    if (style.strike || style.doubleStrike || deleted) {
+    if (revisionStrike || (!replacesAuthoredDecoration && (style.strike || style.doubleStrike))) {
       // On the device grid like the underline: a whole number of units thick, at a whole
       // number of units above the baseline. A face with no OS/2 strike metrics still draws.
       // Its stroke borrows the underline weight, and it sits at three tenths of the ascent,
@@ -744,7 +773,8 @@ export class TextWriter {
         Math.max(1, Math.round(rawThickness / PDF_PAINT_GRID_PT)) * PDF_PAINT_GRID_PT;
       const position = baseline + Math.round(rawOffset / PDF_PAINT_GRID_PT) * PDF_PAINT_GRID_PT;
       lineRule(position, thickness);
-      if (style.doubleStrike) lineRule(position + thickness * 2, thickness);
+      if (replacesAuthoredDecoration ? markup?.mark === 'doubleStrikethrough' : style.doubleStrike)
+        lineRule(position + thickness * 2, thickness);
     }
     return out.join('\n');
   }

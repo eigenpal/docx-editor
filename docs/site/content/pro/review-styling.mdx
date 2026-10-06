@@ -5,7 +5,9 @@ category: 'Pro'
 order: 62
 ---
 
-Review styling changes presentation only. It does not change the document file.
+Revision markup preferences belong to each viewer. They do not change saved revision records or other participants' preferences.
+
+The `trackFormatting` preference also controls whether future editor formatting commands create formatting revisions. Text edits remain tracked.
 
 The same author color applies to [tracked changes](/docs/2.x/pro/tracked-changes) and [comments](/docs/2.x/pro/comments).
 
@@ -139,6 +141,73 @@ editor.setRevisionStyles({
 ```
 
 An author value can be a color string or an author style object. A headless host can also pass `revisionStyles` during editor creation.
+
+## Set revision markup preferences
+
+Pass `revisionMarkup` when you create the editor. Call `setRevisionMarkup(partial)` to update individual preferences. The editor keeps unspecified preferences. Read the full resolved value from `editor.snapshot().revisionMarkup`.
+
+Use this example to change deletion marks and formatting tracking:
+
+```ts
+editor.setRevisionMarkup({
+  deletions: { mark: 'doubleStrikethrough', color: 'red' },
+  trackFormatting: false,
+});
+
+const preferences = editor.snapshot().revisionMarkup;
+```
+
+Listen for `revisionMarkupChange` to save the resolved preferences for each user. This example uses the host's preference storage:
+
+```ts
+const unsubscribe = editor.on('revisionMarkupChange', (preferences) => {
+  localStorage.setItem('revision-markup', JSON.stringify(preferences));
+});
+
+// Call unsubscribe() when the host stops observing this editor.
+```
+
+Pass those preferences as `revisionMarkup` when that user opens another editor. The host owns storage. The editor does not write these preferences into the DOCX package or collaboration state.
+
+React and Vue expose a controlled `revisionMarkup` prop and an `onRevisionMarkupChange` callback. Store callback values in the prop to accept changes. If the prop stays unchanged, the editor restores its value after the framework renders. Omitted fields use defaults. Omit the prop to allow independent API and dialog changes.
+
+Use `DocxEditor.RevisionMarkup` inside the editor root for partial declarative configuration. Do not combine this component with the root's controlled prop. Pass preference fields directly to the component:
+
+```tsx
+<DocxEditor.RevisionMarkup
+  insertions={{ mark: 'doubleUnderline', color: 'blue' }}
+  changedLines={{ mark: 'rightBorder' }}
+  trackFormatting={false}
+/>
+```
+
+Vue also exports `DocxEditorRevisionMarkup`. Its `revisionMarkupChange` event returns the same resolved value. Use one configuration source for each editor.
+
+`revisionStyles` continues to control author colors, backgrounds, classes, and avatars. `revisionMarkup` controls revision marks, revision colors, change bars, and cell shading. Named colors use theme tokens. Markup preferences do not accept arbitrary CSS color strings.
+
+Set the initial review display with `reviewDisplayMode`: `simple-markup`, `all-markup`, `proposed`, or `original`. Display preferences do not accept or reject revisions.
+
+### Use the settings dialog
+
+In the review toolbar group, select **Change tracking options**. The Pro review module provides this dialog in React and Vue. Hosts can hide or replace its toolbar control through the normal toolbar composition API.
+
+The dialog groups settings into **Markup**, **Moves**, **Table cell highlighting**, and **Formatting**. Each mark and color control has a label. The changed-lines preview shows the selected bar position.
+
+Select **OK** to apply the draft in one update. Select **Cancel** to discard the draft. **Reset to defaults** restores the default draft. Select **OK** to apply it. An API update also updates an open dialog.
+
+### Control tracking behavior
+
+Clear **Track moves** to display imported moves with the insertion and deletion styles. This preference changes their display only. Creating move revisions remains unsupported.
+
+Clear **Track formatting** to apply future formatting commands without formatting revision records. Text insertions and deletions remain tracked. Existing formatting revisions remain available for review. The document's `w:doNotTrackFormatting` setting also prevents new formatting revisions. Turning on the viewer preference does not override that document setting.
+
+These host preferences are separate from the Office-shaped document automation model. The document model does not expose a competing revision-markup method. `View.revisionsFilter`, including its `markup` and `view` members, remains a separate compatibility task.
+
+### Export the same preferences
+
+Pass `editor.snapshot().revisionMarkup` to the PDF exporter's `revisionMarkup` option. Pass `editor.snapshot().reviewDisplayMode` as `displayMode`. The PDF exporter supports all four review views, including Simple Markup change bars. A reusable PDF session takes `revisionMarkup` when you open the session. Its layout and PDF output use those preferences together.
+
+PDF output uses the named colors' print values and the default author color ramp. Host CSS and `revisionStyles` overrides do not change PDF colors. Pass `revisionAuthorSlots` to preserve the session's author color assignments after edits. The File menu export handler receives this mapping with the captured viewer preferences.
 
 ## Read document authors
 

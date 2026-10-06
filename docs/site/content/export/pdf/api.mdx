@@ -26,6 +26,8 @@ Font policy and resource failures throw typed errors.
 
 `exportPdfFrom(session, options?)` returns `Promise<PdfExportResult>` without reopening the document. It accepts `PdfProjectionOptions`: `comments`, `fidelityPolicy`, `displayMode`, `timeoutMs`, `maxPages`, `maxOutputBytes`, and `signal`.
 
+Pass `revisionMarkup` and `revisionAuthorSlots` when opening the session. `exportPdfFrom` preserves these values and does not accept replacements.
+
 Omit `displayMode` to use the session's default projection. An explicit mode uses the session's cached `layoutFor(mode)` projection. Result `timings.openMs` is `0` because this call does not open the document.
 
 Use `OpenPdfDocumentForExportOptions` for font and layout settings when opening. Use `PdfExportSession` when you need to name the session type. An ordinary Core session with approximate measurement cannot produce PDF output. `exportPdfFrom` rejects a session that lacks admitted fonts and glyph capabilities.
@@ -45,7 +47,9 @@ For both formats from one layout, see [Compare PDF and Markdown conversion](/doc
 | Option | Default | Behavior |
 | --- | --- | --- |
 | `fidelityPolicy` | `'strict'` | Reject unsupported or approximate PDF content. `'best-effort'` returns available output with diagnostics. |
-| `displayMode` | `'proposed'` | Choose `'proposed'`, `'original'`, or `'all-markup'` for tracked changes. |
+| `revisionAuthorSlots` | Omitted | Author names mapped to stable, nonnegative safe integer color slots from the editor session. |
+| `revisionMarkup` | Omitted | Viewer markup preferences. Set during session creation to keep layout and paint consistent. |
+| `displayMode` | `'proposed'` | Choose `'proposed'`, `'original'`, `'all-markup'`, or `'simple-markup'` for tracked changes. |
 | `comments` | `true` | Include native PDF annotations. |
 | `useSystemFonts` | `true` | Search supported installed font files. Disable for consistent font selection across hosts. |
 | `fonts` | — | Resolve these font sources before installed and packaged sources. |
@@ -67,6 +71,10 @@ For both formats from one layout, see [Compare PDF and Markdown conversion](/doc
 Resource and font deadlines must be positive, finite numbers no greater than `2147483647`. The conversion deadline also applies during those phases.
 
 `measurer`, `producer`, and `reuseAcrossRevisions` are unsupported and cause `TypeError`. PDF conversion requires the fonts used during layout to encode the positioned glyphs.
+
+PDF output uses named colors and the default author color ramp. Host CSS and `revisionStyles` overrides do not change PDF colors. `revisionAuthorSlots` preserves author assignments after session edits. Omit it to assign colors from document order.
+
+Use `RevisionMarkupOptions` for partial preferences and `ResolvedRevisionMarkup` for complete preferences. Both types are available from `@docx-editor.dev/docx-to-pdf`.
 
 See [Configure PDF fonts](/docs/2.x/export/pdf/fonts) for font sources and policy details.
 

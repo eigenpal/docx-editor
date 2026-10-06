@@ -1,3 +1,4 @@
+import { revisionMarkupHidesDrawing } from './revision-markup-projection.ts';
 import {
   cellTabReplayScope,
   shouldReplayCellTab,
@@ -339,7 +340,10 @@ export function breakParagraph(
     if (!flow?.inlineDrawingLayout) return starts;
     const offsets = drawingModelOffsetsInParagraph(paragraph);
     for (const atom of anchoredDrawingAtomsInParagraph(paragraph, flow.inlineDrawingLayout)) {
-      if (!revisionsVisible(atom.revisions, anchorDisplayMode, flow?.revisionAuthorFilter))
+      if (
+        !revisionsVisible(atom.revisions, anchorDisplayMode, flow?.revisionAuthorFilter) ||
+        revisionMarkupHidesDrawing(atom.revisions, anchorDisplayMode, flow?.revisionAuthorFilter)
+      )
         continue;
       if (atom.projection.wrap !== 'topAndBottom') continue;
       const modelStart = offsets.get(atom.atomId);
@@ -353,7 +357,10 @@ export function breakParagraph(
     if (!flow?.inlineDrawingLayout) return starts;
     const offsets = drawingModelOffsetsInParagraph(paragraph);
     for (const atom of anchoredDrawingAtomsInParagraph(paragraph, flow.inlineDrawingLayout)) {
-      if (!revisionsVisible(atom.revisions, anchorDisplayMode, flow?.revisionAuthorFilter))
+      if (
+        !revisionsVisible(atom.revisions, anchorDisplayMode, flow?.revisionAuthorFilter) ||
+        revisionMarkupHidesDrawing(atom.revisions, anchorDisplayMode, flow?.revisionAuthorFilter)
+      )
         continue;
       if (
         atom.projection.wrap === 'topAndBottom' ||

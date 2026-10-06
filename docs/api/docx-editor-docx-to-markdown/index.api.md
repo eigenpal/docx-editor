@@ -6,9 +6,6 @@
 
 /// <reference lib="dom" />
 
-import { createFontSource } from '@docx-editor.dev/core/editor';
-import { defineFontResolver } from '@docx-editor.dev/core/editor';
-
 // @public
 export type AnchoredDrawingLayoutFallback = 'unresolvable-frame' | 'page-defer-exhausted';
 
@@ -40,12 +37,23 @@ export interface AnchoredDrawingRecord extends Omit<InlineDrawingRecord, 'kind' 
     readonly wrap: Exclude<ImageWrapTarget, 'inline'>;
 }
 
-export { createFontSource }
+// @public
+export function createFontSource(bytes: Uint8Array, request: FontFaceRequest & {
+    readonly faceIndex?: number;
+}, options?: {
+    readonly id?: string;
+    readonly maxFontBytes?: number;
+}): {
+    readonly source: FontSource;
+} | {
+    readonly failure: FontLoadFailure;
+};
 
 // @public
 export function createMarkdownZip(result: MarkdownExportResult): Promise<Uint8Array>;
 
-export { defineFontResolver }
+// @public
+export function defineFontResolver<T extends FontResolver>(resolve: T): MarkedFontResolver<T>;
 
 // @public
 export class DocumentOpenError extends Error {
@@ -228,15 +236,19 @@ export interface ExportSemanticLayout extends SemanticLayout {
     readonly destinations?: readonly ExportDestinationGeometry[];
     // (undocumented)
     readonly documentMetadata?: ExportDocumentMetadata;
+    readonly facingPages?: boolean;
     // (undocumented)
     readonly reviewArtifacts: readonly SemanticReviewArtifactRecord[];
+    readonly reviewDisplayMode?: ReviewDisplayMode;
+    readonly revisionAuthorSlots?: Readonly<Record<string, number>>;
+    readonly revisionMarkup?: ResolvedRevisionMarkup;
 }
 
 // @public
 export interface ExportSession {
     dispose(): void;
     layout(): Promise<ExportSemanticLayout>;
-    layoutFor(displayMode: RevisionDisplayMode): Promise<ExportSemanticLayout>;
+    layoutFor(displayMode: ReviewDisplayMode): Promise<ExportSemanticLayout>;
     validatedImageBytes(source: InlineDrawingRecord | AnchoredDrawingRecord | ListMarkerPictureRecord): Uint8Array | null;
 }
 
@@ -646,12 +658,14 @@ export function openDocumentForExport(source: ExportDocumentSource, options?: Op
 // @public
 export interface OpenDocumentForExportOptions {
     readonly convertPreservedImage?: PreservedImageConverter;
-    readonly displayMode?: RevisionDisplayMode;
+    readonly displayMode?: ReviewDisplayMode;
     readonly imageDecodePort?: ImageDecodePort;
     readonly measurer?: TextMeasurer;
     readonly producer?: string;
     readonly resourceTimeoutMs?: number;
     readonly reuseAcrossRevisions?: boolean;
+    readonly revisionAuthorSlots?: Readonly<Record<string, number>>;
+    readonly revisionMarkup?: RevisionMarkupOptions;
     readonly signal?: AbortSignal;
 }
 
@@ -690,6 +704,39 @@ signal?: AbortSignal) => Promise<Readonly<{
 }> | null>;
 
 // @public
+export interface ResolvedRevisionMarkup {
+    // (undocumented)
+    readonly cells: {
+        readonly deleted: RevisionMarkupNamedColor | 'none';
+        readonly inserted: RevisionMarkupNamedColor | 'none';
+        readonly merged: RevisionMarkupNamedColor | 'none';
+        readonly split: RevisionMarkupNamedColor | 'none';
+    };
+    // (undocumented)
+    readonly changedLines: RevisionMarkupStyle<RevisionChangedLinesMark>;
+    // (undocumented)
+    readonly deletions: RevisionMarkupStyle<RevisionDeletionMark>;
+    // (undocumented)
+    readonly formatting: RevisionMarkupStyle;
+    // (undocumented)
+    readonly insertions: RevisionMarkupStyle;
+    // (undocumented)
+    readonly movedFrom: RevisionMarkupStyle<RevisionDeletionMark>;
+    // (undocumented)
+    readonly movedTo: RevisionMarkupStyle;
+    // (undocumented)
+    readonly trackFormatting: boolean;
+    // (undocumented)
+    readonly trackMoves: boolean;
+}
+
+// @public
+export type ReviewDisplayMode = RevisionDisplayMode | 'simple-markup';
+
+// @public
+export const REVISION_MARKUP_COLORS: readonly ['black', 'blue', 'turquoise', 'green', 'pink', 'red', 'yellow', 'white', 'darkBlue', 'teal', 'darkGreen', 'violet', 'darkRed', 'darkYellow', 'gray50', 'gray25', 'lightBlue', 'lightYellow', 'lightOrange'];
+
+// @public
 export interface RevisionAttribution {
     // (undocumented)
     readonly author: string;
@@ -702,8 +749,36 @@ export interface RevisionAttribution {
     readonly nodeId: string;
 }
 
+// @public (undocumented)
+export type RevisionChangedLinesMark = 'none' | 'leftBorder' | 'rightBorder' | 'outsideBorder';
+
+// @public (undocumented)
+export type RevisionDeletionMark = RevisionMarkupMark | 'hidden' | 'caret' | 'pound';
+
 // @public
 export type RevisionDisplayMode = 'all-markup' | 'proposed' | 'original';
+
+// @public (undocumented)
+export type RevisionMarkupColor = RevisionMarkupNamedColor | 'byAuthor' | 'auto';
+
+// @public (undocumented)
+export type RevisionMarkupMark = 'none' | 'colorOnly' | 'bold' | 'italic' | 'underline' | 'doubleUnderline' | 'strikethrough' | 'doubleStrikethrough';
+
+// @public (undocumented)
+export type RevisionMarkupNamedColor = (typeof REVISION_MARKUP_COLORS)[number];
+
+// @public
+export type RevisionMarkupOptions = {
+    readonly [K in keyof ResolvedRevisionMarkup]?: ResolvedRevisionMarkup[K] extends boolean ? boolean : Partial<ResolvedRevisionMarkup[K]>;
+};
+
+// @public (undocumented)
+export interface RevisionMarkupStyle<Mark extends string = RevisionMarkupMark> {
+    // (undocumented)
+    readonly color: RevisionMarkupColor;
+    // (undocumented)
+    readonly mark: Mark;
+}
 
 // @public
 export type SemanticArtifactRootStoryKind = 'body' | 'header' | 'footer' | 'footnote' | 'endnote' | 'note-separator';
@@ -844,6 +919,7 @@ export interface SemanticTrackedChangeArtifactRecord {
     readonly replacedText: string;
     // (undocumented)
     readonly replyIds: readonly string[];
+    readonly structuralChanges?: readonly ('rowInsert' | 'rowDelete' | 'cellInsert' | 'cellDelete' | 'cellMerge' | 'numberingInsert')[];
     // (undocumented)
     readonly text: string;
 }

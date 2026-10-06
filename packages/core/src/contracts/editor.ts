@@ -1,3 +1,4 @@
+import type { ResolvedRevisionMarkup } from './revision-markup.ts';
 /**
  * `@docx-editor.dev/core/contracts/editor` — the `Editor` contract adapters are written against.
  *
@@ -1022,6 +1023,8 @@ export interface EditorCommands
    * adapters and any host chrome read one answer.
    */
   toggleReviewPane: Record<never, never>;
+  /** Open the local review settings dialog supplied by the review module. */
+  openRevisionMarkupDialog: Record<never, never>;
   /** Word's Show/Hide paragraph marks; presentation only. */
   toggleParagraphMarks: Record<never, never>;
   /** Word's Protect Document: enforce filling-in-forms protection, or lift the enforced one. */
@@ -1623,6 +1626,8 @@ export interface EditorSnapshot {
   readonly documentProtection?: DocumentProtectionState | null;
   /** The displayed revision projection. The document and its revision history stay unchanged. */
   readonly reviewDisplayMode?: ReviewDisplayMode;
+  /** Resolved local viewer preferences. Never saved into the document. */
+  readonly revisionMarkup: ResolvedRevisionMarkup;
   /**
    * Whether the document carries review content — tracked changes or comment
    * anchors — independent of any registered review module.

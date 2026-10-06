@@ -1,3 +1,8 @@
+import {
+  resolveRevisionMarkup,
+  type RevisionMarkupOptions,
+  type ResolvedRevisionMarkup,
+} from '../contracts/revision-markup.ts';
 // One neutral document layout session shared by all exporters.
 
 import {
@@ -35,7 +40,11 @@ import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawi
 import type { ListMarkerPictureRecord } from '../layout/semantic-records.ts';
 import type { SemanticLayout, TextMeasurer } from '../layout/semantic-records.ts';
 import type { SemanticReviewArtifactRecord } from '../layout/review-artifact-records.ts';
-import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
+import {
+  layoutProjectionOf,
+  withPlainResolvedMarkup,
+  type ReviewDisplayMode,
+} from '../layout/revision-projection.ts';
 import { DEFAULT_REVISION_DISPLAY_MODE } from '../layout/revision-projection.ts';
 import {
   attachExportDocumentResources,
@@ -57,13 +66,17 @@ export type ExportDocumentSource = Uint8Array | HeadlessDocumentView;
 
 /** Shared session options; translators add their own format-specific options. @public */
 export interface OpenDocumentForExportOptions {
+  /** Viewer markup applied before layout and export. */
+  readonly revisionMarkup?: RevisionMarkupOptions;
+  /** Stable author color slots captured from the editor session. */
+  readonly revisionAuthorSlots?: Readonly<Record<string, number>>;
   /**
    * Revision projection applied before records reach an exporter. Default: `all-markup`.
    *
    * The safe reader default keeps every pending insertion and deletion visible. Choose
    * `proposed` or `original` explicitly only when a resolved view is intended.
    */
-  readonly displayMode?: RevisionDisplayMode;
+  readonly displayMode?: ReviewDisplayMode;
   /**
    * Text measurement used for line wrapping and pagination. Omit only when deterministic
    * approximate pagination is acceptable. Core then uses a fixed-width fallback that neither
@@ -99,6 +112,14 @@ export interface OpenDocumentForExportOptions {
  * @public
  */
 export interface ExportSemanticLayout extends SemanticLayout {
+  /** Requested review view; Simple Markup uses the proposed text projection. */
+  readonly reviewDisplayMode?: ReviewDisplayMode;
+  /** Viewer preferences used for this layout. */
+  readonly revisionMarkup?: ResolvedRevisionMarkup;
+  /** Stable author color slots captured from the editor session. */
+  readonly revisionAuthorSlots?: Readonly<Record<string, number>>;
+  /** Whether outside change bars alternate page margins. */
+  readonly facingPages?: boolean;
   /** Source omissions that cannot be detected by walking laid-out records. */
   readonly contentWarnings?: readonly ExportContentWarning[];
   readonly reviewArtifacts: readonly SemanticReviewArtifactRecord[];
@@ -177,7 +198,7 @@ export interface ExportSession {
   /** Settle resources and return the default revision projection. */
   layout(): Promise<ExportSemanticLayout>;
   /** Settle resources and cache one explicit revision projection. */
-  layoutFor(displayMode: RevisionDisplayMode): Promise<ExportSemanticLayout>;
+  layoutFor(displayMode: ReviewDisplayMode): Promise<ExportSemanticLayout>;
   /**
    * Mint a defensive copy only for a ready image published by this session.
    *
@@ -211,9 +232,15 @@ function normalizedResourceTimeout(value: number | undefined): number {
   return Math.max(1, value);
 }
 
-function normalizedDisplayMode(value: unknown): RevisionDisplayMode {
-  if (value === 'all-markup' || value === 'proposed' || value === 'original') return value;
-  throw new RangeError('displayMode must be all-markup, proposed, or original');
+function normalizedDisplayMode(value: unknown): ReviewDisplayMode {
+  if (
+    value === 'all-markup' ||
+    value === 'simple-markup' ||
+    value === 'proposed' ||
+    value === 'original'
+  )
+    return value;
+  throw new RangeError('displayMode must be all-markup, simple-markup, proposed, or original');
 }
 
 const REVISION_POLL_INTERVAL_MS = 50;
@@ -260,6 +287,33 @@ export function openDocumentForExport(
     // typed refusal the caller can branch on instead.
     return { ok: false, reason: 'aborted' };
   }
+  if (
+    options.revisionAuthorSlots !== undefined &&
+    (!options.revisionAuthorSlots ||
+      typeof options.revisionAuthorSlots !== 'object' ||
+      Array.isArray(options.revisionAuthorSlots))
+  )
+    throw new TypeError('revisionAuthorSlots must map author names to nonnegative safe integers.');
+  const revisionAuthorSlots =
+    options.revisionAuthorSlots === undefined
+      ? undefined
+      : Object.freeze(
+          Object.fromEntries(
+            Object.entries(options.revisionAuthorSlots).map(([author, slot]) => {
+              if (!Number.isSafeInteger(slot) || slot < 0)
+                throw new TypeError(
+                  'revisionAuthorSlots values must be nonnegative safe integers.'
+                );
+              return [author, slot];
+            })
+          )
+        );
+  const revisionMarkup = options.revisionMarkup
+    ? resolveRevisionMarkup(options.revisionMarkup)
+    : undefined;
+  const revisionAuthorFilter = revisionMarkup
+    ? { revisionMarkup, hiddenAuthors: new Set<string>(), cacheKey: JSON.stringify(revisionMarkup) }
+    : undefined;
   const displayMode = normalizedDisplayMode(options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE);
   const sourceIsView = isDocumentView(source);
   const opened = isDocumentView(source)
@@ -300,9 +354,9 @@ export function openDocumentForExport(
     readonly view: HeadlessDocumentView;
     readonly measurer: TextMeasurer;
     readonly paragraphCache: ReturnType<typeof createParagraphLayoutCache<never>>;
-    readonly sessions: Map<RevisionDisplayMode, ReturnType<typeof createLayoutSession>>;
+    readonly sessions: Map<ReviewDisplayMode, ReturnType<typeof createLayoutSession>>;
     readonly completed: Map<
-      RevisionDisplayMode,
+      ReviewDisplayMode,
       {
         readonly revision: number;
         readonly pkg: ReturnType<HeadlessDocumentView['currentPackage']>;
@@ -310,10 +364,10 @@ export function openDocumentForExport(
         readonly published: ExportSemanticLayout;
       }
     >;
-    readonly inFlight: Map<RevisionDisplayMode, Promise<ExportSemanticLayout>>;
+    readonly inFlight: Map<ReviewDisplayMode, Promise<ExportSemanticLayout>>;
     readonly styles: ReturnType<typeof createDocumentStyleDependencies>;
     readonly fieldLinks: Map<
-      RevisionDisplayMode,
+      ReviewDisplayMode,
       {
         readonly revision: number;
         readonly pkg: ReturnType<HeadlessDocumentView['currentPackage']>;
@@ -322,7 +376,7 @@ export function openDocumentForExport(
     >;
     readonly links: ReturnType<typeof createDocumentLinkProjectors>;
     readonly drawingBundle: ReturnType<typeof createInlineDrawingLayoutBundle>;
-    readonly furniture: Map<RevisionDisplayMode, ReturnType<typeof createDocumentFurnitureSource>>;
+    readonly furniture: Map<ReviewDisplayMode, ReturnType<typeof createDocumentFurnitureSource>>;
   } | null = {
     view: initialView,
     measurer: initialMeasurer,
@@ -442,7 +496,7 @@ export function openDocumentForExport(
   };
 
   const runLayout = async (
-    mode: RevisionDisplayMode,
+    mode: ReviewDisplayMode,
     revisionRestarts = 0,
     absoluteDeadline = Date.now() + timeoutMs
   ): Promise<ExportSemanticLayout> => {
@@ -502,8 +556,11 @@ export function openDocumentForExport(
         numberingIndex: state.styles.numberingIndex,
         defaultTabStopPt: state.styles.defaultTabStopPt,
         compatibilityMode: state.styles.compatibilityMode,
-        displayMode: mode,
-        revisionAuthorFilter: undefined,
+        displayMode: layoutProjectionOf(mode),
+        revisionAuthorFilter:
+          mode === 'simple-markup'
+            ? withPlainResolvedMarkup(revisionAuthorFilter)
+            : revisionAuthorFilter,
         showFieldCodes: false,
         inlineDrawingLayoutForPart: (partName) => state.drawingBundle.contextForPart(partName),
         drawingLayoutTokenForPart: (partName) => state.drawingBundle.cacheTokenForPart(partName),
@@ -543,8 +600,11 @@ export function openDocumentForExport(
           state.drawingBundle.drawingTokenForParagraph(paragraph, partName),
         drawingLayoutEpoch: state.drawingBundle.cacheTokenForPart(state.view.part().name),
         drawingLayoutEpochForPart: (partName) => state.drawingBundle.cacheTokenForPart(partName),
-        displayMode: mode,
-        revisionAuthorFilter: undefined,
+        displayMode: layoutProjectionOf(mode),
+        revisionAuthorFilter:
+          mode === 'simple-markup'
+            ? withPlainResolvedMarkup(revisionAuthorFilter)
+            : revisionAuthorFilter,
         showFieldCodes: false,
       } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);
       if (!layoutHasPendingImages(layout)) {
@@ -569,6 +629,23 @@ export function openDocumentForExport(
         const enrichedLayout: ExportSemanticLayout = {
           ...layout,
           ...resources,
+          reviewDisplayMode: mode,
+          ...(revisionMarkup ? { revisionMarkup } : {}),
+          ...(revisionAuthorSlots ? { revisionAuthorSlots } : {}),
+          facingPages: [...pkg.parts.values()].some(
+            (part) =>
+              part.root.localName === 'settings' &&
+              part.root.children.some(
+                (node) =>
+                  node.kind !== 'textValue' &&
+                  (node.localName === 'mirrorMargins' || node.localName === 'evenAndOddHeaders') &&
+                  !node.attributes.some(
+                    (attribute) =>
+                      attribute.localName === 'val' &&
+                      ['0', 'false', 'off'].includes(attribute.value)
+                  )
+              )
+          ),
           contentWarnings: collectExportContentWarnings(state.view),
           reviewArtifacts,
         };
@@ -597,8 +674,8 @@ export function openDocumentForExport(
     );
   };
 
-  const layoutFor = (mode: RevisionDisplayMode): Promise<ExportSemanticLayout> => {
-    let normalizedMode: RevisionDisplayMode;
+  const layoutFor = (mode: ReviewDisplayMode): Promise<ExportSemanticLayout> => {
+    let normalizedMode: ReviewDisplayMode;
     try {
       normalizedMode = normalizedDisplayMode(mode);
     } catch (error) {

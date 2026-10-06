@@ -234,6 +234,7 @@ const SNAPSHOT_FIELDS = {
   showParagraphMarks: 'compared',
   documentProtection: 'compared',
   reviewDisplayMode: 'compared',
+  revisionMarkup: 'compared',
   hasReviewContent: 'compared',
   hiddenReviewAuthors: 'compared',
   collaborationStatus: 'compared',

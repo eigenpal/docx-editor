@@ -1,0 +1,64 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
+import type { ResolvedRevisionMarkup, RevisionMarkupColor } from '@docx-editor.dev/core/editor';
+import { formatRevisionOf, type SemanticSpanVisit } from '@docx-editor.dev/core/layout';
+
+// These are the print values of the named document revision tokens.
+const COLORS: Record<string, string> = {
+  black: '000000',
+  blue: '0000FF',
+  turquoise: '00FFFF',
+  green: '008000',
+  pink: 'FFC0CB',
+  red: 'FF0000',
+  yellow: 'FFFF00',
+  white: 'FFFFFF',
+  darkBlue: '000080',
+  teal: '008080',
+  darkGreen: '006400',
+  violet: '800080',
+  darkRed: '800000',
+  darkYellow: '808000',
+  gray50: '808080',
+  gray25: 'C0C0C0',
+  lightBlue: 'E0F3FA',
+  lightYellow: 'FFF8DC',
+  lightOrange: 'FFE5CC',
+};
+const AUTHORS = ['C0392B', '1F6FB2', '7D3C98', '117A65', '9A6206', 'C2185B', '2E4053', '2E7D32'];
+export function markupColor(color: RevisionMarkupColor, authorSlot = 0, auto = '000000'): string {
+  return color === 'auto'
+    ? auto
+    : color === 'byAuthor'
+      ? AUTHORS[authorSlot % AUTHORS.length]!
+      : COLORS[color]!;
+}
+export function spanMarkup(visit: SemanticSpanVisit, settings: ResolvedRevisionMarkup) {
+  const revision =
+    visit.span.revisions?.at(-1) ??
+    formatRevisionOf(visit.span.props) ??
+    formatRevisionOf(visit.paragraph.props);
+  if (!revision) return null;
+  // A removed ancestor keeps nested insertions visibly removed.
+  const kind =
+    visit.span.revisions?.find((item) => item.kind === 'delete' || item.kind === 'moveFrom')
+      ?.kind ?? revision.kind;
+  const style =
+    kind === 'insert'
+      ? settings.insertions
+      : kind === 'delete'
+        ? settings.deletions
+        : kind === 'moveFrom'
+          ? settings.trackMoves
+            ? settings.movedFrom
+            : settings.deletions
+          : kind === 'moveTo'
+            ? settings.trackMoves
+              ? settings.movedTo
+              : settings.insertions
+            : settings.formatting;
+  return { ...style, author: revision.author };
+}

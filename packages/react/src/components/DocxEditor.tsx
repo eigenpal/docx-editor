@@ -1,3 +1,4 @@
+import { DocxEditorRevisionMarkup } from '../editor/DocxEditorRevisionMarkup';
 import { DocxEditorExportDialog } from '../editor/DocxEditorExportDialog';
 import { DocxEditorPrintDialog } from '../editor/DocxEditorPrintDialog';
 import { DocxEditorNotesContextMenu } from '../editor/note-popup-parts';
@@ -250,6 +251,9 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
       modules,
       zoom,
       zoomMode,
+      revisionMarkup,
+      onRevisionMarkupChange,
+      reviewDisplayMode,
       onReady,
       onChange,
       onFontError,
@@ -428,6 +432,9 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
         mode={mode}
         {...(modules !== undefined ? { modules } : {})}
         {...(zoom !== undefined ? { zoom } : {})}
+        revisionMarkup={revisionMarkup}
+        onRevisionMarkupChange={onRevisionMarkupChange}
+        reviewDisplayMode={reviewDisplayMode}
         {...(zoomMode !== undefined ? { zoomMode } : {})}
         tableInteractionLabel={tableInteractionLabel}
         {...(onReady ? { onReady } : {})}
@@ -481,6 +488,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   /** Conditional loading screen: renders while there is no document to paint. */
   readonly Loading: typeof DocxEditorLoading;
   readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
+  readonly RevisionMarkup: typeof DocxEditorRevisionMarkup;
   readonly AuthorStyle: typeof DocxEditorAuthorStyle;
   /** Context-fed horizontal ruler with draggable margins (props-driven export stays). */
   readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
@@ -547,6 +555,7 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   Menu: DocxEditorMenu,
   Loading: DocxEditorLoading,
   ColorByChangeType: DocxEditorColorByChangeType,
+  RevisionMarkup: DocxEditorRevisionMarkup,
   AuthorStyle: DocxEditorAuthorStyle,
   HorizontalRuler: DocxEditorHorizontalRuler,
   VerticalRuler: DocxEditorVerticalRuler,

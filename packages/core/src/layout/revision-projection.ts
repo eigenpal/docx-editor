@@ -1,3 +1,4 @@
+import type { ResolvedRevisionMarkup } from '../contracts/revision-markup.ts';
 // Revision attribution and display modes for layout.
 //
 // The canonical tree keeps `w:ins` / `w:del` / `w:moveFrom` / `w:moveTo` as wrappers, because
@@ -87,6 +88,7 @@ export const DEFAULT_REVISION_DISPLAY_MODE: RevisionDisplayMode = 'all-markup';
  * delimiter-based key.
  */
 export interface RevisionFilter {
+  readonly revisionMarkup?: ResolvedRevisionMarkup;
   readonly hiddenAuthors: ReadonlySet<string>;
   readonly includes?: (revision: RevisionAttribution) => boolean;
   readonly includesNode?: (nodeId: string, author: string) => boolean;

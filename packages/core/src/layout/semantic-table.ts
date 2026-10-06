@@ -1,3 +1,4 @@
+import { revisionCellMetadata } from './revision-cell-shading.ts';
 import { readTableAlignment } from './table-alignment.ts';
 import { withSharedGridLineSideRules } from './legacy-table-side-rules.ts';
 import { withRowMinimumContentInsets } from './table-row-minimum-insets.ts';
@@ -174,6 +175,7 @@ export interface TableAnchorFrames {
  * and would otherwise be a loop bound an attacker controls.
  */
 export interface SemanticTableCell {
+  readonly revisionShading?: 'inserted' | 'deleted' | 'merged' | 'split';
   readonly id: string;
   /** Derived content-edge geometry for a verified legacy percentage-width parent table. */
   readonly legacyContentAlignment?: true;
@@ -802,6 +804,7 @@ function readTableStructureUncached(
       if (vMerge !== 'none') mergedHere.add(gridColumn);
       cells.push({
         id: cellNode.id,
+        ...revisionCellMetadata(cellProperties, displayMode, authorFilter),
         gridSpan,
         gridColumn,
         ...(gridCols[gridColumn]?.id ? { gridColumnId: gridCols[gridColumn]!.id } : {}),

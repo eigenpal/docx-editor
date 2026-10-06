@@ -1,3 +1,4 @@
+import type { ResolvedRevisionMarkup } from '../contracts/revision-markup.ts';
 // What `openPaginated` takes: the options record of the paginated surface.
 //
 // Split from `paginated-surface-contract.ts`, which is long enough to hold the surface
@@ -84,6 +85,7 @@ export interface PaginatedSurfaceOptions {
    * revision markup paints, whatever the {@link revisionDisplayMode} leaves visible.
    */
   readonly revisionStyles?: RevisionStyles;
+  readonly revisionMarkup?: ResolvedRevisionMarkup;
   /**
    * The review module's derivation hooks for this surface's session. Absent,
    * `session.reviewItems()` is the typed empty queue and every review affordance

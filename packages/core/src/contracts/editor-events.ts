@@ -1,3 +1,4 @@
+import type { ResolvedRevisionMarkup } from './revision-markup.ts';
 import type { EditorError, EditorSnapshot } from './editor.ts';
 import type { HistoryDiagnostic } from './editor-scope.ts';
 
@@ -9,6 +10,8 @@ import type { HistoryDiagnostic } from './editor-scope.ts';
  * against these rather than against the snapshot.
  */
 export interface EditorEvents {
+  /** Local viewer preferences changed through the API or review dialog. */
+  revisionMarkupChange: (settings: ResolvedRevisionMarkup) => void;
   /** A document mutation committed, with the ids it touched. */
   change: (change: DocumentChange) => void;
   /** The selection or its derived formatting moved. */

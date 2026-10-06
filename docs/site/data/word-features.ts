@@ -873,7 +873,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'premium',
     notes:
-      'Suggesting mode, review markup, and review actions require the EigenPal Pro License. Opening and saving existing revisions require no review module. The document API tracks text, fonts, paragraph formatting, list membership, and paragraph insertion. Table suggestions support complete insertion, value replacement, row additions, and partial row deletions. Eligible nonempty text can become a proposed text or date control outside collaboration. Tracked ranges across paragraphs and table or cell value replacement refuse in collaboration. Row deletion suggestions must leave a row without a pending deletion. Existing table properties and columns require permanent edits; eligible complete proposed tables support configuration. The editor offers Simple Markup, All Markup, No Markup, Original, author filters, and filtered bulk decisions. Hidden authors and unsupported changes remain pending during filtered bulk decisions. Original restores prior run and paragraph formatting; prior table, row, cell, and section formatting remains unsupported. Author filters change the display without changing saved revisions. Suggesting mode requires an author. Editor list, indent-level, tab-stop, and table-property changes remain untracked. Malformed revision wrappers refuse resolution and preserve their content.',
+      'Suggesting mode, review markup, and review actions require the EigenPal Pro License. Opening and saving existing revisions require no review module. The document API tracks text, fonts, paragraph formatting, list membership, and paragraph insertion. Table suggestions support complete insertion, value replacement, row additions, and partial row deletions. Eligible nonempty text can become a proposed text or date control outside collaboration. Tracked ranges across paragraphs and table or cell value replacement refuse in collaboration. Row deletion suggestions must leave a row without a pending deletion. Existing table properties and columns require permanent edits; eligible complete proposed tables support configuration. The editor offers Simple Markup, All Markup, No Markup, Original, author filters, and filtered bulk decisions. Hidden authors and unsupported changes remain pending during filtered bulk decisions. Original restores prior run and paragraph formatting; prior table, row, cell, and section formatting remains unsupported. Author filters change the display without changing saved revisions. Viewer markup preferences configure revision marks, named colors, change bars, and cell shading through the API and review dialog. Track formatting can leave future formatting edits untracked while text edits remain tracked. Suggesting mode requires an author. Editor list, indent-level, tab-stop, and table-property changes remain untracked. Malformed revision wrappers refuse resolution and preserve their content.',
     docsLink: '/docs/2.x/pro/tracked-changes',
   },
   {
@@ -921,7 +921,20 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Imported moves survive save and reopen without a review module. Displaying move markup requires the review module and the EigenPal Pro License. Review actions require the module. Creating move revisions remains unsupported.',
+      'Imported moves survive save and reopen without a review module. Displaying move markup requires the review module and the EigenPal Pro License. Review actions require the module. Viewer preferences configure moved-from and moved-to marks and colors. Track moves off uses insertion and deletion marks without changing move records. Creating move revisions remains unsupported.',
+  },
+
+  {
+    id: 'review.cell-revisions',
+    name: 'Tracked table cell shading',
+    category: 'review',
+    editing: 'partial',
+    rendering: 'partial',
+    roundTrip: 'full',
+    tier: 'premium',
+    notes:
+      'Viewer preferences set inserted, deleted, merged, and split cell shading. Imported cellIns, cellDel, and cellMerge records supply the shading. A cellMerge change from continuation to non-continuation uses split shading. Creating arbitrary cell merge and split revisions remains unsupported.',
+    docsLink: '/docs/2.x/pro/review-styling',
   },
 
   // --- Fields, links & TOC ---------------------------------------------------

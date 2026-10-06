@@ -1,3 +1,4 @@
+import { revisionMarkupHidesDrawing } from './revision-markup-projection.ts';
 // Inline drawing measurement and placement (typed-drawings-and-images task 6).
 //
 // DOM-free points everywhere. `wp:extent` EMUs convert at this boundary; intrinsic pixel
@@ -1220,7 +1221,11 @@ export function publishAnchoredDrawingsForParagraph(
   const records: AnchoredDrawingRecord[] = [];
   for (const atom of atoms) {
     const projection = atom.projection;
-    if (projection.hidden) continue;
+    if (
+      projection.hidden ||
+      revisionMarkupHidesDrawing(atom.revisions, displayMode, options.revisionAuthorFilter)
+    )
+      continue;
     const revisions = projectedRevisions(atom.revisions, displayMode, options.revisionAuthorFilter);
     if (revisions === null) continue;
     const start = offsets.get(atom.atomId);

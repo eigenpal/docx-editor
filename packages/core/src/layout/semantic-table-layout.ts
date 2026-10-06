@@ -1538,6 +1538,7 @@ export function layoutRowFragmentBounded(
     }
     return {
       id: entry.cell.id,
+      ...(entry.cell.revisionShading ? { revisionShading: entry.cell.revisionShading } : {}),
       gridColumn: entry.gridColumn,
       ...(entry.cell.logicalGridColumn === undefined
         ? {}

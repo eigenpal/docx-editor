@@ -1,3 +1,5 @@
+import { createEditorEvents } from './editor-events.ts';
+import { createRevisionMarkupState } from './revision-markup-state.ts';
 import { withDisplayedHyphens } from '../store/package/hyphen-text.ts';
 import { queryEditorDocument } from './docx-editor-query.ts';
 import { refreshWriteBlocked } from './refresh-write-guard.ts';
@@ -65,10 +67,8 @@ import { parseNoteScopeId } from '../store/package/note-nodes.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
 import type {
   CanResult,
-  DocumentChange,
   DocumentHandle,
-  EditorError,
-  EditorEvents,
+  DocumentChange,
   EditorScope,
   EditorSnapshot,
   ExecResult,
@@ -446,7 +446,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let cachedVersion = -1;
   /** Closed until a mounted review model confirms that the document has review content. */
   let reviewPaneOpen = false;
-  let reviewDisplayMode: ReviewDisplayMode = 'all-markup';
+  let reviewDisplayMode: ReviewDisplayMode =
+    config.reviewDisplayMode ?? (reviewEnabled ? 'all-markup' : 'proposed');
+  if (!['all-markup', 'simple-markup', 'proposed', 'original'].includes(reviewDisplayMode))
+    throw new TypeError('Invalid reviewDisplayMode');
+  if (config.reviewDisplayMode && config.reviewDisplayMode !== 'proposed' && !reviewEnabled)
+    throw new TypeError('reviewDisplayMode requires a review module');
   const paragraphMarks = createEditorParagraphMarks((visible) => {
     surface?.setShowParagraphMarks(visible);
     bump();
@@ -480,28 +485,26 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     stateVersion += 1;
   }
 
-  const handlers: { [E in keyof EditorEvents]: Set<EditorEvents[E]> } = {
-    change: new Set(),
-    selectionChange: new Set(),
-    error: new Set(),
-    historyDiagnostic: new Set(),
-  };
+  const events = createEditorEvents(snapshotNow);
+  const { emitError, emitDocumentChange, emitSelectionChange } = events;
 
-  function emitError(error: EditorError): void {
-    for (const handler of [...handlers.error]) handler(error);
-  }
-
-  function emitDocumentChange(change: DocumentChange): void {
-    for (const handler of [...handlers.change]) handler(change);
-  }
-
-  function emitSelectionChange(): void {
-    if (handlers.selectionChange.size === 0) return;
-    const snapshot = snapshotNow();
-    for (const handler of [...handlers.selectionChange]) handler(snapshot);
-  }
+  const revisionMarkupState = createRevisionMarkupState(config.revisionMarkup, {
+    container: () => container,
+    destroyed: () => destroyed,
+    contribution: () => modules.review,
+    translate: () => hostConfig.translate(),
+    apply: (value) => {
+      surface?.setRevisionMarkup(value);
+      bump();
+    },
+    changed: (value) => {
+      emitSelectionChange();
+      events.emitRevisionMarkupChange(value);
+    },
+  });
 
   function teardownSurface(): void {
+    revisionMarkupState.destroyDialog();
     unsubscribeSession?.();
     unsubscribeSession = null;
     surface?.destroy();
@@ -591,6 +594,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // review-module display mode; with one registered the surface keeps the layout
       // default (`all-markup`), which is what the review rail annotates.
       revisionDisplayMode: reviewEnabled ? reviewDisplayMode : 'proposed',
+      revisionMarkup: revisionMarkupState.current(),
       ...reviewModelOption(modules, reportDiagnostic),
       ...(shapedMeasurer
         ? { measurer: shapedMeasurer, ...(shapedProducer ? { producer: shapedProducer } : {}) }
@@ -782,7 +786,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const shaperNeverLoaded =
       error.code === 'wasmUnavailable' ||
       (error.cause instanceof HarfBuzzShapingError && error.cause.code === 'unsupportedRuntime');
-    if (shaperNeverLoaded && !config.onFontError && handlers.error.size === 0) {
+    if (shaperNeverLoaded && !config.onFontError && !events.hasErrorHandlers()) {
       warnFontFailureOnce(error);
     }
     // A host handler that throws must not abort font resolution — reporting a dropped
@@ -1155,6 +1159,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       reviewPaneOpen,
       showParagraphMarks: paragraphMarks.get(),
       documentProtection: protection.state(),
+      revisionMarkup: revisionMarkupState.current(),
       reviewDisplayMode:
         surface && reviewEnabled ? surface.revisionDisplayMode() : reviewDisplayMode,
       hasReviewContent: surface?.session.hasReviewContent() ?? false,
@@ -1764,9 +1769,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
   const historyGroups = new EditorHistoryGroups(
     () => surface,
-    (diagnostic) => {
-      for (const handler of [...handlers.historyDiagnostic]) handler(diagnostic);
-    },
+    events.emitHistoryDiagnostic,
     () => JSON.stringify(surface?.state().selection)
   );
   const editor: DocxEditorInstance = {
@@ -1893,6 +1896,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // A command inside the yield window addresses the just-loaded document: mount now.
       // (`can` does NOT flush — chrome polls it per render; a read must not defeat the yield.)
       openScheduler.flush();
+      if (command.type === 'openRevisionMarkupDialog') return revisionMarkupState.open();
       const historyRefusal = historyGroups.gate(command, options);
       if (historyRefusal) return historyRefusal;
       historyGroups.note(command);
@@ -1992,6 +1996,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           code: 'unsupported',
           reason: 'An external document refresh is in progress.',
         };
+      if (command.type === 'openRevisionMarkupDialog') return revisionMarkupState.canOpen();
       const historyRefusal = historyGroups.gate(command, options);
       if (historyRefusal) return historyRefusal;
       if (command.type === 'insertImage' || command.type === 'replaceImage') {
@@ -2303,6 +2308,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // Tolerated detached: the host waits here and applies on the next mount.
       surface?.setRemoteCaretLabelHost(host);
     },
+    setRevisionMarkup: revisionMarkupState.set,
     setRevisionStyles(colors) {
       revisionStyleState.set(colors);
       surface?.setRevisionStyles(colors);
@@ -2643,17 +2649,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       pendingTextFormInputs = new WeakMap();
       mountGeneration += 1;
       bump();
-      for (const set of Object.values(handlers)) set.clear();
+      events.clear();
     },
 
-    on<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): Unsubscribe {
-      // `display` handlers are accepted but never called: the surface paints its own
-      // pages instead of publishing a render list. Documented at the top of this file.
-      handlers[event].add(handler);
-      return () => {
-        handlers[event].delete(handler);
-      };
-    },
+    on: events.on,
   };
 
   refreshHost = registerRefreshHost(editor, {

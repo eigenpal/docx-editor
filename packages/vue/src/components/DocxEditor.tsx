@@ -1,3 +1,9 @@
+import { DocxEditorRevisionMarkup } from '../editor/DocxEditorRevisionMarkup';
+import type {
+  RevisionMarkupOptions,
+  ResolvedRevisionMarkup,
+  ReviewDisplayMode,
+} from '@docx-editor.dev/core/editor';
 import { DocxEditorExportDialog } from '../editor/DocxEditorExportDialog';
 import { DocxEditorPrintDialog } from '../editor/DocxEditorPrintDialog';
 import { DocxEditorContentControlWidget } from '../editor/DocxEditorContentControlWidget';
@@ -195,6 +201,7 @@ export interface DocxEditorNamespace {
   readonly HyperLink: typeof DocxEditorHyperLink;
   readonly ContextMenu: typeof ContextMenu;
   readonly ContentControl: typeof DocxEditorContentControl;
+  readonly RevisionMarkup: typeof DocxEditorRevisionMarkup;
   readonly AuthorStyle: typeof DocxEditorAuthorStyle;
   readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
 }
@@ -227,6 +234,8 @@ const docxEditorFrameProps = {
   rulers: { type: Boolean, default: undefined },
   mode: { type: String as PropType<DocxEditorProps['mode']>, default: undefined },
   zoom: { type: Number, default: undefined },
+  revisionMarkup: Object as PropType<RevisionMarkupOptions>,
+  reviewDisplayMode: String as PropType<ReviewDisplayMode>,
   zoomMode: { type: [Object, String] as PropType<DocxEditorProps['zoomMode']>, default: undefined },
   locale: { type: String, default: undefined },
   author: { type: String, default: undefined },
@@ -254,7 +263,15 @@ const DocxEditorFrame = defineComponent({
   name: 'DocxEditorFrame',
   inheritAttrs: false,
   props: docxEditorFrameProps,
-  emits: ['ready', 'change', 'fontError', 'save', 'open', 'titleChange'] as const,
+  emits: [
+    'ready',
+    'change',
+    'revisionMarkupChange',
+    'fontError',
+    'save',
+    'open',
+    'titleChange',
+  ] as const,
   setup(props, { attrs, emit, slots, expose }) {
     const hostSave = computed(
       () =>
@@ -447,6 +464,10 @@ const DocxEditorFrame = defineComponent({
           ...(props.mode !== undefined ? { mode: props.mode } : { mode: 'edit' }),
           ...(props.modules !== undefined ? { modules: props.modules } : {}),
           ...(props.zoom !== undefined ? { zoom: props.zoom } : {}),
+          revisionMarkup: props.revisionMarkup,
+          reviewDisplayMode: props.reviewDisplayMode,
+          onRevisionMarkupChange: (settings: ResolvedRevisionMarkup) =>
+            emit('revisionMarkupChange', settings),
           ...(props.zoomMode !== undefined ? { zoomMode: props.zoomMode } : {}),
           tableInteractionLabel,
           onReady: (editor: unknown) => emit('ready', editor),
@@ -468,7 +489,15 @@ const DocxEditorImpl = defineComponent({
   name: 'DocxEditor',
   inheritAttrs: false,
   props: docxEditorSugarProps,
-  emits: ['ready', 'change', 'fontError', 'save', 'open', 'titleChange'] as const,
+  emits: [
+    'ready',
+    'change',
+    'revisionMarkupChange',
+    'fontError',
+    'save',
+    'open',
+    'titleChange',
+  ] as const,
   setup(props, { attrs, emit, slots, expose }) {
     const hostSaveProp = () =>
       props.saveHandler ??
@@ -515,6 +544,8 @@ const DocxEditorImpl = defineComponent({
               },
               onReady: (editor: unknown) => emit('ready', editor),
               onChange: (change: unknown) => emit('change', change),
+              onRevisionMarkupChange: (settings: ResolvedRevisionMarkup) =>
+                emit('revisionMarkupChange', settings),
               onFontError: (error: unknown) => emit('fontError', error),
               saveHandler:
                 hostSaveProp() !== undefined
@@ -581,6 +612,7 @@ export const DocxEditor = Object.assign(DocxEditorImpl, {
   HyperLink: DocxEditorHyperLink,
   ContextMenu: DocxEditorContextMenu,
   ContentControl: DocxEditorContentControl,
+  RevisionMarkup: DocxEditorRevisionMarkup,
   AuthorStyle: DocxEditorAuthorStyle,
   ColorByChangeType: DocxEditorColorByChangeType,
 }) as unknown as DocxEditorNamespace;

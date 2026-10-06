@@ -1,3 +1,5 @@
+import { DEFAULT_REVISION_MARKUP } from '../../contracts/revision-markup.ts';
+import { LOADING_SNAPSHOT } from '../loading-snapshot.ts';
 import { expect, test } from 'bun:test';
 import { ChromeExportError, runChromeExport } from '../chrome-export.ts';
 
@@ -69,4 +71,38 @@ test('PDF export rejects endpoint error pages and incomplete headers', async () 
       })
     ).rejects.toThrow('without a PDF header');
   }
+});
+
+test('PDF receives the viewer settings captured before an asynchronous save', async () => {
+  let snapshot = {
+    ...LOADING_SNAPSHOT,
+    reviewDisplayMode: 'all-markup' as const,
+    revisionMarkup: DEFAULT_REVISION_MARKUP,
+  };
+  const original = snapshot;
+  let authors = [{ author: 'Retained author', slot: 5, color: 'blue' }];
+  await runChromeExport(
+    {
+      snapshot: () => snapshot,
+      getReviewAuthors: () => authors,
+      save: async () => {
+        authors = [];
+        snapshot = {
+          ...snapshot,
+          revisionMarkup: { ...DEFAULT_REVISION_MARKUP, trackMoves: false },
+        };
+        return new ArrayBuffer(0);
+      },
+    },
+    'pdf',
+    {
+      pdf: async (_bytes, view) => {
+        expect(view?.displayMode).toBe('all-markup');
+        expect(view?.revisionMarkup).toBe(original.revisionMarkup);
+        expect(view?.revisionAuthorSlots).toEqual({ 'Retained author': 5 });
+        expect(Object.isFrozen(view?.revisionAuthorSlots)).toBe(true);
+        return { bytes: new TextEncoder().encode('%PDF-1.7') };
+      },
+    }
+  );
 });

@@ -7,10 +7,18 @@ export const demoExporters: ChromeExportHandlers = {
     const { exportMarkdown } = await import('@docx-editor.dev/docx-to-markdown');
     return exportMarkdown(source, { displayMode: 'proposed' });
   },
-  async pdf(source) {
-    const response = await fetch('/api/convert?displayMode=proposed&fidelityPolicy=strict', {
+  async pdf(source, view) {
+    const query = new URLSearchParams({
+      displayMode: view?.displayMode ?? 'proposed',
+      fidelityPolicy: 'strict',
+    });
+    const response = await fetch(`/api/convert?${query}`, {
       method: 'POST',
       headers: {
+        ...(view ? { 'X-Revision-Markup': JSON.stringify(view.revisionMarkup) } : {}),
+        ...(view?.revisionAuthorSlots
+          ? { 'X-Revision-Authors': encodeURIComponent(JSON.stringify(view.revisionAuthorSlots)) }
+          : {}),
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       },
       body: source.slice().buffer,

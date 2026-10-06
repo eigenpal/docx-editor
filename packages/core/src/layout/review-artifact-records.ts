@@ -75,6 +75,15 @@ export interface SemanticTrackedChangeArtifactRecord {
     | 'format'
     | 'paragraphMark'
     | 'structural';
+  /** Structural changes represented by this review artifact. */
+  readonly structuralChanges?: readonly (
+    | 'rowInsert'
+    | 'rowDelete'
+    | 'cellInsert'
+    | 'cellDelete'
+    | 'cellMerge'
+    | 'numberingInsert'
+  )[];
   readonly markDirection?: 'insert' | 'delete' | 'moveFrom' | 'moveTo';
   readonly author: string;
   readonly date?: string;

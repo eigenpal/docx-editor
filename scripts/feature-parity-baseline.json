@@ -269,6 +269,26 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": ["close"]
     },
+    "editor/DocxEditorRevisionMarkup": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": [
+        "cells",
+        "changedLines",
+        "deletions",
+        "emits",
+        "formatting",
+        "insertions",
+        "movedFrom",
+        "movedTo",
+        "name",
+        "onRevisionMarkupChange",
+        "props",
+        "trackFormatting",
+        "trackMoves"
+      ],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": ["revision-markup-change"]
+    },
     "editor/DocxEditorRoot": {
       "propsAddedInReact": [
         "author",
@@ -291,14 +311,20 @@
         "onReady",
         "onReady",
         "onReady",
+        "onRevisionMarkupChange",
+        "onRevisionMarkupChange",
+        "onRevisionMarkupChange",
+        "onRevisionMarkupChange",
         "popups",
+        "reviewDisplayMode",
+        "revisionMarkup",
         "tableInteractionLabel",
         "translate",
         "zoom",
         "zoomMode"
       ],
       "propsAddedInVue": [],
-      "emitsAddedInReact": ["change", "font-error", "ready"],
+      "emitsAddedInReact": ["change", "font-error", "ready", "revision-markup-change"],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorTextFormFieldDialog": {
@@ -475,9 +501,13 @@
         "onChange",
         "onFontError",
         "onReady",
+        "onRevisionMarkupChange",
         "popups",
         "props",
         "ready",
+        "reviewDisplayMode",
+        "revisionMarkup",
+        "revisionMarkupChange",
         "tableInteractionLabel",
         "translate",
         "translateResolver",
@@ -485,7 +515,7 @@
         "zoomMode"
       ],
       "emitsAddedInReact": [],
-      "emitsAddedInVue": ["change", "font-error", "ready"]
+      "emitsAddedInVue": ["change", "font-error", "ready", "revision-markup-change"]
     },
     "i18n/LocaleContext": {
       "propsAddedInReact": [],

@@ -1,3 +1,4 @@
+import { resolveRevisionMarkup } from '../../contracts/revision-markup.ts';
 // A drawing inside a tracked insertion or deletion carries the change (#479).
 //
 // The record folds the owning run's revision stack in, paint marks the element with the
@@ -439,4 +440,56 @@ describe('tracked drawings carry and paint their revision', () => {
     expect(original.bars).toBe(0);
     expect(original.y).toBe(plain.y);
   });
+});
+
+test.each(['inline', 'anchored'] as const)(
+  'hidden deletion removes %s drawing geometry and keeps its bar',
+  async (kind) => {
+    const { surface, container } = await mount(
+      docx(
+        `<w:p>${del(kind === 'inline' ? inlinePicture(5) : anchoredPicture(5))}<w:r><w:t>kept</w:t></w:r></w:p>`
+      )
+    );
+    try {
+      surface.setRevisionMarkup(resolveRevisionMarkup({ deletions: { mark: 'hidden' } }));
+      expect(lineDrawings(surface)).toHaveLength(0);
+      expect(surface.layout().pages[0]!.anchoredDrawings ?? []).toHaveLength(0);
+      expect(container.querySelector('.docx-change-bar')).not.toBeNull();
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
+  }
+);
+
+test('move fallback hides anchored drawings and removes their wrap holes', async () => {
+  const drawing = anchoredPicture(9).replace('<wp:wrapNone/>', '<wp:wrapTopAndBottom/>');
+  const { surface, container } = await mount(
+    docx(
+      `<w:p><w:moveFrom w:id="7" w:author="Reviewer">${drawing}</w:moveFrom><w:r><w:t>anchor line</w:t></w:r></w:p>`
+    )
+  );
+  const firstY = () =>
+    surface
+      .layout()
+      .pages[0]!.fragments.flatMap((block) => (block.kind === 'paragraph' ? block.lines : []))[0]!
+      .box.y;
+  try {
+    const initialY = firstY();
+    surface.setRevisionMarkup(
+      resolveRevisionMarkup({
+        trackMoves: false,
+        deletions: { mark: 'hidden' },
+      })
+    );
+    expect(surface.layout().pages[0]!.anchoredDrawings ?? []).toHaveLength(0);
+    expect(firstY()).toBeLessThan(initialY);
+    expect(container.querySelector('.docx-change-bar')).not.toBeNull();
+    surface.setRevisionMarkup(resolveRevisionMarkup());
+    expect(surface.layout().pages[0]!.anchoredDrawings ?? []).toHaveLength(1);
+    expect(firstY()).toBe(initialY);
+  } finally {
+    surface.destroy();
+    container.remove();
+  }
 });

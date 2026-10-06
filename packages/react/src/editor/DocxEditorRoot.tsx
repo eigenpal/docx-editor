@@ -1,3 +1,8 @@
+import type {
+  RevisionMarkupOptions,
+  ResolvedRevisionMarkup,
+  ReviewDisplayMode,
+} from '@docx-editor.dev/core/editor';
 import { FormControlTranslateProvider } from './form-control-translate';
 import { DialogProvider } from './dialog-host';
 import { PopupConfigProvider, type DocxEditorPopups } from './popup-config';
@@ -29,6 +34,7 @@ import {
   createDocxEditor,
   defaultTableLabel,
   resolveZoomMode,
+  resolveRevisionMarkup,
   sameZoomMode,
 } from '@docx-editor.dev/core/editor';
 import type { EditorModule } from '@docx-editor.dev/core/editor';
@@ -115,6 +121,17 @@ export interface DocxEditorRootProps {
    * navigation pane shrinks the document by what it took. Pass `{ type: 'fixed' }` to opt out.
    */
   zoomMode?: ZoomMode | 'auto';
+  /**
+   * Controlled viewer markup settings. Omitted fields use defaults.
+   * Save callback values into this prop to accept API and dialog changes.
+   * Omit this prop for uncontrolled settings. Use one configuration source.
+   */
+  revisionMarkup?: RevisionMarkupOptions;
+  /** Receives proposed settings from API or dialog changes, excluding prop reconciliation. */
+  onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
+  /** Initial revision display mode. */
+  reviewDisplayMode?: ReviewDisplayMode;
+
   /** Fired once per instance, after it is published to the tree (and after any
    *  `DocxEditor.Content` in the same commit has attached its mount point). A large
    *  document mounts behind one painted frame; `onReady` fires AFTER that mount lands,
@@ -153,6 +170,7 @@ export interface DocxEditorRootListeners {
   onReady?: (editor: Editor) => void;
   onChange?: (change: DocumentChange) => void;
   onFontError?: (error: EditorFontError) => void;
+  onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
 }
 
 /** @public Vue-only setup result; exported for cross-adapter API parity. */
@@ -177,6 +195,7 @@ function useProvidedDocxEditor(options: DocxEditorRootProps): ProvideDocxEditorR
     onReady: _onReady,
     onChange: _onChange,
     onFontError: _onFontError,
+    onRevisionMarkupChange: _onRevisionMarkupChange,
     ...rootProps
   } = options;
   const rootListeners = useMemo<DocxEditorRootListeners>(
@@ -187,6 +206,7 @@ function useProvidedDocxEditor(options: DocxEditorRootProps): ProvideDocxEditorR
       },
       onChange: (change) => latest.current.onChange?.(change),
       onFontError: (error) => latest.current.onFontError?.(error),
+      onRevisionMarkupChange: (settings) => latest.current.onRevisionMarkupChange?.(settings),
     }),
     []
   );
@@ -231,6 +251,8 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   defaultTranslateRef.current = defaultTranslate;
 
   // Latest props, read inside effects without retriggering them.
+  const applyingMarkup = useRef(false);
+  const [markupRevision, setMarkupRevision] = useState(0);
   const propsRef = useRef(props);
   propsRef.current = props;
 
@@ -263,6 +285,8 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       ...(p.author !== undefined ? { author: p.author } : {}),
       ...(p.locale !== undefined ? { locale: p.locale } : {}),
       translate,
+      ...(p.revisionMarkup !== undefined ? { revisionMarkup: p.revisionMarkup } : {}),
+      ...(p.reviewDisplayMode !== undefined ? { reviewDisplayMode: p.reviewDisplayMode } : {}),
       ...(p.mode !== undefined ? { mode: p.mode } : {}),
       ...(declaredStyles !== undefined ? { revisionStyles: declaredStyles } : {}),
       ...(p.modules !== undefined ? { modules: p.modules } : {}),
@@ -272,9 +296,15 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       ...(p.imageDecodePort ? { imageDecodePort: p.imageDecodePort } : {}),
       onFontError: (error) => propsRef.current.onFontError?.(error),
     });
+    const offMarkup = instance.on('revisionMarkupChange', (settings) => {
+      if (applyingMarkup.current) return;
+      propsRef.current.onRevisionMarkupChange?.(settings);
+      setMarkupRevision((value) => value + 1);
+    });
     const offChange = instance.on('change', (change) => propsRef.current.onChange?.(change));
     setEditor(instance);
     return () => {
+      offMarkup();
       offChange();
       instance.destroy();
       // Functional update: a StrictMode re-run's second instance must not be clobbered.
@@ -347,6 +377,16 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       editor.setZoomMode(zoomMode!);
     }
   }, [editor, zoom, zoomMode]);
+
+  useEffect(() => {
+    if (!editor || props.revisionMarkup === undefined) return;
+    applyingMarkup.current = true;
+    try {
+      editor.setRevisionMarkup(resolveRevisionMarkup(props.revisionMarkup));
+    } finally {
+      applyingMarkup.current = false;
+    }
+  }, [editor, props.revisionMarkup, markupRevision]);
 
   // Author is runtime state. Prop changes preserve the editor instance and existing revisions.
   useEffect(() => {

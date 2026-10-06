@@ -45,10 +45,13 @@ export const exporters: ChromeExportHandlers = {
     const { exportMarkdown } = await import('@docx-editor.dev/docx-to-markdown');
     return exportMarkdown(source, { displayMode: 'proposed' });
   },
-  pdf: async (source) => {
+  pdf: async (source, view) => {
     const response = await fetch('/api/export/pdf', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/octet-stream' },
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'X-Revision-Markup': encodeURIComponent(JSON.stringify(view ?? {})),
+      },
       body: source.slice().buffer,
     });
     const contentType = response.headers.get('Content-Type') ?? '';
@@ -105,11 +108,17 @@ Your PDF endpoint calls `exportPdf` and returns `result.bytes` with the `applica
 
 ```ts
 import { exportPdf } from '@docx-editor.dev/docx-to-pdf';
+import type { ChromeExportView } from '@docx-editor.dev/core/editor';
 
 export async function POST(request: Request): Promise<Response> {
   const source = new Uint8Array(await request.arrayBuffer());
+  const view = JSON.parse(
+    decodeURIComponent(request.headers.get('X-Revision-Markup') ?? '{}')
+  ) as Partial<ChromeExportView>;
   const result = await exportPdf(source, {
-    displayMode: 'proposed',
+    displayMode: view.displayMode ?? 'proposed',
+    revisionMarkup: view.revisionMarkup,
+    revisionAuthorSlots: view.revisionAuthorSlots,
     fidelityPolicy: 'strict',
     useSystemFonts: false,
   });
@@ -122,7 +131,13 @@ export async function POST(request: Request): Promise<Response> {
 }
 ```
 
+The converter validates the supplied display mode and markup preferences. Return an error for invalid JSON or invalid preferences.
+
 Configure authentication, upload limits, and conversion error responses for your application. For complete server examples, see [Integrate PDF conversion](https://github.com/eigenpal/docx-editor/blob/main/packages/docx-to-pdf/docs/integrations.md).
+
+## Forward viewer settings
+
+The PDF handler receives a second argument of type `ChromeExportView`. It contains `displayMode` and the resolved `revisionMarkup` preferences captured before conversion. Forward both fields to the PDF server, as shown in the example. An existing one-argument handler still works, but uses its own export defaults. Printing uses the same handler and settings.
 
 ## Compose export controls
 
@@ -150,7 +165,7 @@ For a custom download interface, call `runChromeExport(editor, format, exporters
 
 ## Demo behavior
 
-The React and Vue example applications enable both formats with `displayMode: 'proposed'`. Exports include tracked insertions and omit tracked deletions.
+The React and Vue examples forward the review view and markup preferences for PDF conversion. Markdown export uses `displayMode: 'proposed'` and includes insertions while omitting deletions.
 
 Their frontend packages install Markdown for browser conversion. Their shared server installs PDF. Selecting PDF sends the document to the same-origin `/api/convert` endpoint. The server returns the PDF without retaining the input or output.
 

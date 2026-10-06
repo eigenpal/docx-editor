@@ -1,3 +1,8 @@
+import type {
+  RevisionMarkupOptions,
+  ResolvedRevisionMarkup,
+  ReviewDisplayMode,
+} from '@docx-editor.dev/core/editor';
 import { DialogHost } from './dialog-host';
 import { PopupConfigProvider, type DocxEditorPopups } from './popup-config';
 import {
@@ -57,6 +62,7 @@ export interface DocxEditorRootListeners {
   onReady?: (editor: Editor) => void;
   onChange?: (change: DocumentChange) => void;
   onFontError?: (error: EditorFontError) => void;
+  onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
 }
 
 /** @public */
@@ -81,15 +87,21 @@ const noopEmit: DocxEditorRootEmit = {
  * @public
  */
 export function provideDocxEditor(options: DocxEditorRootProps): ProvideDocxEditorResult {
-  const { onReady, onChange, onFontError, ...engineProps } = options;
+  const { onReady, onChange, onFontError, onRevisionMarkupChange, ...engineProps } = options;
   const rootProps = shallowRef({ ...engineProps });
-  const rootListeners: DocxEditorRootListeners = { onReady, onChange, onFontError };
+  const rootListeners: DocxEditorRootListeners = {
+    onReady,
+    onChange,
+    onFontError,
+    onRevisionMarkupChange,
+  };
   const hostEmit = shallowRef({ ...noopEmit });
   provide(docxEditorRootHostEmitKey, hostEmit);
   const { editorRef } = useDocxEditorRootOwner(rootProps, {
     ready: (editor) => hostEmit.value.ready(editor),
     change: (change) => hostEmit.value.change(change),
     fontError: (error) => hostEmit.value.fontError(error),
+    revisionMarkupChange: (settings) => hostEmit.value.revisionMarkupChange?.(settings),
   });
   return {
     DocxEditorRoot,
@@ -117,6 +129,8 @@ export const DocxEditorRoot = defineComponent({
     translate: { type: Function as PropType<DocxEditorRootProps['translate']>, default: undefined },
     modules: { type: Array as PropType<readonly EditorModule[]>, default: undefined },
     mode: { type: String as PropType<'edit' | 'view' | 'suggesting'>, default: undefined },
+    revisionMarkup: Object as PropType<RevisionMarkupOptions>,
+    reviewDisplayMode: String as PropType<ReviewDisplayMode>,
     zoom: { type: Number, default: undefined },
     zoomMode: { type: [Object, String] as PropType<ZoomMode | 'auto'>, default: undefined },
     tableInteractionLabel: {
@@ -129,6 +143,7 @@ export const DocxEditorRoot = defineComponent({
     ready: (_editor: Editor) => true,
     change: (_change: DocumentChange) => true,
     fontError: (_error: unknown) => true,
+    revisionMarkupChange: (_settings: ResolvedRevisionMarkup) => true,
   },
   setup(props, { emit, slots }) {
     const ownedAbove = useDocxEditorRootOwned();
@@ -138,6 +153,7 @@ export const DocxEditorRoot = defineComponent({
         ready: (editor) => emit('ready', editor),
         change: (change) => emit('change', change),
         fontError: (error) => emit('fontError', error),
+        revisionMarkupChange: (settings) => emit('revisionMarkupChange', settings),
       };
       onUnmounted(() => {
         hostEmit.value = { ...noopEmit };
@@ -147,6 +163,7 @@ export const DocxEditorRoot = defineComponent({
         ready: (editor) => emit('ready', editor),
         change: (change) => emit('change', change),
         fontError: (error) => emit('fontError', error),
+        revisionMarkupChange: (settings) => emit('revisionMarkupChange', settings),
       });
     }
 

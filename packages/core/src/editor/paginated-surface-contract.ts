@@ -1,3 +1,4 @@
+import type { ResolvedRevisionMarkup } from '../contracts/revision-markup.ts';
 // The paginated surface's public contract owns the types a host programs against.
 // paginated-surface.ts implements and re-exports them, so importers keep one entry point.
 
@@ -556,6 +557,7 @@ export interface PaginatedSurface {
    * Replace how tracked changes are coloured, live. Paint-level: the pages repaint without
    * remeasuring a line, and the caret, selection and undo history stay where they are.
    */
+  setRevisionMarkup(settings: ResolvedRevisionMarkup): void;
   setRevisionStyles(colors: RevisionStyles | undefined): void;
   /** Toggle paragraph-end furniture without layout or document changes. */
   setShowParagraphMarks(show: boolean): void;

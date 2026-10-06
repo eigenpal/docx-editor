@@ -61,7 +61,22 @@ export {
   HARD_MAX_FONT_BYTES,
   HARD_MAX_FONT_SOURCES,
 } from '@docx-editor.dev/core/layout';
-export { createFontSource, defineFontResolver } from '@docx-editor.dev/core/editor';
+export {
+  createFontSource,
+  defineFontResolver,
+  REVISION_MARKUP_COLORS,
+} from '@docx-editor.dev/core/editor';
+export type {
+  ReviewDisplayMode,
+  RevisionMarkupOptions,
+  ResolvedRevisionMarkup,
+  RevisionMarkupStyle,
+  RevisionMarkupMark,
+  RevisionDeletionMark,
+  RevisionChangedLinesMark,
+  RevisionMarkupColor,
+  RevisionMarkupNamedColor,
+} from '@docx-editor.dev/core/editor';
 
 export type {
   ExportDestinationAnchor,

@@ -521,6 +521,7 @@ function artifactOf(
       kind: 'tracked-change',
       id: mappedId(ids.revision, 'change', item.id),
       change: item.revisionKind,
+      ...(item.structuralChanges ? { structuralChanges: item.structuralChanges } : {}),
       ...(item.markDirection ? { markDirection: item.markDirection } : {}),
       author: item.author,
       ...(item.date !== undefined ? { date: item.date } : {}),

@@ -3,6 +3,9 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
+import { collectPageChangeBars } from '@docx-editor.dev/core/output';
+import { DEFAULT_REVISION_MARKUP, type ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
+import { markupColor, spanMarkup } from './revision-markup.ts';
 import { PDFDocument, type PDFPage } from 'pdf-lib';
 import type {
   ExportSemanticLayout,
@@ -103,7 +106,8 @@ function decorations(
   y: number,
   page: PDFPage,
   work: Work,
-  pageIndex: number
+  pageIndex: number,
+  markup?: ResolvedRevisionMarkup
 ): string[] {
   const out: string[] = [];
   for (const block of blocks) {
@@ -134,7 +138,14 @@ function decorations(
           if (cell.paintInert || cell.vMergeContinue) continue;
           if (cell.shading)
             out.push(`${color(cell.shading)} rg ${rect(cell.box, x, y, pageHeight(page), true)} f`);
-          const inner = decorations(cell.blocks, x, y, page, work, pageIndex);
+          if (markup && cell.revisionShading) {
+            const shade = markup.cells[cell.revisionShading];
+            if (shade !== 'none')
+              out.push(
+                `${color(markupColor(shade))} rg ${rect(cell.box, x, y, pageHeight(page), true)} f`
+              );
+          }
+          const inner = decorations(cell.blocks, x, y, page, work, pageIndex, markup);
           if (cell.textDirection && inner.length)
             out.push('q', rotatedCellMatrix(cell.box, x, y, pageHeight(page)), ...inner, 'Q');
           else out.push(...inner);
@@ -221,11 +232,46 @@ export async function paint(
     if (
       layout.displayMode === 'all-markup' &&
       artifact.kind === 'tracked-change' &&
-      !['insert', 'delete', 'replace'].includes(artifact.change)
+      ![
+        'insert',
+        'delete',
+        'replace',
+        ...(layout.revisionMarkup ? ['moveFrom', 'moveTo', 'format'] : []),
+      ].includes(artifact.change) &&
+      !(
+        layout.revisionMarkup &&
+        artifact.change === 'structural' &&
+        artifact.structuralChanges?.length &&
+        artifact.structuralChanges.every((kind) =>
+          ['cellInsert', 'cellDelete', 'cellMerge'].includes(kind)
+        )
+      )
     )
       work.report('review-presentation', `Unsupported revision presentation: ${artifact.change}`);
   }
-  const text = new TextWriter(doc, session, work, layout.displayMode === 'all-markup');
+  const authorSlots = new Map<string, number>(Object.entries(layout.revisionAuthorSlots ?? {}));
+  let nextAuthorSlot = 0;
+  for (const slot of authorSlots.values()) nextAuthorSlot = Math.max(nextAuthorSlot, slot + 1);
+  const addAuthor = (author: string) => {
+    if (author !== '' && !authorSlots.has(author)) authorSlots.set(author, nextAuthorSlot++);
+  };
+  // Match the visible document order before adding authors from resolved-away revisions.
+  forEachSemanticSpan(layout, (visit) => {
+    for (const revision of visit.span.revisions ?? []) addAuthor(revision.author);
+    const markup = spanMarkup(visit, layout.revisionMarkup ?? DEFAULT_REVISION_MARKUP);
+    if (markup) addAuthor(markup.author);
+  });
+  for (const artifact of layout.reviewArtifacts) {
+    if (artifact.kind === 'tracked-change') addAuthor(artifact.author);
+  }
+  const text = new TextWriter(
+    doc,
+    session,
+    work,
+    layout.displayMode === 'all-markup',
+    layout.revisionMarkup,
+    authorSlots
+  );
   const images = new ImageWriter(doc, session, work);
   const names = destinations(doc, pages, layout);
   const behindStreams = pages.map(() => new Commands(work));
@@ -233,6 +279,28 @@ export async function paint(
   const frontBorders = pages.map(() => new Commands(work));
   for (const record of layout.pages) {
     const out = streams[record.index]!;
+    const simple = layout.reviewDisplayMode === 'simple-markup';
+    if ((layout.revisionMarkup && layout.displayMode === 'all-markup') || simple) {
+      const markup = layout.revisionMarkup ?? DEFAULT_REVISION_MARKUP;
+      const bars = collectPageChangeBars(
+        record,
+        1,
+        simple ? 'simple-markup' : 'all-markup',
+        false,
+        markup,
+        layout.facingPages
+      );
+      for (const bar of bars.runs) {
+        const ink = markupColor(
+          markup.changedLines.color,
+          authorSlots.get(bar.author ?? '') ?? 0,
+          simple ? 'EA3425' : 'A4A4A4'
+        );
+        out.push(
+          `${color(ink)} rg ${n(bars.left)} ${n(pageHeight(pages[record.index]!) - bar.bottom)} ${simple ? '1.5' : '0.75'} ${n(bar.bottom - bar.top)} re f`
+        );
+      }
+    }
     // Chrome flips y from the same gridded page height the text uses. `record.box.height` is
     // the ungridded layout value, and the two differ by up to half a device unit on A4.
     const height = pageHeight(pages[record.index]!);
@@ -290,7 +358,8 @@ export async function paint(
         root.origin.y - root.page.box.y,
         pages[root.page.index]!,
         work,
-        root.page.index
+        root.page.index,
+        layout.displayMode === 'all-markup' ? layout.revisionMarkup : undefined
       )
     );
   });
@@ -532,7 +601,15 @@ export async function paint(
       y: visit.drawingOrigin.y + story.contentOffset.y - visit.page.box.y,
     };
     return images.paintTextbox(visit, page, [
-      ...decorations(story.fragments, origin.x, origin.y, page, work, visit.page.index),
+      ...decorations(
+        story.fragments,
+        origin.x,
+        origin.y,
+        page,
+        work,
+        visit.page.index,
+        layout.displayMode === 'all-markup' ? layout.revisionMarkup : undefined
+      ),
       ...(textboxBuffers.get(visit.page.index)?.get(d) ?? []),
     ]);
   };

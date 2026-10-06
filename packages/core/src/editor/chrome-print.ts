@@ -88,7 +88,7 @@ export interface ChromePrintJob {
  * @public
  */
 export async function runChromePrint(
-  editor: Pick<Editor, 'save'>,
+  editor: Pick<Editor, 'save'> & Partial<Pick<Editor, 'snapshot'>>,
   handlers: ChromeExportHandlers = {},
   container: Document | Element = document
 ): Promise<ChromePrintJob> {

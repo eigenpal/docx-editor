@@ -129,7 +129,7 @@ async function renderSession(
     bytes,
     pageCount: layout.pages.length,
     layoutRevision: layout.revision,
-    displayMode: layout.displayMode ?? 'proposed',
+    displayMode: layout.reviewDisplayMode ?? layout.displayMode ?? 'proposed',
     fontResolution: session.fontResolution,
     diagnostics,
     timings: Object.freeze({

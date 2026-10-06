@@ -317,6 +317,14 @@ export const CHROME_GROUPS: readonly [{
     readonly labelKey: 'formattingBar.groups.format';
 }, {
     readonly controls: readonly [{
+        readonly id: 'revisionMarkup';
+        readonly labelKey: 'revisionMarkup.title';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
         readonly defaultToolbar: false;
         readonly id: 'simpleMarkup';
         readonly labelKey: 'review.simpleMarkup';
@@ -722,7 +730,7 @@ export interface ChromeExportHandlers {
     readonly markdown?: (source: Uint8Array) => Promise<{
         readonly markdown: string;
     }>;
-    readonly pdf?: (source: Uint8Array) => Promise<{
+    readonly pdf?: (source: Uint8Array, view?: ChromeExportView) => Promise<{
         readonly bytes: Uint8Array;
     }>;
 }
@@ -807,7 +815,7 @@ export interface ChromePrintOptions {
 }
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
 
 // @public
 export interface ClearAnchorHighlightOptions {
@@ -1293,6 +1301,8 @@ export interface DocxEditorConfig {
     modules?: readonly EditorModule[];
     // (undocumented)
     onFontError?: (error: EditorFontError) => void;
+    reviewDisplayMode?: ReviewDisplayMode;
+    revisionMarkup?: RevisionMarkupOptions;
     revisionStyles?: RevisionStyles;
     tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
     translate?: (key: string, params?: Record<string, string | number>) => string;
@@ -1324,6 +1334,7 @@ export interface DocxEditorInstance extends Editor {
     setMode(mode: 'edit' | 'view' | 'suggesting' | undefined): void;
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setReviewAuthorVisible(author: string, visible: boolean): void;
+    setRevisionMarkup(options: RevisionMarkupOptions): void;
     setRevisionStyles(styles: RevisionStyles): void;
     setTextFormFieldChrome(handlers: TextFormFieldChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setTranslate(translate: ((key: string, params?: Record<string, string | number>) => string) | undefined): void;
@@ -1610,6 +1621,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
     navigateReviewChange: {
         direction: 'next' | 'previous';
     };
+    openRevisionMarkupDialog: Record<never, never>;
     paste: {
         html?: string;
         text: string;
@@ -1808,6 +1820,7 @@ export interface EditorEvents {
     error: (error: EditorError) => void;
     // (undocumented)
     historyDiagnostic: (diagnostic: HistoryDiagnostic) => void;
+    revisionMarkupChange: (settings: ResolvedRevisionMarkup) => void;
     selectionChange: (snapshot: EditorSnapshot) => void;
 }
 
@@ -2057,6 +2070,7 @@ export interface EditorSnapshot {
     readonly parseError: string | null;
     readonly reviewDisplayMode?: ReviewDisplayMode;
     readonly reviewPaneOpen?: boolean;
+    readonly revisionMarkup: ResolvedRevisionMarkup;
     // (undocumented)
     readonly scope: EditorScope;
     // (undocumented)
@@ -2855,6 +2869,7 @@ export interface ReviewModelInput {
 // @public
 export interface ReviewModuleContribution {
     readonly collectReviewItems: CollectReviewItems;
+    readonly createRevisionMarkupDialog?: (host: RevisionMarkupDialogHost) => RevisionMarkupDialog;
     readonly displayModes: readonly ReviewDisplayMode[];
     readonly revisionItemsOfParagraph: (part: OoxmlPart, paragraphId: string) => readonly ReviewRevisionItem[];
 }
@@ -2992,10 +3007,10 @@ export interface Run {
 }
 
 // @public
-export function runChromeExport(editor: Pick<Editor, 'save'>, format: ChromeExportFormat, handlers?: ChromeExportHandlers): Promise<ChromeExportResult>;
+export function runChromeExport(editor: Pick<Editor, 'save'> & Partial<Pick<DocxEditorInstance, 'snapshot' | 'getReviewAuthors'>>, format: ChromeExportFormat, handlers?: ChromeExportHandlers): Promise<ChromeExportResult>;
 
 // @public
-export function runChromePrint(editor: Pick<Editor, 'save'>, handlers?: ChromeExportHandlers, container?: Document | Element): Promise<ChromePrintJob>;
+export function runChromePrint(editor: Pick<Editor, 'save'> & Partial<Pick<Editor, 'snapshot'>>, handlers?: ChromeExportHandlers, container?: Document | Element): Promise<ChromePrintJob>;
 
 // @public
 export interface RunFormatting {

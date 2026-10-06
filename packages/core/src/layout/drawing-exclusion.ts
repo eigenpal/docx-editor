@@ -1,3 +1,4 @@
+import { revisionMarkupHidesDrawing } from './revision-markup-projection.ts';
 // Anchored drawing exclusion zones and paint-layer ordering (typed-drawings-and-images task 9).
 //
 // Wrap exclusions feed paragraph line breaking; behind/inFront wrapNone produce none.
@@ -471,7 +472,11 @@ export function synthesizeParagraphWrapExclusionZones(options: {
   for (const atom of atoms) {
     // A drawing the display mode resolves away publishes no record, so it must carve no
     // hole either: the original view must not wrap text around an insertion it hides.
-    if (!revisionsVisible(atom.revisions, displayMode, options.revisionAuthorFilter)) continue;
+    if (
+      !revisionsVisible(atom.revisions, displayMode, options.revisionAuthorFilter) ||
+      revisionMarkupHidesDrawing(atom.revisions, displayMode, options.revisionAuthorFilter)
+    )
+      continue;
     if (anchoredOutOfCell(atom.projection, options)) continue;
     if (!wrapProducesExclusion(atom.projection.wrap) || atom.projection.wrap === 'topAndBottom')
       continue;
@@ -574,7 +579,11 @@ export function synthesizeParagraphTopAndBottomZones(options: {
   const zones: ExclusionZone[] = [];
   for (const atom of atoms) {
     // Same rule as the wrap zones above: no record, no hole.
-    if (!revisionsVisible(atom.revisions, displayMode, options.revisionAuthorFilter)) continue;
+    if (
+      !revisionsVisible(atom.revisions, displayMode, options.revisionAuthorFilter) ||
+      revisionMarkupHidesDrawing(atom.revisions, displayMode, options.revisionAuthorFilter)
+    )
+      continue;
     if (atom.projection.wrap !== 'topAndBottom') continue;
     // The table's rows move below this out-of-cell float instead of the cell text.
     if (

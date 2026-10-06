@@ -11,7 +11,7 @@ import type {
 } from '@docx-editor.dev/core/export';
 import type { FontOrigin } from '@docx-editor.dev/core/editor';
 import type { HeadlessDocumentRejection } from '@docx-editor.dev/core/store';
-import type { RevisionDisplayMode } from '@docx-editor.dev/core/layout';
+import type { ReviewDisplayMode } from '@docx-editor.dev/core/editor';
 
 /** A bounded explanation of content the PDF cannot reproduce. @public */
 export interface PdfDiagnostic {
@@ -40,7 +40,7 @@ export interface PdfExportOptions extends Omit<
   'fonts' | 'measurer' | 'producer' | 'reuseAcrossRevisions'
 > {
   /** Revision display mode. Defaults to proposed. */
-  readonly displayMode?: RevisionDisplayMode;
+  readonly displayMode?: ReviewDisplayMode;
   /** Apply optional document ligatures during measurement and output. Defaults to true. */
   readonly documentLigatures?: boolean;
   /** Sources after embedded fonts and before the built-in generic substitutes. */
@@ -78,7 +78,7 @@ export interface PdfExportResult {
   /** Layout revision for this conversion; not a persistent document identifier. */
   readonly layoutRevision: number;
   /** Revision display mode applied to the document. */
-  readonly displayMode: RevisionDisplayMode;
+  readonly displayMode: ReviewDisplayMode;
   /** Selected faces, substitutions, and failed font sources. */
   readonly fontResolution: ExportFontResolutionReport;
   /** Immutable output limitations and informational notices. */

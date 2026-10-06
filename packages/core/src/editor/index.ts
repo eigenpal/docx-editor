@@ -195,6 +195,7 @@ export {
   type EditorModule,
   type EditorModuleRegistry,
   type ReviewModelInput,
+  type ReviewDisplayMode,
   type ReviewModuleContribution,
   type CollaborationModuleContribution,
 } from '../contracts/modules.ts';
@@ -466,9 +467,27 @@ export type {
 
 export { runChromeExport, ChromeExportError } from './chrome-export.ts';
 export type {
+  ChromeExportView,
   ChromeExportFormat,
   ChromeExportHandlers,
   ChromeExportResult,
 } from './chrome-export.ts';
 export { runChromePrint, ChromePrintError, isChromePrintShortcut } from './chrome-print.ts';
 export type { ChromePrintErrorCode, ChromePrintJob, ChromePrintOptions } from './chrome-print.ts';
+
+export {
+  DEFAULT_REVISION_MARKUP,
+  REVISION_MARKUP_COLORS,
+  resolveRevisionMarkup,
+} from '../contracts/revision-markup.ts';
+export type {
+  RevisionMarkupOptions,
+  ResolvedRevisionMarkup,
+  RevisionMarkupNamedColor,
+  RevisionMarkupColor,
+  RevisionMarkupMark,
+  RevisionDeletionMark,
+  RevisionChangedLinesMark,
+  RevisionMarkupStyle,
+} from '../contracts/revision-markup.ts';
+export type { RevisionMarkupDialog, RevisionMarkupDialogHost } from '../contracts/modules.ts';

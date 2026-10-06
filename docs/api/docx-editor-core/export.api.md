@@ -172,15 +172,19 @@ export interface ExportSemanticLayout extends SemanticLayout {
     readonly destinations?: readonly ExportDestinationGeometry[];
     // (undocumented)
     readonly documentMetadata?: ExportDocumentMetadata;
+    readonly facingPages?: boolean;
     // (undocumented)
     readonly reviewArtifacts: readonly SemanticReviewArtifactRecord[];
+    readonly reviewDisplayMode?: ReviewDisplayMode;
+    readonly revisionAuthorSlots?: Readonly<Record<string, number>>;
+    readonly revisionMarkup?: ResolvedRevisionMarkup;
 }
 
 // @public
 export interface ExportSession {
     dispose(): void;
     layout(): Promise<ExportSemanticLayout>;
-    layoutFor(displayMode: RevisionDisplayMode): Promise<ExportSemanticLayout>;
+    layoutFor(displayMode: ReviewDisplayMode): Promise<ExportSemanticLayout>;
     validatedImageBytes(source: InlineDrawingRecord | AnchoredDrawingRecord | ListMarkerPictureRecord): Uint8Array | null;
 }
 
@@ -245,12 +249,14 @@ export function openDocumentForExport(source: ExportDocumentSource, options?: Op
 // @public
 export interface OpenDocumentForExportOptions {
     readonly convertPreservedImage?: PreservedImageConverter;
-    readonly displayMode?: RevisionDisplayMode;
+    readonly displayMode?: ReviewDisplayMode;
     readonly imageDecodePort?: ImageDecodePort;
     readonly measurer?: TextMeasurer;
     readonly producer?: string;
     readonly resourceTimeoutMs?: number;
     readonly reuseAcrossRevisions?: boolean;
+    readonly revisionAuthorSlots?: Readonly<Record<string, number>>;
+    readonly revisionMarkup?: RevisionMarkupOptions;
     readonly signal?: AbortSignal;
 }
 

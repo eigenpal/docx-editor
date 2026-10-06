@@ -126,9 +126,17 @@ import { RefreshLocation } from '@docx-editor.dev/core/editor';
 import { RefreshResult } from '@docx-editor.dev/core/editor';
 import { RefreshSubmission } from '@docx-editor.dev/core/editor';
 import { RefreshUpdate } from '@docx-editor.dev/core/editor';
+import { ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
 import { ReviewAuthorInfo } from '@docx-editor.dev/core/editor';
+import { ReviewDisplayMode } from '@docx-editor.dev/core/editor';
 import { RevisionAuthorAssignments } from '@docx-editor.dev/core/editor';
 import { RevisionAuthorStyle } from '@docx-editor.dev/core/editor';
+import { RevisionChangedLinesMark } from '@docx-editor.dev/core/editor';
+import { RevisionDeletionMark } from '@docx-editor.dev/core/editor';
+import { RevisionMarkupColor } from '@docx-editor.dev/core/editor';
+import { RevisionMarkupMark } from '@docx-editor.dev/core/editor';
+import { RevisionMarkupNamedColor } from '@docx-editor.dev/core/editor';
+import { RevisionMarkupOptions } from '@docx-editor.dev/core/editor';
 import { RevisionStyles } from '@docx-editor.dev/core/editor';
 import { RulerIndent } from '@docx-editor.dev/core/editor';
 import { rulerPageBox } from '@docx-editor.dev/core/editor';
@@ -3095,6 +3103,8 @@ export interface DocxEditorNamespace {
     readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
     readonly PrintDialog: typeof DocxEditorPrintDialog;
     // (undocumented)
+    readonly RevisionMarkup: typeof DocxEditorRevisionMarkup;
+    // (undocumented)
     readonly Root: typeof DocxEditorRoot;
     // (undocumented)
     readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
@@ -3743,6 +3753,8 @@ export interface DocxEditorProps {
     navigation?: boolean | DocxEditorNavigationProps;
     // (undocumented)
     popups?: DocxEditorPopups;
+    reviewDisplayMode?: ReviewDisplayMode;
+    revisionMarkup?: RevisionMarkupOptions;
     // (undocumented)
     rulers?: boolean;
     t?: (key: string, params?: Record<string, string | number>) => string;
@@ -3772,6 +3784,54 @@ export interface DocxEditorRef {
     snapshot(options?: {
         scope?: EditorScope;
     }): EditorSnapshot;
+}
+
+// @public
+export const DocxEditorRevisionMarkup: vue.DefineComponent<vue.ExtractPropTypes<{
+    cells: PropType<RevisionMarkupOptions['cells']>;
+    changedLines: PropType<RevisionMarkupOptions['changedLines']>;
+    deletions: PropType<RevisionMarkupOptions['deletions']>;
+    formatting: PropType<RevisionMarkupOptions['formatting']>;
+    insertions: PropType<RevisionMarkupOptions['insertions']>;
+    movedFrom: PropType<RevisionMarkupOptions['movedFrom']>;
+    movedTo: PropType<RevisionMarkupOptions['movedTo']>;
+    trackFormatting: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    trackMoves: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+}>, () => null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {
+    revisionMarkupChange: (_settings: ResolvedRevisionMarkup) => true;
+}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    cells: PropType<RevisionMarkupOptions['cells']>;
+    changedLines: PropType<RevisionMarkupOptions['changedLines']>;
+    deletions: PropType<RevisionMarkupOptions['deletions']>;
+    formatting: PropType<RevisionMarkupOptions['formatting']>;
+    insertions: PropType<RevisionMarkupOptions['insertions']>;
+    movedFrom: PropType<RevisionMarkupOptions['movedFrom']>;
+    movedTo: PropType<RevisionMarkupOptions['movedTo']>;
+    trackFormatting: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    trackMoves: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+}>> & Readonly<{
+    onRevisionMarkupChange?: ((_settings: ResolvedRevisionMarkup) => any) | undefined;
+}>, {
+    trackFormatting: boolean;
+    trackMoves: boolean;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export interface DocxEditorRevisionMarkupProps extends RevisionMarkupOptions {
+    // (undocumented)
+    onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
 }
 
 // @public (undocumented)
@@ -3805,6 +3865,8 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         type: PropType<readonly EditorModule[]>;
     };
     popups: PropType<DocxEditorPopups>;
+    reviewDisplayMode: PropType<ReviewDisplayMode>;
+    revisionMarkup: PropType<RevisionMarkupOptions>;
     tableInteractionLabel: {
         default: undefined;
         type: PropType<DocxEditorRootProps['tableInteractionLabel']>;
@@ -3827,6 +3889,7 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     change: (_change: DocumentChange) => true;
     fontError: (_error: unknown) => true;
     ready: (_editor: Editor) => true;
+    revisionMarkupChange: (_settings: ResolvedRevisionMarkup) => true;
 }, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     author: {
         default: undefined;
@@ -3857,6 +3920,8 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         type: PropType<readonly EditorModule[]>;
     };
     popups: PropType<DocxEditorPopups>;
+    reviewDisplayMode: PropType<ReviewDisplayMode>;
+    revisionMarkup: PropType<RevisionMarkupOptions>;
     tableInteractionLabel: {
         default: undefined;
         type: PropType<DocxEditorRootProps['tableInteractionLabel']>;
@@ -3877,6 +3942,7 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     onChange?: ((_change: DocumentChange) => any) | undefined;
     onFontError?: ((_error: unknown) => any) | undefined;
     onReady?: ((_editor: Editor) => any) | undefined;
+    onRevisionMarkupChange?: ((_settings: ResolvedRevisionMarkup) => any) | undefined;
 }>, {
     author: string;
     document: DocumentSource;
@@ -3899,6 +3965,8 @@ export interface DocxEditorRootListeners {
     onFontError?: (error: EditorFontError) => void;
     // (undocumented)
     onReady?: (editor: Editor) => void;
+    // (undocumented)
+    onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
 }
 
 // @public (undocumented)
@@ -3921,8 +3989,11 @@ export interface DocxEditorRootProps {
     onFontError?: (error: EditorFontError) => void;
     // (undocumented)
     onReady?: (editor: Editor) => void;
+    onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
     // (undocumented)
     popups?: DocxEditorPopups;
+    reviewDisplayMode?: ReviewDisplayMode;
+    revisionMarkup?: RevisionMarkupOptions;
     // (undocumented)
     tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
     translate?: (key: string, params?: Record<string, string | number>) => string;
@@ -5662,6 +5733,8 @@ export { RefreshSubmission }
 
 export { RefreshUpdate }
 
+export { ResolvedRevisionMarkup }
+
 // @public
 export const REVIEW_MARKERS_GUTTER = 44;
 
@@ -5669,6 +5742,8 @@ export const REVIEW_MARKERS_GUTTER = 44;
 export const REVIEW_PANE_GUTTER = 316;
 
 export { ReviewAuthorInfo }
+
+export { ReviewDisplayMode }
 
 // @public
 export interface ReviewGutter {
@@ -5713,6 +5788,18 @@ export interface ReviewRailRegistry {
 export { RevisionAuthorAssignments }
 
 export { RevisionAuthorStyle }
+
+export { RevisionChangedLinesMark }
+
+export { RevisionDeletionMark }
+
+export { RevisionMarkupColor }
+
+export { RevisionMarkupMark }
+
+export { RevisionMarkupNamedColor }
+
+export { RevisionMarkupOptions }
 
 export { RevisionStyles }
 

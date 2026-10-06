@@ -19,6 +19,7 @@ import { revisionItemsOf } from '../../store/store/review-reads.ts';
 import { planRevisionBatch } from '../../store/store/revision-batch.ts';
 import { serializeOoxmlPart } from '../../store/index.ts';
 import { docx } from './paginated-surface-fixtures.ts';
+import { resolveRevisionMarkup } from '../../contracts/revision-markup.ts';
 
 const AUTHOR = 'Bea';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -687,6 +688,27 @@ describe('tracked format changes in suggesting mode', () => {
       opened.surface.destroy();
       container.remove();
     }
+  });
+
+  test('viewer formatting preferences change tracking without changing text tracking', () => {
+    withSuggesting(`<w:p>${textRun('hello')}</w:p>`, (surface) => {
+      surface.setRevisionMarkup(resolveRevisionMarkup({ trackFormatting: false }));
+      select(surface, 0, 5);
+      surface.toggleRunProperty('b');
+      surface.setParagraphProperty('jc', { val: 'center' });
+      expect(surface.formatting().bold).toBe(true);
+      expect(rPrChanges(surface)).toHaveLength(0);
+      expect(findAll(surface.session.part().root, 'pPrChange')).toHaveLength(0);
+      select(surface, 5, 5);
+      surface.type('!');
+      expect(findAll(surface.session.part().root, 'ins')).toHaveLength(1);
+      surface.setRevisionMarkup(resolveRevisionMarkup({ trackFormatting: true }));
+      select(surface, 0, 5);
+      surface.toggleRunProperty('i');
+      expect(rPrChanges(surface)).toHaveLength(1);
+      surface.setParagraphProperty('jc', { val: 'right' });
+      expect(findAll(surface.session.part().root, 'pPrChange')).toHaveLength(1);
+    });
   });
 
   test('editing mode writes the properties with no record at all', () => {

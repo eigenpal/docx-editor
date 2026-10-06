@@ -218,6 +218,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     borders: 'explicitly-omitted',
     blocks: 'represented',
     box: 'layout-only',
+    revisionShading: 'explicitly-omitted',
   } satisfies Record<keyof TableCellFragmentRecord, MarkdownFieldPolicy>,
   inlineDrawing: {
     kind: 'represented',
@@ -426,6 +427,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     replacedRangeCount: 'represented',
     readOnly: 'represented',
     pairedWith: 'represented',
+    structuralChanges: 'represented',
     replyIds: 'represented',
     occurrences: 'represented',
   } satisfies Record<keyof SemanticTrackedChangeArtifactRecord, MarkdownFieldPolicy>,

@@ -1,3 +1,4 @@
+import { DEFAULT_REVISION_MARKUP } from '../../contracts/revision-markup.ts';
 // `snapshotsEqual` honesty (editor lane).
 //
 // The snapshot cache hands back the PREVIOUS snapshot object whenever `snapshotsEqual`
@@ -33,6 +34,7 @@ const BASELINE: EditorSnapshot = {
   showParagraphMarks: false,
   documentProtection: null,
   reviewDisplayMode: 'all-markup',
+  revisionMarkup: DEFAULT_REVISION_MARKUP,
   hasReviewContent: false,
   collaborationStatus: 'inactive',
   editingMode: 'editing',
@@ -69,6 +71,7 @@ const MUTATIONS = {
   showParagraphMarks: true,
   documentProtection: { edit: 'forms', enforced: true, password: false },
   reviewDisplayMode: 'original',
+  revisionMarkup: { ...DEFAULT_REVISION_MARKUP, trackMoves: false },
   hasReviewContent: true,
   collaborationStatus: 'ready',
   editingMode: 'viewing',

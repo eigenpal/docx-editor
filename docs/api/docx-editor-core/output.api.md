@@ -5,6 +5,12 @@
 ```ts
 
 // @public
+export type ChangeBarsMode = 'all-markup' | 'simple-markup' | 'none';
+
+// @public
+export function collectPageChangeBars(page: PageRecord, scale: number, mode: ChangeBarsMode, toggle?: boolean, markup?: ResolvedRevisionMarkup, facingPages?: boolean, colors?: RevisionStyleContext): PageChangeBars;
+
+// @public
 export const DEFAULT_FIELD_SHADING: FieldShadingMode;
 
 // @public
@@ -28,6 +34,19 @@ export interface OverlayRect {
 }
 
 // @public
+export interface PageChangeBars {
+    // (undocumented)
+    readonly color?: string;
+    readonly left: number;
+    // (undocumented)
+    readonly mode: ChangeBarsMode;
+    // (undocumented)
+    readonly runs: readonly BarRun[];
+    readonly signature: string;
+    readonly toggle: boolean;
+}
+
+// @public
 export interface PaintOptions {
     readonly activeHeaderFooterPageIndex?: number;
     readonly activeHeaderFooterRId?: string;
@@ -48,12 +67,18 @@ export interface PaintOptions {
     // (undocumented)
     readonly drawingStrings?: DrawingPaintStrings;
     readonly emptyTocPlaceholderIds?: ReadonlySet<string>;
+    // (undocumented)
+    readonly facingPages?: boolean;
     readonly fieldShading?: FieldShadingMode;
     readonly fontAlias?: (family: string) => string | undefined;
     // (undocumented)
     readonly imageUrlPort?: PaintImageUrlPort;
     readonly materialize?: ReadonlySet<number>;
     readonly readOnlyParagraphIds?: ReadonlySet<string>;
+    // (undocumented)
+    readonly revisionKindColors?: boolean;
+    // (undocumented)
+    readonly revisionMarkup?: ResolvedRevisionMarkup;
     readonly revisionStyles?: RevisionStyles;
     readonly scale?: number;
     readonly shadeFormFields?: boolean;

@@ -1,3 +1,4 @@
+import { DEFAULT_REVISION_MARKUP } from '../contracts/revision-markup.ts';
 // The one pre-mount read model, shared by every path that answers "no editor yet".
 // Framework-free — both adapters re-export it.
 
@@ -10,6 +11,7 @@ import type { EditorSnapshot } from '../contracts/editor.ts';
  * @public
  */
 export const LOADING_SNAPSHOT: EditorSnapshot = Object.freeze({
+  revisionMarkup: DEFAULT_REVISION_MARKUP,
   scope: Object.freeze({ kind: 'body' as const }),
   isLoading: true,
   isOpening: false,

@@ -722,6 +722,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
     navigateReviewChange: {
         direction: 'next' | 'previous';
     };
+    openRevisionMarkupDialog: Record<never, never>;
     paste: {
         html?: string;
         text: string;
@@ -920,6 +921,7 @@ export interface EditorEvents {
     error: (error: EditorError) => void;
     // (undocumented)
     historyDiagnostic: (diagnostic: HistoryDiagnostic) => void;
+    revisionMarkupChange: (settings: ResolvedRevisionMarkup) => void;
     selectionChange: (snapshot: EditorSnapshot) => void;
 }
 
@@ -1159,6 +1161,7 @@ export interface EditorSnapshot {
     readonly parseError: string | null;
     readonly reviewDisplayMode?: ReviewDisplayMode;
     readonly reviewPaneOpen?: boolean;
+    readonly revisionMarkup: ResolvedRevisionMarkup;
     // (undocumented)
     readonly scope: EditorScope;
     // (undocumented)

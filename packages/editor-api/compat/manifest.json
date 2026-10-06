@@ -214,6 +214,10 @@
   },
   "omissions": [
     {
+      "uid": "Word.View#revisionsFilter",
+      "reason": "Deferred to a separate view API change, including markup and view. Revision markup preferences belong to the editor host, outside the Office-shaped document model. Use createDocxEditor revisionMarkup and setRevisionMarkup; no competing document automation member is introduced."
+    },
+    {
       "uid": "Word.ContentControl#id",
       "reason": "The control's file id IS implemented and readable, as a string. Not selected because it cannot match upstream's `number`: `w:id` is optional and the schema lets a document repeat it, so a number has no value for \"the file wrote none\" and would invite a caller to key a map on something ambiguous. The control's identity is its handle; the file id is metadata beside it."
     },

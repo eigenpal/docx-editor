@@ -22,6 +22,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * always sends `Origin` on a `POST`, so a request without one is not the page.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { resolveRevisionMarkup, type ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
 import { exportPdf } from '@docx-editor.dev/docx-to-pdf';
 
 const MAX_UPLOAD = 20 * 1024 * 1024;
@@ -70,11 +71,40 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const comments = url.searchParams.get('comments') ?? 'true';
   const fidelityPolicy = url.searchParams.get('fidelityPolicy') ?? 'strict';
   if (
-    !['proposed', 'original', 'all-markup'].includes(displayMode) ||
+    !['proposed', 'original', 'all-markup', 'simple-markup'].includes(displayMode) ||
     !['true', 'false'].includes(comments) ||
     !['strict', 'best-effort'].includes(fidelityPolicy)
   )
     return json(res, 400, { message: 'Invalid conversion option.' });
+  let revisionMarkup: ResolvedRevisionMarkup | undefined;
+  const markupHeader = req.headers['x-revision-markup'];
+  if (markupHeader !== undefined) {
+    if (typeof markupHeader !== 'string' || markupHeader.length > 4096)
+      return json(res, 400, { message: 'Invalid revision markup settings.' });
+    try {
+      revisionMarkup = resolveRevisionMarkup(JSON.parse(markupHeader));
+    } catch {
+      return json(res, 400, { message: 'Invalid revision markup settings.' });
+    }
+  }
+  let revisionAuthorSlots: Readonly<Record<string, number>> | undefined;
+  const authorHeader = req.headers['x-revision-authors'];
+  if (authorHeader !== undefined) {
+    try {
+      if (typeof authorHeader !== 'string' || authorHeader.length > 8192) throw new TypeError();
+      const authors: unknown = JSON.parse(decodeURIComponent(authorHeader));
+      if (!authors || typeof authors !== 'object' || Array.isArray(authors)) throw new TypeError();
+      if (
+        Object.values(authors).some(
+          (slot) => typeof slot !== 'number' || !Number.isSafeInteger(slot) || slot < 0
+        )
+      )
+        throw new TypeError();
+      revisionAuthorSlots = Object.freeze(Object.fromEntries(Object.entries(authors)));
+    } catch {
+      return json(res, 400, { message: 'Invalid revision author slots.' });
+    }
+  }
   if (Number(req.headers['content-length']) > MAX_UPLOAD)
     return json(res, 413, { message: 'Upload limit is 20 MiB.' });
   if (active)
@@ -96,8 +126,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
     const generationStarted = performance.now();
     const result = await exportPdf(bytes, {
-      displayMode: displayMode as 'proposed' | 'original' | 'all-markup',
+      displayMode: displayMode as 'proposed' | 'original' | 'all-markup' | 'simple-markup',
       comments: comments === 'true',
+      revisionMarkup,
+      revisionAuthorSlots,
       fidelityPolicy: fidelityPolicy as 'strict' | 'best-effort',
       timeoutMs: DEADLINE_MS,
       // The platform has no installed Word fonts; the packaged faces are the whole set here.

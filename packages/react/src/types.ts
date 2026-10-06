@@ -1,3 +1,8 @@
+import type {
+  RevisionMarkupOptions,
+  ResolvedRevisionMarkup,
+  ReviewDisplayMode,
+} from '@docx-editor.dev/core/editor';
 import type { DocxEditorPopups } from './editor/popup-config';
 import type { DocxEditorChildren } from './docx-editor-children';
 import type {
@@ -216,6 +221,17 @@ export interface DocxEditorProps {
    * `{ type: 'fixed' }` opts out.
    */
   zoomMode?: ZoomMode | 'auto';
+  /**
+   * Controlled viewer markup settings. Omitted fields use defaults.
+   * Save callback values into this prop to accept API and dialog changes.
+   * Omit this prop for uncontrolled settings. Use one configuration source.
+   */
+  revisionMarkup?: RevisionMarkupOptions;
+  /** Receives proposed settings from API or dialog changes, excluding prop reconciliation. */
+  onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
+  /** Initial revision display mode. */
+  reviewDisplayMode?: ReviewDisplayMode;
+
   /**
    * BCP-47 locale for regional date input and engine-generated labels. Defaults to en-US.
    * Changes apply to subsequent edits without a remount; stored date formats are preserved.

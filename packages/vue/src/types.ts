@@ -1,3 +1,4 @@
+import type { RevisionMarkupOptions, ReviewDisplayMode } from '@docx-editor.dev/core/editor';
 import type {
   DocumentHandle,
   DocumentSource,
@@ -51,6 +52,15 @@ export interface DocxEditorProps {
   mode?: EditorMode;
   zoom?: number;
   zoomMode?: ZoomMode | 'auto';
+  /**
+   * Controlled viewer markup settings. Omitted fields use defaults.
+   * Save callback values into this prop to accept API and dialog changes.
+   * Omit this prop for uncontrolled settings. Use one configuration source.
+   */
+  revisionMarkup?: RevisionMarkupOptions;
+  /** Initial revision display mode. */
+  reviewDisplayMode?: ReviewDisplayMode;
+
   /**
    * BCP-47 locale for regional date input and engine-generated labels. Defaults to en-US.
    * Changes apply to subsequent edits without a remount; stored date formats are preserved.

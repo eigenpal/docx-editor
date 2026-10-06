@@ -1,3 +1,4 @@
+import { resolveRevisionMarkup } from '../../contracts/revision-markup.ts';
 // Change bars beyond the body: one column per sheet, whatever story the change is in.
 //
 // Word draws the rule at half the left margin for a header line, a footnote line and a
@@ -332,4 +333,32 @@ describe('change bars in every story share one column', () => {
     expect(overlays[0]!.parentElement!.classList.contains('docx-page')).toBe(true);
     expect(bars(container)).toHaveLength(3);
   });
+});
+
+test('local revision settings repaint the body, header, footnote, cell, and text box together', () => {
+  const insertion = (name: string) => ins(name, run(name));
+  const { surface, container } = mount(
+    docx({
+      body:
+        `<w:p>${insertion('body')}<w:r><w:footnoteReference w:id="1"/></w:r>${textBox(insertion('textbox'))}</w:p>` +
+        `<w:tbl><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:tc><w:p>${insertion('cell')}</w:p></w:tc></w:tr></w:tbl>`,
+      header: `<w:p>${insertion('header')}</w:p>`,
+      footnote: `<w:p>${insertion('footnote')}</w:p>`,
+    })
+  );
+  surface.setRevisionMarkup(
+    resolveRevisionMarkup({
+      insertions: { mark: 'doubleUnderline', color: 'violet' },
+      changedLines: { mark: 'rightBorder' },
+    })
+  );
+  const spans = [
+    ...container.querySelectorAll<HTMLElement>('[data-revision-kind="insert"][data-start]'),
+  ];
+  for (const name of ['body', 'header', 'footnote', 'cell', 'textbox']) {
+    const span = spans.find((item) => item.textContent === name);
+    expect(span).toBeDefined();
+    expect(span!.style.textDecorationStyle).toBe('double');
+    expect(span!.style.color).toBe('var(--doc-revision-color-violet)');
+  }
 });

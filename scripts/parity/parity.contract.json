@@ -21,7 +21,9 @@
       "t",
       "title",
       "zoom",
-      "zoomMode"
+      "zoomMode",
+      "revisionMarkup",
+      "reviewDisplayMode"
     ],
     "deferredInVue": {},
     "reactCallbacksAsVueEmits": {
@@ -30,7 +32,8 @@
       "onFontError": "fontError",
       "onSave": "save",
       "onOpen": "open",
-      "onTitleChange": "titleChange"
+      "onTitleChange": "titleChange",
+      "onRevisionMarkupChange": "revisionMarkupChange"
     },
     "reactRenderPropsAsVueSlots": {
       "children": "default",

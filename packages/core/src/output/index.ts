@@ -35,3 +35,9 @@ export {
   type OverlayRect,
   type SelectionOverlayOptions,
 } from './semantic-selection-overlay.ts';
+
+export {
+  collectPageChangeBars,
+  type PageChangeBars,
+  type ChangeBarsMode,
+} from './semantic-paint-change-bars.ts';

@@ -446,7 +446,11 @@ function blockAuthors(blocks: readonly BlockFragmentRecord[]): readonly string[]
     found.push(author);
   };
   for (const fragment of paragraphFragmentsOfBlocks(blocks)) {
+    for (const property of fragment.props) {
+      if (property.localName === 'pPrChange') see(property.attributes?.author ?? '');
+    }
     for (const line of fragment.lines) {
+      if (line.changeSites) for (const revision of line.changeSites) see(revision.author);
       for (const span of line.spans) {
         // Index loops with an explicit guard: `?? []` allocated a throwaway array and an
         // iterator for every untracked span, which is the overwhelming majority of them.

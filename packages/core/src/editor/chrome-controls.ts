@@ -752,6 +752,7 @@ export type ChromeSlotId =
   | 'list.lineSpacing'
   | 'format.painter'
   | 'format.clear'
+  | 'review.revisionMarkup'
   | 'review.comments'
   | 'review.paragraphMarks'
   | 'review.protectDocument'
@@ -1057,6 +1058,7 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
         ],
       },
       { kind: 'separator' },
+      { kind: 'item', slot: 'review.revisionMarkup' },
       { kind: 'item', slot: 'review.previousChange' },
       { kind: 'item', slot: 'review.nextChange' },
       { kind: 'separator' },

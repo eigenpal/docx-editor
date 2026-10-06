@@ -13,6 +13,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * than the free tier's final-state projection.
  */
 
+import { createRevisionMarkupDialog } from './revision-markup-dialog';
 import type { EditorModule } from '@docx-editor.dev/core/editor';
 import { collectReviewItems, revisionItemsOfParagraph } from './review-model.ts';
 import { rememberLicenseKey, type ProLicenseOptions } from '../license.ts';
@@ -31,6 +32,7 @@ export function reviewModule(options: ReviewModuleOptions = {}): EditorModule {
   return {
     id: 'review',
     review: {
+      createRevisionMarkupDialog,
       displayModes: ['all-markup', 'simple-markup', 'proposed', 'original'],
       collectReviewItems,
       revisionItemsOfParagraph,

@@ -1,3 +1,8 @@
+import type {
+  RevisionMarkupOptions,
+  ResolvedRevisionMarkup,
+  ReviewDisplayMode,
+} from '@docx-editor.dev/core/editor';
 import { formControlTranslateKey } from './form-control-translate';
 import {
   computed,
@@ -24,6 +29,7 @@ import {
   createDocxEditor,
   defaultTableLabel,
   resolveZoomMode,
+  resolveRevisionMarkup,
   sameZoomMode,
   type DocxEditorInstance,
   type EditorModule,
@@ -68,6 +74,17 @@ export interface DocxEditorRootProps {
   mode?: 'edit' | 'view' | 'suggesting';
   zoom?: number;
   zoomMode?: ZoomMode | 'auto';
+  /**
+   * Controlled viewer markup settings. Omitted fields use defaults.
+   * Save callback values into this prop to accept API and dialog changes.
+   * Omit this prop for uncontrolled settings. Use one configuration source.
+   */
+  revisionMarkup?: RevisionMarkupOptions;
+  /** Receives proposed settings from API or dialog changes, excluding prop reconciliation. */
+  onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
+  /** Initial revision display mode. */
+  reviewDisplayMode?: ReviewDisplayMode;
+
   tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
   imageDecodePort?: ImageDecodePort;
   onReady?: (editor: Editor) => void;
@@ -87,6 +104,7 @@ export interface DocxEditorRootEmit {
   ready: (editor: Editor) => void;
   change: (change: DocumentChange) => void;
   fontError: (error: EditorFontError) => void;
+  revisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
 }
 
 function sameZoomProp(a: ZoomMode | 'auto', b: ZoomMode | 'auto'): boolean {
@@ -112,6 +130,8 @@ export function useDocxEditorRootOwner(
   translateResolver: ComputedRef<(key: string, params?: Record<string, string | number>) => string>;
 } {
   const editorRef = shallowRef<DocxEditorInstance | null>(null);
+  const markupRevision = shallowRef(0);
+  let applyingMarkup = false;
   const tick = shallowRef(0);
   provide(docxEditorKey, editorRef);
   provide(editorStateTickKey, tick);
@@ -174,7 +194,7 @@ export function useDocxEditorRootOwner(
   let readyFired = false;
 
   const destroyEditor = () => {
-    if (cleanups.length >= 3) facadeListenerCount = Math.max(0, facadeListenerCount - 3);
+    if (cleanups.length >= 4) facadeListenerCount = Math.max(0, facadeListenerCount - 4);
     for (const off of cleanups.splice(0)) off();
     const instance = editorRef.value;
     if (instance) {
@@ -209,6 +229,8 @@ export function useDocxEditorRootOwner(
       ...(p.author !== undefined ? { author: p.author } : {}),
       ...(p.locale !== undefined ? { locale: p.locale } : {}),
       translate: translateResolver.value,
+      ...(p.revisionMarkup !== undefined ? { revisionMarkup: p.revisionMarkup } : {}),
+      ...(p.reviewDisplayMode !== undefined ? { reviewDisplayMode: p.reviewDisplayMode } : {}),
       ...(p.mode !== undefined ? { mode: p.mode } : {}),
       ...(revisionStyleRegistry.current() !== undefined
         ? { revisionStyles: revisionStyleRegistry.current() }
@@ -223,10 +245,18 @@ export function useDocxEditorRootOwner(
     const notify = deferredTick(() => {
       tick.value++;
     });
-    facadeListenerCount += 3;
+    facadeListenerCount += 4;
     cleanups.push(
       instance.on('change', (change) => {
         fireChange(change);
+        notify();
+      })
+    );
+    cleanups.push(
+      instance.on('revisionMarkupChange', (settings) => {
+        if (applyingMarkup) return;
+        emit.revisionMarkupChange?.(settings);
+        markupRevision.value++;
         notify();
       })
     );
@@ -302,6 +332,20 @@ export function useDocxEditorRootOwner(
       if (editor) editor.setAuthor(author);
     },
     { flush: 'post' }
+  );
+
+  watch(
+    () => [editorRef.value, toValue(props).revisionMarkup, markupRevision.value] as const,
+    ([editor, settings]) => {
+      if (!editor || settings === undefined) return;
+      applyingMarkup = true;
+      try {
+        editor.setRevisionMarkup(resolveRevisionMarkup(settings));
+      } finally {
+        applyingMarkup = false;
+      }
+    },
+    { deep: true, flush: 'post' }
   );
 
   const appliedHostMode = {

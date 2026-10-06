@@ -27,6 +27,7 @@ const REACT_FRAMEWORK_EQUIVALENTS = new Set([
   'onReady',
   'onChange',
   'onFontError',
+  'onRevisionMarkupChange',
   'onSave',
   'onOpen',
   'onTitleChange',

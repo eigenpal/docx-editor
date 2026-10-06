@@ -41,3 +41,16 @@ export type {
 } from '@docx-editor.dev/core/layout';
 export type { HeadlessDocumentRejection } from '@docx-editor.dev/core/store';
 export { ExportResourceError } from '@docx-editor.dev/core/export';
+
+export type {
+  ReviewDisplayMode,
+  RevisionMarkupOptions,
+  ResolvedRevisionMarkup,
+  RevisionMarkupStyle,
+  RevisionMarkupMark,
+  RevisionDeletionMark,
+  RevisionChangedLinesMark,
+  RevisionMarkupColor,
+  RevisionMarkupNamedColor,
+} from '@docx-editor.dev/core/editor';
+export { REVISION_MARKUP_COLORS } from '@docx-editor.dev/core/editor';

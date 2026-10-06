@@ -10,7 +10,9 @@ Printing calls `editor.save()` before conversion. Saving commits pending form in
 
 ## Before you begin
 
-Printing uses the same PDF handler as **File > Export > PDF**:
+Printing uses the same PDF handler as **File > Export > PDF**. The handler receives the review view and markup preferences through its `ChromeExportView` argument. Forward those preferences to the server to preserve revision marks and change bars.
+
+To configure the handler:
 
 1. Install `@docx-editor.dev/docx-to-pdf` on your Node.js server.
 1. Configure `menu.exporters.pdf` to send the document to that server.
