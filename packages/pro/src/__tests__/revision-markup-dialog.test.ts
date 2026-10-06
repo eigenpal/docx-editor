@@ -80,7 +80,7 @@ test('Cancel discards draft settings; Reset only changes the draft', () => {
 
 test('labels controls, omits the preview, closes with Escape, and removes its subscription', () => {
   const host = setup();
-  const dialog = getByRole(host.container, 'dialog', { name: 'Tracked changes options' });
+  const dialog = getByRole(host.container, 'dialog', { name: 'Track changes options' });
   expect(host.container.querySelector('.docx-revision-markup-preview')).toBeNull();
   for (const control of host.container.querySelectorAll('select,input'))
     expect(control.closest('label')).not.toBeNull();
@@ -201,11 +201,43 @@ test('text backgrounds default to None, stage separately, and reset without chan
 });
 
 for (const [code, strings] of Object.entries(locales)) {
-  test(`the ${code} dialog uses its translated tracked changes title`, () => {
+  test(`the ${code} dialog translates labels, options, help, and color controls`, () => {
+    const translations = strings.revisionMarkup!;
+    for (const [key, value] of Object.entries(translations)) {
+      for (const text of typeof value === 'object' && value !== null
+        ? Object.values(value)
+        : [value]) {
+        expect(typeof text, `${code}.revisionMarkup.${key}`).toBe('string');
+        expect(text?.trim().length).toBeGreaterThan(0);
+      }
+    }
     const title = strings.revisionMarkup?.title;
     expect(typeof title).toBe('string');
     const t = createT(deepMerge(en, strings) as LocaleStrings, code);
     const host = setup((key) => t(key as TranslationKey));
     expect(getByRole(host.container, 'dialog', { name: title! })).not.toBeNull();
+    const insertions = getByLabelText(host.container, translations.insertions!);
+    expect(getByRole(insertions, 'option', { name: translations.values!.bold! })).toBeTruthy();
+    const tracking = getByRole(host.container, 'checkbox', { name: translations.trackMoves! });
+    expect(
+      host.container.querySelector(`[id="${tracking.getAttribute('aria-describedby')}"]`)
+        ?.textContent
+    ).toBe(translations.trackMovesNote!);
+    const color = getByRole(host.container, 'button', {
+      name: `${translations.insertionsColor} ${translations.values!.byAuthor}`,
+    });
+    fireEvent.click(color);
+    const palette = getByRole(host.container, 'group', { name: translations.insertionsColor! });
+    fireEvent.click(getByRole(palette, 'button', { name: translations.values!.blue! }), {
+      detail: 1,
+    });
+    expect(color.textContent).toContain(translations.values!.blue!);
+    expect(
+      getByRole(host.container, 'button', {
+        name: `${translations.insertionsBackground} ${translations.values!.none}`,
+      })
+    ).toBeTruthy();
+    fireEvent.click(getByRole(host.container, 'button', { name: translations.ok! }));
+    expect(host.get().insertions.color).toBe('blue');
   });
 }

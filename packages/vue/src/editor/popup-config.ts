@@ -32,7 +32,7 @@ import { useTranslation } from '../i18n';
 
 /** Render overrides for automatically hosted editor popups. False disables a popup. @public */
 export interface DocxEditorPopups {
-  /** Tracked changes options. False cancels the requested settings session. */
+  /** Track changes options. False cancels the requested settings session. */
   revisionMarkup?: DocxEditorPopup<DocxEditorRevisionMarkupDialogProps>;
   /** File export progress and errors. False hides feedback without stopping conversion. */
   export?: DocxEditorPopup<DocxEditorExportDialogProps>;

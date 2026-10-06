@@ -954,10 +954,10 @@
       "lightGreen": "薄い緑",
       "lightPurple": "薄い紫"
     },
-    "deletionsBackground": null,
-    "formattingBackground": null,
-    "insertionsBackground": null,
-    "movedFromBackground": null,
-    "movedToBackground": null
+    "deletionsBackground": "削除の背景",
+    "formattingBackground": "書式変更の背景",
+    "insertionsBackground": "挿入の背景",
+    "movedFromBackground": "移動元の背景",
+    "movedToBackground": "移動先の背景"
   }
 }

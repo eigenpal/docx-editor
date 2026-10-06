@@ -1,15 +1,17 @@
 ---
 title: 'Customize revision markup'
-description: 'Set tracked change styles, save user preferences, and customize the Tracked changes options dialog in React and Vue.'
+description: 'Set tracked change styles, save user preferences, and customize the Track changes options dialog in React and Vue.'
 category: 'Pro'
 order: 63
 ---
 
 Use `revisionMarkup` to choose how each user sees tracked changes. Configure insertion and deletion marks, move styles, change bars, and table cell colors.
 
-The API and **Tracked changes options** dialog share the same settings. Display preferences stay local to each editor. They do not change revision records, saved DOCX content, or another participant's preferences.
+The API and **Track changes options** dialog share the same settings. Display preferences stay local to each editor. They do not change revision records, saved DOCX content, or another participant's preferences.
 
 The review module requires an EigenPal Pro License. Follow [Tracked changes](/docs/2.x/pro/tracked-changes) to enable review features.
+
+The dialog uses the editor's translations. All twelve bundled languages include its labels, help text, formatting options, and color names. Pass the adapter's `i18n` prop or the core editor's `translate` callback to select translations.
 
 ## Try markup styles
 
@@ -241,7 +243,7 @@ editor.setRevisionMarkup({ insertions: { background: 'none' } });
 
 ## Use and customize the dialog
 
-In the toolbar's review group, select **Tracked changes options**. The dialog contains **Markup**, **Moves**, **Table cell highlighting**, and **Formatting**.
+In the toolbar's review group, select **Track changes options**. The dialog contains **Markup**, **Moves**, **Table cell highlighting**, and **Formatting**.
 
 - **OK** applies the draft in one update.
 - **Cancel** discards the draft.
@@ -251,7 +253,7 @@ An effective API update replaces the open draft with the latest settings. An unc
 
 The dialog uses the shared popup API. Register a wrapper through `popups.revisionMarkup` and `definePopup()`. Use `DocxEditor.RevisionMarkupDialog` to retain the session, focus handling, labels, and keyboard behavior.
 
-Customize its named parts, hide fields, replace buttons, or build a layout with `preset={false}`. Use `className` and shared dialog tokens to style it. For React and Vue examples, see [Customize tracked changes options](/docs/2.x/guides/customize-dialogs#customize-tracked-changes-options).
+Customize its named parts, hide fields, replace buttons, or build a layout with `preset={false}`. Use `className` and shared dialog tokens to style it. For React and Vue examples, see [Customize track changes options](/docs/2.x/guides/customize-dialogs#customize-track-changes-options).
 
 The toolbar control uses slot `review.revisionMarkup`. Hide or replace it through [toolbar composition](/docs/2.x/guides/toolbar). Setting `popups.revisionMarkup` to `false` cancels dialog requests; it does not remove the toolbar control.
 

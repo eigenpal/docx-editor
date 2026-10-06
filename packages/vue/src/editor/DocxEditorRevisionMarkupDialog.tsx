@@ -281,5 +281,5 @@ const Impl = defineComponent({
     };
   },
 });
-/** Customizable viewer-local tracked changes options. @public */
+/** Customizable viewer-local Track changes options. @public */
 export const DocxEditorRevisionMarkupDialog = Object.assign(Impl, composition.parts);

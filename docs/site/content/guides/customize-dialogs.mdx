@@ -120,9 +120,9 @@ To manage opening and closing yourself, set the entry to `false` and mount the p
 
 <a id="customize-change-tracking-options" />
 
-## Customize tracked changes options
+## Customize track changes options
 
-The Pro review module opens **Tracked changes options** through `popups.revisionMarkup`. Register your component with `definePopup()` to keep the toolbar trigger and editor session.
+The Pro review module opens **Track changes options** through `popups.revisionMarkup`. Register your component with `definePopup()` to keep the toolbar trigger and editor session.
 
 In React, wrap the packaged dialog and replace its parts:
 
@@ -358,7 +358,7 @@ For handler setup and browser requirements, see [Print documents](/docs/2.x/guid
 
 ## Arrange parts and custom fields
 
-Page Setup, Paragraph Options, Field Options, and Tracked changes options expose compound parts. These include `Header`, `Title`, `Body`, `Footer`, `Apply`, `Cancel`, `Error`, and typed `Field` parts. Parts accept `className`, `style`, `hidden`, and `asChild`. Other popups retain their existing parts.
+Page Setup, Paragraph Options, Field Options, and Track changes options expose compound parts. These include `Header`, `Title`, `Body`, `Footer`, `Apply`, `Cancel`, `Error`, and typed `Field` parts. Parts accept `className`, `style`, `hidden`, and `asChild`. Other popups retain their existing parts.
 
 Parts forward attributes such as `id`, `aria-*`, and `data-*` to the rendered element. Built-in behavior takes precedence: passing `onClick` to `Apply` does not replace its handler. Use `asChild` for a custom element, and preserve the supplied behavior.
 
