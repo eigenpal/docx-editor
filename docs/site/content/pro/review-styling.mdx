@@ -195,6 +195,10 @@ The dialog groups settings into **Markup**, **Moves**, **Table cell highlighting
 
 Select **OK** to apply the draft in one update. Select **Cancel** to discard the draft. **Reset to defaults** restores the default draft. Select **OK** to apply it. An API update also updates an open dialog.
 
+Cell colors also apply to cells in inserted and deleted rows. Explicit cell revision shading takes precedence over row shading. Select **None** to retain authored cell shading without a revision fill.
+
+Text markup settings apply to run revisions, including runs inside table cells. Row-level insertion and deletion indicators keep their existing text styling. Selecting **Hidden** for deleted text does not remove a structurally deleted row.
+
 ### Control tracking behavior
 
 Clear **Track moves** to display imported moves with the insertion and deletion styles. This preference changes their display only. Creating move revisions remains unsupported.

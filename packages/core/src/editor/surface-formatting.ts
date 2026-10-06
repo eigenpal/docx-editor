@@ -1,3 +1,4 @@
+import { revisionMarkupStyleForEditing } from '../layout/revision-markup-style.ts';
 import { formattingRunAt } from '../store/store/direct-properties.ts';
 // Formatting queries over the published layout (paginated-surface seam).
 //
@@ -496,11 +497,17 @@ function selectionSpans(
    */
   paragraphOrder?: readonly string[]
 ): readonly StyleSpanRecord[] {
-  if (cells && cells.length > 0) return spansInCells(layout, cells);
+  const spans =
+    cells && cells.length > 0
+      ? spansInCells(layout, cells)
+      : spansInSelection(layout, selection, paragraphOrder ?? everyStoryOrder(layout));
   // `everyStoryOrder`, not `documentOrder`. The fallback is only reached by a caller that
   // named no story, and the body's order is wrong for every caret outside it — which is the
   // exact defect the parameter above exists to prevent, left standing in its own fallback.
-  return spansInSelection(layout, selection, paragraphOrder ?? everyStoryOrder(layout));
+  return spans.map((span) => {
+    const style = revisionMarkupStyleForEditing(span.style);
+    return style === span.style ? span : { ...span, style };
+  });
 }
 
 /**

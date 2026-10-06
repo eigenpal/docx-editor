@@ -116,6 +116,7 @@ export const SLOT_PARITY: Readonly<Record<ChromeSlotId, ParityRule>> = Object.fr
   'format.painter': { parity: 'same' },
   'format.clear': { parity: 'same' },
   'review.comments': { parity: 'same' },
+  'review.revisionMarkup': { parity: 'same' },
   'review.simpleMarkup': { parity: 'same' },
   'review.allMarkup': { parity: 'same' },
   'review.noMarkup': { parity: 'same' },

@@ -1,3 +1,4 @@
+import { observeContentControlPopup } from '@docx-editor.dev/core/editor';
 import { useId, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 export const revisionColor = (value: string) =>
@@ -30,7 +31,10 @@ export function RevisionMarkupColorPicker({
   const trigger = useRef<HTMLButtonElement>(null);
   const group = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
-    if (open) group.current?.querySelector<HTMLInputElement>('input:checked')?.focus();
+    if (!open || !group.current || !trigger.current) return;
+    const dispose = observeContentControlPopup(group.current, trigger.current);
+    group.current.querySelector<HTMLInputElement>('input:checked')?.focus();
+    return dispose;
   }, [open]);
   useEffect(() => {
     if (disabled) setOpen(false);

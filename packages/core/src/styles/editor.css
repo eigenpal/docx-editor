@@ -7753,11 +7753,11 @@ a.docx-hyperlink:focus-visible {
 }
 .docx-revision-markup-preview[data-position='leftBorder'] > span,
 .docx-revision-markup-preview[data-position='outsideBorder'] > span:first-child {
-  border-left: 3px solid var(--doc-revision-preview-color);
+  border-left: 3px solid var(--doc-revision-preview-color, currentColor);
 }
 .docx-revision-markup-preview[data-position='rightBorder'] > span,
 .docx-revision-markup-preview[data-position='outsideBorder'] > span:last-child {
-  border-right: 3px solid var(--doc-revision-preview-color);
+  border-right: 3px solid var(--doc-revision-preview-color, currentColor);
 }
 @media (max-width: 440px) {
   .docx-revision-markup-row {
@@ -7816,6 +7816,13 @@ a.docx-hyperlink:focus-visible {
   border-radius: 0.125rem;
 }
 .docx-revision-color-options:not([hidden]) {
+  position: fixed;
+  z-index: 1;
+  box-sizing: border-box;
+  width: min(18rem, calc(100vw - 1rem));
+  max-height: 20rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.25rem;

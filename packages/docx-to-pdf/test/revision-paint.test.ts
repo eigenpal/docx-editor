@@ -190,3 +190,31 @@ for (const mark of ['none', 'colorOnly', 'bold', 'italic'] as const) {
     expect(await commands(tracked.bytes)).toBe(await commands(plain.bytes));
   });
 }
+
+
+test.each([
+  ['ins', 'inserted'],
+  ['del', 'deleted'],
+] as const)(
+  'tracked %s row cells honor configured PDF shading and none',
+  async (kind, cellKind) => {
+    const row = (revision: string) =>
+      `<w:tbl><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid><w:tr>${revision}<w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`;
+    const input = docx(row(`<w:trPr><w:${kind} w:id="9" w:author="Reviewer"/></w:trPr>`));
+    const options = { displayMode: 'all-markup', useSystemFonts: false, fidelityPolicy: 'best-effort' } as const;
+    const shaded = await exportPdf(input, {
+      ...options,
+      revisionMarkup: { cells: { [cellKind]: 'yellow' }, changedLines: { mark: 'none' } },
+    });
+    expect(await commands(shaded.bytes)).toContain('1 1 0 rg');
+    const unshaded = await exportPdf(input, {
+      ...options,
+      revisionMarkup: { cells: { [cellKind]: 'none' }, changedLines: { mark: 'none' } },
+    });
+    const plain = await exportPdf(docx(row('')), {
+      ...options,
+      revisionMarkup: { changedLines: { mark: 'none' } },
+    });
+    expect(await commands(unshaded.bytes)).toBe(await commands(plain.bytes));
+  }
+);

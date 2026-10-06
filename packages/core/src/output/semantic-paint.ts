@@ -1860,6 +1860,7 @@ function paintTableFragment(
     const rowElement = positioned(document, 'div', row.box, scale);
     rowElement.className = 'docx-table-row';
     if (row.revisionKind) {
+      if (ctx.revisionMarkup) rowElement.style.backgroundColor = 'transparent';
       rowElement.classList.add(
         'docx-table-row--revision',
         row.revisionKind === 'insert' ? 'layout-revision-ins' : 'layout-revision-del'

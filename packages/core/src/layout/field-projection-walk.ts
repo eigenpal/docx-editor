@@ -2,6 +2,7 @@ import {
   projectRevisionMarkup,
   markupRevisionOf,
   recordHiddenMarkup,
+  projectBufferedRevisionMarkup,
 } from './revision-markup-projection.ts';
 import { tocLinkCascader } from './toc-link-formatting.ts';
 import { fieldResultIsDirectionOnly } from './field-result-style.ts';
@@ -979,7 +980,6 @@ export function unmergedPiecesOfParagraphForDisplay(
   // Malformed field missing end: demote — surface cached/buffered text, no live projection.
   abandonPending();
 
-  // Resolve font slots across run boundaries after assembling the paragraph pieces.
   return applyEastAsiaFontSlots(
     showFieldCodes
       ? displayFieldCodes(
@@ -992,7 +992,7 @@ export function unmergedPiecesOfParagraphForDisplay(
           authorFilter,
           fieldCodeRanges
         )
-      : pieces,
+      : projectBufferedRevisionMarkup(pieces, paragraph, displayMode, authorFilter, changeSites),
     themeFonts
   );
 }

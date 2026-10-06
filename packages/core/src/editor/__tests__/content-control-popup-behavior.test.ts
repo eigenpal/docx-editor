@@ -125,3 +125,60 @@ test('a detached anchor reattaches to replacement chrome in the panel editor', (
     root.remove();
   }
 });
+
+test('fixed palettes flip within the viewport and follow scrolling without an offset parent', () => {
+  const dialog = document.createElement('dialog');
+  const anchor = document.createElement('button');
+  const panel = document.createElement('div');
+  const style = document.createElement('style');
+  style.textContent = '.popup-fixed-fixture { position: fixed; max-height: 320px; }';
+  panel.className = 'popup-fixed-fixture';
+  Object.defineProperty(panel, 'offsetParent', { value: null });
+  dialog.style.overflow = 'hidden';
+  dialog.append(anchor, panel, style);
+  document.body.append(dialog);
+  let top = window.innerHeight - 50;
+  anchor.getBoundingClientRect = () => new DOMRect(window.innerWidth - 120, top, 100, 24);
+  panel.getBoundingClientRect = () => new DOMRect(0, 0, 288, 320);
+  const stop = observeContentControlPopup(panel, anchor);
+  try {
+    expect(panel.offsetParent).toBeNull();
+    expect(panel.dataset.placement).toBe('top');
+    expect(panel.style.top).toBe(`${top - 4 - 320}px`);
+    expect(panel.style.left).toBe(`${window.innerWidth - 8 - 288}px`);
+    expect(panel.style.maxHeight).toBe('320px');
+    top = 12;
+    dialog.dispatchEvent(new Event('scroll', { bubbles: true }));
+    expect(panel.dataset.placement).toBe('bottom');
+    expect(panel.style.top).toBe('40px');
+    stop();
+    top = 100;
+    dialog.dispatchEvent(new Event('scroll', { bubbles: true }));
+    expect(panel.style.top).toBe('40px');
+  } finally {
+    stop();
+    dialog.remove();
+  }
+});
+
+test('fixed palettes limit their scroll height in a short viewport', () => {
+  const descriptor = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+  Object.defineProperty(window, 'innerHeight', { configurable: true, value: 240 });
+  const anchor = document.createElement('button');
+  const panel = document.createElement('div');
+  panel.style.position = 'fixed';
+  anchor.getBoundingClientRect = () => new DOMRect(20, 180, 80, 24);
+  panel.getBoundingClientRect = () => new DOMRect(0, 0, 288, 320);
+  document.body.append(anchor, panel);
+  try {
+    positionContentControlPopup(panel, anchor);
+    expect(panel.dataset.placement).toBe('top');
+    expect(panel.style.maxHeight).toBe('168px');
+    expect(panel.style.top).toBe('8px');
+  } finally {
+    anchor.remove();
+    panel.remove();
+    if (descriptor) Object.defineProperty(window, 'innerHeight', descriptor);
+    else Reflect.deleteProperty(window, 'innerHeight');
+  }
+});

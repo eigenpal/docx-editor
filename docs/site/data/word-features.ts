@@ -933,7 +933,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'premium',
     notes:
-      'Viewer preferences set inserted, deleted, merged, and split cell shading. Imported cellIns, cellDel, and cellMerge records supply the shading. A cellMerge change from continuation to non-continuation uses split shading. Creating arbitrary cell merge and split revisions remains unsupported.',
+      'Viewer preferences set inserted, deleted, merged, and split cell shading. Imported cellIns, cellDel, and cellMerge records supply the shading. Inserted and deleted rows supply shading for cells without an explicit cell revision. None preserves authored shading without a revision fill. Row-level text indicators keep their existing styling; run revision markup still applies inside cells. A cellMerge change from continuation to non-continuation uses split shading. Creating arbitrary cell merge and split revisions remains unsupported.',
     docsLink: '/docs/2.x/pro/review-styling',
   },
 

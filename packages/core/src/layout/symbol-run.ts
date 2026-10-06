@@ -75,3 +75,12 @@ export function spanBesideSymbol<
   const run = leftward ? symbolRunOf(leftward.props) : null;
   return leftward && run ? { ...leftward, props: run.props, style: run.style } : null;
 }
+
+/** Property projection preserves the source run used by symbol caret readback. */
+export function carrySymbolRun(
+  source: readonly OoxmlProperty[],
+  target: readonly OoxmlProperty[]
+): void {
+  const run = symbolRuns.get(source);
+  if (run) symbolRuns.set(target, run);
+}

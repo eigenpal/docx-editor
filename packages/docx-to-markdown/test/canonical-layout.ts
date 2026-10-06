@@ -7,6 +7,11 @@ export function canonicalLayout(value: unknown, key = ''): unknown {
     key === 'part' ||
     key === 'resource' ||
     key === 'reviewArtifacts' ||
+    // Export paint preferences are metadata; projected spans and geometry remain compared.
+    key === 'reviewDisplayMode' ||
+    key === 'revisionMarkup' ||
+    key === 'revisionAuthorSlots' ||
+    key === 'facingPages' ||
     key === 'documentMetadata' ||
     key === 'contentWarnings' ||
     key === 'destinations'

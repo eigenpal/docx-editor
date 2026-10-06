@@ -23,14 +23,15 @@ The DAG was kept identical to the package graph it replaced. A lane quietly gain
 | `store`         | `src/store`         | `./store`         | —                                                                    | neutral     |
 | `collaboration` | `src/collaboration` | `./collaboration` | store                                                                | neutral     |
 | `binding`       | `src/binding`       | `./binding`       | contracts, store, collaboration                                      | browser     |
-| `layout`        | `src/layout`        | `./layout`        | store                                                                | neutral     |
-| `output`        | `src/output`        | `./output`        | store, layout                                                        | browser     |
+| `layout`        | `src/layout`        | `./layout`        | contracts, store                                                                | neutral     |
+| `output`        | `src/output`        | `./output`        | contracts, store, layout                                                        | browser     |
+| `export`        | `src/export`        | `./export`        | contracts, store, layout | neutral |
 | `automation`    | `src/automation`    | `./automation`    | store, collaboration                                                 | neutral     |
 | `editor`        | `src/editor`        | `./editor`        | contracts, store, collaboration, binding, layout, output, automation | browser     |
 
 Responsibilities:
 
-- **`contracts`** — declaration-only public API: `Editor`, `EditorHost`, commands, queries, document types.
+- **`contracts`** — public API types and runtime-neutral shared settings, including revision markup defaults and validation.
 - **`store`** — the bounded OPC/OOXML trust boundary, the canonical ordered OOXML tree, `TreeDocumentStore`, and the `TreeDocOp` vocabulary. The source of truth.
 - **`collaboration`** — provider-neutral contracts for the document port, session, failure codes, and status. This lane is DOM-free. Replication implementations live outside core.
 - **`binding`** — the ONLY ProseMirror-aware lane: projects a tree revision into a PM doc, and maps an edited doc back into tree ops or refuses.
@@ -38,6 +39,8 @@ Responsibilities:
 - **`output`** — the painter over those records. Never rederives geometry or interprets CSS.
 - **`automation`** — the transport-neutral host port an automation object model programs against (`@docx-editor.dev/editor-api`). Store and nothing else: a server has to be able to run it, so reaching into binding, output or editor would put a DOM in a headless host.
 - **`editor`** — the browser composition root. Composes the tree session, pagination and the paginated surface into the `Editor`/`EditorHost` contract.
+
+Layout, output, and export share revision markup settings through the runtime-neutral contracts lane. This keeps settings validation and defaults consistent.
 
 Edges point downward only. A lane that acquires a new dependency declares it in `core-lane-graph.ts`, in a diff a reviewer sees.
 

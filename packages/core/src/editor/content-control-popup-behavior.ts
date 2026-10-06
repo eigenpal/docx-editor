@@ -1,9 +1,31 @@
 /** Shared focus and placement for engine and host value pop-ups. */
 
-/** Place an absolute popup against an anchor, within the sheet and visible scroller. @public */
+/** Place a popup against an anchor, within the viewport or its visible sheet. @public */
 export function positionContentControlPopup(panel: HTMLElement, anchor: HTMLElement): void {
   const view = panel.ownerDocument.defaultView;
   if (!view) return;
+  // Fixed palettes escape scrolling dialog bodies without changing their layout.
+  if (view.getComputedStyle(panel).position === 'fixed') {
+    const gap = 4;
+    const margin = 8;
+    const control = anchor.getBoundingClientRect();
+    panel.style.maxHeight = '';
+    const configured = Number.parseFloat(view.getComputedStyle(panel).maxHeight);
+    const cap = Number.isFinite(configured) ? configured : view.innerHeight;
+    panel.style.maxWidth = `${Math.max(0, view.innerWidth - margin * 2)}px`;
+    panel.style.maxHeight = `${Math.max(0, Math.min(cap, view.innerHeight - margin * 2))}px`;
+    const size = panel.getBoundingClientRect();
+    const below = Math.max(0, view.innerHeight - margin - control.bottom - gap);
+    const above = Math.max(0, control.top - margin - gap);
+    const flip = size.height > below && above > below;
+    const height = Math.min(size.height, flip ? above : below);
+    panel.style.maxHeight = `${height}px`;
+    panel.style.left = `${Math.max(margin, Math.min(control.left, view.innerWidth - margin - size.width))}px`;
+    const preferredTop = flip ? control.top - gap - height : control.bottom + gap;
+    panel.style.top = `${Math.max(margin, Math.min(preferredTop, view.innerHeight - margin - height))}px`;
+    panel.dataset.placement = flip ? 'top' : 'bottom';
+    return;
+  }
   const parent = panel.offsetParent as HTMLElement | null;
   if (!parent) return;
   const control = anchor.getBoundingClientRect();

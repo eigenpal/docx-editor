@@ -1,6 +1,7 @@
+import { withRevisionMarkupEmphasis } from './revision-markup-style.ts';
 import { revisionMarkupStyle, type ResolvedRevisionMarkup } from '../contracts/revision-markup.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
-import { appendChangeSite, type MutableChangeSite } from './field-pieces.ts';
+import { appendChangeSite, type MutableChangeSite, type FieldAwarePiece } from './field-pieces.ts';
 import {
   formatRevisionOf,
   revisionIncluded,
@@ -22,7 +23,7 @@ export function projectRevisionMarkup(
   const mark = settings && revision ? revisionMarkupStyle(settings, revision.kind).mark : undefined;
   return {
     text: mark === 'caret' ? '^' : mark === 'pound' ? '#' : text,
-    style: mark === 'bold' || mark === 'italic' ? { ...style, [mark]: true } : style,
+    style: mark === 'bold' || mark === 'italic' ? withRevisionMarkupEmphasis(style, mark) : style,
     projected: projected || mark === 'caret' || mark === 'pound',
     hidden: mark === 'hidden',
   };
@@ -82,4 +83,35 @@ export function revisionMarkupHidesDrawing(
       revisionIncluded(filter, revision)
   );
   return !!removal && revisionMarkupStyle(filter.revisionMarkup, removal.kind).mark === 'hidden';
+}
+
+/** Buffered editable field results use the same measured presentation as ordinary runs. */
+export function projectBufferedRevisionMarkup(
+  pieces: FieldAwarePiece[],
+  paragraph: OoxmlNode,
+  mode: import('./revision-projection.ts').RevisionDisplayMode,
+  filter: RevisionAuthorFilter | undefined,
+  sites: MutableChangeSite[] | undefined
+): FieldAwarePiece[] {
+  if (mode !== 'all-markup' || !filter?.revisionMarkup) return pieces;
+  const result: FieldAwarePiece[] = [];
+  for (const piece of pieces) {
+    const projected = projectRevisionMarkup(
+      piece.text,
+      piece.style,
+      !!piece.projected,
+      filter.revisionMarkup,
+      markupRevisionOf(piece, paragraph, filter)
+    );
+    if (projected.hidden) {
+      recordHiddenMarkup(sites, piece.start, piece.end, piece);
+      continue;
+    }
+    result.push(
+      projected.text === piece.text && projected.style === piece.style
+        ? piece
+        : { ...piece, text: projected.text, style: projected.style, projected: projected.projected }
+    );
+  }
+  return result;
 }

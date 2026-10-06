@@ -91,6 +91,7 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'list.lineSpacing',
   'format.painter',
   'format.clear',
+  'review.revisionMarkup',
   'review.simpleMarkup',
   'review.allMarkup',
   'review.noMarkup',
@@ -319,7 +320,7 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the count is stable, so a dropped control fails rather than passing quietly', () => {
-    expect(chromeControlCount()).toBe(73);
+    expect(chromeControlCount()).toBe(74);
   });
 
   test('the table group is contextual and carries border/fill chrome slots', () => {

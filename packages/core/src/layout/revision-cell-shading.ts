@@ -35,8 +35,15 @@ export function revisionCellShading(
 export function revisionCellMetadata(
   properties: OoxmlElement | undefined,
   mode: RevisionDisplayMode,
-  filter: RevisionAuthorFilter | undefined
+  filter: RevisionAuthorFilter | undefined,
+  rowRevision?: OoxmlElement
 ): Pick<TableCellFragmentRecord, 'revisionShading'> {
-  const revisionShading = revisionCellShading(properties, mode, filter);
+  const revisionShading =
+    revisionCellShading(properties, mode, filter) ??
+    (mode === 'all-markup' && rowRevision
+      ? rowRevision.localName === 'ins'
+        ? 'inserted'
+        : 'deleted'
+      : undefined);
   return revisionShading ? { revisionShading } : {};
 }

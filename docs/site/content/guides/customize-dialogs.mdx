@@ -170,7 +170,7 @@ const Field = Dialog.Field;
 
 Register the wrapper with `revisionMarkup: definePopup(ReviewOptions)`. Keep `preset: true` when forwarding Boolean props.
 
-The dialog exposes `Header`, `Title`, `Body`, `Footer`, `Apply`, `Cancel`, `Error`, `Field`, and `Reset`. `Field` names match the top-level `ResolvedRevisionMarkup` keys. Each style field contains its mark and color controls. The `cells` field contains all four cell colors.
+The dialog exposes `Header`, `Title`, `Body`, `Footer`, `Apply`, `Cancel`, `Error`, `Field`, and `Reset`. `Field` names match the top-level `ResolvedRevisionMarkup` keys. Each style field contains its mark and color controls. The `changedLines` field also contains the position preview. The `cells` field contains all four cell colors.
 
 Use `useRevisionMarkupDialog()` inside the dialog to read its draft. It provides the shared dialog actions and `reset()`. `setValue()` replaces one top-level value. Spread the existing value when changing a nested property:
 
@@ -195,11 +195,26 @@ function RedInsertions() {
 }
 ```
 
-In Vue, read `draft.values.value`. Set `preset={false}` to arrange the named parts yourself. Keep an accessible title and dismissal control. Hidden fields retain their draft values.
+In Vue, read `draft.values.value`. To arrange named parts yourself, set `preset={false}` in JSX or `:preset="false"` in a Vue template. Keep an accessible title and dismissal control. Hidden fields retain their draft values.
 
 **Reset to defaults** changes the draft. **OK** applies it once through the editor settings. **Cancel** discards it. An external API update refreshes the open draft.
 
-Set `popups.revisionMarkup` to `false` to disable automatic rendering. To supply your own renderer outside React or Vue, register `setRevisionMarkupChrome({ onRequest })`. The request supplies the same draft session. Call `session.cancel()` when you dismiss it. Unregister the renderer when your host unmounts.
+Set `popups.revisionMarkup` to `false` to cancel automatic dialog requests. To supply your own renderer outside React or Vue, register `setRevisionMarkupChrome({ onRequest })`. The request supplies the same draft session. Call `session.cancel()` when you dismiss it. Unregister the renderer when your host unmounts.
+
+The session provides these methods and properties:
+
+| Member | Behavior |
+| --- | --- |
+| `get()` | Returns the immutable resolved draft. |
+| `set(partial)` | Validates and merges draft preferences without applying them. |
+| `reset()` | Restores the default draft without applying it. |
+| `subscribe(listener)` | Observes draft changes and returns an unsubscribe function. Read `get()` for the initial draft. |
+| `canApply()` | Reports whether the session can apply its draft. |
+| `apply()` | Applies the draft and closes the session. Returns `false` if the session cannot apply. |
+| `cancel()` | Discards the draft and closes the session. |
+| `signal` | Aborts when the session ends. |
+
+The Pro review module and an attached editor are required to open a session. These renderer methods belong to host infrastructure. They do not extend the Office-shaped document automation model.
 
 Manual registrations take priority over adapter fallbacks. Pass `null` to select native rendering until you dispose that registration. The session signal aborts on dismissal, replacement, document load, detach, destroy, or renderer disposal. Stop using the session after it aborts.
 

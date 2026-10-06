@@ -148,7 +148,7 @@ describe('useEditorState subscriptions', () => {
       app.mount(container);
       await flush();
       expect(editorStateActiveSubscriptionCount()).toBeGreaterThanOrEqual(40);
-      expect(docxEditorFacadeListenerCount()).toBe(3);
+      expect(docxEditorFacadeListenerCount()).toBe(4);
     } finally {
       app.unmount();
     }
@@ -216,7 +216,7 @@ describe('useEditorCommand lifecycle', () => {
     try {
       app.mount(container);
       await flush();
-      expect(docxEditorFacadeListenerCount()).toBe(3);
+      expect(docxEditorFacadeListenerCount()).toBe(4);
     } finally {
       app.unmount();
     }

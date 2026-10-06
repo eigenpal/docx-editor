@@ -1,3 +1,4 @@
+import { observeContentControlPopup } from '@docx-editor.dev/core/editor';
 import { defineComponent, getCurrentInstance, nextTick, ref, watch, type PropType } from 'vue';
 
 export function revisionColorToken(value: string): string {
@@ -49,6 +50,14 @@ export const RevisionMarkupColorPicker = defineComponent({
         doc?.removeEventListener('mousedown', outside, true);
       });
     });
+    watch(
+      open,
+      (visible, _old, cleanup) => {
+        if (visible && list.value && button.value)
+          cleanup(observeContentControlPopup(list.value, button.value));
+      },
+      { flush: 'post' }
+    );
     return () => (
       <div
         ref={root}

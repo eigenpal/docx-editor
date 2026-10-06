@@ -49,6 +49,7 @@ export function createRevisionMarkupDialog(host: RevisionMarkupDialogHost): Revi
     dialog?.remove();
     dialog = null;
     controls.clear();
+    for (const picker of colors.values()) picker.destroy();
     colors.clear();
     if (opener?.isConnected) opener.focus({ preventScroll: true });
     opener = null;

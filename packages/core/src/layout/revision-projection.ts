@@ -1,3 +1,4 @@
+import { carrySymbolRun } from './symbol-run.ts';
 import type { ResolvedRevisionMarkup } from '../contracts/revision-markup.ts';
 // Revision attribution and display modes for layout.
 //
@@ -476,7 +477,7 @@ export function projectedRevisionProperties(
   authorFilter?: RevisionAuthorFilter
 ): readonly OoxmlProperty[] {
   if (!authorFilter) return properties;
-  return properties.filter((property) => {
+  const projected = properties.filter((property) => {
     if (property.localName !== 'rPrChange' && property.localName !== 'pPrChange') return true;
     const nodeId =
       'revisionNodeId' in property && typeof property.revisionNodeId === 'string'
@@ -490,6 +491,9 @@ export function projectedRevisionProperties(
       nodeId,
     });
   });
+  if (projected.length === properties.length) return properties;
+  carrySymbolRun(properties, projected);
+  return projected;
 }
 
 /** What one laid-out piece carries after the reviewer view is applied to it. */

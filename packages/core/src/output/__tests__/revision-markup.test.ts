@@ -264,3 +264,47 @@ test.each(['none', 'doubleUnderline', 'hidden', 'caret', 'pound'] as const)(
     if (mark === 'pound') expect(glyph.textContent).toBe('#');
   }
 );
+
+test.each([
+  ['ins', 'inserted'],
+  ['del', 'deleted'],
+] as const)('tracked %s rows apply the configured %s cell shading', (kind, cellKind) => {
+  const body = `<w:tbl><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid><w:tr><w:trPr><w:${kind} w:id="9" w:author="Reviewer"/></w:trPr><w:tc><w:p>${run('cell')}</w:p></w:tc></w:tr></w:tbl>`;
+  const { root } = render(body, { cells: { [cellKind]: 'green' } });
+  const cell = root.querySelector<HTMLElement>('[data-revision-cell]')!;
+  expect(cell.dataset.revisionCell).toBe(cellKind);
+  expect(cell.style.backgroundColor).toBe('var(--doc-revision-color-green)');
+  const plain = render(body, { cells: { [cellKind]: 'none' } }).root;
+  expect(plain.querySelector<HTMLElement>('[data-revision-cell]')!.style.backgroundColor).toBe('');
+  expect(plain.querySelector<HTMLElement>('.docx-table-row')!.style.backgroundColor).toBe(
+    'transparent'
+  );
+});
+
+test('cell merge shading takes precedence over its inserted row', () => {
+  const { root } = render(
+    `<w:tbl><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid><w:tr><w:trPr><w:ins w:id="9" w:author="Reviewer"/></w:trPr><w:tc><w:tcPr><w:cellMerge w:id="10" w:author="Reviewer" w:vMerge="cont"/></w:tcPr><w:p>${run('cell')}</w:p></w:tc></w:tr></w:tbl>`,
+    {
+      cells: { inserted: 'green', merged: 'blue' },
+    }
+  );
+  expect(root.querySelector<HTMLElement>('[data-revision-cell]')!.style.backgroundColor).toBe(
+    'var(--doc-revision-color-blue)'
+  );
+});
+
+test.each([
+  ['hidden', ''],
+  ['caret', '^'],
+  ['pound', '#'],
+  ['bold', 'removed'],
+  ['italic', 'removed'],
+] as const)('deletion %s applies inside editable field results', (mark, text) => {
+  const body = `<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> FORMTEXT </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r>${revision('del', 'removed')}<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>`;
+  const { layout, root } = render(body, { deletions: { mark } });
+  const spans = linesOf(layout).flatMap((line) => line.spans);
+  expect(spans.map((span) => span.text).join('')).toBe(text);
+  if (mark === 'bold' || mark === 'italic') expect(spans[0]!.style[mark]).toBe(true);
+  if (text) expect(spans[0]!.range.end).toBe(7);
+  expect(root.querySelector('.docx-change-bar')).not.toBeNull();
+});

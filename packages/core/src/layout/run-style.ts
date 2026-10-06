@@ -1,3 +1,4 @@
+import { revisionMarkupSourcesEqual } from './revision-markup-style.ts';
 // The accepted run property boundary, resolved for layout (task 7.2).
 //
 // Raw `w:rPr` children are authored OOXML: half-points, twips, percentages, toggle elements
@@ -517,6 +518,7 @@ export function measureDisplayText(
 /** Whether two resolved styles are identical, for span merging and cache keys. */
 export function runStylesEqual(a: ResolvedRunStyle, b: ResolvedRunStyle): boolean {
   return (
+    revisionMarkupSourcesEqual(a, b) &&
     a.shaping?.script === b.shaping?.script &&
     a.shaping?.direction === b.shaping?.direction &&
     a.shaping?.level === b.shaping?.level &&

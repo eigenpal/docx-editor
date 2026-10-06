@@ -3,6 +3,8 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
+import { observeContentControlPopup } from '@docx-editor.dev/core/editor';
+
 /** Native radio groups keep color selection usable without pointer input. */
 export function createRevisionColorPicker(
   doc: Document,
@@ -13,7 +15,7 @@ export function createRevisionColorPicker(
     translate(value: string): string;
     change(value: string): void;
   }
-): { element: HTMLElement; update(value: string, disabled: boolean): void } {
+): { element: HTMLElement; update(value: string, disabled: boolean): void; destroy(): void } {
   const element = doc.createElement('div');
   element.className = 'docx-revision-color-picker';
   const label = doc.createElement('span');
@@ -46,10 +48,20 @@ export function createRevisionColorPicker(
         : value === 'none'
           ? 'transparent'
           : `var(--doc-revision-color-${value})`;
+  let disposePosition: (() => void) | undefined;
   const close = () => {
+    disposePosition?.();
+    disposePosition = undefined;
+    doc.removeEventListener('pointerdown', outside, true);
     list.hidden = true;
     button.setAttribute('aria-expanded', 'false');
   };
+  const outside = (event: Event) => {
+    if (!element.contains(event.target as Node)) close();
+  };
+  element.addEventListener('focusout', (event) => {
+    if (!element.contains(event.relatedTarget as Node | null)) close();
+  });
   const choose = (value: string) => {
     options.change(value);
   };
@@ -79,6 +91,12 @@ export function createRevisionColorPicker(
     const open = list.hidden;
     list.hidden = !open;
     button.setAttribute('aria-expanded', String(open));
+    if (!open) {
+      close();
+      return;
+    }
+    disposePosition = observeContentControlPopup(list, button);
+    doc.addEventListener('pointerdown', outside, true);
     if (open)
       (
         Array.from(inputs.values()).find((input) => input.checked) ?? inputs.values().next().value
@@ -95,6 +113,7 @@ export function createRevisionColorPicker(
   element.append(label, button, list);
   return {
     element,
+    destroy: close,
     update(value, disabled) {
       valueLabel.textContent = options.translate(value);
       sample.style.backgroundColor = colorValue(value);

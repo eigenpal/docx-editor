@@ -113,14 +113,15 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
   layout: {
     directory: 'src/layout',
     package: null,
-    mayImport: ['store'],
+    // Viewer markup defaults and validation are shared, runtime-neutral contracts.
+    mayImport: ['contracts', 'store'],
     environment: 'neutral',
     subpath: './layout',
   },
   output: {
     directory: 'src/output',
     package: null,
-    mayImport: ['store', 'layout'],
+    mayImport: ['contracts', 'store', 'layout'],
     environment: 'browser',
     subpath: './output',
   },
@@ -128,7 +129,7 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
     directory: 'src/export',
     package: null,
     nativeToCore: true,
-    mayImport: ['store', 'layout'],
+    mayImport: ['contracts', 'store', 'layout'],
     environment: 'neutral',
     subpath: './export',
   },

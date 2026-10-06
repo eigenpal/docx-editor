@@ -804,7 +804,7 @@ function readTableStructureUncached(
       if (vMerge !== 'none') mergedHere.add(gridColumn);
       cells.push({
         id: cellNode.id,
-        ...revisionCellMetadata(cellProperties, displayMode, authorFilter),
+        ...revisionCellMetadata(cellProperties, displayMode, authorFilter, plan.revision),
         gridSpan,
         gridColumn,
         ...(gridCols[gridColumn]?.id ? { gridColumnId: gridCols[gridColumn]!.id } : {}),

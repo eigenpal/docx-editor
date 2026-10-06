@@ -25,6 +25,7 @@ import { CHROME_GROUPS, chromeSlotId } from '@docx-editor.dev/core/editor';
  */
 const ICON_FOR_SLOT: Record<string, string> = {
   'history.undo': 'undo',
+  'review.revisionMarkup': 'edit_note',
   'history.redo': 'redo',
   'text.bold': 'format_bold',
   'text.italic': 'format_italic',
