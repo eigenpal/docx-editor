@@ -1,6 +1,11 @@
 export { formsProtectionCommandRefusal } from './forms-protection-command.ts';
 import { withDisplayedHyphens } from '../package/hyphen-text.ts';
-import { isInsertableText, textWithHyphens } from './tree-op-inline-elements.ts';
+import {
+  isInsertableText,
+  LINE_BREAK_TEXT,
+  propertiesHoldLineBreaks,
+  textWithHyphens,
+} from './tree-op-inline-elements.ts';
 import {
   checkboxContent,
   checkboxStateHexes,
@@ -1382,6 +1387,8 @@ function planValue(
         return 'typeMismatch';
       }
       if (typeof value.text !== 'string' || !isInsertableText(value.text)) return 'invalidArgs';
+      if (value.text.includes(LINE_BREAK_TEXT) && !propertiesHoldLineBreaks(properties))
+        return 'invalidArgs';
       if (value.text.length === 0) {
         return { text: promptFor(properties.type), showingPlaceholder: true };
       }

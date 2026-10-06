@@ -4,6 +4,7 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-a
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { test, expect } from 'bun:test';
+import { createServer } from '../../runtime/server.ts';
 import { docx, p, serverRuntime, mainXmlOf, reopen } from './support/documents.ts';
 
 test('page break inserts after its range and survives reopen', async () => {
@@ -62,5 +63,61 @@ test('unsupported break and section break inside table refuse atomically', async
     await expect(context.sync()).rejects.toBeDefined();
   });
   expect(await mainXmlOf(runtime)).toBe(before);
+  runtime.dispose();
+});
+
+test('line break and \\v text keep lines in one paragraph and share one sync', async () => {
+  const runtime = await serverRuntime(docx(p('Acme Ltd') + p('Signed')));
+  await runtime.run(async (context) => {
+    const paragraphs = context.document.body.paragraphs;
+    paragraphs.load();
+    await context.sync();
+    paragraphs.items[0]!.getRange('End').insertBreak('Line', 'After');
+    paragraphs.items[1]!.insertText('\vName\vTitle', 'End');
+    await context.sync();
+    for (const paragraph of paragraphs.items) paragraph.load('text');
+    await context.sync();
+    expect(paragraphs.items.map((paragraph) => paragraph.text)).toEqual([
+      'Acme Ltd\v',
+      'Signed\vName\vTitle',
+    ]);
+  });
+  const next = await reopen(runtime);
+  expect((await mainXmlOf(next)).match(/<w:br\/>/g)).toHaveLength(3);
+  runtime.dispose();
+  next.dispose();
+});
+
+test('a tracked line break is a revision that reject removes', async () => {
+  const runtime = await createServer(docx(p('Acme Ltd 1 Main Street')), { author: 'Reviewer' });
+  await runtime.run(async (context) => {
+    const hits = context.document.body.search('1 Main');
+    hits.load('items');
+    await context.sync();
+    context.document.changeTrackingMode = 'TrackMineOnly';
+    hits.items[0]!.insertBreak('Line', 'Before');
+    await context.sync();
+    const revisions = context.document.body.revisions;
+    revisions.load('items');
+    await context.sync();
+    expect(revisions.items).toHaveLength(1);
+    revisions.rejectAll();
+    await context.sync();
+  });
+  expect(await mainXmlOf(runtime)).not.toContain('<w:br');
+  runtime.dispose();
+});
+
+test('an address block built in one sync mixes text and line breaks in one paragraph', async () => {
+  const runtime = await serverRuntime(docx(p('Name')));
+  await runtime.run(async (context) => {
+    const paragraph = context.document.body.paragraphs.getFirst();
+    paragraph.getRange('End').insertBreak('Line', 'After');
+    paragraph.insertText('Title', 'End');
+    await context.sync();
+    paragraph.load('text');
+    await context.sync();
+    expect(paragraph.text).toBe('Name\vTitle');
+  });
   runtime.dispose();
 });

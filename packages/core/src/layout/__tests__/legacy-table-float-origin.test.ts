@@ -79,3 +79,35 @@ test('legacy table fragments, rows, and cell text use the same origin in cold an
   expect(first.lines[0]!.spans[0]!.box.x).toBeCloseTo(0, 6);
   expect(layoutSemanticDocument(part, 1, options).pages).toEqual(cold.pages);
 });
+
+/** A 144pt right-aligned table with a table right cell margin and a narrower cell margin. */
+function rightAligned(tableMargin: number, width = 2880) {
+  const parsed = readOoxmlPart(
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+      '<w:tbl><w:tblPr><w:tblpPr w:horzAnchor="margin" w:vertAnchor="text" w:tblpXSpec="right" w:tblpY="1" w:leftFromText="180"/>' +
+      `<w:tblW w:type="dxa" w:w="${width}"/><w:tblLayout w:type="fixed"/>` +
+      `<w:tblCellMar><w:right w:type="dxa" w:w="${tableMargin}"/></w:tblCellMar></w:tblPr>` +
+      `<w:tblGrid><w:gridCol w:w="${width}"/></w:tblGrid><w:tr><w:tc><w:tcPr>` +
+      '<w:tcMar><w:right w:type="dxa" w:w="14"/></w:tcMar></w:tcPr>' +
+      '<w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>' +
+      '<w:p/></w:body></w:document>',
+    { name: '/word/document.xml', contentType: 'application/xml' }
+  );
+  if (!parsed.ok) throw new Error(parsed.reason);
+  const body = parsed.part.root.children.find(
+    (node) => node.kind !== 'textValue' && node.localName === 'body'
+  ) as OoxmlElement;
+  return readTableStructure(body.children[0] as OoxmlElement, 468, 0)!;
+}
+
+test('legacy right alignment moves the table right by its table cell margin', () => {
+  for (const mode of [undefined, 12, 14]) {
+    // The table margin counts, not the narrower margin of the cell itself.
+    expect(positionedTableOriginX(rightAligned(108), frames, mode)).toBeCloseTo(401.4, 6);
+    expect(positionedTableOriginX(rightAligned(216), frames, mode)).toBeCloseTo(406.8, 6);
+    expect(positionedTableOriginX(rightAligned(0), frames, mode)).toBeCloseTo(396, 6);
+    // A table whose band covers the text column keeps its outer edge.
+    expect(positionedTableOriginX(rightAligned(108, 9360), frames, mode)).toBe(72);
+  }
+  expect(positionedTableOriginX(rightAligned(108), frames, 15)).toBe(396);
+});

@@ -14,7 +14,7 @@
 // write, inside the same span (`onChange`, `onTrackedChange`, a store subscriber), finds
 // the group already taken, so its writes are their own undo steps. Bound exactly, not
 // inherited: a nested `exec` without a group runs ungrouped, and the type-buffer flush
-// runs with the group cleared, because buffered keystrokes that land at the head of a
+// binds its typing run's own group, because buffered keystrokes that land at the head of a
 // grouped command are an edit of their own, not a frame of the gesture.
 
 import type { HistoryGroup } from '@docx-editor.dev/core/store';
@@ -58,7 +58,8 @@ function returnHistoryGroup(owner: object, group: HistoryGroup): void {
  * cleared: a listener that writes back through a surface verb during the commit re-enters
  * `around`, and the outer command's later writes must keep their group. Taken AFTER the
  * type-buffer flush has run inside the same commit, which is safe because the flush binds
- * `undefined` for its own span and so finds nothing to take. A commit that LANDS nothing —
+ * its typing run's group for its own span, takes only that, and restores the command's
+ * group when it returns. A commit that LANDS nothing —
  * a verb reporting a refusal before its real write — hands the group back, so the write
  * that follows in the same command still carries it.
  */

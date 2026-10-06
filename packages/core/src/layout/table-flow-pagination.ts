@@ -12,6 +12,7 @@
 
 import { autofitContextOf } from './table-autofit-widths.ts';
 import { positionedTableOriginX } from './table-origin.ts';
+import { withoutFloatingTableZones } from './table-float-overlap.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import {
   finalizeTableRows,
@@ -131,7 +132,8 @@ export function paginateTableInFlow(
   // the reported box cannot drift apart.
   const originX = (): number =>
     structure.float
-      ? positionedTableOriginX(structure, anchorFrames(), flow.compatibilityMode)
+      ? positionedTableOriginX(structure, anchorFrames(), flow.compatibilityMode) +
+        (outOfFlow ? (flow.positionShiftX ?? 0) : 0)
       : columnLeft() + tableOriginX(structure, columnWidth());
   let tableLeft = originX();
   // A text anchor offsets the current body position. Page and margin anchors are sheet
@@ -171,7 +173,7 @@ export function paginateTableInFlow(
     outOfFlow || structure.float
       ? null
       : planOutOfCellFloats(structure, table.id, tableLeft, flow.cursorY, flowDeps);
-  const tableDeps = floats?.deps ?? flowDeps;
+  const tableDeps = floats?.deps ?? (outOfFlow ? withoutFloatingTableZones(flowDeps) : flowDeps);
   const headerRows: SemanticTableRow[] = [];
   for (const row of structure.rows) {
     if (row.isHeader) headerRows.push(row);

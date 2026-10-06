@@ -2,7 +2,7 @@
 //
 // Composes the already-hardened package primitives — `readZip` (entry/size/ratio limits and
 // OPC name normalization), `normalizePartName` / `resolveInternalTarget` /
-// `validateExternalTarget`, `buildContentTypeIndex`, and `buildRelationshipSet` — into ONE
+// `validateExternalTarget`, `buildTolerantContentTypeIndex`, and `buildRelationshipSet` — into ONE
 // loader that produces `OoxmlPart` trees. It replaces nothing yet: `parseDocx` still builds
 // the `PackageModel`, and this is the path that becomes authoritative as sections 5 and 6
 // move the store and binding onto the tree (task 6.7 then deletes the byte-range model).
@@ -15,6 +15,8 @@
 //   - XML parsing inherits `readXml`'s DTD/entity refusal and byte/element caps;
 //   - the number of parts converted into trees is capped, so a package cannot force
 //     unbounded tree construction.
+// One deliberate tolerance: a content-type record with malformed MIME syntax is ignored
+// (treated as absent) unless it decides the type of a part the document needs.
 
 import { textboxFallbackExportPackage } from './textbox-fallback-export.ts';
 import {
@@ -40,10 +42,12 @@ import {
   type RelationshipRecord,
 } from './relationships.ts';
 import {
-  buildContentTypeIndex,
+  buildTolerantContentTypeIndex,
+  governedByIgnoredRecord,
   resolveContentType,
   type ContentTypeIndex,
   type DefaultRecord,
+  type IgnoredContentTypes,
   type OverrideRecord,
 } from './content-types.ts';
 import {
@@ -59,6 +63,25 @@ const CONTENT_TYPES_PART = '/[Content_Types].xml';
 const CONTENT_TYPES_NAMESPACE = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const OFFICE_DOCUMENT_REL_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+
+const OFFICE_RELATIONSHIPS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+/**
+ * Relationships whose targets are binary payloads the engine keeps as bytes and identifies
+ * by their signature, never by their declared type. Every OTHER internal target of the
+ * package root or the main document is required: a dropped content-type record that decides
+ * its type refuses the package, because the part would otherwise load as unknown bytes and
+ * the document would open without it.
+ */
+const PAYLOAD_RELATIONSHIP_TYPES: ReadonlySet<string> = new Set([
+  `${OFFICE_RELATIONSHIPS}/image`,
+  `${OFFICE_RELATIONSHIPS}/oleObject`,
+  `${OFFICE_RELATIONSHIPS}/package`,
+  `${OFFICE_RELATIONSHIPS}/audio`,
+  `${OFFICE_RELATIONSHIPS}/video`,
+  'http://schemas.microsoft.com/office/2007/relationships/media',
+  'http://schemas.microsoft.com/office/2007/relationships/hdphoto',
+  'http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail',
+]);
 
 /** MIME types read into canonical trees. Anything else stays bytes (media, fonts, ...). */
 const XML_CONTENT_TYPE_RE = /(?:\/xml|\+xml)$/i;
@@ -309,7 +332,9 @@ function relsOwner(relsPartName: string): string | null {
   return `${dir}/${base}`;
 }
 
-function readContentTypes(nodes: readonly XmlNode[]): ContentTypeIndex | null {
+function readContentTypes(
+  nodes: readonly XmlNode[]
+): { readonly index: ContentTypeIndex; readonly ignored: IgnoredContentTypes } | null {
   const defaults: DefaultRecord[] = [];
   const overrides: OverrideRecord[] = [];
   let order = 0;
@@ -326,8 +351,37 @@ function readContentTypes(nodes: readonly XmlNode[]): ContentTypeIndex | null {
     if (partName === undefined || contentType === undefined) continue;
     overrides.push({ partName, contentType, order: order++ });
   }
-  const index = buildContentTypeIndex({ defaults, overrides });
-  return index.ok ? index.index : null;
+  const built = buildTolerantContentTypeIndex({ defaults, overrides });
+  return built.ok ? { index: built.index, ignored: built.ignored } : null;
+}
+
+/**
+ * The first required part whose content type a dropped (invalid-MIME) record decides, or
+ * `null`. Required: the main document part, every relationships part, and every part the
+ * package root or the main document relates to, except binary payloads.
+ */
+function requiredPartWithIgnoredType(
+  mainDocumentPart: string,
+  ownedRelationships: readonly RelationshipRecord[],
+  partNames: ReadonlySet<string> | ReadonlyMap<string, unknown>,
+  index: ContentTypeIndex,
+  ignored: IgnoredContentTypes
+): string | null {
+  if (ignored.overrideKeys.size === 0 && ignored.extensions.size === 0) return null;
+  if (governedByIgnoredRecord(index, ignored, mainDocumentPart)) return mainDocumentPart;
+  for (const partName of partNames.keys()) {
+    if (relsOwner(partName) !== null && governedByIgnoredRecord(index, ignored, partName)) {
+      return partName;
+    }
+  }
+  for (const record of ownedRelationships) {
+    if (PAYLOAD_RELATIONSHIP_TYPES.has(record.type)) continue;
+    const resolved = resolveRelationship(record);
+    if (resolved.mode !== 'Internal' || !resolved.target.ok) continue;
+    const target = resolved.target.partName;
+    if (partNames.has(target) && governedByIgnoredRecord(index, ignored, target)) return target;
+  }
+  return null;
 }
 
 /** Resolve a part's declared content type: Override wins, then the extension Default. */
@@ -336,21 +390,6 @@ function contentTypeFor(partName: string, index: ContentTypeIndex): string {
   return resolved.ok ? resolved.contentType : '';
 }
 
-/**
- * Load an OPC package into canonical typed/generic OOXML trees.
- *
- * Fails closed on every limit, malformed name, unresolvable internal target, duplicate
- * relationship id, and XML rejection. An external relationship never causes a failure and
- * never causes a fetch: it is recorded with its sink-safety verdict for a later, explicitly
- * user-gated lane.
- */
-/**
- * Load DOCX bytes into canonical trees, bounded at every step.
- *
- * THE trust boundary for a document. Composes the hardened primitives — zip limits and OPC name
- * normalization, content-type indexing, relationship validation, entity-free XML — into one
- * loader, and returns a typed rejection rather than throwing from inside a decoder.
- */
 /**
  * Times {@link readOoxmlPackage} has run in this process.
  *
@@ -364,6 +403,20 @@ export function ooxmlPackageReadCount(): number {
   return packageReadCount;
 }
 
+/**
+ * Load DOCX bytes into canonical typed/generic OOXML trees, bounded at every step.
+ *
+ * THE trust boundary for a document. Composes the hardened primitives — zip limits and OPC name
+ * normalization, content-type indexing, relationship validation, entity-free XML — into one
+ * loader, and returns a typed rejection rather than throwing from inside a decoder.
+ *
+ * Fails closed on every limit, malformed name, unresolvable internal target, duplicate
+ * relationship id, and XML rejection. An external relationship never causes a failure and
+ * never causes a fetch: it is recorded with its sink-safety verdict for a later, explicitly
+ * user-gated lane. A content-type record with an invalid MIME type is treated as absent,
+ * unless it decides the type of the main document part, a relationships part, or a
+ * non-payload part that the package root or the main document relates to.
+ */
 export function readOoxmlPackage(
   bytes: Uint8Array,
   limits: OoxmlPackageLimits = {}
@@ -394,8 +447,9 @@ export function readOoxmlPackage(
           : 'bad-content-types',
     };
   }
-  const contentTypes = readContentTypes(parsedContentTypes.nodes);
-  if (!contentTypes) return { ok: false, reason: 'bad-content-types' };
+  const contentTypeRead = readContentTypes(parsedContentTypes.nodes);
+  if (!contentTypeRead) return { ok: false, reason: 'bad-content-types' };
+  const contentTypes = contentTypeRead.index;
 
   const maxRelationships = limits.maxRelationships ?? DEFAULT_OOXML_PACKAGE_LIMITS.maxRelationships;
   const records: RelationshipRecord[] = [];
@@ -477,6 +531,16 @@ export function readOoxmlPackage(
   const mainDocumentPart = mainResolved.target.partName;
   if (!zip.entries.has(mainDocumentPart)) {
     return { ok: false, reason: 'no-main-document', detail: mainDocumentPart };
+  }
+  const misdeclared = requiredPartWithIgnoredType(
+    mainDocumentPart,
+    rootRels.concat(set.byOwner.get(mainDocumentPart) ?? []),
+    zip.entries,
+    contentTypes,
+    contentTypeRead.ignored
+  );
+  if (misdeclared !== null) {
+    return { ok: false, reason: 'bad-content-types', detail: misdeclared };
   }
 
   const maxXmlParts = limits.maxXmlParts ?? DEFAULT_OOXML_PACKAGE_LIMITS.maxXmlParts;

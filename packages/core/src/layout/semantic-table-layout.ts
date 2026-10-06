@@ -191,8 +191,8 @@ export interface TableFlowDeps {
   /** The current row already has the full page band (possibly below repeated headers). */
   readonly rowAtPageStart?: boolean;
   readonly paragraphLineUnitPt?: number;
-  /** A sole positioned table cannot collide with another floating table in this story. */
-  readonly isolatedFloatingTableId?: string;
+  /** Whether a positioned table of this story carries `w:tblOverlap w:val="never"`. */
+  readonly floatRefusesOverlap?: (tableId: string) => boolean;
   readonly measurer: TextMeasurer;
   /** Layout-only insets for one repeated-header/body occurrence. */
   readonly cellContentInsets?: ReadonlyMap<string, CellContentInsets>;

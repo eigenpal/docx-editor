@@ -18,6 +18,7 @@ import {
   type TextOccurrence,
 } from './text-match.ts';
 import { segmentsOfWithFieldSpans } from './tree-op-segments.ts';
+import { isFloatingLegacyVmlAtom, isLegacyVmlAtom } from '../package/legacy-vml-projection.ts';
 import { symbolDisplayText } from '../package/symbol-glyph.ts';
 import {
   isSymbolElement,
@@ -363,6 +364,7 @@ const MC_NAMESPACE = 'http://schemas.openxmlformats.org/markup-compatibility/200
 /** Whether a drawing atom is anchored (floating) rather than inline. */
 function isFloatingDrawingAtom(node: OoxmlNode): boolean {
   if (node.kind === 'textValue') return false;
+  if (isLegacyVmlAtom(node)) return isFloatingLegacyVmlAtom(node);
   const anchored = (drawing: OoxmlNode): boolean =>
     drawing.kind !== 'textValue' &&
     drawing.children.some(

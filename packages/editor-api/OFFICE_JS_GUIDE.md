@@ -169,6 +169,14 @@ Standard `insertText('', 'Replace')` means deletion, and an empty insertion is a
 
 ## Pictures and page fields
 
+Insert a manual line break with `range.insertBreak('Line', 'After')` or `\v` in inserted text.
+Call `await context.sync()` after queuing the write.
+Manual line breaks support `TrackMineOnly` and text edits in the same sync.
+Single-line content controls refuse manual line breaks.
+Reads report manual line breaks as `\v`, column breaks as U+000E, and paragraph separators as `\r`.
+Text writes refuse U+000E and paragraph separators.
+Do not flatten these characters before sending read text back to the document.
+
 Insert PNG or JPEG images with `range.insertInlinePictureFromBase64(data, 'After')`. Sync before setting properties on the returned picture. Width and height use points. New pictures lock the aspect ratio. Set `lockAspectRatio = false` before setting independent dimensions. Set `altTextDescription` to describe the image. Deletion preserves shared media relationships.
 
 Use `range.insertField('Before', 'TOC', '\\o "1-3" \\h')` to insert an inert TOC instruction. This call saves no calculated entries. TOC evaluation and code writes refuse.

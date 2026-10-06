@@ -6,6 +6,8 @@
 import type { AutomationTextProjection } from './operations.ts';
 import type { OoxmlNode, OoxmlParagraphNode } from '../store/package/ooxml-tree.ts';
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
+import { LINE_BREAK_TEXT } from '../store/store/tree-op-inline-elements.ts';
+import { withBreakReadText } from '../store/store/paragraph-model-text.ts';
 import {
   identityProjection,
   projectionFromPieces,
@@ -86,20 +88,42 @@ export function hideInsertionSpansFromPieces(
   return shown;
 }
 
+/**
+ * A manual line break reads as `\v`, the character a write uses for one, so text read from a
+ * paragraph can be written back. The store's model text spells it `\n`; both are one UTF-16
+ * unit, so every offset in the projection stays the same.
+ */
+function withLineBreakText(
+  readText: string,
+  pieces: readonly VisiblePiece[]
+): readonly VisiblePiece[] {
+  return pieces.map((piece) => {
+    if (!piece.text.includes('\n')) return piece;
+    // A piece that shows its model text one-for-one takes each break's spelling from the
+    // model. A field result shows text of its own, where every break is a line break.
+    const identity = piece.text.length === piece.rawEnd - piece.rawStart && !piece.resultRuns;
+    const text = identity
+      ? piece.text.replaceAll('\n', (_char, index: number) => readText[piece.rawStart + index]!)
+      : piece.text.replaceAll('\n', LINE_BREAK_TEXT);
+    return { ...piece, text };
+  });
+}
+
 /** Build the projection once for one immutable paragraph node. */
 export function projectParagraphText(
   paragraph: OoxmlParagraphNode,
   rawText: string,
   projection: AutomationTextProjection
 ): ProjectedParagraphText {
-  if (projection === 'model') return identityProjection(rawText);
+  const readText = withBreakReadText(paragraph, rawText);
+  if (projection === 'model') return identityProjection(readText);
   const base = visibleParagraphPieces(paragraph, rawText, projection);
-  if (projection === 'allMarkup') return projectionFromPieces(base);
+  if (projection === 'allMarkup') return projectionFromPieces(withLineBreakText(readText, base));
 
   const hidden = hiddenInsertionSpans(paragraph);
-  if (hidden.length === 0) return projectionFromPieces(base);
+  if (hidden.length === 0) return projectionFromPieces(withLineBreakText(readText, base));
   const pieces = hideInsertionSpansFromPieces(base, hidden);
-  return projectionFromPieces(pieces);
+  return projectionFromPieces(withLineBreakText(readText, pieces));
 }
 
 /** Pending insertions and move destinations are absent from Word's Original review view. */

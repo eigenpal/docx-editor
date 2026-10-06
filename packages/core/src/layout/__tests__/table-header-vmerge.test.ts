@@ -305,8 +305,8 @@ describe('a merged header head under a wrap band', () => {
       const part = loadBody(body());
       const first = layoutWithoutFloat(part, ROOMY).pages[0]!.fragments[0]!;
       if (first.kind !== 'paragraph') throw new Error('expected a leading paragraph');
-      // A floating table's band: cell text still wraps beside it. A picture's band would move
-      // the rows below it instead (`table-float-collision.ts`).
+      // A text frame's band: cell text still wraps beside it. A picture's or a floating
+      // table's band would move the rows below it instead (`table-float-collision.ts`).
       const band = {
         ...squareWrapZone({
           anchorParagraphId: first.paragraphId,
@@ -316,7 +316,7 @@ describe('a merged header head under a wrap band', () => {
           width: 100,
           contentWidth: 280,
         }),
-        sourceKind: 'table' as const,
+        sourceKind: 'frame' as const,
       };
       const zones = new Map([[0, [band]]]);
       const layout = layoutUnderFloat(part, zones, ROOMY);

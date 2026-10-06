@@ -68,6 +68,8 @@ Font writes honor inherited complex-script properties. Font reads return authore
 
 `Range.insertContentControl()` creates `RichText`, `PlainText`, and `DatePicker` controls.
 
+`Range.insertBreak()` supports `Line`, `Page`, and `SectionNext`. Only `Line` supports tracked insertion and text edits in the same sync. Text reads use `\v` for manual line breaks and U+000E for column breaks. For migration instructions, see [Upgrade text processing](/docs/2.x/editor-api/text-and-ranges#upgrade-text-processing).
+
 | Object or type | Public members beyond inherited members | Guide |
 | --- | --- | --- |
 | `Field`, `FieldCollection` | Field `code`, `updateResult`, `delete`; collection `getFirst`, `getLast`, `getFirstOrNullObject`, `getLastOrNullObject` | [Fields and pagination](/docs/2.x/editor-api/fields) |

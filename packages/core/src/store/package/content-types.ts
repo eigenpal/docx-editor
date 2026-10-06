@@ -4,7 +4,8 @@
 // Override (by case-folded part name) beats Default (by ASCII case-insensitive
 // extension). Conflicting Defaults on one extension, duplicate normalized
 // Override names, and invalid MIME syntax fail closed. Identical duplicates are
-// preserved inertly. Orphans never determine a part type.
+// preserved inertly. Orphans never determine a part type. The package loader uses
+// the tolerant variant, which drops an invalid-MIME record instead of failing.
 
 import { partNameKey, asciiFold, type NameResult, normalizePartName } from './opc-names.ts';
 import { BoundedCounter } from '../runtime/counter.ts';
@@ -149,11 +150,81 @@ export type ResolveResult =
 export function resolveContentType(index: ContentTypeIndex, partName: string): ResolveResult {
   const override = index.overrides.get(partNameKey(partName));
   if (override !== undefined) return { ok: true, contentType: override, source: 'override' };
-  const dot = partName.lastIndexOf('.');
-  if (dot >= 0) {
-    const ext = extensionKey(partName.slice(dot + 1));
+  const ext = partExtensionKey(partName);
+  if (ext !== null) {
     const def = index.defaults.get(ext);
     if (def !== undefined) return { ok: true, contentType: def, source: 'default' };
   }
   return { ok: false, reason: 'unknown' };
+}
+
+/** The Default lookup key for a part: its folded extension after the last dot, or `null`. */
+function partExtensionKey(partName: string): string | null {
+  const dot = partName.lastIndexOf('.');
+  return dot < 0 ? null : extensionKey(partName.slice(dot + 1));
+}
+
+/**
+ * Records dropped by {@link buildTolerantContentTypeIndex} because their content type is not
+ * valid MIME syntax. Kept so the loader can refuse a package whose REQUIRED part one governs.
+ */
+export interface IgnoredContentTypes {
+  /** Case-folded part names of dropped Overrides. */
+  readonly overrideKeys: ReadonlySet<string>;
+  /** Extension keys of dropped Defaults. */
+  readonly extensions: ReadonlySet<string>;
+}
+
+/**
+ * Build the index while treating a record with an invalid MIME type as absent.
+ *
+ * One malformed record (`image/.jpg` on an image extension, say) does not make the other
+ * records untrustworthy, so it is dropped rather than refusing the package. The dropped
+ * record stays in the authored `[Content_Types].xml` bytes, which a save writes back
+ * unchanged. Every other rule still fails closed: conflicting valid Defaults, conflicting
+ * valid Overrides, an invalid Override name on a valid record, and the record budget.
+ * An Override whose name AND type are both invalid is dropped: it cannot name a part.
+ */
+export function buildTolerantContentTypeIndex(
+  records: ContentTypeRecords,
+  maxRecords = 100_000
+):
+  | { readonly ok: true; readonly index: ContentTypeIndex; readonly ignored: IgnoredContentTypes }
+  | { readonly ok: false; readonly error: ContentTypeError } {
+  // Dropped records still count, so the budget is the same with or without them.
+  if (records.defaults.length + records.overrides.length > maxRecords)
+    return { ok: false, error: { code: 'too-many-records', limit: maxRecords } };
+  const extensions = new Set<string>();
+  const overrideKeys = new Set<string>();
+  const defaults = records.defaults.filter((record) => {
+    if (isValidMime(record.contentType)) return true;
+    extensions.add(extensionKey(record.extension));
+    return false;
+  });
+  const overrides = records.overrides.filter((record) => {
+    if (isValidMime(record.contentType)) return true;
+    const norm = normalizePartName(record.partName);
+    if (norm.ok) overrideKeys.add(partNameKey(norm.partName));
+    return false;
+  });
+  const built = buildContentTypeIndex({ defaults, overrides }, maxRecords);
+  if (!built.ok) return built;
+  return { ok: true, index: built.index, ignored: { overrideKeys, extensions } };
+}
+
+/**
+ * Whether a dropped record would have decided this part's content type. With no valid
+ * Override for the part: a dropped Override names it, or a dropped Default names its
+ * extension while no valid Default does. Mirrors {@link resolveContentType}.
+ */
+export function governedByIgnoredRecord(
+  index: ContentTypeIndex,
+  ignored: IgnoredContentTypes,
+  partName: string
+): boolean {
+  const key = partNameKey(partName);
+  if (index.overrides.has(key)) return false;
+  if (ignored.overrideKeys.has(key)) return true;
+  const ext = partExtensionKey(partName);
+  return ext !== null && ignored.extensions.has(ext) && !index.defaults.has(ext);
 }

@@ -110,7 +110,7 @@ export function createParagraphDrawingWrap(options: {
       return zones
         .filter((zone) => {
           if (zone.anchorParagraphId === omittedAnchor) return false;
-          if (zone.sourceKind === 'furniture') return true;
+          if (zone.sourceKind === 'furniture' || zone.earlierSection) return true;
           const entryOrder = options.paragraphOrder.get(entry.paragraph.id);
           const anchorOrder = options.paragraphOrder.get(zone.anchorParagraphId);
           // A page- or margin-framed band does not move when the text before it reflows, so it

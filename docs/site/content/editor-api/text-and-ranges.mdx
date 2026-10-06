@@ -37,12 +37,22 @@ Some document elements use a single character in API text, regardless of their d
 | Non-breaking hyphen | U+001E   | One UTF-16 unit | Restores the non-breaking hyphen element    |
 | Optional hyphen     | U+001F   | One UTF-16 unit | Restores the optional hyphen element        |
 | Symbol (`w:sym`)    | `(`      | One UTF-16 unit | Inserts a literal parenthesis, not a symbol |
+| Manual line break   | `\v`     | One UTF-16 unit | Inserts a manual line break                 |
+| Column break        | U+000E   | One UTF-16 unit | Refused                                     |
 
 Hyphen elements can survive a text read and write through these characters. This does not preserve arbitrary document structure, such as symbols or fields. Convert the hyphen characters before passing text to readers that require ordinary text.
 
 Search never matches a symbol. A search for `(` does not find it, and search does not join the text on either side. For hyphen matching rules, see [Search and navigation](/docs/2.x/editor-api/search-and-navigation).
 
 The API does not expose HTML, OOXML strings, or document-wide `start` and `end` offsets. `Paragraph.uniqueLocalId` identifies a paragraph within the runtime; load it before reading. Do not use it as a permanent identifier across separately opened files.
+
+## Upgrade text processing
+
+Automation reads in 2.26.0 report manual line breaks and column breaks as `\n`. This release changes those results to `\v` and U+000E, respectively. Paragraph separators remain `\r`. Each break still occupies one UTF-16 unit.
+
+Update comparisons, line splitting, stored expectations, and text display code to handle these characters. For plain-text display, you can convert `\v` to `\n` in a separate string. Keep the original API text when writing manual line breaks back to the document. Text writes refuse U+000E. Do not replace column breaks with manual line breaks.
+
+Search and `Paragraph.split()` accept `\n` as an alias for a manual line break. This alias does not change text read results or make `\n` valid insertion text. Text reads do not preserve arbitrary document structure when you write them back.
 
 ## Choose an insertion location
 
@@ -56,7 +66,9 @@ The location types describe the supported call shapes:
 
 The exported aliases are `BodyInsertTextLocation`, `BodyInsertParagraphLocation`, `ParagraphInsertTextLocation`, `RangeInsertTextLocation`, and `BesideLocation`. `InsertLocation` provides matching enum values, such as `InsertLocation.replace`. A method only accepts the locations shown in its signature.
 
-`insertText()` returns the inserted `Range`. `insertParagraph()` returns the created `Paragraph`. Sync before configuring or reading the returned object. Use one paragraph insertion per new paragraph; newline-containing insertion text is refused.
+`insertText()` returns the inserted `Range`. `insertParagraph()` returns the created `Paragraph`. Sync before configuring or reading the returned object. Use one paragraph insertion per new paragraph. Text writes refuse paragraph separators such as `\r` and `\n`.
+
+To keep lines in one paragraph, write a manual line break as `\v` (U+000B). `insertText()` and `insertParagraph()` write each `\v` as a line break. Text reads report that break as `\v`. A single-line content control refuses a line break. You can also insert one break with `Range.insertBreak('Line', location)`.
 
 Text inserted into an empty paragraph takes the character style that the paragraph mark names. It does not take the mark's direct run properties, such as a direct font size. To apply those, set `font` on the returned range after sync.
 

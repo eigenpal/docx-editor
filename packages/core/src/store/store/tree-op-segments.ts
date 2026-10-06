@@ -36,6 +36,11 @@ import {
   inlineContainersOf,
   isContentControlNode,
 } from './tree-op-nodes.ts';
+import {
+  besideRestrictedControl,
+  holdsContentControl,
+  restrictedControlsWithEdgeAt,
+} from './tree-op-restricted-edge.ts';
 
 /**
  * A paragraph-level equation: inline `m:oMath` or a display `m:oMathPara`. Its internal OMML
@@ -477,8 +482,11 @@ export function insertionSite(
   owner: OoxmlNode | null,
   bias: 'left' | 'right' = 'left'
 ): InsertionSite {
-  const site = rawInsertionSite(paragraph, offset, owner, bias);
-  if (owner !== null || (site.kind !== 'newRun' && site.kind !== 'atRunIndex')) return site;
+  const raw = rawInsertionSite(paragraph, offset, owner, bias);
+  if (owner !== null) return raw;
+  // Beside a control typing cannot enter, then out of a deletion around wherever that is.
+  const site = besideRestrictedControlAt(paragraph, offset, raw) ?? raw;
+  if (site.kind !== 'newRun' && site.kind !== 'atRunIndex') return site;
   const target = site.kind === 'newRun' ? site.holder : site.run;
   const ancestors = [target, ...inlineContainersOf(paragraph, target.id)];
   if (
@@ -493,6 +501,45 @@ export function insertionSite(
   const index = holder.children.findIndex((child) => child.id === revision.id);
   const span = paragraphOffsetIndex(paragraph).spanOf(revision);
   return { kind: 'newRun', holder, index: index + (span && offset > span.start ? 1 : 0) };
+}
+
+/** The node a site writes into: the run it joins, or the node a run is minted in. */
+function siteLandingNodeId(site: InsertionSite): string {
+  if (site.kind === 'withinValue' || site.kind === 'atBoundary') {
+    return segmentAncestryNodeId(site.segment);
+  }
+  return site.kind === 'newRun' ? site.holder.id : site.run.id;
+}
+
+function besideRestrictedControlAt(
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  site: InsertionSite
+): InsertionSite | null {
+  return besideRestrictedControl(
+    paragraph,
+    offset,
+    siteLandingNodeId(site),
+    paragraphOffsetIndex(paragraph)
+  );
+}
+
+/**
+ * Whether an unowned insertion at `offset` lands beside a control that typing cannot enter,
+ * at that control's edge, rather than in the run the default rule reads. Validation then
+ * checks the place the insert actually lands. That covers a control wrapped in a revision or
+ * a hyperlink too, where the default site already leaves the wrapper.
+ */
+export function insertsBesideRestrictedControl(
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  bias: 'left' | 'right' = 'left'
+): boolean {
+  if (!holdsContentControl(paragraph)) return false;
+  const controls = restrictedControlsWithEdgeAt(paragraph, offset, paragraphOffsetIndex(paragraph));
+  if (controls.length === 0) return false;
+  const landingId = siteLandingNodeId(insertionSite(paragraph, offset, null, bias));
+  return controls.every((control) => !containsNode(control, landingId));
 }
 
 /** The closing marker at a legacy text form's trailing caret boundary. */

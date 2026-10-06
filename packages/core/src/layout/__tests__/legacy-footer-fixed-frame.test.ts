@@ -149,7 +149,13 @@ test('supports fully contained fields and independent valid anchor decoration', 
 
 test('accepts the switches Word writes after PAGE in a fixed frame', () => {
   const plain = paragraphs(layout())[0]!;
-  for (const instruction of [' PAGE \\* MERGEFORMAT ', ' PAGE \\# "0" ', ' page ']) {
+  for (const instruction of [
+    ' PAGE \\* MERGEFORMAT ',
+    ' PAGE \\# "0" ',
+    ' page ',
+    'PAGE \\* roman \\* MERGEFORMAT',
+    ' PAGE \\* Arabic ',
+  ]) {
     const [framed, anchor] = paragraphs(layout(body.replaceAll(' PAGE ', instruction)));
     expect(framed!.clipToBox).toBe(true);
     expect(framed!.box).toEqual(plain.box);
@@ -159,8 +165,8 @@ test('accepts the switches Word writes after PAGE in a fixed frame', () => {
   // cached text: the frame lane must never claim a field whose value it cannot refresh.
   for (const instruction of [
     ' PAGEREF anchor ',
-    'PAGE \\* roman \\* MERGEFORMAT',
-    ' PAGE \\* Arabic ',
+    'PAGE \\* Ordinal \\* MERGEFORMAT',
+    ' PAGE \\* CardText ',
     ' PAGE MERGEFORMAT ',
   ]) {
     expect(

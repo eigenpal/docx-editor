@@ -13,8 +13,7 @@ import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { finalizePageFieldProjection, withPageFieldSources } from './field-projection.ts';
 import { pageRefAssignmentToken } from './field-page-furniture.ts';
 import { framedTokenJoin } from './layout-cache.ts';
-import type { ContinuedPageFurniture } from './furniture-drawing-exclusion.ts';
-import { numericPictureApplies } from './field-page-furniture.ts';
+import type { ContinuedPageHost } from './continued-page-zones.ts';
 import { framedStoryEntry, remapPage, type HeaderFooterStoryLayout } from './hf-layout.ts';
 import {
   createLayoutSession,
@@ -90,7 +89,7 @@ export type LayoutSectionFn = (
     readonly sectionMarkCollapses?: boolean;
     readonly markJoinsBreakSheet?: boolean;
     readonly continuedPageInsets?: PageContentInsets;
-    readonly continuedPageFurniture?: ContinuedPageFurniture;
+    readonly continuedPageFurniture?: ContinuedPageHost;
     readonly bodyPageNumberFormat?: string;
   }
 ) => SectionLayoutResult;
@@ -526,32 +525,16 @@ export function layoutMultiSectionDocument(
     // on both sections the host resolves `default` and this section would resolve `first`, and
     // the taller box packs content past the host's content bottom.
     const continuedPageInsets = continues ? contentInsetsOf(pages[pages.length - 1]!) : undefined;
-    // For the same reason its text wraps around the drawings the host sheet paints.
+    // For the same reason its text wraps around the drawings the host sheet paints, and around
+    // the floating tables and wrapping pictures earlier sections left there
+    // (`continued-page-zones.ts`). So the section starts below the host's last text line, not
+    // below those floats.
     const continuedPageFurniture = continues ? pages[pages.length - 1] : undefined;
 
-    // The page-number format a body page-field placeholder is MEASURED against.
-    //
-    // Normally the section's own, so the placeholder matches the value that replaces it. A
-    // CONTINUED section is the exception: its local page 0 merges onto the host sheet, which
-    // keeps whatever format that sheet was stamped with, while its own sheets keep this
-    // section's. When those two disagree about whether a `\#` picture renders at all, no single
-    // measurement is right for both — so measure against whichever format SUPPRESSES the
-    // picture. That reserves the plain number's width, and a picture-rendered value overruns it
-    // exactly as an unpictured multi-digit value already does; the reverse would reserve a
-    // width the other pages never fill.
-    //
-    // Read off the HOST PAGE, not tracked across the loop. A continuous section that fits
-    // wholly on the host contributes no sheet of its own, so the sheet the next one merges onto
-    // is still stamped with an earlier section's format — and a loop variable would by then
-    // name the section that left no page behind.
-    const sectionPageNumberFormat = section.properties.pageNumbering?.fmt;
-    const hostPageNumberFormat = continues
-      ? pages[pages.length - 1]?.pageFieldSource?.format
-      : undefined;
-    const measuredPageNumberFormat =
-      continues && !numericPictureApplies('PAGE', hostPageNumberFormat)
-        ? hostPageNumberFormat
-        : sectionPageNumberFormat;
+    // The section's own page-number format, for the body flow's page-field context. A
+    // placeholder measures through the field's own switches, which render the same on every
+    // section, so a continued section that merges onto its host sheet needs no special case.
+    const measuredPageNumberFormat = section.properties.pageNumbering?.fmt;
 
     const laid = layoutSection(slice, revision, {
       ...rest,

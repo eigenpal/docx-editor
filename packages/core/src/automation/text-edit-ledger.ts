@@ -1,4 +1,5 @@
 import type { AutomationHandleTable } from './handles.ts';
+import { modelTextOf } from './line-break-text.ts';
 import type { PlannedOperation } from './plan-types.ts';
 import { spanValue, type ResolvedRange } from './spans.ts';
 import { applyTreeOp, paragraphTextOf, type TreeDocOp } from '../store/store/tree-ops.ts';
@@ -56,7 +57,8 @@ export function placeholderInsertionRefusal(
       : null;
   if (
     candidate?.ok &&
-    paragraphTextOf(candidate.part, paragraphId)?.slice(offset, offset + text.length) === text
+    paragraphTextOf(candidate.part, paragraphId)?.slice(offset, offset + text.length) ===
+      modelTextOf(text)
   )
     return null;
   return {
@@ -220,7 +222,8 @@ export function planSingleTextReplacement(
   const after = paragraphTextOf(candidate, paragraphId);
   if (
     original === null ||
-    after !== original.slice(0, range.start.offset) + text + original.slice(range.end.offset)
+    after !==
+      original.slice(0, range.start.offset) + modelTextOf(text) + original.slice(range.end.offset)
   ) {
     return {
       ok: false,

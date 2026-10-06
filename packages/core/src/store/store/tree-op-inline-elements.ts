@@ -2,6 +2,7 @@ import { isValidXmlText } from '../package/sinks.ts';
 import { hardBreakAttributes } from '../package/hard-break.ts';
 import { NON_BREAKING_HYPHEN_TEXT, OPTIONAL_HYPHEN_TEXT } from '../package/hyphen-text.ts';
 import { WML_NAMESPACE_URI, type OoxmlNode } from '../package/ooxml-tree.ts';
+import type { ContentControlProperties } from '../package/content-control-nodes.ts';
 
 /**
  * A `w:t`, or a `w:delText` when the text being rebuilt was already struck.
@@ -48,20 +49,52 @@ export function simpleElement(
   } as unknown as OoxmlNode;
 }
 
-const HYPHEN_CHARACTERS = /[\u001e\u001f]/;
-const ALL_HYPHEN_CHARACTERS = /[\u001e\u001f]/g;
+/**
+ * The character inserted text uses for a manual line break (`w:br`). Model text reads the break
+ * as `\n`; a write spells it `\v` because `\n` in written text is a paragraph mark.
+ */
+export const LINE_BREAK_TEXT = '\v';
 
-/** Most hyphen elements one inserted text may create, so a string cannot mint a node flood. */
+const HYPHEN_CHARACTERS = /[\u001e\u001f\v]/;
+const ALL_HYPHEN_CHARACTERS = /[\u001e\u001f\v]/g;
+
+/**
+ * Most elements one inserted text may create from U+001E, U+001F, and `\v` together, so a
+ * string cannot mint a node flood.
+ */
 export const MAX_INSERTED_HYPHENS = 4096;
 
-/** Whether inserted text holds a character that becomes a hyphen element. */
+/** Control kinds whose value is one line: a choice, a date, a check mark, or a picture. */
+const SINGLE_LINE_CONTROLS: ReadonlySet<ContentControlProperties['type']> = new Set([
+  'checkbox',
+  'dropDownList',
+  'comboBox',
+  'date',
+  'picture',
+] as const);
+
+/**
+ * Whether a control may hold a manual line break. A plain-text control holds one only when it
+ * declares `w:multiLine`; a choice, date, check mark, or picture never does. Rich text and the
+ * container kinds (building blocks, groups, citations, equations) hold whatever their paragraphs
+ * hold.
+ */
+export function propertiesHoldLineBreaks(
+  properties: Pick<ContentControlProperties, 'type' | 'multiLine'>
+): boolean {
+  if (properties.type === 'plainText') return properties.multiLine === true;
+  return !SINGLE_LINE_CONTROLS.has(properties.type);
+}
+
+/** Whether inserted text holds a character that becomes a hyphen or line-break element. */
 export function holdsHyphenCharacter(text: string): boolean {
   return HYPHEN_CHARACTERS.test(text);
 }
 
 /**
- * Whether text can be inserted as run content: valid XML text, except that U+001E and U+001F
- * are allowed, up to {@link MAX_INSERTED_HYPHENS}, because they become hyphen elements.
+ * Whether text can be inserted as run content: valid XML text, except that U+001E, U+001F, and
+ * `\v` are allowed, up to {@link MAX_INSERTED_HYPHENS}, because they become hyphen and
+ * line-break elements.
  */
 export function isInsertableText(text: string): boolean {
   if (!holdsHyphenCharacter(text)) return isValidXmlText(text);
@@ -89,7 +122,7 @@ export function areInsertableTexts(texts: readonly string[]): boolean {
     }
     for (let index = 0; index < text.length; index += 1) {
       const code = text.charCodeAt(index);
-      if (code !== 0x1e && code !== 0x1f) continue;
+      if (code !== 0x1e && code !== 0x1f && code !== 0x0b) continue;
       hyphens += 1;
       if (hyphens > MAX_INSERTED_HYPHENS || splitsSurrogateAt(text, index)) return false;
     }
@@ -115,8 +148,9 @@ function hyphenElement(nextId: () => string, char: string): OoxmlNode {
 }
 
 /**
- * Run content for inserted text: `w:t` for the text, and `w:noBreakHyphen` or `w:softHyphen`
- * for each U+001E or U+001F, the characters a text read reports for those elements.
+ * Run content for inserted text: `w:t` for the text, `w:noBreakHyphen` or `w:softHyphen` for
+ * each U+001E or U+001F (the characters a text read reports for those elements), and `w:br`
+ * for each `\v`.
  */
 export function textWithHyphenBuilders(text: string): RunChildBuilder[] {
   if (!holdsHyphenCharacter(text)) return [(nextId) => textElement(nextId, text)];
@@ -125,12 +159,21 @@ export function textWithHyphenBuilders(text: string): RunChildBuilder[] {
   for (let index = 0; index <= text.length; index += 1) {
     const char = text[index];
     const end = index === text.length;
-    if (!end && char !== NON_BREAKING_HYPHEN_TEXT && char !== OPTIONAL_HYPHEN_TEXT) continue;
+    if (
+      !end &&
+      char !== NON_BREAKING_HYPHEN_TEXT &&
+      char !== OPTIONAL_HYPHEN_TEXT &&
+      char !== LINE_BREAK_TEXT
+    )
+      continue;
     if (index > from) {
       const piece = text.slice(from, index);
       builders.push((nextId) => textElement(nextId, piece));
     }
-    if (!end) builders.push((nextId) => hyphenElement(nextId, char!));
+    if (!end)
+      builders.push((nextId) =>
+        char === LINE_BREAK_TEXT ? simpleElement(nextId, 'br') : hyphenElement(nextId, char!)
+      );
     from = index + 1;
   }
   return builders;

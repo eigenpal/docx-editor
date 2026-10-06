@@ -1,10 +1,28 @@
+import { readTextOf, searchableLineBreaks } from './line-break-text.ts';
 import type { AutomationStoryReads } from './reads.ts';
 import type { AutomationSectionRead } from './sections.ts';
 import type { ResolvedRange } from './spans.ts';
 
+/** A paragraph's text as a read reports it, and where any delimiter occurs in it. */
+export function delimitedText(
+  reads: AutomationStoryReads,
+  paragraphId: string,
+  delimiters: readonly string[]
+): {
+  readonly text: string;
+  readonly occurrences: readonly { readonly start: number; readonly length: number }[];
+} {
+  const text = readTextOf(reads, paragraphId);
+  return { text, occurrences: delimiterOccurrences(text, delimiters) };
+}
+
 const TRIMMABLE = /\s/;
 
-/** Every occurrence of any delimiter in `text`, non-overlapping, in order. */
+/**
+ * Every occurrence of any delimiter in `text`, non-overlapping, in order.
+ *
+ * `text` is read text, where a line break is `\v`; a delimiter that spells it `\n` finds it too.
+ */
 export function delimiterOccurrences(
   text: string,
   delimiters: readonly string[]
@@ -13,7 +31,8 @@ export function delimiterOccurrences(
   let cursor = 0;
   while (cursor < text.length) {
     let best: { start: number; length: number } | null = null;
-    for (const delimiter of delimiters) {
+    for (const given of delimiters) {
+      const delimiter = searchableLineBreaks(given);
       const at = text.indexOf(delimiter, cursor);
       if (at < 0) continue;
       // Earliest wins; at the same position the LONGEST wins, so a two-character delimiter is

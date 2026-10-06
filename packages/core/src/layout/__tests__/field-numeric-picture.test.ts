@@ -10,7 +10,6 @@ import {
 import { formatNumericPicture, MAX_NUMERIC_PICTURE_CHARS } from '../field-numeric-picture.ts';
 import { allowlistedPageField, matchAllowlistedPageField } from '../field-instruction.ts';
 import {
-  numericPictureApplies,
   pageFieldPlaceholder,
   projectPageFieldValue,
   PAGE_FIELD_PLACEHOLDER,
@@ -82,7 +81,7 @@ describe('numeric picture rendering', () => {
     expect(formatNumericPicture(1234, '#,##0;(#,##0)')).toBeNull();
     // `'` delimits literal text; copying the quotes through paints `'p'3`.
     expect(formatNumericPicture(3, "'p'0")).toBeNull();
-    expect(pageFieldPlaceholder('PAGE', '0;-0')).toBe(PAGE_FIELD_PLACEHOLDER);
+    expect(pageFieldPlaceholder({ picture: '0;-0' })).toBe(PAGE_FIELD_PLACEHOLDER);
   });
 
   test('refuses a fractional picture rather than filling it right to left', () => {
@@ -115,46 +114,40 @@ describe('page-field instructions carrying a picture', () => {
   });
 
   test('projects the computed value through the picture', () => {
-    expect(projectPageFieldValue('PAGE', { pageNumber: 2, pageCount: 9 }, '0#')).toBe('02');
-    expect(projectPageFieldValue('NUMPAGES', { pageNumber: 2, pageCount: 9 }, '000')).toBe('009');
+    const page = { pageNumber: 2, pageCount: 9 };
+    expect(projectPageFieldValue('PAGE', page, { picture: '0#' })).toBe('02');
+    expect(projectPageFieldValue('NUMPAGES', page, { picture: '000' })).toBe('009');
     // An unusable picture falls back to the plain number, never to a cached result.
-    expect(projectPageFieldValue('PAGE', { pageNumber: 2, pageCount: 9 }, 'Page')).toBe('2');
-    // A non-decimal page format has no digits for a picture to place, so the format wins.
+    expect(projectPageFieldValue('PAGE', page, { picture: 'Page' })).toBe('2');
+    // The field's own picture outranks the section's page-number format.
     expect(
-      projectPageFieldValue('PAGE', { pageNumber: 4, pageCount: 9, format: 'lowerRoman' }, '0#')
-    ).toBe('iv');
-    // An authored `w:fmt="decimal"` — which Word writes — IS decimal, so the picture applies.
-    expect(
-      projectPageFieldValue('PAGE', { pageNumber: 2, pageCount: 9, format: 'decimal' }, '0#')
-    ).toBe('02');
+      projectPageFieldValue(
+        'PAGE',
+        { pageNumber: 4, pageCount: 9, format: 'lowerRoman' },
+        { picture: '000' }
+      )
+    ).toBe('004');
+    expect(projectPageFieldValue('PAGE', { ...page, format: 'decimal' }, { picture: '0#' })).toBe(
+      '02'
+    );
   });
 
   test('measures a body placeholder at the width the picture will paint', () => {
     // Finalize substitutes the value without re-measuring, so the placeholder has to be the
     // shape of every value that can replace it.
-    expect(pageFieldPlaceholder('PAGE', undefined)).toBe(PAGE_FIELD_PLACEHOLDER);
-    expect(pageFieldPlaceholder('PAGE', '0#')).toBe('00');
+    expect(pageFieldPlaceholder()).toBe(PAGE_FIELD_PLACEHOLDER);
+    expect(pageFieldPlaceholder({ picture: '0#' })).toBe('00');
     // A `#`-only picture is as wide as every value it can hold, not one digit wide: zero
     // fills the last position and the unfilled ones pad, so `15` and `7` measure the same.
-    expect(pageFieldPlaceholder('PAGE', '###')).toBe('  0');
+    // Spaces measure as no-break spaces, so the placeholder stays one word and one span.
+    expect(pageFieldPlaceholder({ picture: '###' })).toBe('\u00a0\u00a00');
     expect(formatNumericPicture(15, '###')).toHaveLength(3);
-    expect(pageFieldPlaceholder('PAGE', 'Page 0 of')).toBe('Page 0 of');
+    expect(pageFieldPlaceholder({ picture: 'Page 0 of' })).toBe('Page\u00a00\u00a0of');
     // An unusable picture paints the plain number, so its placeholder is the plain digit.
-    expect(pageFieldPlaceholder('PAGE', 'Page')).toBe(PAGE_FIELD_PLACEHOLDER);
-    // And a non-decimal page format wins over the picture, so the placeholder drops it too —
-    // measuring `Page 0 of` for a value the section renders as `III` reserves 9 for 3.
-    expect(pageFieldPlaceholder('PAGE', 'Page 0 of', 'upperRoman')).toBe(PAGE_FIELD_PLACEHOLDER);
-    expect(pageFieldPlaceholder('PAGE', '0#', 'upperRoman')).toBe(PAGE_FIELD_PLACEHOLDER);
-    expect(pageFieldPlaceholder('PAGE', '0#', 'decimal')).toBe('00');
-    expect(numericPictureApplies('PAGE', undefined)).toBe(true);
-    expect(numericPictureApplies('PAGE', 'decimal')).toBe(true);
-    expect(numericPictureApplies('PAGE', 'upperRoman')).toBe(false);
-    // A COUNT is not a page number: `w:pgNumType/@w:fmt` never reformats it, so its picture
-    // applies whatever the section says — and the placeholder has to be measured that way.
-    expect(numericPictureApplies('NUMPAGES', 'upperRoman')).toBe(true);
-    expect(numericPictureApplies('SECTIONPAGES', 'upperRoman')).toBe(true);
-    expect(pageFieldPlaceholder('NUMPAGES', '000', 'upperRoman')).toBe('000');
-    expect(projectPageFieldValue('NUMPAGES', { pageNumber: 2, pageCount: 12 }, '000')).toBe('012');
+    expect(pageFieldPlaceholder({ picture: 'Page' })).toBe(PAGE_FIELD_PLACEHOLDER);
+    expect(
+      projectPageFieldValue('NUMPAGES', { pageNumber: 2, pageCount: 12 }, { picture: '000' })
+    ).toBe('012');
   });
 });
 
@@ -257,15 +250,12 @@ describe('a body page field carrying a picture', () => {
     expect(line.gap).toBeCloseTo(3 * line.charWidth, 6);
   });
 
-  test('measures the format, not the picture, when the section is not decimal', () => {
-    // `w:pgNumType w:fmt="upperRoman"` wins over the picture, so the placeholder must drop it
-    // too: measuring `Page 0 of` and painting `II` leaves following text at the wrong x.
+  test('paints and measures the picture when the section is not decimal', () => {
+    // The field's own picture outranks `w:pgNumType w:fmt="upperRoman"`, so the value and the
+    // placeholder both go through it.
     const line = fieldLine('PAGE \\# "Page 0 of"', 'upperRoman');
-    expect(line.field).toBe('II');
-    // One character, the plain-number placeholder — nine would be the picture's width, which
-    // nothing on this page ever paints. `II` still overruns by one, exactly as an unpictured
-    // multi-digit value does; what must not happen is reserving a width the format never uses.
-    expect(line.gap).toBeCloseTo(line.charWidth, 6);
+    expect(line.field).toBe('Page 2 of');
+    expect(line.gap).toBeCloseTo('Page 0 of'.length * line.charWidth, 6);
   });
 });
 
@@ -275,8 +265,8 @@ describe('a body page field on a continued section', () => {
    * opens with a `PAGE \# "00"` field.
    *
    * B's local page 0 merges onto A's last sheet, which keeps A's decimal format, while B's own
-   * sheets keep roman. One pass measures one placeholder, so the two cannot both match unless
-   * the decision the placeholder took travels to the value.
+   * sheets keep roman. The picture outranks both formats, so the placeholder and the value
+   * agree on either sheet.
    */
   function continuedDoc(): Uint8Array {
     const field =
@@ -335,12 +325,11 @@ describe('a body page field on a continued section', () => {
     }
     if (!field || !end) throw new Error('field line not found');
 
-    // Whatever the field paints, `END` starts exactly that far along. The picture is dropped
-    // because the pass measured under a format that suppresses it, and the decision travels
-    // with the atom — so no later substitution can widen the text past the slot measured for it.
+    // Whatever the field paints, `END` starts exactly that far along: the placeholder was
+    // measured through the same picture the value renders through.
     const charWidth = end.width / 'END'.length;
     expect(end.x - field.x).toBeCloseTo(field.text.length * charWidth, 6);
-    expect(field.text).toHaveLength(1);
+    expect(field.text).toHaveLength(2);
     // NOT asserting a substituted page number. A merged host sheet keeps the
     // `hasBodyPageFields` flag it was flushed with, so a field the continued section appended
     // to it never reaches `substituteBodyPageFields` at all — a separate gap in the continuous
@@ -392,9 +381,8 @@ describe('a page-number format edit and the paragraph break cache', () => {
 
   test('a w:pgNumType edit re-emits a paragraph the break cache already holds', () => {
     // ONE cache across both passes, and the same paragraph text, width and node content. The
-    // only thing that moves is the section's format — which decides the placeholder the field
-    // emits and whether its `\# ` picture reaches finalize at all. If that does not reach the
-    // paragraph key, `breakParagraph` hands back the frozen lines and the stale value paints.
+    // only thing that moves is the section's format. The field's `\#` picture outranks it, so
+    // every pass paints the picture, whichever format the warm cache saw first.
     const cache = createParagraphLayoutCache();
     const lay = (bytes: Uint8Array, revision: number) => {
       const loaded = readOoxmlPackage(bytes);
@@ -407,11 +395,8 @@ describe('a page-number format edit and the paragraph break cache', () => {
       });
     };
 
-    // Roman first: the format wins over the picture, so the field paints `I`.
-    expect(fieldTextOf(lay(formatDoc('upperRoman'), 1))).toBe('I');
-    // Then decimal, through the warm cache: the picture applies and the field paints `001`.
+    expect(fieldTextOf(lay(formatDoc('upperRoman'), 1))).toBe('001');
     expect(fieldTextOf(lay(formatDoc(undefined), 2))).toBe('001');
-    // And back again, so neither direction is the one that happens to work.
-    expect(fieldTextOf(lay(formatDoc('upperRoman'), 3))).toBe('I');
+    expect(fieldTextOf(lay(formatDoc('upperRoman'), 3))).toBe('001');
   });
 });

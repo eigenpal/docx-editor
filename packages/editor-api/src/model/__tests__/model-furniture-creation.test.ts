@@ -51,6 +51,33 @@ test('reading a virtual header does not create parts; its first text write creat
   expect(await mainXmlOf(saved)).toContain('Body sentinel');
 });
 
+test('every collection on a virtual footer reads as empty and creates nothing', async () => {
+  const runtime = await serverRuntime(fixture);
+  const before = await mainXmlOf(runtime);
+  await runtime.run(async (context) => {
+    const section = context.document.sections.getFirst();
+    await context.sync();
+    const footer = section.getFooter('Primary');
+    await context.sync();
+    const collections = [
+      footer.tables,
+      footer.shapes,
+      footer.inlinePictures,
+      footer.fields,
+      footer.contentControls,
+      footer.revisions,
+      footer.search('x'),
+    ];
+    for (const collection of collections) collection.load('items');
+    await context.sync();
+    for (const collection of collections) expect(collection.items).toHaveLength(0);
+  });
+  expect(await mainXmlOf(runtime)).toBe(before);
+  expect(
+    Object.keys(unzipSync(await runtime.save())).some((name) => /word\/footer\d+\.xml/.test(name))
+  ).toBe(false);
+});
+
 test('first-page and even-page footer authoring preserves variants and enables their rendering flags', async () => {
   const runtime = await serverRuntime(fixture);
   await runtime.run(async (context) => {

@@ -353,9 +353,10 @@ export type AutomationOperation =
   /**
    * The header or footer story a section declares or inherits, as a BODY.
    *
-   * A variant the document has neither declared nor inherited is refused: minting the part would
-   * make a read write, and a header that exists only because it was asked about is a header the
-   * document did not have.
+   * A variant the document has neither declared nor inherited is still answered, as an empty
+   * body: every read on it answers what it answers for an empty story. Asking does not create
+   * the part. The first text written into the body creates it; any other write that would change
+   * the body is refused until then.
    */
   | {
       readonly op: 'getFurniture';

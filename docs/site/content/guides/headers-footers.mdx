@@ -37,6 +37,8 @@ A page-number field can carry a numeric picture switch. For example, `PAGE \# 0#
 
 The editor applies the picture to the computed header or footer value. A saved result does not replace that computed value. Pictures support digit placeholders, a grouping comma, and literal text.
 
+A page-number field can also carry a number-format switch. For example, `PAGE \* roman` shows page 4 as `iv`, and `PAGE \* Arabic \* MERGEFORMAT` shows `4`. The editor supports `\* Arabic`, `\* roman`, `\* alphabetic`, and `\* ArabicDash`. The case of the first letter of `roman` or `alphabetic` selects uppercase or lowercase. A number-format switch outranks the section format in `w:pgNumType` and a picture that comes before it. If a field has another switch, such as `\* Ordinal`, the editor shows the saved result.
+
 Other fields use separate evaluation rules. See [Fields and cross-references](/docs/2.x/guides/fields).
 
 ### Page numbers in legacy frames

@@ -74,6 +74,18 @@ if (match) editor.selectMatch(match);
 
 For more information, see [Navigate a document](/docs/2.x/guides/navigation).
 
+### Typing and undo
+
+A run of typing is one undo step, however slowly it is typed. These actions start a new step:
+
+- A caret move by keyboard, pointer, or API.
+- Another edit, such as Backspace, Delete, Enter, paste, or a formatting command.
+- A typing format set at the caret, such as **Bold** with no selection.
+- Undo and redo.
+- An edit to the same paragraph by a collaborator, by automation, or by another editor on the same document.
+
+Each Backspace, Delete, and Enter is its own undo step. Typing over a selection is one step that includes the text typed after it. Collaborative sessions group typing runs the same way. In a collaborative session, other edits made within 5 seconds of each other can share one undo step.
+
 ### Group one gesture into one undo step
 
 If your app applies a value on every slider movement or color-picker input, group those writes into one user gesture. Each value renders and replicates immediately. One undo action restores the formatting before the gesture, including a mixed selection. A redo action restores the final value.

@@ -4,7 +4,7 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { projectedTextTarget } from './projected-text-target.ts';
-import { recordSplitTextSources } from './split-text-recording.ts';
+import { recordSplitTextSources, splitProductsOf } from './split-text-recording.ts';
 import type {
   CanonicalNodeDescriptor,
   CanonicalPrimitiveEffect,
@@ -522,11 +522,24 @@ function recordSplitProvenance(
   insertedIds: readonly LogicalId[]
 ): void {
   for (const removedId of removedIds) {
-    if (registry.kindOf(removedId) !== 'run') continue;
-    // A pre-existing run moved to another paragraph was not replaced by this splice.
-    // Only intermediate runs minted in this journal can be reinserted split ancestors.
+    const kind = registry.kindOf(removedId);
+    if (kind !== 'run' && kind !== 'text') continue;
+    // A pre-existing node moved elsewhere was not replaced by this splice. Only intermediate
+    // nodes minted in this journal can be reinserted split ancestors.
     if (planned.reinserted.has(removedId) && !planned.mintedNodes.has(removedId)) continue;
     const root = resolveSplitRoot(registry, removedId, planned.reinserted);
+    if (kind === 'text') {
+      // An inline element (a line break or a tab) inserted inside a run replaces its `w:t`
+      // with the text on either side. The new text aliases the old, so concurrent typing
+      // follows it; and the whole replacement, element included, joins the split dedup, so two
+      // peers splitting the same `w:t` keep one replacement instead of the text twice (#1129).
+      const texts = splitProductsOf(kind, insertedIds, (id) => registry.kindOf(id));
+      if (texts && recordSplitTextSources(registry, removedId, texts)) {
+        const minted = insertedIds.filter((id) => planned.mintedNodes.has(id));
+        registry.recordRunSplit(root, removedId, minted);
+      }
+      continue;
+    }
     const runs = insertedIds.filter((runId) => registry.kindOf(runId) === 'run');
     recordSplitTextSources(registry, removedId, runs);
     registry.recordRunSplit(root, removedId, runs);

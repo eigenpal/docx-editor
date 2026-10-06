@@ -673,7 +673,8 @@ export interface PaginatedSurface {
    */
   overlayCoordinates(): import('./surface-overlay-coordinates.ts').SurfaceOverlayCoordinates;
   /**
-   * The comment or tracked change the caret is in, as the painted bands report it.
+   * The comment, tracked change or carded custom node the caret is in, as the painted bands
+   * report it. A custom node without `reviewCard` is never the answer: it has no card.
    *
    * ONE source for "which item is open". The band under the text and the card beside it are
    * two views of the same answer, and deriving it twice let them disagree — the card closed

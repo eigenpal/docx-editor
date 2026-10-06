@@ -1,4 +1,9 @@
-import { isInsertableText } from './tree-op-inline-elements.ts';
+import {
+  isInsertableText,
+  LINE_BREAK_TEXT,
+  propertiesHoldLineBreaks,
+} from './tree-op-inline-elements.ts';
+import { contentControlPropertiesOf } from '../package/content-control-nodes.ts';
 import { canTrackContentControl } from './tracked-content-control-insert.ts';
 import { findNode } from '../package/ooxml-edit.ts';
 import {
@@ -47,7 +52,12 @@ import {
   listItemsOf,
   parseCheckboxValue,
 } from './tree-op-nodes.ts';
-import { insertionDestination, segmentsOf, fieldInsertionEndAt } from './tree-op-segments.ts';
+import {
+  insertionDestination,
+  insertsBesideRestrictedControl,
+  segmentsOf,
+  fieldInsertionEndAt,
+} from './tree-op-segments.ts';
 import type { TreeOpRejection } from './tree-op-types.ts';
 
 /**
@@ -70,7 +80,10 @@ export function contentControlAtCaret(
   if (start !== end) {
     return innermostContentControlAround(part, paragraph.id);
   }
-  if (fieldInsertionEndAt(paragraph, start)) {
+  if (
+    fieldInsertionEndAt(paragraph, start) ||
+    insertsBesideRestrictedControl(paragraph, start, bias)
+  ) {
     return innermostContentControlAround(
       part,
       insertionDestination(paragraph, start, null, bias).landingNodeId
@@ -128,7 +141,13 @@ export function rangeTouchesContentRestriction(
   end: number,
   bias?: 'left' | 'right'
 ): TreeOpRejection | null {
-  if (start === end && fieldInsertionEndAt(paragraph, start)) {
+  // The landing resolver moved this insert out of where the run rule below would put it, so
+  // validate the place it actually lands.
+  if (
+    start === end &&
+    (fieldInsertionEndAt(paragraph, start) ||
+      insertsBesideRestrictedControl(paragraph, start, bias))
+  ) {
     return nodeTouchesContentRestriction(
       part,
       insertionDestination(paragraph, start, null, bias).landingNodeId
@@ -283,6 +302,11 @@ export function validateSetContentControlValue(
   // Temporary unwrap is part of a successful value write; refuse when the wrapper is locked.
   if (isTemporaryControl(control) && effectiveLockOf(part, control).wrapper) return 'locked';
   if (typeof value !== 'string' || !isInsertableText(value)) return 'invalidArgs';
+  if (
+    value.includes(LINE_BREAK_TEXT) &&
+    !propertiesHoldLineBreaks(contentControlPropertiesOf(control))
+  )
+    return 'invalidArgs';
 
   const type = contentControlValueTypeOf(control);
   // A value becomes one run inside the structure the control wraps; content no value can stand

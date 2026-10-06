@@ -1,4 +1,5 @@
 // Tracked inline planning shares the canonical story transaction and snapshot anchors.
+import { lineBreakRefusal } from './line-break-text.ts';
 import type { AutomationHandleTable } from './handles.ts';
 import type { AutomationOperation } from './operations.ts';
 import type { PlannedOperation } from './plan.ts';
@@ -84,6 +85,8 @@ export function planProposal(
     }
     const at = { ...range.start, offset: (reads.rawText(ids[0]!) ?? '').length };
     const text = deletion ? '' : operation.text;
+    const lineBreak = lineBreakRefusal(reads.part, ids[0]!, range.start.offset, at.offset, text);
+    if (lineBreak) return lineBreak;
     if (text)
       ops.push({ op: 'insertText', paragraphId: ids[0]!, offset: at.offset, text, revision });
     return {
@@ -119,6 +122,10 @@ export function planProposal(
     insertion && start === (story.value.rawText(paragraphId) ?? '').length
   );
   if (revisionError) return { ok: false, error: revisionError };
+  if (!deletion) {
+    const lineBreak = lineBreakRefusal(story.value.part, paragraphId, start, end, operation.text);
+    if (lineBreak) return lineBreak;
+  }
   const conflict = claim(story.value, paragraphId);
   if (conflict) return conflict;
   const revision = { author: operation.author.trim(), date: new Date().toISOString() };

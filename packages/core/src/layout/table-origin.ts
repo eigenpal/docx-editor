@@ -6,7 +6,15 @@ import type {
 import { contentInsets } from './table-cell-geometry.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 
-/** Legacy numeric text anchors position the first cell's content, not its outer edge. */
+/**
+ * Where a table's left edge sits, floated or not.
+ *
+ * Before mode 15 a floating table aligns its cell content, not its outer edges. A numeric
+ * text anchor positions the first row's leading cell content edge. A right or outside
+ * alignment, against any anchor, moves the table right by its own right cell margin, so its
+ * content ends at the frame edge. A table whose wrap band already covers the text column's
+ * leading edge keeps its outer edge, and so its place across the column.
+ */
 export function positionedTableOriginX(
   structure: SemanticTableStructure,
   frames: TableAnchorFrames,
@@ -20,13 +28,16 @@ export function positionedTableOriginX(
   if (
     !hasCompatibilityRule(compatibilityMode, 'floatingTableContentOrigin') ||
     structure.bidiVisual ||
-    structure.cellSpacingPt !== 0 ||
-    float.horzAnchor !== 'text' ||
-    float.vertAnchor !== 'text' ||
-    float.xSpec !== undefined ||
-    !first ||
-    first.gridColumn !== 0
+    structure.cellSpacingPt !== 0
   )
+    return origin;
+  // A right alignment moves by the table's own right cell margin, not a cell's `w:tcMar`.
+  if (float.xSpec === 'right' || float.xSpec === 'outside') {
+    if (origin - (float.distances?.left ?? 0) <= frames.text.left) return origin;
+    return origin + structure.defaultMargins.right;
+  }
+  if (!first || first.gridColumn !== 0) return origin;
+  if (float.horzAnchor !== 'text' || float.vertAnchor !== 'text' || float.xSpec !== undefined)
     return origin;
   const inset = contentInsets(first.margins, first.contentBorders ?? first.borders).left;
   return Math.max(frames.page.left, origin - inset);

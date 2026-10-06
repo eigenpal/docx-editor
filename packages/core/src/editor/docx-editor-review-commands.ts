@@ -30,6 +30,16 @@ import {
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { PRO_REVIEW_REASON } from './opening-editing-mode.ts';
 
+/** Why `setActiveReviewItem` refused an item that `activatable` reports false for. */
+export function reviewActivationRefusal(item: ReviewItem): string {
+  // A custom node without `reviewCard` has no card, so the surface never makes it active.
+  if (item.kind === 'custom') {
+    return `custom node '${item.name}' has no reviewCard, so it has no card to activate`;
+  }
+  const kind = item.kind === 'revision' ? item.revisionKind : item.kind;
+  return `review items of kind '${kind}' are excluded from activation`;
+}
+
 interface ReviewCommandDependencies {
   surface(): PaginatedSurface | null;
   enabled(): boolean;

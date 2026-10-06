@@ -186,6 +186,36 @@ describe('shapes and text-box stories', () => {
     expect(xml).not.toContain('Acme');
   });
 
+  test('a line break in a text box saves to both copies', () => {
+    const target = host();
+    const { body } = roots(target);
+    const [box] = shapesOf(target, { body });
+    const boxBody = handleAt(
+      target.execute({ operations: [{ op: 'getShapeBody', shape: box! }] }),
+      0
+    );
+    const [paragraph] = handlesAt(
+      target.execute({ operations: [{ op: 'getParagraphs', body: boxBody }] }),
+      0
+    );
+    const response = target.execute({
+      operations: [
+        {
+          op: 'insertBreak',
+          span: {
+            start: { paragraph: paragraph!, offset: 8 },
+            end: { paragraph: paragraph!, offset: 8 },
+          },
+          breakType: 'Line',
+          location: 'Before',
+        },
+      ],
+    });
+    expect(response.ok).toBe(true);
+    expect(storyText(target, boxBody)).toBe('Client: \vAcme Holdings');
+    expect(savedMainXml(target).match(/<w:br\/>/g)).toHaveLength(2);
+  });
+
   test('a shape without text has no body', () => {
     const target = host();
     const { body } = roots(target);

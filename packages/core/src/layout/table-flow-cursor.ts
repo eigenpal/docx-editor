@@ -9,6 +9,8 @@ import type { BlockFragmentRecord } from './semantic-records.ts';
 export interface TableFlowCursor {
   /** The caller admitted a text-anchored table as one object on its anchor sheet. */
   readonly positionTextTable?: boolean;
+  /** How far such a table moved right to clear an earlier floating table (`table-float-overlap.ts`). */
+  readonly positionShiftX?: number;
   /** Points down the page content box. The paginator both reads and advances it. */
   cursorY: number;
   /** Column being filled in a multi-column section; absent with a single column. */

@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Most reads on a header or footer body that does not exist yet refuse with invalid-handle.",
+  "after": "Every read on that body answers as an empty story, and a write that changes nothing succeeds without creating the part.",
+  "reason": "The change affects reads and no-op commands only. Nothing is committed, so no shared field, operation, snapshot, or protocol message changes. Text writes still create the part through the existing path.",
+  "tests": [
+    "packages/core/src/automation/__tests__/automation-virtual-furniture-reads.test.ts",
+    "packages/editor-api/src/model/__tests__/model-furniture-creation.test.ts"
+  ],
+  "changeset": "virtual-furniture-reads",
+  "migration": null
+}

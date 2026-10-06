@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The caret inside a custom node without reviewCard made it the active review item and lit the active band.",
+  "after": "A custom node without reviewCard never becomes the active review item, so no band lights up.",
+  "reason": "Active review state and band painting are local to each editor and never enter shared state.",
+  "tests": ["packages/pro/src/__tests__/custom-review-cards.test.tsx"],
+  "changeset": "uncarded-custom-node-active-band",
+  "migration": null
+}

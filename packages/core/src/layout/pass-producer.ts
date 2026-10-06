@@ -109,12 +109,11 @@ function passProducerEntryMatches(
  * page-number-format tokens.
  *
  * `pageNumberFormat` is the section's `w:pgNumType/@w:fmt` as the body flow MEASURES against
- * it. It belongs in the producer, not only in the section context string, because it changes
- * what a paragraph EMITS: it decides the text of a body page-field placeholder and whether the
- * atom carries its `\#` picture to finalize at all. The context governs session resume; the
- * producer is what reaches `paragraphLayoutKey`, and a cache hit returns the frozen lines
- * before the field walk runs — so a format edit would otherwise serve a stale placeholder and a
- * stale marker until that paragraph was edited for some other reason.
+ * it, the format the body page-field context carries. Body placeholders and their finalize
+ * markers depend only on the field's own switches today, so this is conservative: it keeps a
+ * paragraph laid out under one format from serving a pass under another. The context governs
+ * session resume; the producer is what reaches `paragraphLayoutKey`, and a cache hit returns
+ * the frozen lines before the field walk runs.
  *
  * A multi-section pass derives this once per SECTION; rebuilding a content-equal
  * multi-kilobyte string per section made every downstream `===` a memcmp.

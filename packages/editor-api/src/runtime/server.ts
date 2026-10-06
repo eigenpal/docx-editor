@@ -53,7 +53,11 @@ export interface DocumentZipLimits {
   readonly maxEntries: number;
   /** Most bytes the archive may decompress to in total. */
   readonly maxTotalBytes: number;
-  /** Highest tolerated decompression ratio — the zip-bomb guard. */
+  /**
+   * Highest tolerated ratio of the archive's total uncompressed bytes to its own byte
+   * length — the zip-bomb guard. Applies once the total exceeds 8 MiB, so a small
+   * archive is never refused for compressing well.
+   */
   readonly maxRatio?: number;
 }
 

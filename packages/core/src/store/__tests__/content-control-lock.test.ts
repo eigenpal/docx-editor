@@ -200,10 +200,13 @@ describe('ST_Lock content edits', () => {
         '</w:sdtContent></w:sdt></w:p>'
     );
 
-  test('an unscoped trailing wrapper insertion resolves inside its locked control', () => {
+  test('an unscoped trailing wrapper insertion lands beside its locked control', () => {
     const part = trailingWrapperControl('<w:lock w:val="sdtContentLocked"/>');
     const paragraphId = firstOfKind(part, 'paragraph');
-    expect(reject(part, { op: 'insertText', paragraphId, offset: 4, text: 'X' })).toBe('locked');
+    const next = apply(part, { op: 'insertText', paragraphId, offset: 4, text: 'X' });
+    expect(paragraphTextOf(next, paragraphId)).toBe('wordX');
+    expect(textUnder(firstSdt(next))).toBe('word');
+    expect(reject(part, { op: 'insertText', paragraphId, offset: 2, text: 'X' })).toBe('locked');
   });
 
   test('the same unlocked insertion exits the wrapper but stays in the control', () => {
@@ -268,10 +271,10 @@ describe('ST_Lock content edits', () => {
   test('sdtContentLocked refuses both content edits and removal', () => {
     const part = load(
       '<w:p><w:sdt><w:sdtPr><w:lock w:val="sdtContentLocked"/></w:sdtPr>' +
-        '<w:sdtContent><w:r><w:t>x</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+        '<w:sdtContent><w:r><w:t>xy</w:t></w:r></w:sdtContent></w:sdt></w:p>'
     );
     const control = firstSdt(part);
-    expect(reject(part, { op: 'insertText', paragraphId: PARAGRAPH, offset: 0, text: 'y' })).toBe(
+    expect(reject(part, { op: 'insertText', paragraphId: PARAGRAPH, offset: 1, text: 'y' })).toBe(
       'locked'
     );
     expect(reject(part, { op: 'removeContentControl', controlId: control.id })).toBe('locked');
@@ -323,7 +326,7 @@ describe('ST_Lock content edits', () => {
         '<w:sdt><w:sdtPr/><w:sdtContent><w:r><w:t>in</w:t></w:r></w:sdtContent></w:sdt>' +
         '</w:sdtContent></w:sdt></w:p>'
     );
-    expect(reject(part, { op: 'insertText', paragraphId: PARAGRAPH, offset: 0, text: 'x' })).toBe(
+    expect(reject(part, { op: 'insertText', paragraphId: PARAGRAPH, offset: 1, text: 'x' })).toBe(
       'locked'
     );
   });
@@ -346,9 +349,9 @@ describe('ST_Lock content edits', () => {
     const part = load(
       '<w:p><w:sdt><w:sdtPr>' +
         '<w:dataBinding w:xpath="/a" w:storeItemID="{G}"/>' +
-        '</w:sdtPr><w:sdtContent><w:r><w:t>x</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+        '</w:sdtPr><w:sdtContent><w:r><w:t>xy</w:t></w:r></w:sdtContent></w:sdt></w:p>'
     );
-    expect(reject(part, { op: 'insertText', paragraphId: PARAGRAPH, offset: 0, text: 'y' })).toBe(
+    expect(reject(part, { op: 'insertText', paragraphId: PARAGRAPH, offset: 1, text: 'y' })).toBe(
       'bound'
     );
   });
@@ -480,9 +483,9 @@ describe('ST_Lock content edits', () => {
     const part = load(
       '<w:p><w:sdt><w:sdtPr><w:temporary/>' +
         '<w:dataBinding w:xpath="/a" w:storeItemID="{G}"/>' +
-        '</w:sdtPr><w:sdtContent><w:r><w:t>x</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+        '</w:sdtPr><w:sdtContent><w:r><w:t>xy</w:t></w:r></w:sdtContent></w:sdt></w:p>'
     );
-    expect(reject(part, { op: 'insertText', paragraphId: PARAGRAPH, offset: 0, text: 'y' })).toBe(
+    expect(reject(part, { op: 'insertText', paragraphId: PARAGRAPH, offset: 1, text: 'y' })).toBe(
       'bound'
     );
   });
@@ -704,23 +707,23 @@ describe('hyperlink and page-field ops respect content-control restrictions', ()
   test('contentLocked refuses insertPageField at the caret', () => {
     const part = load(
       '<w:p><w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr>' +
-        '<w:sdtContent><w:r><w:t>x</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+        '<w:sdtContent><w:r><w:t>xy</w:t></w:r></w:sdtContent></w:sdt></w:p>'
     );
     expect(
-      reject(part, { op: 'insertPageField', paragraphId: PARAGRAPH, offset: 0, field: 'PAGE' })
+      reject(part, { op: 'insertPageField', paragraphId: PARAGRAPH, offset: 1, field: 'PAGE' })
     ).toBe('locked');
   });
 
   test('bound refuses insertPageField at the caret', () => {
     const part = load(
       '<w:p><w:sdt><w:sdtPr><w:dataBinding w:xpath="/a" w:storeItemID="{G}"/></w:sdtPr>' +
-        '<w:sdtContent><w:r><w:t>x</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+        '<w:sdtContent><w:r><w:t>xy</w:t></w:r></w:sdtContent></w:sdt></w:p>'
     );
     expect(
       reject(part, {
         op: 'insertPageField',
         paragraphId: PARAGRAPH,
-        offset: 0,
+        offset: 1,
         field: 'NUMPAGES',
       })
     ).toBe('bound');

@@ -14,9 +14,10 @@ test('plain text with bundled fonts has no warnings', async () => {
 });
 
 test('reports legacy text boxes even when layout omits their records', async () => {
+  // Vertical text flow is outside the laid-out subset, so these boxes produce no records.
   const textbox =
     '<w:p><w:r><w:pict><v:shape id="box" type="#_x0000_t202" xmlns:v="urn:schemas-microsoft-com:vml" ' +
-    'style="position:absolute;width:200pt;height:100pt"><v:textbox><w:txbxContent>' +
+    'style="position:absolute;width:200pt;height:100pt"><v:textbox style="layout-flow:vertical"><w:txbxContent>' +
     '<w:p><w:r><w:t>Text box content</w:t></w:r></w:p>' +
     '</w:txbxContent></v:textbox></v:shape></w:pict></w:r></w:p>';
   const result = await exportMarkdown(
@@ -63,7 +64,7 @@ test('reports unsupported legacy shapes that never produce drawing records', asy
   const result = await exportMarkdown(
     docx(
       '<w:p><w:r><w:t>Body</w:t></w:r></w:p>' +
-        '<w:p><w:r><w:pict><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" ' +
+        '<w:p><w:r><w:pict><v:arc xmlns:v="urn:schemas-microsoft-com:vml" ' +
         'id="Diagram" style="position:absolute;width:100pt;height:50pt" fillcolor="red"/>' +
         '</w:pict></w:r></w:p>'
     )
@@ -250,5 +251,45 @@ test('a hostile resolver error cannot make warning formatting reject best-effort
   expect(result.warnings).toContainEqual({
     code: 'font-origin-failed',
     message: 'A font source failed: unknown error',
+  });
+});
+
+test('reports a laid-out legacy text box like any other text box', async () => {
+  const result = await exportMarkdown(
+    docx(
+      '<w:p><w:r><w:t>Body text</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:pict><v:shape id="box" type="#_x0000_t202" xmlns:v="urn:schemas-microsoft-com:vml" ' +
+        'style="position:absolute;width:200pt;height:100pt"><v:textbox><w:txbxContent>' +
+        '<w:p><w:r><w:t>Text box content</w:t></w:r></w:p>' +
+        '</w:txbxContent></v:textbox></v:shape></w:pict></w:r></w:p>'
+    )
+  );
+  expect(result.markdown.trim()).toBe('Body text');
+  expect(result.warnings).toEqual([
+    {
+      code: 'omitted-textbox',
+      message: 'Text box content is omitted from Markdown.',
+      pageNumber: 1,
+    },
+  ]);
+});
+
+test('reports unsupported content nested in a laid-out legacy text box', async () => {
+  const inner =
+    '<w:p><w:r><w:pict><v:arc xmlns:v="urn:schemas-microsoft-com:vml" ' +
+    'style="position:absolute;width:20pt;height:20pt"/></w:pict></w:r></w:p>';
+  const result = await exportMarkdown(
+    docx(
+      '<w:p><w:r><w:t>Body text</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:pict><v:shape id="box" type="#_x0000_t202" xmlns:v="urn:schemas-microsoft-com:vml" ' +
+        `style="position:absolute;width:200pt;height:100pt"><v:textbox><w:txbxContent>${inner}` +
+        '</w:txbxContent></v:textbox></v:shape></w:pict></w:r></w:p>'
+    )
+  );
+  expect(result.warnings).toContainEqual({
+    code: 'omitted-drawing',
+    partName: '/word/document.xml',
+    message:
+      'Legacy images or shapes in /word/document.xml are omitted from Markdown and may affect page breaks.',
   });
 });

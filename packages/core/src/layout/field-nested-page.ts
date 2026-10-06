@@ -74,7 +74,7 @@ export function createNestedPageTracker(): NestedPageTracker {
       const suppressed = seen && !visible;
       const value =
         closesTracked && pageContext && !suppressed
-          ? projectPageFieldValue(field.kind, pageContext, field.picture)
+          ? projectPageFieldValue(field.kind, pageContext, field)
           : '';
       reset();
       return closesTracked ? value : null;

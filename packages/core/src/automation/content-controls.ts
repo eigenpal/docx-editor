@@ -10,6 +10,7 @@
 // and the paragraphs it holds are all facts about the document NOW, and a read remembered from
 // when the handle was minted would describe the document as it was.
 
+import { LINE_BREAK_TEXT } from '../store/store/tree-op-inline-elements.ts';
 import {
   contentControlContentNodeOf,
   contentControlPropertiesOf,
@@ -165,7 +166,7 @@ export function contentControlText(
   projection: AutomationTextProjection = 'allMarkup'
 ): string {
   // Control values keep their established semantics. They omit struck text and paragraph marks.
-  if (projection === 'allMarkup') return contentControlTextOf(node);
+  if (projection === 'allMarkup') return contentControlTextOf(node, LINE_BREAK_TEXT);
   // Project inline content from its own subtree. An enclosing revision changes placement,
   // but it does not erase the value returned for the control itself.
   const inlineText = inlineContentControlText(reads, node, projection);

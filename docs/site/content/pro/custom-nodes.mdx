@@ -193,7 +193,7 @@ Everything else is optional: `label` and `chrome.color` for the chip, `onClick` 
 
 ## Render the chips
 
-Chips are content-locked by default, so editing runs through the context menu:
+Chips are content-locked by default. You can type before or after a chip, including at the start of a paragraph or between two chips, and the text lands beside the chip. Editing the chip itself runs through the context menu:
 
 Mount both components inside the viewport:
 
@@ -399,7 +399,9 @@ if (built.ok) template.replace('{{citation}}', built.xml);
 
 ### Add a review sidebar card
 
-`reviewCard` contributes one card per node, anchored at its range. `useReviewItem()` supplies the item for the card containing your component:
+`reviewCard` contributes one card per node, anchored at its range. While the card is open, the editor highlights the node. If you leave out `reviewCard`, the node has no card and no active highlight.
+
+`useReviewItem()` supplies the item for the card containing your component:
 
 <FrameworkTabs>
 <Framework value="react">

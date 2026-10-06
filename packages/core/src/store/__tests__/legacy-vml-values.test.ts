@@ -8,7 +8,10 @@ test('parses supported VML colors and optional palette indices', () => {
     ['Red', '#ff0000'],
     ['blue', '#0000ff'],
     ['green', '#008000'],
+    ['yellow', '#ffff00'],
+    ['Silver', '#c0c0c0'],
     ['#Ab12Ef', '#ab12ef'],
+    ['#3A9', '#33aa99'],
   ]) {
     expect(color(input, '')).toBe(expected);
     for (const whitespace of [' ', '\t', '\r\n', '\u00a0', ' \t\n\uFEFF']) {
@@ -21,8 +24,9 @@ test('parses supported VML colors and optional palette indices', () => {
 
 test('rejects unsupported colors and malformed palette suffixes', () => {
   for (const input of [
-    'yellow',
-    '#abc',
+    'window',
+    '#abcd',
+    '#ab',
     ' red',
     'red ',
     ' red [1]',

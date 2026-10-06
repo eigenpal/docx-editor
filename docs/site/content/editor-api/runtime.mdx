@@ -112,6 +112,8 @@ Explicit server pagination does not give a server a browser selection or layout 
 
 `DocumentLimits` has optional `zip`, `xml`, `maxXmlParts`, and `maxRelationships` fields. `DocumentZipLimits` requires `maxEntries` and `maxTotalBytes`; `maxRatio` is optional. `DocumentXmlLimits` requires `maxBytes`; `maxElements` is optional. Counts and byte budgets must be finite nonnegative integers. Compression ratios can be fractional.
 
+`maxRatio` compares the total uncompressed size of all entries with the size of the archive. It applies only after the total exceeds 8 MiB. The ratio never refuses a smaller archive. A larger archive is refused when it expands by more than `maxRatio`. The default ratio is 200.
+
 The default XML element budget is 10,000,000 per part. The engine limits each XML part to 50,000,000 elements, 64 MiB, and 256 nested levels. These limits do not guarantee sufficient host memory. Malformed input or invalid limits produce `InvalidArgument`. An exceeded budget produces `ResourceLimitExceeded` with a `limit` field. See [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) for recovery.
 
 ## Next steps

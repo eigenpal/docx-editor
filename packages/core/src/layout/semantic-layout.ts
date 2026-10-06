@@ -14,8 +14,8 @@ import {
   drawingZonesAtLinePlacement,
 } from './drawing-placement-exclusion.ts';
 import { createParagraphDrawingWrap } from './paragraph-drawing-wrap.ts';
+import { continuedPageZones, continuedWrapFlags } from './continued-page-zones.ts';
 import {
-  continuedPageFurnitureZones,
   furnitureDrawingExclusionsForPage,
   hasFurnitureDrawingExclusions,
   refusalYieldsHiddenFurniture,
@@ -711,9 +711,8 @@ function layoutBlocksPass(
   /**
    * What the body flow measures a page-field placeholder against.
    *
-   * The section's `w:pgNumType/@w:fmt` rides along because the placeholder and the value that
-   * replaces it have to agree about whether a `\#` picture applies — see
-   * {@link numericPictureApplies}. A section is one format, so this is fixed for the pass.
+   * The section's `w:pgNumType/@w:fmt` rides along as the format a PAGE field without
+   * switches renders in. A section is one format, so this is fixed for the pass.
    */
   const bodyPageFieldContext: BodyPageFieldContext = Object.freeze(
     options.bodyPageNumberFormat !== undefined ? { format: options.bodyPageNumberFormat } : {}
@@ -729,16 +728,19 @@ function layoutBlocksPass(
   const reserveKeyBound = session?.previous ? session.previous.pages.length + 1 : Infinity;
   const columnRegionBottom = options.columnRegionBottom;
   const continuedInsets = options.continuedPageInsets;
-  // Local page 0 of a continued section IS the host sheet, so its text wraps around the
-  // drawings of the header and footer the host paints, never around this section's own.
+  // Local page 0 of a continued section IS the host sheet: its text wraps around the host's
+  // header and footer drawings (never this section's) and the floats earlier sections left.
   const continuedZones =
     continuedInsets && options.continuedPageFurniture
-      ? continuedPageFurnitureZones(
+      ? continuedPageZones(
           options.continuedPageFurniture,
           continuedInsets,
           geometry.margin.left,
           contentWidthForReflow,
-          options.yieldHiddenFurnitureZones
+          {
+            omitHiddenFurniture: options.yieldHiddenFurnitureZones,
+            drawingLayout: options.inlineDrawingLayout,
+          }
         )
       : undefined;
   const contextFor = layoutPassContextKey({
@@ -784,9 +786,10 @@ function layoutBlocksPass(
   });
   const { pageBox, furnitureFor, overflowShellAt } = sectionFurniture;
 
-  const furnitureHasWrap =
-    hasFurnitureDrawingExclusions(furniture, options.yieldHiddenFurnitureZones) ||
-    (continuedZones?.length ?? 0) > 0;
+  const { furnitureHasWrap, furnitureHoldsTables, admission } = continuedWrapFlags(
+    hasFurnitureDrawingExclusions(furniture, options.yieldHiddenFurnitureZones),
+    continuedZones
+  );
   let exclusionPageIndex = -1;
   let currentPageZones: readonly ExclusionZone[] = Object.freeze([]);
   const pageExclusionZones = (): readonly ExclusionZone[] => {
@@ -798,7 +801,7 @@ function layoutBlocksPass(
     const hostZones = index === 0 ? continuedZones : undefined;
     if (hostZones) {
       if (hostZones.length) currentPageZones = Object.freeze([...bodyZones, ...hostZones]);
-    } else if (furnitureHasWrap) {
+    } else if (furnitureHoldsTables) {
       const box = pageBox(index);
       const insets = insetsFor(index);
       // Resolve furniture on the page being filled, including newly minted pages.
@@ -1350,7 +1353,6 @@ function layoutBlocksPass(
   const floatSignals: tableFloat.PositionedTableAnchorSignal[] = [];
   // Pass-local: the shared flow token prevents checkpoint resume inside this group.
   const terminalTextTableIds = new Set<string>();
-  let terminalTextTableBottom = 0;
   // A continuous section resumes the previous section's column rather than opening a
   // sheet, so its first block starts at that column's used height and its first paragraph
   // is NOT at a page top — page-top space-before suppression must not apply to it, and the
@@ -1885,12 +1887,14 @@ function layoutBlocksPass(
     table: OoxmlElement,
     anchorY = cursorY,
     positionTextTable = false,
-    next?: number
+    next?: number,
+    positionShiftX = 0
   ): boolean => {
     const savedCursorY = cursorY;
     // The paginator owns the cursor. The adapter syncs it around each story-flow advance.
     const flow: TableFlowCursor = {
       positionTextTable,
+      positionShiftX,
       cursorY: anchorY,
       columnWidth,
       columnLeft,
@@ -1948,15 +1952,17 @@ function layoutBlocksPass(
         flowColumnIndex = anchorColumn;
         collectingCellBreakKeys = [];
         try {
-          const clearedY = tableWrap.clearEarlierText(
+          const start = tableWrap.positionedTableStart(
             table,
             anchorY,
             columnWidth(),
             anchorFrames(),
-            pageFragments.slice(0, anchorFragmentIndex),
-            tableDeps
+            pageFragments,
+            anchorFragmentIndex,
+            tableDeps,
+            contentHeight()
           );
-          layoutTableInFlow(table, clearedY, true);
+          layoutTableInFlow(table, start.anchorY, true, undefined, start.dx);
           registerTableCellBreakKeys(table, collectingCellBreakKeys);
         } finally {
           collectingCellBreakKeys = null;
@@ -2119,7 +2125,6 @@ function layoutBlocksPass(
                 terminalTextTableIds.add(table.id);
                 registerTableCellBreakKeys(table, placed.cellBreakKeys[memberIndex]!);
               }
-              terminalTextTableBottom = placed.bottom;
               continue;
             }
           }
@@ -2127,10 +2132,10 @@ function layoutBlocksPass(
       }
       if (
         positionedTablePolicy.has(entry.table.id) &&
-        !furnitureHasWrap &&
+        !furnitureHoldsTables &&
         tableWrap.admitsAtAnchor(entry.table, tableDeps, {
           allowBreak: columns.count === 1 && positionedTablePolicy.get(entry.table.id),
-          zones: options.drawingExclusionZonesByPage,
+          zones: admission(options.drawingExclusionZonesByPage),
           page: pages.length,
           width: Math.min(...columns.widths),
           frames: anchorFrames(),
@@ -2307,6 +2312,7 @@ function layoutBlocksPass(
               frames: anchorFrames(),
               verticalFrames: tableVerticalFrames(prospectiveFirstTop),
               earlier: pageFragments,
+              signals: floatSignals,
             }
           )
         );
@@ -2897,8 +2903,8 @@ function layoutBlocksPass(
 
   // Captured BEFORE the terminal flush, which zeroes the cursor. A converged pass stopped
   // early and never walked the tail, so its end state is the one the previous pass stored.
-  let endCursorY =
-    converged && session ? session.endCursorY : Math.max(cursorY, terminalTextTableBottom);
+  // Floats on the last sheet do not move it: a section continuing there wraps around them.
+  let endCursorY = converged && session ? session.endCursorY : cursorY;
   const endSpaceAfter = converged && session ? session.endSpaceAfter : previousSpaceAfter;
   // The terminal flush closes the page the flow was still filling. When it does NOT run,
   // the last page was already closed by a page break and the cursor sits at the top of a
@@ -2911,7 +2917,6 @@ function layoutBlocksPass(
     flushPage();
     endCursorY = Math.max(
       endCursorY,
-      tableWrap.floatingTextTableBottom(pages.at(-1)!.fragments),
       positionedFrameBottom(pages.at(-1)!.fragments, pages.at(-1)!.contentBox.height)
     );
   }

@@ -6,7 +6,7 @@
 // apart from all three so none of them has to import another for a constant — the type
 // imports below are erased, so the module graph stays acyclic at runtime.
 
-import { isValidNCName } from './qname.ts';
+import { isXmlNCName } from './qname.ts';
 import {
   validContentControlCheckboxChildren,
   validContentControlChildren,
@@ -69,13 +69,13 @@ export interface ExpandedName {
 export function splitQName(name: string): ExpandedName {
   const colon = name.indexOf(':');
   if (colon < 0) {
-    if (!isValidNCName(name)) throw new TreeReadError('invalid-name');
+    if (!isXmlNCName(name)) throw new TreeReadError('invalid-name');
     return { localName: name };
   }
   if (name.indexOf(':', colon + 1) >= 0) throw new TreeReadError('invalid-name');
   const prefix = name.slice(0, colon);
   const localName = name.slice(colon + 1);
-  if (!isValidNCName(prefix) || !isValidNCName(localName)) throw new TreeReadError('invalid-name');
+  if (!isXmlNCName(prefix) || !isXmlNCName(localName)) throw new TreeReadError('invalid-name');
   return { prefix, localName };
 }
 
@@ -103,7 +103,7 @@ export function resolvedPrefixNamespaceSet(
     .split(/\s+/)
     .filter(Boolean)
     .map((prefix) => {
-      if (!isValidNCName(prefix)) throw new TreeReadError('invalid-name');
+      if (!isXmlNCName(prefix)) throw new TreeReadError('invalid-name');
       const namespaceUri = bindings.get(prefix);
       if (namespaceUri === undefined) throw new TreeReadError('undeclared-prefix');
       return namespaceUri;

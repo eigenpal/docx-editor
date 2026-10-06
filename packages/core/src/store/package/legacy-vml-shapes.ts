@@ -1,6 +1,8 @@
 import type { SourceCrop } from './drawing-projection.ts';
 import { RELATIONSHIPS_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
 import { legacyChromaKeyFilter } from './legacy-vml-chromakey.ts';
+import type { VectorShapeProjection } from './drawing-shape-projection.ts';
+import { freezeVectorShapeComponent } from './drawing-vector-freeze.ts';
 import {
   attribute as a,
   children,
@@ -138,6 +140,18 @@ function wordArt(node: OoxmlElement, box: LegacyBox): string | null {
   return `<svg x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" viewBox="0 -880 ${span} 1000" preserveAspectRatio="none"><text x="0" y="0" font-family="${esc(face)}" font-size="1000" font-weight="${weight}" font-style="${italic}" textLength="${span}" lengthAdjust="spacingAndGlyphs" fill="${ink.fill}" stroke="${ink.stroke}" stroke-width="${(ink.weight / size) * 1000}" stroke-linejoin="round">${esc(text)}</text></svg>`;
 }
 
+/** Arrowhead width and length, in stroke widths. */
+const ARROW_WIDTHS: ReadonlyMap<string, number> = new Map([
+  ['narrow', 2],
+  ['medium', 3],
+  ['wide', 5],
+]);
+const ARROW_LENGTHS: ReadonlyMap<string, number> = new Map([
+  ['short', 2],
+  ['medium', 3],
+  ['long', 5],
+]);
+
 function arrow(
   pointsList: readonly [number, number][],
   start: boolean,
@@ -149,18 +163,8 @@ function arrow(
   const type = stroke ? (a(stroke, prefix) ?? 'none') : 'none';
   if (type === 'none' || color === 'none') return '';
   if (!['block', 'classic', 'open'].includes(type)) return null;
-  const widths = new Map([
-    ['narrow', 2],
-    ['medium', 3],
-    ['wide', 5],
-  ]);
-  const lengths = new Map([
-    ['short', 2],
-    ['medium', 3],
-    ['long', 5],
-  ]);
-  const w = widths.get(a(stroke!, prefix + 'width') ?? 'medium');
-  const h = lengths.get(a(stroke!, prefix + 'length') ?? 'medium');
+  const w = ARROW_WIDTHS.get(a(stroke!, prefix + 'width') ?? 'medium');
+  const h = ARROW_LENGTHS.get(a(stroke!, prefix + 'length') ?? 'medium');
   if (!w || !h) return null;
   if (weight === 0) return '';
   const tip = pointsList[start ? 0 : pointsList.length - 1]!;
@@ -181,8 +185,17 @@ function arrow(
   return `<path d="${d}${notch}${type === 'open' ? '' : ' Z'}" fill="${type === 'open' ? 'none' : color}" stroke="${color}" stroke-width="${weight}" stroke-linejoin="round"/>`;
 }
 
-function pathPoints(node: OoxmlElement, box: LegacyBox): [number, number][] | null {
+function pathPoints(
+  node: OoxmlElement,
+  box: LegacyBox,
+  ends?: LegacyLineEnds
+): [number, number][] | null {
   const style = styleOf(node)!;
+  if (ends) {
+    // Explicit ends already carry the direction; a flip on top of them has no single meaning.
+    if (style.has('flip')) return null;
+    return ends.map(([x, y]) => [box.x + x, box.y + y]);
+  }
   let coords: [number, number][];
   const source = a(node, 'path');
   if (source) {
@@ -235,6 +248,133 @@ function pathPoints(node: OoxmlElement, box: LegacyBox): [number, number][] | nu
   ]);
 }
 
+/** A line's `from` and `to` points in points, relative to its box. */
+export type LegacyLineEnds = readonly [readonly [number, number], readonly [number, number]];
+
+/**
+ * How far a line's ink reaches past its ends, in points: half the stroke, or the arrowhead
+ * allowance when an end has one. A `closed` shape reaches half its stroke. Null when the paint
+ * is outside the subset.
+ */
+export function legacyLineReach(node: OoxmlElement, closed = false): number | null {
+  const ink = paint(node);
+  if (!ink) return null;
+  if (ink.stroke === 'none') return 0;
+  // A closed shape draws no arrowheads.
+  if (closed) return ink.weight / 2;
+  const arrows =
+    ink.strokeNode &&
+    ['startarrow', 'endarrow'].some((key) => (a(ink.strokeNode!, key) ?? 'none') !== 'none');
+  return arrows ? ink.weight * 6 : ink.weight / 2;
+}
+
+const EMU_PER_POINT = 12_700;
+type Point = Readonly<{ x: number; y: number }>;
+
+/** The filled or open arrowhead of a line end, in EMU, as `arrow` draws it. */
+function arrowEmu(
+  tip: Point,
+  previous: Point,
+  stroke: OoxmlElement,
+  prefix: 'startarrow' | 'endarrow',
+  weight: number
+): { filled?: Point[]; open?: Point[] } | null {
+  const type = a(stroke, prefix) ?? 'none';
+  if (type === 'none') return {};
+  const w = ARROW_WIDTHS.get(a(stroke, prefix + 'width') ?? 'medium');
+  const h = ARROW_LENGTHS.get(a(stroke, prefix + 'length') ?? 'medium');
+  if (!['block', 'classic', 'open'].includes(type) || !w || !h) return null;
+  const dx = previous.x - tip.x,
+    dy = previous.y - tip.y,
+    distance = Math.hypot(dx, dy);
+  if (!distance || weight === 0) return {};
+  const ux = dx / distance,
+    uy = dy / distance,
+    len = h * weight,
+    half = (w * weight) / 2;
+  const left = { x: tip.x + ux * len - uy * half, y: tip.y + uy * len + ux * half };
+  const right = { x: tip.x + ux * len + uy * half, y: tip.y + uy * len - ux * half };
+  if (type === 'open') return { open: [left, tip, right] };
+  if (type === 'block') return { filled: [tip, left, right] };
+  return {
+    filled: [tip, left, { x: tip.x + ux * len * 0.75, y: tip.y + uy * len * 0.75 }, right],
+  };
+}
+
+/**
+ * A `v:line` between `ends` as a vector shape in its own `width` by `height` points box. The
+ * caller has validated the line with {@link legacyShapeFragment}. A vector shape paints in
+ * every output, and its outline reaches past the box as a modern line's does. Null when the
+ * paint is outside the subset.
+ */
+export function legacyLineShape(
+  node: OoxmlElement,
+  width: number,
+  height: number,
+  ends: LegacyLineEnds
+): VectorShapeProjection | null {
+  const ink = paint(node);
+  if (!ink) return null;
+  const emu = ([x, y]: readonly [number, number]): Point =>
+    Object.freeze({ x: Math.round(x * EMU_PER_POINT), y: Math.round(y * EMU_PER_POINT) });
+  const stroked = ink.stroke !== 'none' && ink.weight > 0;
+  const strokeHex = stroked ? ink.stroke.slice(1).toUpperCase() : null;
+  const weight = stroked ? ink.weight : 0;
+  const subpaths: Point[][] = [];
+  const closed: boolean[] = [];
+  const arrowheads: Point[][] = [];
+  const from = emu(ends[0]),
+    to = emu(ends[1]);
+  subpaths.push([from, to]);
+  closed.push(false);
+  if (stroked && ink.strokeNode) {
+    const weightEmu = weight * EMU_PER_POINT;
+    for (const [tip, previous, prefix] of [
+      [from, to, 'startarrow'],
+      [to, from, 'endarrow'],
+    ] as const) {
+      const head = arrowEmu(tip, previous, ink.strokeNode, prefix, weightEmu);
+      if (!head) return null;
+      if (head.filled) arrowheads.push(head.filled);
+      if (head.open) {
+        subpaths.push(head.open);
+        closed.push(false);
+      }
+    }
+  }
+  const component = freezeVectorShapeComponent({
+    subpathsEmu: subpaths,
+    subpathsClosed: closed,
+    ...(arrowheads.length ? { arrowheadsEmu: arrowheads } : {}),
+    fillHex: null,
+    fillAlpha: 1,
+    strokeHex,
+    strokeAlpha: 1,
+    strokeWidthEmu: Math.round(weight * EMU_PER_POINT),
+  });
+  return Object.freeze({
+    extentEmu: Object.freeze({
+      cx: Math.round(width * EMU_PER_POINT),
+      cy: Math.round(height * EMU_PER_POINT),
+    }),
+    subpathsEmu: component.subpathsEmu,
+    fillHex: null,
+    fillAlpha: 1,
+    strokeHex,
+    strokeAlpha: 1,
+    strokeWidthEmu: component.strokeWidthEmu,
+    components: Object.freeze([component]),
+  });
+}
+
+/** The corner radius of a `v:roundrect`: `arcsize` of half the shorter side (default 0.2). */
+function cornerRadius(node: OoxmlElement, box: LegacyBox): number | null {
+  const raw = (a(node, 'arcsize') ?? '0.2').trim();
+  const fraction = raw.endsWith('f') ? numeric(raw.slice(0, -1)) / 65536 : numeric(raw);
+  if (!Number.isFinite(fraction) || fraction < 0) return null;
+  return (Math.min(fraction, 1) * Math.min(box.width, box.height)) / 2;
+}
+
 /** A picture outline: one solid line of `weight` points in `color` (`#rrggbb`) on all sides. */
 export interface LegacyPictureBorder {
   readonly weight: number;
@@ -280,12 +420,16 @@ export function legacyPictureBorder(node: OoxmlElement): LegacyPictureBorder | n
   return border ? Object.freeze(border) : null;
 }
 
-/** `bordered`: the caller validated the shape's `w10:border*` sides and draws the outline. */
+/**
+ * `bordered`: the caller validated the shape's `w10:border*` sides and draws the outline.
+ * `ends`: a line's `from` and `to` points relative to `box`, in place of its diagonal.
+ */
 export function legacyShapeFragment(
   node: OoxmlElement,
   box: LegacyBox,
   canvas: LegacyBox = box,
-  bordered = false
+  bordered = false,
+  ends?: LegacyLineEnds
 ): LegacyGraphicFragment | null {
   const inside = (x: number, y: number, padding = 0) =>
     x - padding >= canvas.x &&
@@ -395,16 +539,21 @@ export function legacyShapeFragment(
   if (!ink) return null;
   const padding = ink.stroke === 'none' ? 0 : ink.weight / 2;
   if (
-    ['rect', 'oval'].includes(node.localName) &&
+    ['rect', 'roundrect', 'oval'].includes(node.localName) &&
     (!inside(box.x, box.y, padding) || !inside(box.x + box.width, box.y + box.height, padding))
   )
     return null;
   if (node.localName === 'rect')
     return `<rect x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" fill="${ink.fill}" stroke="${ink.stroke}" stroke-width="${ink.weight}"/>`;
+  if (node.localName === 'roundrect') {
+    const radius = cornerRadius(node, box);
+    if (radius === null) return null;
+    return `<rect x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" rx="${radius}" ry="${radius}" fill="${ink.fill}" stroke="${ink.stroke}" stroke-width="${ink.weight}"/>`;
+  }
   if (node.localName === 'oval')
     return `<ellipse cx="${box.x + box.width / 2}" cy="${box.y + box.height / 2}" rx="${box.width / 2}" ry="${box.height / 2}" fill="${ink.fill}" stroke="${ink.stroke}" stroke-width="${ink.weight}"/>`;
   if (node.localName !== 'line' && type !== '#_x0000_t32' && !a(node, 'path')) return null;
-  const path = pathPoints(node, box);
+  const path = pathPoints(node, box, ends);
   if (!path || path.some((p) => p.some((v) => !Number.isFinite(v) || Math.abs(v) > 1_000_000)))
     return null;
   if (a(node, 'connectortype', OFFICE) && a(node, 'connectortype', OFFICE) !== 'straight')

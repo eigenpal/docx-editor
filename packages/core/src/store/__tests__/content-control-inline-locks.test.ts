@@ -219,12 +219,13 @@ describe('the boundary is where the refusal starts and stops', () => {
     );
   });
 
-  // THE TWO EDGES ARE NOT THE SAME PLACE. The applier owns a boundary offset by the run that
-  // STARTS there, so content inserted at the leading edge lands in the control's first run and
-  // content inserted at the trailing edge lands in whatever follows the control. Validation has
-  // to say the same thing, or a locked field can be typed into from the front — the refusal
-  // would be looking at a rule the write does not follow.
-  describe('the leading edge belongs to the control and the trailing edge does not', () => {
+  // THE TWO EDGES ARE NOT THE SAME PLACE for a control that takes typing. The applier owns a
+  // boundary offset by the run that STARTS there, so content inserted at an unlocked control's
+  // leading edge lands in its first run, and content inserted at the trailing edge lands in
+  // whatever follows. A control that typing can never enter (content lock, data binding,
+  // checkbox, picture) is left at BOTH edges, because its first run is a place no keystroke can
+  // land. Validation reads the same landing, or a locked field could be typed into from the front.
+  describe('which side of a control edge an insertion lands on', () => {
     test('unlocked: text typed at the leading edge lands inside', () => {
       const part = inlineLocked('unlocked', 'abc', 'MID', 'xyz');
       const span = controlSpan(part);
@@ -250,14 +251,27 @@ describe('the boundary is where the refusal starts and stops', () => {
       expect(textOf(written)).toContain('MID#xyz');
     });
 
-    test('locked: the leading edge is refused, because that is where the text would go', () => {
-      const part = inlineLocked('sdtContentLocked', 'abc');
+    test('locked: text typed at the leading edge lands beside the control', () => {
+      const part = inlineLocked('sdtContentLocked', 'abc', 'MID', 'xyz');
+      const span = controlSpan(part);
+      const written = applied(part, {
+        op: 'insertText',
+        paragraphId: firstParagraph(part).id,
+        offset: span.start,
+        text: '#',
+      });
+      expect(controlTextOf(written)).toBe('MID');
+      expect(textOf(written)).toContain('abc#MID');
+    });
+
+    test('locked: text typed one character inside the control is refused', () => {
+      const part = inlineLocked('sdtContentLocked', 'abc', 'MID', 'xyz');
       const span = controlSpan(part);
       expect(
         refusal(part, {
           op: 'insertText',
           paragraphId: firstParagraph(part).id,
-          offset: span.start,
+          offset: span.start + 1,
           text: '#',
         })
       ).toBe('locked');
@@ -277,23 +291,29 @@ describe('the boundary is where the refusal starts and stops', () => {
 
     // Every op that writes content at an offset lands in the same place, so every one of them
     // meets the same edge rule.
-    test('a tab, a line break and a page break are refused at the leading edge too', () => {
-      const span = controlSpan(inlineLocked('sdtContentLocked', 'abc'));
+    test('a tab, a line break and a page break at the leading edge land beside it too', () => {
       for (const build of [
-        (paragraphId: string): TreeDocOp => ({ op: 'insertTab', paragraphId, offset: span.start }),
-        (paragraphId: string): TreeDocOp => ({
+        (paragraphId: string, offset: number): TreeDocOp => ({
+          op: 'insertTab',
+          paragraphId,
+          offset,
+        }),
+        (paragraphId: string, offset: number): TreeDocOp => ({
           op: 'insertHardBreak',
           paragraphId,
-          offset: span.start,
+          offset,
         }),
-        (paragraphId: string): TreeDocOp => ({
+        (paragraphId: string, offset: number): TreeDocOp => ({
           op: 'insertPageBreak',
           paragraphId,
-          offset: span.start,
+          offset,
         }),
       ]) {
-        const part = inlineLocked('sdtContentLocked', 'abc');
-        expect(refusal(part, build(firstParagraph(part).id))).toBe('locked');
+        const part = inlineLocked('sdtContentLocked', 'abc', 'MID', 'xyz');
+        const span = controlSpan(part);
+        const paragraphId = firstParagraph(part).id;
+        expect(controlTextOf(applied(part, build(paragraphId, span.start)))).toBe('MID');
+        expect(refusal(part, build(paragraphId, span.start + 1))).toBe('locked');
       }
     });
 
@@ -322,7 +342,7 @@ describe('the boundary is where the refusal starts and stops', () => {
       ).toBeNull();
     });
 
-    test('a nested control’s leading edge is the outer control’s too', () => {
+    test('a nested control’s leading edge lands beside the locked outer control', () => {
       const part = parseDoc(
         `<w:p><w:r><w:t>a</w:t></w:r>` +
           `<w:sdt><w:sdtPr><w:tag w:val="outer"/><w:lock w:val="contentLocked"/></w:sdtPr>` +
@@ -330,15 +350,13 @@ describe('the boundary is where the refusal starts and stops', () => {
           `<w:sdtContent><w:r><w:t>deep</w:t></w:r></w:sdtContent></w:sdt></w:sdtContent></w:sdt>` +
           `<w:r><w:t>z</w:t></w:r></w:p>`
       );
-      // Both controls start at offset 1, so the leading edge is inside both of them.
-      expect(
-        refusal(part, {
-          op: 'insertText',
-          paragraphId: firstParagraph(part).id,
-          offset: 1,
-          text: '#',
-        })
-      ).toBe('locked');
+      // Both controls start at offset 1. The outer lock covers the inner control, so the text
+      // leaves both of them; one character further in, the outer lock refuses it.
+      const paragraphId = firstParagraph(part).id;
+      const written = applied(part, { op: 'insertText', paragraphId, offset: 1, text: '#' });
+      expect(textOf(written)).toBe('a#deepz');
+      expect(controlTextOf(written)).toBe('deep');
+      expect(refusal(part, { op: 'insertText', paragraphId, offset: 2, text: '#' })).toBe('locked');
     });
   });
 

@@ -187,7 +187,7 @@ test('escapes image alternative text without allowing HTML or Markdown injection
 test('keeps warnings for unsupported legacy content beside an exported legacy image', async () => {
   const shape = `<w:p><w:r><w:pict><v:shape xmlns:v="urn:schemas-microsoft-com:vml" xmlns:r="${R}" id="Picture" type="#_x0000_t75" style="width:100pt;height:50pt"><v:imagedata r:id="rImage"/></v:shape></w:pict></w:r></w:p>`;
   const extra =
-    '<w:p><w:r><w:pict><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" id="Unsupported" style="width:100pt;height:50pt"/></w:pict></w:r></w:p>';
+    '<w:p><w:r><w:pict><v:arc xmlns:v="urn:schemas-microsoft-com:vml" id="Unsupported" style="width:100pt;height:50pt"/></w:pict></w:r></w:p>';
   const clean = await exportMarkdown(imageDocx(shape), fast);
   expect(clean.media).toHaveLength(1);
   expect(clean.warnings).toEqual([]);
