@@ -7687,6 +7687,7 @@ a.docx-hyperlink:focus-visible {
 .docx-editor .docx-revision-markup-dialog,
 .docx-editor.docx-revision-markup-dialog,
 .docx-revision-markup-dialog {
+  box-sizing: border-box;
   max-width: 39rem;
   width: min(39rem, calc(100vw - 2rem));
   position: fixed;
@@ -7782,12 +7783,6 @@ a.docx-hyperlink:focus-visible {
 .docx-revision-markup-actions button:first-child {
   margin-inline-end: auto;
 }
-@media (max-width: 440px) {
-  .docx-revision-markup-row {
-    grid-template-columns: 1fr;
-  }
-}
-
 .docx-revision-markup-dialog button:focus-visible,
 .docx-revision-markup-dialog select:focus-visible,
 .docx-revision-markup-dialog input:focus-visible {
@@ -7826,6 +7821,7 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text);
   background: var(--doc-bg);
   text-align: start;
+  overflow-wrap: anywhere;
 }
 .docx-revision-color-trigger:disabled {
   opacity: 0.5;
@@ -7870,6 +7866,7 @@ a.docx-hyperlink:focus-visible {
 }
 .docx-revision-color-trigger::after {
   content: '';
+  flex: none;
   margin-inline-start: auto;
   width: 0.375rem;
   height: 0.375rem;
@@ -7902,5 +7899,16 @@ a.docx-hyperlink:focus-visible {
 @media (max-width: 540px) {
   .docx-revision-markup-background > .docx-revision-color-picker {
     grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 440px) {
+  .docx-revision-markup-row,
+  .docx-revision-markup-tableCells,
+  .docx-revision-markup-background > .docx-revision-color-picker {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .docx-revision-markup-actions {
+    flex-wrap: wrap;
   }
 }

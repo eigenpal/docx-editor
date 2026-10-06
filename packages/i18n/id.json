@@ -414,7 +414,7 @@
     "deleteShortcut": "Del",
     "selectAll": "Pilih Semua",
     "selectAllShortcut": "Ctrl+A",
-    "editCustomNode": "Edit {label}",
+    "editCustomNode": "Sunting {label}",
     "removeCustomNode": "Hapus {label}",
     "pasteWithoutFormatting": "Tempel tanpa pemformatan",
     "pasteWithoutFormattingShortcut": "Ctrl+Shift+V",
