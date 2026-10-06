@@ -19,7 +19,7 @@ Choose a scenario to compare its markup and API settings. The preview illustrate
 
 ## Set preferences through the API
 
-Pass initial preferences to `createDocxEditor()`. Omitted fields use the defaults.
+Pass initial preferences to `createDocxEditor()`. The editor uses them from its first render. You do not need to call `setRevisionMarkup()` afterward to apply them. Omitted fields use the defaults.
 
 ```ts
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
@@ -38,7 +38,7 @@ const editor = createDocxEditor({
 editor.attach(container);
 ```
 
-Call `setRevisionMarkup()` to merge a partial update. Nested fields that you omit keep their existing values.
+After creation, call `setRevisionMarkup()` to update the displayed markup without reloading the document or recreating the editor. The setter merges a partial update. Nested fields that you omit keep their existing values.
 
 ```ts
 editor.setRevisionMarkup({ insertions: { color: 'green' } });
