@@ -691,6 +691,7 @@ export function findContentControl(root: OoxmlNode, nodeId: string): ContentCont
  * old item is still present as a tracked deletion would otherwise report both.
  *
  * A manual line break is left out unless `lineBreak` names the text to report it as.
+ * With that option, column breaks report U+000E so callers cannot silently discard them.
  */
 export function contentControlTextOf(control: OoxmlNode, lineBreak?: string): string {
   const content = contentControlContentNodeOf(control);
@@ -713,7 +714,9 @@ export function contentControlTextOf(control: OoxmlNode, lineBreak?: string): st
       // Struck content is not the value; `w:delText` above already says so for text.
       if (node.kind === 'revisionDelete' || node.kind === 'revisionMoveFrom') return;
       if (node.kind === 'hardBreak') {
-        if (hardBreakKind(node) === 'line') text += lineBreak;
+        const kind = hardBreakKind(node);
+        if (kind === 'line') text += lineBreak;
+        else if (kind === 'column') text += '\u000e';
         return;
       }
     }

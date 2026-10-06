@@ -621,6 +621,44 @@ describe('line breaks read back as \\v', () => {
     }
   });
 
+  test('control values retain column breaks and refuse writing them back', () => {
+    const host = open(
+      docx(
+        '<w:p><w:sdt><w:sdtPr><w:richText/></w:sdtPr><w:sdtContent>' +
+          '<w:r><w:t>A</w:t><w:br w:type="column"/><w:t>B</w:t></w:r>' +
+          '</w:sdtContent></w:sdt></w:p>'
+      )
+    );
+    const { body } = roots(host);
+    const [control] = handlesAt(
+      host.execute({ operations: [{ op: 'getContentControls', scope: { body } }] }),
+      0
+    );
+    const before = savedMainXml(host);
+    for (const projection of ['allMarkup', 'original'] as const) {
+      expect(
+        textAt(
+          host.execute({
+            operations: [{ op: 'getContentControlText', contentControl: control!, projection }],
+          }),
+          0
+        )
+      ).toBe('A\u000eB');
+    }
+    const write = host.execute({
+      operations: [
+        {
+          op: 'insertContentControlText',
+          contentControl: control!,
+          text: 'A\u000eB',
+          at: 'replace',
+        },
+      ],
+    });
+    expect(write.ok).toBe(false);
+    expect(savedMainXml(host)).toBe(before);
+  });
+
   test('a column break reads as U+000E and is not written back as a line break', () => {
     const host = open(
       docx(
