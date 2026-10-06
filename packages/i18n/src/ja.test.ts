@@ -4,11 +4,22 @@ import { createT, deepMerge, en, ja, locales, type LocaleStrings } from './index
 import jaSubpath from './ja';
 import catalog from '../ja.json';
 
-function flatten(value: object, prefix = ''): Record<string, string> {
+function flatten(value: object, prefix = ''): Record<string, string | null> {
   return Object.fromEntries(
     Object.entries(value).flatMap(([key, entry]) => {
       const path = prefix ? `${prefix}.${key}` : key;
-      return typeof entry === 'string' ? [[path, entry]] : Object.entries(flatten(entry, path));
+      return entry === null || typeof entry === 'string'
+        ? [[path, entry]]
+        : Object.entries(flatten(entry, path));
+    })
+  );
+}
+
+function flattenStrings(value: object): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(flatten(value)).map(([key, entry]) => {
+      assert.ok(typeof entry === 'string', key);
+      return [key, entry];
     })
   );
 }
@@ -18,16 +29,23 @@ function parameters(message: string) {
 }
 
 describe('Japanese editor locale', () => {
-  const source = flatten(en);
-  const translated = flatten(catalog);
+  const source = flattenStrings(en);
+  const rawCatalog = flatten(catalog);
+  const translated = flattenStrings(deepMerge(en, ja));
 
   it('covers the source catalog without empty strings or extra keys', () => {
-    assert.deepEqual(Object.keys(translated).sort(), Object.keys(source).sort());
+    assert.deepEqual(Object.keys(rawCatalog).sort(), Object.keys(source).sort());
     for (const [key, value] of Object.entries(translated)) {
       assert.notEqual(value.trim(), '', key);
     }
     assert.equal(catalog._lang, 'ja');
     assert.equal(locales.ja, jaSubpath);
+  });
+
+  it('uses the source string for each null translation', () => {
+    for (const [key, value] of Object.entries(rawCatalog)) {
+      if (value === null) assert.equal(translated[key], source[key], key);
+    }
   });
 
   it('preserves interpolation parameters and keyboard shortcuts', () => {

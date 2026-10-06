@@ -65,10 +65,10 @@ test('Cancel discards draft settings; Reset only changes the draft', () => {
   expect(host.get()).toEqual(DEFAULT_REVISION_MARKUP);
 });
 
-test('labels controls, exposes the preview, closes with Escape, and removes its subscription', () => {
+test('labels controls, omits the preview, closes with Escape, and removes its subscription', () => {
   const host = setup();
   const dialog = getByRole(host.container, 'dialog', { name: 'Change tracking options' });
-  expect(getByRole(host.container, 'img').getAttribute('aria-label')).toContain('Outside border');
+  expect(host.container.querySelector('.docx-revision-markup-preview')).toBeNull();
   for (const control of host.container.querySelectorAll('select,input'))
     expect(control.closest('label')).not.toBeNull();
   fireEvent(dialog, new Event('cancel', { cancelable: true }));
@@ -85,10 +85,10 @@ test('shows selected cell and line colors without sending editing keys to the pa
   expect(
     (color.querySelector('.docx-revision-color-swatch') as HTMLElement).style.backgroundColor
   ).toBe('var(--doc-revision-color-green)');
-  const preview = getByRole(host.container, 'img') as HTMLElement;
-  expect(preview.style.getPropertyValue('--doc-revision-preview-color')).toBe(
-    'var(--doc-revision-color-red)'
-  );
+  const lineColor = getByRole(host.container, 'button', { name: 'Changed lines color Red' });
+  expect(
+    (lineColor.querySelector('.docx-revision-color-swatch') as HTMLElement).style.backgroundColor
+  ).toBe('var(--doc-revision-color-red)');
   let keydown = false;
   host.container.addEventListener('keydown', () => {
     keydown = true;
@@ -97,12 +97,14 @@ test('shows selected cell and line colors without sending editing keys to the pa
   expect(keydown).toBe(false);
 });
 
-test('color lists show swatches and support radio selection', () => {
+test('color palettes use compact toolbar swatches', () => {
   const host = setup();
   const trigger = getByRole(host.container, 'button', { name: 'Insertions color By author' });
   fireEvent.click(trigger);
-  const group = getByRole(host.container, 'radiogroup', { name: 'Insertions color' });
-  const blue = getByRole(group, 'radio', { name: 'Blue' });
+  const group = getByRole(host.container, 'group', { name: 'Insertions color' });
+  const blue = getByRole(group, 'button', { name: 'Blue' });
+  expect(blue.classList.contains('docx-toolbar__swatch')).toBe(true);
+  expect(blue.getAttribute('aria-pressed')).toBe('false');
   fireEvent.click(blue, { detail: 1 });
   expect(trigger.getAttribute('aria-expanded')).toBe('false');
   expect(trigger.textContent).toContain('Blue');
@@ -111,19 +113,30 @@ test('color lists show swatches and support radio selection', () => {
   expect(host.get().insertions.color).toBe('blue');
 });
 
-test('keyboard radio selection keeps the palette open until Enter', () => {
+test('keyboard navigation focuses colors without changing the draft', () => {
   const host = setup();
   const trigger = getByRole(host.container, 'button', { name: 'Insertions color By author' });
   fireEvent.click(trigger);
-  const group = getByRole(host.container, 'radiogroup', { name: 'Insertions color' });
-  const blue = getByRole(group, 'radio', { name: 'Blue' });
+  const group = getByRole(host.container, 'group', { name: 'Insertions color' });
+  const author = getByRole(group, 'button', { name: 'By author' });
+  expect(document.activeElement).toBe(author);
+  fireEvent.keyDown(author, { key: 'ArrowRight' });
+  expect(document.activeElement).toBe(getByRole(group, 'button', { name: 'Auto' }));
+  expect(trigger.textContent).toContain('By author');
+  fireEvent.keyDown(document.activeElement!, { key: 'End' });
+  expect(document.activeElement).toBe(Array.from(group.querySelectorAll('button')).at(-1)!);
+  fireEvent.keyDown(document.activeElement!, { key: 'Home' });
+  expect(document.activeElement).toBe(author);
+  fireEvent.keyDown(author, { key: 'Escape' });
+  expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  expect(document.activeElement).toBe(trigger);
+  expect(host.container.querySelector('dialog')).not.toBeNull();
+  fireEvent.click(trigger);
+  const blue = getByRole(group, 'button', { name: 'Blue' });
   blue.focus();
   fireEvent.click(blue, { detail: 0 });
-  expect(trigger.getAttribute('aria-expanded')).toBe('true');
-  expect(trigger.textContent).toContain('Blue');
-  expect(document.activeElement).toBe(blue);
-  fireEvent.keyDown(blue, { key: 'Enter' });
   expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  expect(trigger.textContent).toContain('Blue');
   expect(document.activeElement).toBe(trigger);
 });
 
@@ -135,8 +148,8 @@ test.each([
 ] as const)('native cell palette applies %s', (value, label) => {
   const host = setup();
   fireEvent.click(getByRole(host.container, 'button', { name: 'Inserted cells Light blue' }));
-  const group = getByRole(host.container, 'radiogroup', { name: 'Inserted cells' });
-  fireEvent.click(getByRole(group, 'radio', { name: label }), { detail: 1 });
+  const group = getByRole(host.container, 'group', { name: 'Inserted cells' });
+  fireEvent.click(getByRole(group, 'button', { name: label }), { detail: 1 });
   expect(host.changes).toHaveLength(0);
   fireEvent.click(getByRole(host.container, 'button', { name: 'OK' }));
   expect(host.get().cells.inserted).toBe(value);
@@ -146,8 +159,8 @@ test('text backgrounds default to None, stage separately, and reset without chan
   const host = setup();
   for (const name of ['Insertions', 'Deletions', 'Moved from', 'Moved to', 'Formatting']) {
     fireEvent.click(getByRole(host.container, 'button', { name: `${name} background None` }));
-    const group = getByRole(host.container, 'radiogroup', { name: `${name} background` });
-    fireEvent.click(getByRole(group, 'radio', { name: 'Light yellow' }), { detail: 1 });
+    const group = getByRole(host.container, 'group', { name: `${name} background` });
+    fireEvent.click(getByRole(group, 'button', { name: 'Light yellow' }), { detail: 1 });
   }
   expect(host.changes).toHaveLength(0);
   fireEvent.click(getByRole(host.container, 'button', { name: 'OK' }));

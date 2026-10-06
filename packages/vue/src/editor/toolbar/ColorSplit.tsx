@@ -142,13 +142,15 @@ interface PopupBodyProps {
   readonly themeHexes: readonly string[];
 }
 
-const Swatch = defineComponent({
+/** @internal */
+export const ToolbarColorSwatch = defineComponent({
   name: 'ColorSwatch',
   props: {
     value: { type: String, required: true },
     css: { type: String, required: true },
     title: { type: String, required: true },
     selected: { type: Boolean, required: true },
+    disabled: Boolean,
     apply: { type: Function as PropType<(value: string) => void>, required: true },
   },
   setup(props) {
@@ -156,12 +158,16 @@ const Swatch = defineComponent({
       <button
         type="button"
         class="docx-toolbar__swatch"
+        disabled={props.disabled}
         style={{ backgroundColor: props.css }}
         aria-label={props.title}
+        aria-pressed={props.selected}
         title={props.title}
         data-value={props.value}
         {...(props.selected ? { 'data-selected': '' } : {})}
-        {...(isLightHex(props.css.replace('#', '')) ? { 'data-light': '' } : {})}
+        {...(props.css.startsWith('var(') || isLightHex(props.css.replace('#', ''))
+          ? { 'data-light': '' }
+          : {})}
         onMousedown={guardToolbarMousedown}
         onClick={() => props.apply(props.value)}
       />
@@ -186,7 +192,7 @@ const ThemeMatrix = defineComponent({
           <div class="docx-toolbar__swatch-heading">{props.label('colorPicker.themeColors')}</div>
           <div class="docx-toolbar__swatch-grid docx-toolbar__swatch-grid--theme" role="group">
             {props.themeHexes.map((hex, column) => (
-              <Swatch
+              <ToolbarColorSwatch
                 key={`base-${column}`}
                 value={hex}
                 css={`#${hex.toLowerCase()}`}
@@ -200,7 +206,7 @@ const ThemeMatrix = defineComponent({
                 const variant = ladders[column]![row]!;
                 const hex = variantHex(base, variant.apply);
                 return (
-                  <Swatch
+                  <ToolbarColorSwatch
                     key={`${row}-${column}`}
                     value={hex}
                     css={`#${hex.toLowerCase()}`}
@@ -239,7 +245,7 @@ const FontColorBody = defineComponent({
             </div>
             <div class="docx-toolbar__swatch-grid" role="group">
               {STANDARD_COLOR_SWATCHES.map((swatch) => (
-                <Swatch
+                <ToolbarColorSwatch
                   key={swatch.value}
                   value={swatch.value}
                   css={swatch.css}
@@ -339,7 +345,7 @@ const HighlightBody = defineComponent({
         <div class="docx-toolbar__swatch-heading">{props.label('colorPicker.highlightColors')}</div>
         <div class="docx-toolbar__swatch-grid docx-toolbar__swatch-grid--highlight" role="group">
           {HIGHLIGHT_GRID.map((swatch) => (
-            <Swatch
+            <ToolbarColorSwatch
               key={swatch.value}
               value={swatch.value}
               css={swatch.css}

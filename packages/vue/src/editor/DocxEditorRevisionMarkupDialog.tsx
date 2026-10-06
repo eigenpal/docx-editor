@@ -24,7 +24,7 @@ import {
   type DialogCustomizationProps,
   type UseDialogReturn,
 } from './dialog-parts';
-import { RevisionMarkupColorPicker, revisionColorToken } from './revision-markup-color-picker';
+import { RevisionMarkupColorPicker } from './revision-markup-color-picker';
 
 const composition = createDialogComposition<ResolvedRevisionMarkup>('RevisionMarkupDialog');
 /** Viewer markup draft state and actions. @public */
@@ -218,23 +218,6 @@ const Impl = defineComponent({
               {style('deletions', deletionMarks)}
               <div data-docx-part="field" data-docx-field="changedLines">
                 {style('changedLines', ['none', 'leftBorder', 'rightBorder', 'outsideBorder'])}
-                <div
-                  class="docx-revision-markup-preview"
-                  data-position={v.changedLines.mark}
-                  role="img"
-                  aria-label={`${t('preview')}: ${t(`values.${v.changedLines.mark}`)}`}
-                  style={{
-                    '--doc-revision-preview-color': revisionColorToken(v.changedLines.color),
-                  }}
-                >
-                  {[0, 1].map((page) => (
-                    <span key={page}>
-                      <i />
-                      <i />
-                      <i />
-                    </span>
-                  ))}
-                </div>
               </div>
             </fieldset>
             <fieldset class="docx-revision-markup-moves">

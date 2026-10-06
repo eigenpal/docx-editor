@@ -5,7 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { observeContentControlPopup } from '@docx-editor.dev/core/editor';
 
-/** Native radio groups keep color selection usable without pointer input. */
+/** Compact swatches share the toolbar palette appearance and keyboard controls. */
 export function createRevisionColorPicker(
   doc: Document,
   options: {
@@ -37,9 +37,9 @@ export function createRevisionColorPicker(
   list.id = `${options.id}-options`;
   list.className = 'docx-revision-color-options';
   list.hidden = true;
-  list.setAttribute('role', 'radiogroup');
+  list.setAttribute('role', 'group');
   list.setAttribute('aria-labelledby', label.id);
-  const inputs = new Map<string, HTMLInputElement>();
+  const choices = new Map<string, HTMLButtonElement>();
   const colorValue = (value: string) =>
     value === 'auto'
       ? 'currentColor'
@@ -62,30 +62,38 @@ export function createRevisionColorPicker(
   element.addEventListener('focusout', (event) => {
     if (!element.contains(event.relatedTarget as Node | null)) close();
   });
-  const choose = (value: string) => {
-    options.change(value);
-  };
+  const special = doc.createElement('div');
+  special.className = 'docx-revision-color-special';
+  const grid = doc.createElement('div');
+  grid.className = 'docx-toolbar__swatch-grid';
+  list.append(special, grid);
   for (const value of options.colors) {
-    const option = doc.createElement('label');
-    option.className = 'docx-revision-color-option';
-    const input = doc.createElement('input');
-    input.type = 'radio';
-    input.name = options.id;
-    input.value = value;
-    input.addEventListener('change', () => choose(value));
-    input.addEventListener('click', (event) => {
-      // Arrow keys synthesize clicks when native radio selection changes.
-      if (event.detail === 0) return;
+    const option = doc.createElement('button');
+    option.type = 'button';
+    option.dataset.value = value;
+    option.setAttribute('aria-label', options.translate(value));
+    option.title = options.translate(value);
+    if (['auto', 'none', 'byAuthor'].includes(value)) {
+      option.className = 'docx-toolbar__swatch-clear';
+      const swatch = doc.createElement('span');
+      swatch.className = 'docx-revision-color-swatch';
+      swatch.style.backgroundColor = colorValue(value);
+      swatch.setAttribute('aria-hidden', 'true');
+      option.append(swatch, doc.createTextNode(options.translate(value)));
+      special.append(option);
+    } else {
+      option.className = 'docx-toolbar__swatch';
+      option.dataset.light = '';
+      option.style.backgroundColor = colorValue(value);
+      grid.append(option);
+    }
+    option.addEventListener('mousedown', (event) => event.preventDefault());
+    option.addEventListener('click', () => {
+      options.change(value);
       close();
       button.focus();
     });
-    const swatch = doc.createElement('span');
-    swatch.className = 'docx-revision-color-swatch';
-    swatch.style.backgroundColor = colorValue(value);
-    swatch.setAttribute('aria-hidden', 'true');
-    option.append(input, swatch, doc.createTextNode(options.translate(value)));
-    list.append(option);
-    inputs.set(value, input);
+    choices.set(value, option);
   }
   button.addEventListener('click', () => {
     const open = list.hidden;
@@ -97,17 +105,34 @@ export function createRevisionColorPicker(
     }
     disposePosition = observeContentControlPopup(list, button);
     doc.addEventListener('pointerdown', outside, true);
-    if (open)
-      (
-        Array.from(inputs.values()).find((input) => input.checked) ?? inputs.values().next().value
-      )?.focus();
+    (
+      Array.from(choices.values()).find((choice) => choice.hasAttribute('data-selected')) ??
+      choices.values().next().value
+    )?.focus();
   });
   list.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' || event.key === 'Enter') {
+    if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
       close();
       button.focus();
+    }
+    const buttons = Array.from(list.querySelectorAll('button'));
+    const current = buttons.indexOf(event.target as HTMLButtonElement);
+    const next =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? buttons.length - 1
+          : ['ArrowRight', 'ArrowDown'].includes(event.key)
+            ? (current + 1) % buttons.length
+            : ['ArrowLeft', 'ArrowUp'].includes(event.key)
+              ? (current - 1 + buttons.length) % buttons.length
+              : null;
+    if (next !== null) {
+      event.preventDefault();
+      event.stopPropagation();
+      buttons[next]?.focus();
     }
   });
   element.append(label, button, list);
@@ -118,9 +143,10 @@ export function createRevisionColorPicker(
       valueLabel.textContent = options.translate(value);
       sample.style.backgroundColor = colorValue(value);
       button.disabled = disabled;
-      for (const [color, input] of inputs) {
-        input.checked = color === value;
-        input.disabled = disabled;
+      for (const [color, choice] of choices) {
+        choice.setAttribute('aria-pressed', String(color === value));
+        choice.toggleAttribute('data-selected', color === value);
+        choice.disabled = disabled;
       }
       if (disabled) close();
     },

@@ -143,14 +143,12 @@ test('React default markup palette retains keyboard selection and restores focus
   });
   const trigger = view.getByRole('button', { name: 'Insertions color By author' });
   fireEvent.click(trigger);
-  const group = view.getByRole('radiogroup', { name: 'Insertions color' });
-  const blue = Array.from(group.querySelectorAll<HTMLInputElement>('input')).find(
-    (input) => input.value === 'blue'
-  )!;
+  const group = view.getByRole('group', { name: 'Insertions color' });
+  const blue = group.querySelector<HTMLButtonElement>('[data-value="blue"]')!;
   blue.focus();
-  fireEvent.click(blue, { detail: 0 });
-  expect(trigger.getAttribute('aria-expanded')).toBe('true');
-  fireEvent.keyDown(blue, { key: 'Enter' });
+  fireEvent.keyDown(blue, { key: 'ArrowRight' });
+  expect(document.activeElement).not.toBe(blue);
+  fireEvent.click(blue);
   expect(trigger.getAttribute('aria-expanded')).toBe('false');
   expect(document.activeElement).toBe(trigger);
   await act(async () => {
@@ -183,7 +181,7 @@ test('React palettes close on focus exit and outside presses without moving focu
     expect(note?.textContent?.length).toBeGreaterThan(0);
   }
 });
-test('React hidden changed-lines field also hides its preview', async () => {
+test('React hosts can hide the changed-lines field', async () => {
   const { view, editor } = mount({
     revisionMarkup: (props) => (
       <Dialog {...props}>
@@ -303,11 +301,11 @@ test.each([
     editor().exec({ type: 'openRevisionMarkupDialog' });
   });
   fireEvent.click(view.getByRole('button', { name: 'Inserted cells Light blue' }));
-  const group = view.getByRole('radiogroup', { name: 'Inserted cells' });
-  const radio = Array.from(group.querySelectorAll<HTMLInputElement>('input')).find(
-    (item) => item.value === value
+  const group = view.getByRole('group', { name: 'Inserted cells' });
+  const radio = Array.from(group.querySelectorAll<HTMLButtonElement>('button')).find(
+    (item) => item.getAttribute('aria-label') === label || item.textContent === label
   )!;
-  expect(radio.parentElement!.textContent).toContain(label);
+  expect(radio).toBeTruthy();
   await act(async () => {
     fireEvent.click(radio, { detail: 1 });
   });
@@ -325,8 +323,8 @@ test('React backgrounds stage, apply, reset, and follow external preferences', a
   });
   for (const name of ['Insertions', 'Deletions', 'Moved from', 'Moved to', 'Formatting']) {
     fireEvent.click(view.getByRole('button', { name: `${name} background None` }));
-    const group = view.getByRole('radiogroup', { name: `${name} background` });
-    fireEvent.click(group.querySelector<HTMLInputElement>('input[value="lightYellow"]')!, {
+    const group = view.getByRole('group', { name: `${name} background` });
+    fireEvent.click(group.querySelector<HTMLButtonElement>('[data-value="lightYellow"]')!, {
       detail: 1,
     });
   }

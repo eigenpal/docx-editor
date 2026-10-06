@@ -203,7 +203,7 @@ interface PopupBodyProps {
   readonly themeHexes: readonly string[];
 }
 
-function Swatch({
+export function ToolbarColorSwatch({
   value,
   css,
   title,
@@ -222,10 +222,11 @@ function Swatch({
       className="docx-toolbar__swatch"
       style={{ backgroundColor: css }}
       aria-label={title}
+      aria-pressed={selected}
       title={title}
       data-value={value}
       {...(selected ? { 'data-selected': '' } : {})}
-      {...(isLightHex(css.replace('#', '')) ? { 'data-light': '' } : {})}
+      {...(css.startsWith('var(') || isLightHex(css.replace('#', '')) ? { 'data-light': '' } : {})}
       onMouseDown={guardToolbarMousedown}
       onClick={() => apply(value)}
     />
@@ -241,7 +242,7 @@ function ThemeMatrix({ apply, label, current, themeHexes }: PopupBodyProps) {
       <div className="docx-toolbar__swatch-heading">{label('colorPicker.themeColors')}</div>
       <div className="docx-toolbar__swatch-grid docx-toolbar__swatch-grid--theme" role="group">
         {themeHexes.map((hex, column) => (
-          <Swatch
+          <ToolbarColorSwatch
             key={`base-${column}`}
             value={hex}
             css={`#${hex.toLowerCase()}`}
@@ -255,7 +256,7 @@ function ThemeMatrix({ apply, label, current, themeHexes }: PopupBodyProps) {
             const variant = ladders[column]![row]!;
             const hex = variantHex(base, variant.apply);
             return (
-              <Swatch
+              <ToolbarColorSwatch
                 key={`${row}-${column}`}
                 value={hex}
                 css={`#${hex.toLowerCase()}`}
@@ -283,7 +284,7 @@ function FontColorBody(props: PopupBodyProps) {
         <div className="docx-toolbar__swatch-heading">{label('colorPicker.standardColors')}</div>
         <div className="docx-toolbar__swatch-grid" role="group">
           {STANDARD_COLOR_SWATCHES.map((swatch) => (
-            <Swatch
+            <ToolbarColorSwatch
               key={swatch.value}
               value={swatch.value}
               css={swatch.css}
@@ -372,7 +373,7 @@ function HighlightBody({ apply, label, current }: PopupBodyProps) {
       <div className="docx-toolbar__swatch-heading">{label('colorPicker.highlightColors')}</div>
       <div className="docx-toolbar__swatch-grid docx-toolbar__swatch-grid--highlight" role="group">
         {HIGHLIGHT_GRID.map((swatch) => (
-          <Swatch
+          <ToolbarColorSwatch
             key={swatch.value}
             value={swatch.value}
             css={swatch.css}

@@ -1,3 +1,4 @@
+import { ToolbarColorSwatch } from './toolbar/ColorSplit';
 import { observeContentControlPopup } from '@docx-editor.dev/core/editor';
 import { useId, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
@@ -33,7 +34,10 @@ export function RevisionMarkupColorPicker({
   useLayoutEffect(() => {
     if (!open || !group.current || !trigger.current) return;
     const dispose = observeContentControlPopup(group.current, trigger.current);
-    group.current.querySelector<HTMLInputElement>('input:checked')?.focus();
+    (
+      group.current.querySelector<HTMLButtonElement>('[data-selected]') ??
+      group.current.querySelector<HTMLButtonElement>('button')
+    )?.focus();
     return dispose;
   }, [open]);
   useEffect(() => {
@@ -81,37 +85,76 @@ export function RevisionMarkupColorPicker({
         id={`${id}-options`}
         className="docx-revision-color-options"
         hidden={!open || disabled}
-        role="radiogroup"
+        role="group"
         aria-labelledby={`${id}-label`}
         onKeyDown={(event) => {
-          if (event.key === 'Escape' || event.key === 'Enter') {
+          if (event.key === 'Escape') {
             event.preventDefault();
             event.stopPropagation();
             close();
           }
+          const buttons = Array.from(
+            event.currentTarget.querySelectorAll<HTMLButtonElement>('button')
+          );
+          const current = buttons.indexOf(event.target as HTMLButtonElement);
+          const next =
+            event.key === 'Home'
+              ? 0
+              : event.key === 'End'
+                ? buttons.length - 1
+                : ['ArrowRight', 'ArrowDown'].includes(event.key)
+                  ? (current + 1) % buttons.length
+                  : ['ArrowLeft', 'ArrowUp'].includes(event.key)
+                    ? (current - 1 + buttons.length) % buttons.length
+                    : null;
+          if (next !== null) {
+            event.preventDefault();
+            event.stopPropagation();
+            buttons[next]?.focus();
+          }
         }}
       >
-        {values.map((color) => (
-          <label key={color} className="docx-revision-color-option">
-            <input
-              type="radio"
-              name={id}
-              value={color}
-              checked={value === color}
-              disabled={disabled}
-              onChange={() => change(color)}
-              onClick={(event) => {
-                if (event.detail > 0) close();
-              }}
-            />
-            <span
-              className="docx-revision-color-swatch"
-              aria-hidden="true"
-              style={{ backgroundColor: revisionColor(color) }}
-            />
-            {t(`values.${color}`)}
-          </label>
-        ))}
+        <div className="docx-revision-color-special">
+          {values
+            .filter((color) => ['auto', 'none', 'byAuthor'].includes(color))
+            .map((color) => (
+              <button
+                key={color}
+                type="button"
+                className="docx-toolbar__swatch-clear"
+                aria-pressed={value === color}
+                data-selected={value === color ? '' : undefined}
+                onClick={() => {
+                  change(color);
+                  close();
+                }}
+              >
+                <span
+                  className="docx-revision-color-swatch"
+                  aria-hidden="true"
+                  style={{ backgroundColor: revisionColor(color) }}
+                />
+                {t(`values.${color}`)}
+              </button>
+            ))}
+        </div>
+        <div className="docx-toolbar__swatch-grid">
+          {values
+            .filter((color) => !['auto', 'none', 'byAuthor'].includes(color))
+            .map((color) => (
+              <ToolbarColorSwatch
+                key={color}
+                value={color}
+                css={revisionColor(color)}
+                title={t(`values.${color}`)}
+                selected={value === color}
+                apply={(next) => {
+                  change(next);
+                  close();
+                }}
+              />
+            ))}
+        </div>
       </div>
     </div>
   );

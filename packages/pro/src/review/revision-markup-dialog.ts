@@ -34,7 +34,6 @@ export function createRevisionMarkupDialog(host: RevisionMarkupDialogHost): Revi
   let opener: HTMLElement | null = null;
   const controls = new Map<string, HTMLInputElement | HTMLSelectElement>();
   const colors = new Map<string, ReturnType<typeof createRevisionColorPicker>>();
-  let preview: HTMLElement | null = null;
   const fallback = createT(en);
   const t = (key: string) =>
     host.translate?.(`revisionMarkup.${key}`) ??
@@ -68,22 +67,6 @@ export function createRevisionMarkupDialog(host: RevisionMarkupDialogHost): Revi
       picker.update(
         value[field!]!,
         (key === 'movedFrom' || key === 'movedTo') && !draft.trackMoves
-      );
-    }
-    if (preview) {
-      preview.dataset.position = draft.changedLines.mark;
-      const color = draft.changedLines.color;
-      preview.style.setProperty(
-        '--doc-revision-preview-color',
-        color === 'auto'
-          ? 'currentColor'
-          : color === 'byAuthor'
-            ? 'var(--doc-review-author-0)'
-            : `var(--doc-revision-color-${color})`
-      );
-      preview.setAttribute(
-        'aria-label',
-        `${t('preview')}: ${t(`values.${draft.changedLines.mark}`)}`
       );
     }
   };
@@ -213,15 +196,6 @@ export function createRevisionMarkupDialog(host: RevisionMarkupDialogHost): Revi
       style(markup, 'insertions', marks);
       style(markup, 'deletions', deletionMarks);
       style(markup, 'changedLines', ['none', 'leftBorder', 'rightBorder', 'outsideBorder']);
-      preview = el('div');
-      preview.className = 'docx-revision-markup-preview';
-      preview.setAttribute('role', 'img');
-      for (let page = 0; page < 2; page++) {
-        const sheet = el('span');
-        for (let line = 0; line < 3; line++) sheet.append(el('i'));
-        preview.append(sheet);
-      }
-      markup.append(preview);
       const moves = section('moves');
       checkbox(moves, 'trackMoves');
       style(moves, 'movedFrom', deletionMarks);

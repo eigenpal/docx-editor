@@ -100,8 +100,9 @@ test('Vue markup dialog parts preserve draft writes, reset, external updates, an
   state.session.set({ insertions: { mark: 'italic' }, changedLines: { mark: 'rightBorder' } });
   await nextTick();
   expect(select.value).toBe('italic');
+  expect(container.querySelector('.docx-revision-markup-preview')).toBeNull();
   expect(
-    container.querySelector<HTMLElement>('.docx-revision-markup-preview')?.dataset.position
+    container.querySelector<HTMLSelectElement>('[data-docx-field="changedLines"] select')!.value
   ).toBe('rightBorder');
   container.querySelector<HTMLButtonElement>('[data-docx-part="reset"]')!.click();
   await nextTick();
@@ -153,21 +154,39 @@ test('Vue markup dialog supports an empty preset and a headless hook', async () 
   expect(container.querySelector('dialog')).toBeNull();
 });
 
-test('Vue color controls preserve keyboard radio changes and close on Escape', async () => {
+test('Vue color palette supports keyboard navigation, selection, and Escape', async () => {
   const state = session();
   const container = mount(() => h(Dialog, { session: state.session }));
   await nextTick();
   const trigger = container.querySelector<HTMLButtonElement>('.docx-revision-color-trigger')!;
   trigger.click();
   await nextTick();
-  const group = container.querySelector<HTMLElement>('[role="radiogroup"]')!;
-  const blue = group.querySelector<HTMLInputElement>('input[value="blue"]')!;
-  blue.checked = true;
-  blue.dispatchEvent(new Event('change', { bubbles: true }));
-  blue.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
   await nextTick();
-  expect(group.hidden).toBe(false);
+  const group = container.querySelector<HTMLElement>('.docx-revision-color-options')!;
+  const special = group.querySelector<HTMLButtonElement>('[data-value="byAuthor"]')!;
+  expect(document.activeElement).toBe(special);
+  special.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true })
+  );
+  expect(document.activeElement).toBe(Array.from(group.querySelectorAll('button')).at(-1)!);
+  document.activeElement!.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true })
+  );
+  expect(document.activeElement).toBe(special);
+  special.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true })
+  );
+  expect(document.activeElement).toBe(group.querySelector('[data-value="auto"]'));
+  const blue = group.querySelector<HTMLButtonElement>('button[data-value="blue"]')!;
+  expect(blue.classList.contains('docx-toolbar__swatch')).toBe(true);
+  blue.click();
+  await nextTick();
+  expect(group.hidden).toBe(true);
   expect(state.session.get().insertions.color).toBe('blue');
+  trigger.click();
+  await nextTick();
+  await nextTick();
+  expect(document.activeElement).toBe(blue);
   blue.dispatchEvent(
     new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
   );
@@ -230,7 +249,7 @@ for (const mode of ['default', 'false', 'replacement'] as const) {
   });
 }
 
-test('Vue hides the changed-line preview with its field and closes palettes outside their group', async () => {
+test('Vue hides changed-line fields and closes palettes outside their group', async () => {
   const state = session();
   const container = mount(() =>
     h(
@@ -242,7 +261,7 @@ test('Vue hides the changed-line preview with its field and closes palettes outs
   await nextTick();
   expect(container.querySelector('.docx-revision-markup-preview')).toBeNull();
   const triggers = container.querySelectorAll<HTMLButtonElement>('.docx-revision-color-trigger');
-  const groups = container.querySelectorAll<HTMLElement>('[role="radiogroup"]');
+  const groups = container.querySelectorAll<HTMLElement>('.docx-revision-color-options');
   triggers[0]!.click();
   await nextTick();
   expect(groups[0]!.hidden).toBe(false);
@@ -350,9 +369,9 @@ test.each(['byAuthor', 'lightPurple', 'lightGreen', 'gray'] as const)(
     const field = container.querySelector('[data-docx-field="cells"]')!;
     field.querySelector<HTMLButtonElement>('.docx-revision-color-trigger')!.click();
     await nextTick();
-    const radio = field.querySelector<HTMLInputElement>(`input[value="${value}"]`)!;
-    expect(radio).not.toBeNull();
-    radio.click();
+    const swatch = field.querySelector<HTMLButtonElement>(`button[data-value="${value}"]`)!;
+    expect(swatch).not.toBeNull();
+    swatch.click();
     await nextTick();
     expect(state.saved).toHaveLength(0);
     container.querySelector<HTMLButtonElement>('[data-docx-part="apply"]')!.click();
@@ -373,7 +392,7 @@ test('Vue background fields preserve draft state, external updates, reset, and a
     expect(trigger.textContent).toContain('None');
     trigger.click();
     await nextTick();
-    field.querySelector<HTMLInputElement>('input[value="lightYellow"]')!.click();
+    field.querySelector<HTMLButtonElement>('button[data-value="lightYellow"]')!.click();
     await nextTick();
     expect(state.session.get()[key].background).toBe('lightYellow');
   }

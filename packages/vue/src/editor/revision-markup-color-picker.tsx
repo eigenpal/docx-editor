@@ -1,3 +1,4 @@
+import { ToolbarColorSwatch } from './toolbar/ColorSplit';
 import { observeContentControlPopup } from '@docx-editor.dev/core/editor';
 import { defineComponent, getCurrentInstance, nextTick, ref, watch, type PropType } from 'vue';
 
@@ -80,7 +81,10 @@ export const RevisionMarkupColorPicker = defineComponent({
             open.value = !open.value;
             if (open.value)
               void nextTick(() =>
-                list.value?.querySelector<HTMLInputElement>('input:checked')?.focus()
+                (
+                  list.value?.querySelector<HTMLButtonElement>('[data-selected]') ??
+                  list.value?.querySelector<HTMLButtonElement>('button')
+                )?.focus()
               );
           }}
         >
@@ -96,37 +100,72 @@ export const RevisionMarkupColorPicker = defineComponent({
           id={`${id}-options`}
           class="docx-revision-color-options"
           hidden={!open.value}
-          role="radiogroup"
+          role="group"
           aria-labelledby={`${id}-label`}
           onKeydown={(event) => {
-            if (event.key === 'Escape' || event.key === 'Enter') {
+            if (event.key === 'Escape') {
               event.preventDefault();
               event.stopPropagation();
               close();
+              return;
             }
+            const buttons = Array.from(
+              list.value?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? []
+            );
+            if (!buttons.length) return;
+            const current = buttons.indexOf(event.target as HTMLButtonElement);
+            let next: number;
+            if (event.key === 'Home') next = 0;
+            else if (event.key === 'End') next = buttons.length - 1;
+            else if (event.key === 'ArrowRight' || event.key === 'ArrowDown')
+              next = (current + 1) % buttons.length;
+            else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp')
+              next = (current - 1 + buttons.length) % buttons.length;
+            else return;
+            event.preventDefault();
+            event.stopPropagation();
+            buttons[next]?.focus();
           }}
         >
-          {p.colors.map((value) => (
-            <label key={value} class="docx-revision-color-option">
-              <input
-                type="radio"
-                name={id}
-                value={value}
-                checked={p.value === value}
-                disabled={p.disabled}
-                onChange={() => p.onChange(value)}
-                onClick={(event) => {
-                  if (event.detail > 0) close();
-                }}
-              />
-              <span
-                aria-hidden="true"
-                class="docx-revision-color-swatch"
-                style={{ backgroundColor: revisionColorToken(value) }}
-              />
-              {p.translate(value)}
-            </label>
-          ))}
+          <div class="docx-revision-color-special">
+            {p.colors
+              .filter((value) => ['byAuthor', 'auto', 'none'].includes(value))
+              .map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  class="docx-toolbar__swatch-clear"
+                  disabled={p.disabled}
+                  data-value={value}
+                  {...(p.value === value ? { 'data-selected': '' } : {})}
+                  aria-pressed={p.value === value}
+                  onClick={() => {
+                    p.onChange(value);
+                    close();
+                  }}
+                >
+                  {p.translate(value)}
+                </button>
+              ))}
+          </div>
+          <div class="docx-toolbar__swatch-grid">
+            {p.colors
+              .filter((value) => !['byAuthor', 'auto', 'none'].includes(value))
+              .map((value) => (
+                <ToolbarColorSwatch
+                  key={value}
+                  value={value}
+                  css={revisionColorToken(value)}
+                  title={p.translate(value)}
+                  selected={p.value === value}
+                  disabled={p.disabled}
+                  apply={(selected) => {
+                    p.onChange(selected);
+                    close();
+                  }}
+                />
+              ))}
+          </div>
         </div>
       </div>
     );

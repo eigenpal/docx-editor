@@ -1,10 +1,6 @@
-import type { CSSProperties } from 'react';
 import { REVISION_MARKUP_COLORS, type ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
 import type { UseRevisionMarkupDialogReturn } from './DocxEditorRevisionMarkupDialog';
-import {
-  RevisionMarkupColorPicker as ColorPicker,
-  revisionColor,
-} from './revision-markup-color-picker';
+import { RevisionMarkupColorPicker as ColorPicker } from './revision-markup-color-picker';
 
 const marks = [
   'none',
@@ -88,30 +84,6 @@ export function revisionMarkupFields(
                 } as ResolvedRevisionMarkup[typeof name])
               }
             />
-          </div>
-        )}
-        {name === 'changedLines' && (
-          <div
-            className="docx-revision-markup-preview"
-            role="img"
-            aria-label={`${t('preview')}: ${t(`values.${values.changedLines.mark}`)}`}
-            data-position={values.changedLines.mark}
-            style={
-              {
-                '--doc-revision-preview-color': revisionColor(values.changedLines.color),
-              } as CSSProperties
-            }
-          >
-            <span>
-              <i />
-              <i />
-              <i />
-            </span>
-            <span>
-              <i />
-              <i />
-              <i />
-            </span>
           </div>
         )}
       </div>
