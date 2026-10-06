@@ -241,7 +241,7 @@ const Impl = defineComponent({
                 color(
                   `${key}Cells`,
                   v.cells[key],
-                  ['none', ...REVISION_MARKUP_COLORS],
+                  ['byAuthor', 'none', ...REVISION_MARKUP_COLORS],
                   (value) => set({ cells: { [key]: value } }),
                   !enabled.value
                 )

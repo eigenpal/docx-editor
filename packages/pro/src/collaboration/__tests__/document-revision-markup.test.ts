@@ -51,7 +51,17 @@ function xml(editor: Editor) {
 }
 
 test('local markup stays private while tracked edits converge, undo, reconnect, and reopen', async () => {
-  const pair = await harness.pair(zipDocument('<w:p><w:r><w:t>Anchor</w:t></w:r></w:p>'));
+  const cells = ['Alice', 'Bob']
+    .map(
+      (author, index) =>
+        `<w:tc><w:tcPr><w:cellIns w:id="${index + 30}" w:author="${author}"/></w:tcPr><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc>`
+    )
+    .join('');
+  const pair = await harness.pair(
+    zipDocument(
+      `<w:p><w:r><w:t>Anchor</w:t></w:r></w:p><w:tbl><w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid><w:tr>${cells}</w:tr></w:tbl>`
+    )
+  );
   const alice = mount(pair.alice, 'Alice', false);
   const bob = mount(pair.bob, 'Bob', true);
   const sync = () => {
@@ -65,7 +75,16 @@ test('local markup stays private while tracked edits converge, undo, reconnect, 
     );
   };
   const before = xml(alice.editor);
-  alice.editor.setRevisionMarkup({ insertions: { mark: 'doubleUnderline', color: 'red' } });
+  alice.editor.setRevisionMarkup({
+    insertions: { mark: 'doubleUnderline', color: 'red' },
+    cells: { inserted: 'byAuthor', merged: 'lightPurple', split: 'lightGreen', deleted: 'gray' },
+  });
+  const aliceCells = alice.container.querySelectorAll<HTMLElement>('[data-revision-cell]');
+  expect(aliceCells[0]!.style.backgroundColor).toBe('var(--doc-review-author-0)');
+  expect(aliceCells[1]!.style.backgroundColor).toBe('var(--doc-review-author-1)');
+  expect(
+    bob.container.querySelector<HTMLElement>('[data-revision-cell]')!.style.backgroundColor
+  ).toBe('var(--doc-revision-color-lightBlue)');
   expect(xml(alice.editor)).toBe(before);
   expect(xml(bob.editor)).toBe(before);
   expect(bob.editor.snapshot().revisionMarkup.insertions.mark).toBe('underline');
@@ -136,6 +155,8 @@ test('local markup stays private while tracked edits converge, undo, reconnect, 
     packageFingerprint(alice.editor.surface!.session.currentPackage())
   );
   expect(joined.editor.snapshot().revisionMarkup.insertions.mark).toBe('underline');
+  expect(joined.editor.snapshot().revisionMarkup.cells.inserted).toBe('lightBlue');
+  expect(alice.editor.snapshot().revisionMarkup.cells.inserted).toBe('byAuthor');
   const saved = new Uint8Array(await alice.editor.save());
   const reopened = createDocxEditor({ document: saved, modules: [reviewModule()] });
   editors.push(reopened);

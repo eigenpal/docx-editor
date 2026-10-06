@@ -324,3 +324,52 @@ test.each(['caret', 'pound'] as const)(
     ).toBe(mark === 'caret' ? '^' : '#');
   }
 );
+
+test('cell author colors preserve explicit cell attribution over row attribution', () => {
+  const cell = (revision: string) =>
+    `<w:tc><w:tcPr>${revision}</w:tcPr><w:p>${run('cell')}</w:p></w:tc>`;
+  const body = `<w:tbl><w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid><w:tr><w:trPr><w:ins w:id="9" w:author="Row author"/></w:trPr>${cell('')}${cell('<w:cellMerge w:id="10" w:author="Cell author" w:vMerge="cont"/>')}</w:tr></w:tbl>`;
+  const settings = { cells: { inserted: 'byAuthor', merged: 'byAuthor' } } as const;
+  const { root, layout } = render(body, settings);
+  const cells = root.querySelectorAll<HTMLElement>('[data-revision-cell]');
+  expect(cells[0]!.style.backgroundColor).toBe('var(--doc-review-author-0)');
+  expect(cells[1]!.style.backgroundColor).toBe('var(--doc-review-author-1)');
+  const table = layout.pages[0]!.fragments.find((block) => block.kind === 'table')!;
+  expect(table.rows[0]!.cells.map((item) => item.revisionShadingAuthor)).toEqual([
+    'Row author',
+    'Cell author',
+  ]);
+  const custom = render(body, settings, { authors: { 'Cell author': '#123456' } }).root;
+  expect(
+    custom.querySelectorAll<HTMLElement>('[data-revision-cell]')[1]!.style.backgroundColor
+  ).toBe('#123456');
+});
+
+test.each([undefined, 'kind', { others: 'kind', authors: {} }] as const)(
+  'cell-only authors get distinct colors with text mode %j',
+  (revisionStyles) => {
+    const cell = (author: string, id: number) =>
+      `<w:tc><w:tcPr><w:cellIns w:id="${id}" w:author="${author}"/></w:tcPr><w:p>${run('cell')}</w:p></w:tc>`;
+    const { root } = render(
+      `<w:tbl><w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid><w:tr>${cell('First', 1)}${cell('Second', 2)}</w:tr></w:tbl>`,
+      { cells: { inserted: 'byAuthor' } },
+      revisionStyles
+    );
+    expect(
+      Array.from(
+        root.querySelectorAll<HTMLElement>('[data-revision-cell]'),
+        (cell) => cell.style.backgroundColor
+      )
+    ).toEqual(['var(--doc-review-author-0)', 'var(--doc-review-author-1)']);
+  }
+);
+
+test.each(['lightPurple', 'lightGreen', 'gray'] as const)('cell shading supports %s', (color) => {
+  const { root } = render(
+    `<w:tbl><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:cellIns w:id="1" w:author="Reviewer"/></w:tcPr><w:p>${run('cell')}</w:p></w:tc></w:tr></w:tbl>`,
+    { cells: { inserted: color } }
+  );
+  expect(root.querySelector<HTMLElement>('[data-revision-cell]')!.style.backgroundColor).toBe(
+    `var(--doc-revision-color-${color})`
+  );
+});

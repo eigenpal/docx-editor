@@ -949,7 +949,10 @@
       "underline": null,
       "violet": null,
       "white": null,
-      "yellow": null
+      "yellow": null,
+      "gray": null,
+      "lightGreen": null,
+      "lightPurple": null
     }
   }
 }

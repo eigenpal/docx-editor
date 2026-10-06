@@ -720,6 +720,8 @@ export interface TableRowFragmentRecord {
  */
 export interface TableCellFragmentRecord {
   readonly revisionShading?: 'inserted' | 'deleted' | 'merged' | 'split';
+  /** Author of the visible cell revision, or its enclosing row revision. */
+  readonly revisionShadingAuthor?: string;
   /** Canonical node id of the `w:tc`. */
   readonly id: string;
   /** First grid column this cell occupies. */

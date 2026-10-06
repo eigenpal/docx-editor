@@ -107,7 +107,8 @@ function decorations(
   page: PDFPage,
   work: Work,
   pageIndex: number,
-  markup?: ResolvedRevisionMarkup
+  markup?: ResolvedRevisionMarkup,
+  authorSlots?: ReadonlyMap<string, number>
 ): string[] {
   const out: string[] = [];
   for (const block of blocks) {
@@ -142,10 +143,10 @@ function decorations(
             const shade = markup.cells[cell.revisionShading];
             if (shade !== 'none')
               out.push(
-                `${color(markupColor(shade))} rg ${rect(cell.box, x, y, pageHeight(page), true)} f`
+                `${color(markupColor(shade, authorSlots?.get(cell.revisionShadingAuthor ?? '') ?? 0))} rg ${rect(cell.box, x, y, pageHeight(page), true)} f`
               );
           }
-          const inner = decorations(cell.blocks, x, y, page, work, pageIndex, markup);
+          const inner = decorations(cell.blocks, x, y, page, work, pageIndex, markup, authorSlots);
           if (cell.textDirection && inner.length)
             out.push('q', rotatedCellMatrix(cell.box, x, y, pageHeight(page)), ...inner, 'Q');
           else out.push(...inner);
@@ -261,6 +262,17 @@ export async function paint(
     const markup = spanMarkup(visit, layout.revisionMarkup ?? DEFAULT_REVISION_MARKUP);
     if (markup) addAuthor(markup.author);
   });
+  const addCellAuthors = (blocks: readonly BlockFragmentRecord[]): void => {
+    for (const block of blocks) {
+      if (block.kind !== 'table') continue;
+      for (const row of block.rows)
+        for (const cell of row.cells) {
+          if (cell.revisionShadingAuthor) addAuthor(cell.revisionShadingAuthor);
+          addCellAuthors(cell.blocks);
+        }
+    }
+  };
+  forEachSemanticStory(layout, (root) => addCellAuthors(root.host.fragments));
   for (const artifact of layout.reviewArtifacts) {
     if (artifact.kind === 'tracked-change') addAuthor(artifact.author);
   }
@@ -375,7 +387,8 @@ export async function paint(
         pages[root.page.index]!,
         work,
         root.page.index,
-        layout.displayMode === 'all-markup' ? layout.revisionMarkup : undefined
+        layout.displayMode === 'all-markup' ? layout.revisionMarkup : undefined,
+        authorSlots
       )
     );
   });
@@ -628,7 +641,8 @@ export async function paint(
         page,
         work,
         visit.page.index,
-        layout.displayMode === 'all-markup' ? layout.revisionMarkup : undefined
+        layout.displayMode === 'all-markup' ? layout.revisionMarkup : undefined,
+        authorSlots
       ),
       ...(textboxBuffers.get(visit.page.index)?.get(d) ?? []),
     ]);

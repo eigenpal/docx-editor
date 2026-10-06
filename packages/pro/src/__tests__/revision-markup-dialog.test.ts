@@ -126,3 +126,18 @@ test('keyboard radio selection keeps the palette open until Enter', () => {
   expect(trigger.getAttribute('aria-expanded')).toBe('false');
   expect(document.activeElement).toBe(trigger);
 });
+
+test.each([
+  ['byAuthor', 'By author'],
+  ['lightPurple', 'Light purple'],
+  ['lightGreen', 'Light green'],
+  ['gray', 'Gray'],
+] as const)('native cell palette applies %s', (value, label) => {
+  const host = setup();
+  fireEvent.click(getByRole(host.container, 'button', { name: 'Inserted cells Light blue' }));
+  const group = getByRole(host.container, 'radiogroup', { name: 'Inserted cells' });
+  fireEvent.click(getByRole(group, 'radio', { name: label }), { detail: 1 });
+  expect(host.changes).toHaveLength(0);
+  fireEvent.click(getByRole(host.container, 'button', { name: 'OK' }));
+  expect(host.get().cells.inserted).toBe(value);
+});

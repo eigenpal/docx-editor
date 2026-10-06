@@ -27,6 +27,9 @@ const COLORS: Record<string, string> = {
   lightBlue: 'E0F3FA',
   lightYellow: 'FFF8DC',
   lightOrange: 'FFE5CC',
+  lightPurple: 'EADCF4',
+  lightGreen: 'E2EFD9',
+  gray: 'D9D9D9',
 };
 const AUTHORS = ['C0392B', '1F6FB2', '7D3C98', '117A65', '9A6206', 'C2185B', '2E4053', '2E7D32'];
 export function markupColor(color: RevisionMarkupColor, authorSlot = 0, auto = '000000'): string {

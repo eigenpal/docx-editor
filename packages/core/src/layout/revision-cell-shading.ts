@@ -13,13 +13,8 @@ export function revisionCellShading(
   filter: RevisionAuthorFilter | undefined
 ): TableCellFragmentRecord['revisionShading'] {
   if (mode !== 'all-markup' || !properties) return undefined;
-  const revision = properties.children.find(
-    (node) =>
-      node.kind !== 'textValue' &&
-      node.namespaceUri === WML_NAMESPACE_URI &&
-      ['cellIns', 'cellDel', 'cellMerge'].includes(node.localName)
-  );
-  if (!revision || revision.kind === 'textValue') return undefined;
+  const revision = cellRevision(properties);
+  if (!revision) return undefined;
   const attribute = (name: string) =>
     revision.attributes.find(
       (item) => item.localName === name && item.namespaceUri === WML_NAMESPACE_URI
@@ -31,19 +26,58 @@ export function revisionCellShading(
   return attribute('vMergeOrig') === 'cont' && attribute('vMerge') !== 'cont' ? 'split' : 'merged';
 }
 
+function cellRevision(properties: OoxmlElement): OoxmlElement | undefined {
+  const revision = properties.children.find(
+    (node) =>
+      node.kind !== 'textValue' &&
+      node.namespaceUri === WML_NAMESPACE_URI &&
+      ['cellIns', 'cellDel', 'cellMerge'].includes(node.localName)
+  );
+  return revision?.kind !== 'textValue' ? revision : undefined;
+}
+
 /** Publish cell revision metadata only when a visible cell revision exists. */
 export function revisionCellMetadata(
   properties: OoxmlElement | undefined,
   mode: RevisionDisplayMode,
   filter: RevisionAuthorFilter | undefined,
   rowRevision?: OoxmlElement
-): Pick<TableCellFragmentRecord, 'revisionShading'> {
+): Pick<TableCellFragmentRecord, 'revisionShading' | 'revisionShadingAuthor'> {
+  const cellShading = revisionCellShading(properties, mode, filter);
   const revisionShading =
-    revisionCellShading(properties, mode, filter) ??
+    cellShading ??
     (mode === 'all-markup' && rowRevision
       ? rowRevision.localName === 'ins'
         ? 'inserted'
         : 'deleted'
       : undefined);
-  return revisionShading ? { revisionShading } : {};
+  if (!revisionShading) return {};
+  const revision = cellShading && properties ? cellRevision(properties) : rowRevision;
+  const revisionShadingAuthor =
+    revision?.attributes.find(
+      (item) => item.localName === 'author' && item.namespaceUri === WML_NAMESPACE_URI
+    )?.value ?? '';
+  return { revisionShading, revisionShadingAuthor };
+}
+
+export function wmlRevisionChild(
+  node: OoxmlElement,
+  localName: 'trPr' | 'ins' | 'del'
+): OoxmlElement | undefined {
+  for (const child of node.children) {
+    if (
+      child.kind !== 'textValue' &&
+      child.namespaceUri === WML_NAMESPACE_URI &&
+      child.localName === localName
+    ) {
+      return child;
+    }
+  }
+  return undefined;
+}
+
+export function wmlRevisionAttribute(node: OoxmlElement, localName: string): string | undefined {
+  return node.attributes.find(
+    (attribute) => attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === localName
+  )?.value;
 }

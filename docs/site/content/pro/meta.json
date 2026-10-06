@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "tracked-changes",
+    "revision-markup",
     "review-styling",
     "comments",
     "custom-nodes",

@@ -179,3 +179,29 @@ test('React markup focus cleanup does not steal focus from a replacement dialog'
     expect(document.activeElement).not.toBe(opener);
   } finally { view.unmount(); opener.remove(); }
 });
+
+test.each([
+  ['byAuthor', 'By author'],
+  ['lightPurple', 'Light purple'],
+  ['lightGreen', 'Light green'],
+  ['gray', 'Gray'],
+] as const)('React cell palette applies %s', async (value, label) => {
+  const { view, editor } = mount();
+  await act(async () => {
+    editor().exec({ type: 'openRevisionMarkupDialog' });
+  });
+  fireEvent.click(view.getByRole('button', { name: 'Inserted cells Light blue' }));
+  const group = view.getByRole('radiogroup', { name: 'Inserted cells' });
+  const radio = Array.from(group.querySelectorAll<HTMLInputElement>('input')).find(
+    (item) => item.value === value
+  )!;
+  expect(radio.parentElement!.textContent).toContain(label);
+  await act(async () => {
+    fireEvent.click(radio, { detail: 1 });
+  });
+  expect(editor().snapshot().revisionMarkup.cells.inserted).toBe('lightBlue');
+  await act(async () => {
+    fireEvent.click(view.getByRole('button', { name: 'OK' }));
+  });
+  expect(editor().snapshot().revisionMarkup.cells.inserted).toBe(value);
+});

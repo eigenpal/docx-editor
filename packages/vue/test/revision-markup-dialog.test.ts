@@ -199,3 +199,23 @@ test('Vue manual markup dialog cancels disposed and replaced sessions', async ()
   visible.value = false; await nextTick();
   expect(second.controller.signal.aborted).toBe(true);
 });
+
+test.each(['byAuthor', 'lightPurple', 'lightGreen', 'gray'] as const)(
+  'Vue cell palette applies %s',
+  async (value) => {
+    const state = session();
+    const container = mount(() => h(Dialog, { session: state.session }));
+    await nextTick();
+    const field = container.querySelector('[data-docx-field="cells"]')!;
+    field.querySelector<HTMLButtonElement>('.docx-revision-color-trigger')!.click();
+    await nextTick();
+    const radio = field.querySelector<HTMLInputElement>(`input[value="${value}"]`)!;
+    expect(radio).not.toBeNull();
+    radio.click();
+    await nextTick();
+    expect(state.saved).toHaveLength(0);
+    container.querySelector<HTMLButtonElement>('[data-docx-part="apply"]')!.click();
+    await nextTick();
+    expect(state.saved[0]!.cells.inserted).toBe(value);
+  }
+);

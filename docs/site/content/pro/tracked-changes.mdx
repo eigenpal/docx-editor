@@ -11,6 +11,8 @@ Each revision keeps available author and timestamp metadata. OOXML timestamps ar
 
 This feature requires the review module from [`@docx-editor.dev/pro`](/docs/2.x/pro).
 
+For user preferences and programmatic styling, see [Customize revision markup](/docs/2.x/pro/revision-markup).
+
 ## Review changes
 
 Use **Review > Next Change** or **Previous Change** to move between visible changes. Navigation skips comments and hidden authors, and wraps at the end. A continuous insertion stays in one card when it crosses field markers or tracked paragraph breaks. Accepting or rejecting that card resolves its field instructions, results, and surrounding text together. Accepting or rejecting a card preserves the caret. Use **Next Change** to continue review.
@@ -214,7 +216,7 @@ The editor draws Word's change bar: a rule in the left margin beside every line 
 
 In **All Markup** the bar is a neutral gray hairline, as in Word. In **Simple Markup** the text reads as the proposed result, with no underlines, strikes, or author colors, and the bar is red and heavier beside every line a change touched, including a deleted word that is no longer shown. A click on the bar switches between Simple Markup and All Markup, as in Word. The resolved views, **No Markup** and **Original**, draw no bar. To change the bar's color or width, or to color it by change kind, see [Review colors and styling](/docs/2.x/pro/review-styling#style-the-change-bar).
 
-Mirrored margins do not move the bar to the outside edge.
+Use `revisionMarkup.changedLines.mark` to choose the change bar position.
 
 One paragraph mark can contain two decisions. For example, one author can insert a break before another author suggests its removal.
 

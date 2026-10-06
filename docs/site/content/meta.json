@@ -55,6 +55,7 @@
     "---Pro---",
     "pro/index",
     "pro/tracked-changes",
+    "pro/revision-markup",
     "pro/review-styling",
     "pro/comments",
     "pro/custom-nodes",

@@ -1,0 +1,235 @@
+---
+title: 'Customize revision markup'
+description: 'Set tracked change styles, save user preferences, and customize the Change tracking options dialog in React and Vue.'
+category: 'Pro'
+order: 63
+---
+
+Use `revisionMarkup` to choose how each user sees tracked changes. Configure insertion and deletion marks, move styles, change bars, and table cell colors.
+
+The API and **Change tracking options** dialog share the same settings. Display preferences stay local to each editor. They do not change revision records, saved DOCX content, or another participant's preferences.
+
+The review module requires an EigenPal Pro License. Follow [Tracked changes](/docs/2.x/pro/tracked-changes) to enable review features.
+
+## Try markup styles
+
+Choose a scenario to compare its markup and API settings. The preview illustrates display preferences; it does not load an editor.
+
+<RevisionMarkupDemo />
+
+## Set preferences through the API
+
+Pass initial preferences to `createDocxEditor()`. Omitted fields use the defaults.
+
+```ts
+import { createDocxEditor } from '@docx-editor.dev/core/editor';
+import { reviewModule } from '@docx-editor.dev/pro';
+
+const editor = createDocxEditor({
+  document: bytes,
+  modules: [reviewModule()],
+  revisionMarkup: {
+    insertions: { mark: 'underline', color: 'blue' },
+    deletions: { mark: 'doubleStrikethrough', color: 'red' },
+    changedLines: { mark: 'outsideBorder' },
+  },
+});
+
+editor.attach(container);
+```
+
+Call `setRevisionMarkup()` to merge a partial update. Nested fields that you omit keep their existing values.
+
+```ts
+editor.setRevisionMarkup({ insertions: { color: 'green' } });
+
+const preferences = editor.snapshot().revisionMarkup;
+// The insertion mark stays underline.
+```
+
+The snapshot contains the complete, immutable settings object. Invalid fields or values throw `TypeError` before settings change.
+
+Listen for `revisionMarkupChange` to save effective changes from the API or dialog. The event contains the complete settings object. Setting an unchanged value emits no event.
+
+```ts
+const unsubscribe = editor.on('revisionMarkupChange', (preferences) => {
+  saveUserPreferences(preferences);
+});
+
+// Call unsubscribe() when your host stops observing the editor.
+```
+
+`saveUserPreferences` belongs to your application. The next section shows a browser storage implementation.
+
+To reset all settings, pass `DEFAULT_REVISION_MARKUP` to the setter:
+
+```ts
+import { DEFAULT_REVISION_MARKUP } from '@docx-editor.dev/core/editor';
+
+editor.setRevisionMarkup(DEFAULT_REVISION_MARKUP);
+```
+
+Passing `{}` to the setter preserves existing settings. It does not reset them.
+
+## Save each user's preferences
+
+Your application owns preference storage. Use a key scoped to the signed-in user. Pass the saved object back when that user opens an editor.
+
+This browser storage helper validates saved values and falls back to defaults. Import it into either framework example. Load `@docx-editor.dev/core/styles/editor.css` once, as described in [Quickstart](/docs/2.x/quickstart).
+
+```ts
+// revision-preferences.ts
+import { DEFAULT_REVISION_MARKUP, resolveRevisionMarkup } from '@docx-editor.dev/core/editor';
+import type { ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
+
+export function readPreferences(key: string): ResolvedRevisionMarkup {
+  try {
+    const saved = localStorage.getItem(key);
+    return saved ? resolveRevisionMarkup(JSON.parse(saved)) : DEFAULT_REVISION_MARKUP;
+  } catch {
+    return DEFAULT_REVISION_MARKUP;
+  }
+}
+
+export function savePreferences(key: string, preferences: ResolvedRevisionMarkup): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(preferences));
+  } catch {
+    // Keep the active preferences if browser storage is unavailable.
+  }
+}
+```
+
+For server rendering, load preferences after mount. The examples use that pattern. Remount the editor when the signed-in user changes.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { useEffect, useState } from 'react';
+import { DocxEditor } from '@docx-editor.dev/react';
+import { reviewModule } from '@docx-editor.dev/pro/react';
+import { DEFAULT_REVISION_MARKUP } from '@docx-editor.dev/core/editor';
+import type { ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
+import { readPreferences, savePreferences } from './revision-preferences';
+
+const modules = [reviewModule()];
+
+export function ReviewEditor({ bytes, userId }: { bytes: Uint8Array; userId: string }) {
+  const key = `revision-markup:${userId}`;
+  const [preferences, setPreferences] = useState(DEFAULT_REVISION_MARKUP);
+  useEffect(() => setPreferences(readPreferences(key)), [key]);
+
+  function updatePreferences(next: ResolvedRevisionMarkup) {
+    setPreferences(next);
+    savePreferences(key, next);
+  }
+
+  return (
+    <DocxEditor
+      document={bytes}
+      modules={modules}
+      revisionMarkup={preferences}
+      onRevisionMarkupChange={updatePreferences}
+    />
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { onMounted, shallowRef } from 'vue';
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { reviewModule } from '@docx-editor.dev/pro/vue';
+import { DEFAULT_REVISION_MARKUP } from '@docx-editor.dev/core/editor';
+import type { ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
+import { readPreferences, savePreferences } from './revision-preferences';
+
+const props = defineProps<{ bytes: Uint8Array; userId: string }>();
+const modules = [reviewModule()];
+const key = `revision-markup:${props.userId}`;
+const preferences = shallowRef(DEFAULT_REVISION_MARKUP);
+onMounted(() => {
+  preferences.value = readPreferences(key);
+});
+
+function updatePreferences(next: ResolvedRevisionMarkup) {
+  preferences.value = next;
+  savePreferences(key, next);
+}
+</script>
+
+<template>
+  <DocxEditor
+    :document="bytes"
+    :modules="modules"
+    :revision-markup="preferences"
+    @revision-markup-change="updatePreferences"
+  />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+The controlled prop is the source of truth. Store callback values in that prop to accept API and dialog changes. Otherwise, the next framework render restores the prop's value. Omitted prop fields resolve to defaults, unlike partial setter updates.
+
+For independent API and dialog changes, omit the controlled prop. You can instead mount `DocxEditor.RevisionMarkup` inside `DocxEditor.Root` for partial declarative settings. Vue also exports `DocxEditorRevisionMarkup`. Do not combine the declaration with the controlled prop.
+
+## Choose marks and colors
+
+| Setting           | Default                        |
+| ----------------- | ------------------------------ |
+| `insertions`      | `underline`, `byAuthor`        |
+| `deletions`       | `strikethrough`, `byAuthor`    |
+| `changedLines`    | `outsideBorder`, `auto`        |
+| `movedFrom`       | `doubleStrikethrough`, `green` |
+| `movedTo`         | `doubleUnderline`, `green`     |
+| `formatting`      | `none`, `byAuthor`             |
+| `cells.inserted`  | `lightBlue`                    |
+| `cells.deleted`   | `pink`                         |
+| `cells.merged`    | `lightYellow`                  |
+| `cells.split`     | `lightOrange`                  |
+| `trackMoves`      | `true`                         |
+| `trackFormatting` | `true`                         |
+
+Text styles accept `none`, `colorOnly`, `bold`, `italic`, `underline`, `doubleUnderline`, `strikethrough`, or `doubleStrikethrough`. Deletions and moved-from text also accept `hidden`, `caret`, or `pound`.
+
+`none` removes revision text styling. `colorOnly` changes the revision color without adding a mark. `hidden` hides deleted text; `caret` and `pound` replace it with `^` and `#` markers. These settings do not accept or reject revisions.
+
+Change bars accept `none`, `leftBorder`, `rightBorder`, or `outsideBorder`. The dialog previews the selected position.
+
+Text and bar colors accept `byAuthor`, `auto`, or a named color from `REVISION_MARKUP_COLORS`. For text, `auto` retains the document's text color. For bars, `auto` uses the review display's bar color. Cell colors accept named colors, `byAuthor`, or `none`. Use `byAuthor` to color a cell by its revision author. Use `none` to preserve authored cell shading.
+
+Named colors use editor theme tokens. Arbitrary CSS colors are not accepted in `revisionMarkup`. For author palettes, backgrounds, and avatars, use [Review colors and styling](/docs/2.x/pro/review-styling).
+
+## Use and customize the dialog
+
+In the toolbar's review group, select **Change tracking options**. The dialog contains **Markup**, **Moves**, **Table cell highlighting**, and **Formatting**.
+
+- **OK** applies the draft in one update.
+- **Cancel** discards the draft.
+- **Reset to defaults** resets the draft. Select **OK** to apply it.
+
+An effective API update replaces the open draft with the latest settings. An unchanged API update preserves unsaved draft edits.
+
+The dialog uses the shared popup API. Register a wrapper through `popups.revisionMarkup` and `definePopup()`. Use `DocxEditor.RevisionMarkupDialog` to retain the session, focus handling, labels, and keyboard behavior.
+
+Customize its named parts, hide fields, replace buttons, or build a layout with `preset={false}`. Use `className` and shared dialog tokens to style it. For React and Vue examples, see [Customize change tracking options](/docs/2.x/guides/customize-dialogs#customize-change-tracking-options).
+
+The toolbar control uses slot `review.revisionMarkup`. Hide or replace it through [toolbar composition](/docs/2.x/guides/toolbar). Setting `popups.revisionMarkup` to `false` cancels dialog requests; it does not remove the toolbar control.
+
+## Understand tracking behavior
+
+Set `trackMoves: false` to display imported moves with insertion and deletion styles. The editor does not create move revisions.
+
+Set `trackFormatting: false` to stop future formatting commands from creating formatting revisions. Text edits remain tracked. Existing formatting revisions remain available for review. The document's `w:doNotTrackFormatting` setting also prevents formatting tracking; the viewer preference cannot override it.
+
+Cell colors apply to cell revisions and inserted or deleted rows. Explicit cell revision colors take precedence. Row-level text indicators retain their existing styling. Hiding deleted text does not remove a structurally deleted row.
+
+Markup styles appear according to `reviewDisplayMode`. Use `all-markup` to inspect text decorations and colors. Display settings do not resolve revisions.
+
+For PDF output, pass the snapshot's `revisionMarkup` and `reviewDisplayMode` as `revisionMarkup` and `displayMode`. See [Export the same preferences](/docs/2.x/pro/review-styling#export-the-same-preferences) for color and author mapping limits.

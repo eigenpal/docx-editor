@@ -19,6 +19,9 @@ export const REVISION_MARKUP_COLORS = [
   'lightBlue',
   'lightYellow',
   'lightOrange',
+  'lightPurple',
+  'lightGreen',
+  'gray',
 ] as const;
 /** @public */
 export type RevisionMarkupNamedColor = (typeof REVISION_MARKUP_COLORS)[number];
@@ -52,10 +55,10 @@ export interface ResolvedRevisionMarkup {
   readonly formatting: RevisionMarkupStyle;
   readonly changedLines: RevisionMarkupStyle<RevisionChangedLinesMark>;
   readonly cells: {
-    readonly inserted: RevisionMarkupNamedColor | 'none';
-    readonly deleted: RevisionMarkupNamedColor | 'none';
-    readonly merged: RevisionMarkupNamedColor | 'none';
-    readonly split: RevisionMarkupNamedColor | 'none';
+    readonly inserted: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+    readonly deleted: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+    readonly merged: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+    readonly split: RevisionMarkupNamedColor | 'byAuthor' | 'none';
   };
   readonly trackMoves: boolean;
   readonly trackFormatting: boolean;
@@ -131,7 +134,11 @@ export function resolveRevisionMarkup(
     const merged = { ...previous[key], ...value };
     if (key === 'cells') {
       for (const color of Object.values(merged))
-        if (color !== 'none' && !REVISION_MARKUP_COLORS.includes(color as RevisionMarkupNamedColor))
+        if (
+          color !== 'none' &&
+          color !== 'byAuthor' &&
+          !REVISION_MARKUP_COLORS.includes(color as RevisionMarkupNamedColor)
+        )
           throw new TypeError('Invalid cell color');
     } else {
       const entry = merged as RevisionMarkupStyle<string>;

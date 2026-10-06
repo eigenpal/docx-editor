@@ -2631,10 +2631,10 @@ export function resolveColorValueToCss(color: ColorValue | undefined | null, the
 export interface ResolvedRevisionMarkup {
     // (undocumented)
     readonly cells: {
-        readonly deleted: RevisionMarkupNamedColor | 'none';
-        readonly inserted: RevisionMarkupNamedColor | 'none';
-        readonly merged: RevisionMarkupNamedColor | 'none';
-        readonly split: RevisionMarkupNamedColor | 'none';
+        readonly deleted: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+        readonly inserted: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+        readonly merged: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+        readonly split: RevisionMarkupNamedColor | 'byAuthor' | 'none';
     };
     // (undocumented)
     readonly changedLines: RevisionMarkupStyle<RevisionChangedLinesMark>;
@@ -2719,7 +2719,7 @@ export interface ReviewModuleContribution {
 export type ReviewWriteIntent = 'revision-resolve' | 'comment-add' | 'comment-reply' | 'comment-resolve' | 'comment-delete' | 'package-scoped';
 
 // @public
-export const REVISION_MARKUP_COLORS: readonly ['black', 'blue', 'turquoise', 'green', 'pink', 'red', 'yellow', 'white', 'darkBlue', 'teal', 'darkGreen', 'violet', 'darkRed', 'darkYellow', 'gray50', 'gray25', 'lightBlue', 'lightYellow', 'lightOrange'];
+export const REVISION_MARKUP_COLORS: readonly ['black', 'blue', 'turquoise', 'green', 'pink', 'red', 'yellow', 'white', 'darkBlue', 'teal', 'darkGreen', 'violet', 'darkRed', 'darkYellow', 'gray50', 'gray25', 'lightBlue', 'lightYellow', 'lightOrange', 'lightPurple', 'lightGreen', 'gray'];
 
 // @public
 export interface RevisionAuthorAssignments {

@@ -218,3 +218,58 @@ test.each([
     expect(await commands(unshaded.bytes)).toBe(await commands(plain.bytes));
   }
 );
+
+test('cell author colors use captured slots and explicit cell attribution before row attribution', async () => {
+  const cell = (revision: string) =>
+    `<w:tc><w:tcPr>${revision}</w:tcPr><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc>`;
+  const input = docx(
+    `<w:tbl><w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid><w:tr><w:trPr><w:ins w:id="9" w:author="Row author"/></w:trPr>${cell('')}${cell('<w:cellMerge w:id="10" w:author="Cell author" w:vMerge="cont"/>')}</w:tr></w:tbl>`
+  );
+  const result = await exportPdf(input, {
+    displayMode: 'all-markup',
+    useSystemFonts: false,
+    fidelityPolicy: 'best-effort',
+    revisionMarkup: {
+      cells: { inserted: 'byAuthor', merged: 'byAuthor' },
+      changedLines: { mark: 'none' },
+    },
+    revisionAuthorSlots: { 'Row author': 3, 'Cell author': 1 },
+  });
+  const stream = await commands(result.bytes);
+  expect(stream).toContain('0.066667 0.478431 0.396078 rg');
+  expect(stream).toContain('0.121569 0.435294 0.698039 rg');
+});
+
+test('cell-only authors retain distinct PDF colors', async () => {
+  const cell = (author: string, id: number) =>
+    `<w:tc><w:tcPr><w:cellIns w:id="${id}" w:author="${author}"/></w:tcPr><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc>`;
+  const result = await exportPdf(
+    docx(
+      `<w:tbl><w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid><w:tr>${cell('First', 1)}${cell('Second', 2)}</w:tr></w:tbl>`
+    ),
+    {
+      displayMode: 'all-markup',
+      useSystemFonts: false,
+      revisionMarkup: { cells: { inserted: 'byAuthor' }, changedLines: { mark: 'none' } },
+    }
+  );
+  const stream = await commands(result.bytes);
+  expect(stream).toContain('0.752941 0.223529 0.168627 rg');
+  expect(stream).toContain('0.121569 0.435294 0.698039 rg');
+});
+
+test.each([
+  ['lightPurple', '0.917647 0.862745 0.956863'],
+  ['lightGreen', '0.886275 0.937255 0.85098'],
+  ['gray', '0.85098 0.85098 0.85098'],
+] as const)('cell shading exports the %s print color', async (shade, rgb) => {
+  const input = docx(
+    '<w:tbl><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:cellIns w:id="1" w:author="Reviewer"/></w:tcPr><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+  );
+  const result = await exportPdf(input, {
+    displayMode: 'all-markup',
+    useSystemFonts: false,
+    revisionMarkup: { cells: { inserted: shade }, changedLines: { mark: 'none' } },
+  });
+  expect(await commands(result.bytes)).toContain(`${rgb} rg`);
+});

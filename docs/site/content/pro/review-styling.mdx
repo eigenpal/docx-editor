@@ -144,6 +144,8 @@ An author value can be a color string or an author style object. A headless host
 
 ## Set revision markup preferences
 
+For complete API, React, and Vue examples, see [Customize revision markup](/docs/2.x/pro/revision-markup).
+
 Pass `revisionMarkup` when you create the editor. Call `setRevisionMarkup(partial)` to update individual preferences. The editor keeps unspecified preferences. Read the full resolved value from `editor.snapshot().revisionMarkup`.
 
 Use this example to change deletion marks and formatting tracking:
@@ -284,7 +286,7 @@ Painted spans use inline ink and text decoration. CSS selectors cannot override 
 
 Text, table rows, and drawings use the same page-margin change bars. Tracked rows do not draw a second bar beside the table, and tracked images, shapes, and text boxes do not draw a colored revision frame. Deleted drawings remain dimmed in All Markup.
 
-The change bar is the rule in the left margin beside every changed line. Two tokens control the gray bar of **All Markup**, and two more the red bar of **Simple Markup**. The bar is painted on the page sheet, outside the dark-mode inversion, so define both light and dark values when you change a color.
+The change bar marks changed lines in the margin selected by `revisionMarkup.changedLines.mark`. Two tokens control the gray bar of **All Markup**, and two more the red bar of **Simple Markup**. The bar is painted on the page sheet, outside the dark-mode inversion, so define both light and dark values when you change a color.
 
 ```css
 .docx-editor {

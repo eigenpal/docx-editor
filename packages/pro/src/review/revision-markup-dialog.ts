@@ -212,7 +212,13 @@ export function createRevisionMarkupDialog(host: RevisionMarkupDialogHost): Revi
       style(moves, 'movedTo', marks);
       const cells = section('tableCells');
       for (const key of ['inserted', 'deleted', 'merged', 'split'] as const) {
-        select(cells, 'cells', key, ['none', ...REVISION_MARKUP_COLORS], draft.cells[key]);
+        select(
+          cells,
+          'cells',
+          key,
+          ['byAuthor', 'none', ...REVISION_MARKUP_COLORS],
+          draft.cells[key]
+        );
       }
       const formatting = section('formatting');
       checkbox(formatting, 'trackFormatting');

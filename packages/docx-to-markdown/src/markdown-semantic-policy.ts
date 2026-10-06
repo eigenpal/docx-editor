@@ -219,6 +219,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     blocks: 'represented',
     box: 'layout-only',
     revisionShading: 'explicitly-omitted',
+    revisionShadingAuthor: 'explicitly-omitted',
   } satisfies Record<keyof TableCellFragmentRecord, MarkdownFieldPolicy>,
   inlineDrawing: {
     kind: 'represented',

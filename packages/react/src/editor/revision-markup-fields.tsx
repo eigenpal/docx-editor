@@ -139,7 +139,7 @@ export function revisionMarkupFields(
             key={name}
             label={t(`${name}Cells`)}
             value={values.cells[name]}
-            values={['none', ...REVISION_MARKUP_COLORS]}
+            values={['byAuthor', 'none', ...REVISION_MARKUP_COLORS]}
             t={t}
             change={(color) =>
               state.setValue('cells', {

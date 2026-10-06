@@ -498,6 +498,18 @@ function blockAuthors(blocks: readonly BlockFragmentRecord[]): readonly string[]
     const marks = fragment.markRevisions;
     if (marks) for (let i = 0; i < marks.length; i += 1) see(marks[i]!.author);
   }
+  // Cell-only revisions carry no text span attribution. Retain their reviewers too.
+  const collectCells = (items: readonly BlockFragmentRecord[]): void => {
+    for (const block of items) {
+      if (block.kind !== 'table') continue;
+      for (const row of block.rows)
+        for (const cell of row.cells) {
+          if (cell.revisionShadingAuthor) see(cell.revisionShadingAuthor);
+          collectCells(cell.blocks);
+        }
+    }
+  };
+  collectCells(blocks);
   blockAuthorCache.set(blocks, found);
   return found;
 }

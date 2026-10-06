@@ -3814,6 +3814,8 @@ export interface SemanticTableCell {
     readonly preferredWidth: PreferredWidth;
     // (undocumented)
     readonly revisionShading?: 'inserted' | 'deleted' | 'merged' | 'split';
+    // (undocumented)
+    readonly revisionShadingAuthor?: string;
     readonly shading?: string;
     readonly styleFormatting: TableCellStyleFormatting;
     readonly suppressesTopBand?: true;
@@ -4436,6 +4438,7 @@ export interface TableCellFragmentRecord {
     readonly paintInert?: boolean;
     // (undocumented)
     readonly revisionShading?: 'inserted' | 'deleted' | 'merged' | 'split';
+    readonly revisionShadingAuthor?: string;
     readonly rowSpan?: number;
     readonly shading?: string;
     readonly textDirection?: 'btLr';

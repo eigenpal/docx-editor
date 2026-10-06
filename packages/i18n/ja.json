@@ -949,7 +949,10 @@
       "gray25": "灰色 25%",
       "lightBlue": "薄い青",
       "lightYellow": "薄い黄",
-      "lightOrange": "薄いオレンジ"
+      "lightOrange": "薄いオレンジ",
+      "gray": "灰色",
+      "lightGreen": "薄い緑",
+      "lightPurple": "薄い紫"
     }
   }
 }

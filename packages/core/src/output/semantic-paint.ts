@@ -37,6 +37,7 @@ import { DEFAULT_CANVAS_FONT_STACK } from '../layout/canvas-measurer.ts';
 import { isolatePageFromHost } from './page-host-isolation.ts';
 import { styleForFontSlot } from '../layout/script-itemization.ts';
 import {
+  reviewAuthorSlotColor,
   revisionStyleContextKey,
   revisionStyleContextOf,
   type RevisionStyleContext,
@@ -165,6 +166,8 @@ export interface PaintContext {
    * page shares one author→slot map.
    */
   readonly revisionStyles?: RevisionStyleContext;
+  /** Author palette for explicit cell colors, independent of text color mode. */
+  readonly revisionCellStyles?: RevisionStyleContext;
   readonly revisionMarkup?: ResolvedRevisionMarkup;
   readonly revisionKindColors?: boolean;
   readonly facingPages?: boolean;
@@ -1710,7 +1713,14 @@ function paintTableCell(
   if (cell.revisionShading && ctx.revisionMarkup) {
     const color = ctx.revisionMarkup.cells[cell.revisionShading];
     cellElement.dataset.revisionCell = cell.revisionShading;
-    if (color !== 'none') cellElement.style.backgroundColor = `var(--doc-revision-color-${color})`;
+    if (color !== 'none') {
+      const author = cell.revisionShadingAuthor ?? '';
+      cellElement.style.backgroundColor =
+        color === 'byAuthor'
+          ? (ctx.revisionStyles?.styles.get(author)?.color ??
+            reviewAuthorSlotColor(ctx.revisionCellStyles?.authorSlots.get(author) ?? 0))
+          : `var(--doc-revision-color-${color})`;
+    }
   }
   const contentElement = tableCellContentHost(document, cell, scale, cellElement);
   for (const block of cell.blocks) {
@@ -2244,6 +2254,10 @@ export function paintSemanticLayoutWithAuthorSlots(
     layout,
     authorSlots
   );
+  const revisionCellStyles =
+    options.revisionMarkup && Object.values(options.revisionMarkup.cells).includes('byAuthor')
+      ? (revisionStyles ?? revisionStyleContextOf('author', layout, authorSlots))
+      : null;
   const resolved = {
     scale: options.scale ?? 96 / 72,
     ariaHidden: options.ariaHidden ?? true,
@@ -2261,6 +2275,7 @@ export function paintSemanticLayoutWithAuthorSlots(
     changeBarsToggle: options.changeBarsToggle ?? false,
     ...(options.shadeFormFields !== undefined ? { shadeFormFields: options.shadeFormFields } : {}),
     ...(revisionStyles ? { revisionStyles } : {}),
+    ...(revisionCellStyles ? { revisionCellStyles } : {}),
     ...(options.revisionMarkup ? { revisionMarkup: options.revisionMarkup } : {}),
     facingPages: options.facingPages,
     revisionKindColors: options.revisionStyles === 'kind',
@@ -2295,7 +2310,7 @@ export function paintSemanticLayoutWithAuthorSlots(
     `${drawingPaintStringsCacheToken(drawingStrings)}|` +
     // The slot map belongs to this paint. A standalone paint derives it from the layout; an
     // attached surface supplies its stable session map. The key must move when that map moves.
-    `markup:${JSON.stringify(options.revisionMarkup)}|facing:${options.facingPages}|rev:${revisionStyleContextKey(revisionStyles)}|marks:${options.showParagraphMarks ?? false}|` +
+    `markup:${JSON.stringify(options.revisionMarkup)}|facing:${options.facingPages}|rev:${revisionStyleContextKey(revisionStyles)}|cells:${revisionStyleContextKey(revisionCellStyles)}|marks:${options.showParagraphMarks ?? false}|` +
     `bars:${resolved.changeBars}:${resolved.changeBarsToggle}`;
   const previous = retainedPaints.get(container);
   const parametersUnchanged = previous?.parameters === parameters;

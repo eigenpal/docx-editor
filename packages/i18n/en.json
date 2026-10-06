@@ -949,7 +949,10 @@
       "gray25": "Gray 25%",
       "lightBlue": "Light blue",
       "lightYellow": "Light yellow",
-      "lightOrange": "Light orange"
+      "lightOrange": "Light orange",
+      "lightPurple": "Light purple",
+      "lightGreen": "Light green",
+      "gray": "Gray"
     }
   }
 }
