@@ -7,7 +7,7 @@ import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorRevisionMarkup } from '../src/editor/DocxEditorRevisionMarkup';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
-import { reviewModule } from '@docx-editor.dev/pro';
+import { reviewModule } from '../../pro/src/index';
 
 const cleanup: (() => void)[] = [];
 afterEach(() => { for (const fn of cleanup.splice(0)) fn(); });

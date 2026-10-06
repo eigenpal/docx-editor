@@ -231,6 +231,7 @@
     "vue": "3.5.33"
   },
   "dependencies": {
+    "@docx-editor.dev/core": "workspace:*",
     "@docx-editor.dev/docx-to-pdf": "workspace:*",
     "@docx-editor.dev/fonts-cjk": "workspace:*",
     "prosemirror-commands": "^1.7.1",
