@@ -5,7 +5,11 @@ test('markup preferences resolve, stay immutable, and emit only effective change
   const editor = createDocxEditor({ revisionMarkup: { insertions: { color: 'red' } } });
   try {
     const original = editor.snapshot();
-    expect(original.revisionMarkup.insertions).toEqual({ mark: 'underline', color: 'red' });
+    expect(original.revisionMarkup.insertions).toEqual({
+      mark: 'underline',
+      color: 'red',
+      background: 'none',
+    });
     expect(Object.isFrozen(original.revisionMarkup.insertions)).toBe(true);
     const values: unknown[] = [];
     editor.on('revisionMarkupChange', (value) => {
@@ -19,6 +23,7 @@ test('markup preferences resolve, stay immutable, and emit only effective change
     expect(editor.snapshot().revisionMarkup.insertions).toEqual({
       mark: 'doubleUnderline',
       color: 'red',
+      background: 'none',
     });
     expect(values).toHaveLength(1);
     const beforeInvalid = editor.snapshot();
@@ -41,7 +46,11 @@ test('local preferences survive attach, detach, reload and leave package revisio
   try {
     const revision = editor.getDocumentHandle().revision;
     const before = new Uint8Array(await editor.save());
-    editor.setRevisionMarkup({ deletions: { mark: 'hidden' }, trackFormatting: false });
+    editor.setRevisionMarkup({
+      deletions: { mark: 'hidden' },
+      insertions: { background: 'lightGreen' },
+      trackFormatting: false,
+    });
     expect(editor.getDocumentHandle().revision).toBe(revision);
     expect(new Uint8Array(await editor.save())).toEqual(before);
     const settings = editor.snapshot().revisionMarkup;

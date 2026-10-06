@@ -11,9 +11,22 @@ export function paintRevisionMarkup(
   settings: ResolvedRevisionMarkup,
   kind: RevisionKind,
   authorColor: string,
-  legacyColor?: string
+  legacyColor?: string,
+  authorBackground?: string
 ): void {
   const option = revisionMarkupStyle(settings, kind);
+  if (option.background === 'byAuthor' && !authorBackground) {
+    element.style.setProperty(
+      '--doc-revision-background',
+      `color-mix(in srgb, ${authorColor} 15%, var(--doc-revision-color-white))`
+    );
+    element.style.backgroundColor = 'var(--doc-revision-background)';
+  } else if (option.background !== 'none') {
+    element.style.backgroundColor =
+      option.background === 'byAuthor'
+        ? authorBackground!
+        : revisionMarkupColor(option.background, authorColor);
+  }
   if (option.mark === 'none') {
     return;
   }

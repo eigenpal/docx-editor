@@ -7921,3 +7921,22 @@ a.docx-hyperlink:focus-visible {
     grid-column: 1 / -1;
   }
 }
+
+.docx-revision-markup-background {
+  margin: 0 0 0.75rem;
+}
+.docx-revision-markup-background > .docx-revision-color-picker {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+}
+.docx-revision-markup-background > .docx-revision-color-picker > span:first-child {
+  color: var(--doc-text-muted);
+  font-size: 0.75rem;
+}
+@media (max-width: 540px) {
+  .docx-revision-markup-background > .docx-revision-color-picker {
+    grid-template-columns: 1fr 1fr;
+  }
+}

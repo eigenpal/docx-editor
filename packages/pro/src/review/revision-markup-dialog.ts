@@ -101,8 +101,12 @@ export function createRevisionMarkupDialog(host: RevisionMarkupDialogHost): Revi
     values: readonly string[],
     value: string
   ) => {
-    if (field === 'color' || key === 'cells') {
-      const label = t(key === 'cells' ? `${field}Cells` : `${key}Color`);
+    if (field === 'color' || field === 'background' || key === 'cells') {
+      const label = t(
+        key === 'cells'
+          ? `${field}Cells`
+          : `${key}${field === 'background' ? 'Background' : 'Color'}`
+      );
       const picker = createRevisionColorPicker(doc, {
         id: `docx-revision-color-${nextId++}`,
         label,
@@ -145,6 +149,18 @@ export function createRevisionMarkupDialog(host: RevisionMarkupDialogHost): Revi
     select(row, key, 'mark', values, draft[key].mark);
     select(row, key, 'color', ['byAuthor', 'auto', ...REVISION_MARKUP_COLORS], draft[key].color);
     section.append(row);
+    if (key !== 'changedLines') {
+      const background = el('div');
+      background.className = 'docx-revision-markup-background';
+      select(
+        background,
+        key,
+        'background',
+        ['none', 'byAuthor', ...REVISION_MARKUP_COLORS],
+        draft[key].background
+      );
+      section.append(background);
+    }
   };
   const checkbox = (section: HTMLElement, key: 'trackMoves' | 'trackFormatting') => {
     const label = el('label');

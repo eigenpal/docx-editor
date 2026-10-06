@@ -715,15 +715,15 @@ export interface ResolvedRevisionMarkup {
     // (undocumented)
     readonly changedLines: RevisionMarkupStyle<RevisionChangedLinesMark>;
     // (undocumented)
-    readonly deletions: RevisionMarkupStyle<RevisionDeletionMark>;
+    readonly deletions: RevisionMarkupTextStyle<RevisionDeletionMark>;
     // (undocumented)
-    readonly formatting: RevisionMarkupStyle;
+    readonly formatting: RevisionMarkupTextStyle;
     // (undocumented)
-    readonly insertions: RevisionMarkupStyle;
+    readonly insertions: RevisionMarkupTextStyle;
     // (undocumented)
-    readonly movedFrom: RevisionMarkupStyle<RevisionDeletionMark>;
+    readonly movedFrom: RevisionMarkupTextStyle<RevisionDeletionMark>;
     // (undocumented)
-    readonly movedTo: RevisionMarkupStyle;
+    readonly movedTo: RevisionMarkupTextStyle;
     // (undocumented)
     readonly trackFormatting: boolean;
     // (undocumented)
@@ -778,6 +778,11 @@ export interface RevisionMarkupStyle<Mark extends string = RevisionMarkupMark> {
     readonly color: RevisionMarkupColor;
     // (undocumented)
     readonly mark: Mark;
+}
+
+// @public
+export interface RevisionMarkupTextStyle<Mark extends string = RevisionMarkupMark> extends RevisionMarkupStyle<Mark> {
+    readonly background: RevisionMarkupNamedColor | 'byAuthor' | 'none';
 }
 
 // @public

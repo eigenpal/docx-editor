@@ -200,8 +200,9 @@ export function paintParagraphMark(
       glyph,
       markup,
       shown.kind,
-      reviewAuthorSlotColor(markSlot),
-      kindColors || colors?.others === 'kind' || markStyle?.color ? legacyColor : undefined
+      markStyle?.color ?? reviewAuthorSlotColor(markSlot),
+      kindColors || colors?.others === 'kind' || markStyle?.color ? legacyColor : undefined,
+      markStyle?.background
     );
   } else if (removes) glyph.style.textDecorationLine = 'line-through';
   return glyph;

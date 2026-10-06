@@ -491,5 +491,6 @@ export type {
   RevisionDeletionMark,
   RevisionChangedLinesMark,
   RevisionMarkupStyle,
+  RevisionMarkupTextStyle,
 } from '../contracts/revision-markup.ts';
 export type { RevisionMarkupDialog, RevisionMarkupDialogHost } from '../contracts/modules.ts';

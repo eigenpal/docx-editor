@@ -37,7 +37,11 @@ test('a host restores preferences, changes them in the dialog, and saves the sam
     fireEvent.change(getByLabelText(dialog, 'Deletions'), { target: { value: 'caret' } });
     fireEvent.click(getByRole(dialog, 'button', { name: 'OK' }));
     expect(saved!).toBe(editor.snapshot().revisionMarkup);
-    expect(saved!.insertions).toEqual({ mark: 'doubleUnderline', color: 'green' });
+    expect(saved!.insertions).toEqual({
+      mark: 'doubleUnderline',
+      color: 'green',
+      background: 'none',
+    });
     expect(saved!.deletions.mark).toBe('caret');
     const restored = createDocxEditor({ revisionMarkup: JSON.parse(JSON.stringify(saved)) });
     expect(restored.snapshot().revisionMarkup).toEqual(saved!);

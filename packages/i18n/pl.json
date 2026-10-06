@@ -953,6 +953,11 @@
       "gray": null,
       "lightGreen": null,
       "lightPurple": null
-    }
+    },
+    "deletionsBackground": null,
+    "formattingBackground": null,
+    "insertionsBackground": null,
+    "movedFromBackground": null,
+    "movedToBackground": null
   }
 }

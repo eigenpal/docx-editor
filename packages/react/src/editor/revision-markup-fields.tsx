@@ -73,6 +73,23 @@ export function revisionMarkupFields(
             }
           />
         </div>
+        {name !== 'changedLines' && (
+          <div className="docx-revision-markup-background">
+            <ColorPicker
+              label={t(`${name}Background`)}
+              value={values[name].background}
+              values={['none', 'byAuthor', ...REVISION_MARKUP_COLORS]}
+              disabled={disabled}
+              t={t}
+              change={(background) =>
+                state.setValue(name, {
+                  ...values[name],
+                  background,
+                } as ResolvedRevisionMarkup[typeof name])
+              }
+            />
+          </div>
+        )}
         {name === 'changedLines' && (
           <div
             className="docx-revision-markup-preview"

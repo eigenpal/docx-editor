@@ -19,7 +19,8 @@ const revision = (kind: string, text: string) =>
 function render(
   body: string,
   options: RevisionMarkupOptions,
-  revisionStyles?: import('../revision-presentation.ts').RevisionStyles
+  revisionStyles?: import('../revision-presentation.ts').RevisionStyles,
+  displayMode: import('../../layout/revision-projection.ts').RevisionDisplayMode = 'all-markup'
 ) {
   const parsed = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
     name: '/word/document.xml',
@@ -29,9 +30,11 @@ function render(
   const before = serializeOoxmlPart(parsed.part);
   const revisionMarkup = resolveRevisionMarkup(options);
   const layout = layoutSemanticDocument(parsed.part, 1, {
+    displayMode,
     measurer: createFixedMeasurer(6, 14),
     revisionAuthorFilter: {
       hiddenAuthors: new Set(),
+      resolvedMarkup: 'plain',
       cacheKey: JSON.stringify(revisionMarkup),
       revisionMarkup,
     },
@@ -43,7 +46,7 @@ function render(
 }
 test('settings merge deeply, reject unknown values, and stay immutable', () => {
   const value = resolveRevisionMarkup({ insertions: { color: 'red' } });
-  expect(value.insertions).toEqual({ mark: 'underline', color: 'red' });
+  expect(value.insertions).toEqual({ mark: 'underline', color: 'red', background: 'none' });
   expect(DEFAULT_REVISION_MARKUP.insertions.color).toBe('byAuthor');
   expect(Object.isFrozen(value.insertions)).toBe(true);
   expect(() => resolveRevisionMarkup({ insertions: { color: 'url(x)' as never } })).toThrow();
@@ -371,5 +374,117 @@ test.each(['lightPurple', 'lightGreen', 'gray'] as const)('cell shading supports
   );
   expect(root.querySelector<HTMLElement>('[data-revision-cell]')!.style.backgroundColor).toBe(
     `var(--doc-revision-color-${color})`
+  );
+});
+
+test('background preferences merge independently and reject unsupported values', () => {
+  const first = resolveRevisionMarkup({ insertions: { background: 'lightGreen' } });
+  const next = resolveRevisionMarkup({ insertions: { color: 'blue' } }, first);
+  expect(next.insertions).toEqual({ mark: 'underline', color: 'blue', background: 'lightGreen' });
+  expect(
+    resolveRevisionMarkup({ insertions: { background: 'none' } }, next).insertions.background
+  ).toBe('none');
+  for (const background of ['auto', '#fff', 'url(x)', null, undefined])
+    expect(() => resolveRevisionMarkup({ insertions: { background } } as never)).toThrow();
+  expect(() =>
+    resolveRevisionMarkup({ changedLines: { background: 'yellow' } } as never)
+  ).toThrow();
+});
+
+test('revision backgrounds work without a text mark and retain authored highlight when off', () => {
+  const body = `<w:p><w:ins w:id="1" w:author="Reviewer"><w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:t>text</w:t></w:r></w:ins></w:p>`;
+  const background = (options: RevisionMarkupOptions) =>
+    render(body, options).root.querySelector<HTMLElement>('[data-revision-kind="insert"]')!.style
+      .backgroundColor;
+  expect(background({ insertions: { mark: 'none', background: 'lightGreen' } })).toBe(
+    'var(--doc-revision-color-lightGreen)'
+  );
+  expect(background({ insertions: { mark: 'none', background: 'none' } })).toBe('#ffff00');
+  const authorSpan = render(body, {
+    insertions: { mark: 'none', background: 'byAuthor' },
+  }).root.querySelector<HTMLElement>('[data-revision-kind="insert"]')!;
+  expect(authorSpan.style.backgroundColor).toBe('var(--doc-revision-background)');
+  expect(authorSpan.style.getPropertyValue('--doc-revision-background')).toBe(
+    'color-mix(in srgb, var(--doc-review-author-0) 15%, var(--doc-revision-color-white))'
+  );
+});
+
+test('background overrides retain author preferences only for none and byAuthor', () => {
+  const body = `<w:p>${revision('ins', 'text')}</w:p>`;
+  const revisionStyles = {
+    others: 'author' as const,
+    authors: { Reviewer: { color: 'red', background: 'pink' } },
+  };
+  for (const background of ['none', 'byAuthor', 'lightGreen'] as const) {
+    const span = render(
+      body,
+      { insertions: { background } },
+      revisionStyles
+    ).root.querySelector<HTMLElement>('[data-revision-kind="insert"]')!;
+    expect(span.style.backgroundColor).toBe(
+      background === 'lightGreen' ? 'var(--doc-revision-color-lightGreen)' : 'pink'
+    );
+  }
+});
+
+test('moves use insertion and deletion backgrounds when move tracking is off', () => {
+  const { root } = render(`<w:p>${revision('moveFrom', 'old')}${revision('moveTo', 'new')}</w:p>`, {
+    trackMoves: false,
+    insertions: { background: 'lightGreen' },
+    deletions: { background: 'pink' },
+    movedFrom: { background: 'yellow' },
+    movedTo: { background: 'yellow' },
+  });
+  expect(
+    root.querySelector<HTMLElement>('[data-revision-kind="moveFrom"]')!.style.backgroundColor
+  ).toBe('var(--doc-revision-color-pink)');
+  expect(
+    root.querySelector<HTMLElement>('[data-revision-kind="moveTo"]')!.style.backgroundColor
+  ).toBe('var(--doc-revision-color-lightGreen)');
+});
+
+test('formatting background appears when its text mark is none', () => {
+  const { root } = render(
+    '<w:p><w:r><w:rPr><w:rPrChange w:id="1" w:author="Reviewer"><w:rPr/></w:rPrChange></w:rPr><w:t>Formatted</w:t></w:r></w:p>',
+    {
+      formatting: { mark: 'none', background: 'lightBlue' },
+    }
+  );
+  expect(
+    root.querySelector<HTMLElement>('[data-revision-kind="format"][data-start]')!.style
+      .backgroundColor
+  ).toBe('var(--doc-revision-color-lightBlue)');
+});
+
+test.each(['proposed', 'original'] as const)(
+  '%s suppresses viewer backgrounds and keeps document highlights',
+  (displayMode) => {
+    const kind = displayMode === 'original' ? 'del' : 'ins';
+    const textTag = kind === 'del' ? 'delText' : 't';
+    const body = `<w:p><w:${kind} w:id="1" w:author="Reviewer"><w:r><w:rPr><w:highlight w:val="yellow"/></w:rPr><w:${textTag}>text</w:${textTag}></w:r></w:${kind}></w:p>`;
+    const { root } = render(
+      body,
+      {
+        insertions: { background: 'lightGreen' },
+        deletions: { background: 'pink' },
+      },
+      undefined,
+      displayMode
+    );
+    const span = root.querySelector<HTMLElement>('[data-start]')!;
+    expect(span.textContent).toBe('text');
+    expect(span.style.backgroundColor).toBe('#ffff00');
+  }
+);
+
+test('paragraph mark backgrounds use the custom author color', () => {
+  const { root } = render(
+    `<w:p><w:pPr><w:rPr><w:del w:id="1" w:author="Reviewer"/></w:rPr></w:pPr>${run('text')}</w:p>`,
+    { deletions: { background: 'byAuthor' } },
+    { others: 'author', authors: { Reviewer: { color: 'blue' } } }
+  );
+  const glyph = root.querySelector<HTMLElement>('.docx-revision-pmark')!;
+  expect(glyph.style.getPropertyValue('--doc-revision-background')).toBe(
+    'color-mix(in srgb, blue 15%, var(--doc-revision-color-white))'
   );
 });

@@ -76,7 +76,8 @@ test('local markup stays private while tracked edits converge, undo, reconnect, 
   };
   const before = xml(alice.editor);
   alice.editor.setRevisionMarkup({
-    insertions: { mark: 'doubleUnderline', color: 'red' },
+    insertions: { mark: 'doubleUnderline', color: 'red', background: 'lightGreen' },
+    deletions: { background: 'pink' },
     cells: { inserted: 'byAuthor', merged: 'lightPurple', split: 'lightGreen', deleted: 'gray' },
   });
   const aliceCells = alice.container.querySelectorAll<HTMLElement>('[data-revision-cell]');
@@ -88,6 +89,7 @@ test('local markup stays private while tracked edits converge, undo, reconnect, 
   expect(xml(alice.editor)).toBe(before);
   expect(xml(bob.editor)).toBe(before);
   expect(bob.editor.snapshot().revisionMarkup.insertions.mark).toBe('underline');
+  expect(bob.editor.snapshot().revisionMarkup.insertions.background).toBe('none');
   select(alice.editor, 0, 6);
   alice.editor.surface!.toggleRunProperty('b');
   converge();
@@ -115,6 +117,18 @@ test('local markup stays private while tracked edits converge, undo, reconnect, 
   converge();
   expect(xml(bob.editor)).toContain('w:author="Alice"');
   expect(xml(bob.editor)).toContain('w:author="Bob"');
+  const aliceInsertions = alice.container.querySelectorAll<HTMLElement>(
+    '[data-revision-kind="insert"][data-start]'
+  );
+  expect(aliceInsertions.length).toBeGreaterThan(0);
+  for (const span of aliceInsertions)
+    expect(span.style.backgroundColor).toBe('var(--doc-revision-color-lightGreen)');
+  const bobInsertions = bob.container.querySelectorAll<HTMLElement>(
+    '[data-revision-kind="insert"][data-start]'
+  );
+  expect(bobInsertions.length).toBeGreaterThan(0);
+  for (const span of bobInsertions) expect(span.style.backgroundColor).toBe('');
+
   expect(alice.editor.exec({ type: 'undo' }).ok).toBe(true);
   converge();
   expect(alice.editor.exec({ type: 'redo' }).ok).toBe(true);
@@ -155,6 +169,8 @@ test('local markup stays private while tracked edits converge, undo, reconnect, 
     packageFingerprint(alice.editor.surface!.session.currentPackage())
   );
   expect(joined.editor.snapshot().revisionMarkup.insertions.mark).toBe('underline');
+  expect(joined.editor.snapshot().revisionMarkup.insertions.background).toBe('none');
+  expect(alice.editor.snapshot().revisionMarkup.insertions.background).toBe('lightGreen');
   expect(joined.editor.snapshot().revisionMarkup.cells.inserted).toBe('lightBlue');
   expect(alice.editor.snapshot().revisionMarkup.cells.inserted).toBe('byAuthor');
   const saved = new Uint8Array(await alice.editor.save());
@@ -164,6 +180,7 @@ test('local markup stays private while tracked edits converge, undo, reconnect, 
   document.body.append(container);
   containers.push(container);
   reopened.attach(container);
+  expect(reopened.snapshot().revisionMarkup.insertions.background).toBe('none');
   expect(saveReopenDigest(reopened.surface!.session.currentPackage())).toEqual(
     saveReopenDigest(alice.editor.surface!.session.currentPackage())
   );

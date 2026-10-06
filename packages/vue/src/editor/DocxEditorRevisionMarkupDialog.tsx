@@ -148,33 +148,45 @@ const Impl = defineComponent({
             {...(key === 'changedLines'
               ? {}
               : { 'data-docx-part': 'field', 'data-docx-field': key })}
-            class="docx-revision-markup-row"
           >
-            <span aria-hidden="true" class="docx-revision-markup-row-title">
-              {t(key)}
-            </span>
-            <label>
-              <span class="docx-revision-markup-field-label">{t(key)}</span>
-              <select
-                value={v[key].mark}
-                disabled={disabled}
-                onChange={(event) =>
-                  set({ [key]: { mark: (event.target as HTMLSelectElement).value } })
-                }
-              >
-                {choices.map((value) => (
-                  <option value={value} key={value}>
-                    {t(`values.${value}`)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {color(
-              `${key}Color`,
-              v[key].color,
-              ['byAuthor', 'auto', ...REVISION_MARKUP_COLORS],
-              (value) => set({ [key]: { color: value } }),
-              disabled
+            <div class="docx-revision-markup-row">
+              <span aria-hidden="true" class="docx-revision-markup-row-title">
+                {t(key)}
+              </span>
+              <label>
+                <span class="docx-revision-markup-field-label">{t(key)}</span>
+                <select
+                  value={v[key].mark}
+                  disabled={disabled}
+                  onChange={(event) =>
+                    set({ [key]: { mark: (event.target as HTMLSelectElement).value } })
+                  }
+                >
+                  {choices.map((value) => (
+                    <option value={value} key={value}>
+                      {t(`values.${value}`)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {color(
+                `${key}Color`,
+                v[key].color,
+                ['byAuthor', 'auto', ...REVISION_MARKUP_COLORS],
+                (value) => set({ [key]: { color: value } }),
+                disabled
+              )}
+            </div>
+            {key !== 'changedLines' && (
+              <div class="docx-revision-markup-background">
+                {color(
+                  `${key}Background`,
+                  v[key].background,
+                  ['none', 'byAuthor', ...REVISION_MARKUP_COLORS],
+                  (value) => set({ [key]: { background: value } }),
+                  disabled
+                )}
+              </div>
             )}
           </div>
         );

@@ -61,7 +61,11 @@ test('custom settings sessions stage, reset, validate, and commit once', () => {
   session.set({ insertions: { color: 'blue' } });
   expect(host.state.current()).toEqual(DEFAULT_REVISION_MARKUP);
   expect(host.changes).toHaveLength(0);
-  expect(session.get().insertions).toEqual({ color: 'blue', mark: 'underline' });
+  expect(session.get().insertions).toEqual({
+    color: 'blue',
+    mark: 'underline',
+    background: 'none',
+  });
   expect(() => session.set({ insertions: { color: 'invalid' as never } })).toThrow();
   expect(session.get().insertions.color).toBe('blue');
   session.reset();

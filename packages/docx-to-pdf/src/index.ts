@@ -47,6 +47,7 @@ export type {
   RevisionMarkupOptions,
   ResolvedRevisionMarkup,
   RevisionMarkupStyle,
+  RevisionMarkupTextStyle,
   RevisionMarkupMark,
   RevisionDeletionMark,
   RevisionChangedLinesMark,

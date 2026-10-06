@@ -69,7 +69,8 @@ export function applyRevisionPresentation(
         presentation.authorColor,
         ctx.revisionKindColors || colors?.others === 'kind' || authorStyle?.color
           ? color
-          : undefined
+          : undefined,
+        authorStyle?.background
       );
       return;
     }
@@ -147,6 +148,8 @@ export function applyRevisionPresentation(
       ctx.revisionMarkup,
       'format',
       colors?.styles.get(format!.author)?.color ??
-        reviewAuthorSlotColor(colors?.authorSlots.get(format!.author) ?? 0)
+        reviewAuthorSlotColor(colors?.authorSlots.get(format!.author) ?? 0),
+      undefined,
+      colors?.styles.get(format!.author)?.background
     );
 }

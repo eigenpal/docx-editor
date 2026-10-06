@@ -46,13 +46,20 @@ export interface RevisionMarkupStyle<Mark extends string = RevisionMarkupMark> {
   readonly mark: Mark;
   readonly color: RevisionMarkupColor;
 }
+/** Viewer-only text styling. Document highlighting remains unchanged. @public */
+export interface RevisionMarkupTextStyle<
+  Mark extends string = RevisionMarkupMark,
+> extends RevisionMarkupStyle<Mark> {
+  /** Background color behind revision text. Defaults to `none`. */
+  readonly background: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+}
 /** Fully resolved, immutable viewer preferences. @public */
 export interface ResolvedRevisionMarkup {
-  readonly insertions: RevisionMarkupStyle;
-  readonly deletions: RevisionMarkupStyle<RevisionDeletionMark>;
-  readonly movedFrom: RevisionMarkupStyle<RevisionDeletionMark>;
-  readonly movedTo: RevisionMarkupStyle;
-  readonly formatting: RevisionMarkupStyle;
+  readonly insertions: RevisionMarkupTextStyle;
+  readonly deletions: RevisionMarkupTextStyle<RevisionDeletionMark>;
+  readonly movedFrom: RevisionMarkupTextStyle<RevisionDeletionMark>;
+  readonly movedTo: RevisionMarkupTextStyle;
+  readonly formatting: RevisionMarkupTextStyle;
   readonly changedLines: RevisionMarkupStyle<RevisionChangedLinesMark>;
   readonly cells: {
     readonly inserted: RevisionMarkupNamedColor | 'byAuthor' | 'none';
@@ -71,13 +78,17 @@ export type RevisionMarkupOptions = {
 };
 const style = <T extends string>(mark: T, color: RevisionMarkupColor): RevisionMarkupStyle<T> =>
   Object.freeze({ mark, color });
+const textStyle = <T extends string>(
+  mark: T,
+  color: RevisionMarkupColor
+): RevisionMarkupTextStyle<T> => Object.freeze({ mark, color, background: 'none' });
 /** Initial viewer preferences. @public */
 export const DEFAULT_REVISION_MARKUP: ResolvedRevisionMarkup = Object.freeze({
-  insertions: style('underline', 'byAuthor'),
-  deletions: style('strikethrough', 'byAuthor'),
-  movedFrom: style('doubleStrikethrough', 'green'),
-  movedTo: style('doubleUnderline', 'green'),
-  formatting: style('none', 'byAuthor'),
+  insertions: textStyle('underline', 'byAuthor'),
+  deletions: textStyle('strikethrough', 'byAuthor'),
+  movedFrom: textStyle('doubleStrikethrough', 'green'),
+  movedTo: textStyle('doubleUnderline', 'green'),
+  formatting: textStyle('none', 'byAuthor'),
   changedLines: style('outsideBorder', 'auto'),
   cells: Object.freeze({
     inserted: 'lightBlue',
@@ -141,6 +152,15 @@ export function resolveRevisionMarkup(
         )
           throw new TypeError('Invalid cell color');
     } else {
+      if (key !== 'changedLines') {
+        const background = (merged as RevisionMarkupTextStyle<string>).background;
+        if (
+          background !== 'none' &&
+          background !== 'byAuthor' &&
+          !REVISION_MARKUP_COLORS.includes(background)
+        )
+          throw new TypeError(`Invalid ${key} background`);
+      }
       const entry = merged as RevisionMarkupStyle<string>;
       const allowed =
         key === 'changedLines'
@@ -177,7 +197,7 @@ export function revisionMarkupColor(
 export function revisionMarkupStyle(
   settings: ResolvedRevisionMarkup,
   kind: 'insert' | 'delete' | 'moveFrom' | 'moveTo' | 'format'
-): RevisionMarkupStyle<RevisionDeletionMark> {
+): RevisionMarkupTextStyle<RevisionDeletionMark> {
   switch (kind) {
     case 'insert':
       return settings.insertions;

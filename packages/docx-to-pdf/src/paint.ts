@@ -5,7 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { collectPageChangeBars } from '@docx-editor.dev/core/output';
 import { DEFAULT_REVISION_MARKUP, type ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
-import { markupColor, spanMarkup } from './revision-markup.ts';
+import { markupBackground, markupColor, spanMarkup } from './revision-markup.ts';
 import { PDFDocument, type PDFPage } from 'pdf-lib';
 import type {
   ExportSemanticLayout,
@@ -581,7 +581,14 @@ export async function paint(
             )
           );
     }
-    const fill = HIGHLIGHTS[visit.span.style.highlight ?? ''] ?? visit.span.style.shading;
+    const markup =
+      layout.displayMode === 'all-markup' && layout.revisionMarkup
+        ? spanMarkup(visit, layout.revisionMarkup)
+        : null;
+    const fill =
+      markup && markup.background !== 'none'
+        ? markupBackground(markup.background, authorSlots.get(markup.author) ?? 0)
+        : (HIGHLIGHTS[visit.span.style.highlight ?? ''] ?? visit.span.style.shading);
     if (fill)
       out.push(
         `${color(fill)} rg ${rect(text.bandBox(visit), -visit.page.box.x, -visit.page.box.y, pageHeight(page), true)} f`

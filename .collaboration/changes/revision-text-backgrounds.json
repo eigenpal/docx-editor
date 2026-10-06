@@ -1,0 +1,12 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Viewer preferences do not expose text background colors.",
+  "after": "Each viewer can select optional revision text backgrounds.",
+  "reason": "Background preferences remain local and do not change document operations, room state, or protocol fields.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-revision-markup.test.ts"
+  ],
+  "changeset": "revision-markup-preferences",
+  "migration": null
+}

@@ -185,7 +185,7 @@ Use `DocxEditor.RevisionMarkup` inside the editor root for partial declarative c
 
 Vue also exports `DocxEditorRevisionMarkup`. Its `revisionMarkupChange` event returns the same resolved value. Use one configuration source for each editor.
 
-`revisionStyles` continues to control author colors, backgrounds, classes, and avatars. `revisionMarkup` controls revision marks, revision colors, change bars, and cell shading. Named colors use theme tokens. Markup preferences do not accept arbitrary CSS color strings.
+`revisionStyles` continues to control author colors, backgrounds, classes, and avatars. `revisionMarkup` controls revision marks, revision colors, optional text backgrounds, change bars, and cell shading. Text backgrounds default to `none`. See [Add text background highlighting](/docs/2.x/pro/revision-markup#add-text-background-highlighting) for examples and precedence. Named colors use theme tokens. Markup preferences do not accept arbitrary CSS color strings.
 
 Set the initial review display with `reviewDisplayMode`: `simple-markup`, `all-markup`, `proposed`, or `original`. Display preferences do not accept or reject revisions.
 

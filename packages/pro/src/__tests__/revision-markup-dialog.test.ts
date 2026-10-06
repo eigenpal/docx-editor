@@ -141,3 +141,35 @@ test.each([
   fireEvent.click(getByRole(host.container, 'button', { name: 'OK' }));
   expect(host.get().cells.inserted).toBe(value);
 });
+
+test('text backgrounds default to None, stage separately, and reset without changing document colors', () => {
+  const host = setup();
+  for (const name of ['Insertions', 'Deletions', 'Moved from', 'Moved to', 'Formatting']) {
+    fireEvent.click(getByRole(host.container, 'button', { name: `${name} background None` }));
+    const group = getByRole(host.container, 'radiogroup', { name: `${name} background` });
+    fireEvent.click(getByRole(group, 'radio', { name: 'Light yellow' }), { detail: 1 });
+  }
+  expect(host.changes).toHaveLength(0);
+  fireEvent.click(getByRole(host.container, 'button', { name: 'OK' }));
+  for (const key of ['insertions', 'deletions', 'movedFrom', 'movedTo', 'formatting'] as const) {
+    expect(host.get()[key].background).toBe('lightYellow');
+    expect(host.get()[key].color).toBe(DEFAULT_REVISION_MARKUP[key].color);
+  }
+  host.dialog.open();
+  fireEvent.click(getByRole(host.container, 'button', { name: 'Reset to defaults' }));
+  expect(getByRole(host.container, 'button', { name: 'Insertions background None' })).toBeTruthy();
+  fireEvent.click(getByRole(host.container, 'button', { name: 'Cancel' }));
+  expect(host.get().insertions.background).toBe('lightYellow');
+  host.dialog.open();
+  host.set({ insertions: { background: 'byAuthor' }, trackMoves: false });
+  expect(
+    getByRole(host.container, 'button', { name: 'Insertions background By author' })
+  ).toBeTruthy();
+  expect(
+    (
+      getByRole(host.container, 'button', {
+        name: 'Moved from background Light yellow',
+      }) as HTMLButtonElement
+    ).disabled
+  ).toBe(true);
+});

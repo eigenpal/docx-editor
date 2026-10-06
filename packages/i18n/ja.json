@@ -953,6 +953,11 @@
       "gray": "灰色",
       "lightGreen": "薄い緑",
       "lightPurple": "薄い紫"
-    }
+    },
+    "deletionsBackground": null,
+    "formattingBackground": null,
+    "insertionsBackground": null,
+    "movedFromBackground": null,
+    "movedToBackground": null
   }
 }

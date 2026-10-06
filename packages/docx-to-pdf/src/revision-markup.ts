@@ -39,6 +39,21 @@ export function markupColor(color: RevisionMarkupColor, authorSlot = 0, auto = '
       ? AUTHORS[authorSlot % AUTHORS.length]!
       : COLORS[color]!;
 }
+/** Opaque light author wash, equivalent to the screen's 15% sRGB color mix. */
+export function markupBackground(
+  color: Exclude<ResolvedRevisionMarkup['insertions']['background'], 'none'>,
+  authorSlot = 0
+): string {
+  const foreground = markupColor(color, authorSlot);
+  if (color !== 'byAuthor') return foreground;
+  return [0, 2, 4]
+    .map((offset) =>
+      Math.round(parseInt(foreground.slice(offset, offset + 2), 16) * 0.15 + 255 * 0.85)
+        .toString(16)
+        .padStart(2, '0')
+    )
+    .join('');
+}
 export function spanMarkup(visit: SemanticSpanVisit, settings: ResolvedRevisionMarkup) {
   const revision =
     visit.span.revisions?.at(-1) ??
