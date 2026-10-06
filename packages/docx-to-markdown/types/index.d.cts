@@ -9,6 +9,7 @@ export declare const exportMarkdownLayout: typeof API.exportMarkdownLayout;
 export declare const openDocumentForExport: typeof API.openDocumentForExport;
 export declare const createFontSource: typeof API.createFontSource;
 export declare const defineFontResolver: typeof API.defineFontResolver;
+export declare const REVISION_MARKUP_COLORS: typeof API.REVISION_MARKUP_COLORS;
 export declare const forEachSemanticDrawing: typeof API.forEachSemanticDrawing;
 export declare const HARD_MAX_AGGREGATE_FONT_BYTES: typeof API.HARD_MAX_AGGREGATE_FONT_BYTES;
 export declare const HARD_MAX_FONT_BYTES: typeof API.HARD_MAX_FONT_BYTES;
