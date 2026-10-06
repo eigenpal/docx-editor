@@ -12,9 +12,14 @@ import {
   contentControlPropertiesContainerOf,
   contentControlPropertiesOf,
 } from '../package/content-control-nodes.ts';
-import { createNodeIdAllocator, replaceNode, type EditOptions } from '../package/ooxml-edit.ts';
+import {
+  createNodeIdAllocator,
+  findNode,
+  replaceNode,
+  type EditOptions,
+} from '../package/ooxml-edit.ts';
 import { MAX_INLINE_CONTAINER_DEPTH } from '../package/ooxml-shared.ts';
-import type { OoxmlNode } from '../package/ooxml-tree.ts';
+import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { isInlineControl } from './content-control-checkbox.ts';
 import { contentWithText, editedProperties, promptFor } from './tree-op-content-controls.ts';
 import {
@@ -22,6 +27,7 @@ import {
   findContentControl,
   isRunPropertiesNode,
 } from './tree-op-nodes.ts';
+import { paragraphLength } from './tree-op-segments.ts';
 import type { TreeOpResult } from './tree-op-types.ts';
 
 /** The kinds whose empty content shows a prompt. A checkbox or a picture has none. */
@@ -76,4 +82,20 @@ export function restoreEmptiedPlaceholder(
   } as OoxmlNode;
   const written = replaceNode(result.part, control.id, rebuilt, options);
   return written.ok ? { ...result, part: written.part } : result;
+}
+
+/**
+ * Where the caller's characters go once a prompt has been emptied.
+ *
+ * Prompt replacement uses the prompt's start position. Clamp the position to the shortened
+ * paragraph before inserting the replacement text.
+ */
+export function promptInsertionOffset(
+  part: OoxmlPart,
+  paragraphId: string,
+  planned: number
+): number {
+  const paragraph = findNode(part, paragraphId);
+  if (!paragraph || paragraph.kind !== 'paragraph') return planned;
+  return Math.min(planned, paragraphLength(paragraph));
 }

@@ -230,7 +230,7 @@ export interface RevisionMarkupDialogSession {
   /** Close without committing the draft. */
   cancel(): void;
 }
-/** Host rendering for the change tracking options dialog. @public */
+/** Host rendering for the tracked changes options dialog. @public */
 export interface RevisionMarkupChromeHandlers {
   readonly onRequest?: (session: RevisionMarkupDialogSession) => void;
 }

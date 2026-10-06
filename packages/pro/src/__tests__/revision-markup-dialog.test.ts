@@ -6,6 +6,14 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { afterEach, expect, test } from 'bun:test';
 import { fireEvent, getByLabelText, getByRole } from '@testing-library/react';
 import {
+  createT,
+  deepMerge,
+  en,
+  locales,
+  type LocaleStrings,
+  type TranslationKey,
+} from '@docx-editor.dev/i18n';
+import {
   DEFAULT_REVISION_MARKUP,
   createDocxEditor,
   type RevisionMarkupOptions,
@@ -15,11 +23,16 @@ import { reviewModule } from '../review/review-module';
 
 let cleanup = () => {};
 afterEach(() => cleanup());
-function setup() {
+function setup(translate?: Parameters<typeof createDocxEditor>[0]['translate']) {
   const container = document.createElement('div');
   document.body.append(container);
   const changes: ResolvedRevisionMarkup[] = [];
-  const editor = createDocxEditor({ container, document: 'blank', modules: [reviewModule({})] });
+  const editor = createDocxEditor({
+    container,
+    document: 'blank',
+    translate,
+    modules: [reviewModule({})],
+  });
   editor.on('revisionMarkupChange', (value) => changes.push(value));
   const set = (value: RevisionMarkupOptions) => editor.setRevisionMarkup(value);
   const dialog = {
@@ -67,7 +80,7 @@ test('Cancel discards draft settings; Reset only changes the draft', () => {
 
 test('labels controls, omits the preview, closes with Escape, and removes its subscription', () => {
   const host = setup();
-  const dialog = getByRole(host.container, 'dialog', { name: 'Change tracking options' });
+  const dialog = getByRole(host.container, 'dialog', { name: 'Tracked changes options' });
   expect(host.container.querySelector('.docx-revision-markup-preview')).toBeNull();
   for (const control of host.container.querySelectorAll('select,input'))
     expect(control.closest('label')).not.toBeNull();
@@ -186,3 +199,13 @@ test('text backgrounds default to None, stage separately, and reset without chan
     ).disabled
   ).toBe(true);
 });
+
+for (const [code, strings] of Object.entries(locales)) {
+  test(`the ${code} dialog uses its translated tracked changes title`, () => {
+    const title = strings.revisionMarkup?.title;
+    expect(typeof title).toBe('string');
+    const t = createT(deepMerge(en, strings) as LocaleStrings, code);
+    const host = setup((key) => t(key as TranslationKey));
+    expect(getByRole(host.container, 'dialog', { name: title! })).not.toBeNull();
+  });
+}

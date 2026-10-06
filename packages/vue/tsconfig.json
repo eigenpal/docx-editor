@@ -28,6 +28,8 @@
     // Bun resolves test imports through these, and the export map points at `dist`, so a stale or
     // missing entry does not fall back — it fails to resolve on a tree that has never been built.
     "paths": {
+      "@docx-editor.dev/i18n": ["../i18n/src/index.ts"],
+      "@docx-editor.dev/i18n/*": ["../i18n/src/*.ts"],
       "@docx-editor.dev/core": ["../core/src/index.ts"],
       "@docx-editor.dev/core/automation": ["../core/src/automation/index.ts"],
       "@docx-editor.dev/core/binding": ["../core/src/binding/index.ts"],

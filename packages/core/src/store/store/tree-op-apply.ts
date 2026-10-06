@@ -151,7 +151,6 @@ import {
   insertionDestination,
   fieldInsertionEndAt,
   isParagraph,
-  paragraphLength,
   runsUnder,
   segmentAncestryNodeId,
   segmentsOf,
@@ -188,7 +187,10 @@ import { isDrawingTreeDocOp } from './tree-op-drawings.ts';
 import { applyInsertFragment } from './tree-op-fragment.ts';
 import { applyDrawingContentEdit } from './drawing-content-edit.ts';
 import { applyInsertBuildingBlock } from './building-block-insert.ts';
-import { restoreEmptiedPlaceholder } from './content-control-prompt-restore.ts';
+import {
+  promptInsertionOffset,
+  restoreEmptiedPlaceholder,
+} from './content-control-prompt-restore.ts';
 
 /** The one run-level element each insert op places, shared by its tracked and untracked arms. */
 const RUN_ELEMENT_INSERTS: Readonly<
@@ -198,19 +200,6 @@ const RUN_ELEMENT_INSERTS: Readonly<
   insertHardBreak: (nextId) => simpleElement(nextId, 'br', 'line'),
   insertPageBreak: (nextId) => simpleElement(nextId, 'br', 'page'),
 };
-
-/**
- * Where the caller's characters go once a prompt has been emptied.
- *
- * The prompt's own characters are gone, so the offset the caller planned against them cannot
- * be honoured — Word puts the text where the prompt started, and clamping keeps the op inside
- * a paragraph that is now shorter than it was.
- */
-function promptInsertionOffset(part: OoxmlPart, paragraphId: string, planned: number): number {
-  const paragraph = findNode(part, paragraphId);
-  if (!paragraph || paragraph.kind !== 'paragraph') return planned;
-  return Math.min(planned, paragraphLength(paragraph));
-}
 
 function runElement(nextId: () => string, children: readonly OoxmlNode[]): OoxmlNode {
   return {
@@ -270,7 +259,11 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
       if (!emptied) return { ok: false, reason: 'unsupported' };
       const result = applyTreeOp(
         emptied,
-        { ...op, offset: promptInsertionOffset(emptied, op.paragraphId, prompt.offset) },
+        {
+          ...op,
+          offset: promptInsertionOffset(emptied, op.paragraphId, prompt.offset),
+          inside: prompt.control.id,
+        },
         options
       );
       // Emptying the prompt may drop its other paragraphs; the insert's effect must say so.

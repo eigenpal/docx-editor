@@ -7683,7 +7683,7 @@ a.docx-hyperlink:focus-visible {
   --doc-revision-color-gray: #d9d9d9;
 }
 
-/* Change tracking options dialog. */
+/* Tracked changes options dialog. */
 .docx-editor .docx-revision-markup-dialog,
 .docx-editor.docx-revision-markup-dialog,
 .docx-revision-markup-dialog {

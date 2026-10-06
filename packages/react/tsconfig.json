@@ -24,6 +24,8 @@
     "declaration": true,
     "declarationMap": true,
     "paths": {
+      "@docx-editor.dev/i18n": ["../i18n/src/index.ts"],
+      "@docx-editor.dev/i18n/*": ["../i18n/src/*.ts"],
       "@/*": ["./src/*"],
       // Every published subpath, mapped to source. The export map points at dist, so a subpath missing here resolves to built .d.ts while its siblings resolve to src, and the same type arrives under two identities.
       "@docx-editor.dev/core": ["../core/src/index.ts"],

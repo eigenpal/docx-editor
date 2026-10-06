@@ -126,7 +126,7 @@ function RevisionMarkupForm({
     </DialogFrame>
   );
 }
-/** Change tracking options with replaceable controls and layout. @public */
+/** Tracked changes options with replaceable controls and layout. @public */
 export const DocxEditorRevisionMarkupDialog = Object.assign(RevisionMarkupDialogRoot, {
   Header: parts.Header,
   Title: parts.Title,

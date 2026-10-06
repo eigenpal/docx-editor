@@ -209,6 +209,8 @@ function insertField() {
 
 `tag` is the identity you look the control back up by, and `title` is the label Word shows. An empty control holds its prompt until the user types: the first character replaces the whole prompt, the way it does in Word.
 
+Typing also replaces a placeholder inside a tracked insertion. The replacement text stays inside the control. The control and its tracked insertion stay in place.
+
 To address text other than the selection, pass a `target` that names a paragraph by its `paraId` and the phrase inside it:
 
 ```ts

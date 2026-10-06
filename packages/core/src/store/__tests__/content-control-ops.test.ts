@@ -1244,6 +1244,26 @@ function collectTextV2(node: OoxmlNode): string {
 }
 
 describe('showingPlcHdr first-input replacement', () => {
+  test('typing at the end of a tracked placeholder stays inside the control', () => {
+    const part = loadV2(
+      '<w:p><w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z">' +
+        '<w:sdt><w:sdtPr><w:showingPlcHdr/><w:text/></w:sdtPr>' +
+        '<w:sdtContent><w:r><w:t>Click to enter text</w:t></w:r></w:sdtContent>' +
+        '</w:sdt></w:ins><w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>'
+    );
+    const control = firstSdtV2(part);
+    const next = applyV2(part, {
+      op: 'insertText',
+      paragraphId: V2_PARAGRAPH,
+      offset: 19,
+      text: '#',
+    });
+    const updated = findContentControl(next, control.id)!;
+    expect(collectTextV2(childNamedV2(updated, 'sdtContent')!)).toBe('#');
+    expect(paragraphTextOf(next, V2_PARAGRAPH)).toBe('# after');
+    expect(isShowingPlaceholder(updated)).toBe(false);
+  });
+
   test('insertText replaces the entire literal prompt and clears showingPlcHdr', () => {
     const part = loadV2(
       '<w:p><w:r><w:t>x</w:t></w:r>' +

@@ -885,7 +885,7 @@
     "titleCase": "Title case"
   },
   "revisionMarkup": {
-    "title": "Change tracking options",
+    "title": "Tracked changes options",
     "markup": "Markup",
     "insertions": "Insertions",
     "deletions": "Deletions",
