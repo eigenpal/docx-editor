@@ -909,7 +909,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'premium',
     notes:
-      'The automation object model requires the EigenPal Pro License. It writes native tracked changes. It works over DOCX bytes on a server, or over an editor open in a page.',
+      'The automation object model requires the EigenPal Pro License. Manual line breaks use U+000B in text reads and writes, including tracked insertion. Column breaks read as U+000E and refuse text writes. Paragraph separators remain carriage returns. It writes native tracked changes. It works over DOCX bytes on a server, or over an editor open in a page.',
     docsLink: '/docs/2.x/editor-api',
   },
   {
@@ -1236,7 +1236,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'premium',
     notes:
-      'The automation object model requires the EigenPal Pro License. It follows a documented subset of the Word JavaScript API. The server entry works over bytes and reports exceeded resource limits with typed errors. The browser entry works over an open editor. Core metadata supports author, title, subject, keywords, comments, and category reads and writes. The last saved author is read-only. Collaborative metadata writes require an existing core-properties part. Standard core, extended, and custom properties can be removed outside collaboration. Removal is the only write in its sync. Other document content remains unchanged. Metadata writes require tracking to be off. It ships no model integration, tool catalog, or MCP transport.',
+      'The automation object model requires the EigenPal Pro License. Manual line breaks use U+000B in text reads and writes, including tracked insertion. Column breaks read as U+000E and refuse text writes. Paragraph separators remain carriage returns. It follows a documented subset of the Word JavaScript API. The server entry works over bytes and reports exceeded resource limits with typed errors. The browser entry works over an open editor. Core metadata supports author, title, subject, keywords, comments, and category reads and writes. The last saved author is read-only. Collaborative metadata writes require an existing core-properties part. Standard core, extended, and custom properties can be removed outside collaboration. Removal is the only write in its sync. Other document content remains unchanged. Metadata writes require tracking to be off. It ships no model integration, tool catalog, or MCP transport.',
     docsLink: '/docs/2.x/editor-api',
   },
 ];

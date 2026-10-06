@@ -541,6 +541,29 @@ describe('line breaks read back as \\v', () => {
   const BLOCK =
     '<w:p><w:r><w:t>Acme Ltd</w:t><w:br/><w:t xml:space="preserve">1 Main Street</w:t></w:r></w:p>';
 
+  test('break reads preserve UTF-16 offsets after supplementary characters', () => {
+    const host = open(
+      docx(
+        '<w:p><w:r><w:t>😀a</w:t><w:br/><w:t>𐐀b</w:t>' +
+          '<w:br w:type="column"/><w:t>c</w:t></w:r></w:p>'
+      )
+    );
+    const { body } = roots(host);
+    const paragraph = firstParagraph(host, body);
+    for (const projection of ['allMarkup', 'original', 'model'] as const) {
+      expect(
+        textAt(host.execute({ operations: [{ op: 'getText', target: paragraph, projection }] }), 0)
+      ).toBe('😀a\v𐐀b\u000ec');
+    }
+    const spans = spansAt(
+      host.execute({ operations: [{ op: 'search', scope: { body }, text: '\v𐐀b' }] }),
+      0
+    );
+    expect(spans).toHaveLength(1);
+    expect(spans[0]!.start.offset).toBe(3);
+    expect(spans[0]!.end.offset).toBe(7);
+  });
+
   test('text read from a paragraph writes back to the same paragraph', () => {
     const host = open(docx(BLOCK));
     const { body } = roots(host);

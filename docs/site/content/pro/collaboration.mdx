@@ -670,6 +670,10 @@ The session undo manager treats one typing run as one undo step. Runs end at the
 
 Repeated concurrent formatting, typing, deletion, and undo preserve document text across participants.
 
+### Concurrent line breaks and tabs
+
+Text insertion and deletion survive a concurrent line break or tab in the same text run. Two concurrent splits of the same text keep one replacement, including only one participant's break or tab. Undo of the other split can restore the original text over both splits. A concurrent formatting change in the same run can still remove an inserted line break. For that limitation, see [Concurrent formatting and line breaks](https://github.com/eigenpal/docx-editor/issues/1133).
+
 ### Numeric limits
 
 Most exceeded limits produce a typed failure code.

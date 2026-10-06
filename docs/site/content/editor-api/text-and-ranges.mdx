@@ -46,6 +46,14 @@ Search never matches a symbol. A search for `(` does not find it, and search doe
 
 The API does not expose HTML, OOXML strings, or document-wide `start` and `end` offsets. `Paragraph.uniqueLocalId` identifies a paragraph within the runtime; load it before reading. Do not use it as a permanent identifier across separately opened files.
 
+## Upgrade text processing
+
+Automation reads in 2.26.0 report manual line breaks and column breaks as `\n`. This release changes those results to `\v` and U+000E, respectively. Paragraph separators remain `\r`. Each break still occupies one UTF-16 unit.
+
+Update comparisons, line splitting, stored expectations, and text display code to handle these characters. For plain-text display, you can convert `\v` to `\n` in a separate string. Keep the original API text when writing manual line breaks back to the document. Text writes refuse U+000E. Do not replace column breaks with manual line breaks.
+
+Search and `Paragraph.split()` accept `\n` as an alias for a manual line break. This alias does not change text read results or make `\n` valid insertion text. Text reads do not preserve arbitrary document structure when you write them back.
+
 ## Choose an insertion location
 
 The location types describe the supported call shapes:
@@ -60,7 +68,7 @@ The exported aliases are `BodyInsertTextLocation`, `BodyInsertParagraphLocation`
 
 `insertText()` returns the inserted `Range`. `insertParagraph()` returns the created `Paragraph`. Sync before configuring or reading the returned object. Use one paragraph insertion per new paragraph; newline-containing insertion text is refused.
 
-To keep lines in one paragraph, such as an address block, write a manual line break as `\v` (U+000B). Every `insertText()` and `insertParagraph()` writes each `\v` as a line break, and text reads report it as `\v`, so text you read can be written back unchanged. A search for `\n` also finds a line break. A single-line content control, such as plain text without multiple lines, a list, or a date, refuses a line break. You can also insert one break with `Range.insertBreak('Line', location)`.
+To keep lines in one paragraph, write a manual line break as `\v` (U+000B). `insertText()` and `insertParagraph()` write each `\v` as a line break. Text reads report that break as `\v`. A single-line content control refuses a line break. You can also insert one break with `Range.insertBreak('Line', location)`.
 
 Text inserted into an empty paragraph takes the character style that the paragraph mark names. It does not take the mark's direct run properties, such as a direct font size. To apply those, set `font` on the returned range after sync.
 

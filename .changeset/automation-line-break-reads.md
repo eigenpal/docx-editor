@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/core': minor
+'@docx-editor.dev/core': major
 ---
 
-Automation text reads report a manual line break as `\v` instead of `\n`, so text read from a document can be written back unchanged.
+Automation text reads report manual line breaks as `\v` and column breaks as U+000E instead of `\n`. Update text processing for these characters; paragraph separators remain `\r`.

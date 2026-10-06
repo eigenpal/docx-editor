@@ -103,9 +103,7 @@ function withLineBreakText(
     // model. A field result shows text of its own, where every break is a line break.
     const identity = piece.text.length === piece.rawEnd - piece.rawStart && !piece.resultRuns;
     const text = identity
-      ? [...piece.text]
-          .map((char, index) => (char === '\n' ? readText[piece.rawStart + index]! : char))
-          .join('')
+      ? piece.text.replaceAll('\n', (_char, index: number) => readText[piece.rawStart + index]!)
       : piece.text.replaceAll('\n', LINE_BREAK_TEXT);
     return { ...piece, text };
   });
