@@ -78,8 +78,8 @@ test('line break and \\v text keep lines in one paragraph and share one sync', a
     for (const paragraph of paragraphs.items) paragraph.load('text');
     await context.sync();
     expect(paragraphs.items.map((paragraph) => paragraph.text)).toEqual([
-      'Acme Ltd\n',
-      'Signed\nName\nTitle',
+      'Acme Ltd\v',
+      'Signed\vName\vTitle',
     ]);
   });
   const next = await reopen(runtime);
@@ -117,7 +117,7 @@ test('an address block built in one sync mixes text and line breaks in one parag
     await context.sync();
     paragraph.load('text');
     await context.sync();
-    expect(paragraph.text).toBe('Name\nTitle');
+    expect(paragraph.text).toBe('Name\vTitle');
   });
   runtime.dispose();
 });

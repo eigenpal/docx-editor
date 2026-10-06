@@ -416,6 +416,10 @@
   ],
   "divergences": [
     {
+      "uid": "Word.Range#insertBreak",
+      "note": "Supports Line, Page, and SectionNext. Line supports tracked insertion and text edits in the same sync. Single-line controls refuse Line. Page and SectionNext require a separate sync and refuse tracking. Other break types refuse. Text reads report manual line breaks as U+000B and column breaks as U+000E; text writes refuse U+000E."
+    },
+    {
       "uid": "Word.Document#removeDocumentInformation",
       "note": "Only DocumentProperties removes standard core, extended, and custom property parts. Other modes, tracked edits, and collaboration refuse with NotSupported. Run as the only write in its sync. Malformed or ambiguous dependencies refuse atomically. Document content and review authors remain unchanged."
     },

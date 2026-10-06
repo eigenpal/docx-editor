@@ -31,6 +31,7 @@
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import type { TableFragmentRecord, TableRowFragmentRecord } from './semantic-records.ts';
+import { tableRefusesOverlap } from './table-float-overlap.ts';
 import {
   createTableBorderOwnershipBudget,
   createTableVMergeResolveBudget,
@@ -69,12 +70,14 @@ export interface PinnedBreakDeps {
 
 /** The positioned-table facts a body pass gives its table deps. */
 export function positionedTableDeps(
-  anchors: readonly { readonly table: { readonly id: string } }[],
+  anchors: readonly { readonly table: OoxmlElement }[],
   policy: ReadonlyMap<string, boolean>
-): { readonly isolatedFloatingTableId?: string } & PinnedBreakDeps {
+): { readonly floatRefusesOverlap?: (tableId: string) => boolean } & PinnedBreakDeps {
+  const refusing = new Set(
+    anchors.filter(({ table }) => tableRefusesOverlap(table)).map(({ table }) => table.id)
+  );
   return {
-    // A sole positioned table cannot collide with another floating table in this story.
-    isolatedFloatingTableId: anchors.length === 1 ? anchors[0]!.table.id : undefined,
+    floatRefusesOverlap: (tableId) => refusing.has(tableId),
     pinnedBreakAllowed: (tableId) => policy.get(tableId) !== false,
   };
 }

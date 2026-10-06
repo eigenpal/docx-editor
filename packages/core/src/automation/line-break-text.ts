@@ -1,5 +1,7 @@
 // A manual line break inside written text. `\v` is the character Office text uses for one.
 import type { PlannedOperation } from './plan-types.ts';
+import type { AutomationStoryReads } from './reads.ts';
+import { withBreakReadText } from '../store/store/paragraph-model-text.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import {
@@ -11,7 +13,7 @@ import { contentControlAtCaret } from '../store/store/tree-op-validate.ts';
 import { contentControlPropertiesOf } from '../store/package/content-control-nodes.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 
-/** The written form of a manual line break (`w:br`). Reads answer it as `\n`. */
+/** The written form of a manual line break (`w:br`). Text reads answer it the same way. */
 export const LINE_BREAK_CHAR = LINE_BREAK_TEXT;
 
 /** Paragraph-breaking characters a text write refuses. A manual line break is not one. */
@@ -62,4 +64,16 @@ export function lineBreakRefusal(
   if (!isParagraph(paragraph)) return null;
   const control = contentControlAtCaret(part, paragraph, start, end);
   return control ? controlLineBreakRefusal(control, text) : null;
+}
+
+/** A query or delimiter that spells a line break `\n`, as model text does, spelled as reads do. */
+export function searchableLineBreaks(text: string): string {
+  return text.replaceAll('\n', LINE_BREAK_CHAR);
+}
+
+/** A paragraph's model text with its breaks spelled as a text read spells them. */
+export function readTextOf(reads: AutomationStoryReads, paragraphId: string): string {
+  const raw = reads.rawText(paragraphId) ?? '';
+  const node = reads.node(paragraphId);
+  return node?.kind === 'paragraph' ? withBreakReadText(node, raw) : raw;
 }

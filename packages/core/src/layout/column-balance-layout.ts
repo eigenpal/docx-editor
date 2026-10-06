@@ -2,7 +2,7 @@
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import type { RefFieldContext } from './field-ref.ts';
-import type { ContinuedPageFurniture } from './furniture-drawing-exclusion.ts';
+import type { ContinuedPageHost } from './continued-page-zones.ts';
 import type { LayoutSession } from './layout-session.ts';
 import type { PageContentInsets, OverflowPageShell } from './page-furniture-insets.ts';
 import { resolveSectionColumns, type ResolvedSectionColumns } from './section-columns.ts';
@@ -38,8 +38,8 @@ export type BlockLayoutOptions<HostOptions extends object = object> = HostOption
   readonly pageIndexStart?: number;
   /** The host sheet's content box when this section continues the previous one. */
   readonly continuedPageInsets?: PageContentInsets;
-  /** The host sheet's header and footer, whose drawings the continued text wraps around. */
-  readonly continuedPageFurniture?: ContinuedPageFurniture;
+  /** The host sheet, whose furniture drawings and earlier floats the continued text wraps around. */
+  readonly continuedPageFurniture?: ContinuedPageHost;
   /** Balance a continuous section's columns instead of filling each to the page bottom. */
   readonly balanceColumns?: boolean;
   /** A continuous section follows, so an empty section-mark paragraph takes no flow height. */

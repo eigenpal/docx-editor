@@ -18,6 +18,7 @@ import {
   savedMainXml,
   savedPartBytes,
   spanAt,
+  spansAt,
   table,
   textAt,
 } from './support/protocol.ts';
@@ -59,10 +60,10 @@ describe('insertBreak Line', () => {
     const { body } = roots(host);
     const response = host.execute({ operations: [lineBreak(firstParagraph(host, body), 9)] });
     expect(response.ok).toBe(true);
-    expect(bodyText(host, body)).toBe('Acme Ltd \n1 Main Street');
+    expect(bodyText(host, body)).toBe('Acme Ltd \v1 Main Street');
     expect(savedMainXml(host)).toMatch(/<w:t[^>]*>Acme Ltd <\/w:t><w:br\/>/);
     const again = reopen(host);
-    expect(bodyText(again.host, again.body)).toBe('Acme Ltd \n1 Main Street');
+    expect(bodyText(again.host, again.body)).toBe('Acme Ltd \v1 Main Street');
   });
 
   test('After places the break at the end of the span', () => {
@@ -80,7 +81,7 @@ describe('insertBreak Line', () => {
       ],
     });
     expect(response.ok).toBe(true);
-    expect(bodyText(host, body)).toBe('Acme Ltd\n 1 Main Street');
+    expect(bodyText(host, body)).toBe('Acme Ltd\v 1 Main Street');
   });
 
   test('shares one batch with edits in other paragraphs', () => {
@@ -97,7 +98,7 @@ describe('insertBreak Line', () => {
       ],
     });
     expect(response.ok).toBe(true);
-    expect(paragraphTexts(host, body)).toEqual(['Acme Ltd \n1 Main Street', 'Signed here']);
+    expect(paragraphTexts(host, body)).toEqual(['Acme Ltd \v1 Main Street', 'Signed here']);
   });
 
   test('writes into a table cell, a header, and a footnote', () => {
@@ -141,7 +142,7 @@ describe('insertBreak Line', () => {
     ] as const) {
       const response = host.execute({ operations: [lineBreak(paragraph, 4)] });
       expect(response.ok).toBe(true);
-      expect(paragraphTexts(host, story)[0]).toMatch(/^\w+\n one$/);
+      expect(paragraphTexts(host, story)[0]).toMatch(/^\w+\v one$/);
     }
     expect(savedPartBytes(host, 'word/header1.xml')).toContain('<w:br/>');
     expect(savedPartBytes(host, 'word/footnotes.xml')).toContain('<w:br/>');
@@ -205,7 +206,7 @@ describe('insertBreak Line', () => {
       ],
     });
     expect(response.ok).toBe(true);
-    expect(bodyText(host, body)).toBe('Dr Name Surname\n');
+    expect(bodyText(host, body)).toBe('Dr Name Surname\v');
   });
 
   test('a line break at the start of a replacement stays in the replaced link', () => {
@@ -251,7 +252,7 @@ describe('insertBreak Line', () => {
       ],
     });
     expect(response.ok).toBe(true);
-    expect(bodyText(host, header)).toBe('\n');
+    expect(bodyText(host, header)).toBe('\v');
   });
 
   test('line breaks share the element cap with hyphen characters', () => {
@@ -321,7 +322,7 @@ describe('\\v in written text', () => {
     });
     expect(response.ok).toBe(true);
     expect(spanAt(response, 0).end.offset - spanAt(response, 0).start.offset).toBe(21);
-    expect(bodyText(host, body)).toBe('Acme Ltd\n1 Main Street\nLondon');
+    expect(bodyText(host, body)).toBe('Acme Ltd\v1 Main Street\vLondon');
     expect(savedMainXml(host).match(/<w:br\/>/g)).toHaveLength(2);
   });
 
@@ -339,7 +340,7 @@ describe('\\v in written text', () => {
       ],
     });
     expect(response.ok).toBe(true);
-    expect(bodyText(host, body)).toBe('Acme Ltd\n1 Main Street');
+    expect(bodyText(host, body)).toBe('Acme Ltd\v1 Main Street');
   });
 
   test('a whole-story replacement and a new paragraph accept \\v', () => {
@@ -354,7 +355,7 @@ describe('\\v in written text', () => {
       operations: [{ op: 'insertParagraph', anchor: { paragraph }, where: 'after', text: 'C\vD' }],
     });
     expect(inserted.ok).toBe(true);
-    expect(paragraphTexts(host, body)).toEqual(['A\nB', 'C\nD']);
+    expect(paragraphTexts(host, body)).toEqual(['A\vB', 'C\vD']);
   });
 
   test('tracked insertText records the text and its break as one insertion', () => {
@@ -437,7 +438,7 @@ describe('\\v in written text', () => {
       ],
     });
     expect(response.ok).toBe(true);
-    expect(paragraphTexts(host, body)).toEqual(['A\nB', 'C\nD']);
+    expect(paragraphTexts(host, body)).toEqual(['A\vB', 'C\vD']);
   });
 
   test('a line break into a single-line plain-text control refuses', () => {
@@ -505,7 +506,7 @@ describe('\\v in written text', () => {
     expect(write(controls[1]!, 'insert').ok).toBe(false);
     expect(write(controls[1]!, 'value').ok).toBe(false);
     expect(write(controls[2]!, 'insert').ok).toBe(false);
-    expect(paragraphTexts(host, body)).toEqual(['A\nB', 'Single', 'Date']);
+    expect(paragraphTexts(host, body)).toEqual(['A\vB', 'Single', 'Date']);
   });
 
   test('a paragraph inside a building-block or group control takes a line break', () => {
@@ -532,6 +533,210 @@ describe('\\v in written text', () => {
       ),
     });
     expect(response.ok).toBe(true);
-    expect(paragraphTexts(host, body)).toEqual(['Page\n', 'Form\n']);
+    expect(paragraphTexts(host, body)).toEqual(['Page\v', 'Form\v']);
+  });
+});
+
+describe('line breaks read back as \\v', () => {
+  const BLOCK =
+    '<w:p><w:r><w:t>Acme Ltd</w:t><w:br/><w:t xml:space="preserve">1 Main Street</w:t></w:r></w:p>';
+
+  test('break reads preserve UTF-16 offsets after supplementary characters', () => {
+    const host = open(
+      docx(
+        '<w:p><w:r><w:t>😀a</w:t><w:br/><w:t>𐐀b</w:t>' +
+          '<w:br w:type="column"/><w:t>c</w:t></w:r></w:p>'
+      )
+    );
+    const { body } = roots(host);
+    const paragraph = firstParagraph(host, body);
+    for (const projection of ['allMarkup', 'original', 'model'] as const) {
+      expect(
+        textAt(host.execute({ operations: [{ op: 'getText', target: paragraph, projection }] }), 0)
+      ).toBe('😀a\v𐐀b\u000ec');
+    }
+    const spans = spansAt(
+      host.execute({ operations: [{ op: 'search', scope: { body }, text: '\v𐐀b' }] }),
+      0
+    );
+    expect(spans).toHaveLength(1);
+    expect(spans[0]!.start.offset).toBe(3);
+    expect(spans[0]!.end.offset).toBe(7);
+  });
+
+  test('text read from a paragraph writes back to the same paragraph', () => {
+    const host = open(docx(BLOCK));
+    const { body } = roots(host);
+    const before = savedMainXml(host);
+    const paragraph = firstParagraph(host, body);
+    for (const projection of ['allMarkup', 'original', 'model'] as const) {
+      const read = textAt(
+        host.execute({ operations: [{ op: 'getText', target: paragraph, projection }] }),
+        0
+      );
+      expect(read).toBe('Acme Ltd\v1 Main Street');
+    }
+    const read = textAt(host.execute({ operations: [{ op: 'getText', target: paragraph }] }), 0);
+    const response = host.execute({
+      operations: [{ op: 'replaceSpan', span: { paragraph }, text: read }],
+    });
+    expect(response.ok).toBe(true);
+    expect(savedMainXml(host)).toBe(before);
+  });
+
+  test('search finds a line break as \\v, and as \\n for older callers', () => {
+    const host = open(docx(BLOCK));
+    const { body } = roots(host);
+    for (const text of ['Ltd\v1', 'Ltd\n1']) {
+      const spans = spansAt(
+        host.execute({ operations: [{ op: 'search', scope: { body }, text }] }),
+        0
+      );
+      expect(spans).toHaveLength(1);
+      expect(spans[0]!.end.offset - spans[0]!.start.offset).toBe(5);
+    }
+  });
+
+  test('a content control reports its line breaks', () => {
+    const host = open(
+      docx(
+        '<w:p><w:sdt><w:sdtPr><w:richText/></w:sdtPr><w:sdtContent><w:r><w:t>A</w:t><w:br/>' +
+          '<w:t>B</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+      )
+    );
+    const { body } = roots(host);
+    const [control] = handlesAt(
+      host.execute({ operations: [{ op: 'getContentControls', scope: { body } }] }),
+      0
+    );
+    for (const projection of ['allMarkup', 'original'] as const) {
+      expect(
+        textAt(
+          host.execute({
+            operations: [{ op: 'getContentControlText', contentControl: control!, projection }],
+          }),
+          0
+        )
+      ).toBe('A\vB');
+    }
+  });
+
+  test('control values retain column breaks and refuse writing them back', () => {
+    const host = open(
+      docx(
+        '<w:p><w:sdt><w:sdtPr><w:richText/></w:sdtPr><w:sdtContent>' +
+          '<w:r><w:t>A</w:t><w:br w:type="column"/><w:t>B</w:t></w:r>' +
+          '</w:sdtContent></w:sdt></w:p>'
+      )
+    );
+    const { body } = roots(host);
+    const [control] = handlesAt(
+      host.execute({ operations: [{ op: 'getContentControls', scope: { body } }] }),
+      0
+    );
+    const before = savedMainXml(host);
+    for (const projection of ['allMarkup', 'original'] as const) {
+      expect(
+        textAt(
+          host.execute({
+            operations: [{ op: 'getContentControlText', contentControl: control!, projection }],
+          }),
+          0
+        )
+      ).toBe('A\u000eB');
+    }
+    const write = host.execute({
+      operations: [
+        {
+          op: 'insertContentControlText',
+          contentControl: control!,
+          text: 'A\u000eB',
+          at: 'replace',
+        },
+      ],
+    });
+    expect(write.ok).toBe(false);
+    expect(savedMainXml(host)).toBe(before);
+  });
+
+  test('a column break reads as U+000E and is not written back as a line break', () => {
+    const host = open(
+      docx(
+        '<w:p><w:r><w:t>A</w:t><w:br w:type="column"/><w:t>B</w:t><w:br/><w:t>C</w:t></w:r></w:p>'
+      )
+    );
+    const { body } = roots(host);
+    const paragraph = firstParagraph(host, body);
+    const before = savedMainXml(host);
+    const read = textAt(host.execute({ operations: [{ op: 'getText', target: paragraph }] }), 0);
+    expect(read).toBe('A\u000eB\vC');
+    const response = host.execute({
+      operations: [{ op: 'replaceSpan', span: { paragraph }, text: read }],
+    });
+    expect(response.ok).toBe(false);
+    expect(savedMainXml(host)).toBe(before);
+  });
+
+  test('a struck line break is not part of a control value', () => {
+    const host = open(
+      docx(
+        '<w:p><w:sdt><w:sdtPr><w:richText/></w:sdtPr><w:sdtContent><w:r><w:t>a</w:t></w:r>' +
+          '<w:del w:id="1" w:author="R"><w:r><w:br/></w:r></w:del><w:r><w:t>b</w:t></w:r>' +
+          '</w:sdtContent></w:sdt></w:p>'
+      )
+    );
+    const { body } = roots(host);
+    const [control] = handlesAt(
+      host.execute({ operations: [{ op: 'getContentControls', scope: { body } }] }),
+      0
+    );
+    expect(
+      textAt(
+        host.execute({ operations: [{ op: 'getContentControlText', contentControl: control! }] }),
+        0
+      )
+    ).toBe('ab');
+  });
+
+  test('a table cell value reports its line breaks and writes back unchanged', () => {
+    const host = open(
+      docx(table(row(cell('<w:p><w:r><w:t>A</w:t><w:br/><w:t>B</w:t></w:r></w:p>'))) + p('Tail'))
+    );
+    const { body } = roots(host);
+    const [tableHandle] = handlesAt(
+      host.execute({ operations: [{ op: 'getTables', scope: { body } }] }),
+      0
+    );
+    const read = host.execute({ operations: [{ op: 'getTable', table: tableHandle! }] })
+      .results[0] as unknown as { status: 'ok'; value: { table: { values: string[][] } } };
+    expect(read.value.table.values).toEqual([['A\vB']]);
+    const before = savedMainXml(host);
+    const response = host.execute({
+      operations: [
+        TRACK,
+        {
+          op: 'updateTable',
+          table: tableHandle!,
+          mutation: { kind: 'values', values: [['A\vB']] },
+        },
+      ],
+    });
+    expect(response.ok).toBe(true);
+    expect(savedMainXml(host)).toBe(before);
+  });
+
+  test('split finds a line break given as \\v or as \\n', () => {
+    for (const delimiter of ['\v', '\n']) {
+      const host = open(docx('<w:p><w:r><w:t>A</w:t><w:br/><w:t>B</w:t></w:r></w:p>'));
+      const { body } = roots(host);
+      const paragraph = firstParagraph(host, body);
+      const response = host.execute({
+        operations: [
+          { op: 'splitParagraph', paragraph, delimiters: [delimiter], trimDelimiters: true },
+        ],
+      });
+      expect(response.ok).toBe(true);
+      expect(paragraphTexts(host, body)).toEqual(['A', 'B']);
+    }
   });
 });

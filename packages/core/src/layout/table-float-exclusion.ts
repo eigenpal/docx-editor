@@ -13,6 +13,7 @@ import {
   positionedTableAnchors,
   tableFloatOriginY,
   type PositionedTableAnchor,
+  type PositionedTableAnchorSignal,
   type TableVerticalAnchorFrames,
 } from './table-float-position.ts';
 import {
@@ -31,6 +32,13 @@ import {
 } from './semantic-table.ts';
 import { positionedTableOriginX } from './table-origin.ts';
 import { pinnedTableBreak } from './table-pinned-break.ts';
+import {
+  noOverlapShift,
+  tableRefusesOverlap,
+  withoutFloatingTableZones,
+  type NoOverlapObstacle,
+} from './table-float-overlap.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 
@@ -114,7 +122,7 @@ function outerRuleWidths(fragment: TableFragmentRecord): {
 }
 
 export function addFloatingTableExclusions(
-  pages: readonly PageRecord[],
+  pages: readonly Pick<PageRecord, 'fragments'>[],
   drawingZones: ReadonlyMap<number, readonly ExclusionZone[]>,
   columns: ExclusionColumnLayout
 ): ReadonlyMap<number, readonly ExclusionZone[]> {
@@ -184,6 +192,10 @@ export function addFloatingTableExclusions(
   return result ?? drawingZones;
 }
 
+const NO_DISTANCES = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
+const NO_SHIFT: { readonly dx: number; readonly dy: number; readonly band?: NoOverlapObstacle } =
+  Object.freeze({ dx: 0, dy: 0 });
+
 // The deps object belongs to one body pass. Drawing-free probes have no page-relative inputs.
 const bandMemos = new WeakMap<TableFlowDeps, WeakMap<OoxmlElement, Map<number, number>>>();
 
@@ -201,22 +213,8 @@ export function floatingTableBand(table: OoxmlElement, width: number, deps: Tabl
   const structure = floatTableStructure(table, width, deps);
   if (!structure?.float || structure.float.vertAnchor !== 'text') return 0;
   // Text-frame alignments need their own admission math; retain the existing row-flow path.
+  // `w:tblOverlap` does not: it moves the table off other floating tables at placement.
   if (structure.float.ySpec) return Infinity;
-  const properties = table.children.find((node) => node.kind === 'tableProperties');
-  // No-overlap constrains other tables, not the surrounding paragraph text. Multiple
-  // positioned tables retain row flow until their collision displacement is supported.
-  if (
-    deps.isolatedFloatingTableId !== table.id &&
-    properties &&
-    properties.kind !== 'textValue' &&
-    properties.children.some(
-      (node) =>
-        node.kind !== 'textValue' &&
-        node.localName === 'tblOverlap' &&
-        node.attributes.some((attr) => attr.localName === 'val' && attr.value === 'never')
-    )
-  )
-    return Infinity;
   const band =
     Math.max(0, structure.float.yPt) +
     probeTableHeight(structure, table.id, deps) +
@@ -372,7 +370,7 @@ function breaksAtPageBottom(
   const float = structure?.float;
   // A negative offset collides with earlier text. Only anchor placement displaces it.
   if (!structure || float?.vertAnchor !== 'text' || float.ySpec || float.yPt < 0) return false;
-  const distances = float.distances ?? { top: 0, right: 0, bottom: 0, left: 0 };
+  const distances = float.distances ?? NO_DISTANCES;
   if (distances.top > 0 || distances.bottom > 0) return false;
   const left = positionedTableOriginX(structure, flow.frames, deps.compatibilityMode);
   const width = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
@@ -405,8 +403,9 @@ function probeTableHeight(
   deps: TableFlowDeps
 ): number {
   let line = 0;
+  // Measured as placed: a floating table's cells never wrap around another floating table.
   return layoutTableFragment(structure, 0, 0, 0, tableId, 0, {
-    ...stripAnchorSinksForProbe(deps),
+    ...stripAnchorSinksForProbe(withoutFloatingTableZones(deps)),
     onCellBreakKey: undefined,
     borderOwnershipBudget: createTableBorderOwnershipBudget(),
     vMergeResolveBudget: createTableVMergeResolveBudget(),
@@ -453,7 +452,7 @@ function pageFramedAnchorBand(
   const structure = floatTableStructure(anchor.table, width, deps);
   const float = structure?.float;
   if (!structure || !float || float.vertAnchor === 'text' || float.ySpec === 'inline') return 0;
-  const distances = float.distances ?? { top: 0, right: 0, bottom: 0, left: 0 };
+  const distances = float.distances ?? NO_DISTANCES;
   const left = positionedTableOriginX(structure, placement.frames, deps.compatibilityMode);
   const tableWidth = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
   const bandLeft = left - distances.left;
@@ -497,12 +496,49 @@ export function requiredAnchorBand(
     readonly frames: TableAnchorFrames;
     readonly verticalFrames: TableVerticalAnchorFrames;
     readonly earlier: readonly BlockFragmentRecord[];
+    /** Anchors already laid on this page whose tables wait for the page flush. */
+    readonly signals?: readonly PositionedTableAnchorSignal[];
   }
 ): number {
   if (pending.size === 0) return 0;
   let height = 0;
-  for (const anchor of positionedTablesByAnchor(anchors).get(paragraphId) ?? []) {
-    if (!pending.has(anchor.table.id)) continue;
+  const byParagraph = positionedTablesByAnchor(anchors);
+  const pendingOf = (anchorId: string) =>
+    (byParagraph.get(anchorId) ?? []).filter((anchor) => pending.has(anchor.table.id));
+  const here = pendingOf(paragraphId);
+  // Tables of earlier anchors on this page are placed first, at the flush, in anchor order.
+  // Only in one column: a waiting table in another column is placed against other frames.
+  const singleColumn = placement.frames.text.width >= placement.frames.margin.width - 0.5;
+  const before = here.length > 0 && singleColumn ? (placement.signals ?? []) : [];
+  const waiting = before.flatMap((signal) =>
+    pendingOf(signal.anchorId).map((anchor) => ({ anchor, signal }))
+  );
+  const placed = here.length > 0 ? placedFloatObstacles(placement.earlier, deps) : [];
+  // Overlap avoidance only runs when a table involved refuses overlap.
+  const avoids =
+    [...here, ...waiting.map((entry) => entry.anchor)].some(
+      (anchor) => deps.floatRefusesOverlap?.(anchor.table.id) ?? tableRefusesOverlap(anchor.table)
+    ) || placed.some((obstacle) => obstacle.refusesOverlap);
+  const prospective: NoOverlapObstacle[] = [];
+  if (avoids) {
+    for (const { anchor, signal } of waiting) {
+      // The same text the flush clears: what preceded that anchor on the page.
+      const y = clearEarlierText(
+        anchor.table,
+        signal.anchorY,
+        width,
+        placement.frames,
+        placement.earlier.slice(0, signal.fragmentIndex),
+        deps
+      );
+      const shift = noOverlapPlacement(anchor.table, y, width, placement.frames, deps, [
+        ...placed,
+        ...prospective,
+      ]);
+      if (shift.band) prospective.push(shift.band);
+    }
+  }
+  for (const anchor of here) {
     const clearedY = clearEarlierText(
       anchor.table,
       placement.anchorY,
@@ -511,14 +547,129 @@ export function requiredAnchorBand(
       placement.earlier,
       deps
     );
+    // Tables sharing this anchor are placed in order, so each one meets the ones before it.
+    const shift = avoids
+      ? noOverlapPlacement(anchor.table, clearedY, width, placement.frames, deps, [
+          ...placed,
+          ...prospective,
+        ])
+      : NO_SHIFT;
+    if (shift.band) prospective.push(shift.band);
     const band =
       floatingTableBand(anchor.table, width, deps) +
-      clearedY -
+      clearedY +
+      shift.dy -
       placement.anchorY +
       Math.min(0, anchor.float.yPt);
     height = Math.max(height, band, pageFramedAnchorBand(anchor, width, deps, placement));
   }
   return height;
+}
+
+/**
+ * Where a text-anchored table placed at its anchor starts: below the earlier text it would
+ * cover, then off the floating tables already on the page. `dx` moves it sideways.
+ */
+export function positionedTableStart(
+  table: OoxmlElement,
+  anchorY: number,
+  width: number,
+  frames: TableAnchorFrames,
+  pageFragments: readonly BlockFragmentRecord[],
+  anchorFragmentIndex: number,
+  deps: TableFlowDeps,
+  /** The page content bottom. A move down never takes the table past it. */
+  bottom: number
+): { readonly anchorY: number; readonly dx: number } {
+  const earlier = pageFragments.slice(0, anchorFragmentIndex);
+  const clearedY = clearEarlierText(table, anchorY, width, frames, earlier, deps);
+  const refuses = (fragment: BlockFragmentRecord) =>
+    fragment.kind === 'table' &&
+    !!fragment.floatingWrap &&
+    (deps.floatRefusesOverlap?.(fragment.tableId) ?? false);
+  // The common story has no no-overlap table: skip building obstacles at all.
+  if (!tableRefusesOverlap(table) && !pageFragments.some(refuses))
+    return { anchorY: clearedY, dx: 0 };
+  const obstacles = placedFloatObstacles(pageFragments, deps);
+  const shift = noOverlapPlacement(table, clearedY, width, frames, deps, obstacles);
+  // The anchor's band priced the moves it could see. A table that a later move would push
+  // below the page keeps its authored place rather than painting into the bottom margin.
+  if (shift.dy > 0 && (shift.band?.bottom ?? 0) > bottom + 0.001)
+    return { anchorY: clearedY, dx: 0 };
+  return { anchorY: clearedY + shift.dy, dx: shift.dx };
+}
+
+/** Floating tables already placed among `fragments`, as obstacles for a later table. */
+export function placedFloatObstacles(
+  fragments: readonly BlockFragmentRecord[],
+  deps: TableFlowDeps
+): NoOverlapObstacle[] {
+  // The wrap bands text already avoids, outer rules included. Floating tables an earlier
+  // section left on this sheet join them; their own setting is not known here, so only a
+  // table that itself refuses overlap moves off them.
+  const layout = Object.freeze({ columnCount: 1, columnGapPt: 0, contentWidth: Infinity });
+  const zones = [
+    ...(deps.pageExclusionZones?.() ?? []).filter(
+      (zone) => zone.earlierSection && zone.sourceKind === 'table'
+    ),
+    ...(addFloatingTableExclusions([{ fragments }], new Map(), layout).get(0) ?? []),
+  ];
+  return zones.map((zone) => ({
+    left: zone.verticalBand.x,
+    top: zone.verticalBand.y,
+    right: zone.verticalBand.x + zone.verticalBand.width,
+    bottom: zone.verticalBand.y + zone.verticalBand.height,
+    refusesOverlap:
+      !zone.earlierSection &&
+      (deps.floatRefusesOverlap?.(zone.drawingNodeId.slice('table:'.length)) ?? false),
+  }));
+}
+
+/**
+ * How far a text-anchored floating table placed at `anchorY` moves off earlier floating
+ * tables (`table-float-overlap.ts`), with the band it then occupies. No move without one.
+ */
+export function noOverlapPlacement(
+  table: OoxmlElement,
+  anchorY: number,
+  width: number,
+  frames: TableAnchorFrames,
+  deps: TableFlowDeps,
+  obstacles: readonly NoOverlapObstacle[]
+): { readonly dx: number; readonly dy: number; readonly band?: NoOverlapObstacle } {
+  const structure = floatTableStructure(table, width, deps);
+  const float = structure?.float;
+  if (!structure || !float || float.vertAnchor !== 'text' || float.ySpec) return NO_SHIFT;
+  const band = floatingTableBand(table, width, deps);
+  if (!Number.isFinite(band)) return NO_SHIFT;
+  const distances = float.distances ?? NO_DISTANCES;
+  const refusesOverlap = tableRefusesOverlap(table);
+  const candidate = {
+    left: positionedTableOriginX(structure, frames, deps.compatibilityMode),
+    top: anchorY + float.yPt,
+    width: structure.columnWidthsPt.reduce((sum, column) => sum + column, 0),
+    height: band - Math.max(0, float.yPt) - distances.bottom,
+    distances,
+    refusesOverlap,
+  };
+  const shift = noOverlapShift(
+    candidate,
+    obstacles,
+    { left: frames.margin.left, right: frames.margin.left + frames.margin.width },
+    hasCompatibilityRule(deps.compatibilityMode, 'floatingTableOverlapMovesLeft')
+  );
+  const left = candidate.left + shift.dx;
+  const top = candidate.top + shift.dy;
+  return {
+    ...shift,
+    band: {
+      left: left - distances.left,
+      top: top - distances.top,
+      right: left + candidate.width + distances.right,
+      bottom: top + candidate.height + distances.bottom,
+      refusesOverlap,
+    },
+  };
 }
 
 /** Preserve offsets whose padded box clears earlier ink; displacement avoids circular reflow. */
@@ -534,7 +685,7 @@ export function clearEarlierText(
   const float = structure?.float;
   if (!structure || !float || float.vertAnchor !== 'text' || float.ySpec) return anchorY;
   const tableWidth = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
-  const distances = float.distances ?? { top: 0, right: 0, bottom: 0, left: 0 };
+  const distances = float.distances ?? NO_DISTANCES;
   const left = positionedTableOriginX(structure, frames, deps.compatibilityMode) - distances.left;
   const height = floatingTableBand(table, width, deps) - Math.max(0, float.yPt) + distances.top;
   let top = anchorY + float.yPt - distances.top;
@@ -559,19 +710,6 @@ export function clearEarlierText(
   return top + distances.top - float.yPt;
 }
 
-/** Continuous sections resume below text-relative tables and their requested trailing clearance. */
-export function floatingTextTableBottom(blocks: readonly BlockFragmentRecord[]): number {
-  let bottom = 0;
-  for (const block of blocks) {
-    if (block.kind !== 'table' || block.floatingWrap?.float.vertAnchor !== 'text') continue;
-    bottom = Math.max(
-      bottom,
-      block.box.y + block.box.height + (block.floatingWrap.float.distances?.bottom ?? 0)
-    );
-  }
-  return bottom;
-}
-
 const earliestExclusions = new WeakMap<
   TableFlowDeps,
   {
@@ -593,11 +731,14 @@ export function hasEarlierCellExclusions(
     const remainingOrders: [number, number][] = [];
     for (const [pageIndex, page] of zones) {
       let order = Infinity;
+      // Another floating table never wraps this table's cells: the two overlap, or
+      // `w:tblOverlap` moves this one off it at placement.
       for (const zone of page)
-        order = Math.min(
-          order,
-          deps.paragraphOrderIndex?.(zone.anchorParagraphId) ?? zone.sourceOrder
-        );
+        if (zone.sourceKind !== 'table')
+          order = Math.min(
+            order,
+            deps.paragraphOrderIndex?.(zone.anchorParagraphId) ?? zone.sourceOrder
+          );
       remainingOrders.push([pageIndex, order]);
     }
     remainingOrders.sort((a, b) => a[0] - b[0]);

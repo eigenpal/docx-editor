@@ -1,5 +1,6 @@
 // Projected text search with model-offset results.
 
+import { searchableLineBreaks } from './line-break-text.ts';
 import { SEARCH_MATCH_LIMIT } from '../store/store/text-match.ts';
 import type { AutomationHandleTable } from './handles.ts';
 import type { AutomationSearchOptions } from './operations.ts';
@@ -27,7 +28,8 @@ export function projectedSearchSpans(
     if (budget <= 0) break;
     const projected = reads.projectedText(paragraphId, options?.projection ?? 'allMarkup');
     if (!projected) continue;
-    const found = projected.findOccurrences(text, budget, {
+    // Text reads report a line break as `\v`. A query that still spells it `\n` finds it too.
+    const found = projected.findOccurrences(searchableLineBreaks(text), budget, {
       matchCase: options?.matchCase === true,
       wholeWord: options?.matchWholeWord === true,
       ...(position === 0 && scope ? { from: projected.projectedOffset(scope.start.offset) } : {}),

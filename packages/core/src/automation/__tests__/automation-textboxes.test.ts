@@ -212,7 +212,7 @@ describe('shapes and text-box stories', () => {
       ],
     });
     expect(response.ok).toBe(true);
-    expect(storyText(target, boxBody)).toBe('Client: \nAcme Holdings');
+    expect(storyText(target, boxBody)).toBe('Client: \vAcme Holdings');
     expect(savedMainXml(target).match(/<w:br\/>/g)).toHaveLength(2);
   });
 

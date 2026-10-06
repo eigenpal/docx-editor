@@ -109,7 +109,7 @@ test('line breaks made at once in different paragraphs both survive', async () =
     r.pair.resume();
     r.sync();
     for (const peer of r.peers)
-      expect(await texts(peer.runtime)).toEqual(['Acme Ltd \n1 Main Street', 'Signed\nName']);
+      expect(await texts(peer.runtime)).toEqual(['Acme Ltd \v1 Main Street', 'Signed\vName']);
     const xml = await r.savedXml();
     expect(xml[0]).toBe(xml[1]!);
     expect(xml[0]!.match(/<w:br\/>/g)).toHaveLength(2);
@@ -130,7 +130,7 @@ test('an edit after a replicated line break in the same paragraph keeps both', a
     });
     r.sync();
     for (const peer of r.peers)
-      expect((await texts(peer.runtime))[0]).toBe('Acme Ltd \n1 Main Street, London');
+      expect((await texts(peer.runtime))[0]).toBe('Acme Ltd \v1 Main Street, London');
     const xml = await r.savedXml();
     expect(xml[0]).toBe(xml[1]!);
   } finally {
@@ -191,13 +191,13 @@ test('undo and redo of a line break replicate to the other peer', async () => {
     const [alice, bob] = r.peers;
     await breakBefore(alice!.runtime, '1 Main');
     r.sync();
-    expect((await texts(bob!.runtime))[0]).toBe('Acme Ltd \n1 Main Street');
+    expect((await texts(bob!.runtime))[0]).toBe('Acme Ltd \v1 Main Street');
     expect(alice!.editor.exec({ type: 'undo' }).ok).toBe(true);
     r.sync();
     expect((await texts(bob!.runtime))[0]).toBe('Acme Ltd 1 Main Street');
     expect(alice!.editor.exec({ type: 'redo' }).ok).toBe(true);
     r.sync();
-    expect((await texts(bob!.runtime))[0]).toBe('Acme Ltd \n1 Main Street');
+    expect((await texts(bob!.runtime))[0]).toBe('Acme Ltd \v1 Main Street');
     const xml = await r.savedXml();
     expect(xml[0]).toBe(xml[1]!);
   } finally {
