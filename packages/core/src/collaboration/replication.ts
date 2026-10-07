@@ -129,3 +129,5 @@ export type {
 } from './primitive-journal.ts';
 
 export { reportHistoryGroup } from '../store/store/history-group.ts';
+
+export { registerUndoHistoryPosition } from '../store/store/undo-history-position.ts';

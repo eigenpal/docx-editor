@@ -14,7 +14,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // is what lets a run of keystrokes stay one item.
 import type { HistoryGroup } from '@docx-editor.dev/core/store';
 import type * as Y from 'yjs';
-import { reportHistoryGroup } from '@docx-editor.dev/core/collaboration/replication';
+import {
+  registerUndoHistoryPosition,
+  reportHistoryGroup,
+} from '@docx-editor.dev/core/collaboration/replication';
 
 type StackItem = Y.UndoManager['undoStack'][number];
 
@@ -33,7 +36,10 @@ export class HistoryGroupCapture {
   private capturing = false;
   private captured = false;
 
-  constructor(private readonly undoManager: Y.UndoManager) {
+  constructor(
+    private readonly undoManager: Y.UndoManager,
+    owner?: object
+  ) {
     const noteItem = (event: { stackItem: StackItem; type: 'undo' | 'redo' }): void => {
       if (this.capturing && event.type === 'undo') {
         this.gestureItem = event.stackItem;
@@ -42,6 +48,7 @@ export class HistoryGroupCapture {
     };
     undoManager.on('stack-item-added', noteItem);
     undoManager.on('stack-item-updated', noteItem);
+    if (owner) bindHistoryPosition(owner, undoManager, () => this.reset());
   }
 
   /**
@@ -90,4 +97,29 @@ export class HistoryGroupCapture {
     this.previous = undefined;
     this.gestureItem = undefined;
   }
+}
+
+/** Undo and redo create new CRDT stack items; keep their logical identities stable. */
+function bindHistoryPosition(owner: object, manager: Y.UndoManager, reset: () => void): void {
+  const tokens = new WeakMap<StackItem, object>();
+  const token = (item: StackItem): object => {
+    let value = tokens.get(item);
+    if (!value) tokens.set(item, (value = {}));
+    return value;
+  };
+  manager.on('stack-item-popped', ({ stackItem, type }) => {
+    const counterpart = (type === 'undo' ? manager.redoStack : manager.undoStack).at(-1);
+    if (counterpart) tokens.set(counterpart, token(stackItem));
+  });
+  registerUndoHistoryPosition(owner, {
+    current: () => {
+      const top = manager.undoStack.at(-1);
+      return top ? token(top) : null;
+    },
+    split: () => {
+      reset();
+      manager.stopCapturing();
+      manager.clear(false, true);
+    },
+  });
 }

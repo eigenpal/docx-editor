@@ -354,11 +354,25 @@ describe('exec history groups', () => {
 });
 
 describe('owned history handles and reporting', () => {
+  test('groups caret color gestures without changing document content', () => {
+    withEditor(MIXED, (editor) => {
+      const g = editor.beginHistoryGroup();
+      expect(setColor(editor, '00FF00', g)).toMatchObject({ history: { kind: 'started' } });
+      expect(setColor(editor, '007700', g)).toMatchObject({ history: { kind: 'extended' } });
+      expect(colors(editor)).toEqual(['FF0000', '0000FF']);
+      editor.exec({ type: 'undo' });
+      expect(editor.snapshot().canUndo).toBe(false);
+      expect(editor.surface!.formatting().color).toBe('FF0000');
+      editor.exec({ type: 'redo' });
+      expect(editor.surface!.formatting().color).toBe('007700');
+    });
+  });
+
   test('reports actual starts, extensions, splits and no-history frames', () => {
     withEditor(MIXED, (editor) => {
       const g = editor.beginHistoryGroup();
       expect(editor.snapshot().canUndo).toBe(false);
-      expect(setColor(editor, '000000', g)).toMatchObject({ history: { kind: 'none' } });
+      expect(setColor(editor, 'FF0000', g)).toMatchObject({ history: { kind: 'none' } });
       selectAll(editor);
       expect(setColor(editor, '00FF00', g)).toMatchObject({ history: { kind: 'started' } });
       editor.exec({ type: 'selectAll' });

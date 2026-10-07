@@ -188,3 +188,26 @@ function resolveInternalStoryPart(
   }
   return { ok: true, partName: part.name, part };
 }
+
+/** Revision ops whose result can remove a note reference along with the content it sits in. */
+export const RESOLUTION_OPS: ReadonlySet<string> = new Set([
+  'acceptRevision',
+  'rejectRevision',
+  'acceptAllRevisions',
+  'rejectAllRevisions',
+]);
+
+/**
+ * Ops that remove whole blocks without naming one, so no cheap subtree probe exists.
+ *
+ * Row and column deletion take a table id and carry away every cell paragraph under it —
+ * comment range markers included. Gated by kind rather than by content: the reap they open is
+ * a before/after diff and finds nothing when the table held no comment.
+ */
+export const CONTENT_REMOVING_OPS: ReadonlySet<string> = new Set([
+  'authorTable',
+  'deleteTableRow',
+  'deleteTableColumn',
+  'removeContentControl',
+  'removeRepeatingSectionItem',
+]);

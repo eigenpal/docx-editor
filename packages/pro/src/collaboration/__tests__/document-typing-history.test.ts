@@ -230,3 +230,67 @@ test('a run typed while disconnected is one step after reconnect', async () => {
   converge();
   expect(text(bob)).toBe('one offline\ntwo!');
 });
+
+test('caret formatting stays local between shared edits through undo, redo, and reconnect', async () => {
+  const { alice, bob, text, converge, peers } = await pair(WITH_HEADER, offlineHarness);
+  caret(alice.editor, 0, 3);
+  await typeSlowly(alice, 'Alpha');
+  alice.editor.surface!.toggleRunProperty('b');
+  const beforeFormat = packageFingerprint(alice.editor.surface!.session.currentPackage());
+  converge();
+  expect(bob.editor.surface!.formatting().bold).toBe(false);
+  expect(packageFingerprint(alice.editor.surface!.session.currentPackage())).toBe(beforeFormat);
+  peers.pause();
+  await typeSlowly(alice, 'Beta');
+  caret(bob.editor, 1, 3);
+  await typeSlowly(bob, '!');
+  peers.resume();
+  converge();
+  expect(text(bob)).toBe('oneAlphaBeta\ntwo!');
+  for (const expected of ['oneAlpha\ntwo!', 'oneAlpha\ntwo!', 'one\ntwo!']) {
+    expect(alice.editor.exec({ type: 'undo' }).ok).toBe(true);
+    converge();
+    expect(text(bob)).toBe(expected);
+  }
+  for (const expected of ['oneAlpha\ntwo!', 'oneAlpha\ntwo!', 'oneAlphaBeta\ntwo!']) {
+    expect(alice.editor.exec({ type: 'redo' }).ok).toBe(true);
+    converge();
+    expect(text(bob)).toBe(expected);
+  }
+  const reopened = mount({ document: new Uint8Array(await bob.editor.save()) });
+  expect(saveReopenDigest(reopened.editor.surface!.session.currentPackage())).toEqual(
+    saveReopenDigest(bob.editor.surface!.session.currentPackage())
+  );
+});
+
+test('undoing a local caret format does not restore text deleted by a collaborator', async () => {
+  const { alice, bob, text, converge } = await pair();
+  caret(alice.editor, 0, 3);
+  alice.editor.surface!.toggleRunProperty('b');
+  const id = bob.editor.surface!.session.paragraphIds()[0]!;
+  bob.editor.surface!.setSelection({
+    anchor: { paragraphId: id, offset: 0 },
+    head: { paragraphId: id, offset: 3 },
+  });
+  bob.editor.surface!.deleteSelection();
+  converge();
+  expect(text(alice)).toBe('\ntwo');
+  expect(alice.editor.exec({ type: 'undo' }).ok).toBe(true);
+  converge();
+  expect(text(bob)).toBe('\ntwo');
+  expect(alice.editor.surface!.state().selection.head.offset).toBe(0);
+  expect(alice.editor.surface!.formatting().bold).toBe(false);
+});
+
+test('new caret formatting discards shared redo without publishing a document change', async () => {
+  const { alice, bob, text, converge } = await pair();
+  caret(alice.editor, 0, 3);
+  await typeSlowly(alice, 'Alpha');
+  alice.editor.exec({ type: 'undo' });
+  converge();
+  expect(alice.editor.surface!.state().canRedo).toBe(true);
+  alice.editor.surface!.toggleRunProperty('b');
+  expect(alice.editor.surface!.state().canRedo).toBe(false);
+  converge();
+  expect(text(bob)).toBe('one\ntwo');
+});

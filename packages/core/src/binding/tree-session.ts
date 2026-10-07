@@ -1,3 +1,4 @@
+import { shareUndoHistoryPosition } from '../store/store/undo-history-position.ts';
 import { createSessionPackageWriter } from './session-package-writer.ts';
 // Tree-backed editing session (cutover step 2b).
 //
@@ -691,7 +692,7 @@ export function openTreeSession(
     return parts;
   };
 
-  return {
+  const result: OpenTreeSessionResult = {
     ok: true,
     session: {
       // A document with paragraphs — body-level OR inside table cells — is editable. There
@@ -1274,6 +1275,8 @@ export function openTreeSession(
       },
     },
   };
+  shareUndoHistoryPosition(result.session, packageStore);
+  return result;
 }
 
 /** The origin a host should use when committing a reconciliation rather than a user edit. */

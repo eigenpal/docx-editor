@@ -155,7 +155,7 @@ class DocumentSession implements DocumentCollaborationSession {
       captureTimeout: UNDO_CAPTURE_TIMEOUT_MS,
       deleteFilter: registry.undoDeleteFilter(),
     });
-    this.historyGroups = new HistoryGroupCapture(this.undoManager);
+    this.historyGroups = new HistoryGroupCapture(this.undoManager, this);
     ydoc.on('afterTransaction', this.onYjsTransaction);
     awareness.on('change', this.onAwarenessChange);
     this.stopBlobWatch = blobs.observeChanges((digests) => {

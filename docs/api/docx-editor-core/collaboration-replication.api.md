@@ -205,6 +205,9 @@ export type HistoryGroup = symbol;
 // @public
 export function historyGroupOfJournal(journal: CanonicalPrimitiveJournal): HistoryGroup | undefined;
 
+// @internal
+export function registerUndoHistoryPosition(owner: object, position: UndoHistoryPosition): void;
+
 // @public (undocumented)
 export function reportHistoryGroup(group: HistoryGroup | undefined, kind: HistoryCaptureKind, reason?: HistoryCaptureReason): void;
 

@@ -1,3 +1,4 @@
+import { registerUndoHistoryPosition } from './undo-history-position.ts';
 import { capturePackageSelections, selectionForHistory } from './package-history-selection.ts';
 // Package-aware mutation coordinator for editable story parts (body + headers/footers +
 // notes parts).
@@ -48,6 +49,8 @@ import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import type { ImpactClass, TreeDocOp, TreeOpRejection } from './tree-op-types.ts';
 import type { RevisionAttributionInput } from './tree-op-types.ts';
 import {
+  RESOLUTION_OPS,
+  CONTENT_REMOVING_OPS,
   deleteBlockMayStrandNote,
   deleteMayEmptyCommentRange,
   deleteMayStrandNote,
@@ -99,29 +102,6 @@ import {
 } from './story-retention.ts';
 
 type NoteCascadeFn = (before: OoxmlPackage, after: OoxmlPackage) => OoxmlPackage | null;
-
-/** Revision ops whose result can remove a note reference along with the content it sits in. */
-const RESOLUTION_OPS: ReadonlySet<string> = new Set([
-  'acceptRevision',
-  'rejectRevision',
-  'acceptAllRevisions',
-  'rejectAllRevisions',
-]);
-
-/**
- * Ops that remove whole blocks without naming one, so no cheap subtree probe exists.
- *
- * Row and column deletion take a table id and carry away every cell paragraph under it —
- * comment range markers included. Gated by kind rather than by content: the reap they open is
- * a before/after diff and finds nothing when the table held no comment.
- */
-const CONTENT_REMOVING_OPS: ReadonlySet<string> = new Set([
-  'authorTable',
-  'deleteTableRow',
-  'deleteTableColumn',
-  'removeContentControl',
-  'removeRepeatingSectionItem',
-]);
 
 /**
  * Editable story target.
@@ -255,6 +235,13 @@ export class TreePackageStore {
       settingsPart: () => settingsPartOf(this.pkg),
     });
     this.body.setStoryRef({ kind: 'body', partName: main.name });
+    registerUndoHistoryPosition(this, {
+      current: () => this.undoOrder.at(-1) ?? null,
+      split: () => {
+        closeHistoryGroupsExcept(this.body, this.stories, null);
+        this.redoOrder.length = 0;
+      },
+    });
     // Body is always open; HF stores are opened lazily and count against the cap.
   }
 

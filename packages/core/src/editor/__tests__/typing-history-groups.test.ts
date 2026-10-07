@@ -167,7 +167,7 @@ describe('typing history groups', () => {
     surface.toggleRunProperty('b');
     await typeSlowly(container, 'cd');
     expect(surface.session.bodyText()).toBe('Abcd');
-    expect(undoTrail(surface, 2)).toEqual(['Ab', '']);
+    expect(undoTrail(surface, 3)).toEqual(['Ab', 'Ab', '']);
   });
 
   test('typing after an undo starts a new step', async () => {

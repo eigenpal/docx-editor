@@ -1,4 +1,13 @@
 import {
+  armedFormatAt,
+  armCaretFormat,
+  type ArmedFormat,
+  type CaretFormatSnapshot,
+  restoreCaretFormatSnapshot,
+  type PendingFormat,
+} from './caret-format-state.ts';
+import { CaretFormatHistory } from './caret-format-history.ts';
+import {
   createSurfaceRevisionMarkup,
   revisionFacingPages,
   revisionParagraphMarkVisible,
@@ -281,7 +290,11 @@ import { createNoteOps } from './surface-note-ops.ts';
 import { notePropertiesStateOf, notePreviewTextOf } from './surface-note-state.ts';
 import { createDerivationPrewarmSteps, scheduleDerivationPrewarm } from './derivation-prewarm.ts';
 import { runWithTransactionActor } from '../store/package/actor-scoped-ids.ts';
-import { CommitHistoryGroup, runWithHistoryGroup } from './history-group-scope.ts';
+import {
+  CommitHistoryGroup,
+  runWithHistoryGroup,
+  takeHistoryGroup,
+} from './history-group-scope.ts';
 import { TypingHistory } from './typing-history.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
@@ -605,27 +618,29 @@ export function mountPaginatedSurface(
     retainedSelection = null;
   }
 
-  /**
-   * The armed typing format: what was pressed (`properties`) over the face the caret had
-   * when it was pressed (`base`). The base is CAPTURED AT ARM TIME, Word's rule — delete
-   * the run beside the caret and the next characters still come out in the face you armed,
-   * not in whatever run the caret drifted against.
-   */
-  interface ArmedFormat {
-    readonly properties: readonly SurfaceProperty[];
-    readonly base: readonly SurfaceProperty[];
+  // Stored caret formats are local preferences, anchored to one logical position.
+  let pendingFormats: PendingFormat = null;
+  const caretFormatHistory = new CaretFormatHistory<CaretFormatSnapshot>(
+    collaborationSession ?? session
+  );
+  function moveDocumentHistory(direction: 'undo' | 'redo'): void {
+    if (collaborationSession) {
+      if (collaborationSession[direction]()) restoreSelection(null);
+      return;
+    }
+    const revision = session.packageRevision();
+    const mark = session[direction]();
+    if (session.packageRevision() !== revision) restoreSelection(mark);
   }
-
-  /**
-   * The stored-marks lane: run properties armed at a collapsed caret, applied to the next
-   * characters typed there (Word's pending-format behavior — Bold at a caret, then type).
-   *
-   * Anchored to the position it was armed at: a selection change away from it discards it,
-   * the caret-preserving edits (Backspace, Delete, Enter) re-anchor it, and `type()` or
-   * the IME readback consumes it. The anchor is double-checked at consumption so a missed
-   * clearing path degrades to "the format is forgotten", never "the wrong text is styled".
-   */
-  let pendingFormats: ({ readonly position: SemanticPosition } & ArmedFormat) | null = null;
+  function restoreCaretFormat(value: CaretFormatSnapshot): void {
+    selectionSync.noteModelMoved();
+    flushLayout();
+    const restored = restoreCaretFormatSnapshot(value, editingLayout(), paragraphOrder());
+    setSelection(restored.selection);
+    pendingFormats = restored.format;
+    caret.update();
+    options.onChange?.(currentState());
+  }
 
   /** The armed pending properties, if the selection still sits where they were armed. */
   function pendingAtCaret(): readonly SurfaceProperty[] | null {
@@ -634,13 +649,7 @@ export function mountPaginatedSurface(
 
   /** The full armed state — properties AND captured base — anchored at the current caret. */
   function armedAtCaret(): ArmedFormat | null {
-    if (!pendingFormats) return null;
-    const at = pendingFormats.position;
-    const collapsedThere = (position: SemanticPosition): boolean =>
-      position.paragraphId === at.paragraphId && position.offset === at.offset;
-    return collapsedThere(selection.anchor) && collapsedThere(selection.head)
-      ? pendingFormats
-      : null;
+    return armedFormatAt(pendingFormats, selection);
   }
 
   /** Discard pending caret formatting when `next` is not collapsed at its anchor. */
@@ -1031,36 +1040,28 @@ export function mountPaginatedSurface(
     styles: () => revisionStyles,
     slots: stableAuthorSlots,
   });
-  // Structural edits — breaks, lists, indent, sections — are their own lane over the same
-  // session and commit path.
-  /**
-   * Arm, replace, or clear the typing format at the caret (Word's stored marks).
-   *
-   * A named function rather than an inline dep because TWO lanes drive it: the formatting
-   * lane, when a toggle or a picker lands on a collapsed caret, and the format painter,
-   * when a paint lands on one. A second arming path would be a second place the base is
-   * captured and a second place the caret-move rule could be forgotten.
-   */
   function setPendingFormats(next: readonly SurfaceProperty[] | null): void {
-    if (next === null || next.length === 0) {
-      if (!pendingFormats) return;
-      pendingFormats = null;
-    } else {
-      // Armed only at a collapsed caret — a range selection formats directly. The base
-      // is captured on the FIRST arm at this caret and kept across further presses:
-      // it is the face the user saw when they started pressing buttons.
-      const { anchor, head } = selection;
-      if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) return;
-      const base =
-        armedAtCaret()?.base ??
-        authoredRunPropertiesAt(
-          session.partFor(storyScope()) ?? session.part(),
-          head.paragraphId,
-          head.offset,
-          revisionDisplayMode(),
-          revisionFilter()
-        );
-      pendingFormats = { position: head, properties: next, base };
+    flushTypeBuffer();
+    collaborationSession?.flushPendingJournals();
+    const before = { selection, format: pendingFormats };
+    const beforeStyle = JSON.stringify(format.formatting());
+    const nextFormat = armCaretFormat(selection, pendingFormats, next, () =>
+      authoredRunPropertiesAt(
+        session.partFor(storyScope()) ?? session.part(),
+        selection.head.paragraphId,
+        selection.head.offset,
+        revisionDisplayMode(),
+        revisionFilter()
+      )
+    );
+    if (nextFormat === undefined) return;
+    pendingFormats = nextFormat;
+    if (beforeStyle !== JSON.stringify(format.formatting())) {
+      caretFormatHistory.record(
+        before,
+        { selection, format: pendingFormats },
+        takeHistoryGroup(surface)
+      );
     }
     typingHistory.end();
     // Not document state, but observable state: the toolbar's Bold must light up NOW,
@@ -1598,6 +1599,12 @@ export function mountPaginatedSurface(
   const unsubscribe = session.subscribe((modelChange) => {
     // Before anything downstream can read the index against the new revision.
     retainReviewOrderIndex(modelChange);
+    if (
+      modelChange.origin !== ORIGIN_IDS.mutationRemote &&
+      modelChange.origin !== ORIGIN_IDS.mutationUndo &&
+      modelChange.origin !== ORIGIN_IDS.mutationRedo
+    )
+      caretFormatHistory.noteEdit();
     // A commit from OUTSIDE this surface retires the armed typing format: the tree it was
     // armed against has moved, and the offsets it is anchored to no longer mean what they
     // did. This surface's own commits already cleared it before running their ops (and
@@ -2453,8 +2460,8 @@ export function mountPaginatedSurface(
       pageCount: currentLayout.pages.length,
       selection,
       cellSelection,
-      canUndo: collaborationSession?.canUndo() ?? session.canUndo(),
-      canRedo: collaborationSession?.canRedo() ?? session.canRedo(),
+      canUndo: caretFormatHistory.canUndo || (collaborationSession?.canUndo() ?? session.canUndo()),
+      canRedo: caretFormatHistory.canRedo || (collaborationSession?.canRedo() ?? session.canRedo()),
       collaborationStatus: collaborationSession?.status() ?? 'inactive',
       lastRejection,
       // Reference-stable while unchanged: `pendingAtCaret` hands back the stored array,
@@ -3196,7 +3203,10 @@ export function mountPaginatedSurface(
     if (moved && typeBuffer.length > 0) flushTypeBuffer();
     const fieldSelection = textFormInteraction?.beforeSelect(next);
     if (fieldSelection === null) return;
-    if (moved && !flushingTypeBuffer) typingHistory.end();
+    if (moved && !flushingTypeBuffer) {
+      typingHistory.end();
+      caretFormatHistory.endGroup();
+    }
     next = fieldSelection ?? next;
     // Moving the caret discards a stored caret format — Word's rule. Landing back on the
     // exact armed position (the mirror re-adopting the same caret) keeps it.
@@ -5477,13 +5487,8 @@ export function mountPaginatedSurface(
       // first removes what was just typed rather than skipping past it.
       flushTypeBuffer();
       typingHistory.end();
-      if (collaborationSession) {
-        if (collaborationSession.undo()) restoreSelection(null);
-        return;
-      }
-      const revision = session.packageRevision();
-      const mark = session.undo();
-      if (session.packageRevision() !== revision) restoreSelection(mark);
+      collaborationSession?.flushPendingJournals();
+      caretFormatHistory.step('undo', restoreCaretFormat, () => moveDocumentHistory('undo'));
     },
     redo: () => {
       if (editingMode === 'view' || refreshWriteBlocked(container)) {
@@ -5493,13 +5498,8 @@ export function mountPaginatedSurface(
       }
       flushTypeBuffer();
       typingHistory.end();
-      if (collaborationSession) {
-        if (collaborationSession.redo()) restoreSelection(null);
-        return;
-      }
-      const revision = session.packageRevision();
-      const mark = session.redo();
-      if (session.packageRevision() !== revision) restoreSelection(mark);
+      collaborationSession?.flushPendingJournals();
+      caretFormatHistory.step('redo', restoreCaretFormat, () => moveDocumentHistory('redo'));
     },
     sectionAtPage,
     activeScope: () => {

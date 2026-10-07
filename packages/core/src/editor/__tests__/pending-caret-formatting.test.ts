@@ -367,14 +367,15 @@ describe('pending caret formatting', () => {
     });
   });
 
-  test('undo discards the armed format instead of leaving it over the reverted tree', () => {
+  test('undo clears the armed format before reverting earlier text', () => {
     withSurface(paragraph(textRun('hello')), (surface) => {
       caretAt(surface, 5);
       surface.type('a');
       caretAt(surface, 5);
       surface.toggleRunProperty('b');
-      // The history entry restores the caret to exactly the armed position, so a
-      // position check alone would leave it armed against a tree that no longer exists.
+      surface.undo();
+      expect(runsOf(surface)).toEqual([['helloa']]);
+      expect(surface.formatting().bold).toBe(false);
       surface.undo();
       expect(surface.formatting().bold).toBe(false);
       surface.type('z');
