@@ -68,9 +68,6 @@ export function markUndoneRecords(
   }, RESTORE_ORIGIN);
 }
 
-/** The most characters one undo checks for copies; a larger step keeps its copies. */
-const MAX_UNDONE_CHARACTERS = 1 << 16;
-
 /** The deleted runs whose copies the undo of a step hides. */
 const COPY_RUNS = 'docx-copy-runs';
 /** The deletion records the undo that pushed this redo step wrote. */
@@ -149,21 +146,38 @@ export function stepHistory(
   );
 }
 
-/** The characters a step typed whose copies show, and those an earlier undo of it hid. */
+/**
+ * The characters a step typed whose copies show, and those an earlier undo of it hid.
+ *
+ * Walked by item, not by character: a move deletes whole spans of a step's characters at
+ * once. A span already deleted, with a copy of any of its characters, is recorded whole; its
+ * other characters are deleted too, so the record hides nothing else. Every span of the step
+ * is read: a step that undoes only in part is worse than one that does not undo.
+ */
 function copiesOf(registry: DocumentRegistry, step: StackItemShape | undefined): DeletedRun[] {
   const follow = registry.inline.follow;
   const copied: DeletedRun[] = [...((runsOf(step, COPY_RUNS) as DeletedRun[] | undefined) ?? [])];
-  let checked = 0;
+  const add = (client: number, from: number, to: number): void => {
+    const last = copied[copied.length - 1];
+    if (last && last.client === client && last.to === from) {
+      copied[copied.length - 1] = { ...last, to };
+    } else {
+      copied.push({ client, from, to });
+    }
+  };
   for (const run of deleteSetRuns((step as { insertions?: unknown } | undefined)?.insertions)) {
-    for (let clock = run.clock; clock < run.clock + run.length; clock += 1) {
-      if ((checked += 1) > MAX_UNDONE_CHARACTERS) return copied;
-      if (follow.shownCopy(`${run.client}:${clock}`) === null) continue;
-      const last = copied[copied.length - 1];
-      if (last && last.client === run.client && last.to === clock) {
-        copied[copied.length - 1] = { ...last, to: clock + 1 };
-      } else {
-        copied.push({ client: run.client, from: clock, to: clock + 1 });
+    const runEnd = run.clock + run.length;
+    for (let clock = run.clock; clock < runEnd; ) {
+      const item = structAt(registry.doc, { client: run.client, clock });
+      const end = item ? Math.min(item.id.clock + item.length, runEnd) : clock + 1;
+      if (item?.deleted) {
+        for (let at = clock; at < end; at += 1) {
+          if (follow.shownCopy(`${run.client}:${at}`) === null) continue;
+          add(run.client, clock, end);
+          break;
+        }
       }
+      clock = end;
     }
   }
   return copied;

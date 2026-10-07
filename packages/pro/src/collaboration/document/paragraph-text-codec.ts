@@ -39,9 +39,36 @@ export const RUN_SLOT: Slot = { kind: 'run', localName: 'r' };
 export const RUN_PROPERTIES_SLOT: Slot = { kind: 'runProperties', localName: 'rPr' };
 export const TEXT_SLOT: Slot = { kind: 'text', localName: 't' };
 
-/** Bounds on what one attribute value may describe. */
-const MAX_JSON_NODES = 512;
+/**
+ * Bounds on what one attribute value may describe: a run's properties together, or one
+ * wrapper with its fixed parts, such as a content control's properties with every list
+ * choice. The writer refuses a value beyond them (`fitsJsonBounds`), so a reader never meets
+ * one from an honest peer, and drops one from any other.
+ */
+export const MAX_JSON_NODES = 1 << 15;
 export const MAX_JSON_DEPTH = 24;
+
+/**
+ * The nodes a value describes, as `readElement` counts them, or `Infinity` past the depth
+ * it reads to.
+ */
+export function jsonNodeCount(value: JsonValue, depth = 0): number {
+  if (depth > MAX_JSON_DEPTH) return Infinity;
+  if (!isRecord(value)) return 1;
+  const children = (value as { c?: unknown }).c;
+  let count = 1;
+  if (Array.isArray(children)) {
+    for (const child of children) count += jsonNodeCount(child as JsonValue, depth + 1);
+  }
+  return count;
+}
+
+/** A value too large for the shared text: the writer refuses it rather than lose it. */
+export class SharedTextValueTooLarge extends Error {
+  constructor(readonly detail: string) {
+    super(`shared text value too large: ${detail}`);
+  }
+}
 
 /** Short codes for namespaces other than WordprocessingML. A URI never starts with `#`. */
 const NAMESPACE_CODES: ReadonlyMap<string, string> = new Map([

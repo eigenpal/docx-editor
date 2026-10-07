@@ -118,6 +118,29 @@ describe('compaction', () => {
     next.destroy();
   });
 
+  test('a room whose content was mostly deleted is compacted, though it hardly grew', async () => {
+    const paragraphs = Array.from(
+      { length: 100 },
+      (_, index) =>
+        `<w:p><w:r><w:t>Paragraph ${index} with some text to keep it long</w:t></w:r></w:p>`
+    ).join('');
+    const { alice } = await harness.pair(zipDocument(`${paragraphs}<w:sectPr/>`));
+    // The stored state stays near its seed size; the content is now one paragraph.
+    for (let index = 99; index >= 1; index -= 1) {
+      harness.apply(alice, [
+        { op: 'deleteBlock', blockId: harness.paragraphIdAt(alice, index) } as never,
+      ]);
+    }
+    const state = Y.encodeStateAsUpdate(alice.ydoc);
+    const compacted = await compactCollaborationState(state);
+    expect(compacted).not.toBeNull();
+    expect(compacted!.byteLength * 2).toBeLessThanOrEqual(state.byteLength);
+    const next = new Y.Doc();
+    Y.applyUpdate(next, compacted!);
+    expect(textsOfDocx(readCollaborationDocument(next))).toEqual(paragraphTexts(alice));
+    next.destroy();
+  });
+
   test('a room with nothing to gain is left as it is', async () => {
     const { alice } = await harness.pair(collaborationDocx());
     expect(await compactCollaborationState(Y.encodeStateAsUpdate(alice.ydoc))).toBeNull();

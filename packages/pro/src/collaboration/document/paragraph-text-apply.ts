@@ -812,7 +812,12 @@ export function deleteHeldOriginals(
 }
 
 /** Write a plan's paragraphs. Runs inside the journal's Yjs transaction, after its records. */
-export function applyInlinePlan(registry: DocumentRegistry, plan: InlinePlan): InlineWritten {
+export function applyInlinePlan(
+  registry: DocumentRegistry,
+  plan: InlinePlan,
+  /** Each plan paragraph's tokens, encoded before the write began. */
+  encoded: ReadonlyMap<LogicalId, Token[]> = new Map()
+): InlineWritten {
   const embedsAfter = new Set<string>();
   // Block children are records the record pipeline writes; the rest is shared text.
   const writes: (ParagraphWrite<Token> & {
@@ -838,7 +843,7 @@ export function applyInlinePlan(registry: DocumentRegistry, plan: InlinePlan): I
   for (const { id, after } of plan.paragraphs) {
     const record = registry.schema.nodes.get(id);
     if (!record || adopted.has(id)) continue;
-    const tokens = tokensOfParagraph(after);
+    const tokens = encoded.get(id) ?? tokensOfParagraph(after);
     for (const token of tokens) {
       if (typeof token.insert !== 'string' && 'n' in token.insert) embedsAfter.add(token.insert.n);
     }

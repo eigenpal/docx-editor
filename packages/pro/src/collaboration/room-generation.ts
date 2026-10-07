@@ -19,12 +19,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 import * as Y from 'yjs';
 import { DocumentRegistry, seedPackage } from './document/index.ts';
-import {
-  FRESH_BYTES_FIELD,
-  openBaselinePackage,
-  recordFreshSize,
-  recordSeed,
-} from './document-bootstrap.ts';
+import { openBaselinePackage, recordFreshSize, recordSeed } from './document-bootstrap.ts';
 import { readCollaborationDocument } from './document-read.ts';
 import { PACKAGE_META_KEY } from './document/schema.ts';
 import { keepFormattingMarkers } from './document/yjs-items.ts';
@@ -88,12 +83,9 @@ export async function compactCollaborationState(
     const documentId = meta.get('documentId');
     if (typeof documentId !== 'string') throw new CollaborationSchemaError('not-initialized');
     const minimumGain = options.minimumGain ?? DEFAULT_MINIMUM_GAIN;
-    // The room recorded its size when it was seeded. Until it has grown past that by the gain,
-    // the content cannot have shrunk enough to matter, and the room loads as it is, unread.
-    const fresh = meta.get(FRESH_BYTES_FIELD);
-    if (typeof fresh === 'number' && fresh > 0 && state.byteLength < fresh * minimumGain) {
-      return null;
-    }
+    // Measured against a fresh build of the content the room holds now. The size the room had
+    // when it was seeded is no bound: deleting most of a document makes the fresh build far
+    // smaller than the seed while the stored state hardly grows.
     const compacted = await seedGeneration(readCollaborationDocument(stored), documentId);
     return state.byteLength / Math.max(1, compacted.byteLength) >= minimumGain ? compacted : null;
   } finally {

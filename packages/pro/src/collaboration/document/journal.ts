@@ -31,6 +31,8 @@ import {
 } from './limits.ts';
 import { isNodeMap, JOURNAL_ORIGIN, mapFieldArriving } from './schema.ts';
 import { INLINE_FIELD } from './paragraph-text.ts';
+import { SharedTextValueTooLarge } from './paragraph-text-codec.ts';
+import { tokensOfParagraph, type Token } from './paragraph-text-diff.ts';
 import { JournalProjection, projectEffect } from './journal-projection.ts';
 import type { DocumentRegistry } from './registry.ts';
 
@@ -554,6 +556,15 @@ export function applyPrimitiveJournal(
       transient: true,
     };
   }
+  // Every paragraph is encoded before anything is written: a value too large for the shared
+  // text refuses the edit here, where nothing has changed yet.
+  let tokens: ReadonlyMap<LogicalId, Token[]>;
+  try {
+    tokens = new Map(plan?.paragraphs.map(({ id, after }) => [id, tokensOfParagraph(after)]));
+  } catch (error) {
+    if (!(error instanceof SharedTextValueTooLarge)) throw error;
+    return { ok: false, code: 'too-many-nodes', detail: error.detail };
+  }
   registry.doc.transact(() => {
     // Inside the transaction, so the flag is set before Yjs can deliver the events that clear
     // it. A flush that runs while a remote update is still being processed opens a DEFERRED
@@ -592,7 +603,7 @@ export function applyPrimitiveJournal(
     tombstoneRemoved(registry, effects, planned, formerChildren);
     const removed = deleteCopiesOfRemoved(registry, planned.removed);
     const written: InlineWritten = plan
-      ? applyInlinePlan(registry, plan)
+      ? applyInlinePlan(registry, plan, tokens)
       : { copied: new Set<string>(), deleted: new Set<string>(), embedded: new Set<string>() };
     deleteHeldOriginals(registry, removed.held, written.copied);
     recordDeletions(registry, written, removed.shown);

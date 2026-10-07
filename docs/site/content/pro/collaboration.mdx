@@ -562,7 +562,7 @@ A server that only relays updates, and holds no `Y.Doc`, needs no preparation.
 
 Yjs state only grows. Deleted text and records, formatting history, and media that nothing references stay in a room. A server keeps each room's size bounded by compacting it into a new generation: a fresh document that holds the room's current content.
 
-Compact a room when the server loads it, before any participant syncs. Pass the stored state to `compactCollaborationState`. It returns the new generation's state, or `null` when the room has not grown enough to need one. By default, a room is compacted once it is twice the size it had when it was seeded or last compacted. Store the new state in place of the old one.
+Compact a room when the server loads it, before any participant syncs. Pass the stored state to `compactCollaborationState`. It returns the new generation's state, or `null` when compaction would not gain enough. By default, a room is compacted when its stored state is at least twice the size of a fresh build of its current content, which also covers content that participants deleted. Store the new state in place of the old one.
 
 Every server that holds rooms must also call `checkCollaborationRoomGeneration` from `beforeHandleMessage`. A participant that still holds the previous generation is refused before any of its state merges into the new one.
 

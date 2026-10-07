@@ -35,12 +35,15 @@ import {
   elementData,
   encodeId,
   isRecord,
+  jsonNodeCount,
   MAX_JSON_DEPTH,
+  MAX_JSON_NODES,
   namespaceCode,
   namespaceFromCode,
   readElement,
   RUN_PROPERTIES_SLOT,
   RUN_SLOT,
+  SharedTextValueTooLarge,
   TEXT_SLOT,
   type JsonValue,
   type Slot,
@@ -129,10 +132,15 @@ export function encodeAttributes(
     out[KEY_RUN_PROPERTIES] = JSON.stringify(
       shellData(attributes.runProperties, paragraphId, RUN_PROPERTIES_SLOT, { o: keys })
     );
+    // A reader decodes a run's properties under one budget.
+    let nodes = 0;
     attributes.properties.forEach((property, index) => {
       const slot = { kind: 'generic', localName: property.localName };
-      out[keys[index]!] = JSON.stringify(elementData(property, slot, true));
+      const data = elementData(property, slot, true);
+      nodes += jsonNodeCount(data);
+      out[keys[index]!] = JSON.stringify(data);
     });
+    if (nodes > MAX_JSON_NODES) throw new SharedTextValueTooLarge(`properties of ${run.id}`);
   }
   if (attributes.text) {
     const textId = attributes.text.id;
@@ -141,13 +149,21 @@ export function encodeAttributes(
       valueId === `${textId}~v` ? {} : { v: encodeId(valueId, textId) };
     out[KEY_TEXT] = JSON.stringify(shellData(attributes.text, paragraphId, TEXT_SLOT, extra));
   }
+  if (attributes.wrap.length > MAX_JSON_DEPTH) {
+    throw new SharedTextValueTooLarge(`${attributes.wrap.length} nested wrappers`);
+  }
   if (attributes.wrap.length > 0) {
+    // A reader decodes each wrapper, with its fixed parts, under a budget of its own.
     out[KEY_WRAP] = JSON.stringify(
-      attributes.wrap.map((wrapper) =>
-        shellData(wrapper, paragraphId, null, {
+      attributes.wrap.map((wrapper) => {
+        const data = shellData(wrapper, paragraphId, null, {
           c: wrapper.children.map((child) => elementData(child, null, true)),
-        })
-      )
+        });
+        if (jsonNodeCount(data) > MAX_JSON_NODES) {
+          throw new SharedTextValueTooLarge(`fixed parts of ${wrapper.id}`);
+        }
+        return data;
+      })
     );
   }
   return out;

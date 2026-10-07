@@ -20,6 +20,7 @@ import {
   type ServerSample,
   type ServerSummary,
 } from './analysis.ts';
+import { createCollaborationRoomId } from '../../packages/pro/src/collaboration/room-id.ts';
 import { documentTextDigest, storeFrom } from './document-text.ts';
 import type { EditProfile } from './edit-model.ts';
 import {
@@ -134,12 +135,6 @@ function freePort(): Promise<number> {
       server.close(() => resolve(typeof address === 'object' && address ? address.port : 0));
     });
   });
-}
-
-function roomId(): string {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return [...bytes].map((byte) => alphabet[byte % alphabet.length]).join('');
 }
 
 function sleep(ms: number): Promise<void> {
@@ -385,7 +380,7 @@ export async function runStep(options: StepOptions): Promise<StepResult> {
   mkdirSync(options.workDir, { recursive: true });
   // The server appends to the store log, so a reused directory must not mix in an old run.
   rmSync(path.join(options.workDir, 'stores.jsonl'), { force: true });
-  const room = roomId();
+  const room = createCollaborationRoomId();
   const server = await startServer(options);
   // Two seconds of an empty server: the baseline that participants add to.
   const idleFrom = now();

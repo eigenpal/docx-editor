@@ -24,6 +24,7 @@ import {
 import type { DocumentRegistry } from './registry.ts';
 import { idOf, type LogicalId } from './identity.ts';
 import { linearizeParagraph } from './paragraph-linear.ts';
+import { SharedTextValueTooLarge } from './paragraph-text-codec.ts';
 import { writeInlineText } from './paragraph-text-view.ts';
 import { encodeItems } from './paragraph-text.ts';
 
@@ -224,7 +225,14 @@ function visitParagraph(
   }
   if (length > registry.limits.maxTextLength) return 'text-too-long';
   const record = registry.schema.nodes.get(paragraph.id);
-  if (record) writeInlineText(record, encodeItems(linear.items, paragraph.id));
+  if (!record) return null;
+  try {
+    writeInlineText(record, encodeItems(linear.items, paragraph.id));
+  } catch (error) {
+    // A value the shared text cannot hold whole refuses the seed, rather than lose a part.
+    if (error instanceof SharedTextValueTooLarge) return 'too-many-nodes';
+    throw error;
+  }
   return null;
 }
 

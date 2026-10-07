@@ -165,8 +165,9 @@ export function recordSeed(ydoc: Y.Doc): void {
 export const FRESH_BYTES_FIELD = 'freshBytes';
 
 /**
- * Record the size of the room's state right after its seed. A server compares the room's size
- * with it to tell when compacting the room is worth a new generation (`room-generation.ts`).
+ * Record the size of the room's state right after its seed, a field of the shared format that
+ * tells how far a room has grown. Compaction does not use it as a bound: deleted content makes
+ * a fresh build of the room far smaller than its seed (`room-generation.ts`).
  */
 export function recordFreshSize(ydoc: Y.Doc): void {
   const size = Y.encodeStateAsUpdate(ydoc).byteLength;

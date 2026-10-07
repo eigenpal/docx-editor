@@ -8,12 +8,11 @@ import * as Y from 'yjs';
 import type { WebrtcProvider } from 'y-webrtc';
 import { trackUnsyncedChanges } from '../webrtc-unsynced.ts';
 
-/** A provider stand-in: its room's connections, its sync flag, and its two events. */
+/** A provider stand-in: its room's links, as the provider keeps them, and its two events. */
 function fakeProvider() {
   const room = {
-    webrtcConns: new Map<string, unknown>(),
+    webrtcConns: new Map<string, { connected: boolean; synced: boolean }>(),
     bcConns: new Set<string>(),
-    synced: true,
   };
   const listeners = new Map<string, Set<() => void>>();
   const emit = (event: string): void => {
@@ -32,54 +31,77 @@ function fakeProvider() {
   return {
     provider: provider as unknown as WebrtcProvider,
     room,
-    /** A peer connects; the room syncs with it when `synced` is true. */
-    connect(synced: boolean) {
-      room.webrtcConns.set('peer', {});
-      room.synced = synced;
+    /** A peer starts negotiating: the provider lists its link before it connects. */
+    negotiate(name: string) {
+      room.webrtcConns.set(name, { connected: false, synced: false });
       emit('peers');
-      if (synced) emit('synced');
     },
-    disconnect() {
-      room.webrtcConns.clear();
-      room.synced = true;
+    /** The link connects and the two sync. */
+    sync(name: string) {
+      room.webrtcConns.set(name, { connected: true, synced: true });
+      emit('synced');
+    },
+    close(name: string) {
+      room.webrtcConns.delete(name);
       emit('peers');
     },
   };
 }
 
+const type = (ydoc: Y.Doc, text: string): void => {
+  ydoc.getText('t').insert(0, text);
+};
+
 describe('changes no WebRTC peer has received', () => {
-  test('count while alone, and return to zero once a peer connects and syncs', () => {
+  test('count while alone, and return to zero once a peer syncs', () => {
     const ydoc = new Y.Doc();
     const fake = fakeProvider();
     const unsynced = trackUnsyncedChanges(ydoc, fake.provider);
     let notified = 0;
     unsynced.subscribe(() => (notified += 1));
-    ydoc.getText('t').insert(0, 'a');
-    ydoc.getText('t').insert(1, 'b');
+    type(ydoc, 'a');
+    type(ydoc, 'b');
     expect(unsynced.count()).toBe(2);
-    // Connected but not yet in sync: the changes are still only here.
-    fake.connect(false);
-    expect(unsynced.count()).toBe(2);
-    fake.connect(true);
+    fake.sync('peer');
     expect(unsynced.count()).toBe(0);
     expect(notified).toBe(3);
     unsynced.destroy();
   });
 
-  test('a change made while a peer is connected reaches it, and a peer change is not local', () => {
+  test('a link still negotiating receives nothing, so changes still count', () => {
     const ydoc = new Y.Doc();
     const fake = fakeProvider();
     const unsynced = trackUnsyncedChanges(ydoc, fake.provider);
-    fake.connect(true);
-    ydoc.getText('t').insert(0, 'a');
+    fake.negotiate('peer');
+    type(ydoc, 'a');
+    expect(unsynced.count()).toBe(1);
+    // The negotiation fails: the change is still only here.
+    fake.close('peer');
+    expect(unsynced.count()).toBe(1);
+    unsynced.destroy();
+  });
+
+  test('one synced link is enough, even beside a link that never connects', () => {
+    const ydoc = new Y.Doc();
+    const fake = fakeProvider();
+    const unsynced = trackUnsyncedChanges(ydoc, fake.provider);
+    fake.negotiate('stuck');
+    type(ydoc, 'a');
+    fake.sync('peer');
     expect(unsynced.count()).toBe(0);
-    fake.disconnect();
+    type(ydoc, 'b');
+    expect(unsynced.count()).toBe(0);
+    unsynced.destroy();
+  });
+
+  test('a peer change is not a local one', () => {
+    const ydoc = new Y.Doc();
+    const fake = fakeProvider();
+    const unsynced = trackUnsyncedChanges(ydoc, fake.provider);
     const peer = new Y.Doc();
-    peer.getText('t').insert(0, 'z');
+    type(peer, 'z');
     Y.applyUpdate(ydoc, Y.encodeStateAsUpdate(peer), fake.room);
     expect(unsynced.count()).toBe(0);
-    ydoc.getText('t').insert(0, 'b');
-    expect(unsynced.count()).toBe(1);
     unsynced.destroy();
   });
 });
