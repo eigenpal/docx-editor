@@ -1,8 +1,8 @@
 {
   "impact": "compatible",
   "fields": [],
-  "before": "Inserted table rows had empty paragraphs, formatting inside an author's own proposed row recorded property changes, tracked deletions refused to border the author's own pending insertions, and endpoints read before an edit could address moved text.",
-  "after": "Inserted rows copy source paragraph and run formatting, own proposed rows record no property changes, tracked deletions may border the author's own pending insertions, and hosts refuse endpoints whose position moved since they were read.",
+  "before": "Inserted table rows had empty paragraphs, formatting inside an author's own proposed row recorded property changes, tracked deletions refused to start where the author's own pending insertion ends, and endpoints read before an edit could address moved text.",
+  "after": "Inserted rows copy source paragraph and run formatting, own proposed rows record no property changes, tracked deletions may start where the author's own pending insertion ends, and hosts refuse endpoints whose position moved since they were read.",
   "reason": "Replicas exchange the resulting tree content of each committed transaction, not the planned operation, so the copied formatting and the absence of property records replicate as ordinary content. The endpoint read revision is local to one automation host and never enters shared state, so no shared field, operation shape, or protocol message changes.",
   "tests": [
     "packages/pro/src/collaboration/__tests__/document-api-row-insertion.test.ts",

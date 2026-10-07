@@ -248,6 +248,29 @@ test('added columns take the formatting of the cells beside them', async () => {
   }
 });
 
+test('a plain first run inside a wrapper is the face, not a later formatted run', async () => {
+  const wrapped =
+    '<w:p><w:ins w:id="2" w:author="Old"><w:r><w:t>plain</w:t></w:r></w:ins>' +
+    '<w:r><w:rPr><w:b/><w:color w:val="FF0000"/></w:rPr><w:t> loud</w:t></w:r></w:p>';
+  const r = await DocxEditor.createServer(
+    docx(table(`<w:tr>${cell(wrapped)}${cell(runSized('Role'))}</w:tr>`)),
+    { author: 'Agent' }
+  );
+  try {
+    await r.run(async (c) => {
+      (await rows(c)).table.addRows('End', 1, [['Ada', 'Counsel']]);
+      await c.sync();
+    });
+    const added = await rowXml(r, 'Ada');
+    const at = added.indexOf('>Ada<');
+    const run = added.slice(added.lastIndexOf('<w:r>', at), added.indexOf('</w:r>', at));
+    expect(run).not.toContain('FF0000');
+    expect(run).not.toContain('<w:b/>');
+  } finally {
+    r.dispose();
+  }
+});
+
 test('formatting inside the author’s own proposed row records no revision of its own', async () => {
   const r = await DocxEditor.createServer(
     docx(table(`<w:tr>${cell(runSized('Name'))}${cell(runSized('Role'))}</w:tr>`)),

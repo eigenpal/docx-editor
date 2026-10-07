@@ -952,8 +952,9 @@ function applyInsertContent(
 
   const runs = paragraph.children.filter((child) => child.kind === 'run');
   const last = runs[runs.length - 1];
-  // Runs that hold nothing do not give an empty paragraph its face; its mark does
-  // (`mark-character-style-run.ts`). The first content goes in a run of its own after them.
+  // An empty paragraph's face is its mark's character style and direction flags, or the face
+  // of an empty run that already carries them (`mark-character-style-run.ts`). The first
+  // content goes in a run of its own after the empty runs.
   const markStyled = last ? emptyParagraphRunProperties(paragraph, nextId) : [];
   if (last && markStyled.length > 0) {
     inserted = fromEdit(

@@ -66,7 +66,10 @@ function fieldCharType(run: readonly OoxmlNode[]): string | undefined {
  * The first run that shows plain text: not struck, not a link, not a field result, not a
  * reference mark. `field` counts the complex fields open at the walk's position.
  */
-function firstTextRunProperties(node: OoxmlNode, field = { depth: 0 }): OoxmlElement | undefined {
+function firstTextRunProperties(
+  node: OoxmlNode,
+  field = { depth: 0 }
+): { readonly rPr: OoxmlElement | undefined } | undefined {
   if (node.kind === 'textValue') return undefined;
   for (const child of node.children) {
     if (child.kind === 'textValue' || SKIPPED_WRAPPERS.has(child.kind)) continue;
@@ -86,7 +89,8 @@ function firstTextRunProperties(node: OoxmlNode, field = { depth: 0 }): OoxmlEle
         )
       )
         continue;
-      return rPr;
+      // Found, plain or not: an unformatted first run is the face too.
+      return { rPr };
     }
     if (child.kind === 'paragraphProperties') continue;
     const nested = firstTextRunProperties(child, field);
@@ -135,7 +139,7 @@ function sourceContent(cell: OoxmlElement): SourceContent | null {
     const ownChildren = ownMark ? wmlChildren(ownMark, MARK_DROPPED) : [];
     const mark = ownChildren.length > 0 ? withChildren(ownMark!, ownChildren) : undefined;
     // The seed run carries the face written text shows: the mark's, or else the first text run's.
-    const borrowed = mark ? undefined : firstTextRunProperties(paragraph);
+    const borrowed = mark ? undefined : firstTextRunProperties(paragraph)?.rPr;
     const borrowedChildren = borrowed ? wmlChildren(borrowed, MARK_DROPPED) : [];
     const face =
       mark ?? (borrowedChildren.length > 0 ? withChildren(borrowed!, borrowedChildren) : undefined);
@@ -143,7 +147,8 @@ function sourceContent(cell: OoxmlElement): SourceContent | null {
     const pPrChildren = mark ? [...properties, mark] : properties;
     const nodes: OoxmlNode[] = [];
     if (pPrChildren.length > 0)
-      nodes.push(element(pPr ?? face ?? mark!, 'paragraphProperties', 'pPr', pPrChildren));
+      // Non-empty only when the source has a `w:pPr`: the mark comes from it.
+      nodes.push(element(pPr!, 'paragraphProperties', 'pPr', pPrChildren));
     if (face) nodes.push(element(face, 'run', 'r', [face]));
     if (nodes.length > 0)
       result = { nodes, count: nodes.reduce((total, node) => total + nodeCount(node), 0) };

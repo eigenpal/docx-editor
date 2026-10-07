@@ -21,7 +21,7 @@
   },
   "Word.Range#select": {
     "status": "partial",
-    "notes": "Selection requires an attached browser editor. Check runtime.capabilities.selection; server runtimes refuse with NotSupported."
+    "notes": "Selection requires an attached browser editor. Check runtime.capabilities.selection; server runtimes refuse with NotSupported. A range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.ContentControl#id": {
     "status": "different",
@@ -49,7 +49,7 @@
   },
   "Word.Range#insertComment": {
     "status": "partial",
-    "notes": "Writes require an explicit author. Browser writes also require the Pro review module and an editable document. A range in a text box refuses with InvalidArgument, because a comment there is not kept when the file opens."
+    "notes": "Writes require an explicit author. Browser writes also require the Pro review module and an editable document. A range in a text box refuses with InvalidArgument, because a comment there is not kept when the file opens. A range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.Section#getHeader": {
     "status": "partial",
@@ -61,7 +61,7 @@
   },
   "Word.Document#changeTrackingMode": {
     "status": "partial",
-    "notes": "Off and TrackMineOnly control this automation runtime only; the mode is not saved as a document-wide policy. TrackMineOnly requires a configured author and supports inline text, font, paragraph-format, and paragraph-style edits. Browser tracked writes require the review module and remain subject to the editor UI mode. TrackAll refuses. Paragraph insertion and list membership changes support native revisions. Table row additions and partial deletions support native row revisions. Existing list definitions and page layout still refuse. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control\u2019s tag and title. Empty ranges, existing review markup, and other control structure changes refuse. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration."
+    "notes": "Off and TrackMineOnly control this automation runtime only; the mode is not saved as a document-wide policy. TrackMineOnly requires a configured author and supports inline text, font, paragraph-format, and paragraph-style edits. Browser tracked writes require the review module and remain subject to the editor UI mode. TrackAll refuses. Paragraph insertion and list membership changes support native revisions. Table row additions and partial deletions support native row revisions. Existing list definitions and page layout still refuse. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control’s tag and title. Empty ranges, existing review markup, and other control structure changes refuse. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration."
   },
   "Word.Comment#creationDate": {
     "status": "partial",
@@ -81,19 +81,19 @@
   },
   "Word.Revision#type": {
     "status": "partial",
-    "notes": "The type union remains declared in full. The built-in reader emits Insert, Delete, Property, ParagraphProperty, MovedFrom, and MovedTo. Text replacements expose separate Insert and Delete revisions, including matching author, ID, and date. Replace remains declared but is not inferred from adjacent revisions. A change to a table row, a cell, the grid or a section's properties is STRUCTURAL, and the canonical accept/reject ops refuse it \u2014 so reporting it would list a change with an accept() and a reject() that both fail. Such revisions are therefore not reported at all rather than reported and un-actionable; the document's own markup is untouched either way, and a save round-trips it."
+    "notes": "The type union remains declared in full. The built-in reader emits Insert, Delete, Property, ParagraphProperty, MovedFrom, and MovedTo. Text replacements expose separate Insert and Delete revisions, including matching author, ID, and date. Replace remains declared but is not inferred from adjacent revisions. A change to a table row, a cell, the grid or a section's properties is STRUCTURAL, and the canonical accept/reject ops refuse it — so reporting it would list a change with an accept() and a reject() that both fail. Such revisions are therefore not reported at all rather than reported and un-actionable; the document's own markup is untouched either way, and a save round-trips it."
   },
   "Word.List#insertParagraph": {
     "status": "partial",
-    "notes": "All four locations are accepted, and Before/After land INSIDE the list at its first and last position \u2014 the same places Start and End name. A list is a set of paragraphs sharing a w:numId rather than a contiguous region of the story, so 'before the list' is a position in the story, not in the list, and Word.Paragraph#insertParagraph is the member that addresses it. A refusal on two of the four locations would fail scripts written against the shape; a silent unnumbered insert outside the list would answer a paragraph the list does not contain. Text may contain \\v, which inserts a manual line break (w:br); text reads report the break as \\v, so read text can be written back. Other paragraph-mark characters refuse."
+    "notes": "All four locations are accepted, and Before/After land INSIDE the list at its first and last position — the same places Start and End name. A list is a set of paragraphs sharing a w:numId rather than a contiguous region of the story, so 'before the list' is a position in the story, not in the list, and Word.Paragraph#insertParagraph is the member that addresses it. A refusal on two of the four locations would fail scripts written against the shape; a silent unnumbered insert outside the list would answer a paragraph the list does not contain. Text may contain \\v, which inserts a manual line break (w:br); text reads report the break as \\v, so read text can be written back. Other paragraph-mark characters refuse."
   },
   "Word.ContentControl#getRange": {
     "status": "partial",
-    "notes": "All six locations are accepted. Whole and Content answer the same stretch, and Before/After answer the content's own edges, because a control's boundary marks occupy no offset in the text this API addresses \u2014 there is no position between a mark and the first character for a range to start at. Refusing four of the six would fail scripts written against the shape; answering an invented offset would be worse."
+    "notes": "All six locations are accepted. Whole and Content answer the same stretch, and Before/After answer the content's own edges, because a control's boundary marks occupy no offset in the text this API addresses — there is no position between a mark and the first character for a range to start at. Refusing four of the six would fail scripts written against the shape; answering an invented offset would be worse."
   },
   "Word.ContentControl#insertText": {
     "status": "partial",
-    "notes": "Text-like controls accept all three locations and return the range of the written text. Replace goes through the control's own value path, so the prompt a control was showing is replaced whole and a w:temporary wrapper is removed \u2014 upstream's own behaviour, reached through the one write path the keyboard also takes, which is why a locked or custom-XML-bound control refuses this call with the same named reason a keystroke gets. Supports text-like controls only. Date, checkbox, and other typed controls refuse all insert locations with NotSupported. Use the editor native value UI for typed fields. Text may contain U+001E and U+001F, which insert a non-breaking hyphen and an optional hyphen, up to 4096 per call; text reads report those hyphens with the same characters. A symbol (w:sym) reads as \"(\" and counts as one character; writing \"(\" inserts a parenthesis, not a symbol. Text may contain \\v, which inserts a manual line break (w:br); text reads report the break as \\v, so read text can be written back. Other paragraph-mark characters refuse."
+    "notes": "Text-like controls accept all three locations and return the range of the written text. Replace goes through the control's own value path, so the prompt a control was showing is replaced whole and a w:temporary wrapper is removed — upstream's own behaviour, reached through the one write path the keyboard also takes, which is why a locked or custom-XML-bound control refuses this call with the same named reason a keystroke gets. Supports text-like controls only. Date, checkbox, and other typed controls refuse all insert locations with NotSupported. Use the editor native value UI for typed fields. Text may contain U+001E and U+001F, which insert a non-breaking hyphen and an optional hyphen, up to 4096 per call; text reads report those hyphens with the same characters. A symbol (w:sym) reads as \"(\" and counts as one character; writing \"(\" inserts a parenthesis, not a symbol. Text may contain \\v, which inserts a manual line break (w:br); text reads report the break as \\v, so read text can be written back. Other paragraph-mark characters refuse."
   },
   "OfficeExtension.LoadOption#expand": {
     "status": "partial",
@@ -121,7 +121,7 @@
   },
   "Word.Range#insertInlinePictureFromBase64": {
     "status": "partial",
-    "notes": "Supports canonical padded base64 for PNG/JPEG only, up to 20 MiB and 40 million pixels. Validates bounded raster headers and container structure without invoking a pixel decoder. Sizes use header DPI when present, otherwise 96 DPI. Before/Start and After/End use range endpoints; Replace supports one paragraph. Insertion must be the only mutation in its sync; sync before configuring the returned proxy. New pictures lock aspect ratio by default. Tracking and protected content refuse."
+    "notes": "Supports canonical padded base64 for PNG/JPEG only, up to 20 MiB and 40 million pixels. Validates bounded raster headers and container structure without invoking a pixel decoder. Sizes use header DPI when present, otherwise 96 DPI. Before/Start and After/End use range endpoints; Replace supports one paragraph. Insertion must be the only mutation in its sync; sync before configuring the returned proxy. New pictures lock aspect ratio by default. Tracking and protected content refuse. A range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.InlinePicture#width": {
     "status": "partial",
@@ -145,7 +145,7 @@
   },
   "Word.Range#insertTable": {
     "status": "partial",
-    "notes": "Creates a rectangular table with optional row-major string values. Before/After use range endpoints. Insertion may split a paragraph; adjacent tables retain a paragraph separator. Nested table authoring refuses. Initial values commit atomically. Table insertion is the only mutation in its sync; sync before using its returned proxy. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration."
+    "notes": "Creates a rectangular table with optional row-major string values. Before/After use range endpoints. Insertion may split a paragraph; adjacent tables retain a paragraph separator. Nested table authoring refuses. Initial values commit atomically. Table insertion is the only mutation in its sync; sync before using its returned proxy. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration. A range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.Table#values": {
     "status": "partial",
@@ -153,15 +153,15 @@
   },
   "Word.Table#addRows": {
     "status": "partial",
-    "notes": "Start/End insert ordinary rows using the first or last row as the source. Optional values cover every new cell. New cells copy the source cell's paragraph formatting, and written values take its first run formatting. Unrelated merged headers survive. Merged source rows, row offsets, hidden source cells, and crossing vertical merges refuse with InvalidArgument. Tables with merges require an explicit grid. Returns inserted rows; sync before dependent edits. This structural mutation must be alone in its sync. TrackMineOnly writes native row insertion revisions. Direct and tracked insertion support collaboration, undo/redo, reconnect, and save/reopen."
+    "notes": "Start/End insert ordinary rows using the first or last row as the source. Optional values cover every new cell. New cells copy the source cell's paragraph formatting; written values take the source mark's formatting, or the first text run's when the mark has none. Unrelated merged headers survive. Merged source rows, row offsets, hidden source cells, and crossing vertical merges refuse with InvalidArgument. Tables with merges require an explicit grid. Returns inserted rows; sync before dependent edits. This structural mutation must be alone in its sync. TrackMineOnly writes native row insertion revisions. Direct and tracked insertion support collaboration, undo/redo, reconnect, and save/reopen."
   },
   "Word.TableRow#insertRows": {
     "status": "partial",
-    "notes": "Before/After insert ordinary rows relative to the addressed row. Optional values cover every new cell. New cells copy the source cell's paragraph formatting, and written values take its first run formatting. Returns TableRowCollection; sync before dependent edits. Unrelated merged headers survive. Merged source rows, row offsets, hidden source cells, and crossing vertical merges refuse with InvalidArgument. Tables with merges require an explicit grid. This structural mutation must be alone in its sync. TrackMineOnly writes native row insertion revisions. Direct and tracked insertion support collaboration, undo/redo, reconnect, and save/reopen."
+    "notes": "Before/After insert ordinary rows relative to the addressed row. Optional values cover every new cell. New cells copy the source cell's paragraph formatting; written values take the source mark's formatting, or the first text run's when the mark has none. Returns TableRowCollection; sync before dependent edits. Unrelated merged headers survive. Merged source rows, row offsets, hidden source cells, and crossing vertical merges refuse with InvalidArgument. Tables with merges require an explicit grid. This structural mutation must be alone in its sync. TrackMineOnly writes native row insertion revisions. Direct and tracked insertion support collaboration, undo/redo, reconnect, and save/reopen."
   },
   "Word.Table#addColumns": {
     "status": "partial",
-    "notes": "Start/End insert columns across all rows. Optional values are row-major with one entry per added column. New cells copy the source cell's paragraph formatting, and written values take its first run formatting. This structural mutation must be alone in its sync. Merged topology refuses. Tables without an explicit grid refuse with InvalidArgument."
+    "notes": "Start/End insert columns across all rows. Optional values are row-major with one entry per added column. New cells copy the source cell's paragraph formatting; written values take the source mark's formatting, or the first text run's when the mark has none. This structural mutation must be alone in its sync. Merged topology refuses. Tables without an explicit grid refuse with InvalidArgument."
   },
   "Word.Table#deleteRows": {
     "status": "partial",
@@ -229,7 +229,7 @@
   },
   "Word.Range#insertField": {
     "status": "partial",
-    "notes": "Supports Page and NumPages with no switches, or Empty/default with text PAGE or NUMPAGES. Other field types, unsupported switches, and removeFormatting=true refuse. Inserts a simple field with an empty cached result; call updateResult to compute supported page fields. Before/Start and After/End use range endpoints; Replace requires one paragraph. Sync before configuring the returned field proxy. Also accepts TOC with optional \\o \"1-3\", \\h, \\z, and \\u switches. The outline range accepts ascending levels 1 through 9. TOC creation saves an empty cached result; TOC evaluation and code writes remain unsupported. Tracked field creation refuses."
+    "notes": "Supports Page and NumPages with no switches, or Empty/default with text PAGE or NUMPAGES. Other field types, unsupported switches, and removeFormatting=true refuse. Inserts a simple field with an empty cached result; call updateResult to compute supported page fields. Before/Start and After/End use range endpoints; Replace requires one paragraph. Sync before configuring the returned field proxy. Also accepts TOC with optional \\o \"1-3\", \\h, \\z, and \\u switches. The outline range accepts ascending levels 1 through 9. TOC creation saves an empty cached result; TOC evaluation and code writes remain unsupported. Tracked field creation refuses. A range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.Field#code": {
     "status": "partial",
@@ -505,7 +505,7 @@
   },
   "Word.Range#insertParagraph": {
     "status": "partial",
-    "notes": "Inserts a canonical paragraph at the supported endpoint (Body Start/End; Range Before/After). The returned proxy requires a sync before configuration. Newline-containing text and unsupported structural boundaries refuse; adjacent content is preserved. TrackMineOnly records inserted text and paragraph marks. Reject restores the original paragraph boundaries. Text may contain \\v, which inserts a manual line break (w:br); text reads report the break as \\v, so read text can be written back. Other paragraph-mark characters refuse."
+    "notes": "Inserts a canonical paragraph at the supported endpoint (Body Start/End; Range Before/After). The returned proxy requires a sync before configuration. Newline-containing text and unsupported structural boundaries refuse; adjacent content is preserved. TrackMineOnly records inserted text and paragraph marks. Reject restores the original paragraph boundaries. Text may contain \\v, which inserts a manual line break (w:br); text reads report the break as \\v, so read text can be written back. Other paragraph-mark characters refuse. A range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.Body#insertText": {
     "status": "partial",
@@ -529,7 +529,7 @@
   },
   "Word.Range#hyperlink": {
     "status": "partial",
-    "notes": "Writes a hyperlink on supported text spans using a package relationship. Supported URL policy and content boundaries are validated; unsupported targets refuse. Relationship resources are preserved on undo to keep surviving links valid. Partial retargeting and unlinking split ordinary text-run links directly inside a paragraph and preserve unaffected targets, wrapper metadata, and formatting. Partial complex/nested wrappers and collapsed positions within links refuse with NotSupported."
+    "notes": "Writes a hyperlink on supported text spans using a package relationship. Supported URL policy and content boundaries are validated; unsupported targets refuse. Relationship resources are preserved on undo to keep surviving links valid. Partial retargeting and unlinking split ordinary text-run links directly inside a paragraph and preserve unaffected targets, wrapper metadata, and formatting. Partial complex/nested wrappers and collapsed positions within links refuse with NotSupported. A range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.Paragraph#style": {
     "status": "partial",
@@ -593,11 +593,11 @@
   },
   "Word.ListItem#level": {
     "status": "partial",
-    "notes": "Writes levels 0\u20138 only when the list defines that level. New authored lists define all nine levels. Missing levels and protected paragraphs refuse. TrackMineOnly records list membership in paragraph-property revisions. Reject restores prior membership; unused numbering definitions can remain in the package."
+    "notes": "Writes levels 0–8 only when the list defines that level. New authored lists define all nine levels. Missing levels and protected paragraphs refuse. TrackMineOnly records list membership in paragraph-property revisions. Reject restores prior membership; unused numbering definitions can remain in the package."
   },
   "Word.Range#insertBreak": {
     "status": "partial",
-    "notes": "Authors Line, Page, and SectionNext at Before/After. Line writes a manual line break (w:br) in any story, as a text insertion: it shares its sync with other edits, including text edits in the same paragraph, and TrackMineOnly records it as a tracked insertion. A single-line content control (plain text without multiLine, a list, or a date) refuses a line break. SectionNext requires a body paragraph outside a table. Page and SectionNext commit alone in their sync and refuse while tracking. Other break types refuse."
+    "notes": "Authors Line, Page, and SectionNext at Before/After. Line writes a manual line break (w:br) in any story, as a text insertion: it shares its sync with other edits, including text edits in the same paragraph, and TrackMineOnly records it as a tracked insertion. A single-line content control (plain text without multiLine, a list, or a date) refuses a line break. SectionNext requires a body paragraph outside a table. Page and SectionNext commit alone in their sync and refuse while tracking. Other break types refuse. A range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.PageSetup#orientation": {
     "status": "partial",
@@ -629,7 +629,7 @@
   },
   "Word.Range#insertContentControl": {
     "status": "partial",
-    "notes": "Creates RichText, PlainText, and DatePicker controls around an eligible single-paragraph range. Other types refuse. Sync before configuring the returned proxy. DatePicker creates a real date SDT; typed date configuration accessors remain unavailable. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control\u2019s tag and title. Empty ranges, existing review markup, and other control structure changes refuse."
+    "notes": "Creates RichText, PlainText, and DatePicker controls around an eligible single-paragraph range. Other types refuse. Sync before configuring the returned proxy. DatePicker creates a real date SDT; typed date configuration accessors remain unavailable. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control’s tag and title. Empty ranges, existing review markup, and other control structure changes refuse. A range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.ContentControl#tag": {
     "status": "partial",

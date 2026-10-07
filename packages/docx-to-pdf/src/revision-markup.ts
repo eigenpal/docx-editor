@@ -114,10 +114,10 @@ export function spanMarkup(
     formatRevisionOf(visit.span.props) ??
     formatRevisionOf(visit.paragraph.props);
   if (!revision) return null;
-  // A removed ancestor, including a deleted row, keeps nested insertions visibly removed.
-  const kind =
-    revisions.find((item) => item.kind === 'delete' || item.kind === 'moveFrom')?.kind ??
-    revision.kind;
+  // A removed ancestor, including a deleted row, keeps nested insertions visibly removed, in
+  // the color of the author who removed it.
+  const removing = revisions.find((item) => item.kind === 'delete' || item.kind === 'moveFrom');
+  const kind = removing?.kind ?? revision.kind;
   const style =
     kind === 'insert'
       ? settings.insertions
@@ -132,5 +132,5 @@ export function spanMarkup(
               ? settings.movedTo
               : settings.insertions
             : settings.formatting;
-  return { ...style, author: revision.author };
+  return { ...style, author: (removing ?? revision).author };
 }
