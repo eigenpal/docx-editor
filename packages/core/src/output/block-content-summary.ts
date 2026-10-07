@@ -1,3 +1,4 @@
+import { blockMetadataIdentity } from '../layout/block-metadata-identity.ts';
 // What a block list holds that page-level consumers need without its geometry: the review
 // authors it names and whether it can paint a drawing at all.
 //
@@ -21,7 +22,7 @@ export interface BlockContentSummary {
   readonly drawingFree: boolean;
 }
 
-const summaries = new WeakMap<readonly BlockFragmentRecord[], BlockContentSummary>();
+const summaries = new WeakMap<object, BlockContentSummary>();
 
 /**
  * The author of the first tracked format change in one run's properties: `''` when it names
@@ -40,7 +41,8 @@ function formatChangeAuthor(props: readonly OoxmlProperty[]): string | null {
 }
 
 export function blockContentSummary(blocks: readonly BlockFragmentRecord[]): BlockContentSummary {
-  const cached = summaries.get(blocks);
+  const identity = blockMetadataIdentity(blocks);
+  const cached = summaries.get(identity);
   if (cached) return cached;
   const found: string[] = [];
   const seen = new Set<string>();
@@ -129,6 +131,6 @@ export function blockContentSummary(blocks: readonly BlockFragmentRecord[]): Blo
   walk(blocks, true);
   for (const author of cellAuthors) see(author);
   const summary: BlockContentSummary = { authors: found, drawingFree };
-  summaries.set(blocks, summary);
+  summaries.set(identity, summary);
   return summary;
 }

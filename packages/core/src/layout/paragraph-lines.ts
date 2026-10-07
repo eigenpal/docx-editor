@@ -5,6 +5,7 @@
 // memoized per revision, with no knowledge of stops or selections.
 
 import { lineSegments } from './line-segments.ts';
+import { paragraphFragmentsOnPage } from './story-fragments.ts';
 import type { LayoutBox, LineRecord, PageRecord, SemanticLayout } from './semantic-records.ts';
 import { lineAtPosition, paragraphFragmentsOf } from './semantic-records.ts';
 import type { SemanticPosition } from './semantic-interaction.ts';
@@ -63,6 +64,21 @@ export function paragraphLinesIndex(layout: SemanticLayout): Map<string, PlacedL
 
 const requestedParagraphLines = new WeakMap<SemanticLayout, Map<string, readonly PlacedLine[]>>();
 
+// Page membership can survive a width-only table update while line geometry changes.
+// Retain only page numbers, never line or page records from the previous layout.
+const paragraphPageRoutes = new WeakMap<SemanticLayout, Map<string, ReadonlySet<number>>>();
+
+/** @internal Caller proves every paragraph keeps its page membership. */
+export function carryParagraphPageRoutes(previous: SemanticLayout, next: SemanticLayout): void {
+  if (previous === next || previous.pages.length !== next.pages.length) return;
+  const routes = new Map(paragraphPageRoutes.get(previous));
+  for (const [id, placed] of requestedParagraphLines.get(previous) ?? []) {
+    if (placed.length) routes.set(id, new Set(placed.map((entry) => entry.pageIndex)));
+  }
+  while (routes.size > LAZY_PARAGRAPH_READS) routes.delete(routes.keys().next().value!);
+  if (routes.size) paragraphPageRoutes.set(next, routes);
+}
+
 /**
  * Distinct paragraphs one layout answers by page scan before it builds the complete index.
  *
@@ -94,13 +110,51 @@ export function paragraphLinesFor(
     return paragraphLinesIndex(layout).get(paragraphId) ?? [];
   }
   const result: PlacedLine[] = [];
+  const route = paragraphPageRoutes.get(layout)?.get(paragraphId);
   for (const page of layout.pages) {
+    if (route && !route.has(page.index)) continue;
     pageTraversals += 1;
-    const placed = pageLines(page).get(paragraphId);
+    const placed = pageLinesFor(page, paragraphId);
     if (placed) for (const line of placed) result.push(line);
   }
   requested.set(paragraphId, result);
   return result;
+}
+
+const requestedPageLines = new WeakMap<
+  PageRecord,
+  Map<string, readonly PlacedLine[] | undefined>
+>();
+
+/** A caret read must not allocate entries for every other paragraph on a changed page. */
+function pageLinesFor(page: PageRecord, paragraphId: string): readonly PlacedLine[] | undefined {
+  const complete = pageLinesCache.get(page);
+  if (complete) return complete.get(paragraphId);
+  let requested = requestedPageLines.get(page);
+  if (requested?.has(paragraphId)) return requested.get(paragraphId);
+  if (requested && requested.size >= LAZY_PARAGRAPH_READS) return pageLines(page).get(paragraphId);
+  let found: PlacedLine[] | undefined;
+  for (const fragment of paragraphFragmentsOnPage(page)) {
+    for (const line of fragment.lines) {
+      // Merged paragraphs can draw a member whose id differs from the fragment and line.
+      // Inspect ownership without building segment arrays for unrelated ordinary lines.
+      if (
+        line.range.paragraphId !== paragraphId &&
+        !line.spans.some((span) => span.range.paragraphId === paragraphId) &&
+        !line.drawings?.some((drawing) => drawing.paragraphId === paragraphId)
+      )
+        continue;
+      if (!lineSegments(line).some((segment) => segment.paragraphId === paragraphId)) continue;
+      (found ??= []).push({
+        line,
+        pageIndex: page.index,
+        ...(fragment.clipToBox ? { clipBox: fragment.box } : {}),
+      });
+    }
+  }
+  if (!requested) requestedPageLines.set(page, (requested = new Map()));
+  requested.set(paragraphId, found);
+  return found;
 }
 
 function pageLines(page: PageRecord): ReadonlyMap<string, readonly PlacedLine[]> {
@@ -156,6 +210,7 @@ function pageLines(page: PageRecord): ReadonlyMap<string, readonly PlacedLine[]>
     if (!area) continue;
     for (const note of area.notes) indexFragments(note.fragments, page.index);
   }
+  requestedPageLines.delete(page);
   pageLinesCache.set(page, index);
   return index;
 }

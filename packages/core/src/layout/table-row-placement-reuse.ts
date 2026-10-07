@@ -94,6 +94,16 @@ export function rememberRowPlacement(
   });
 }
 
+const settledPreviousRows = new WeakSet<TableRowFragmentRecord>();
+
+/**
+ * A previous finalized row moved without changing its vertical placement.
+ * The ordinary-paragraph proof excludes drawings, so finalization has no anchors to republish.
+ */
+export function isSettledPreviousRow(row: TableRowFragmentRecord): boolean {
+  return settledPreviousRows.has(row);
+}
+
 /**
  * The probe result a fresh placement of `row` at `top` would give, rebuilt from its previous
  * finalized row; null when anything vertical or any cell line could differ.
@@ -121,6 +131,7 @@ export function placementFromPrevious(
     return null;
   const record = moveRowToWidths(row, previous, cols, left, deps);
   if (!record) return null;
+  settledPreviousRows.add(record);
   return {
     record,
     bottom: known.bottom,

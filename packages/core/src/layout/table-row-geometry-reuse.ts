@@ -23,13 +23,10 @@ import {
   cellAvailableWidth,
   cellParagraphBreakInputs,
   cellParagraphInputs,
+  memoizedCellParagraphBreakInputs,
   memoizedCellParagraphInputs,
 } from './cell-paragraph-inputs.ts';
-import {
-  cellBreakKeyParts,
-  sameCellBreakKeyParts,
-  type CellBreakKeyParts,
-} from './cell-break-key.ts';
+import { cellBreakKeyPartsMatch, type CellBreakKeyParts } from './cell-break-key.ts';
 import { alignCellLine } from './cell-line-alignment.ts';
 import { rowsClearOutOfCellFloats } from './cell-anchor-layout.ts';
 import { directionalListFirstLineShift } from './list-marker.ts';
@@ -42,7 +39,7 @@ import { lineContentX, type PendingLine } from './pending-line.ts';
 import type { SemanticTableRow } from './semantic-table.ts';
 import { MIN_CELL_BOX_PT, sumCols, type TableFlowDeps } from './semantic-table-layout.ts';
 import type { ParagraphLayoutInputs } from './style-cascade.ts';
-import { cellContentInsets } from './table-cell-geometry.ts';
+import { sharedCellContentInsets } from './cell-content-insets-memo.ts';
 import { cellFlowBox } from './table-cell-text-direction.ts';
 import type {
   LineRecord,
@@ -64,6 +61,18 @@ interface CellLine {
   readonly compatibilityMode: TableFlowDeps['compatibilityMode'];
   readonly displayMode: TableFlowDeps['displayMode'];
   readonly revisionAuthorFilter: number;
+}
+
+/** Per row: the identities every cell of it compares, read once. */
+interface MoveContext {
+  readonly deps: TableFlowDeps;
+  readonly cache: NonNullable<TableFlowDeps['cache']>;
+  readonly measurer: number;
+  readonly styleCascade: number;
+  readonly revisionAuthorFilter: number;
+  readonly cols: readonly number[];
+  readonly geometry: ColumnGeometry;
+  readonly left: number;
 }
 
 let movedRowsObserver: { moved: number } | null = null;
@@ -217,15 +226,18 @@ function onlyMovableFields(block: ParagraphFragmentRecord): boolean {
 /** Blocks a move built: the same keys as a block that passed `onlyMovableFields`. */
 const movedBlocks = new WeakSet<ParagraphFragmentRecord>();
 
+interface ColumnGeometry {
+  readonly lefts: readonly number[];
+  readonly widths: readonly number[];
+  readonly total: number;
+}
+
 /**
  * Cell left edges and single-column widths for one column-width array, computed by the
  * same `sumCols` calls row placement makes, so every value is bit-identical to placement's.
  */
-const columnGeometry = new WeakMap<
-  readonly number[],
-  { readonly lefts: readonly number[]; readonly widths: readonly number[]; readonly total: number }
->();
-function columnGeometryOf(cols: readonly number[]) {
+const columnGeometry = new WeakMap<readonly number[], ColumnGeometry>();
+function columnGeometryOf(cols: readonly number[]): ColumnGeometry {
   let known = columnGeometry.get(cols);
   if (!known) {
     known = {
@@ -242,11 +254,9 @@ function columnGeometryOf(cols: readonly number[]) {
 function moveCell(
   cell: SemanticTableRow['cells'][number],
   placed: TableCellFragmentRecord,
-  cols: readonly number[],
-  left: number,
-  total: number,
-  deps: TableFlowDeps
+  context: MoveContext
 ): TableCellFragmentRecord | null {
+  const { deps, cache, cols, geometry } = context;
   const paragraph = cell.blocks[0];
   const block = placed.blocks[0];
   if (
@@ -262,27 +272,25 @@ function moveCell(
   const known = cellLines.get(block.range);
   if (
     !known ||
-    !deps.cache ||
     known.paragraph !== paragraph ||
-    known.measurer !== identityOf(deps.measurer) ||
-    known.styleCascade !== identityOf(deps.styleCascade) ||
+    known.measurer !== context.measurer ||
+    known.styleCascade !== context.styleCascade ||
     known.compatibilityMode !== deps.compatibilityMode ||
     known.displayMode !== deps.displayMode ||
-    known.revisionAuthorFilter !== identityOf(deps.revisionAuthorFilter)
+    known.revisionAuthorFilter !== context.revisionAuthorFilter
   )
     return null;
   // Cell and content boxes exactly as row placement derives them, cell spacing excluded.
   const { gridColumn, gridSpan } = cell;
-  const geometry = columnGeometryOf(cols);
   const single = gridSpan === 1 && gridColumn < cols.length;
-  const x = left + (single ? geometry.lefts[gridColumn]! : sumCols(cols, 0, gridColumn));
+  const x = context.left + (single ? geometry.lefts[gridColumn]! : sumCols(cols, 0, gridColumn));
   const width = Math.max(
     (single
       ? geometry.widths[gridColumn]!
-      : sumCols(cols, gridColumn, Math.min(gridColumn + gridSpan, cols.length))) || total,
+      : sumCols(cols, gridColumn, Math.min(gridColumn + gridSpan, cols.length))) || geometry.total,
     MIN_CELL_BOX_PT
   );
-  const insets = deps.cellContentInsets?.get(cell.id) ?? cellContentInsets(cell, true);
+  const insets = deps.cellContentInsets?.get(cell.id) ?? sharedCellContentInsets(cell, true);
   const { flowLeft, flowRight } = cellFlowBox(false, x, width, 0, 0, insets);
   const contentWidth = Math.max(1, flowRight - flowLeft);
   // A move reads the memo without replacing it: only `available` depends on width.
@@ -305,28 +313,37 @@ function moveCell(
   if (!sameInputsExceptWidth(inputs, known.inputs)) return null;
   const { indent } = inputs;
   const available = cellAvailableWidth(inputs, contentWidth);
-  const { tabStops, properties } = cellParagraphBreakInputs(
-    paragraph,
-    inputs,
-    deps.defaultTabStopPt,
-    {
+  const hostedListToken = deps.hostedStory?.hostedListTokenForParagraph?.(paragraph) ?? '';
+  const refToken = deps.refFields?.tokenForParagraph(paragraph.id) ?? '';
+  const { tabStops, properties } =
+    memoizedCellParagraphBreakInputs(
+      paragraph,
+      inputs,
+      deps.defaultTabStopPt,
+      undefined,
+      hostedListToken,
+      refToken
+    ) ??
+    cellParagraphBreakInputs(paragraph, inputs, deps.defaultTabStopPt, {
       listToken: undefined,
-      hostedListToken: deps.hostedStory?.hostedListTokenForParagraph?.(paragraph) ?? '',
-      refToken: deps.refFields?.tokenForParagraph(paragraph.id) ?? '',
-    }
-  );
-  const parts = cellBreakKeyParts(
-    paragraph,
-    deps,
-    known.parts.inTableCell,
-    known.parts.cellEndMark,
-    rowsClearOutOfCellFloats(deps, paragraph.id)
-  );
-  if (!sameCellBreakKeyParts(parts, known.parts) || !sameProperties(properties, known.properties))
+      hostedListToken,
+      refToken,
+    });
+  if (
+    !cellBreakKeyPartsMatch(
+      paragraph,
+      deps,
+      known.parts.inTableCell,
+      known.parts.cellEndMark,
+      rowsClearOutOfCellFloats(deps, paragraph.id),
+      known.parts
+    ) ||
+    !sameProperties(properties, known.properties)
+  )
     return null;
   // The entry placement read: every key input but width matches, so a fresh placement at this
   // width takes the same line whenever the cache's own width transfer accepts it.
-  const lines = deps.cache.get(known.key);
+  const lines = cache.get(known.key);
   const old = block.lines[0]!;
   const pending = lines?.length === 1 ? lines[0]! : undefined;
   if (!pending || !placedFrom(old, pending) || !lineHolds(pending, available)) return null;
@@ -339,6 +356,7 @@ function moveCell(
     false
   );
   const lineIndent = flowLeft + indent.left + firstLineOffset;
+  const lineWidth = Math.max(1, available - firstLineOffset);
   const content = alignCellLine(
     pending,
     paragraph.id,
@@ -346,7 +364,7 @@ function moveCell(
     old.box.y,
     [],
     lineIndent,
-    Math.max(1, available - firstLineOffset),
+    lineWidth,
     true,
     {
       measurer: deps.measurer,
@@ -359,11 +377,9 @@ function moveCell(
   );
   const spans = content.spans;
   // Alignment moves spans along x only; anything else is not this line any more.
-  if (
-    spans.length !== old.spans.length ||
-    spans.some((span, index) => span.box.y !== old.spans[index]!.box.y)
-  )
-    return null;
+  if (spans.length !== old.spans.length) return null;
+  for (let index = 0; index < spans.length; index += 1)
+    if (spans[index]!.box.y !== old.spans[index]!.box.y) return null;
   const line = {
     ...old,
     spans,
@@ -397,10 +413,21 @@ export function moveRowToWidths(
     placed.isHeaderRepeat ||
     placed.isContinuation ||
     placed.hasContinuation ||
-    row.cells.length !== placed.cells.length
+    row.cells.length !== placed.cells.length ||
+    !deps.cache
   )
     return null;
-  const total = columnGeometryOf(cols).total;
+  const geometry = columnGeometryOf(cols);
+  const context: MoveContext = {
+    deps,
+    cache: deps.cache,
+    measurer: identityOf(deps.measurer),
+    styleCascade: identityOf(deps.styleCascade),
+    revisionAuthorFilter: identityOf(deps.revisionAuthorFilter),
+    cols,
+    geometry,
+    left,
+  };
   const cells: TableCellFragmentRecord[] = [];
   for (let index = 0; index < row.cells.length; index += 1) {
     const cell = row.cells[index]!;
@@ -413,10 +440,10 @@ export function moveRowToWidths(
       before.paintInert
     )
       return null;
-    const moved = moveCell(cell, before, cols, left, total, deps);
+    const moved = moveCell(cell, before, context);
     if (!moved) return null;
     cells.push(moved);
   }
   if (movedRowsObserver) movedRowsObserver.moved += 1;
-  return { ...placed, cells, box: { ...placed.box, x: left, width: total } };
+  return { ...placed, cells, box: { ...placed.box, x: left, width: geometry.total } };
 }

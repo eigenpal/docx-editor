@@ -93,6 +93,31 @@ export function memoizedCellParagraphInputs(
     : undefined;
 }
 
+/**
+ * The prepared break inputs `cellParagraphBreakInputs` would return from its memo for these
+ * values, or undefined on a miss. Builds no dependency object; callers fall back to
+ * `cellParagraphBreakInputs` on a miss.
+ */
+export function memoizedCellParagraphBreakInputs(
+  paragraph: OoxmlElement,
+  inputs: ParagraphLayoutInputs,
+  interval: number | undefined,
+  listToken: string | undefined,
+  hostedListToken: string,
+  refToken: string
+): ReturnType<typeof prepareParagraphBreakInputs> | undefined {
+  const memo = memos.get(paragraph);
+  const known = memo?.prepared;
+  return memo?.inputs === inputs &&
+    known &&
+    known.interval === interval &&
+    known.dependencies.listToken === listToken &&
+    known.dependencies.hostedListToken === hostedListToken &&
+    known.dependencies.refToken === refToken
+    ? known.value
+    : undefined;
+}
+
 export function cellParagraphBreakInputs(
   paragraph: OoxmlElement,
   inputs: ParagraphLayoutInputs,

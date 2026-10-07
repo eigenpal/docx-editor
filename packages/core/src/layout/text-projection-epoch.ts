@@ -8,7 +8,11 @@ import type {
 import { sha256FontBytes } from '../store/package/sha256.ts';
 import type { DocumentPropertyKey } from './field-doc-property.ts';
 import { piecesOfParagraph } from './field-projection.ts';
-import { aggregateParagraphTokensForTableBlock, framedTokenJoin } from './layout-cache.ts';
+import { framedTokenJoin } from './framed-token.ts';
+import {
+  aggregateParagraphTokensForTableBlock,
+  createTableRowTokenStore,
+} from './table-paragraph-tokens.ts';
 import type { HyperlinkProjector } from './field-pieces.ts';
 
 const encoder = new TextEncoder();
@@ -153,6 +157,8 @@ export function createStoryProjectionDependencies(
     OoxmlNode,
     WeakMap<HyperlinkProjector, { readonly epoch: string; readonly token: string }>
   >();
+  // Row segments under the same projector and epoch, for a table node a cell edit replaced.
+  const tableRowTokens = createTableRowTokenStore();
   const epochForPart = (partName: string): string => {
     const revision = view.packageRevision();
     const pkg = view.currentPackage();
@@ -240,8 +246,10 @@ export function createStoryProjectionDependencies(
     const byProjector = tableTokens.get(table);
     const cached = byProjector?.get(projectLink);
     if (cached?.epoch === epoch) return cached.token;
-    const token = aggregateParagraphTokensForTableBlock(table, (paragraph) =>
-      tokenForParagraphForPart(partName, paragraph)
+    const token = aggregateParagraphTokensForTableBlock(
+      table,
+      (paragraph) => tokenForParagraphForPart(partName, paragraph),
+      { rows: tableRowTokens, scope: projectLink, epoch }
     );
     const target = byProjector ?? new WeakMap();
     target.set(projectLink, { epoch, token });

@@ -10,12 +10,8 @@
 import { shiftInlineDrawingRecord } from './drawing-layout.ts';
 import { relayOutMergedBottomToTop } from './table-cell-text-direction.ts';
 import { republishAnchoredParagraphsInBlocks } from './table-anchor-republish.ts';
-import {
-  borderContentInset,
-  cellContentInsets,
-  type CellContentInsets,
-} from './table-cell-geometry.ts';
-import { effectiveBorderSide } from './table-border-cascade.ts';
+import type { CellContentInsets } from './table-cell-geometry.ts';
+import { outerBottomInsetFloor, sharedCellContentInsets } from './cell-content-insets-memo.ts';
 import {
   resolveTableCellBorderGrid,
   type BorderGridCell,
@@ -213,7 +209,7 @@ export function finalizeTableRows(
             if (authored && authored.vAlign !== 'top' && blocks.length > 0) {
               const insets =
                 occurrenceInsets?.get(row)?.get(cell.id) ??
-                cellContentInsets(authored, structure.cellSpacingPt === 0);
+                sharedCellContentInsets(authored, structure.cellSpacingPt === 0);
               // Content was placed relative to the first row; measure current content band.
               let contentTop = Number.POSITIVE_INFINITY;
               let contentBottom = Number.NEGATIVE_INFINITY;
@@ -255,7 +251,7 @@ export function finalizeTableRows(
             ) {
               const insets =
                 occurrenceInsets?.get(row)?.get(cell.id) ??
-                cellContentInsets(authored, structure.cellSpacingPt === 0);
+                sharedCellContentInsets(authored, structure.cellSpacingPt === 0);
               const cellContentBox = {
                 ...finalizedCellBox,
                 x: finalizedCellBox.x + insets.left,
@@ -312,17 +308,13 @@ export function finalizeTableRows(
         const insets =
           authored &&
           (occurrenceInsets?.get(rows[rowIndex]!)?.get(cell.id) ??
-            cellContentInsets(authored, structure.cellSpacingPt === 0));
+            sharedCellContentInsets(authored, structure.cellSpacingPt === 0));
         // Split/merged occurrences can decline the terminal re-probe. Do not move their
         // stroke into content until admission has reserved the complete outer inset.
         const outerBottomInsetReserved =
           authored && insets
             ? insets.bottom >=
-              borderContentInset(
-                authored.margins.bottom,
-                effectiveBorderSide(authored.borders.bottom, structure.tableBorders.bottom)
-              ) -
-                0.001
+              outerBottomInsetFloor(authored, structure.tableBorders.bottom) - 0.001
             : false;
         return {
           width: cell.box.width,

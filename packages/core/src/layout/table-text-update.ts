@@ -1,3 +1,4 @@
+import { carryBlockMetadataIdentity } from './block-metadata-identity.ts';
 import { ordinaryTableParagraph } from './table-ordinary-paragraph.ts';
 import { firstRowContentDeps, lastRowContentDeps } from './table-fragment-content-insets.ts';
 import { bodyLineId } from './body-line-id.ts';
@@ -28,6 +29,7 @@ export function updateTableText(
   pages: readonly PageRecord[];
   lineDelta: number;
   replacements: ReadonlyMap<BlockFragmentRecord, BlockFragmentRecord>;
+  paragraphPagesUnchanged?: true;
 } | null {
   if (!drawingInputsUnchangedByTextEdit(before, after)) return null;
   const structureOf = (table: OoxmlElement) =>
@@ -45,8 +47,19 @@ export function updateTableText(
   const structure = structureOf(after);
   if (!oldStructure || !structure || structure.float) return null;
   if (oldStructure.rows.length !== structure.rows.length) return null;
-  if (JSON.stringify(oldStructure.columnWidthsPt) !== JSON.stringify(structure.columnWidthsPt))
-    return updateTableWidths(after, oldStructure, structure, pages, width, deps);
+  if (JSON.stringify(oldStructure.columnWidthsPt) !== JSON.stringify(structure.columnWidthsPt)) {
+    const update = updateTableWidths(after, oldStructure, structure, pages, width, deps);
+    // The width lane requires ordinaryTableParagraph, which excludes revision markup and
+    // drawings. The text-only source proof preserves cell properties and shading authors.
+    // Unchanged page membership then preserves attribution order and drawing presence.
+    if (update)
+      for (let index = 0; index < pages.length; index++) {
+        const previous = pages[index]!.fragments;
+        const next = update.pages[index]!.fragments;
+        if (previous !== next) carryBlockMetadataIdentity(previous, next);
+      }
+    return update;
+  }
   const changed = structure.rows.filter((row, i) => row !== oldStructure.rows[i]);
   if (changed.length !== 1) return null;
   const source = changed[0]!;

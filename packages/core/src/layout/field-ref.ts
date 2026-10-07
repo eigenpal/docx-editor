@@ -52,6 +52,7 @@
 
 import { visibleHyphenText } from '../store/package/hyphen-text.ts';
 import {
+  flattenContentControls,
   fldSimpleInstr,
   isFldSimple,
   type OoxmlElement,
@@ -118,6 +119,7 @@ import {
   type RevisionDisplayMode,
 } from './revision-projection.ts';
 import { cacheProjection } from './bounded-projection-cache.ts';
+import { storyRowParagraphs } from './story-paragraph-walk.ts';
 import {
   listItemNumberSource,
   walkStoryParagraphs,
@@ -903,12 +905,50 @@ export function resolveStoryRefFieldsWithNoteNumbers(
  * Aggregate the REF tokens of every paragraph a table contains, for its prepared-block memo
  * and cache key — the same shape as the table's list-token aggregate, for the same reason: a
  * REF value change inside a cell moves nothing else in the table's key.
+ *
+ * Each row's joined tokens are reused while the row node and the context's values hold. A
+ * context's `valuesToken` frames every paragraph id with its token, so two contexts with equal
+ * `valuesToken` answer every paragraph alike and share one row scope. Joining the non-empty
+ * row segments equals joining the non-empty paragraph tokens.
  */
 export function refTokenForTableBlock(table: OoxmlElement, context: RefFieldContext): string {
-  const tokens: string[] = [];
-  for (const paragraph of walkStoryParagraphs([table])) {
-    const token = context.tokenForParagraph(paragraph.id);
-    if (token) tokens.push(token);
+  if (context.valuesToken === '') return '';
+  const scope = refRowScope(context);
+  const segments: string[] = [];
+  for (const row of flattenContentControls(table.children)) {
+    if (row.kind !== 'tableRow') continue;
+    let known = refRowTokens.get(row);
+    if (known?.scope !== scope) {
+      const tokens: string[] = [];
+      for (const paragraph of storyRowParagraphs(row, REF_TABLE_DEPTH)) {
+        const token = context.tokenForParagraph(paragraph.id);
+        if (token) tokens.push(token);
+      }
+      known = { scope, token: tokens.join(';') };
+      if (known.token.length <= MAX_REF_ROW_TOKEN_LENGTH) refRowTokens.set(row, known);
+    }
+    if (known.token) segments.push(known.token);
   }
-  return tokens.join(';');
+  return segments.join(';');
+}
+
+/** The table depth `walkStoryParagraphs` allows a top-level table. */
+const REF_TABLE_DEPTH = 8;
+const MAX_REF_ROW_TOKEN_LENGTH = 1 << 18;
+const refRowTokens = new WeakMap<OoxmlNode, { readonly scope: object; readonly token: string }>();
+const refRowScopes = new WeakMap<RefFieldContext, object>();
+let lastRefContext: WeakRef<RefFieldContext> | null = null;
+
+/** One row scope per distinct `valuesToken`, carried from the previous context when equal. */
+function refRowScope(context: RefFieldContext): object {
+  let scope = refRowScopes.get(context);
+  if (scope) return scope;
+  const previous = lastRefContext?.deref();
+  scope =
+    (previous && previous.valuesToken === context.valuesToken
+      ? refRowScopes.get(previous)
+      : undefined) ?? {};
+  refRowScopes.set(context, scope);
+  lastRefContext = new WeakRef(context);
+  return scope;
 }

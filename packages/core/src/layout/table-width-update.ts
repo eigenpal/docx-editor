@@ -46,14 +46,52 @@ type TableFragment = Extract<BlockFragmentRecord, { kind: 'table' }>;
 
 /** Same result shape as `updateTableText`. */
 export interface TableWidthUpdate {
+  readonly paragraphPagesUnchanged: true;
   readonly pages: readonly PageRecord[];
   readonly lineDelta: number;
   readonly replacements: ReadonlyMap<BlockFragmentRecord, BlockFragmentRecord>;
 }
 
-/** Structural eligibility of one resolved table, memoized per immutable structure. */
+/**
+ * Structural eligibility of one resolved table, memoized per immutable structure. A text
+ * edit gives the table a new structure that shares every unchanged row object, so the row
+ * answers are memoized per row as well.
+ */
 const eligibleStructures = new WeakMap<SemanticTableStructure, boolean>();
-const listFreeStructures = new WeakMap<SemanticTableStructure, TableFlowDeps['listItems']>();
+const listFreeStructures = new WeakMap<
+  SemanticTableStructure,
+  WeakRef<NonNullable<TableFlowDeps['listItems']>>
+>();
+const eligibleRows = new WeakMap<SemanticTableRow, boolean>();
+const listFreeRows = new WeakMap<
+  SemanticTableRow,
+  WeakRef<NonNullable<TableFlowDeps['listItems']>>
+>();
+
+function eligibleRow(row: SemanticTableRow): boolean {
+  let known = eligibleRows.get(row);
+  if (known === undefined) {
+    known = row.cells.every(
+      (cell) =>
+        cell.logicalGridColumn === undefined &&
+        cell.textDirection === 'horizontal' &&
+        // A merge is planned here only inside the leading header group.
+        (!cell.vMergeContinue || row.isHeader) &&
+        cell.blocks.every((block) => block.kind === 'paragraph' && ordinaryTableParagraph(block))
+    );
+    eligibleRows.set(row, known);
+  }
+  return known;
+}
+
+function listFreeRow(row: SemanticTableRow, listItems: NonNullable<TableFlowDeps['listItems']>) {
+  if (listFreeRows.get(row)?.deref() === listItems) return true;
+  const listFree = row.cells.every((cell) =>
+    cell.blocks.every((block) => !listItems.has(block.id))
+  );
+  if (listFree) listFreeRows.set(row, new WeakRef(listItems));
+  return listFree;
+}
 
 function eligibleStructure(structure: SemanticTableStructure, deps: TableFlowDeps): boolean {
   let known = eligibleStructures.get(structure);
@@ -62,27 +100,15 @@ function eligibleStructure(structure: SemanticTableStructure, deps: TableFlowDep
       !structure.float &&
       !structure.bidiVisual &&
       structure.cellSpacingPt === 0 &&
-      structure.rows.every((row) =>
-        row.cells.every(
-          (cell) =>
-            cell.logicalGridColumn === undefined &&
-            cell.textDirection === 'horizontal' &&
-            // A merge is planned here only inside the leading header group.
-            (!cell.vMergeContinue || row.isHeader) &&
-            cell.blocks.every(
-              (block) => block.kind === 'paragraph' && ordinaryTableParagraph(block)
-            )
-        )
-      );
+      structure.rows.every(eligibleRow);
     eligibleStructures.set(structure, known);
   }
   // List markers depend on the body counter stream, which this lane does not walk.
   const listItems = deps.listItems;
-  if (!known || !listItems?.size || listFreeStructures.get(structure) === listItems) return known;
-  const listFree = structure.rows.every((row) =>
-    row.cells.every((cell) => cell.blocks.every((block) => !listItems.has(block.id)))
-  );
-  if (listFree) listFreeStructures.set(structure, listItems);
+  if (!known || !listItems?.size || listFreeStructures.get(structure)?.deref() === listItems)
+    return known;
+  const listFree = structure.rows.every((row) => listFreeRow(row, listItems));
+  if (listFree) listFreeStructures.set(structure, new WeakRef(listItems));
   return listFree;
 }
 
@@ -437,7 +463,9 @@ export function updateTableWidths(
   }
   registerTableCellBreakKeys(after, keys);
   return {
-    // Equal line counts on every row: the flow's line counter does not move.
+    // sameRowHeights rejects changed block heights, line counts, and vertical positions.
+    // Each replacement keeps the original rows on their original page fragments.
+    paragraphPagesUnchanged: true,
     lineDelta: 0,
     pages: pages.map((page) =>
       page.fragments.some((fragment) => replacements.has(fragment))

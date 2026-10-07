@@ -30,6 +30,13 @@ import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { registerParagraphCacheDiagnostics } from './paragraph-cache-diagnostics.ts';
 import { sha256FontBytes } from '../store/package/sha256.ts';
+import { framedTokenJoin } from './framed-token.ts';
+
+export { framedTokenJoin } from './framed-token.ts';
+export {
+  aggregateParagraphTokensForTableBlock,
+  listTokenForTableBlock,
+} from './table-paragraph-tokens.ts';
 
 /** A fingerprint over one paragraph's layout inputs. */
 export type ParagraphLayoutKey = string;
@@ -118,14 +125,6 @@ export function rememberLayoutProperties(properties: readonly OoxmlProperty[]): 
   immutablePropertyDigests.set(properties, reusableLayoutTokenDigest(propertiesToken(properties)));
 }
 
-/**
- * Tokens longer than this are computed transiently instead of retained. A table token embeds
- * its whole subtree, so a hostile document nesting a large payload inside ~50 table levels
- * would otherwise retain depth × payload of strings for the document's lifetime; the ceiling
- * bounds retention while leaving every realistic paragraph and table memoized.
- */
-const MAX_MEMOIZED_TOKEN_LENGTH = 1 << 18;
-
 const layoutTokenEncoder = new TextEncoder();
 
 /** Collision-resistant, platform-neutral cache fingerprint over a framed string. */
@@ -181,106 +180,6 @@ function reusableLayoutTokenDigest(token: string): string {
  */
 export function withDrawingContext(token: string, inlineDrawingContext: boolean): string {
   return `${token}|${inlineDrawingContext ? 'drawing' : ''}`;
-}
-
-/**
- * Injective token join: every part is length-prefixed (netstring framing), so NO content —
- * file-controlled text, other framed joins, even a part containing digits and colons — can
- * forge a part boundary. Two part lists concatenate to one string only when they are the
- * same list. Use this for every cache/reuse token composed over file-influenced strings; a
- * printable separator, and even a NUL separator once parts may themselves contain NUL, lets
- * two different states alias and a reused page paint the stale one.
- */
-export function framedTokenJoin(parts: readonly string[]): string {
-  let out = '';
-  for (const part of parts) out += `${part.length}:${part}`;
-  return out;
-}
-
-/**
- * Aggregate the list tokens of every paragraph a table contains, memoized per (table,
- * listItems) pair — both immutable, so the walk runs once per numbering state instead of
- * once per pass. An empty slot is retained for every unlisted paragraph, so token position
- * remains significant even when neighboring paragraphs have equal authored content.
- */
-const tableListTokens = new WeakMap<object, WeakMap<object, string>>();
-export function listTokenForTableBlock(
-  table: OoxmlNode,
-  listItems: ReadonlyMap<string, { readonly cacheToken: string }> | undefined
-): string {
-  if (!listItems || listItems.size === 0) return '';
-  // Nested weak keying: neither the table nor the list map is retained by the memo, and two
-  // consumers preparing one table under different list maps both stay warm.
-  let byListItems = tableListTokens.get(table);
-  const cached = byListItems?.get(listItems);
-  if (cached !== undefined) return cached;
-  const token = aggregateParagraphTokensForTableBlock(
-    table,
-    (paragraph) => listItems.get(paragraph.id)?.cacheToken ?? ''
-  );
-  if (token.length <= MAX_MEMOIZED_TOKEN_LENGTH) {
-    if (!byListItems) {
-      byListItems = new WeakMap();
-      tableListTokens.set(table, byListItems);
-    }
-    byListItems.set(listItems, token);
-  }
-  return token;
-}
-
-/**
- * ONE walk for every per-paragraph token aggregate over a table subtree (list, drawing,
- * semantic projection), so framing and traversal cannot drift between copies. Empty slots
- * preserve paragraph position; netstring framing stays injective even if a future token
- * contains NUL or another file-controlled delimiter. Empty when no paragraph carries a token,
- * so token-free tables keep keying as before. Callers own their memoization.
- */
-export function aggregateParagraphTokensForTableBlock(
-  table: OoxmlNode,
-  tokenForParagraph: (paragraph: OoxmlNode) => string
-): string {
-  const tokens: string[] = [];
-  let any = false;
-  for (const paragraph of tableParagraphsInOrder(table)) {
-    const token = tokenForParagraph(paragraph);
-    if (token) any = true;
-    tokens.push(token);
-  }
-  return any ? framedTokenJoin(tokens) : '';
-}
-
-/**
- * The paragraphs of a table subtree in document order, not descending into a paragraph
- * (hosted text-box paragraphs are represented by their host), per immutable table node.
- *
- * Callers memoize their tokens on the table AND their own input (the list map, a drawing
- * epoch), and that input moves with edits far from the table — Enter anywhere in a section
- * mints a new list map. The walk itself only depends on the table, so it runs once per node.
- */
-const tableParagraphs = new WeakMap<OoxmlNode, readonly OoxmlNode[]>();
-function tableParagraphsInOrder(table: OoxmlNode): readonly OoxmlNode[] {
-  const cached = tableParagraphs.get(table);
-  if (cached) return cached;
-  const paragraphs: OoxmlNode[] = [];
-  const stack: OoxmlNode[] = [table];
-  while (stack.length > 0) {
-    const node = stack.pop()!;
-    if (node !== table && node.kind === 'tableRow') {
-      for (const paragraph of tableParagraphsInOrder(node)) paragraphs.push(paragraph);
-      continue;
-    }
-    if (node.kind === 'paragraph') {
-      paragraphs.push(node);
-      continue;
-    }
-    if ('children' in node) {
-      for (let index = node.children.length - 1; index >= 0; index -= 1) {
-        stack.push(node.children[index]!);
-      }
-    }
-  }
-  if (table.kind !== 'tableRow' || paragraphs.length <= 256) tableParagraphs.set(table, paragraphs);
-  return paragraphs;
 }
 
 /**
