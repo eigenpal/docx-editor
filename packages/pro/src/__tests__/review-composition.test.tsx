@@ -114,6 +114,31 @@ describe('review compound composition', () => {
     expect(view.getByTestId('card-extra').textContent).toBe('Host action');
   });
 
+  test('a host input in a card keeps focus, and pressing it does not activate the card', () => {
+    const view = render(
+      <DocxEditorRoot document={TRACKED} modules={[reviewModule()]}>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview>
+            <DocxEditorReview.List>
+              <input data-testid="host-input" aria-label="Host input" />
+            </DocxEditorReview.List>
+          </DocxEditorReview>
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const card = view.getByTestId('review-card');
+    const input = view.getByTestId('host-input') as HTMLInputElement;
+    expect(card.contains(input)).toBe(true);
+    input.focus();
+    act(() => {
+      input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      input.click();
+    });
+    expect(document.activeElement).toBe(input);
+    expect(card.hasAttribute('data-active')).toBe(false);
+  });
+
   test('keeps direct root Card children as a compatibility shorthand', () => {
     const view = render(
       <DocxEditorRoot document={TRACKED} modules={[reviewModule()]}>

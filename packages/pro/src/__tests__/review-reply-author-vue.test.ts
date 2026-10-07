@@ -3,7 +3,7 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// A reply inside a thread draws in its own author's colour, as the React rail does.
+// Review cards in Vue: host controls inside a card, and reply author colours, as in React.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -18,6 +18,40 @@ import { DocxEditorAuthorStyle } from '../../../vue/src/editor/DocxEditorAuthorS
 
 afterEach(() => {
   document.body.innerHTML = '';
+});
+
+test('a host input in a card keeps focus, and pressing it does not activate the card', async () => {
+  const mounted = mountEditorTree(
+    () => [],
+    TRACKED,
+    () => [
+      h(DocxEditorReview, null, {
+        default: () => [
+          h(DocxEditorReview.List, null, {
+            default: () =>
+              h(DocxEditorReview.Card, null, {
+                default: () => h('input', { 'data-testid': 'host-input', 'aria-label': 'Host' }),
+              }),
+          }),
+        ],
+      }),
+    ],
+    [reviewModule()]
+  );
+  try {
+    await flush();
+    await waitFor(() => mounted.container.querySelector('[data-testid="host-input"]') !== null);
+    const input = mounted.container.querySelector<HTMLInputElement>('[data-testid="host-input"]')!;
+    const card = input.closest<HTMLElement>('[data-testid="review-card"]')!;
+    input.focus();
+    input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    input.click();
+    await flush();
+    expect(document.activeElement).toBe(input);
+    expect(card.hasAttribute('data-active')).toBe(false);
+  } finally {
+    mounted.unmount();
+  }
 });
 
 test("a reply draws in its own author's colour, not the thread author's", async () => {

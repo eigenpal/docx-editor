@@ -73,6 +73,7 @@ import {
   useRailWindow,
 } from './use-rail-geometry';
 import { useReviewSlotSizing } from './use-review-slot-sizing';
+import { isCardControl } from '../review/card-controls.ts';
 import { useReview, type ReviewItemView } from './useReview';
 import {
   authorAccent,
@@ -1527,10 +1528,12 @@ function ReviewCard({ className, asChild, hidden, children }: ReviewPartProps) {
     ...(!resolvedCollapsible
       ? {
           onMouseDown: (event: React.MouseEvent) => {
-            if ((event.target as HTMLElement | null)?.closest('[data-review-selectable]')) return;
+            if (isCardControl(event.target)) return;
             (event.currentTarget as HTMLElement).focus({ preventScroll: true });
           },
-          onClick: () => review.setActive(entry.key),
+          onClick: (event: React.MouseEvent) => {
+            if (!isCardControl(event.target)) review.setActive(entry.key);
+          },
           onKeyDown: (event: React.KeyboardEvent) => {
             if (event.target !== event.currentTarget) return;
             if (event.key !== 'Enter' && event.key !== ' ') return;

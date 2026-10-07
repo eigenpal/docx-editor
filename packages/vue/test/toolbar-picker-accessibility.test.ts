@@ -21,6 +21,8 @@ async function mount() {
             h(DocxEditorToolbar.Zoom),
             h(DocxEditorToolbar.FontSize),
             h(DocxEditorToolbar.FontColor),
+            h(DocxEditorToolbar.Alignment),
+            h(DocxEditorToolbar.LineSpacing),
             h(DocxEditorToolbar.Highlight),
           ],
         }
@@ -156,4 +158,33 @@ test('Escape closes a picker opened by a click while focus stays in the pages', 
   expect(fieldSawEscape).toBe(true);
   expect(root.querySelector('[role="listbox"]')).toBeNull();
   field.remove();
+});
+
+test('Escape closes the alignment and line spacing popups, from the pages or inside', async () => {
+  const view = await mount();
+  unmount = view.unmount;
+  const pages = view.container.querySelector<HTMLElement>('.docx-pages')!;
+  for (const slot of ['alignment', 'list.lineSpacing']) {
+    const root = view.container.querySelector<HTMLElement>(`[data-slot="${slot}"]`)!;
+    const trigger = root.querySelector<HTMLButtonElement>('[aria-haspopup]')!;
+    await update(() => {
+      pages.focus();
+      trigger.click();
+    });
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    await update(() =>
+      pages.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    );
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(pages);
+
+    await update(() => trigger.click());
+    const option = root.querySelector<HTMLButtonElement>('.docx-toolbar__menu button')!;
+    await update(() => {
+      option.focus();
+      option.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(trigger);
+  }
 });

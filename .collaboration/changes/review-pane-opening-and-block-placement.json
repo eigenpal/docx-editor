@@ -2,7 +2,7 @@
   "impact": "no-impact",
   "fields": [],
   "before": "The review pane opened itself on load and on the first tracked change. scrollToBlock always put the block near the top. A picker opened by a click ignored Escape. A reply avatar took the thread author's colour.",
-  "after": "reviewModule({ paneOpening: 'manual' }) keeps the pane closed until the host opens it. scrollToBlock takes an optional block placement. Escape closes an open toolbar picker. The toolbar overflow panel closes on Escape the same way. A reply in a review card draws in its own author's colour.",
+  "after": "reviewModule({ paneOpening: 'manual' }) keeps the pane closed until the host opens it. scrollToBlock takes an optional block placement. Escape closes an open toolbar picker. The toolbar overflow panel closes on Escape the same way. A reply in a review card draws in its own author's colour. Alignment, line spacing, and table dropdowns close on Escape too. A press on a control a host adds inside a review card no longer refocuses or activates the card.",
   "reason": "Pane visibility, scroll position, and picker state are local view state. No shared document state or operation changes.",
   "tests": [
     "packages/pro/src/__tests__/review-module.test.ts",
@@ -12,7 +12,8 @@
     "packages/react/test/toolbar-overflow-react.test.tsx",
     "packages/vue/test/chrome-composition.test.ts",
     "packages/pro/src/__tests__/revision-author-styles.test.tsx",
-    "packages/pro/src/__tests__/review-reply-author-vue.test.ts"
+    "packages/pro/src/__tests__/review-reply-author-vue.test.ts",
+    "packages/pro/src/__tests__/review-composition.test.tsx"
   ],
   "changeset": "review-pane-opening-and-block-placement",
   "migration": null

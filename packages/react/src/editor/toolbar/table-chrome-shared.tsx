@@ -15,7 +15,11 @@ export function restoreToolbarDocumentFocus(from: HTMLElement | null): void {
   root?.querySelector<HTMLElement>('.docx-pages')?.focus();
 }
 
-/** Outside mousedown closes a toolbar popup. */
+/**
+ * Outside mousedown and Escape close a toolbar popup. Escape is heard on the document because
+ * a popup opened by a click leaves focus in the pages. Bubble phase, and the event goes on to
+ * whoever else handles it. From inside the popup, focus returns to its trigger.
+ */
 export function useDropdownClose(
   open: boolean,
   setOpen: (open: boolean) => void,
@@ -28,8 +32,20 @@ export function useDropdownClose(
       if (root && event.target instanceof Node && root.contains(event.target)) return;
       setOpen(false);
     };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.isComposing) return;
+      const root = rootRef.current;
+      if (root && event.target instanceof Node && root.contains(event.target)) {
+        root.querySelector<HTMLElement>('[aria-haspopup]')?.focus();
+      }
+      setOpen(false);
+    };
     document.addEventListener('mousedown', onMouseDown);
-    return () => document.removeEventListener('mousedown', onMouseDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
   }, [open, setOpen, rootRef]);
 }
 

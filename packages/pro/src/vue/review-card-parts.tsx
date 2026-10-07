@@ -36,6 +36,7 @@ import { ReviewReplyScope, useRail, useReviewItem, useReviewLabel } from './revi
 import { useReviewStableId } from './stable-id.ts';
 import type { ReviewItemView } from './useReview.ts';
 import { authorCardStyle, authorSlot } from './review-author-styles.ts';
+import { isCardControl } from '../review/card-controls.ts';
 
 const { ReviewResolve, ReviewReopen } = createCommentResolutionParts({
   useRail,
@@ -553,19 +554,11 @@ export const ReviewCard = markPart(
           ...(!resolvedCollapsible
             ? {
                 onMousedown: (event: MouseEvent) => {
-                  if ((event.target as HTMLElement | null)?.closest('[data-review-selectable]')) {
-                    return;
-                  }
+                  if (isCardControl(event.target)) return;
                   (event.currentTarget as HTMLElement).focus({ preventScroll: true });
                 },
                 onClick: (event: MouseEvent) => {
-                  if (
-                    (event.target as HTMLElement | null)?.closest(
-                      'button, input, textarea, .docx-review__reply-box, [data-review-selectable]'
-                    )
-                  ) {
-                    return;
-                  }
+                  if (isCardControl(event.target)) return;
                   if (!entry.isActive) review.setActive(entry.key);
                 },
                 onKeydown: (event: KeyboardEvent) => {

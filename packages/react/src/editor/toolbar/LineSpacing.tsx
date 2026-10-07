@@ -8,7 +8,7 @@
 // come off the snapshot, so the menu reflects the paragraph the caret is in rather than
 // showing a fixed list of things to apply.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlotValue } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
@@ -18,6 +18,7 @@ import { useParagraphDialog } from '../paragraph-dialog-host';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
 import type { ToolbarSlotPartProps, ToolbarSlotPartComponent } from './parts';
+import { useDropdownClose } from './table-chrome-shared';
 
 /** Word's line-spacing menu, in lines. */
 const LINE_SPACING_PRESETS: readonly number[] = [1, 1.15, 1.5, 2, 2.5, 3];
@@ -70,16 +71,7 @@ function ToolbarLineSpacingImpl({ className, hidden }: ToolbarSlotPartProps) {
   const rootRef = useRef<HTMLSpanElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
-  useEffect(() => {
-    if (!open) return undefined;
-    const onMouseDown = (event: globalThis.MouseEvent) => {
-      const root = rootRef.current;
-      if (root && event.target instanceof Node && root.contains(event.target)) return;
-      setOpen(false);
-    };
-    document.addEventListener('mousedown', onMouseDown);
-    return () => document.removeEventListener('mousedown', onMouseDown);
-  }, [open]);
+  useDropdownClose(open, setOpen, rootRef);
 
   const applyLines = useCallback(
     (lines: number) => {
