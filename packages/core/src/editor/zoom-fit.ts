@@ -78,6 +78,10 @@ export function resolveZoomMode(mode: ZoomMode | 'auto'): ZoomMode | null {
   if (!mode || typeof mode !== 'object') return null;
   if (mode.type === 'fixed') return FIXED_ZOOM_MODE;
   if (mode.type === 'fit' && mode.fit === 'pageWidth') {
+    // Refused, not ignored: a misspelled or mistyped opt-in that the engine dropped would
+    // leave the host believing the page makes room for the review pane when it does not.
+    const shrink = (mode as { readonly shrinkForReviewPane?: unknown }).shrinkForReviewPane;
+    if (shrink !== undefined && typeof shrink !== 'boolean') return null;
     // The canonical fit gets the shared object back, so a host writing the long form of
     // `'auto'` is reference-equal to `'auto'`.
     return sameZoomMode(mode, AUTO_ZOOM_MODE) ? AUTO_ZOOM_MODE : mode;
@@ -103,7 +107,46 @@ export function sameZoomMode(a: ZoomMode, b: ZoomMode): boolean {
   // nothing in `cap` — is not equal to itself under `===`, so an unchanged prop reported as a
   // change on every render and took the observer, the refit and every consumer's re-render
   // with it. `fitZoom` treats a non-finite bound as absent, so the two really are one mode.
-  return a.fit === b.fit && Object.is(a.minZoom, b.minZoom) && Object.is(a.maxZoom, b.maxZoom);
+  return (
+    a.fit === b.fit &&
+    Object.is(a.minZoom, b.minZoom) &&
+    Object.is(a.maxZoom, b.maxZoom) &&
+    (a.shrinkForReviewPane ?? false) === (b.shrinkForReviewPane ?? false)
+  );
+}
+
+/**
+ * The scale the page is ENTITLED to when the review rail decides whether its full card
+ * column fits beside the page, or `null` when the page has no entitlement to measure.
+ *
+ * The rail must never measure the LIVE zoom under a fit: that zoom already includes the
+ * room the rail reserved last frame, so a threshold computed from it chases itself. The
+ * entitlement depends only on the mode (and on the held scale for a fixed mode), so the
+ * rail settles in one pass.
+ *
+ * - A fixed mode is entitled to the scale in force.
+ * - A fit with `shrinkForReviewPane` is entitled to its lower bound: the column stands
+ *   whenever ANY scale the fit may take leaves room for it, and the fit then paints at
+ *   the largest of those inside the padded box.
+ * - A capped fit is entitled to its cap.
+ * - An uncapped fit returns `null`: it fills whatever box it is given, so the full column
+ *   always stands.
+ */
+export function reviewPaneEntitledZoom(mode: ZoomMode | undefined, zoom: number): number | null {
+  if (mode?.type !== 'fit') return zoom;
+  if (mode.shrinkForReviewPane === true) {
+    const lower =
+      mode.minZoom !== undefined && Number.isFinite(mode.minZoom)
+        ? clampToRange(mode.minZoom)
+        : ZOOM_MIN;
+    const upper =
+      mode.maxZoom !== undefined && Number.isFinite(mode.maxZoom)
+        ? clampToRange(mode.maxZoom)
+        : ZOOM_MAX;
+    // `fitZoom` lets the lower bound win a contradiction; the entitlement follows it.
+    return Math.min(lower, Math.max(upper, lower));
+  }
+  return mode.maxZoom !== undefined && mode.maxZoom < ZOOM_MAX ? mode.maxZoom : null;
 }
 
 /** Whether a mode makes the engine track the viewport rather than hold a number. */

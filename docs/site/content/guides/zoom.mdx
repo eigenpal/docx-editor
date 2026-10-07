@@ -144,6 +144,49 @@ Set `minZoom` to choose a different minimum scale:
 </Framework>
 </FrameworkTabs>
 
+### Make room for the review pane
+
+The review pane needs a 316-pixel card column beside the page. A fit with `maxZoom` keeps the page at that maximum. If the column does not fit beside the page at that scale, the pane changes to a marker strip. It then shows one floating card for the active item, and that card can cover page text.
+
+Set `shrinkForReviewPane: true` to let the fit make room for the column instead. While the pane is open, the page can shrink to `minZoom` so that the full column fits. The pane changes to the marker strip only if the column does not fit at `minZoom` either. If you omit `minZoom`, the limit is 10%. When the pane closes, the page returns to its usual fit.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor
+  document={bytes}
+  zoomMode={{
+    type: 'fit',
+    fit: 'pageWidth',
+    minZoom: 0.35,
+    maxZoom: 1,
+    shrinkForReviewPane: true,
+  }}
+/>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditor
+  :document="bytes"
+  :zoom-mode="{
+    type: 'fit',
+    fit: 'pageWidth',
+    minZoom: 0.35,
+    maxZoom: 1,
+    shrinkForReviewPane: true,
+  }"
+/>
+```
+
+</Framework>
+</FrameworkTabs>
+
+`shrinkForReviewPane` accepts only `true` or `false`. `setZoomMode` refuses any other value with `invalidArgs`.
+
 ## Without an adapter
 
 Zoom APIs are on the engine. Every host calls the same methods:

@@ -1,6 +1,6 @@
 import { ref, shallowRef, watch, type ShallowRef } from 'vue';
 import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/editor';
-import { ZOOM_MAX } from '@docx-editor.dev/core/editor';
+import { reviewPaneEntitledZoom } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../lib/units';
 import { useReviewRailRegistry } from './context';
 import { useEditorState } from './useEditorState';
@@ -72,12 +72,7 @@ const selectGutterGeometry = (snapshot: EditorSnapshot): GutterGeometry => {
   return {
     pageSetup: snapshot.pageSetup ?? null,
     reviewPaneOpen: snapshot.reviewPaneOpen ?? true,
-    entitledZoom:
-      mode?.type === 'fit'
-        ? mode.maxZoom !== undefined && mode.maxZoom < ZOOM_MAX
-          ? mode.maxZoom
-          : null
-        : snapshot.zoom,
+    entitledZoom: reviewPaneEntitledZoom(mode, snapshot.zoom),
   };
 };
 

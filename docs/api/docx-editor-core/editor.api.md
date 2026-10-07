@@ -2723,6 +2723,9 @@ export interface ReviewModuleContribution {
 }
 
 // @public
+export function reviewPaneEntitledZoom(mode: ZoomMode | undefined, zoom: number): number | null;
+
+// @public
 export type ReviewWriteIntent = 'revision-resolve' | 'comment-add' | 'comment-reply' | 'comment-resolve' | 'comment-delete' | 'package-scoped';
 
 // @public

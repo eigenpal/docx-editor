@@ -23,7 +23,11 @@
 // at the fixed zoom in force — is independent of the padding, so the mode settles in one
 // pass. A fit with NO cap has no entitlement to measure against — it fills whatever box
 // it is given — so the full column stands and the page absorbs it, exactly as it always
-// has.
+// has. A fit that opts in with `shrinkForReviewPane` is entitled to its FLOOR instead:
+// the column stands whenever any scale the fit may take leaves room for it, and the fit
+// then paints at the largest such scale inside the padded box. The floor is still a
+// property of the mode, not of the padding, so this too settles in one pass. Core's
+// `reviewPaneEntitledZoom` owns that rule for both adapters.
 //
 // ONE value, three consumers. The scroll container pads by it, the horizontal ruler
 // mirrors it to stay over the page, and the vertical ruler subtracts it to decide
@@ -32,7 +36,7 @@
 
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/editor';
-import { ZOOM_MAX } from '@docx-editor.dev/core/editor';
+import { reviewPaneEntitledZoom } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../lib/units';
 import { ReviewRailContext } from './context';
 import { useEditorState } from './useEditorState';
@@ -132,7 +136,7 @@ interface GutterGeometry {
   readonly reviewPaneOpen: boolean;
   /**
    * The zoom the page is entitled to, whatever it paints at right now: a fit's own cap
-   * (`'auto'` caps at 1), or the fixed scale in force. Reading the LIVE zoom instead
+   * (`'auto'` caps at 1), a shrinking fit's floor, or the fixed scale in force. Reading the LIVE zoom instead
    * re-creates the feedback loop the module comment describes — under a fit the live
    * zoom already includes whatever this gutter reserved last frame. `null` marks an
    * uncapped fit, which has no entitlement to measure against.
@@ -145,12 +149,7 @@ const selectGutterGeometry = (snapshot: EditorSnapshot): GutterGeometry => {
   return {
     pageSetup: snapshot.pageSetup ?? null,
     reviewPaneOpen: snapshot.reviewPaneOpen ?? true,
-    entitledZoom:
-      mode?.type === 'fit'
-        ? mode.maxZoom !== undefined && mode.maxZoom < ZOOM_MAX
-          ? mode.maxZoom
-          : null
-        : snapshot.zoom,
+    entitledZoom: reviewPaneEntitledZoom(mode, snapshot.zoom),
   };
 };
 

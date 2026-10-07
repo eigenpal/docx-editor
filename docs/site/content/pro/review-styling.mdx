@@ -335,7 +335,11 @@ To hide the bars, set `display: none` on `.docx-change-bars`.
 
 `useReviewAuthor` returns one author's resolved color, ramp slot, and declared style. It works inside the review rail and anywhere else under the editor root, such as a side panel that lists changes. React returns the value directly. The Vue composable accepts a ref or getter and returns a computed ref.
 
-The `DocxEditorReview.List` callback or Vue `#item` slot receives each item and its `author`. Use that value to select a custom card. For composition patterns, see [React composition](/docs/2.x/react/composition) or [Vue composition](/docs/2.x/vue/composition).
+The `DocxEditorReview.List` callback or Vue `#item` slot receives each item and its `author`. Use that value to select a custom card.
+
+If the viewport is too narrow for the card column, the rail shows markers and one floating card for the active item. That card uses the same template as the list: the `DocxEditorReview.List` callback or Vue `#item` slot, a `DocxEditorReview.Card` part, or the part overrides and extra children inside the list. A part that you hide in the list stays hidden in the floating card. To keep the full column on narrower viewports, see [Make room for the review pane](/docs/2.x/guides/zoom#make-room-for-the-review-pane).
+
+For composition patterns, see [React composition](/docs/2.x/react/composition) or [Vue composition](/docs/2.x/vue/composition).
 
 ## Next steps
 

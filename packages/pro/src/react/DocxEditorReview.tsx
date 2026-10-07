@@ -65,7 +65,7 @@ import {
   type ReviewAuthorInfo,
   type ToolbarTranslate,
 } from '@docx-editor.dev/react';
-import { cloneReviewCard, partitionReviewChildren } from './review-composition';
+import { cloneReviewCard, listCardTemplate, partitionReviewChildren } from './review-composition';
 import {
   COMPACT_CARD_WIDTH,
   RAIL_OVERSCAN,
@@ -828,24 +828,24 @@ function ReviewRoot({
         : window_ !== null
           ? window_.top + RAIL_OVERSCAN + 24
           : null;
-  // The same card resolution as ReviewList: a host's `Card` part (or render prop) must
-  // reach the floating card too, or compact silently swaps in the packaged card the host
-  // replaced. With `preset={false}` and no Card part there is no card to float — the host
-  // opted out of packaged defaults. Under `asChild` the child is the rail ELEMENT, never
-  // a card template, so the packaged card stands there (as it does in that branch's list).
-  const cardTemplate = asChild ? null : rootChildren.rest;
+  // The same card resolution as ReviewList, from the same template: the List part's
+  // children (render prop, `Card` part, or part overrides plus extra children), else the
+  // root's. Without it compact swaps in the packaged parts the host hid or replaced.
+  // `preset={false}` with no template of its own floats nothing. Under `asChild` the child
+  // is the rail ELEMENT, never a card template, so the packaged card stands there.
+  const fromList = listCardTemplate(rootChildren.rest, rootParts.List);
+  const cardTemplate = asChild ? null : fromList.template;
   const listParts =
     typeof cardTemplate === 'function' ? null : partitionReviewChildren(cardTemplate, 'list');
-  const compactCardInner =
-    typeof cardTemplate === 'function' ? (
-      activeRoot && cardTemplate(activeRoot)
-    ) : listParts?.parts.Card && isValidElement<{ className?: string }>(listParts.parts.Card) ? (
-      cloneReviewCard(listParts.parts.Card, cardClassName)
-    ) : preset ? (
-      <ReviewCard {...(cardClassName ? { className: cardClassName } : {})}>
-        {listParts?.rest}
-      </ReviewCard>
-    ) : null;
+  const compactCardInner = fromList.hidden ? null : typeof cardTemplate === 'function' ? (
+    activeRoot && cardTemplate(activeRoot)
+  ) : listParts?.parts.Card && isValidElement<{ className?: string }>(listParts.parts.Card) ? (
+    cloneReviewCard(listParts.parts.Card, cardClassName)
+  ) : preset || fromList.fromList ? (
+    <ReviewCard {...(cardClassName ? { className: cardClassName } : {})}>
+      {listParts?.rest}
+    </ReviewCard>
+  ) : null;
   const compactCard =
     activeRoot && compactTop !== null && metrics.compactCardLeft !== null && compactCardInner ? (
       <ReviewItemContext.Provider value={activeRoot}>

@@ -2289,6 +2289,7 @@ export type ZoomMode = {
     readonly fit: ZoomFitTarget;
     readonly maxZoom?: number;
     readonly minZoom?: number;
+    readonly shrinkForReviewPane?: boolean;
     readonly type: 'fit';
 };
 

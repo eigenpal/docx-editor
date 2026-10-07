@@ -40,7 +40,12 @@ import {
 } from '@docx-editor.dev/vue';
 import { useReviewWithRevision, type ReviewItemView, type UseReviewReturn } from './useReview.ts';
 import { provideEditorRenderRevision, useEditorRenderRevision } from './useEditorRenderRevision.ts';
-import { cloneReviewCard, partitionReviewChildren } from './review-composition.ts';
+import {
+  cloneReviewCard,
+  listCardTemplate,
+  partitionReviewChildren,
+  slotNodes,
+} from './review-composition.ts';
 import { hasFormattingBalloon } from './review-balloon-anchor.ts';
 import {
   COLLAPSE_DISPLACEMENT_PX,
@@ -691,19 +696,30 @@ const ReviewRoot = defineComponent({
             : scrollWindow.value !== null
               ? scrollWindow.value.top + RAIL_OVERSCAN + 24
               : null;
-      const listParts = partitionReviewChildren(rootRest, 'list');
+      // The same card template the List renders: a host's List part (its item slot, its
+      // `Card` part, or part overrides plus extra children) must reach the floating card
+      // too, or compact silently swaps in the packaged parts the host hid or replaced. With
+      // no List template the root's children stand in, as they do for the implicit List.
+      const fromList = listCardTemplate(rootParts.List);
+      const itemSlot = fromList ? fromList.item : slots.item;
+      const listParts = partitionReviewChildren(
+        fromList ? slotNodes(fromList.default?.()) : rootRest,
+        'list'
+      );
       const compactCardInner =
-        activeRoot && slots.item
-          ? slots.item({ item: activeRoot })
-          : listParts.parts.Card
-            ? cloneReviewCard(listParts.parts.Card, props.card?.className)
-            : props.preset
-              ? h(
-                  ReviewCard,
-                  props.card?.className ? { className: props.card.className } : {},
-                  () => listParts.rest
-                )
-              : null;
+        fromList?.hidden || !activeRoot
+          ? null
+          : itemSlot
+            ? itemSlot({ item: activeRoot })
+            : listParts.parts.Card
+              ? cloneReviewCard(listParts.parts.Card, props.card?.className)
+              : props.preset || fromList
+                ? h(
+                    ReviewCard,
+                    props.card?.className ? { className: props.card.className } : {},
+                    () => listParts.rest
+                  )
+                : null;
       const compactCard =
         activeRoot &&
         compactTop !== null &&

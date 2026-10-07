@@ -243,6 +243,7 @@ export {
   ZOOM_MAX,
   ZOOM_MIN,
   resolveZoomMode,
+  reviewPaneEntitledZoom,
   sameZoomMode,
 } from './zoom-fit.ts';
 export {

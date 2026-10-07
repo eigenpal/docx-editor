@@ -16,6 +16,7 @@ import {
   fitZoom,
   isFitMode,
   resolveZoomMode,
+  reviewPaneEntitledZoom,
   sameZoomMode,
 } from '../zoom-fit.ts';
 
@@ -160,6 +161,61 @@ describe('resolveZoomMode', () => {
     expect(resolveZoomMode({ type: 'fit', fit: 'fullPage' } as never)).toBeNull();
     expect(resolveZoomMode(null as never)).toBeNull();
   });
+
+  test('accepts a boolean shrinkForReviewPane and refuses any other value', () => {
+    const mode = { type: 'fit', fit: 'pageWidth', maxZoom: 1, shrinkForReviewPane: true } as const;
+    expect(resolveZoomMode(mode)).toBe(mode);
+    expect(
+      resolveZoomMode({ type: 'fit', fit: 'pageWidth', shrinkForReviewPane: false })
+    ).not.toBeNull();
+    expect(
+      resolveZoomMode({ type: 'fit', fit: 'pageWidth', shrinkForReviewPane: 'shrink' } as never)
+    ).toBeNull();
+    expect(
+      resolveZoomMode({ type: 'fit', fit: 'pageWidth', shrinkForReviewPane: 1 } as never)
+    ).toBeNull();
+  });
+});
+
+describe('reviewPaneEntitledZoom', () => {
+  test('a fixed mode is entitled to the scale in force', () => {
+    expect(reviewPaneEntitledZoom(FIXED_ZOOM_MODE, 1.25)).toBe(1.25);
+    expect(reviewPaneEntitledZoom(undefined, 0.8)).toBe(0.8);
+  });
+
+  test('a capped fit is entitled to its cap, an uncapped one to nothing', () => {
+    expect(reviewPaneEntitledZoom(AUTO_ZOOM_MODE, 0.7)).toBe(1);
+    expect(reviewPaneEntitledZoom({ type: 'fit', fit: 'pageWidth' }, 1.4)).toBeNull();
+  });
+
+  test('a shrinking fit is entitled to its floor, never to the live zoom', () => {
+    const mode = {
+      type: 'fit',
+      fit: 'pageWidth',
+      minZoom: 0.35,
+      maxZoom: 1,
+      shrinkForReviewPane: true,
+    } as const;
+    expect(reviewPaneEntitledZoom(mode, 0.9)).toBe(0.35);
+    expect(reviewPaneEntitledZoom(mode, 0.4)).toBe(0.35);
+    // No floor stated: the contract floor. An out-of-range floor clamps into the contract.
+    expect(
+      reviewPaneEntitledZoom({ type: 'fit', fit: 'pageWidth', shrinkForReviewPane: true }, 1)
+    ).toBe(ZOOM_MIN);
+    expect(
+      reviewPaneEntitledZoom(
+        { type: 'fit', fit: 'pageWidth', minZoom: 0.01, shrinkForReviewPane: true },
+        1
+      )
+    ).toBe(ZOOM_MIN);
+    // An explicit false is the default rule.
+    expect(
+      reviewPaneEntitledZoom(
+        { type: 'fit', fit: 'pageWidth', maxZoom: 1, shrinkForReviewPane: false },
+        0.5
+      )
+    ).toBe(1);
+  });
 });
 
 describe('sameZoomMode', () => {
@@ -182,6 +238,15 @@ describe('sameZoomMode', () => {
       sameZoomMode({ type: 'fit', fit: 'pageWidth' }, { type: 'fit', fit: 'pageWidth', maxZoom: 1 })
     ).toBe(false);
     expect(sameZoomMode(FIXED_ZOOM_MODE, AUTO_ZOOM_MODE)).toBe(false);
+  });
+
+  test('shrinkForReviewPane is part of the mode; false and absent are the same', () => {
+    expect(sameZoomMode(AUTO_ZOOM_MODE, { ...AUTO_ZOOM_MODE, shrinkForReviewPane: true })).toBe(
+      false
+    );
+    expect(sameZoomMode(AUTO_ZOOM_MODE, { ...AUTO_ZOOM_MODE, shrinkForReviewPane: false })).toBe(
+      true
+    );
   });
 });
 
