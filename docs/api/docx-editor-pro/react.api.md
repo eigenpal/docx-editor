@@ -356,6 +356,7 @@ export function reviewModule(options?: ReviewModuleOptions): EditorModule;
 
 // @public
 export interface ReviewModuleOptions extends ProLicenseOptions {
+    readonly paneOpening?: 'automatic' | 'manual';
 }
 
 // @public

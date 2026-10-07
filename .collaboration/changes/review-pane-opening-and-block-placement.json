@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The review pane opened itself on load and on the first tracked change. scrollToBlock always put the block near the top. A picker opened by a click ignored Escape.",
+  "after": "reviewModule({ paneOpening: 'manual' }) keeps the pane closed until the host opens it. scrollToBlock takes an optional block placement. Escape closes an open toolbar picker.",
+  "reason": "Pane visibility, scroll position, and picker state are local view state. No shared document state or operation changes.",
+  "tests": [
+    "packages/pro/src/__tests__/review-module.test.ts",
+    "packages/core/src/editor/__tests__/reveal-scrolling.test.ts",
+    "packages/react/test/toolbar-picker-accessibility-react.test.tsx",
+    "packages/vue/test/toolbar-picker-accessibility.test.ts"
+  ],
+  "changeset": "review-pane-opening-and-block-placement",
+  "migration": null
+}

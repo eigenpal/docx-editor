@@ -108,7 +108,7 @@ for (const heading of editor.getOutline()) {
 }
 ```
 
-`scrollToBlock()` puts the heading near the top of the viewport. If a header, footer, or note is open for editing, the editor returns to the body first. Block IDs belong to the open document. After you load another document, read the outline again.
+`scrollToBlock()` puts the heading near the top of the viewport. To place it differently, pass `{ block: 'center' }`, `{ block: 'centerIfNeeded' }`, or `{ block: 'nearest' }`. The editor refuses an unknown placement and returns `false`. If a header, footer, or note is open for editing, the editor returns to the body first. Block IDs belong to the open document. After you load another document, read the outline again.
 
 ## Scroll to a paragraph reference
 

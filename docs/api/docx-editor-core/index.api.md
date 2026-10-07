@@ -1528,7 +1528,9 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights {
     retainSelection(): SelectionPin | null;
     save(): Promise<ArrayBuffer>;
     // (undocumented)
-    scrollToBlock(blockId: string): boolean;
+    scrollToBlock(blockId: string, options?: {
+        readonly block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest';
+    }): boolean;
     scrollToPage(pageNumber: number): boolean;
     selectMatch(match: TextMatch): ExecResult;
     setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult;
@@ -2872,6 +2874,7 @@ export interface ReviewModuleContribution {
     readonly collectReviewItems: CollectReviewItems;
     readonly createRevisionMarkupDialog?: (host: RevisionMarkupDialogHost) => RevisionMarkupDialog;
     readonly displayModes: readonly ReviewDisplayMode[];
+    readonly paneOpening?: 'automatic' | 'manual';
     readonly revisionItemsOfParagraph: (part: OoxmlPart, paragraphId: string) => readonly ReviewRevisionItem[];
 }
 

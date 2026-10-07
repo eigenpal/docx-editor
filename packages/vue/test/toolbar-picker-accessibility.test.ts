@@ -4,18 +4,37 @@ import { h } from 'vue';
 import { DocxEditorToolbar } from '../src/editor/toolbar';
 import { flush, mountEditorTree } from './helpers/mount';
 import { PICKER_SOURCE } from './helpers/picker-document';
-async function update(action: () => unknown = () => {}) { action(); await flush(); }
+async function update(action: () => unknown = () => {}) {
+  action();
+  await flush();
+}
 async function mount() {
-  const view = mountEditorTree(() => h(DocxEditorToolbar, { preset: false, overflow: false }, {
-    default: () => [h(DocxEditorToolbar.FontFamily), h(DocxEditorToolbar.StylePicker),
-      h(DocxEditorToolbar.Zoom), h(DocxEditorToolbar.FontSize),
-      h(DocxEditorToolbar.FontColor), h(DocxEditorToolbar.Highlight)],
-  }), PICKER_SOURCE);
+  const view = mountEditorTree(
+    () =>
+      h(
+        DocxEditorToolbar,
+        { preset: false, overflow: false },
+        {
+          default: () => [
+            h(DocxEditorToolbar.FontFamily),
+            h(DocxEditorToolbar.StylePicker),
+            h(DocxEditorToolbar.Zoom),
+            h(DocxEditorToolbar.FontSize),
+            h(DocxEditorToolbar.FontColor),
+            h(DocxEditorToolbar.Highlight),
+          ],
+        }
+      ),
+    PICKER_SOURCE
+  );
   await flush();
   return view;
 }
 
-afterEach(() => { unmount?.(); unmount = undefined; });
+afterEach(() => {
+  unmount?.();
+  unmount = undefined;
+});
 let unmount: (() => void) | undefined;
 
 for (const slot of ['font.family', 'styles.style', 'zoom.level']) {
@@ -28,18 +47,35 @@ for (const slot of ['font.family', 'styles.style', 'zoom.level']) {
     const visible = trigger.textContent!.replace('▾', '').trim();
     const name = trigger.getAttribute('aria-label') ?? trigger.textContent!;
     expect(name).toContain(visible);
-    await update(() => { trigger.focus(); trigger.click(); });
+    await update(() => {
+      trigger.focus();
+      trigger.click();
+    });
     const list = root.querySelector<HTMLElement>('[role="listbox"]')!;
     expect(list).not.toBeNull();
     expect(list.getAttribute('aria-label')?.length).toBeGreaterThan(0);
     const options = [...list.querySelectorAll<HTMLElement>('[role="option"]')];
     expect(options.length).toBeGreaterThan(1);
-    expect(options.every(option => option.tabIndex === -1)).toBe(true);
-    await update(() => trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })));
+    expect(options.every((option) => option.tabIndex === -1)).toBe(true);
+    await update(() =>
+      trigger.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })
+      )
+    );
     expect(document.activeElement).toBe(options[0]);
-    await update(() => options[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true })));
+    await update(() =>
+      options[0]!.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true })
+      )
+    );
     expect(document.activeElement).toBe(options.at(-1)!);
-    await update(() => options.at(-1)!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
+    await update(() =>
+      options
+        .at(-1)!
+        .dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+        )
+    );
     expect(root.querySelector('[role="listbox"]')).toBeNull();
     expect(document.activeElement).toBe(trigger);
   });
@@ -56,18 +92,50 @@ test('font size links its open list and color pickers return focus on Escape', a
   for (const slot of ['text.color', 'text.highlight']) {
     const root = view.container.querySelector<HTMLElement>(`[data-slot="${slot}"]`)!;
     const trigger = root.querySelector<HTMLButtonElement>('[aria-haspopup]')!;
-    await update(() => { trigger.focus(); trigger.click(); });
+    await update(() => {
+      trigger.focus();
+      trigger.click();
+    });
     const dialog = root.querySelector<HTMLElement>('[role="dialog"]')!;
     expect(dialog).not.toBeNull();
     expect(trigger.getAttribute('aria-haspopup')).toBe('dialog');
     const option = dialog.querySelector<HTMLButtonElement>('button')!;
-    await update(() => { option.focus(); option.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); });
+    await update(() => {
+      option.focus();
+      option.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+      );
+    });
     expect(root.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement).toBe(trigger);
     await update(() => trigger.click());
     const swatch = root.querySelector<HTMLButtonElement>('[role="dialog"] button')!;
-    await update(() => { swatch.focus(); swatch.click(); });
+    await update(() => {
+      swatch.focus();
+      swatch.click();
+    });
     expect(root.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement).toBe(view.container.querySelector('.docx-pages'));
+  }
+});
+
+test('Escape closes a picker opened by a click while focus stays in the pages', async () => {
+  const view = await mount();
+  unmount = view.unmount;
+  const pages = view.container.querySelector<HTMLElement>('.docx-pages')!;
+  for (const slot of ['font.family', 'styles.style', 'zoom.level']) {
+    const root = view.container.querySelector<HTMLElement>(`[data-slot="${slot}"]`)!;
+    const trigger = root.querySelector<HTMLButtonElement>('[aria-haspopup="listbox"]')!;
+    // Toolbar mousedown is prevented, so the caret keeps focus in the pages.
+    await update(() => {
+      pages.focus();
+      trigger.click();
+    });
+    expect(root.querySelector('[role="listbox"]')).not.toBeNull();
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    await update(() => pages.dispatchEvent(escape));
+    expect(root.querySelector('[role="listbox"]')).toBeNull();
+    expect(escape.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(pages);
   }
 });

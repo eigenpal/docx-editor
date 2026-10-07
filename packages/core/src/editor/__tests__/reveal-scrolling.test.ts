@@ -105,6 +105,29 @@ describe('scrollToPage / scrollToBlock actually scroll', () => {
     editor.destroy();
   });
 
+  test('a block can be centred instead of put near the top', () => {
+    const { editor, scroller } = mount();
+    const ids = editor.surface!.session.paragraphIds();
+    const target = ids[ids.length - 1]!;
+    expect(editor.scrollToBlock(target)).toBe(true);
+    const atStart = scroller.scrollTop;
+    scroller.scrollTop = 0;
+    expect(editor.scrollToBlock(target, { block: 'center' })).toBe(true);
+    // Centring a line in a 600px viewport scrolls less than putting it near the top.
+    expect(scroller.scrollTop).toBeGreaterThan(0);
+    expect(scroller.scrollTop).toBeLessThan(atStart);
+    editor.destroy();
+  });
+
+  test('an unknown placement is refused rather than read as the default', () => {
+    const { editor, scroller } = mount();
+    const ids = editor.surface!.session.paragraphIds();
+    const options = { block: 'middle' } as unknown as { block: 'center' };
+    expect(editor.scrollToBlock(ids[ids.length - 1]!, options)).toBe(false);
+    expect(scroller.scrollTop).toBe(0);
+    editor.destroy();
+  });
+
   test('an unknown block is refused, so a caller can tell "no such target" from "done"', () => {
     const { editor } = mount();
     expect(editor.scrollToBlock('no-such-paragraph')).toBe(false);

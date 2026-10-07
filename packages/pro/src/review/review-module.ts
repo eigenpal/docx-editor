@@ -19,12 +19,20 @@ import { collectReviewItems, revisionItemsOfParagraph } from './review-model.ts'
 import { rememberLicenseKey, type ProLicenseOptions } from '../license.ts';
 
 /**
- * How {@link reviewModule} is configured. Carries only the licence key today, so
- * `reviewModule()` with no argument is the ordinary call.
+ * How {@link reviewModule} is configured. Every field is optional, so `reviewModule()`
+ * with no argument is the ordinary call.
  *
  * @public
  */
-export interface ReviewModuleOptions extends ProLicenseOptions {}
+export interface ReviewModuleOptions extends ProLicenseOptions {
+  /**
+   * Whether the editor opens the review pane by itself. Default `'automatic'`: the pane
+   * opens when a document with review items loads and when the first tracked change is
+   * made. Pass `'manual'` when the host shows review items its own way, for example in
+   * balloons or margin markers, and opens the pane only on demand.
+   */
+  readonly paneOpening?: 'automatic' | 'manual';
+}
 
 /** Build the review module. Construction never validates the key and never touches the network. */
 export function reviewModule(options: ReviewModuleOptions = {}): EditorModule {
@@ -36,6 +44,7 @@ export function reviewModule(options: ReviewModuleOptions = {}): EditorModule {
       displayModes: ['all-markup', 'simple-markup', 'proposed', 'original'],
       collectReviewItems,
       revisionItemsOfParagraph,
+      ...(options.paneOpening ? { paneOpening: options.paneOpening } : {}),
     },
   };
 }

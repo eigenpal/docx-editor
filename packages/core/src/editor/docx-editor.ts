@@ -260,6 +260,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const modules = resolveEditorModules(config.modules);
   const reportDiagnostic = customNodeDiagnosticReporter(modules);
   const reviewEnabled = modules.review !== null;
+  const autoOpenPane = modules.review?.paneOpening !== 'manual';
   /** Document bytes waiting for a container — set when constructed or loaded detached. */
   let pendingBytes: Uint8Array | null = null;
   /** Pending input belongs to these exact remount bytes, including a deferred mount. */
@@ -614,7 +615,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       onRequestHyperlink: () => hyperlinkChrome.current().onRequest?.(),
       onEquationPopover: (activation) => equationChrome.current().onPopover?.(activation),
       onTrackedChange: () => {
-        if (reviewPaneOpen) return;
+        if (reviewPaneOpen || !autoOpenPane) return;
         reviewPaneOpen = true;
         bump();
         emitSelectionChange();
@@ -661,9 +662,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // Before anything can publish: the mount decides the mode itself just below, and a sync
     // firing in between would decide a second time and clear what the first one published.
     protection.prime();
-    // Keep the loading page centred and its comments control inactive until the review
-    // model exists. Once open completes, show the pane only when the model found content.
-    reviewPaneOpen = reviewEnabled && surface.session.reviewItems().length > 0;
+    // Once the review model exists, show the pane when it found content and the module allows.
+    reviewPaneOpen = reviewEnabled && autoOpenPane && surface.session.reviewItems().length > 0;
     publishSignal.adopt(surface);
     if (pendingHostModeFallback !== null) applyHostModeDecision(pendingHostModeFallback, false);
     else adoptDocumentTracking();

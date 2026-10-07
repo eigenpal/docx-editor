@@ -92,3 +92,63 @@ describe('the free packages carry no review derivation', () => {
     expect('commentsOfPart' in layout).toBe(false);
   });
 });
+
+describe('reviewModule paneOpening', () => {
+  const PLAIN = `<w:p><w:r><w:t>Plain words</w:t></w:r></w:p>`;
+
+  function open(body: string, paneOpening?: 'automatic' | 'manual') {
+    return createDocxEditor({
+      container: document.createElement('div'),
+      document: docx(body),
+      author: 'Grace Hopper',
+      modules: [reviewModule(paneOpening ? { paneOpening } : {})],
+    });
+  }
+
+  function typeTracked(editor: ReturnType<typeof open>) {
+    editor.setEditingMode('suggesting');
+    const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 0 },
+      head: { paragraphId, offset: 0 },
+    });
+    editor.surface!.type('x');
+  }
+
+  test('by default the pane opens on a document with review items', () => {
+    const editor = open(TRACKED);
+    expect(editor.isReviewPaneOpen()).toBe(true);
+    editor.destroy();
+  });
+
+  test('by default the first tracked change opens the pane', () => {
+    const editor = open(PLAIN);
+    expect(editor.isReviewPaneOpen()).toBe(false);
+    typeTracked(editor);
+    expect(editor.getReviewItems().length).toBeGreaterThan(0);
+    expect(editor.isReviewPaneOpen()).toBe(true);
+    editor.destroy();
+  });
+
+  test('manual keeps the pane closed on load and after a tracked change', () => {
+    const loaded = open(TRACKED, 'manual');
+    expect(loaded.getReviewItems().length).toBeGreaterThan(0);
+    expect(loaded.isReviewPaneOpen()).toBe(false);
+    loaded.destroy();
+
+    const edited = open(PLAIN, 'manual');
+    typeTracked(edited);
+    expect(edited.getReviewItems().length).toBeGreaterThan(0);
+    expect(edited.isReviewPaneOpen()).toBe(false);
+    edited.destroy();
+  });
+
+  test('manual still lets the host open and close the pane', () => {
+    const editor = open(TRACKED, 'manual');
+    expect(editor.exec({ type: 'toggleReviewPane' }).ok).toBe(true);
+    expect(editor.isReviewPaneOpen()).toBe(true);
+    expect(editor.exec({ type: 'toggleReviewPane' }).ok).toBe(true);
+    expect(editor.isReviewPaneOpen()).toBe(false);
+    editor.destroy();
+  });
+});

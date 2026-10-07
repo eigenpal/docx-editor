@@ -628,7 +628,9 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights {
     retainSelection(): SelectionPin | null;
     save(): Promise<ArrayBuffer>;
     // (undocumented)
-    scrollToBlock(blockId: string): boolean;
+    scrollToBlock(blockId: string, options?: {
+        readonly block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest';
+    }): boolean;
     scrollToPage(pageNumber: number): boolean;
     selectMatch(match: TextMatch): ExecResult;
     setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult;
