@@ -265,6 +265,31 @@ describe('revisionStyles reaches the painted document', () => {
     ).toBe('/sam.png');
   });
 
+  test('useReviewAuthor outside the rail reads the declared colour from the roster', async () => {
+    function SidePanelProbe() {
+      const ada = useReviewAuthor('Ada Lovelace');
+      const grace = useReviewAuthor('Grace Hopper');
+      return (
+        <span data-testid="outside" data-ada={ada?.color ?? ''} data-grace={grace?.color ?? ''} />
+      );
+    }
+    const view = render(
+      <DocxEditorRoot document={TRACKED} modules={[reviewModule()]}>
+        <DocxEditorAuthorStyle author="Ada Lovelace" color="var(--brand-ada)" />
+        <SidePanelProbe />
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    const probe = view.getByTestId('outside');
+    expect(probe.dataset.ada).toBe('var(--brand-ada)');
+    expect(probe.dataset.grace).toBe('var(--doc-review-author-1)');
+  });
+
   test("a reply draws in its own author's colour, not the thread author's", async () => {
     let instance: DocxEditorInstance | null = null;
     const view = render(

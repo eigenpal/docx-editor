@@ -9,10 +9,11 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterEach, expect, test } from 'bun:test';
-import { h } from 'vue';
+import { defineComponent, h } from 'vue';
 import { TRACKED, waitFor } from './review-vue-harness.ts';
 import { DocxEditorReview } from '../vue/DocxEditorReview.tsx';
 import { reviewModule } from '../index.ts';
+import { useReviewAuthor } from '../vue/index.ts';
 import { flush, mountEditorTree } from '../../../vue/test/helpers/mount.ts';
 import { DocxEditorAuthorStyle } from '../../../vue/src/editor/DocxEditorAuthorStyle.ts';
 
@@ -49,6 +50,35 @@ test('a host input in a card keeps focus, and pressing it does not activate the 
     await flush();
     expect(document.activeElement).toBe(input);
     expect(card.hasAttribute('data-active')).toBe(false);
+  } finally {
+    mounted.unmount();
+  }
+});
+
+test('useReviewAuthor outside the rail reads the declared colour from the roster', async () => {
+  const SidePanelProbe = defineComponent({
+    setup() {
+      const ada = useReviewAuthor('Ada Lovelace');
+      return () => h('span', { 'data-testid': 'outside', 'data-ada': ada.value?.color ?? '' });
+    },
+  });
+  const mounted = mountEditorTree(
+    () => [
+      h(DocxEditorAuthorStyle, { author: 'Ada Lovelace', color: 'var(--brand-ada)' }),
+      h(SidePanelProbe),
+    ],
+    TRACKED,
+    () => [],
+    [reviewModule()]
+  );
+  try {
+    await flush();
+    await waitFor(
+      () =>
+        mounted.container.querySelector<HTMLElement>('[data-testid="outside"]')?.dataset.ada !== ''
+    );
+    const probe = mounted.container.querySelector<HTMLElement>('[data-testid="outside"]')!;
+    expect(probe.dataset.ada).toBe('var(--brand-ada)');
   } finally {
     mounted.unmount();
   }

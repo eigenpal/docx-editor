@@ -24,7 +24,7 @@ import {
 } from 'vue';
 import type { ReviewAuthorInfo } from '@docx-editor.dev/vue';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
-import { useTranslation } from '@docx-editor.dev/vue';
+import { useReviewAuthors, useTranslation } from '@docx-editor.dev/vue';
 import type { ReviewActions } from './review-types.ts';
 import type { ReviewItemView } from './useReview.ts';
 
@@ -109,17 +109,22 @@ export function useReviewItem(): ComputedRef<ReviewItemView | null> {
 /**
  * Returns the resolved color, slot, and declared style for one review author.
  *
- * The result updates when the author or revision style declarations change.
+ * The result updates when the author or revision style declarations change. Outside the
+ * review rail it reads the editor's author roster.
  *
  * @public
  */
 export function useReviewAuthor(
   author: MaybeRefOrGetter<string | undefined>
 ): ComputedRef<ReviewAuthorInfo | undefined> {
-  const rail = useRail();
+  const rail = inject(ReviewContextKey, null);
+  const roster = useReviewAuthors();
   return computed(() => {
     const name = toValue(author);
-    return name === undefined ? undefined : rail.value.authorInfo.get(name);
+    if (name === undefined) return undefined;
+    return rail
+      ? rail.value.authorInfo.get(name)
+      : roster.value.find((info) => info.author === name);
   });
 }
 

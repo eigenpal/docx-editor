@@ -333,7 +333,7 @@ To hide the bars, set `display: none` on `.docx-change-bars`.
 
 ## Build custom review cards
 
-`useReviewAuthor` returns one author's resolved color, ramp slot, and declared style. React returns the value directly. The Vue composable accepts a ref or getter and returns a computed ref.
+`useReviewAuthor` returns one author's resolved color, ramp slot, and declared style. It works inside the review rail and anywhere else under the editor root, such as a side panel that lists changes. React returns the value directly. The Vue composable accepts a ref or getter and returns a computed ref.
 
 The `DocxEditorReview.List` callback or Vue `#item` slot receives each item and its `author`. Use that value to select a custom card. For composition patterns, see [React composition](/docs/2.x/react/composition) or [Vue composition](/docs/2.x/vue/composition).
 

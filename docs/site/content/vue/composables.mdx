@@ -503,7 +503,7 @@ Install `@docx-editor.dev/pro` and import these APIs from `@docx-editor.dev/pro/
 - `useReview()` returns items, active state, review actions, pane state, and readiness.
 - `useReviewOf(editorRef, query?)` binds the same state to an explicit editor ref.
 - `useReviewItem()` returns the item for the active review card context.
-- `useReviewAuthor(author)` returns the resolved author style in a review rail.
+- `useReviewAuthor(author)` returns the resolved author style, inside or outside the review rail.
 - `useStackedReviewPositions(items, heights, options?)` calculates card positions without overlap.
 
 The package also exports `DocxEditorReview`. Mount it inside `DocxEditor.Viewport`, beside `DocxEditor.Content`.

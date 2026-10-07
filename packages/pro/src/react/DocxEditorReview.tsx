@@ -123,7 +123,7 @@ export function useReviewItem(): ReviewItemView | null {
  * The link between a CUSTOM card and the author styling system: a `List` render callback
  * or card child reads the item's author here and draws with the same colours the painted
  * document and the packaged cards use. Live: a `setRevisionStyles` call re-renders the
- * rail, and this answer with it. Works anywhere under `DocxEditorReview`.
+ * rail, and this answer with it. Outside the rail it reads the editor's author roster.
  *
  * ```tsx
  * function MyCard({ item }: { item: ReviewItemView }) {
@@ -136,8 +136,10 @@ export function useReviewItem(): ReviewItemView | null {
  * @public
  */
 export function useReviewAuthor(author: string | undefined): ReviewAuthorInfo | undefined {
-  const { authorInfo } = useRail();
-  return author === undefined ? undefined : authorInfo.get(author);
+  const rail = useContext(ReviewContext);
+  const roster = useReviewAuthors();
+  if (author === undefined) return undefined;
+  return rail ? rail.authorInfo.get(author) : roster.find((info) => info.author === author);
 }
 
 interface ReviewRailValue {
