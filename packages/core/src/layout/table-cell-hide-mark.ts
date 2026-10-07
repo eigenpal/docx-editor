@@ -1,9 +1,5 @@
 import { WML_NAMESPACE_URI, type OoxmlElement } from '@docx-editor.dev/core/store';
 import type { CascadedTableFormatting } from './style-cascade.ts';
-import type { PendingLine } from './paragraph-flow.ts';
-import type { ResolvedListItem } from './list-resolve.ts';
-import type { TextMeasurer } from './semantic-records.ts';
-import { applyLineSpacing, type ParagraphLineSpacing } from './paragraph-style.ts';
 
 function childNamed(node: OoxmlElement | undefined, name: string): OoxmlElement | undefined {
   if (!node) return undefined;
@@ -46,37 +42,4 @@ export function cellIgnoresEndMark(
     }
   }
   return optionalHideMark(direct) ?? hidden;
-}
-
-/** Keep the source position, but remove an excluded empty cell glyph's line-height contribution. */
-export function withoutHiddenCellMark(
-  lines: readonly PendingLine[],
-  hideMark: boolean,
-  measurer: TextMeasurer,
-  spacing: ParagraphLineSpacing,
-  listItem?: ResolvedListItem
-): readonly PendingLine[] {
-  const last = lines.at(-1);
-  if (!hideMark || !last || last.spans.length > 0 || last.drawings.length > 0) return lines;
-  // A list marker is printable and belongs to the first line, even when the paragraph is empty.
-  const marker =
-    lines.length === 1 && listItem?.markerText && !listItem.markerStyle.hidden
-      ? measurer.lineMetrics(listItem.markerStyle)
-      : { height: 0, baseline: 0 };
-  const spaced: { height: number; baseline: number; trailing?: number } =
-    marker.height > 0 ? applyLineSpacing(spacing, marker.height, marker.baseline) : marker;
-  // Copy only for placement: the break cache also serves ordinary paragraphs and visible marks.
-  return [
-    ...lines.slice(0, -1),
-    {
-      ...last,
-      height: spaced.height,
-      baseline: spaced.baseline,
-      leading: Math.max(0, spaced.baseline - marker.baseline),
-      trailingSpacing:
-        spacing.rule === 'exact'
-          ? 0
-          : Math.max(0, spaced.trailing ?? spaced.height - marker.height),
-    },
-  ];
 }

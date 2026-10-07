@@ -5,6 +5,7 @@ import {
   createLayoutSession,
   layoutSemanticDocument,
 } from '../semantic-layout.ts';
+import { withSharedGridLineSideRules } from '../legacy-table-side-rules.ts';
 import { readTableStructure } from '../semantic-table.ts';
 
 // Compatibility mode 15 puts the OUTER edge of a left- or right-aligned table's side rule on
@@ -252,4 +253,45 @@ test('a retained session relays an edge-aligned table when the mode or width cha
   expect(firstTable(layout(part, 15, session, 146.9)).box.x).toBe(0);
   expect(read(table, 16).outerRuleOffsetPt).toBe(1.5);
   expect(read(table, 15).outerRuleOffsetPt).toBe(1.5);
+});
+
+test('side-rule reuse respects changed borders and grid coverage', () => {
+  const structure = read(source({ cols: [1440, 1440] }).table, 15);
+  const shape = {
+    ...structure,
+    compatibilityMode: 15,
+    depth: 0,
+    floating: false,
+    widthType: structure.tableWidth.type,
+    containerWidthPt: 300,
+  };
+  const initial = withSharedGridLineSideRules(structure.rows, shape);
+  expect(initial.outerRuleOffsetPt).toBe(1.5);
+  const row = structure.rows[0]!;
+  const cell = row.cells[0]!;
+  const borders = cell.contentBorders ?? cell.borders;
+  if (borders.left.state !== 'edge') throw Error('Missing left border');
+  const changedRows = [
+    {
+      ...row,
+      cells: [
+        {
+          ...cell,
+          contentBorders: {
+            ...borders,
+            left: { ...borders.left, state: 'edge' as const, widthPt: 1 },
+          },
+        },
+        ...row.cells.slice(1),
+      ],
+    },
+  ];
+  expect(withSharedGridLineSideRules(changedRows, shape).outerRuleOffsetPt).toBeUndefined();
+  expect(
+    withSharedGridLineSideRules(structure.rows, {
+      ...shape,
+      columnWidthsPt: [...shape.columnWidthsPt, 10],
+    }).outerRuleOffsetPt
+  ).toBeUndefined();
+  expect(withSharedGridLineSideRules(structure.rows, shape).outerRuleOffsetPt).toBe(1.5);
 });

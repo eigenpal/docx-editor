@@ -2,6 +2,7 @@ import { paragraphFragmentsOfBlocks } from './semantic-records.ts';
 import type {
   BlockFragmentRecord,
   LayoutBox,
+  PageRecord,
   SemanticLayout,
   TableCellFragmentRecord,
 } from './semantic-records.ts';
@@ -207,39 +208,54 @@ const locationsByLayout = new WeakMap<
 >();
 const bottomToTopCarets = new WeakSet<CaretGeometry>();
 
+const locationsByPage = new WeakMap<
+  PageRecord,
+  readonly {
+    readonly paragraphId: string;
+    readonly cell: TableCellFragmentRecord;
+  }[]
+>();
+
+function pageBottomToTopLocations(page: PageRecord) {
+  const cached = locationsByPage.get(page);
+  if (cached) return cached;
+  const found: { paragraphId: string; cell: TableCellFragmentRecord }[] = [];
+  const visit = (blocks: readonly BlockFragmentRecord[]): void => {
+    for (const block of blocks) {
+      if (block.kind !== 'table') continue;
+      for (const row of block.rows)
+        for (const cell of row.cells) {
+          if (cell.textDirection === 'btLr') {
+            for (const paragraph of paragraphFragmentsOfBlocks(cell.blocks))
+              found.push({ paragraphId: paragraph.paragraphId, cell });
+          } else visit(cell.blocks);
+        }
+    }
+  };
+  visit(page.fragments);
+  if (page.header) visit(page.header.fragments);
+  if (page.footer) visit(page.footer.fragments);
+  for (const area of [page.footnotes, page.endnotes]) {
+    if (!area) continue;
+    if (area.separator) visit(area.separator.fragments);
+    if (area.continuationNotice) visit(area.continuationNotice.fragments);
+    for (const note of area.notes) visit(note.fragments);
+  }
+  locationsByPage.set(page, found);
+  return found;
+}
+
 function bottomToTopLocations(
   layout: SemanticLayout
 ): ReadonlyMap<string, readonly BottomToTopCellLocation[]> {
   const cached = locationsByLayout.get(layout);
   if (cached) return cached;
   const found = new Map<string, BottomToTopCellLocation[]>();
-  const visit = (blocks: readonly BlockFragmentRecord[], pageIndex: number): void => {
-    for (const block of blocks) {
-      if (block.kind !== 'table') continue;
-      for (const row of block.rows) {
-        for (const cell of row.cells) {
-          if (cell.textDirection === 'btLr') {
-            for (const paragraph of paragraphFragmentsOfBlocks(cell.blocks)) {
-              const locations = found.get(paragraph.paragraphId) ?? [];
-              locations.push({ pageIndex, cell });
-              found.set(paragraph.paragraphId, locations);
-            }
-          } else {
-            visit(cell.blocks, pageIndex);
-          }
-        }
-      }
-    }
-  };
   for (const page of layout.pages) {
-    visit(page.fragments, page.index);
-    if (page.header) visit(page.header.fragments, page.index);
-    if (page.footer) visit(page.footer.fragments, page.index);
-    for (const area of [page.footnotes, page.endnotes]) {
-      if (!area) continue;
-      if (area.separator) visit(area.separator.fragments, page.index);
-      if (area.continuationNotice) visit(area.continuationNotice.fragments, page.index);
-      for (const note of area.notes) visit(note.fragments, page.index);
+    for (const { paragraphId, cell } of pageBottomToTopLocations(page)) {
+      let locations = found.get(paragraphId);
+      if (!locations) found.set(paragraphId, (locations = []));
+      locations.push({ pageIndex: page.index, cell });
     }
   }
   locationsByLayout.set(layout, found);

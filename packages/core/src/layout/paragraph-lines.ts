@@ -41,14 +41,66 @@ export function paragraphLinesIndex(layout: SemanticLayout): Map<string, PlacedL
   if (cached) return cached;
   const index = new Map<string, PlacedLine[]>();
   for (const page of layout.pages) {
+    pageTraversals += 1;
     for (const [paragraphId, placed] of pageLines(page)) {
       const entry = index.get(paragraphId);
       if (entry) entry.push(...placed);
       else index.set(paragraphId, [...placed]);
     }
   }
+  // Answers already handed out stay the answers: a reader never sees two arrays for one
+  // paragraph of one layout. They hold exactly the lines the index just collected.
+  const requested = requestedParagraphLines.get(layout);
+  if (requested) {
+    for (const [paragraphId, placed] of requested) {
+      if (placed.length > 0) index.set(paragraphId, placed as PlacedLine[]);
+    }
+    requestedParagraphLines.delete(layout);
+  }
   paragraphLinesCache.set(layout, index);
   return index;
+}
+
+const requestedParagraphLines = new WeakMap<SemanticLayout, Map<string, readonly PlacedLine[]>>();
+
+/**
+ * Distinct paragraphs one layout answers by page scan before it builds the complete index.
+ *
+ * A single read visits every page, which beats building the whole index for the handful of
+ * paragraphs a keystroke asks about. A range operation asks about every paragraph it spans,
+ * and per-paragraph scans would cost paragraphs × pages; past this many the index wins.
+ */
+const LAZY_PARAGRAPH_READS = 32;
+
+let pageTraversals = 0;
+
+/** @internal Pages visited by paragraph line reads so far, for bounded-work tests. */
+export function paragraphLinesPageTraversals(): number {
+  return pageTraversals;
+}
+
+/** Read one paragraph without copying every page index into a document-wide map. */
+export function paragraphLinesFor(
+  layout: SemanticLayout,
+  paragraphId: string
+): readonly PlacedLine[] {
+  const complete = paragraphLinesCache.get(layout);
+  if (complete) return complete.get(paragraphId) ?? [];
+  let requested = requestedParagraphLines.get(layout);
+  if (!requested) requestedParagraphLines.set(layout, (requested = new Map()));
+  const known = requested.get(paragraphId);
+  if (known) return known;
+  if (requested.size >= LAZY_PARAGRAPH_READS) {
+    return paragraphLinesIndex(layout).get(paragraphId) ?? [];
+  }
+  const result: PlacedLine[] = [];
+  for (const page of layout.pages) {
+    pageTraversals += 1;
+    const placed = pageLines(page).get(paragraphId);
+    if (placed) for (const line of placed) result.push(line);
+  }
+  requested.set(paragraphId, result);
+  return result;
 }
 
 function pageLines(page: PageRecord): ReadonlyMap<string, readonly PlacedLine[]> {
@@ -124,7 +176,7 @@ export function lineAtIndexedPosition(
   paragraphId: string,
   offset: number
 ): LineRecord | null {
-  const placed = paragraphLinesIndex(layout).get(paragraphId);
+  const placed = paragraphLinesFor(layout, paragraphId);
   if (placed && placed.length > 0) {
     const hit = lineAtPosition(
       layout,
@@ -165,7 +217,7 @@ export function paragraphDeletedRanges(
   const cached = byParagraph.get(paragraphId);
   if (cached) return cached;
   const collected: { start: number; end: number }[] = [];
-  for (const { line } of paragraphLinesIndex(layout).get(paragraphId) ?? []) {
+  for (const { line } of paragraphLinesFor(layout, paragraphId) ?? []) {
     // A merged line indexes under both members but expresses `deletedRanges` in the offsets
     // of the paragraph it NAMES (merged-paragraph-ranges.ts); the other member's are dropped.
     if (line.range.paragraphId !== paragraphId) continue;

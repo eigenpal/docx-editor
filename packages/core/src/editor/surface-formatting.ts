@@ -14,9 +14,6 @@ import {
   paragraphsInCells,
   spansInCells,
   spansInSelection,
-  type BlockFragmentRecord,
-  type PageRecord,
-  type ParagraphFragmentRecord,
   type ParagraphIndent,
   type ResolvedRunStyle,
   type SemanticPosition,
@@ -42,7 +39,7 @@ import {
 // answer to "which runs does this range cover", not surface a consumer builds on.
 import { clippedFormattableRuns } from '../store/store/formattable-runs.ts';
 import type { SurfaceFormatting } from './paginated-surface-contract.ts';
-import { lineSegments } from '../layout/line-segments.ts';
+import { paragraphFormattingEntry } from './surface-formatting-index.ts';
 import { paragraphAlignment } from '../layout/paragraph-flow.ts';
 import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
 import {
@@ -61,210 +58,34 @@ export interface SurfaceProperty {
   readonly attributes?: Record<string, string>;
 }
 
-/**
- * Every paragraph fragment the layout publishes, in EVERY story the caret can reach.
- *
- * `layout.pages[].fragments` is the BODY. Headers, footers, footnotes and endnotes are
- * editable scopes of their own (`enterHeaderFooter`, `enterNote`), and a paragraph index
- * built from the body alone answers nothing for a caret inside one — so the toolbar read
- * defaults over a centred header and Increase Indent stepped from an indent of zero,
- * moving header text BACKWARDS. `paragraphLinesIndex` already walks the same four stories
- * for exactly this reason; these two indexes did not.
- *
- * Header-repeat rows are skipped: a repeated row is the SAME paragraph drawn again, and it
- * carries the header row's properties rather than its own.
- *
- * `inTable` rides along because it is the ruler's gate and this is the walk that knows it.
- */
-function eachParagraphFragmentOnPage(
-  page: PageRecord,
-  visit: (fragment: ParagraphFragmentRecord, inTable: boolean) => void
-): void {
-  const walk = (blocks: readonly BlockFragmentRecord[], inTable: boolean): void => {
-    for (const block of blocks) {
-      if (block.kind === 'paragraph') {
-        visit(block, inTable);
-        continue;
-      }
-      for (const row of block.rows) {
-        if (row.isHeaderRepeat) continue;
-        for (const cell of row.cells) walk(cell.blocks, true);
-      }
-    }
-  };
-  walk(page.fragments, false);
-  if (page.header) walk(page.header.fragments, false);
-  if (page.footer) walk(page.footer.fragments, false);
-  for (const area of [page.footnotes, page.endnotes]) {
-    if (!area) continue;
-    for (const note of area.notes) walk(note.fragments, false);
-  }
-}
-
-/**
- * Record one paragraph under EVERY id it is drawn for: its own, and every member of a
- * merged run laid out under it.
- *
- * A resolved view draws a run of paragraphs as one fragment under the survivor's name, and
- * each member is being shown with that fragment's properties — so each has to be reachable
- * by them. First-wins, so a continuation fragment on a later page never displaces the one
- * that opened the paragraph.
- */
-function recordFragment<T>(
-  index: Map<string, T>,
-  fragment: ParagraphFragmentRecord,
-  value: T
-): void {
-  if (!index.has(fragment.paragraphId)) index.set(fragment.paragraphId, value);
-  for (const line of fragment.lines) {
-    for (const segment of lineSegments(line)) {
-      if (!index.has(segment.paragraphId)) index.set(segment.paragraphId, value);
-    }
-  }
-}
-
-/**
- * Paragraph properties by paragraph id, one map per published layout.
- *
- * Weakly keyed on the layout because a layout is immutable: a new revision is a new
- * object, and superseded revisions release their index with the records.
- */
-const fragmentPropsByLayout = new WeakMap<
-  SemanticLayout,
-  Map<string, readonly SurfaceProperty[]>
->();
-
-const emptyStylesByLayout = new WeakMap<SemanticLayout, ReadonlyMap<string, ResolvedRunStyle>>();
-
+/** A paragraph's first published empty-line style, including editable furniture. */
 function emptyParagraphStyleOf(
   layout: SemanticLayout,
   paragraphId: string
 ): ResolvedRunStyle | undefined {
-  let styles = emptyStylesByLayout.get(layout);
-  if (!styles) {
-    const next = new Map<string, ResolvedRunStyle>();
-    for (const page of layout.pages)
-      eachParagraphFragmentOnPage(page, (fragment) => {
-        if (fragment.emptyParagraphStyle)
-          recordFragment(next, fragment, fragment.emptyParagraphStyle);
-      });
-    styles = next;
-    emptyStylesByLayout.set(layout, styles);
-  }
-  return styles.get(paragraphId);
+  return paragraphFormattingEntry(layout, paragraphId, true)?.emptyStyle;
 }
 
-/**
- * One page's contribution to that index, remembered on the PAGE record.
- *
- * A page that layout does not touch keeps its record identity across revisions, so a
- * keystroke walks the lines of one page instead of every page in the document. The map above
- * is still rebuilt per layout, because a paragraph can move between pages.
- */
-const fragmentPropsByPage = new WeakMap<
-  PageRecord,
-  ReadonlyMap<string, readonly SurfaceProperty[]>
->();
-
-function pageProps(page: PageRecord): ReadonlyMap<string, readonly SurfaceProperty[]> {
-  const cached = fragmentPropsByPage.get(page);
-  if (cached) return cached;
-  const props = new Map<string, readonly SurfaceProperty[]>();
-  eachParagraphFragmentOnPage(page, (fragment) => recordFragment(props, fragment, fragment.props));
-  fragmentPropsByPage.set(page, props);
-  return props;
-}
-
-/**
- * A paragraph's CASCADED properties, read back from the layout records.
- *
- * `w:docDefaults` + the style chain + direct formatting, flattened: what the paragraph
- * LOOKS like, which is the right answer for a toolbar and the wrong one for an op —
- * `directParagraphProperties` is what a write merges against.
- */
+/** Cascaded paragraph properties from its first published fragment. */
 export function paragraphPropertiesOf(
   layout: SemanticLayout,
   paragraphId: string
 ): readonly SurfaceProperty[] {
-  // Indexed per layout: the host reads formatting after every commit, and scanning all
-  // pages for one paragraph's `w:pPr` projection made that read O(document).
-  let index = fragmentPropsByLayout.get(layout);
-  if (!index) {
-    index = new Map();
-    for (const page of layout.pages) {
-      for (const [id, props] of pageProps(page)) {
-        if (!index.has(id)) index.set(id, props);
-      }
-    }
-    fragmentPropsByLayout.set(layout, index);
-  }
-  return index.get(paragraphId) ?? [];
+  return paragraphFormattingEntry(layout, paragraphId)?.fragment.props ?? [];
 }
 
-const fragmentTabStopsByPage = new WeakMap<PageRecord, ReadonlyMap<string, ResolvedTabStops>>();
-
-function pageTabStops(page: PageRecord): ReadonlyMap<string, ResolvedTabStops> {
-  const cached = fragmentTabStopsByPage.get(page);
-  if (cached) return cached;
-  const stops = new Map<string, ResolvedTabStops>();
-  eachParagraphFragmentOnPage(page, (fragment) =>
-    recordFragment(stops, fragment, fragment.tabStops)
-  );
-  fragmentTabStopsByPage.set(page, stops);
-  return stops;
-}
-
-/**
- * A paragraph's resolved tab stops, from the layout records, or null for a paragraph the
- * published layout does not carry.
- *
- * Not derivable from {@link paragraphPropertiesOf}: `w:tabs` carries its meaning in `w:tab`
- * CHILDREN and the flat property projection has none, so the cascade shows the element and
- * not a single stop.
- */
+/** Resolved paragraph tabs from its first published fragment. */
 export function paragraphTabStopsOf(
   layout: SemanticLayout,
   paragraphId: string
 ): ResolvedTabStops | null {
-  let index = fragmentTabStopsByLayout.get(layout);
-  if (!index) {
-    const built = new Map<string, ResolvedTabStops>();
-    // Through the PAGE memo, like the other two indexes. An incremental pass keeps most
-    // page records by identity, so a keystroke re-walks only the pages that moved rather
-    // than every line in the document.
-    for (const page of layout.pages) {
-      for (const [id, stops] of pageTabStops(page)) {
-        if (!built.has(id)) built.set(id, stops);
-      }
-    }
-    index = built;
-    fragmentTabStopsByLayout.set(layout, built);
-  }
-  return index.get(paragraphId) ?? null;
+  return paragraphFormattingEntry(layout, paragraphId)?.fragment.tabStops ?? null;
 }
-
-const fragmentTabStopsByLayout = new WeakMap<SemanticLayout, Map<string, ResolvedTabStops>>();
 
 /** A paragraph's effective indent, plus whether it sits inside a table. */
 export interface ParagraphIndentEntry {
   readonly indent: ParagraphIndent;
   readonly inTable: boolean;
-}
-
-const fragmentIndentByLayout = new WeakMap<SemanticLayout, Map<string, ParagraphIndentEntry>>();
-
-/** One page's indents, on the page record, for the same reason {@link pageProps} is. */
-const fragmentIndentByPage = new WeakMap<PageRecord, ReadonlyMap<string, ParagraphIndentEntry>>();
-
-function pageIndents(page: PageRecord): ReadonlyMap<string, ParagraphIndentEntry> {
-  const cached = fragmentIndentByPage.get(page);
-  if (cached) return cached;
-  const indents = new Map<string, ParagraphIndentEntry>();
-  eachParagraphFragmentOnPage(page, (fragment, inTable) =>
-    recordFragment(indents, fragment, { indent: fragment.indent, inTable })
-  );
-  fragmentIndentByPage.set(page, indents);
-  return indents;
 }
 
 /**
@@ -290,18 +111,7 @@ export function paragraphIndentOf(
   layout: SemanticLayout,
   paragraphId: string
 ): ParagraphIndentEntry | null {
-  let index = fragmentIndentByLayout.get(layout);
-  if (!index) {
-    const built = new Map<string, ParagraphIndentEntry>();
-    for (const page of layout.pages) {
-      for (const [id, entry] of pageIndents(page)) {
-        if (!built.has(id)) built.set(id, entry);
-      }
-    }
-    index = built;
-    fragmentIndentByLayout.set(layout, built);
-  }
-  return index.get(paragraphId) ?? null;
+  return paragraphFormattingEntry(layout, paragraphId)?.indent ?? null;
 }
 
 /*

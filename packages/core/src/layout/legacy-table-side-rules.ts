@@ -108,28 +108,64 @@ export interface SharedGridLineSideRules {
  * both sides, and whose rows each cover the whole grid (no `w:gridBefore`/`w:gridAfter`);
  * else `undefined`.
  */
+const uniformRows = new WeakMap<
+  SemanticTableRow,
+  { columns: number; value: number | null | undefined }
+>();
+const uniformTables = new WeakMap<
+  readonly SemanticTableRow[],
+  { columns: number; value: number | undefined }
+>();
+function uniformRowRule(row: SemanticTableRow, columnCount: number): number | null | undefined {
+  const known = uniformRows.get(row);
+  if (known?.columns === columnCount) return known.value;
+  const read = (): number | null | undefined => {
+    const first = row.cells[0],
+      last = row.cells.at(-1);
+    if (
+      !first ||
+      !last ||
+      first.gridColumn !== 0 ||
+      last.gridColumn + last.gridSpan !== columnCount
+    )
+      return null;
+    let width: number | undefined;
+    for (const cell of row.cells) {
+      if (cell.vMergeContinue) continue;
+      const { left, right } = cell.contentBorders ?? cell.borders;
+      for (const edge of [left, right]) {
+        if (
+          edge.state !== 'edge' ||
+          !SIMPLE_SIDE_STYLES.includes(edge.style) ||
+          !(edge.widthPt > 0)
+        )
+          return null;
+        if (width !== undefined && edge.widthPt !== width) return null;
+        width = edge.widthPt;
+      }
+    }
+    return width;
+  };
+  const value = read();
+  uniformRows.set(row, { columns: columnCount, value });
+  return value;
+}
 function uniformSimpleSideRuleWidth(
   rows: readonly SemanticTableRow[],
   columnCount: number
 ): number | undefined {
+  const known = uniformTables.get(rows);
+  if (known?.columns === columnCount) return known.value;
   let width: number | undefined;
   for (const row of rows) {
-    const first = row.cells[0];
-    const last = row.cells[row.cells.length - 1];
-    if (!first || !last || first.gridColumn !== 0) return undefined;
-    if (last.gridColumn + last.gridSpan !== columnCount) return undefined;
-    for (const cell of row.cells) {
-      // A merge continuation paints and holds nothing; its restart cell carries the rules.
-      if (cell.vMergeContinue) continue;
-      const { left, right } = cell.contentBorders ?? cell.borders;
-      for (const edge of [left, right]) {
-        if (edge.state !== 'edge' || !SIMPLE_SIDE_STYLES.includes(edge.style)) return undefined;
-        if (!(edge.widthPt > 0)) return undefined;
-        if (width !== undefined && edge.widthPt !== width) return undefined;
-        width = edge.widthPt;
-      }
+    const value = uniformRowRule(row, columnCount);
+    if (value === null || (value !== undefined && width !== undefined && value !== width)) {
+      uniformTables.set(rows, { columns: columnCount, value: undefined });
+      return undefined;
     }
+    if (value !== undefined) width = value;
   }
+  uniformTables.set(rows, { columns: columnCount, value: width });
   return width;
 }
 
@@ -185,20 +221,72 @@ function modernEdgeAlignedOffsetPt(
  * Other mode-15 shapes (`pct` width, unequal or compound rules) and mode 16 keep
  * the full-stroke inset until controls cover them.
  */
-export function withSharedGridLineSideRules(
+function sharedGridLineDecision(
   rows: readonly SemanticTableRow[],
   table: SideRuleTableShape
-): SharedGridLineSideRules {
+): { legacyMode: boolean; modernGridWidth: boolean; outerRuleOffsetPt?: number } | null {
   const { compatibilityMode: mode } = table;
   if (table.depth !== 0 || table.bidiVisual || table.floating || table.cellSpacingPt !== 0)
-    return { rows };
+    return null;
   const legacyMode = hasCompatibilityRule(mode, 'legacySharedGridLineSideRules');
   const modernGridWidth =
     hasCompatibilityRule(mode, 'modernGridLineSideRules') &&
     MODERN_GRID_WIDTH_TYPES.includes(table.widthType);
   const modernCentred = modernGridWidth && table.alignment === 'center';
   const outerRuleOffsetPt = legacyMode ? undefined : modernEdgeAlignedOffsetPt(rows, table);
-  if (!legacyMode && !modernCentred && outerRuleOffsetPt === undefined) return { rows };
+  if (!legacyMode && !modernCentred && outerRuleOffsetPt === undefined) return null;
+  return { legacyMode, modernGridWidth, outerRuleOffsetPt };
+}
+
+const rowsWithoutSharedSides = new WeakMap<SemanticTableRow, SemanticTableRow>();
+function withoutSharedSides(row: SemanticTableRow): SemanticTableRow {
+  const known = rowsWithoutSharedSides.get(row);
+  if (known) return known;
+  let changed = false;
+  const cells = row.cells.map((cell) => {
+    if (!cell.centeredSideRules && !cell.centeredSidePaint) return cell;
+    changed = true;
+    const { centeredSideRules: _rules, centeredSidePaint: _paint, ...plain } = cell;
+    return plain;
+  });
+  const result = changed ? { ...row, cells } : row;
+  rowsWithoutSharedSides.set(row, result);
+  return result;
+}
+
+/** Reapply only the width-dependent side rules; authored cell material stays unchanged. */
+export function retargetSharedGridLineSideRules(
+  rows: readonly SemanticTableRow[],
+  before: SideRuleTableShape,
+  widths: readonly number[]
+): SharedGridLineSideRules {
+  const old = sharedGridLineDecision(rows, before);
+  const shape = { ...before, columnWidthsPt: widths };
+  const next = sharedGridLineDecision(rows, shape);
+  if (
+    old === next ||
+    (old &&
+      next &&
+      old.legacyMode === next.legacyMode &&
+      old.modernGridWidth === next.modernGridWidth &&
+      old.outerRuleOffsetPt === next.outerRuleOffsetPt)
+  )
+    return {
+      rows,
+      ...(next?.outerRuleOffsetPt === undefined
+        ? {}
+        : { outerRuleOffsetPt: next.outerRuleOffsetPt }),
+    };
+  return withSharedGridLineSideRules(rows.map(withoutSharedSides), shape);
+}
+
+export function withSharedGridLineSideRules(
+  rows: readonly SemanticTableRow[],
+  table: SideRuleTableShape
+): SharedGridLineSideRules {
+  const decision = sharedGridLineDecision(rows, table);
+  if (!decision) return { rows };
+  const { legacyMode, modernGridWidth, outerRuleOffsetPt } = decision;
   const painted = withCentredSideRulePaint(rows, !legacyMode);
   const shared =
     table.widthType === 'dxa' || modernGridWidth

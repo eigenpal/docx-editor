@@ -1,3 +1,5 @@
+import { createRowProbeReuse } from './table-row-probe-reuse.ts';
+import { takePreviousRows } from './table-row-placement-reuse.ts';
 // Placing ONE top-level table into the body flow, row by row, across page breaks.
 //
 // Lifted out of the story loop because it is the one block kind whose placement is a loop of
@@ -19,7 +21,6 @@ import {
   initialCellCursors,
   layoutRowFragment,
   layoutRowFragmentBounded,
-  measureRowHeight,
   MAX_TABLE_ROW_FRAGMENTS,
   TablePaginationError,
   vMergePlanFor,
@@ -46,6 +47,7 @@ import { readTableStructure, tableOriginX, type SemanticTableRow } from './seman
 import { pinnedBreakAtCursor, withSplittableRows } from './table-pinned-break.ts';
 import { tableFloatOriginY } from './table-float-position.ts';
 import { shiftTableFragment } from './table-fragment-finalize.ts';
+import { budgetsHaveHeadroom, withBudgetProof } from './table-budget-proof.ts';
 import { planOutOfCellFloats } from './table-out-of-cell-floats.ts';
 import { tableFloatClearance } from './table-float-collision.ts';
 import type { TableRowFragmentRecord } from './semantic-records.ts';
@@ -150,22 +152,17 @@ export function paginateTableInFlow(
     // complete fragment in closeTableFragment once that height is known.
     flow.cursorY = tableFloatOriginY(structure.float, 0, verticalFrames);
   }
-  /** One row's natural height where the table stands now. `tableLeft` moves; this reads it. */
+  const rowProbes = createRowProbeReuse(
+    structure.columnWidthsPt,
+    structure.cellSpacingPt,
+    takePreviousRows(table)
+  );
+  /** One row's natural height at the current table origin. */
   const rowHeightOf = (
     probeRow: SemanticTableRow,
     top = flow.cursorY,
     deps?: TableFlowDeps
-  ): number =>
-    measureRowHeight(
-      probeRow,
-      structure.columnWidthsPt,
-      tableLeft,
-      0,
-      deps ?? tableDeps,
-      structure.cellSpacingPt,
-      undefined,
-      tableDeps.pageExclusionZones?.().length ? top : undefined
-    );
+  ): number => rowProbes.measure(probeRow, tableLeft, top, deps ?? tableDeps);
   // Out-of-cell floats (`layoutInCell="0"` before mode 15) keep the place the unpushed table
   // gives them and push the rows that touch them; see `table-out-of-cell-floats.ts`. Only
   // an in-flow table's first fragment is pushed: after a break the rows are on another sheet.
@@ -320,7 +317,7 @@ export function paginateTableInFlow(
             shiftAnchor
           )
         : fragment;
-    publishFragment(positionedFragment);
+    publishFragment(withBudgetProof(positionedFragment, budgetsHaveHeadroom(tableDeps)));
     floats?.end();
     fragmentIndex += 1;
     rows = [];
@@ -786,18 +783,22 @@ export function paginateTableInFlow(
       // and whose overflow the `placed.bottom` check below therefore cannot see.
       if (!isContinuation && naturalHeight <= remaining + 0.001) {
         const placementDeps = rowDeps();
-        const placed = layoutRowFragment(
-          deferred?.headRow ?? row,
-          structure.columnWidthsPt,
-          tableLeft,
-          flow.cursorY,
-          false,
-          0,
-          placementDeps,
-          structure.cellSpacingPt,
-          vMerge,
-          contentHeight()
-        );
+        const placed =
+          (!vMerge && !deferred
+            ? rowProbes.take(row, tableLeft, flow.cursorY, placementDeps)
+            : null) ??
+          layoutRowFragment(
+            deferred?.headRow ?? row,
+            structure.columnWidthsPt,
+            tableLeft,
+            flow.cursorY,
+            false,
+            0,
+            placementDeps,
+            structure.cellSpacingPt,
+            vMerge,
+            contentHeight()
+          );
         if (placed.bottom > contentHeight() + 0.001) {
           throw new TablePaginationError(
             'table-row-overheight',

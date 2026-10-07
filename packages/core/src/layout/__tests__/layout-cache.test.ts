@@ -11,6 +11,7 @@ import {
   readOoxmlPart,
   type OoxmlNode,
   type OoxmlPart,
+  type OoxmlProperty,
 } from '@docx-editor.dev/core/store';
 import {
   createFixedMeasurer,
@@ -20,6 +21,7 @@ import {
   type ParagraphLayoutCache,
   type PageGeometry,
 } from '../index.ts';
+import { sha256FontBytes } from '../../store/package/sha256.ts';
 import { layoutNodeTokenVisitTestRecorder, PARAGRAPH_KEY_INPUT_ROLES } from '../layout-cache.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -600,4 +602,42 @@ describe('key memoization over immutable nodes', () => {
       paragraphLayoutKey({ paragraph: node, properties: [], width: 100, producer: 'p' })
     ).not.toThrow();
   });
+});
+
+test('property key framing preserves the exact digest across attribute orders and values', () => {
+  const part = load(paragraph('Cache control'));
+  const values = ['', 'a=b', 'x,y;z', 'line\nvalue', 'λ漢字', 'nul\0value', '__proto__'];
+  const encoder = new TextEncoder();
+  for (let count = 0; count < 40; count += 1) {
+    const properties: OoxmlProperty[] = Array.from({ length: count }, (_, index) => ({
+      localName: `property${index}`,
+      ...(index % 3 === 0
+        ? {}
+        : {
+            attributes: Object.fromEntries(
+              values.map((value, attribute) => [
+                `attribute${values.length - attribute}`,
+                `${value}${index}`,
+              ])
+            ),
+          }),
+    }));
+    // Independent reference framing: property order matters; attribute order does not.
+    const reference = properties
+      .map((property) => {
+        const attributes = Object.entries(property.attributes ?? {})
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+          .map(([name, value]) => `${name}=${value}`)
+          .join('\0,');
+        return `${property.localName}(\0${attributes}\0)`;
+      })
+      .join('\0;');
+    const key = paragraphLayoutKey({
+      paragraph: part.root,
+      properties,
+      width: 100,
+      producer: 'fixed',
+    });
+    expect(key.endsWith(`:${sha256FontBytes(encoder.encode(reference))}`)).toBe(true);
+  }
 });

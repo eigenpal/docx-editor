@@ -131,24 +131,30 @@ export function applyHeaderFooterPaintChrome(
 ): void {
   for (const { record: page, element, materialized } of pages) {
     if (!materialized) continue;
+    // Every write below is skipped when the value is already in place. This runs over every
+    // materialized sheet on every paint, and an attribute write is a mutation and a style
+    // invalidation even when it stores the value the attribute already had.
     const content = element.querySelector<HTMLElement>(':scope > .docx-page-content');
-    if (content) {
-      if (chrome.activeHeaderFooterRId) content.setAttribute('contenteditable', 'false');
-      else content.removeAttribute('contenteditable');
-    }
+    if (content)
+      setAttributeIfChanged(
+        content,
+        'contenteditable',
+        chrome.activeHeaderFooterRId ? 'false' : null
+      );
     // The sheet names the band being edited, so the stylesheet can dim the change bars of
     // every OTHER story alongside the content they stand beside (the overlay is a sibling
     // of the bands, not a child, so no band selector can reach it).
-    delete element.dataset.docxHfActiveKind;
+    let activeKind: string | null = null;
     for (const band of element.querySelectorAll<HTMLElement>(
       ':scope > .docx-hf:not(.docx-hf--placeholder)'
     )) {
       const story = storyOfBand(page, band);
       if (!story) continue;
       const active = headerFooterBandIsActive(story, page.index, chrome);
-      if (active) element.dataset.docxHfActiveKind = story.kind;
+      if (active) activeKind = story.kind;
       applyBandChrome(band, page, story, active, chrome.scale);
     }
+    setAttributeIfChanged(element, 'data-docx-hf-active-kind', activeKind);
     for (const layer of element.querySelectorAll<HTMLElement>(':scope > [data-docx-hf-front]')) {
       const story = storyOfKind(page, layer.dataset.docxHfFront);
       setDrawingInteractivity(
@@ -179,15 +185,18 @@ function applyBandChrome(
   active: boolean,
   scale: number
 ): void {
-  if (active) {
-    band.dataset.docxHfActive = '';
-    band.setAttribute('contenteditable', 'true');
-  } else {
-    delete band.dataset.docxHfActive;
-    band.setAttribute('contenteditable', 'false');
-  }
-  band.style.height = `${headerFooterBandHeightPt(story, page, active) * scale}px`;
+  setAttributeIfChanged(band, 'data-docx-hf-active', active ? '' : null);
+  setAttributeIfChanged(band, 'contenteditable', active ? 'true' : 'false');
+  const height = `${headerFooterBandHeightPt(story, page, active) * scale}px`;
+  if (band.style.height !== height) band.style.height = height;
   setDrawingInteractivity(band, active);
+}
+
+/** Set an attribute, or remove it for `null`, only when that changes it. */
+function setAttributeIfChanged(element: Element, name: string, value: string | null): void {
+  if (element.getAttribute(name) === value) return;
+  if (value === null) element.removeAttribute(name);
+  else element.setAttribute(name, value);
 }
 
 function setDrawingInteractivity(root: ParentNode, interactive: boolean): void {
@@ -196,10 +205,11 @@ function setDrawingInteractivity(root: ParentNode, interactive: boolean): void {
       ? ':scope > *'
       : ':scope > .docx-drawing-layer > *'
   );
+  const value = interactive ? 'auto' : 'none';
   for (const node of nodes) {
-    node.style.pointerEvents = interactive ? 'auto' : 'none';
+    if (node.style.pointerEvents !== value) node.style.pointerEvents = value;
     for (const nested of node.querySelectorAll<HTMLElement>('.docx-drawing')) {
-      nested.style.pointerEvents = interactive ? 'auto' : 'none';
+      if (nested.style.pointerEvents !== value) nested.style.pointerEvents = value;
     }
   }
 }

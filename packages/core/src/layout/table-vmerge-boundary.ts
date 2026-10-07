@@ -49,6 +49,7 @@ import type { TableCellFragmentRecord, TableRowFragmentRecord } from './semantic
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { probeRowFragmentProgress } from './table-row-progress-probe.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
+import { readOnlyBreakCache } from './paragraph-cache-peek.ts';
 import type { CellContentInsets } from './table-cell-geometry.ts';
 import { isCarriedHeadRow } from './table-carried-head-row.ts';
 import type { RowVMergeLayoutOptions, VMergeRowHeights } from './table-vmerge-heights.ts';
@@ -96,7 +97,8 @@ function discardedDeps(deps: TableFlowDeps): TableFlowDeps {
   let lineCounter = 0;
   return {
     ...stripAnchorSinksForProbe(deps),
-    cache: undefined,
+    // Reads only: a probe never retains a break, but it may reuse one placement measured.
+    cache: readOnlyBreakCache(deps.cache),
     borderOwnershipBudget: undefined,
     vMergeResolveBudget: undefined,
     onCellBreakKey: undefined,

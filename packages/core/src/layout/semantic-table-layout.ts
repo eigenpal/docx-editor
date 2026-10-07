@@ -1,4 +1,6 @@
 import { withStoryLineGrid } from './line-grid.ts';
+import { reuseSingleLineAtWidth } from './paragraph-cache-width-reuse.ts';
+import { cellParagraphInputs, cellParagraphBreakInputs } from './cell-paragraph-inputs.ts';
 import { adjustedBreakIndex, paragraphKeeps } from './pagination-keeps.ts';
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { cellContextualSpacing, contextualCellNeighbours } from './contextual-paragraph-spacing.ts';
@@ -43,11 +45,10 @@ import type {
   FieldPageContext,
   HyperlinkProjector,
 } from './field-projection.ts';
-import {
-  paragraphLayoutKey,
-  withDrawingContext,
-  type ParagraphLayoutCache,
-} from './layout-cache.ts';
+import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
+import { cellBreakKeyInputs, cellBreakKeyParts } from './cell-break-key.ts';
+import { rememberCellLine } from './table-row-geometry-reuse.ts';
+import { alignCellLine } from './cell-line-alignment.ts';
 import {
   cellParagraphLines,
   zonesReachingCellParagraph,
@@ -61,9 +62,7 @@ import {
   type CellPlaceCursor,
 } from './table-cell-cursor.ts';
 export { initialCellCursors, type CellPlaceCursor } from './table-cell-cursor.ts';
-import { alignSpans, type PendingLine } from './paragraph-flow.ts';
-import { alignLineWithPictures } from './line-picture-alignment.ts';
-import { boxLineSetsLikeLastLine, lineAlignOffset } from './paragraph-alignment.ts';
+import { type PendingLine } from './paragraph-flow.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
 import { resolvedParagraphMarkChangeSites } from './revision-formatting-projection.ts';
 import { isEmptyCellTerminator, paragraphMergeGroupOf } from './story-roots.ts';
@@ -82,19 +81,13 @@ import {
 } from './paragraph-style.ts';
 import { cellEdgeAutoSpacing } from './table-cell-edge-spacing.ts';
 import {
-  prepareParagraphBreakInputs,
   positionedParagraphExclusionToken,
-  breakPreparedParagraph,
+  breakPreparedParagraphLazily,
 } from './paragraph-break-request.ts';
 import type { CellParagraphPlacementOptions } from './table-cell-paragraph-options.ts';
 import { cellReservedMarkHeights } from './table-cell-end-mark.ts';
-import { withoutHiddenCellMark } from './table-cell-hide-mark.ts';
 import { DEFAULT_RUN_STYLE } from './run-style.ts';
-import {
-  resolveParagraphLayoutInputs,
-  type StyleCascadeTable,
-  type TableCellStyleFormatting,
-} from './style-cascade.ts';
+import { type StyleCascadeTable, type TableCellStyleFormatting } from './style-cascade.ts';
 import { cellBorderContinuation, paragraphBorderGroupKey } from './cell-border-groups.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import {
@@ -156,7 +149,7 @@ export {
 export const MAX_TABLE_ROW_FRAGMENTS = 4096;
 
 /** A cell box never narrows below this, however wide a `w:tblCellSpacing` gap is stated. */
-const MIN_CELL_BOX_PT = 1;
+export const MIN_CELL_BOX_PT = 1;
 
 /**
  * Why a table could not be paginated as authored.
@@ -338,7 +331,7 @@ export interface TableFlowDeps {
   readonly onCellBreakKey?: (key: string) => void;
 }
 
-function sumCols(cols: readonly number[], from: number, to: number): number {
+export function sumCols(cols: readonly number[], from: number, to: number): number {
   let sum = 0;
   for (let index = from; index < to && index < cols.length; index += 1) sum += cols[index]!;
   return sum;
@@ -377,13 +370,12 @@ function placeCellParagraph(
   const keyFor = deps.cache?.keyFor?.bind(deps.cache) ?? paragraphLayoutKey;
   const listItem = deps.listItems?.get(paragraphId);
   const layoutInputs = withStoryLineGrid(
-    resolveParagraphLayoutInputs(
+    cellParagraphInputs(
       paragraph,
       cellContentWidth,
       deps.styleCascade,
       listItem,
       options?.tableCellStyle,
-      true,
       deps.paragraphLineUnitPt
     ),
     deps.snapsStoryLines && options?.inTableCell === false ? deps.paragraphLineUnitPt : undefined
@@ -433,7 +425,8 @@ function placeCellParagraph(
   const topEdge = continuesAbove ? undefined : borders.top;
   // What closes the paragraph: the bottom rule, or the `between` rule when the block runs on.
   const closingEdge = continuesBelow ? borders.between : bottomBorder;
-  const { tabStops, properties: breakProperties } = prepareParagraphBreakInputs(
+  const { tabStops, properties: breakProperties } = cellParagraphBreakInputs(
+    paragraph,
     layoutInputs,
     deps.defaultTabStopPt,
     {
@@ -479,71 +472,72 @@ function placeCellParagraph(
   const exclusionToken = exclusionLayoutToken(pageZones);
   const positionedExclusionToken = positionedParagraphExclusionToken(exclusionToken, top);
   // `positioned` false names the break apart from where the paragraph sits, for a held break.
+  const keyParts = cellBreakKeyParts(
+    paragraph,
+    deps,
+    options?.inTableCell === true,
+    options?.cellEndMark === true,
+    anchorScope.rowsClearOutOfCellFloats
+  );
   const keyFrom = (offset: number, positioned = true): string =>
     keyFor({
-      paragraph,
-      properties: breakProperties,
-      width: available,
-      producer: deps.producer,
-      // The inline-drawing CONTEXT joins the token exactly as it does in the body flow: the
-      // context changes how a paragraph breaks (drawings become measured atoms), so a
-      // token-less pass with the context may not share cell entries with one without it.
-      // `||`, not `??`: a per-paragraph callback answering `''` falls through to the
-      // document-wide token, as it always has.
-      drawingToken: withDrawingContext(
-        deps.drawingTokenForParagraph?.(paragraph) || deps.drawingLayoutToken || '',
-        deps.inlineDrawingLayout !== undefined
-      ),
-      projectionToken: `${deps.projectionTokenForParagraph?.(paragraph) ?? ''}|inTableCell:${options?.inTableCell === true}|cellEndMark:${options?.cellEndMark === true}|from:${offset}|rowsClear:${anchorScope.rowsClearOutOfCellFloats}`,
+      ...cellBreakKeyInputs(paragraph, breakProperties, available, keyParts, offset),
       ...(positioned && positionedExclusionToken
         ? { exclusionToken: positionedExclusionToken }
         : {}),
     });
+  let reportedKey: string | undefined;
   const breakRemainder = (): readonly PendingLine[] => {
-    const key = keyFrom(startOffset);
+    const key = (reportedKey = keyFrom(startOffset));
     if (deps.cache) deps.onCellBreakKey?.(key);
-    return breakPreparedParagraph({
-      compatibilityMode: deps.compatibilityMode,
-      paragraph,
-      paragraphId,
-      indentLeft: indent.left,
-      available,
-      measurer: deps.measurer,
-      cache: deps.cache,
-      cacheKey: deps.cache ? key : null,
-      formatting: layoutInputs,
-      producer: deps.producer,
-      styleCascade: deps.styleCascade,
-      tabStops,
-      ...(deps.pageContext ? { pageContext: deps.pageContext } : {}),
-      flow: {
-        paragraphMarkIsCellEnd: options?.cellEndMark,
-        firstLineOffset,
-        ...(startOffset === 0 ? listMarkerFirstLineMetrics(listItem, deps.measurer) : {}),
-        startOffset,
-        marginExtent: { left: 0, right: cellBoxWidth },
-        ...(deps.projectLink ? { projectLink: deps.projectLink } : {}),
-        ...(deps.projectFieldLink ? { projectFieldLink: deps.projectFieldLink } : {}),
-        showFieldCodes: deps.showFieldCodes,
-        fieldCodeRanges: deps.fieldCodeRanges?.get(paragraphId),
-        tocLinkStyleRanges: deps.tocLinkStyleRanges?.get(paragraphId),
-        suppressEmptyPlaceholderLine: deps.fieldCodeRanges
-          ?.get(paragraphId)
-          ?.some((range) => range.suppressParagraph),
-        ...(deps.documentProperties ? { documentProperties: deps.documentProperties } : {}),
-        ...(deps.bodyPageFields ? { bodyPageFields: deps.bodyPageFields } : {}),
-        ...(deps.refFields ? { refFields: deps.refFields } : {}),
-        displayMode: deps.displayMode,
-        ...(deps.revisionAuthorFilter ? { revisionAuthorFilter: deps.revisionAuthorFilter } : {}),
-        ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
-        ...inlineDrawingFlow(deps.inlineDrawingLayout, deps.hostedStory),
-        contentLeft: 0,
-        contentRight: cellBoxWidth,
-        paragraphStartY: top,
-        ...cellAnchorFlow(cellBoxWidth, available, anchorScope),
-        ...(pageZones.length > 0 ? { pageExclusionZones: pageZones } : {}),
-      },
-    });
+    return breakPreparedParagraphLazily(
+      deps.cache,
+      deps.cache ? key : null,
+      () => ({
+        compatibilityMode: deps.compatibilityMode,
+        paragraph,
+        paragraphId,
+        indentLeft: indent.left,
+        available,
+        measurer: deps.measurer,
+        formatting: layoutInputs,
+        producer: deps.producer,
+        styleCascade: deps.styleCascade,
+        tabStops,
+        ...(deps.pageContext ? { pageContext: deps.pageContext } : {}),
+        flow: {
+          paragraphMarkIsCellEnd: options?.cellEndMark,
+          firstLineOffset,
+          ...(startOffset === 0 ? listMarkerFirstLineMetrics(listItem, deps.measurer) : {}),
+          startOffset,
+          marginExtent: { left: 0, right: cellBoxWidth },
+          ...(deps.projectLink ? { projectLink: deps.projectLink } : {}),
+          ...(deps.projectFieldLink ? { projectFieldLink: deps.projectFieldLink } : {}),
+          showFieldCodes: deps.showFieldCodes,
+          fieldCodeRanges: deps.fieldCodeRanges?.get(paragraphId),
+          tocLinkStyleRanges: deps.tocLinkStyleRanges?.get(paragraphId),
+          suppressEmptyPlaceholderLine: deps.fieldCodeRanges
+            ?.get(paragraphId)
+            ?.some((range) => range.suppressParagraph),
+          ...(deps.documentProperties ? { documentProperties: deps.documentProperties } : {}),
+          ...(deps.bodyPageFields ? { bodyPageFields: deps.bodyPageFields } : {}),
+          ...(deps.refFields ? { refFields: deps.refFields } : {}),
+          displayMode: deps.displayMode,
+          ...(deps.revisionAuthorFilter ? { revisionAuthorFilter: deps.revisionAuthorFilter } : {}),
+          ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
+          ...inlineDrawingFlow(deps.inlineDrawingLayout, deps.hostedStory),
+          contentLeft: 0,
+          contentRight: cellBoxWidth,
+          paragraphStartY: top,
+          ...cellAnchorFlow(cellBoxWidth, available, anchorScope),
+          ...(pageZones.length > 0 ? { pageExclusionZones: pageZones } : {}),
+        },
+      }),
+      () =>
+        deps.cache && !rtl && startOffset === 0 && pageZones.length === 0 && !listItem
+          ? reuseSingleLineAtWidth(deps.cache, paragraph, key, available)
+          : undefined
+    );
   };
   const placement = cellParagraphLines({
     paragraph,
@@ -584,18 +578,9 @@ function placeCellParagraph(
     listItem !== undefined ||
     (deps.displayMode === 'all-markup' &&
       paragraphMarkMarkupVisible(paragraph, 'all-markup', deps.revisionAuthorFilter));
-  const lines = withoutHiddenCellMark(
-    brokenLines,
-    options?.hideEndMark === true &&
-      !(
-        deps.displayMode === 'all-markup' &&
-        paragraphMarkMarkupVisible(paragraph, 'all-markup', deps.revisionAuthorFilter)
-      ),
-    deps.measurer,
-    layoutInputs.lineSpacing,
-    // The marker belongs to the paragraph's first line, whichever break the page places.
-    priorLineCount === 0 ? listItem : undefined
-  );
+  // Excluding the cell marker's minimum height does not remove an empty paragraph.
+  // Keep its line box so its insertion point remains inside the row's content area.
+  const lines = brokenLines;
   const collapseHeight = (options?.collapseHeight ?? false) && !publishesPlacedGlyphs();
 
   const appliedBefore =
@@ -661,6 +646,14 @@ function placeCellParagraph(
       options?.aloneOnPage ?? true
     );
   }
+  const lineAlignment = {
+    measurer: deps.measurer,
+    styleCascade: deps.styleCascade,
+    props,
+    alignment,
+    rtl,
+    inTableCell: options?.inTableCell === true,
+  };
   for (let lineIndex = lineStart; lineIndex < lineEnd; lineIndex += 1) {
     const pendingLine = lines[lineIndex]!;
     const isLastLine = lineIndex === lines.length - 1;
@@ -669,11 +662,6 @@ function placeCellParagraph(
     const lineAvailableWidth = Math.max(1, available - (lineIndex === 0 ? firstLineOffset : 0));
     // Spans and inline drawings come from one pen, so they share one origin.
     const penX = originX - (rtl && lineIndex === 0 ? firstLineOffset : 0);
-    const placedSpans = pendingLine.spans.map((span) => ({
-      ...span,
-      range: { ...span.range, paragraphId },
-      box: { ...span.box, x: span.box.x + penX, y },
-    }));
     const cellClip = Object.freeze({
       x: originX,
       y: top,
@@ -683,25 +671,16 @@ function placeCellParagraph(
     const placedDrawings = pendingLine.drawings.map((drawing) =>
       Object.freeze({ ...shiftInlineDrawingRecord(drawing, penX, y), paragraphId })
     );
-    const content = alignLineWithPictures(
-      placedSpans,
+    const content = alignCellLine(
+      pendingLine,
+      paragraphId,
+      penX,
+      y,
       placedDrawings,
-      rtl,
-      (spans) =>
-        alignSpans(
-          spans,
-          deps.measurer,
-          lineIndent,
-          lineAvailableWidth,
-          alignment,
-          boxLineSetsLikeLastLine(props, pendingLine, isLastLine, deps.styleCascade),
-          alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined,
-          rtl,
-          options?.inTableCell === true,
-          pendingLine.spaceShrink === true
-        ),
-      (aligned) =>
-        lineAlignOffset(placedSpans, aligned, alignment, lineAvailableWidth, pendingLine.width)
+      lineIndent,
+      lineAvailableWidth,
+      isLastLine,
+      lineAlignment
     );
     const { spans: alignedSpans, offset: alignOffset } = content;
     const alignedDrawings = content.drawings.map((drawing) =>
@@ -992,6 +971,17 @@ function placeCellParagraph(
     }
   }
 
+  if (complete && startsParagraph && !collapseHeight && !pageZones.length && !rtl && !listItem)
+    rememberCellLine(
+      fragment,
+      paragraph,
+      lines,
+      layoutInputs,
+      breakProperties,
+      keyParts,
+      deps,
+      reportedKey
+    );
   return {
     fragment,
     bottom,

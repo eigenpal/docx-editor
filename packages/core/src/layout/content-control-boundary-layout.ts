@@ -42,7 +42,10 @@ import {
   type SemanticLayout,
 } from './semantic-records.ts';
 
-import { contentControlContextToken } from './content-control-context-token.ts';
+import {
+  contentControlContextToken,
+  contentControlSubtreeToken,
+} from './content-control-context-token.ts';
 
 export { contentControlContextToken };
 
@@ -215,6 +218,7 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
         continue;
       }
       if (child.kind === 'table') {
+        if (contentControlSubtreeToken(child, depth) === '') continue;
         for (const row of child.children) {
           if (row.kind !== 'tableRow') continue;
           walkBlocks([row], depth, lockStack, containerDepth);
@@ -861,6 +865,8 @@ export function attachContentControlBoundaries(
     const cached = wrappedPages.get(page);
     if (cached && sameBoundaryList(cached.controls, pageControls)) return cached.wrapped;
     const wrapped = { ...page, contentControls: pageControls };
+    const geometry = pageGeometryContributions.get(page);
+    if (geometry) pageGeometryContributions.set(wrapped, geometry);
     wrappedPages.set(page, { controls: pageControls, wrapped });
     return wrapped;
   });

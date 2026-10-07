@@ -703,7 +703,8 @@ export function createSurfaceTableInteraction(
   }
 
   function hitAtLastPointer(input: SurfaceTableInteractionInput): TableInteractionHit | null {
-    if (!index || !lastPointerSheet) return null;
+    if (!lastPointerSheet) return null;
+    index ??= tableInteractionIndex(input.layout);
     const pageOffsetX = host.pageOffsetX(lastPointerSheet.pageIndex);
     return findTableInteractionAt(
       index,
@@ -751,10 +752,7 @@ export function createSurfaceTableInteraction(
     }
     insertButton = retained;
     if (!insertHit || (insertHit.kind !== 'insertRow' && insertHit.kind !== 'insertColumn')) return;
-    if (!index) {
-      retireRetainedInsertButton();
-      return;
-    }
+    index ??= tableInteractionIndex(input.layout);
 
     const priorTarget = tableInteractionTargetIdentity(insertHit);
     const resolved = resolveTableInteractionInsertHit(index, insertHit);
@@ -796,6 +794,7 @@ export function createSurfaceTableInteraction(
       lastPointerSheet = { x: sheet.x, y: sheet.y, pageIndex };
     }
     const pageOffsetX = pageIndex >= 0 ? host.pageOffsetX(pageIndex) : 0;
+    index ??= tableInteractionIndex(input.layout);
     const hit = index
       ? findTableInteractionAt(
           index,
@@ -862,7 +861,7 @@ export function createSurfaceTableInteraction(
       const input = host.read();
       const previousLayoutRevision = indexedLayoutRevision;
       const previousStoreRevision = indexedStoreRevision;
-      index = tableInteractionIndex(input.layout);
+      index = null;
       indexedLayoutRevision = input.layout.revision;
       indexedStoreRevision = input.storeRevision;
       if (input.editingMode === 'view') {

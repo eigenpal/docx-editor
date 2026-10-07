@@ -1,0 +1,111 @@
+import type { LayoutSession } from './layout-session.ts';
+import type { SectionPrepass } from './section-prepass-types.ts';
+import type { TableFlowDeps } from './semantic-table-layout.ts';
+import type { BlockLayoutResult } from './column-balance-layout.ts';
+import { withContentControlMetadata } from './content-control-boundary-layout.ts';
+import { carryTableAutofitScope } from './table-autofit-widths.ts';
+import { updateTableText } from './table-text-update.ts';
+import { carryTableCaretContexts } from './table-caret-context.ts';
+import { offerPreviousRows } from './table-row-placement-reuse.ts';
+import { drawingInputsUnchangedByTextEdit } from './drawing-text-only-change.ts';
+
+type Result = Omit<BlockLayoutResult, 'overflowShellAt'>;
+function resultOf(session: LayoutSession): Result {
+  const layout = session.previous!;
+  return {
+    layout,
+    pages: layout.pages,
+    lineCounter: session.endLineCounter,
+    endCursorY: session.endCursorY,
+    endSpaceAfter: session.endSpaceAfter,
+    endsOpenPage: session.endsOpenPage,
+  };
+}
+export function reuseUnchangedLayout(
+  session: LayoutSession,
+  revision: number,
+  lineCounterStart: number
+): Result {
+  const previous = session.previous!;
+  session.previous = withContentControlMetadata({ revision, pages: previous.pages }, previous);
+  carryTableCaretContexts(previous, session.previous);
+  session.endLineCounter = lineCounterStart + session.endLineCounter - session.startLineCounter;
+  session.startLineCounter = lineCounterStart;
+  session.stats = {
+    placed: 0,
+    total: session.keys.length,
+    reusedPages: previous.pages.length,
+    fullPasses: session.stats.fullPasses,
+  };
+  return resultOf(session);
+}
+export function tryUpdateTableSession(input: {
+  session: LayoutSession | undefined;
+  previous: SectionPrepass | null | undefined;
+  prepass: SectionPrepass;
+  inputsEqual: boolean;
+  eligible: boolean;
+  firstChanged: number;
+  commonSuffix: number;
+  deps: TableFlowDeps;
+  revision: number;
+  lineCounterStart: number;
+}): Result | null {
+  const { session, previous, prepass, firstChanged, deps, revision, lineCounterStart } = input;
+  const sameInputs = carryTableAutofitScope(previous, prepass, input.inputsEqual, deps);
+  if (
+    !input.eligible ||
+    !sameInputs ||
+    !session?.previous ||
+    !previous ||
+    prepass.prepared.length !== session.keys.length ||
+    input.commonSuffix !== prepass.prepared.length - firstChanged - 1
+  )
+    return null;
+  const oldEntry = previous.prepared[firstChanged];
+  const entry = prepass.prepared[firstChanged];
+  if (oldEntry?.kind !== 'table' || entry?.kind !== 'table') return null;
+  const update = updateTableText(
+    oldEntry.table,
+    entry.table,
+    session.previous.pages,
+    prepass.contentWidth,
+    deps
+  );
+  if (!update) {
+    // The full pagination that follows can still reuse every row that keeps its place. A
+    // moved row keeps its old cell and row properties, so only a text-only edit offers rows.
+    if (drawingInputsUnchangedByTextEdit(oldEntry.table, entry.table))
+      offerPreviousRows(entry.table, session.previous.pages);
+    return null;
+  }
+  const reusedPages = update.pages.reduce(
+    (count, page, index) => count + Number(page === session.previous!.pages[index]),
+    0
+  );
+  const oldLayout = session.previous;
+  session.previous = withContentControlMetadata(
+    { ...session.previous, revision, pages: update.pages },
+    session.previous
+  );
+  // updateTableText proves ordinary text edits and preserves all table occurrences.
+  carryTableCaretContexts(oldLayout, session.previous);
+  session.keys = prepass.flowKeys;
+  session.checkpoints = session.checkpoints.map((mark, index) => ({
+    ...mark,
+    lineCounter: mark.lineCounter + (index > firstChanged ? update.lineDelta : 0),
+    pageFragments: mark.pageFragments.map(
+      (fragment) => update.replacements.get(fragment) ?? fragment
+    ),
+  }));
+  session.endLineCounter =
+    lineCounterStart + session.endLineCounter - session.startLineCounter + update.lineDelta;
+  session.startLineCounter = lineCounterStart;
+  session.stats = {
+    placed: 1,
+    total: prepass.prepared.length,
+    reusedPages,
+    fullPasses: session.stats.fullPasses,
+  };
+  return resultOf(session);
+}

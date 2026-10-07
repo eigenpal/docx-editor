@@ -9,6 +9,11 @@ import { readXml, type XmlLimits, type XmlNode, type XmlRejection } from './xml-
 import { isXmlNCName } from './qname.ts';
 import { candidateSdtKind } from './ooxml-sdt.ts';
 import {
+  EMPTY_NAMESPACE_BINDINGS,
+  EMPTY_NODE_CHILDREN,
+  OoxmlReadMetadata,
+} from './ooxml-read-metadata.ts';
+import {
   TreeReadError,
   W14_NAMESPACE_URI,
   WML_NAMESPACE_URI,
@@ -1805,6 +1810,7 @@ function canonicalLegacyChildren(
 
 function convertElement(
   element: LegacyElement,
+  metadata: OoxmlReadMetadata,
   inherited: ReadonlyMap<string, string>,
   partName: string,
   path: string,
@@ -1816,7 +1822,7 @@ function convertElement(
   const declarations = namespaceDeclarations(element, inherited);
   const name = resolveElementName(element.name, declarations.bindings);
   const resolvedAttributes = resolveAttributes(element, declarations.bindings);
-  const attributes = resolvedAttributes.attributes;
+  const attributes = metadata.shareAttributes(resolvedAttributes.attributes);
   validateQNameAttributeValues(
     attributes,
     declarations.bindings,
@@ -1869,6 +1875,7 @@ function convertElement(
       };
     return convertElement(
       child,
+      metadata,
       declarations.bindings,
       partName,
       childPath,
@@ -1913,9 +1920,11 @@ function convertElement(
     namespaceUri: name.namespaceUri,
     localName: name.localName,
     ...(name.prefix === undefined ? {} : { prefix: name.prefix }),
-    namespaceBindings: declarations.authored,
+    namespaceBindings: declarations.authored.length
+      ? declarations.authored
+      : EMPTY_NAMESPACE_BINDINGS,
     attributes,
-    children: finalChildren,
+    children: finalChildren.length ? finalChildren : EMPTY_NODE_CHILDREN,
   } as OoxmlElement;
 }
 
@@ -2004,6 +2013,7 @@ export function readOoxmlPart(
     const root = deepFreezeNode(
       convertElement(
         roots[0],
+        new OoxmlReadMetadata(),
         new Map([
           ['xml', XML_NAMESPACE_URI],
           ['xmlns', XMLNS_NAMESPACE_URI],
