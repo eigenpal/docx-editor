@@ -8,8 +8,9 @@
 // records the text of the endpoint's paragraph at that revision. An endpoint at offset k read at
 // an older revision is still valid while the paragraph's first k characters are unchanged: an
 // edit after it, or a formatting edit anywhere, moves nothing. A span's end endpoint covers its
-// content, so an edit inside the span makes it stale. A revision the history no longer holds
-// cannot be checked, so it is stale too: the caller reads again, as any stale answer asks.
+// content in a one-paragraph span. A span's start in an EARLIER paragraph than its end covers
+// the rest of that paragraph too, so there the whole paragraph must be unchanged. A revision the
+// history no longer holds cannot be checked, so it is stale too: the caller reads again.
 
 import type { AutomationHandleTable } from './handles.ts';
 import type { AutomationPackageReads } from './reads.ts';
@@ -142,7 +143,13 @@ export function stampEndpoints<T>(
   return (copy ? Object.freeze(copy) : value) as T;
 }
 
-function endpointsOf(value: unknown, into: StampedEndpoint[], depth = 0): void {
+interface CheckedEndpoint {
+  readonly endpoint: StampedEndpoint;
+  /** For a span's start: the span's end, whose paragraph may differ. */
+  readonly end?: StampedEndpoint;
+}
+
+function endpointsOf(value: unknown, into: CheckedEndpoint[], depth = 0): void {
   if (depth > MAX_DEPTH) return;
   if (Array.isArray(value)) {
     for (const item of value) endpointsOf(item, into, depth + 1);
@@ -150,7 +157,15 @@ function endpointsOf(value: unknown, into: StampedEndpoint[], depth = 0): void {
   }
   if (!isPlain(value)) return;
   if (isEndpoint(value)) {
-    if (value.readAt !== undefined) into.push(value);
+    if (value.readAt !== undefined) into.push({ endpoint: value });
+    return;
+  }
+  const { start, end } = value;
+  if (isPlain(start) && isEndpoint(start) && isPlain(end) && isEndpoint(end)) {
+    if (start.readAt !== undefined) into.push({ endpoint: start, end });
+    if (end.readAt !== undefined) into.push({ endpoint: end });
+    for (const [key, child] of Object.entries(value))
+      if (key !== 'start' && key !== 'end') endpointsOf(child, into, depth + 1);
     return;
   }
   for (const child of Object.values(value)) endpointsOf(child, into, depth + 1);
@@ -169,9 +184,9 @@ export function staleEndpointDetail(
   handles: AutomationHandleTable,
   reads: AutomationPackageReads
 ): string | null {
-  const endpoints: StampedEndpoint[] = [];
+  const endpoints: CheckedEndpoint[] = [];
   endpointsOf(operation, endpoints);
-  for (const endpoint of endpoints) {
+  for (const { endpoint, end } of endpoints) {
     if (endpoint.readAt === revision) continue;
     if (typeof endpoint.readAt !== 'number' || !Number.isSafeInteger(endpoint.readAt))
       return 'invalid-read-revision';
@@ -184,8 +199,11 @@ export function staleEndpointDetail(
     // An offset that was never inside the paragraph is the planner's to refuse, as the bad
     // argument it is. One the paragraph shrank below is stale.
     if (!Number.isInteger(k) || k < 0 || k > before.length) continue;
-    if (now.length < k || before.slice(0, k) !== now.slice(0, k))
-      return `text before offset ${String(k)} changed since revision ${String(endpoint.readAt)}`;
+    const spansOn = end !== undefined && paragraphOf(end, handles, reads)?.id !== paragraph.id;
+    if (spansOn ? before !== now : now.length < k || before.slice(0, k) !== now.slice(0, k))
+      return spansOn
+        ? `the paragraph a span starts in changed since revision ${String(endpoint.readAt)}`
+        : `text before offset ${String(k)} changed since revision ${String(endpoint.readAt)}`;
   }
   return null;
 }

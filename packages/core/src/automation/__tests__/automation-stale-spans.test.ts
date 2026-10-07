@@ -93,6 +93,23 @@ describe('stamped endpoints', () => {
     expect(storyText(host, body)).toContain('Z beta gamma');
   });
 
+  test('a span across paragraphs refuses an edit after its start in its first paragraph', () => {
+    const spanned = (edit: boolean) => {
+      const { host, body, first, second } = fixture();
+      const beta = find(host, first, 'beta');
+      const other = find(host, second, 'other');
+      // An edit elsewhere moves the revision, so the span's endpoints are checked.
+      expect(replace(host, find(host, second, 'other'), 'other').ok).toBe(true);
+      // An edit to the first paragraph's tail lies inside the span, past its start offset.
+      if (edit) expect(replace(host, find(host, first, 'gamma'), 'G').ok).toBe(true);
+      return { host, body, response: replace(host, { start: beta.start, end: other.end }, 'x') };
+    };
+    const untouched = spanned(false);
+    expect(untouched.response.ok).toBe(true);
+    expect(storyText(untouched.host, untouched.body)).toContain('alpha x');
+    expect(refusal(spanned(true).response)).toBe('stale-revision');
+  });
+
   test('a bad offset on an old endpoint is a bad argument, not a stale read', () => {
     const { host, first, second } = fixture();
     const alpha = find(host, first, 'alpha');

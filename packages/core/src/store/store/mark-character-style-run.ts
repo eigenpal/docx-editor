@@ -118,7 +118,7 @@ export function emptyParagraphRunProperties(
  * Not carried into new text: another author's pending format change belongs to the run it
  * was proposed on, and hidden formatting would hide the words being typed.
  */
-const NOT_INHERITED = new Set([
+export const NOT_INHERITED: ReadonlySet<string> = new Set([
   'ins',
   'del',
   'moveFrom',

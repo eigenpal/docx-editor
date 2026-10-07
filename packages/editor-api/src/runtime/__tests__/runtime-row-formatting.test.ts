@@ -7,7 +7,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 //
 // A row added with `addRows` or `insertRows` copies each source cell's paragraph properties,
 // paragraph mark included, so values written into it keep the table's font size and alignment.
-// A source mark with no formatting borrows the cell's first run formatting. Inside a row the
+// When the source mark has no formatting, written values take the cell's first run formatting. Inside a row the
 // author proposed inserting, formatting records nothing of its own: rejecting the row removes it.
 
 import { expect, test } from 'bun:test';
@@ -78,8 +78,14 @@ test('rows added below take the source row’s run size when its mark has none',
       await c.sync();
     });
     const added = await rowXml(r, 'Ada');
-    expect(added).toContain('<w:sz w:val="19"/>');
-    expect(added.match(/<w:sz w:val="19"\/>/g)?.length).toBeGreaterThanOrEqual(4);
+    // The written runs carry the size; the unformatted source mark stays unformatted, so a list
+    // marker or empty line in the new row looks like the source row's.
+    for (const value of ['Ada', 'Counsel']) {
+      const at = added.indexOf(`>${value}<`);
+      const run = added.slice(added.lastIndexOf('<w:r>', at), added.indexOf('</w:r>', at));
+      expect(run).toContain('<w:sz w:val="19"/>');
+    }
+    expect(added).not.toContain('<w:pPr><w:rPr>');
   } finally {
     r.dispose();
   }

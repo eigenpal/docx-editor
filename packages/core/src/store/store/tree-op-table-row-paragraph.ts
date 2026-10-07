@@ -2,12 +2,12 @@
 //
 // Inserting a row copies each source cell's first-paragraph properties, paragraph mark
 // included, into the new cell's empty paragraph, so a new row matches the row it was made
-// from instead of falling back to the document defaults. A source mark with no formatting of
-// its own borrows the formatting of the cell's first plain text run, the face the row shows.
+// from instead of falling back to the document defaults. The mark copies as it is; when it has
+// no formatting of its own, the seed run below borrows the cell's first plain text run's face.
 //
 // A mark formats only the empty line; text written into the cell needs a run that carries the
-// face. So the new paragraph also holds an empty run with the mark's formatting: written or
-// typed text joins it, the way it joins any run already in a paragraph.
+// face. So the new paragraph also holds an empty run with that face: written or typed text
+// joins it, the way it joins any run already in a paragraph.
 //
 // Only WordprocessingML properties are copied, re-spelled under the prefix the new row uses.
 // An extension namespace may be bound only on the source paragraph, where a copy cannot
@@ -24,19 +24,12 @@ import {
 import type { WmlFreshNamespaceContext } from '../package/wml-namespace.ts';
 import { paragraphPropertiesNodeOf } from './tree-op-nodes.ts';
 import { isWmlElement, wmlAttributeValue } from './tree-op-table-shared.ts';
+import { NOT_INHERITED } from './mark-character-style-run.ts';
 
 const PPR_DROPPED = new Set(['pPrChange', 'sectPr', 'rPr']);
 // Revision markers, plus visibility: a hidden source must not hide the values written here.
-const MARK_DROPPED = new Set([
-  'ins',
-  'del',
-  'moveFrom',
-  'moveTo',
-  'rPrChange',
-  'vanish',
-  'specVanish',
-  'webHidden',
-]);
+// The same rule new text follows when it joins an empty run (`mark-character-style-run.ts`).
+const MARK_DROPPED = NOT_INHERITED;
 /** Revision records dropped at any depth: a copy must not repeat someone's decision. */
 const REVISION_RECORDS = new Set([
   'ins',
@@ -103,14 +96,29 @@ function firstTextRunProperties(node: OoxmlNode, field = { depth: 0 }): OoxmlEle
 }
 
 interface SourceContent {
-  /** The kept `w:pPr` children other than the mark, or none. */
-  readonly properties: readonly OoxmlNode[];
-  readonly propertiesNode: OoxmlElement | undefined;
-  /** The mark formatting, borrowed from the first text run when the mark has none. */
-  readonly mark: OoxmlElement | undefined;
+  /** The new paragraph's children before respelling: `w:pPr`, then the seed run. */
+  readonly nodes: readonly OoxmlNode[];
+  /** Their node count, an upper bound on what respelling creates. */
+  readonly count: number;
 }
 
 const sources = new WeakMap<OoxmlElement, SourceContent | null>();
+
+function element(
+  template: OoxmlElement,
+  kind: OoxmlElement['kind'],
+  localName: string,
+  children: readonly OoxmlNode[]
+): OoxmlElement {
+  return { ...template, kind, localName, attributes: [], children } as OoxmlElement;
+}
+
+function nodeCount(node: OoxmlNode): number {
+  if (node.kind === 'textValue') return 1;
+  let count = 1;
+  for (const child of node.children) count += nodeCount(child);
+  return count;
+}
 
 function sourceContent(cell: OoxmlElement): SourceContent | null {
   const cached = sources.get(cell);
@@ -122,14 +130,23 @@ function sourceContent(cell: OoxmlElement): SourceContent | null {
     const ownMark = pPr?.children.find((child) => isWmlElement(child, 'rPr')) as
       | OoxmlElement
       | undefined;
-    // A mark holding only revision markers has no formatting of its own to copy.
+    // The mark copies as the source mark is: list markers and the empty line take their face
+    // from it. A mark holding only revision markers has no formatting of its own.
     const ownChildren = ownMark ? wmlChildren(ownMark, MARK_DROPPED) : [];
-    const markSource: OoxmlElement | undefined =
-      ownChildren.length > 0 ? ownMark : firstTextRunProperties(paragraph);
-    const markChildren = markSource ? wmlChildren(markSource, MARK_DROPPED) : [];
+    const mark = ownChildren.length > 0 ? withChildren(ownMark!, ownChildren) : undefined;
+    // The seed run carries the face written text shows: the mark's, or else the first text run's.
+    const borrowed = mark ? undefined : firstTextRunProperties(paragraph);
+    const borrowedChildren = borrowed ? wmlChildren(borrowed, MARK_DROPPED) : [];
+    const face =
+      mark ?? (borrowedChildren.length > 0 ? withChildren(borrowed!, borrowedChildren) : undefined);
     const properties = pPr ? wmlChildren(pPr, PPR_DROPPED) : [];
-    const mark = markChildren.length > 0 ? withChildren(markSource!, markChildren) : undefined;
-    if (properties.length > 0 || mark) result = { properties, propertiesNode: pPr, mark };
+    const pPrChildren = mark ? [...properties, mark] : properties;
+    const nodes: OoxmlNode[] = [];
+    if (pPrChildren.length > 0)
+      nodes.push(element(pPr ?? face ?? mark!, 'paragraphProperties', 'pPr', pPrChildren));
+    if (face) nodes.push(element(face, 'run', 'r', [face]));
+    if (nodes.length > 0)
+      result = { nodes, count: nodes.reduce((total, node) => total + nodeCount(node), 0) };
   }
   sources.set(cell, result);
   return result;
@@ -166,24 +183,6 @@ function respelled(
   } as OoxmlNode;
 }
 
-function element(
-  template: OoxmlElement,
-  kind: OoxmlElement['kind'],
-  localName: string,
-  children: readonly OoxmlNode[]
-): OoxmlElement {
-  return { ...template, kind, localName, attributes: [], children } as OoxmlElement;
-}
-
-/** The new cell paragraph's children: `w:pPr` (with the mark), then the seed run. */
-function sourceNodes(source: SourceContent): OoxmlNode[] {
-  const template = source.propertiesNode ?? source.mark!;
-  const pPrChildren = source.mark ? [...source.properties, source.mark] : source.properties;
-  const pPr = element(template, 'paragraphProperties', 'pPr', pPrChildren);
-  if (!source.mark) return [pPr];
-  return [pPr, element(source.mark, 'run', 'r', [source.mark])];
-}
-
 /** Fresh paragraph content for a cell copied from `sourceCell`. */
 export function insertedCellParagraphContent(
   sourceCell: OoxmlElement,
@@ -192,18 +191,11 @@ export function insertedCellParagraphContent(
 ): OoxmlNode[] {
   const source = sourceContent(sourceCell);
   if (!source) return [];
-  return sourceNodes(source).flatMap((node) => respelled(node, wml, nextId) ?? []);
-}
-
-function nodeCount(node: OoxmlNode): number {
-  if (node.kind === 'textValue') return 1;
-  let count = 1;
-  for (const child of node.children) count += nodeCount(child);
-  return count;
+  return source.nodes.flatMap((node) => respelled(node, wml, nextId) ?? []);
 }
 
 /** An upper bound on the nodes {@link insertedCellParagraphContent} creates, for budgeting. */
 export function insertedCellParagraphNodeCount(sourceCell: OoxmlElement): number {
   const source = sourceContent(sourceCell);
-  return source ? sourceNodes(source).reduce((total, node) => total + nodeCount(node), 0) : 0;
+  return source?.count ?? 0;
 }
