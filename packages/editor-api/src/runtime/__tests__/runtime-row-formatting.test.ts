@@ -148,6 +148,77 @@ test('a source mark holding only a revision marker borrows the run face, minus h
   }
 });
 
+for (const tracking of ['Off', 'TrackMineOnly'] as const) {
+  test(`a styled source run keeps its style and size in written values (${tracking})`, async () => {
+    const styled = (text: string) =>
+      `<w:p><w:r><w:rPr><w:rStyle w:val="Emphasis"/><w:sz w:val="18"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
+    const r = await DocxEditor.createServer(
+      docx(table(`<w:tr>${cell(styled('Name'))}${cell(styled('Role'))}</w:tr>`)),
+      { author: 'Agent' }
+    );
+    try {
+      await r.run(async (c) => {
+        c.document.changeTrackingMode = tracking;
+        await c.sync();
+        (await rows(c)).table.addRows('End', 1, [['Ada', 'Counsel']]);
+        await c.sync();
+      });
+      const added = await rowXml(r, 'Ada');
+      const at = added.indexOf('>Ada<');
+      const run = added.slice(added.lastIndexOf('<w:r>', at), added.indexOf('</w:r>', at));
+      expect(run).toContain('<w:rStyle w:val="Emphasis"/>');
+      expect(run).toContain('<w:sz w:val="18"/>');
+    } finally {
+      r.dispose();
+    }
+  });
+}
+
+test('a leading field result and nested revision records do not reach the new row', async () => {
+  const fielded =
+    '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="0"/><w:ins w:id="7" w:author="Old"/></w:numPr></w:pPr>' +
+    '<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> HYPERLINK "https://example.com" </w:instrText></w:r>' +
+    '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+    '<w:r><w:rPr><w:rStyle w:val="Hyperlink"/></w:rPr><w:t>link</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>' +
+    '<w:r><w:rPr><w:b/></w:rPr><w:t> Name</w:t></w:r></w:p>';
+  const r = await DocxEditor.createServer(
+    docx(table(`<w:tr>${cell(fielded)}${cell(runSized('Role'))}</w:tr>`)),
+    { author: 'Agent' }
+  );
+  try {
+    await r.run(async (c) => {
+      (await rows(c)).table.addRows('End', 1, [['Ada', 'Counsel']]);
+      await c.sync();
+    });
+    const added = await rowXml(r, 'Ada');
+    expect(added).toContain('<w:b/>');
+    expect(added).not.toContain('Hyperlink');
+    expect(added).not.toContain('w:author="Old"');
+  } finally {
+    r.dispose();
+  }
+});
+
+test('added columns take the formatting of the cells beside them', async () => {
+  const r = await DocxEditor.createServer(
+    docx(table(`<w:tr>${cell(markFormatted('Name'))}${cell(markFormatted('Role'))}</w:tr>`)),
+    { author: 'Agent' }
+  );
+  try {
+    await r.run(async (c) => {
+      (await rows(c)).table.addColumns('End', 1, [['Since']]);
+      await c.sync();
+    });
+    const xml = strFromU8(unzipSync(await r.save())['word/document.xml']!);
+    const at = xml.indexOf('>Since<');
+    const cellXml = xml.slice(xml.lastIndexOf('<w:tc>', at), at);
+    expect(cellXml).toContain('<w:jc w:val="center"/>');
+    expect(cellXml).toContain('<w:sz w:val="28"/>');
+  } finally {
+    r.dispose();
+  }
+});
+
 test('formatting inside the author’s own proposed row records no revision of its own', async () => {
   const r = await DocxEditor.createServer(
     docx(table(`<w:tr>${cell(runSized('Name'))}${cell(runSized('Role'))}</w:tr>`)),

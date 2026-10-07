@@ -58,7 +58,15 @@ export function createReadTexts(limit = STALE_SPAN_HISTORY) {
       if (!texts) {
         texts = new Map();
         byRevision.set(revision, texts);
-        while (byRevision.size > limit) byRevision.delete(byRevision.keys().next().value!);
+        let evicted = false;
+        while (byRevision.size > limit) {
+          byRevision.delete(byRevision.keys().next().value!);
+          evicted = true;
+        }
+        // Keep shared strings only for paragraphs a retained revision still records.
+        if (evicted)
+          for (const id of latest.keys())
+            if (![...byRevision.values()].some((kept) => kept.has(id))) latest.delete(id);
       }
       texts.set(paragraphId, text);
     },

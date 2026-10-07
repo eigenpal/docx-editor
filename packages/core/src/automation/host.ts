@@ -186,7 +186,13 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
         return refuse(
           operations,
           index,
-          automationError('stale-revision', 'that range was read before its text changed', detail),
+          detail === 'invalid-read-revision'
+            ? automationError('invalid-offset', 'an endpoint carries an invalid readAt', detail)
+            : automationError(
+                'stale-revision',
+                'that range was read before its text changed',
+                detail
+              ),
           revision
         );
     }

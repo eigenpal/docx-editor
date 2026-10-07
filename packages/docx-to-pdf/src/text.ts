@@ -279,7 +279,8 @@ export class TextWriter {
     readonly authorSlots: ReadonlyMap<string, number> = new Map(),
     readonly rowRevisions: ReadonlyMap<BlockFragmentRecord, RowRevision> = new Map()
   ) {}
-  paint(visit: SemanticSpanVisit, page: PDFPage): string {
+  /** `marker`: a list marker, which a tracked row's revision does not mark. */
+  paint(visit: SemanticSpanVisit, page: PDFPage, marker = false): string {
     const { span, line, storyOrigin, absoluteBox } = visit;
     if (span.style.hidden || !span.text) return '';
     if (span.noteSeparator) {
@@ -362,7 +363,7 @@ export class TextWriter {
     const unitsFromTop = snapToGrid(baselineFromTop / PDF_PAINT_GRID_PT);
     const baseline = pageHeight(page) - Math.ceil(unitsFromTop - 0.5) * PDF_PAINT_GRID_PT;
     let foreground = style.color;
-    const row = this.rowRevisions.get(visit.paragraph);
+    const row = marker ? undefined : this.rowRevisions.get(visit.paragraph);
     const revisions = this.showRevisionMarkup ? spanRevisions(visit, row) : [];
     const insert = revisions.some((r) => r.kind === 'insert' || r.kind === 'moveTo');
     const deleted = revisions.some((r) => r.kind === 'delete' || r.kind === 'moveFrom');

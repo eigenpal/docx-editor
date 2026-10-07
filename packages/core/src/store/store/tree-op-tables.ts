@@ -1123,6 +1123,7 @@ function planColumnInsertion(
     structureBudget += 2;
     const tcPr = wmlChildNamed(cell, 'tcPr');
     if (tcPr) structureBudget += countAllowlistedLeaves(tcPr, COLUMN_SAFE_TCPR_LEAVES);
+    structureBudget += insertedCellParagraphNodeCount(cell);
   }
   void wml;
   return {
@@ -1151,7 +1152,8 @@ function buildFreshColumnCell(
     : undefined;
   const children: OoxmlNode[] = [];
   if (copiedTcPr) children.push(copiedTcPr);
-  children.push(emptyParagraph(part, targetTable, nextId, `${seed}:p`, used, wml));
+  const content = insertedCellParagraphContent(sourceCell, nextId, wml);
+  children.push(emptyParagraph(part, targetTable, nextId, `${seed}:p`, used, wml, content));
   return freshTableCell(nextId, children, wml);
 }
 

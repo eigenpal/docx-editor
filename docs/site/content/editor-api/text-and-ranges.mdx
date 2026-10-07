@@ -11,7 +11,7 @@ Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `
 
 ## Refresh ranges after edits
 
-A `Range` stores paragraph identities and UTF-16 offsets from the moment it was found. It does not follow later edits inside those paragraphs. For example, a range over `alpha` still names offsets zero through five after text is inserted before it. A later load can therefore read different text at those positions. Deleting an endpoint paragraph invalidates the range.
+A `Range` stores paragraph identities and UTF-16 offsets from the moment it was found. It does not follow later edits inside those paragraphs. For example, a range over `alpha` still names offsets zero through five after text is inserted before it. Using that range, to read or to edit, then fails with `StaleDocument` instead of addressing different text. Edits after the range and formatting changes keep it valid. Deleting an endpoint paragraph invalidates the range.
 
 After a successful edit, search again before acting on another target in that paragraph. For the inserted text itself, use the `Range` returned by `insertText()` after sync. Tracking a proxy across runs preserves its lifetime; it does not turn its range into a live text region. This differs from Word's moving range behavior.
 

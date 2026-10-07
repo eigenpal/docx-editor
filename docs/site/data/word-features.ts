@@ -100,7 +100,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'none',
     tier: 'premium',
     notes:
-      'File > Export downloads PDF through docx-to-pdf on Node.js. Configure menu.exporters.pdf. A dismissible dialog shows progress and errors. Customize it with popups.export. Missing handlers show a setup error. Rejects output without a PDF header. PDF conversion requires the EigenPal Pro License. Arabic letters join across supported formatting boundaries and when fallback fonts supply missing glyphs. Arabic, Persian, Urdu, and Hebrew text extracts in logical order as whole words. Missing Hebrew glyphs use Times New Roman, or Liberation Serif when that font is unavailable. The exporter synthesizes bold and italic when the selected font lacks those faces. Install @docx-editor.dev/fonts-cjk for Chinese, Japanese, and Korean fallback fonts on hosts without suitable fonts. Font admission reports faces that exceed shaping limits and tries later sources. Strict font policy refuses rejected document fonts and the configured default font. Shaping-limit rejections for optional glyph fallbacks remain informational. Other source failures still cause strict refusal.',
+      'File > Export downloads PDF through docx-to-pdf on Node.js. Configure menu.exporters.pdf. A dismissible dialog shows progress and errors. Customize it with popups.export. Missing handlers show a setup error. Rejects output without a PDF header. In All Markup, text in tracked inserted and deleted table rows takes the row revision mark and author color. PDF conversion requires the EigenPal Pro License. Arabic letters join across supported formatting boundaries and when fallback fonts supply missing glyphs. Arabic, Persian, Urdu, and Hebrew text extracts in logical order as whole words. Missing Hebrew glyphs use Times New Roman, or Liberation Serif when that font is unavailable. The exporter synthesizes bold and italic when the selected font lacks those faces. Install @docx-editor.dev/fonts-cjk for Chinese, Japanese, and Korean fallback fonts on hosts without suitable fonts. Font admission reports faces that exceed shaping limits and tries later sources. Strict font policy refuses rejected document fonts and the configured default font. Shaping-limit rejections for optional glyph fallbacks remain informational. Other source failures still cause strict refusal.',
     docsLink: '/docs/2.x/guides/export',
   },
   {
@@ -460,7 +460,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Hover controls insert a row or column. Drag a divider or the outer right edge to resize. The context menu adds seven structural actions. Both adapters ship the same table chrome. The automation object model adds rows at table edges or before and after an ordinary row. Unrelated merged headers survive row insertion. Automation row insertion refuses merged source rows and boundaries that cross vertical merges.',
+      'Hover controls insert a row or column. Drag a divider or the outer right edge to resize. The context menu adds seven structural actions. Both adapters ship the same table chrome. The automation object model adds rows at table edges or before and after an ordinary row. Unrelated merged headers survive row insertion. Automation row insertion refuses merged source rows and boundaries that cross vertical merges. New rows and columns copy the paragraph and text formatting of the cells they come from, so written values match the table.',
   },
   {
     id: 'tables.borders-shading',

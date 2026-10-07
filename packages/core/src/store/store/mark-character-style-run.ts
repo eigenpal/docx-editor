@@ -95,6 +95,10 @@ export function emptyParagraphRunProperties(
     }
   }
   if (children.length === 0) return [];
+  // An empty run that already carries the mark's style and flags is the face the paragraph
+  // was given, a new table row's seed run among them: keep the rest of its formatting too.
+  const seeded = agreeingEmptyRunProperties(paragraph, children);
+  if (seeded) return [withFreshIds(seeded, nextId)];
   return [
     {
       id: nextId(),
@@ -107,4 +111,38 @@ export function emptyParagraphRunProperties(
       children,
     } as unknown as OoxmlNode,
   ];
+}
+
+function valOf(node: OoxmlNode): string | undefined {
+  if (node.kind === 'textValue') return undefined;
+  return node.attributes.find(
+    (attribute) => attribute.localName === 'val' && attribute.namespaceUri === WML_NAMESPACE_URI
+  )?.value;
+}
+
+/** The last run's `w:rPr` when it holds every one of `wanted`, by name and value. */
+function agreeingEmptyRunProperties(
+  paragraph: OoxmlParagraphNode,
+  wanted: readonly OoxmlNode[]
+): OoxmlNode | undefined {
+  const runs = paragraph.children.filter((child) => child.kind === 'run');
+  const last = runs[runs.length - 1];
+  if (!last) return undefined;
+  const rPr = (last.children as readonly OoxmlNode[]).find(
+    (child) =>
+      child.kind !== 'textValue' &&
+      child.namespaceUri === WML_NAMESPACE_URI &&
+      child.localName === 'rPr'
+  );
+  if (!rPr || rPr.kind === 'textValue') return undefined;
+  const has = (want: OoxmlNode) =>
+    want.kind !== 'textValue' &&
+    rPr.children.some(
+      (child) =>
+        child.kind !== 'textValue' &&
+        child.namespaceUri === WML_NAMESPACE_URI &&
+        child.localName === want.localName &&
+        valOf(child) === valOf(want)
+    );
+  return wanted.every(has) ? rPr : undefined;
 }

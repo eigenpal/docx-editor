@@ -282,15 +282,7 @@ export function ownProposedParagraph(
   // The nearest proposal decides: the mark's own `w:ins`, then the innermost proposed row.
   if (markProperties.some((child) => isWmlNamed(child, 'ins')))
     return ownProposedMark(markProperties, author);
-  for (
-    let node = parentNodeOf(part, paragraphId);
-    node !== null;
-    node = parentNodeOf(part, node.id)
-  ) {
-    const table = insertedTablePart(node, author);
-    if (table !== null) return table;
-  }
-  return false;
+  return insideOwnInsertion(part, paragraphId, author);
 }
 
 /**

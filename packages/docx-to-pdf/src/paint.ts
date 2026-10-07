@@ -601,7 +601,8 @@ export async function paint(
                   y: piece.box.y + visit.storyOrigin.y,
                 },
               },
-              page
+              page,
+              true
             )
           );
     }

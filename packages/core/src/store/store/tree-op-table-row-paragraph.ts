@@ -37,6 +37,16 @@ const MARK_DROPPED = new Set([
   'specVanish',
   'webHidden',
 ]);
+/** Revision records dropped at any depth: a copy must not repeat someone's decision. */
+const REVISION_RECORDS = new Set([
+  'ins',
+  'del',
+  'moveFrom',
+  'moveTo',
+  'rPrChange',
+  'pPrChange',
+  'numberingChange',
+]);
 /** Inline wrappers whose runs do not show the row's plain face. */
 const SKIPPED_WRAPPERS = new Set(['revisionDelete', 'revisionMoveFrom', 'hyperlink']);
 
@@ -60,14 +70,29 @@ function withChildren(node: OoxmlElement, children: readonly OoxmlNode[]): Ooxml
   return { ...node, children } as OoxmlElement;
 }
 
-/** The first run that shows plain text: not struck, not a link, not a reference mark. */
-function firstTextRunProperties(node: OoxmlNode): OoxmlElement | undefined {
+function fieldCharType(run: readonly OoxmlNode[]): string | undefined {
+  const fldChar = run.find((leaf) => isWmlElement(leaf, 'fldChar')) as OoxmlElement | undefined;
+  if (!fldChar) return undefined;
+  return fldChar.attributes.find(
+    (attribute) =>
+      attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === 'fldCharType'
+  )?.value;
+}
+
+/**
+ * The first run that shows plain text: not struck, not a link, not a field result, not a
+ * reference mark. `field` counts the complex fields open at the walk's position.
+ */
+function firstTextRunProperties(node: OoxmlNode, field = { depth: 0 }): OoxmlElement | undefined {
   if (node.kind === 'textValue') return undefined;
   for (const child of node.children) {
     if (child.kind === 'textValue' || SKIPPED_WRAPPERS.has(child.kind)) continue;
     if (child.kind === 'run') {
       const children: readonly OoxmlNode[] = child.children;
-      if (!children.some((leaf) => isWmlElement(leaf, 't'))) continue;
+      const fieldChar = fieldCharType(children);
+      if (fieldChar === 'begin') field.depth += 1;
+      else if (fieldChar === 'end') field.depth = Math.max(0, field.depth - 1);
+      if (field.depth > 0 || !children.some((leaf) => isWmlElement(leaf, 't'))) continue;
       const rPr = children.find((leaf): leaf is OoxmlElement => isWmlElement(leaf, 'rPr'));
       // A content control's prompt shows placeholder styling, not the row's face.
       if (
@@ -80,7 +105,7 @@ function firstTextRunProperties(node: OoxmlNode): OoxmlElement | undefined {
       return rPr;
     }
     if (child.kind === 'paragraphProperties') continue;
-    const nested = firstTextRunProperties(child);
+    const nested = firstTextRunProperties(child, field);
     if (nested) return nested;
   }
   return undefined;
@@ -126,7 +151,7 @@ function respelled(
   nextId: () => string
 ): OoxmlNode | null {
   if (node.kind === 'textValue') return { id: nextId(), kind: 'textValue', value: node.value };
-  if (node.namespaceUri !== WML_NAMESPACE_URI) return null;
+  if (node.namespaceUri !== WML_NAMESPACE_URI || REVISION_RECORDS.has(node.localName)) return null;
   const attributes: OoxmlAttribute[] = [];
   for (const attribute of node.attributes) {
     if (attribute.namespaceUri === WML_NAMESPACE_URI)
