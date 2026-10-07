@@ -26,7 +26,17 @@ import { paragraphPropertiesNodeOf } from './tree-op-nodes.ts';
 import { isWmlElement } from './tree-op-table-shared.ts';
 
 const PPR_DROPPED = new Set(['pPrChange', 'sectPr', 'rPr']);
-const MARK_DROPPED = new Set(['ins', 'del', 'moveFrom', 'moveTo', 'rPrChange']);
+// Revision markers, plus visibility: a hidden source must not hide the values written here.
+const MARK_DROPPED = new Set([
+  'ins',
+  'del',
+  'moveFrom',
+  'moveTo',
+  'rPrChange',
+  'vanish',
+  'specVanish',
+  'webHidden',
+]);
 /** Inline wrappers whose runs do not show the row's plain face. */
 const SKIPPED_WRAPPERS = new Set(['revisionDelete', 'revisionMoveFrom', 'hyperlink']);
 
@@ -37,6 +47,13 @@ function wmlChildren(node: OoxmlElement, dropped: ReadonlySet<string>): OoxmlNod
       child.namespaceUri === WML_NAMESPACE_URI &&
       !dropped.has(child.localName)
   );
+}
+
+function wmlVal(node: OoxmlNode): string | undefined {
+  if (node.kind === 'textValue') return undefined;
+  return node.attributes.find(
+    (attribute) => attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === 'val'
+  )?.value;
 }
 
 function withChildren(node: OoxmlElement, children: readonly OoxmlNode[]): OoxmlElement {
@@ -51,7 +68,16 @@ function firstTextRunProperties(node: OoxmlNode): OoxmlElement | undefined {
     if (child.kind === 'run') {
       const children: readonly OoxmlNode[] = child.children;
       if (!children.some((leaf) => isWmlElement(leaf, 't'))) continue;
-      return children.find((leaf): leaf is OoxmlElement => isWmlElement(leaf, 'rPr'));
+      const rPr = children.find((leaf): leaf is OoxmlElement => isWmlElement(leaf, 'rPr'));
+      // A content control's prompt shows placeholder styling, not the row's face.
+      if (
+        rPr &&
+        rPr.children.some(
+          (leaf) => isWmlElement(leaf, 'rStyle') && wmlVal(leaf) === 'PlaceholderText'
+        )
+      )
+        continue;
+      return rPr;
     }
     if (child.kind === 'paragraphProperties') continue;
     const nested = firstTextRunProperties(child);
@@ -80,7 +106,10 @@ function sourceContent(cell: OoxmlElement): SourceContent | null {
     const ownMark = pPr?.children.find((child) => isWmlElement(child, 'rPr')) as
       | OoxmlElement
       | undefined;
-    const markSource: OoxmlElement | undefined = ownMark ?? firstTextRunProperties(paragraph);
+    // A mark holding only revision markers has no formatting of its own to copy.
+    const ownChildren = ownMark ? wmlChildren(ownMark, MARK_DROPPED) : [];
+    const markSource: OoxmlElement | undefined =
+      ownChildren.length > 0 ? ownMark : firstTextRunProperties(paragraph);
     const markChildren = markSource ? wmlChildren(markSource, MARK_DROPPED) : [];
     const properties = pPr ? wmlChildren(pPr, PPR_DROPPED) : [];
     const mark = markChildren.length > 0 ? withChildren(markSource!, markChildren) : undefined;

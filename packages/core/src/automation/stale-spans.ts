@@ -42,13 +42,18 @@ function isEndpoint(
 /**
  * The text of each answered endpoint's paragraph, by the revision it was answered at.
  *
- * Holds strings the reads already cached, for the most recent revisions only; the oldest
- * revision goes first.
+ * Kept for the most recent revisions only; the oldest revision goes first. A paragraph whose
+ * text is unchanged since its last record shares that record's string, so re-reading a whole
+ * document at every revision does not keep a copy of it per revision.
  */
 export function createReadTexts(limit = STALE_SPAN_HISTORY) {
   const byRevision = new Map<number, Map<string, string>>();
+  const latest = new Map<string, string>();
   return {
-    record(revision: number, paragraphId: string, text: string): void {
+    record(revision: number, paragraphId: string, read: string): void {
+      const previous = latest.get(paragraphId);
+      const text = previous === read ? previous : read;
+      latest.set(paragraphId, text);
       let texts = byRevision.get(revision);
       if (!texts) {
         texts = new Map();

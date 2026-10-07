@@ -127,6 +127,27 @@ test('a leading reference, link, or struck run does not set the new row’s face
   }
 });
 
+test('a source mark holding only a revision marker borrows the run face, minus hiding', async () => {
+  const proposed = (text: string) =>
+    `<w:p><w:pPr><w:rPr><w:ins w:id="3" w:author="Old"/></w:rPr></w:pPr><w:r><w:rPr><w:vanish/><w:sz w:val="19"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
+  const r = await DocxEditor.createServer(
+    docx(table(`<w:tr>${cell(proposed('Name'))}${cell(proposed('Role'))}</w:tr>`)),
+    { author: 'Agent' }
+  );
+  try {
+    await r.run(async (c) => {
+      (await rows(c)).table.addRows('End', 1, [['Ada', 'Counsel']]);
+      await c.sync();
+    });
+    const added = await rowXml(r, 'Ada');
+    expect(added).toContain('<w:sz w:val="19"/>');
+    expect(added).not.toContain('vanish');
+    expect(added).not.toContain('w:author="Old"');
+  } finally {
+    r.dispose();
+  }
+});
+
 test('formatting inside the author’s own proposed row records no revision of its own', async () => {
   const r = await DocxEditor.createServer(
     docx(table(`<w:tr>${cell(runSized('Name'))}${cell(runSized('Role'))}</w:tr>`)),

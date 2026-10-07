@@ -449,11 +449,8 @@ test('a deleted row keeps a nested inserted row visibly deleted', async () => {
 });
 
 test('a tracked row marks its text without configured markup settings', async () => {
-  const options = {
-    displayMode: 'all-markup',
-    useSystemFonts: false,
-    fidelityPolicy: 'best-effort',
-  } as const;
+  // Strict: the row is a presented revision even without configured markup settings.
+  const options = { displayMode: 'all-markup', useSystemFonts: false } as const;
   const tracked = await exportPdf(docx(trackedRow(rowMark('del'))), options);
   const plain = await exportPdf(docx(trackedRow('')), options);
   expect(await commands(tracked.bytes)).not.toBe(await commands(plain.bytes));

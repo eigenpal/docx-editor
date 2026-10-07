@@ -245,12 +245,18 @@ export async function paint(
         'replace',
         ...(layout.revisionMarkup ? ['moveFrom', 'moveTo', 'format'] : []),
       ].includes(artifact.change) &&
+      // Tracked rows are painted in every All Markup export: their text takes the row's mark.
+      !(
+        artifact.change === 'structural' &&
+        artifact.structuralChanges?.length &&
+        artifact.structuralChanges.every((kind) => kind === 'rowInsert' || kind === 'rowDelete')
+      ) &&
       !(
         layout.revisionMarkup &&
         artifact.change === 'structural' &&
         artifact.structuralChanges?.length &&
         artifact.structuralChanges.every((kind) =>
-          ['cellInsert', 'cellDelete', 'cellMerge', 'rowInsert', 'rowDelete'].includes(kind)
+          ['cellInsert', 'cellDelete', 'cellMerge'].includes(kind)
         )
       )
     )
@@ -263,10 +269,12 @@ export async function paint(
     if (author !== '' && !authorSlots.has(author)) authorSlots.set(author, nextAuthorSlot++);
   };
   // Runs in a tracked row carry no revision of their own; the row's applies to all of them.
+  // Only All Markup shows revision marks; the resolved views have no tracked rows to mark.
   const rowRevisions = new Map<BlockFragmentRecord, RowRevision>();
-  forEachSemanticStory(layout, (root) =>
-    indexRowRevisions(root.host.fragments, rowRevisions, () => work.tick())
-  );
+  if (layout.displayMode === 'all-markup')
+    forEachSemanticStory(layout, (root) =>
+      indexRowRevisions(root.host.fragments, rowRevisions, () => work.tick())
+    );
   // Match the visible document order before adding authors from resolved-away revisions.
   forEachSemanticSpan(layout, (visit) => {
     for (const revision of visit.span.revisions ?? []) addAuthor(revision.author);

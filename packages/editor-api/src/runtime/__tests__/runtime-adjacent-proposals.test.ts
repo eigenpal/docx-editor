@@ -188,3 +188,20 @@ test('a tracked deletion still refuses to border another author’s proposal', a
     r.dispose();
   }
 });
+
+test('a tracked deletion still refuses to end where the same author’s insertion starts', async () => {
+  const r = await open(p('One two three.'));
+  try {
+    await trackedSteps(r, [
+      async (c) => {
+        (await first(c, 'two')).insertText('X', 'Before');
+      },
+    ]);
+    // Deleting "One " would sit directly before "X" and review as one replacement.
+    await expect(
+      trackedSteps(r, [async (c) => (await first(c, 'One ')).delete()])
+    ).rejects.toMatchObject({ code: 'NotImplemented' });
+  } finally {
+    r.dispose();
+  }
+});

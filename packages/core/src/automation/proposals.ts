@@ -108,13 +108,16 @@ export function proposalRevisionError(
       const b = index === last ? r.end.offset : Infinity;
       if (start < b && end > a) return true;
       if (start > b || end < a) return false;
-      // Touching. A replacement or deletion may border the author's own inserted text: the
-      // new strike cannot join anyone's decision there. Beside their own struck text it
-      // would, because adjacent deletions by one author review as one decision, so a
-      // replacement's deleted start and a plain deletion still refuse.
-      if (!own) return true;
-      if (['insert', 'format', 'paragraphMark'].includes(item.revisionKind)) return false;
-      return !(item.revisionKind === 'replace' && start === b);
+      // Touching. A replacement or deletion may START where the author's own inserted text
+      // ends: the new strike cannot join anyone's decision there. Ending where it starts
+      // would put a strike directly before their insertion, which reviews as one
+      // replacement; beside their own struck text it would join that deletion. Both refuse.
+      if (!own || start !== b) return true;
+      return !(
+        item.revisionKind === 'insert' ||
+        item.revisionKind === 'replace' ||
+        (item.revisionKind === 'paragraphMark' && item.markDirection === 'insert')
+      );
     });
   });
   if (overlaps)

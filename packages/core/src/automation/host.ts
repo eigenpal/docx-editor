@@ -175,10 +175,13 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       );
     }
 
+    // Taken once, before any post-commit read, so the one-entry reads cache ends on the
+    // committed package the next batch starts from.
+    const start = readsOf(pkg);
     // An endpoint read before its paragraph changed names other text now. Refuse it rather
     // than edit whatever sits at the old offsets.
     for (let index = 0; index < operations.length; index += 1) {
-      const detail = staleEndpointDetail(operations[index], revision, texts, handles, readsOf(pkg));
+      const detail = staleEndpointDetail(operations[index], revision, texts, handles, start);
       if (detail)
         return refuse(
           operations,
@@ -190,7 +193,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
 
     const planner = createBatchPlanner({
       handles,
-      reads: readsOf(pkg),
+      reads: start,
       capabilities,
       collaborative: port.collaborative?.() ?? false,
       trackedRangeReplacement: port.trackedRangeReplacement?.() ?? true,
@@ -406,13 +409,12 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
 
     tracking = stagedTracking;
     const committed = port.revision();
-    const before = readsOf(pkg);
     // Queries answered from the package the batch started with; commands from the result.
     const results: AutomationOperationResult[] = planned.map((step) => ({
       status: 'ok',
       value:
         step.kind === 'query'
-          ? stampEndpoints(step.value, revision, texts, handles, before)
+          ? stampEndpoints(step.value, revision, texts, handles, start)
           : stampEndpoints(
               step.kind === 'customNodeWrite'
                 ? step.answer(post)

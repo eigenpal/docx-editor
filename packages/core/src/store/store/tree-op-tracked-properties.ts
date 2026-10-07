@@ -244,25 +244,29 @@ export function insideOwnInsertion(part: OoxmlPart, nodeId: string, author: stri
   let ancestor = parentNodeOf(part, nodeId);
   while (ancestor !== null) {
     if (ancestor.kind === 'revisionInsert') return ownedBy(ancestor, author);
-    if (ownInsertedTablePart(ancestor, author)) return true;
+    const table = insertedTablePart(ancestor, author);
+    if (table !== null) return table;
     ancestor = parentNodeOf(part, ancestor.id);
   }
   return false;
 }
 
 /**
- * Whether a row or cell is one this author proposed inserting (`w:trPr/w:ins`,
- * `w:tcPr/w:cellIns`). Rejecting it removes everything inside, formatting included, so
- * nothing inside needs a format record of its own, the same as a run in their `w:ins`.
+ * For a row or cell proposed as an insertion (`w:trPr/w:ins`, `w:tcPr/w:cellIns`), whether
+ * this author proposed it; null for anything else. Rejecting the author's own removes
+ * everything inside, formatting included, so nothing inside needs a format record, the same as
+ * a run in their `w:ins`. Someone else's is the nearest owner, and the record belongs on it.
  */
-function ownInsertedTablePart(node: OoxmlNode, author: string): boolean {
-  if (node.kind === 'textValue') return false;
+function insertedTablePart(node: OoxmlNode, author: string): boolean | null {
+  if (node.kind === 'textValue') return null;
   const container = node.kind === 'tableRow' ? 'trPr' : node.kind === 'tableCell' ? 'tcPr' : null;
-  if (!container) return false;
+  if (!container) return null;
   const properties = node.children.find((child) => isWmlNamed(child, container));
-  if (!properties || properties.kind === 'textValue') return false;
-  const marker = container === 'trPr' ? 'ins' : 'cellIns';
-  return properties.children.some((child) => isWmlNamed(child, marker) && ownedBy(child, author));
+  if (!properties || properties.kind === 'textValue') return null;
+  const marker = properties.children.find((child) =>
+    isWmlNamed(child, container === 'trPr' ? 'ins' : 'cellIns')
+  );
+  return marker ? ownedBy(marker, author) : null;
 }
 
 /**
@@ -275,13 +279,17 @@ export function ownProposedParagraph(
   markProperties: readonly OoxmlNode[],
   author: string
 ): boolean {
-  if (ownProposedMark(markProperties, author)) return true;
+  // The nearest proposal decides: the mark's own `w:ins`, then the innermost proposed row.
+  if (markProperties.some((child) => isWmlNamed(child, 'ins')))
+    return ownProposedMark(markProperties, author);
   for (
     let node = parentNodeOf(part, paragraphId);
     node !== null;
     node = parentNodeOf(part, node.id)
-  )
-    if (ownInsertedTablePart(node, author)) return true;
+  ) {
+    const table = insertedTablePart(node, author);
+    if (table !== null) return table;
+  }
   return false;
 }
 
