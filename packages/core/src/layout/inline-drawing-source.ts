@@ -45,7 +45,11 @@ import { createPictureBulletResourceResolver } from './numbering-picture-bullet-
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { walkDrawingAtoms } from './drawing-inline-walk.ts';
-import { aggregateParagraphTokensForTableBlock, framedTokenJoin } from './layout-cache.ts';
+import { framedTokenJoin } from './framed-token.ts';
+import {
+  aggregateParagraphTokensForTableBlock,
+  createTableRowTokenStore,
+} from './table-paragraph-tokens.ts';
 
 /** Layout-owned read surface for inline drawing package state (no binding/session lane). */
 export interface InlineDrawingPackageReader {
@@ -960,7 +964,9 @@ export function drawingTokenForTableBlockMemo(
   if (epoch === undefined) return drawingTokenForTableBlock(table, drawingTokenForParagraph);
   const cached = tableDrawingTokenCache.get(table);
   if (cached && cached.epoch === epoch) return cached.token;
-  const token = drawingTokenForTableBlock(table, drawingTokenForParagraph);
+  // Rows keep their identity across a cell edit, so their segments answer under the same epoch.
+  const reuse = { rows: rowDrawingTokens, scope: undefined, epoch };
+  const token = aggregateParagraphTokensForTableBlock(table, drawingTokenForParagraph, reuse);
   tableDrawingTokenCache.set(table, { epoch, token });
   return token;
 }
@@ -970,6 +976,7 @@ const tableDrawingTokenCache = new WeakMap<
   OoxmlNode,
   { readonly epoch: string; readonly token: string }
 >();
+const rowDrawingTokens = createTableRowTokenStore();
 
 /**
  * Aggregate per-paragraph drawing tokens for a table subtree (cache + incremental keys).

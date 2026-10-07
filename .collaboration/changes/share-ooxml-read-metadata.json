@@ -54,7 +54,11 @@
     "packages/core/src/layout/__tests__/table-probe-cache-reads.test.ts",
     "packages/core/src/layout/__tests__/table-row-placement-reuse.test.ts",
     "packages/core/src/layout/__tests__/layout-key-leaf-tokens.test.ts",
-    "packages/core/src/layout/__tests__/table-row-placement-guards.test.ts"
+    "packages/core/src/layout/__tests__/table-row-placement-guards.test.ts",
+    "packages/core/src/layout/__tests__/paragraph-page-routes.test.ts",
+    "packages/core/src/layout/__tests__/table-paragraph-tokens.test.ts",
+    "packages/core/src/layout/__tests__/cell-break-key-match.test.ts",
+    "packages/core/src/output/__tests__/table-metadata-reuse.test.ts"
   ],
   "changeset": "share-ooxml-read-metadata",
   "migration": null

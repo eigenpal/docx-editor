@@ -91,26 +91,26 @@ export function createRowProbeReuse(
         if (key === 'rowAtPageStart' && !!deps[key] === !!known.deps[key]) continue;
         if (deps[key] !== known.deps[key]) return null;
       }
-      return {
-        ...known.result,
-        record: {
-          ...known.result.record,
-          cells: known.result.record.cells.map((cell) => ({
-            ...cell,
-            blocks: cell.blocks.map((block) => {
-              if (block.kind !== 'paragraph')
-                throw new Error('Ordinary row probe contains a table');
-              return {
-                ...block,
-                lines: block.lines.map((line, index) => ({
-                  ...line,
-                  id: deps.nextLineId(line.range.paragraphId, line.range.start, index),
-                })),
-              };
-            }),
-          })),
-        },
-      };
+      // A prior finalized row already carries the same paragraph-local line ids. Keep its
+      // records when no id changes; remapping must still call nextLineId for every line.
+      let cells: (typeof known.result.record.cells)[number][] | undefined;
+      for (let cellIndex = 0; cellIndex < known.result.record.cells.length; cellIndex++) {
+        const cell = known.result.record.cells[cellIndex]!;
+        let blocks: (typeof cell.blocks)[number][] | undefined;
+        for (let blockIndex = 0; blockIndex < cell.blocks.length; blockIndex++) {
+          const block = cell.blocks[blockIndex]!;
+          if (block.kind !== 'paragraph') throw new Error('Ordinary row probe contains a table');
+          let lines: (typeof block.lines)[number][] | undefined;
+          for (let index = 0; index < block.lines.length; index++) {
+            const line = block.lines[index]!;
+            const id = deps.nextLineId(line.range.paragraphId, line.range.start, index);
+            if (id !== line.id) (lines ??= block.lines.slice())[index] = { ...line, id };
+          }
+          if (lines) (blocks ??= cell.blocks.slice())[blockIndex] = { ...block, lines };
+        }
+        if (blocks) (cells ??= known.result.record.cells.slice())[cellIndex] = { ...cell, blocks };
+      }
+      return cells ? { ...known.result, record: { ...known.result.record, cells } } : known.result;
     },
   };
 }

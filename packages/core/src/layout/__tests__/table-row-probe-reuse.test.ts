@@ -1,3 +1,7 @@
+import { createParagraphLayoutCache } from '../layout-cache.ts';
+import { bodyLineId } from '../body-line-id.ts';
+import { finalizeTableRows } from '../table-fragment-finalize.ts';
+import { rememberRowPlacement, isSettledPreviousRow } from '../table-row-placement-reuse.ts';
 import { expect, test } from 'bun:test';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { createRowProbeReuse } from '../table-row-probe-reuse.ts';
@@ -90,4 +94,52 @@ test('semantic merge continuations and vertical text cannot reuse probes', () =>
     p.measure(r, 0, 0, d);
     expect(p.take(r, 0, 0, d)).toBeNull();
   }
+});
+
+test('matching line ids preserve a settled previous placement and still call the id allocator', () => {
+  const structure = fixture(row('plain'));
+  const source = structure.rows[0]!;
+  let calls = 0;
+  const d: TableFlowDeps = {
+    ...deps(),
+    cache: createParagraphLayoutCache(),
+    nextLineId: (id, start, index) => {
+      calls++;
+      return bodyLineId(id, start, index);
+    },
+  };
+  const initial = layoutRowFragment(source, structure.columnWidthsPt, 0, 0, false, 0, d, 0);
+  rememberRowPlacement(source, initial, 0, d);
+  const finalized = finalizeTableRows([initial.record], structure, [source])[0]!;
+  const probe = createRowProbeReuse(structure.columnWidthsPt, 0, new Map([[source.id, finalized]]));
+  probe.measure(source, 0, 0, d);
+  calls = 0;
+  const answer = probe.take(source, 0, 0, d);
+  expect(answer).not.toBeNull();
+  expect(isSettledPreviousRow(answer!.record)).toBe(true);
+  expect(calls).toBe(
+    finalized.cells.reduce(
+      (sum, cell) =>
+        sum +
+        cell.blocks.reduce(
+          (n, block) => n + (block.kind === 'paragraph' ? block.lines.length : 0),
+          0
+        ),
+      0
+    )
+  );
+  const changed = {
+    ...d,
+    nextLineId: (id: string, start: number, index: number) =>
+      'changed:' + bodyLineId(id, start, index),
+  };
+  probe.measure(source, 0, 0, changed);
+  const remapped = probe.take(source, 0, 0, changed);
+  expect(remapped).not.toBeNull();
+  expect(isSettledPreviousRow(remapped!.record)).toBe(false);
+  for (const cell of remapped!.record.cells)
+    for (const block of cell.blocks) {
+      if (block.kind === 'paragraph')
+        for (const line of block.lines) expect(line.id.startsWith('changed:')).toBe(true);
+    }
 });

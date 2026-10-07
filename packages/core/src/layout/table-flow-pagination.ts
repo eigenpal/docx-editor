@@ -1,3 +1,4 @@
+import { isSettledPreviousRow } from './table-row-placement-reuse.ts';
 import { createRowProbeReuse } from './table-row-probe-reuse.ts';
 import { takePreviousRows } from './table-row-placement-reuse.ts';
 // Placing ONE top-level table into the body flow, row by row, across page breaks.
@@ -284,7 +285,8 @@ export function paginateTableInFlow(
         undefined,
         shiftAnchor,
         tableDeps,
-        occurrenceInsets
+        occurrenceInsets,
+        new Set(rows.filter(isSettledPreviousRow))
       )
     );
     const last = finalized[finalized.length - 1]!;

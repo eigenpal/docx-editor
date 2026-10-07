@@ -1,3 +1,4 @@
+import { carryParagraphPageRoutes } from './paragraph-lines.ts';
 import type { LayoutSession } from './layout-session.ts';
 import type { SectionPrepass } from './section-prepass-types.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
@@ -90,6 +91,7 @@ export function tryUpdateTableSession(input: {
   );
   // updateTableText proves ordinary text edits and preserves all table occurrences.
   carryTableCaretContexts(oldLayout, session.previous);
+  if (update.paragraphPagesUnchanged) carryParagraphPageRoutes(oldLayout, session.previous);
   session.keys = prepass.flowKeys;
   session.checkpoints = session.checkpoints.map((mark, index) => ({
     ...mark,

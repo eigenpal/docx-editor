@@ -1,6 +1,6 @@
 import { drawingInputsUnchangedByTextEdit } from './drawing-text-only-change.ts';
 import { tryUpdateTableSession, reuseUnchangedLayout } from './table-text-session.ts';
-import { carryTableCaretContexts } from './table-caret-context.ts';
+import { carryLayoutReadCaches } from './layout-read-caches.ts';
 import { createDrawingExclusionPasses } from './drawing-exclusion-passes.ts';
 import { resolveBodyRefFields } from './style-separator-ref.ts';
 import { styleSeparatorToken } from './style-separator-group.ts';
@@ -375,7 +375,7 @@ export function layoutSemanticDocument(
       laid.layout
     );
     const finalized = finalizePageFieldProjection(annotated);
-    carryTableCaretContexts(laid.layout, finalized);
+    carryLayoutReadCaches(laid.layout, finalized);
     // The notes pass mints overflow sheets from this layout; publish what index they land at.
     registerOverflowPageShell(finalized, (_sectionAnchorIndex, documentPageIndex, box) =>
       laid.overflowShellAt(documentPageIndex, box)
@@ -398,7 +398,7 @@ export function layoutSemanticDocument(
       };
     }
     const withBoundaries = attachContentControlBoundaries(projected, part, controlToken);
-    carryTableCaretContexts(layout, withBoundaries);
+    carryLayoutReadCaches(layout, withBoundaries);
     if (options.session) {
       options.session.previous = withBoundaries;
     }

@@ -38,6 +38,31 @@ export function cellBreakKeyParts(
   };
 }
 
+/**
+ * `sameCellBreakKeyParts(cellBreakKeyParts(...), known)` without building the parts. Row
+ * geometry reuse asks this for every moved cell. Keep it in step with `cellBreakKeyParts`;
+ * `cell-break-key-match.test.ts` fails when a part is added to one and not the other.
+ */
+export function cellBreakKeyPartsMatch(
+  paragraph: OoxmlElement,
+  deps: TableFlowDeps,
+  inTableCell: boolean,
+  cellEndMark: boolean,
+  rowsClearOutOfCellFloats: boolean,
+  known: CellBreakKeyParts
+): boolean {
+  return (
+    known.producer === deps.producer &&
+    known.drawing ===
+      (deps.drawingTokenForParagraph?.(paragraph) || deps.drawingLayoutToken || '') &&
+    known.drawingContext === (deps.inlineDrawingLayout !== undefined) &&
+    known.projection === (deps.projectionTokenForParagraph?.(paragraph) ?? '') &&
+    known.inTableCell === inTableCell &&
+    known.cellEndMark === cellEndMark &&
+    known.rowsClearOutOfCellFloats === rowsClearOutOfCellFloats
+  );
+}
+
 /** True when every part matches; new parts are compared without a change here. */
 export function sameCellBreakKeyParts(a: CellBreakKeyParts, b: CellBreakKeyParts): boolean {
   for (const key of Object.keys(a) as (keyof CellBreakKeyParts)[])
