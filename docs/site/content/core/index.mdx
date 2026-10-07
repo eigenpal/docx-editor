@@ -190,12 +190,13 @@ For supported commands, inspect `result.history?.kind`. A _story_ in this table 
 | Intervening write, another group, typing flush, or local story change | Next committed frame reports `split` |
 | Undo or redo | Next committed frame starts a separate entry; `exec` undo/redo reports reason `undo-redo` |
 | Read-only command without a group, such as `selectAll` | Does not close the group |
-| No committed history, including formatting at a collapsed caret | `none`; no undo entry |
+| Caret formatting changes the next typing format | Starts or extends a local undo entry |
+| No effective formatting change at a collapsed caret | `none`; no undo entry |
 | Command rejected before a store transaction | No history change |
 | Ungrouped store transaction, even if empty or refused | Closes the local group |
 | Ended handle | Further calls return `unsupported`; existing edits remain |
 
-The result describes the undo entry recorded for the command. An accepted call does not necessarily create an entry. Reapplying the same property value can report `changed: true` and `extended`. At a caret, formatting can set the format for subsequent typing and report `changed: false`.
+The result describes the undo entry recorded for the command. An accepted call does not necessarily create an entry. Reapplying the same property value can report `changed: true` and `extended`. At a caret, formatting can set the format for subsequent typing and report `changed: false`. Its local undo entry still reports `started`, `extended`, or `split`.
 
 If composition or a transaction that spans document parts prevents grouping, the command reports `split` with reason `composition` or `package-unit`.
 
