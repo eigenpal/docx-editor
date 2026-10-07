@@ -5738,6 +5738,7 @@ a.docx-hyperlink:focus-visible {
    Light: the page and the chrome agree on the value. Dark: the PAGE is rendered through an
    inverting filter and the chrome is not, so only the chrome lifts. */
 .docx-review__card,
+.docx-review__reply,
 .docx-review__marker {
   --doc-review-author-ink: var(--doc-review-author-current, #c0392b);
   --doc-review-author-disc: color-mix(
@@ -5748,6 +5749,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-editor.dark .docx-review__card,
+.docx-editor.dark .docx-review__reply,
 .docx-editor.dark .docx-review__marker {
   --doc-review-author-ink: color-mix(in srgb, var(--doc-review-author-current, #c0392b) 55%, white);
   --doc-review-author-disc: color-mix(

@@ -714,10 +714,13 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights {
   /**
    * Scroll a page or a block into view. Returns false when the target does not exist or
    * the host has no scroll container — a caller can tell "not found" from "scrolled".
-   * `options.block` places a block: `'start'` (default) near the top, `'center'` centred,
-   * `'centerIfNeeded'` centred only when it is off screen, `'nearest'` the minimum scroll.
    */
   scrollToPage(pageNumber: number): boolean;
+  /**
+   * `options.block` places the block: `'start'` (default) near the top, `'center'` centred,
+   * `'centerIfNeeded'` centred only when off screen, `'nearest'` the minimum scroll. An
+   * unknown placement also returns false, and nothing scrolls.
+   */
   scrollToBlock(
     blockId: string,
     options?: { readonly block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest' }

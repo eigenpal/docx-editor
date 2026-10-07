@@ -627,7 +627,6 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights {
     reportCustomNodeDiagnostic(diagnostic: unknown): void;
     retainSelection(): SelectionPin | null;
     save(): Promise<ArrayBuffer>;
-    // (undocumented)
     scrollToBlock(blockId: string, options?: {
         readonly block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest';
     }): boolean;

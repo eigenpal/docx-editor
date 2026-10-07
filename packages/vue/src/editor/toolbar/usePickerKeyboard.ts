@@ -52,21 +52,20 @@ function bindPickerKeyboard(root: HTMLElement, close: () => void): () => void {
     if (event.relatedTarget instanceof Node && !root.contains(event.relatedTarget)) close();
   };
   // Toolbar mousedown keeps focus in the document, so a picker opened by a click never
-  // sees its keys. Escape still closes it, and the caret stays where it was.
+  // sees its keys. Escape anywhere else still closes it. Bubble phase, and the event goes
+  // on: a dialog, the find bar, or the surface handles the same key as it would anyway.
   const escapeOutside = (event: KeyboardEvent) => {
-    if (event.key !== 'Escape' || event.defaultPrevented) return;
+    if (event.key !== 'Escape' || event.isComposing) return;
     if (event.target instanceof Node && root.contains(event.target)) return;
-    event.preventDefault();
-    event.stopPropagation();
     close();
   };
   const owner = root.ownerDocument;
   root.addEventListener('keydown', keydown);
   root.addEventListener('focusout', focusout);
-  owner.addEventListener('keydown', escapeOutside, true);
+  owner.addEventListener('keydown', escapeOutside);
   return () => {
     root.removeEventListener('keydown', keydown);
     root.removeEventListener('focusout', focusout);
-    owner.removeEventListener('keydown', escapeOutside, true);
+    owner.removeEventListener('keydown', escapeOutside);
   };
 }

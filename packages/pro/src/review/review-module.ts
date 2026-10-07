@@ -27,15 +27,20 @@ import { rememberLicenseKey, type ProLicenseOptions } from '../license.ts';
 export interface ReviewModuleOptions extends ProLicenseOptions {
   /**
    * Whether the editor opens the review pane by itself. Default `'automatic'`: the pane
-   * opens when a document with review items loads and when the first tracked change is
-   * made. Pass `'manual'` when the host shows review items its own way, for example in
-   * balloons or margin markers, and opens the pane only on demand.
+   * opens when a document with review items loads, and when a tracked change is made while
+   * the pane is closed. Pass `'manual'` when the host shows review items its own way, for
+   * example in balloons or margin markers, and opens the pane only on demand. Any other
+   * value throws a `TypeError`.
    */
   readonly paneOpening?: 'automatic' | 'manual';
 }
 
 /** Build the review module. Construction never validates the key and never touches the network. */
 export function reviewModule(options: ReviewModuleOptions = {}): EditorModule {
+  const { paneOpening } = options;
+  if (paneOpening !== undefined && paneOpening !== 'automatic' && paneOpening !== 'manual') {
+    throw new TypeError(`reviewModule: paneOpening must be 'automatic' or 'manual'`);
+  }
   rememberLicenseKey(options.licenseKey);
   return {
     id: 'review',
@@ -44,7 +49,7 @@ export function reviewModule(options: ReviewModuleOptions = {}): EditorModule {
       displayModes: ['all-markup', 'simple-markup', 'proposed', 'original'],
       collectReviewItems,
       revisionItemsOfParagraph,
-      ...(options.paneOpening ? { paneOpening: options.paneOpening } : {}),
+      ...(paneOpening ? { paneOpening } : {}),
     },
   };
 }

@@ -401,6 +401,16 @@ describe('toolbar overflow integration', () => {
       fireEvent.mouseDown(document.body, { bubbles: true });
     });
     expect(view.queryByTestId('toolbar-overflow-panel')).toBeNull();
+
+    // A click leaves focus outside the panel; Escape there still closes it.
+    await act(async () => {
+      trigger.click();
+    });
+    expect(view.queryByTestId('toolbar-overflow-panel')).not.toBeNull();
+    await act(async () => {
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+    });
+    expect(view.queryByTestId('toolbar-overflow-panel')).toBeNull();
   });
 
   test('a command in the overflow dialog executes through shared engine state', async () => {

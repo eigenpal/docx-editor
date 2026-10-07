@@ -171,6 +171,10 @@ describe('DocxEditorToolbar composition', () => {
     await flush();
     expect(panel.querySelector('.docx-table-chrome__panel')).not.toBeNull();
     expect(view.container.querySelector('[data-testid="toolbar-overflow-panel"]')).toBe(panel);
+    // A click leaves focus outside the panel; Escape there still closes it.
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await flush();
+    expect(view.container.querySelector('[data-testid="toolbar-overflow-panel"]')).toBeNull();
 
     const outsideParagraphId = view.editor().surface!.session.paragraphIds()[0]!;
     Object.defineProperty(toolbar, 'clientWidth', { configurable: true, get: () => 600 });

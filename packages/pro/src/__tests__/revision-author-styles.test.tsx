@@ -265,6 +265,43 @@ describe('revisionStyles reaches the painted document', () => {
     ).toBe('/sam.png');
   });
 
+  test("a reply draws in its own author's colour, not the thread author's", async () => {
+    let instance: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={TRACKED}
+        modules={[reviewModule()]}
+        author="Sam Reyes"
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorAuthorStyle author="Sam Reyes" color="var(--brand-sam)" />
+        <DocxEditorAuthorStyle author="Rae Kim" color="var(--brand-rae)" />
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    await act(async () => {
+      instance!.surface!.selectAll();
+    });
+    await act(async () => {
+      expect(instance!.addComment('please review', 'Sam Reyes').ok).toBe(true);
+    });
+    const thread = instance!.getReviewItems().find((item) => item.kind === 'comment')!;
+    await act(async () => {
+      expect(instance!.replyToReviewItem(thread.key, 'done', 'Rae Kim').ok).toBe(true);
+      instance!.setActiveReviewItem(thread.key);
+    });
+    const reply = view.getByTestId('review-reply');
+    expect(reply.dataset.reviewAuthor).toBe('Rae Kim');
+    expect(reply.style.getPropertyValue('--doc-review-author-current')).toBe('var(--brand-rae)');
+    const card = reply.closest<HTMLElement>('[data-testid="review-card"]')!;
+    expect(card.style.getPropertyValue('--doc-review-author-current')).toBe('var(--brand-sam)');
+  });
+
   test('a script-scheme avatar URL is dropped; the initials stand in', () => {
     const view = mount({ authors: { 'Ada Lovelace': { avatarUrl: 'javascript:alert(1)' } } });
     const [adaCard] = view.getAllByTestId('review-card');

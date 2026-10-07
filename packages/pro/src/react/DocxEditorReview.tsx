@@ -1961,7 +1961,7 @@ ReviewDelete.docxReviewPart = 'Delete' as const;
 
 /** The thread under a comment, in document order. @public */
 function ReviewReplies({ className, hidden }: ReviewPartProps) {
-  const { byId } = useRail();
+  const { byId, authorSlots, authorInfo } = useRail();
   const entry = useContext(ReviewItemContext);
   // Comments AND revisions. A reply to a tracked change is a comment over that change's range,
   // and refusing to draw it here is what put the reader's answer in a card of its own, floating
@@ -1975,7 +1975,25 @@ function ReviewReplies({ className, hidden }: ReviewPartProps) {
     <ol className={`docx-review__replies${className ? ` ${className}` : ''}`}>
       {replies.map((reply) => (
         <ReviewItemContext.Provider key={reply.key} value={reply}>
-          <li className="docx-review__reply" data-testid="review-reply">
+          <li
+            className="docx-review__reply"
+            data-testid="review-reply"
+            // Each reply draws in its OWN author's colour, not the thread's.
+            {...(reply.author
+              ? {
+                  'data-review-author': reply.author,
+                  'data-review-author-slot': authorSlot(
+                    authorInfo.get(reply.author),
+                    authorSlots.get(reply.author) ?? 0
+                  ),
+                }
+              : {})}
+            style={authorCardStyle(
+              reply.author,
+              authorInfo.get(reply.author),
+              authorSlots.get(reply.author) ?? 0
+            )}
+          >
             <div className="docx-review__head">
               <ReviewAvatar />
               <div className="docx-review__meta">

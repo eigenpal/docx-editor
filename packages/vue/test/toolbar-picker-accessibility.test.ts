@@ -135,7 +135,25 @@ test('Escape closes a picker opened by a click while focus stays in the pages', 
     const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
     await update(() => pages.dispatchEvent(escape));
     expect(root.querySelector('[role="listbox"]')).toBeNull();
-    expect(escape.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(pages);
   }
+  // Escape in another field, such as a dialog or the find bar, still reaches that field.
+  const field = document.createElement('input');
+  view.container.append(field);
+  let fieldSawEscape = false;
+  field.addEventListener('keydown', () => {
+    fieldSawEscape = true;
+  });
+  const root = view.container.querySelector<HTMLElement>('[data-slot="font.family"]')!;
+  await update(() => root.querySelector<HTMLButtonElement>('[aria-haspopup="listbox"]')!.click());
+  expect(root.querySelector('[role="listbox"]')).not.toBeNull();
+  await update(() => {
+    field.focus();
+    field.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    );
+  });
+  expect(fieldSawEscape).toBe(true);
+  expect(root.querySelector('[role="listbox"]')).toBeNull();
+  field.remove();
 });

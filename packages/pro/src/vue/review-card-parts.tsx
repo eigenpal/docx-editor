@@ -357,6 +357,20 @@ export const ReviewDelete = markPart(
 );
 
 /** @public */
+function replyAuthorAttributes(
+  author: string,
+  rail: ReturnType<typeof useRail>['value']
+): Record<string, unknown> {
+  if (!author) return {};
+  const info = rail.authorInfo.get(author);
+  const slot = rail.authorSlots.get(author) ?? 0;
+  return {
+    'data-review-author': author,
+    'data-review-author-slot': authorSlot(info, slot),
+    style: authorCardStyle(author, info, slot),
+  };
+}
+
 export const ReviewReplies = markPart(
   defineComponent({
     name: 'ReviewReplies',
@@ -376,7 +390,12 @@ export const ReviewReplies = markPart(
           <ol class={`docx-review__replies${props.className ? ` ${props.className}` : ''}`}>
             {replies.map((reply) => (
               <ReviewReplyScope key={reply.key} entry={reply}>
-                <li class="docx-review__reply" data-testid="review-reply">
+                <li
+                  class="docx-review__reply"
+                  data-testid="review-reply"
+                  // Each reply draws in its OWN author's colour, not the thread's.
+                  {...replyAuthorAttributes(reply.author, rail.value)}
+                >
                   <div class="docx-review__head">
                     <ReviewAvatar />
                     <div class="docx-review__meta">

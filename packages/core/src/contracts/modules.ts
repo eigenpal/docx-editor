@@ -91,10 +91,9 @@ export interface ReviewModuleContribution {
   readonly displayModes: readonly ReviewDisplayMode[];
   /**
    * Whether the editor opens the review pane by itself. Default `'automatic'`: the pane
-   * opens when a document with review items loads and when the first tracked change is
-   * made. `'manual'` leaves it closed until the host or the user opens it, for a host
-   * that shows review items its own way (a balloon, a margin marker) and opens the pane
-   * on demand.
+   * opens when a document with review items loads, and when a tracked change is made while
+   * the pane is closed. `'manual'` leaves it closed until the host or the user opens it,
+   * for a host that shows review items its own way (a balloon, a margin marker).
    */
   readonly paneOpening?: 'automatic' | 'manual';
   /** The review queue derivation. */

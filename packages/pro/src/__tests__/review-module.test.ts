@@ -143,6 +143,11 @@ describe('reviewModule paneOpening', () => {
     edited.destroy();
   });
 
+  test('an unknown value is refused, not read as the default', () => {
+    const bad = { paneOpening: 'Manual' } as unknown as { paneOpening: 'manual' };
+    expect(() => reviewModule(bad)).toThrow(TypeError);
+  });
+
   test('manual still lets the host open and close the pane', () => {
     const editor = open(TRACKED, 'manual');
     expect(editor.exec({ type: 'toggleReviewPane' }).ok).toBe(true);

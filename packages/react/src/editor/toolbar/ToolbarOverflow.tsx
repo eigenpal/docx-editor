@@ -153,8 +153,19 @@ export function ToolbarOverflow({ sections, className }: ToolbarOverflowProps) {
       if (target instanceof Node && rootRef.current?.contains(target)) return;
       setOpen(false);
     };
+    // A click opens the panel with focus left in the pages, where its own Escape handler
+    // never hears the key. Bubble phase, and the event goes on to whoever else handles it.
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || event.isComposing) return;
+      if (event.target instanceof Node && rootRef.current?.contains(event.target)) return;
+      setOpen(false);
+    };
     document.addEventListener('mousedown', onPointerDown, true);
-    return () => document.removeEventListener('mousedown', onPointerDown, true);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown, true);
+      document.removeEventListener('keydown', onKeyDown);
+    };
   }, [open]);
 
   useEffect(() => {
