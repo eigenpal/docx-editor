@@ -416,6 +416,7 @@ export function createTextHighlights(deps: {
   let paintedLayer: HTMLElement | null = null;
   let lastPaint: string | null = null;
   let lastLayout: SemanticLayout | null = null;
+  let lastFrame: SurfaceOverlayFrame | null = null;
 
   const ordered = () =>
     [...sets.values()].sort((a, b) => a.priority - b.priority || a.order - b.order);
@@ -423,6 +424,7 @@ export function createTextHighlights(deps: {
   function paint(frame: SurfaceOverlayFrame): void {
     const surface = deps.surface();
     paintedLayer = frame.layer;
+    lastFrame = frame;
     if (!surface || sets.size === 0) {
       if (frame.layer.childElementCount > 0) frame.layer.replaceChildren();
       painted = [];
@@ -643,6 +645,8 @@ export function createTextHighlights(deps: {
 
   return {
     members,
+    /** The frame the surface last painted, for hit tests that must match painted geometry. */
+    frame: (): SurfaceOverlayFrame | null => lastFrame,
     /** Record what each search result covers now, before the document can move under it. */
     noteMatches<T extends HighlightRange>(found: readonly T[]): readonly T[] {
       const surface = deps.surface();
@@ -668,6 +672,7 @@ export function createTextHighlights(deps: {
      */
     attach(surface: PaginatedSurface | null, replaced = false) {
       lastPaint = null;
+      lastFrame = null;
       if (replaced) sets.clear();
       surface?.setHighlightPainter(paint);
     },

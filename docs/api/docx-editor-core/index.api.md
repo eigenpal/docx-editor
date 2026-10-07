@@ -1379,7 +1379,7 @@ export interface DrawingPositionInput {
 export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'line' | 'margin' | 'outsideMargin' | 'page' | 'paragraph' | 'topMargin';
 
 // @public
-export interface Editor extends EditorAnchorNavigation, EditorHighlights {
+export interface Editor extends EditorAnchorNavigation, EditorHighlights, EditorReviewHits {
     acceptReviewItem(key: string): ExecResult;
     addComment(text: string, author?: string): ExecResult;
     beginHistoryGroup(): HistoryGroup;
@@ -2000,6 +2000,12 @@ export interface EditorQueryResults extends DocQueryResults {
     trackedChanges: readonly Revision[];
     // (undocumented)
     watermark: Watermark | null;
+}
+
+// @public
+export interface EditorReviewHits {
+    getReviewItemRects(key: string): readonly HighlightRect[];
+    getReviewItemsAt(clientX: number, clientY: number, query?: ReviewItemQuery): readonly ReviewItemHit[];
 }
 
 // @public
@@ -2822,6 +2828,12 @@ export interface ReviewCustomPlacement extends ReviewItemPlacementBase {
 
 // @public
 export type ReviewItem = ReviewRevisionItem | ReviewCommentItem | ReviewCustomItem;
+
+// @public
+export interface ReviewItemHit {
+    readonly placement: ReviewItemPlacement;
+    readonly rect: HighlightRect;
+}
 
 // @public
 export type ReviewItemPlacement = ReviewCommentPlacement | ReviewRevisionPlacement | ReviewCustomPlacement;

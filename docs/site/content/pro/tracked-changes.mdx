@@ -330,6 +330,28 @@ Use `useReviewOf(editor, query)` with an existing editor. React accepts `Editor 
 
 A query filters returned data. It does not limit caret-driven activation.
 
+### Find the item under a pointer
+
+If you draw your own balloons or margin markers, use `editor.getReviewItemsAt(clientX, clientY, query?)` to find the review items under a pointer. Each hit holds the `placement` that `getReviewItems()` returns and a `rect` in client coordinates. The `rect` is the item's band on the line under the pointer.
+
+The following example opens a card for the item under a click:
+
+```ts
+pages.addEventListener('click', (event) => {
+  const hits = editor.getReviewItemsAt(event.clientX, event.clientY);
+  const hit = hits.find(
+    ({ placement }) =>
+      placement.kind !== 'comment' ||
+      (placement.parentId === undefined && placement.parentRevisionId === undefined)
+  );
+  if (hit) openCard(hit.placement.key, hit.rect);
+});
+```
+
+An item hits when the character under the pointer is inside its range. The right half of the last character still hits. Hits list the narrowest range first. Replies share their thread's range, so they hit too. The test covers the body, tables, headers, footers, footnotes, and endnotes on painted pages. Ranges that cover no characters never hit.
+
+To anchor a balloon to an item without a pointer, call `editor.getReviewItemRects(key)`. It returns the item's bands on painted pages in client coordinates, or an empty array.
+
 ## Filter by reviewer
 
 The packaged menu exposes **Review → Markup Options → Reviewers**. The default toolbar omits the shortcut to keep the chrome compact. A host that wants one can compose `DocxEditor.Toolbar.Reviewers` and provide a custom `icon` (or the Vue default slot). Each checked author keeps their tracked markup and review cards visible. Clearing an author shows that author’s revisions as accepted: insertions remain as ordinary text, deletions leave the layout, and formatting stays applied without markup. Comments by that author are hidden.

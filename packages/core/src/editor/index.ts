@@ -462,6 +462,7 @@ export type {
   HighlightRange,
   HighlightRect,
   HighlightResult,
+  ReviewItemHit,
   ScrollToAnchorOptions,
 } from '../contracts/editor.ts';
 

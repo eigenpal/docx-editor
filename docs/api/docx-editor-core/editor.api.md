@@ -2692,6 +2692,12 @@ export interface ReviewAuthorInfo {
 export type ReviewDisplayMode = RevisionDisplayMode | 'simple-markup';
 
 // @public
+export interface ReviewItemHit {
+    readonly placement: ReviewItemPlacement;
+    readonly rect: HighlightRect;
+}
+
+// @public
 export interface ReviewModelInput {
     readonly commentsExtendedPart?: OoxmlPart | undefined;
     readonly commentsPart?: OoxmlPart | undefined;

@@ -23,6 +23,7 @@ import { formattingCommandActive } from './docx-editor-active.ts';
 import { createEditorScrolling } from './docx-editor-scroll.ts';
 import { createAnchorNavigation } from './docx-editor-anchor-navigation.ts';
 import { createTextHighlights } from './text-highlights.ts';
+import { createReviewItemsAt } from './review-items-at.ts';
 import { captureSearchResult } from './document-search-result.ts';
 import { createDocumentProtectionCommands } from './docx-editor-protection.ts';
 
@@ -31,12 +32,12 @@ import {
   commentBodyText,
   commentInitials,
   documentOrder,
+  firstReviewRange,
   paragraphFragmentsOfBlocks,
   reviewItemGeometry,
   reviewItemKey,
   type ReviewItem,
   type ReviewParagraphAnchor,
-  type ReviewRange,
   type SemanticLayout,
   type SemanticPosition,
   type SemanticSelection,
@@ -1276,11 +1277,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
   // The surface derives the active card from its caret and explicit selection pin.
   // Sharing that answer keeps card state and painted highlights consistent.
-  function firstReviewRange(item: ReviewItem): ReviewRange | null {
-    if (item.kind === 'revision') return item.ranges[0] ?? null;
-    return item.range;
-  }
-
   /** Shared by the placement flag and activation: an addressable, non-excluded range with a card. */
   function reviewItemActivatable(item: ReviewItem): boolean {
     if (firstReviewRange(item) === null || (item.kind === 'custom' && !item.carded)) return false;
@@ -2604,6 +2600,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     ...zoomFacadeMembers(zoomLane, () => surface),
     ...highlights.members,
+    ...createReviewItemsAt({ frame: highlights.frame, placements: reviewPlacements }),
 
     relayout(options?: { sync?: boolean }) {
       // `layout()` flushes any commit the scheduler has not published yet; the surface
