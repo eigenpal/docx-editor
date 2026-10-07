@@ -5,7 +5,13 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { collectPageChangeBars } from '@docx-editor.dev/core/output';
 import { DEFAULT_REVISION_MARKUP, type ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
-import { markupBackground, markupColor, spanMarkup } from './revision-markup.ts';
+import {
+  indexRowRevisions,
+  markupBackground,
+  markupColor,
+  spanMarkup,
+  type RowRevision,
+} from './revision-markup.ts';
 import { PDFDocument, type PDFPage } from 'pdf-lib';
 import type {
   ExportSemanticLayout,
@@ -244,7 +250,7 @@ export async function paint(
         artifact.change === 'structural' &&
         artifact.structuralChanges?.length &&
         artifact.structuralChanges.every((kind) =>
-          ['cellInsert', 'cellDelete', 'cellMerge'].includes(kind)
+          ['cellInsert', 'cellDelete', 'cellMerge', 'rowInsert', 'rowDelete'].includes(kind)
         )
       )
     )
@@ -256,10 +262,19 @@ export async function paint(
   const addAuthor = (author: string) => {
     if (author !== '' && !authorSlots.has(author)) authorSlots.set(author, nextAuthorSlot++);
   };
+  // Runs in a tracked row carry no revision of their own; the row's applies to all of them.
+  const rowRevisions = new Map<BlockFragmentRecord, RowRevision>();
+  forEachSemanticStory(layout, (root) =>
+    indexRowRevisions(root.host.fragments, rowRevisions, () => work.tick())
+  );
   // Match the visible document order before adding authors from resolved-away revisions.
   forEachSemanticSpan(layout, (visit) => {
     for (const revision of visit.span.revisions ?? []) addAuthor(revision.author);
-    const markup = spanMarkup(visit, layout.revisionMarkup ?? DEFAULT_REVISION_MARKUP);
+    const markup = spanMarkup(
+      visit,
+      layout.revisionMarkup ?? DEFAULT_REVISION_MARKUP,
+      rowRevisions.get(visit.paragraph)
+    );
     if (markup) addAuthor(markup.author);
   });
   const addCellAuthors = (blocks: readonly BlockFragmentRecord[]): void => {
@@ -282,7 +297,8 @@ export async function paint(
     work,
     layout.displayMode === 'all-markup',
     layout.revisionMarkup,
-    authorSlots
+    authorSlots,
+    rowRevisions
   );
   const images = new ImageWriter(doc, session, work);
   const names = destinations(doc, pages, layout);
@@ -583,7 +599,7 @@ export async function paint(
     }
     const markup =
       layout.displayMode === 'all-markup' && layout.revisionMarkup
-        ? spanMarkup(visit, layout.revisionMarkup)
+        ? spanMarkup(visit, layout.revisionMarkup, rowRevisions.get(visit.paragraph))
         : null;
     const fill =
       markup && markup.background !== 'none'

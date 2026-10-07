@@ -4,7 +4,11 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import type { ResolvedRevisionMarkup, RevisionMarkupColor } from '@docx-editor.dev/core/editor';
-import { formatRevisionOf, type SemanticSpanVisit } from '@docx-editor.dev/core/layout';
+import {
+  formatRevisionOf,
+  type BlockFragmentRecord,
+  type SemanticSpanVisit,
+} from '@docx-editor.dev/core/layout';
 
 // These are the print values of the named document revision tokens.
 const COLORS: Record<string, string> = {
@@ -54,16 +58,66 @@ export function markupBackground(
     )
     .join('');
 }
-export function spanMarkup(visit: SemanticSpanVisit, settings: ResolvedRevisionMarkup) {
+/** A tracked `w:trPr/w:ins|w:del` that every run in the row inherits. */
+export interface RowRevision {
+  readonly kind: 'insert' | 'delete';
+  readonly author: string;
+}
+
+/**
+ * Index each paragraph fragment inside a tracked table row by that row's revision.
+ *
+ * A row's runs carry no revision of their own, so a span alone cannot tell it sits in a
+ * deleted or inserted row. A deleted outer row wins over any row nested inside it, because
+ * accepting that deletion removes the nested table too; otherwise the innermost tracked
+ * row applies.
+ */
+export function indexRowRevisions(
+  blocks: readonly BlockFragmentRecord[],
+  into: Map<BlockFragmentRecord, RowRevision>,
+  tick: () => void,
+  inherited?: RowRevision
+): void {
+  for (const block of blocks) {
+    tick();
+    if (block.kind === 'paragraph') {
+      if (inherited) into.set(block, inherited);
+      continue;
+    }
+    for (const row of block.rows) {
+      const own: RowRevision | undefined = row.revisionKind
+        ? { kind: row.revisionKind, author: row.revisionAuthor ?? '' }
+        : undefined;
+      const effective = inherited?.kind === 'delete' ? inherited : (own ?? inherited);
+      for (const cell of row.cells) indexRowRevisions(cell.blocks, into, tick, effective);
+    }
+  }
+}
+
+/** The span's revisions with its row's revision, if any, as the outermost one. */
+export function spanRevisions(
+  visit: SemanticSpanVisit,
+  row: RowRevision | undefined
+): readonly { readonly kind: string; readonly author: string }[] {
+  const own = visit.span.revisions ?? [];
+  return row ? [row, ...own] : own;
+}
+
+export function spanMarkup(
+  visit: SemanticSpanVisit,
+  settings: ResolvedRevisionMarkup,
+  row?: RowRevision
+) {
+  const revisions = spanRevisions(visit, row);
   const revision =
-    visit.span.revisions?.at(-1) ??
+    revisions.at(-1) ??
     formatRevisionOf(visit.span.props) ??
     formatRevisionOf(visit.paragraph.props);
   if (!revision) return null;
-  // A removed ancestor keeps nested insertions visibly removed.
+  // A removed ancestor, including a deleted row, keeps nested insertions visibly removed.
   const kind =
-    visit.span.revisions?.find((item) => item.kind === 'delete' || item.kind === 'moveFrom')
-      ?.kind ?? revision.kind;
+    revisions.find((item) => item.kind === 'delete' || item.kind === 'moveFrom')?.kind ??
+    revision.kind;
   const style =
     kind === 'insert'
       ? settings.insertions

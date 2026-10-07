@@ -267,13 +267,19 @@ test.each([
       revisionMarkup: { cells: { [cellKind]: 'yellow' }, changedLines: { mark: 'none' } },
     });
     expect(await commands(shaded.bytes)).toContain('1 1 0 rg');
+    // Text marks off, so only the cell shading can differ from a plain row.
+    const unmarked = {
+      insertions: { mark: 'none' },
+      deletions: { mark: 'none' },
+      changedLines: { mark: 'none' },
+    } as const;
     const unshaded = await exportPdf(input, {
       ...options,
-      revisionMarkup: { cells: { [cellKind]: 'none' }, changedLines: { mark: 'none' } },
+      revisionMarkup: { ...unmarked, cells: { [cellKind]: 'none' } },
     });
     const plain = await exportPdf(docx(row('')), {
       ...options,
-      revisionMarkup: { changedLines: { mark: 'none' } },
+      revisionMarkup: unmarked,
     });
     expect(await commands(unshaded.bytes)).toBe(await commands(plain.bytes));
   }
@@ -393,4 +399,74 @@ test('move fallback uses insertion background in PDF', async () => {
     },
   });
   expect(await commands(result.bytes)).toContain('1 1 0 rg');
+});
+
+const trackedRow = (revision: string, text = 'Cell') =>
+  `<w:tbl><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid><w:tr>${revision}<w:tc><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`;
+const rowMark = (kind: 'ins' | 'del') =>
+  `<w:trPr><w:${kind} w:id="9" w:author="Reviewer"/></w:trPr>`;
+const markedSettings = {
+  insertions: { mark: 'underline', color: 'blue' },
+  deletions: { mark: 'strikethrough', color: 'red' },
+  cells: { inserted: 'none', deleted: 'none' },
+  changedLines: { mark: 'none' },
+} as const;
+
+test.each([
+  ['del', '1 0 0 rg'],
+  ['ins', '0 0 1 rg'],
+] as const)(
+  'text in a tracked %s row takes the row revision mark and color',
+  async (kind, colorOperator) => {
+    const options = { displayMode: 'all-markup', useSystemFonts: false } as const;
+    // Strict: a tracked row is a presented revision, not an unsupported one.
+    const tracked = await exportPdf(docx(trackedRow(rowMark(kind))), {
+      ...options,
+      revisionMarkup: markedSettings,
+    });
+    const plain = await exportPdf(docx(trackedRow('')), {
+      ...options,
+      revisionMarkup: markedSettings,
+    });
+    expect(await commands(tracked.bytes)).toContain(colorOperator);
+    expect(await commands(plain.bytes)).not.toContain(colorOperator);
+  }
+);
+
+test('a deleted row keeps a nested inserted row visibly deleted', async () => {
+  const nested = `<w:tbl><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr>${rowMark('del')}<w:tc>${trackedRow(
+    rowMark('ins'),
+    'Inner'
+  )}<w:p/></w:tc></w:tr></w:tbl>`;
+  const result = await exportPdf(docx(nested), {
+    displayMode: 'all-markup',
+    useSystemFonts: false,
+    revisionMarkup: markedSettings,
+  });
+  const stream = await commands(result.bytes);
+  expect(stream).toContain('1 0 0 rg');
+  expect(stream).not.toContain('0 0 1 rg');
+});
+
+test('a tracked row marks its text without configured markup settings', async () => {
+  const options = {
+    displayMode: 'all-markup',
+    useSystemFonts: false,
+    fidelityPolicy: 'best-effort',
+  } as const;
+  const tracked = await exportPdf(docx(trackedRow(rowMark('del'))), options);
+  const plain = await exportPdf(docx(trackedRow('')), options);
+  expect(await commands(tracked.bytes)).not.toBe(await commands(plain.bytes));
+});
+
+test('proposed and original views do not mark rows they resolve', async () => {
+  for (const displayMode of ['proposed', 'original'] as const) {
+    const options = { displayMode, useSystemFonts: false, revisionMarkup: markedSettings } as const;
+    const kept = await exportPdf(
+      docx(trackedRow(rowMark(displayMode === 'proposed' ? 'ins' : 'del'))),
+      options
+    );
+    const plain = await exportPdf(docx(trackedRow('')), options);
+    expect(await commands(kept.bytes)).toBe(await commands(plain.bytes));
+  }
 });

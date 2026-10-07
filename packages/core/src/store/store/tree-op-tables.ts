@@ -67,6 +67,10 @@ import {
 } from './tree-op-table-vmerge-removal.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import {
+  insertedCellParagraphContent,
+  insertedCellParagraphNodeCount,
+} from './tree-op-table-row-paragraph.ts';
+import {
   invalidRevisionAttribution,
   type RevisionAttributionInput,
   type TreeOpEffect,
@@ -524,6 +528,7 @@ function planRowInsertion(
     structureBudget += 2;
     const tcPr = wmlChildNamed(cells[index]!, 'tcPr');
     if (tcPr) structureBudget += countAllowlistedLeaves(tcPr, SAFE_TCPR_LEAVES);
+    structureBudget += insertedCellParagraphNodeCount(cells[index]!);
     // A continued merge adds `w:vMerge`, plus a `w:tcPr` to carry it whenever the copy has
     // none — including a source `w:tcPr` whose every leaf is stripped. Budget the ceiling.
     if (continuations.has(index)) structureBudget += 2;
@@ -539,7 +544,8 @@ function emptyParagraph(
   nextId: () => string,
   seed: string,
   used: Set<string>,
-  wml: WmlFreshNamespaceContext
+  wml: WmlFreshNamespaceContext,
+  content: readonly OoxmlNode[] = []
 ): OoxmlParagraphNode {
   const w14Prefix = w14PrefixInScopeAt(part, targetTable);
   const identity: OoxmlAttribute[] = [];
@@ -556,7 +562,7 @@ function emptyParagraph(
     ...(wml.elementPrefix === undefined ? {} : { prefix: wml.elementPrefix }),
     namespaceBindings: [],
     attributes: identity,
-    children: [],
+    children: content,
   } as OoxmlParagraphNode;
 }
 
@@ -595,7 +601,8 @@ function buildFreshCell(
     : copiedTcPr;
   const children: OoxmlNode[] = [];
   if (finalTcPr) children.push(finalTcPr);
-  children.push(emptyParagraph(part, targetTable, nextId, `${seed}:p`, used, wml));
+  const content = insertedCellParagraphContent(sourceCell, nextId, wml);
+  children.push(emptyParagraph(part, targetTable, nextId, `${seed}:p`, used, wml, content));
   return freshTableCell(nextId, children, wml);
 }
 

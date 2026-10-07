@@ -1,5 +1,5 @@
 import type { ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
-import { markupColor, spanMarkup } from './revision-markup.ts';
+import { markupColor, spanMarkup, spanRevisions, type RowRevision } from './revision-markup.ts';
 /*
 Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
@@ -17,6 +17,7 @@ import {
   styleForFontSlot,
   TAB_LEADER_GLYPH,
   tabLeaderPattern,
+  type BlockFragmentRecord,
   type LayoutBox,
   type SemanticSpanVisit,
   type ShapedRun,
@@ -275,7 +276,8 @@ export class TextWriter {
     readonly work: Work,
     readonly showRevisionMarkup: boolean,
     readonly revisionMarkup?: ResolvedRevisionMarkup,
-    readonly authorSlots: ReadonlyMap<string, number> = new Map()
+    readonly authorSlots: ReadonlyMap<string, number> = new Map(),
+    readonly rowRevisions: ReadonlyMap<BlockFragmentRecord, RowRevision> = new Map()
   ) {}
   paint(visit: SemanticSpanVisit, page: PDFPage): string {
     const { span, line, storyOrigin, absoluteBox } = visit;
@@ -360,14 +362,15 @@ export class TextWriter {
     const unitsFromTop = snapToGrid(baselineFromTop / PDF_PAINT_GRID_PT);
     const baseline = pageHeight(page) - Math.ceil(unitsFromTop - 0.5) * PDF_PAINT_GRID_PT;
     let foreground = style.color;
-    const revisions = this.showRevisionMarkup ? (span.revisions ?? []) : [];
+    const row = this.rowRevisions.get(visit.paragraph);
+    const revisions = this.showRevisionMarkup ? spanRevisions(visit, row) : [];
     const insert = revisions.some((r) => r.kind === 'insert' || r.kind === 'moveTo');
     const deleted = revisions.some((r) => r.kind === 'delete' || r.kind === 'moveFrom');
     if (insert) foreground = '008000';
     if (deleted) foreground = 'C00000';
     const markup =
       this.showRevisionMarkup && this.revisionMarkup
-        ? spanMarkup(visit, this.revisionMarkup)
+        ? spanMarkup(visit, this.revisionMarkup, row)
         : null;
     if (markup)
       foreground =

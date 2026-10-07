@@ -244,8 +244,44 @@ export function insideOwnInsertion(part: OoxmlPart, nodeId: string, author: stri
   let ancestor = parentNodeOf(part, nodeId);
   while (ancestor !== null) {
     if (ancestor.kind === 'revisionInsert') return ownedBy(ancestor, author);
+    if (ownInsertedTablePart(ancestor, author)) return true;
     ancestor = parentNodeOf(part, ancestor.id);
   }
+  return false;
+}
+
+/**
+ * Whether a row or cell is one this author proposed inserting (`w:trPr/w:ins`,
+ * `w:tcPr/w:cellIns`). Rejecting it removes everything inside, formatting included, so
+ * nothing inside needs a format record of its own, the same as a run in their `w:ins`.
+ */
+function ownInsertedTablePart(node: OoxmlNode, author: string): boolean {
+  if (node.kind === 'textValue') return false;
+  const container = node.kind === 'tableRow' ? 'trPr' : node.kind === 'tableCell' ? 'tcPr' : null;
+  if (!container) return false;
+  const properties = node.children.find((child) => isWmlNamed(child, container));
+  if (!properties || properties.kind === 'textValue') return false;
+  const marker = container === 'trPr' ? 'ins' : 'cellIns';
+  return properties.children.some((child) => isWmlNamed(child, marker) && ownedBy(child, author));
+}
+
+/**
+ * {@link ownProposedMark} for a paragraph, also true inside a row or cell this author
+ * proposed inserting: such a paragraph never existed for anyone else either.
+ */
+export function ownProposedParagraph(
+  part: OoxmlPart,
+  paragraphId: string,
+  markProperties: readonly OoxmlNode[],
+  author: string
+): boolean {
+  if (ownProposedMark(markProperties, author)) return true;
+  for (
+    let node = parentNodeOf(part, paragraphId);
+    node !== null;
+    node = parentNodeOf(part, node.id)
+  )
+    if (ownInsertedTablePart(node, author)) return true;
   return false;
 }
 

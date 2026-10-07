@@ -36,7 +36,7 @@ const fixture = zipDocument(
     p('Tail')
 );
 
-async function peer(name: string, host?: { ydoc: Y.Doc }) {
+async function peer(name: string, host?: { ydoc: Y.Doc }, source: Uint8Array = fixture) {
   const ydoc = new Y.Doc();
   const awareness = new Awareness(ydoc);
   if (host) Y.applyUpdate(ydoc, Y.encodeStateAsUpdate(host.ydoc));
@@ -45,7 +45,7 @@ async function peer(name: string, host?: { ydoc: Y.Doc }) {
     awareness,
     documentId: 'api-row-insertion',
     identity: { actorId: name, name },
-    bootstrap: host ? { kind: 'join' } : { kind: 'create', document: fixture },
+    bootstrap: host ? { kind: 'join' } : { kind: 'create', document: source },
   });
   const container = document.createElement('div');
   document.body.append(container);
@@ -205,6 +205,77 @@ test('concurrent row insertion and cell edits converge; deletion keeps the survi
       expect(body.text).toContain('Tail');
       expect(body.text).not.toContain('Header');
     });
+  } finally {
+    b.destroy();
+    a.destroy();
+  }
+});
+
+const sized = (text: string) =>
+  `<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:sz w:val="19"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
+const formatted = zipDocument(
+  '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>' +
+    `<w:tr><w:tc>${sized('A')}</w:tc><w:tc>${sized('B')}</w:tc></w:tr></w:tbl>` +
+    p('Tail')
+);
+
+test('a tracked row copies source formatting, formats without records, and converges', async () => {
+  const a = await peer('Alice', undefined, formatted);
+  const b = await peer('Bob', a);
+  try {
+    await a.runtime.run(async (context) => {
+      context.document.changeTrackingMode = 'TrackMineOnly';
+      await context.sync();
+      const table = context.document.body.tables.getFirst();
+      table.addRows('End', 1, [['New', 'Row']]);
+      await context.sync();
+      table.getCell(1, 0).body.font.size = 12;
+      await context.sync();
+    });
+    sync(a, b);
+    await converged(a, b);
+    const xml = JSON.stringify(await main(b));
+    expect(xml).not.toContain('"localName":"rPrChange"');
+    expect(xml).not.toContain('"localName":"pPrChange"');
+    await b.runtime.run(async (context) => {
+      context.document.body.revisions.rejectAll();
+      await context.sync();
+    });
+    sync(a, b);
+    await converged(a, b);
+    await a.runtime.run(async (context) => {
+      const table = context.document.body.tables.getFirst();
+      table.load('values');
+      await context.sync();
+      expect(table.values).toEqual([['A', 'B']]);
+    });
+  } finally {
+    b.destroy();
+    a.destroy();
+  }
+});
+
+test('a range read before a peer edited its paragraph refuses with StaleDocument', async () => {
+  const a = await peer('Alice');
+  const b = await peer('Bob', a);
+  try {
+    const tail = await a.runtime.run(async (context) => {
+      const range = context.document.body.search('Tail').getFirst();
+      await context.sync();
+      context.trackedObjects.add(range);
+      return range;
+    });
+    await b.runtime.run(async (context) => {
+      context.document.body.search('Tail').getFirst().insertText('Start ', 'Before');
+      await context.sync();
+    });
+    sync(a, b);
+    await a.runtime.run(tail, async (context) => {
+      tail.insertText('End', 'Replace');
+      await expect(context.sync()).rejects.toMatchObject({ code: 'StaleDocument' });
+      context.trackedObjects.remove(tail);
+    });
+    await converged(a, b);
   } finally {
     b.destroy();
     a.destroy();

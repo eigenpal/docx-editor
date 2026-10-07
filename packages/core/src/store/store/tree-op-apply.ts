@@ -71,7 +71,7 @@ import {
 } from './tree-op-tracked-marks.ts';
 import {
   insideOwnInsertion,
-  ownProposedMark,
+  ownProposedParagraph,
   withPropertyChangeRecord,
 } from './tree-op-tracked-properties.ts';
 import { paragraphModelTextOf } from './paragraph-model-text.ts';
@@ -578,7 +578,10 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
       // and mark writes apply: rejecting that `w:ins` runs the paragraph into the next one and
       // takes its properties with it, so a record of what they used to be decides nothing.
       const markProperties = namedChild(existing, 'rPr')?.children ?? [];
-      if (op.revision && !ownProposedMark(markProperties, op.revision.author)) {
+      if (
+        op.revision &&
+        !ownProposedParagraph(part, paragraph.id, markProperties, op.revision.author)
+      ) {
         children = withPropertyChangeRecord({
           container: 'paragraphProperties',
           prior,
