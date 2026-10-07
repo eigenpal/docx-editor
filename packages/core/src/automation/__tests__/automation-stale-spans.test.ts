@@ -93,6 +93,14 @@ describe('stamped endpoints', () => {
     expect(storyText(host, body)).toContain('Z beta gamma');
   });
 
+  test('a bad offset on an old endpoint is a bad argument, not a stale read', () => {
+    const { host, first, second } = fixture();
+    const alpha = find(host, first, 'alpha');
+    expect(replace(host, find(host, second, 'other'), 'Other').ok).toBe(true);
+    const negative = { ...alpha, start: { ...alpha.start, offset: -1 } };
+    expect(refusal(replace(host, negative, 'A'))).toBe('invalid-offset');
+  });
+
   test('a read revision the host no longer remembers refuses', () => {
     const { host, first, second } = fixture();
     const alpha = find(host, first, 'alpha');

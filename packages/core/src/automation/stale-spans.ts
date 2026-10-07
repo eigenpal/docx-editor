@@ -51,9 +51,6 @@ export function createReadTexts(limit = STALE_SPAN_HISTORY) {
   const latest = new Map<string, string>();
   return {
     record(revision: number, paragraphId: string, read: string): void {
-      const previous = latest.get(paragraphId);
-      const text = previous === read ? previous : read;
-      latest.set(paragraphId, text);
       let texts = byRevision.get(revision);
       if (!texts) {
         texts = new Map();
@@ -64,11 +61,21 @@ export function createReadTexts(limit = STALE_SPAN_HISTORY) {
           evicted = true;
         }
         // Keep shared strings only for paragraphs a retained revision still records.
-        if (evicted)
-          for (const id of latest.keys())
-            if (![...byRevision.values()].some((kept) => kept.has(id))) latest.delete(id);
+        if (evicted) {
+          const retained = new Set<string>();
+          for (const kept of byRevision.values()) for (const id of kept.keys()) retained.add(id);
+          for (const id of latest.keys()) if (!retained.has(id)) latest.delete(id);
+        }
       }
+      // An unchanged paragraph keeps one string across revisions, not one per read.
+      const previous = latest.get(paragraphId);
+      const text = previous === read ? previous : read;
+      latest.set(paragraphId, text);
       texts.set(paragraphId, text);
+    },
+    clear(): void {
+      byRevision.clear();
+      latest.clear();
     },
     at(revision: number, paragraphId: string): string | undefined {
       return byRevision.get(revision)?.get(paragraphId);
@@ -174,7 +181,10 @@ export function staleEndpointDetail(
     if (before === undefined) return `read-at ${String(endpoint.readAt)} is no longer checkable`;
     const now = paragraph.text;
     const k = endpoint.offset;
-    if (before.length < k || now.length < k || before.slice(0, k) !== now.slice(0, k))
+    // An offset that was never inside the paragraph is the planner's to refuse, as the bad
+    // argument it is. One the paragraph shrank below is stale.
+    if (!Number.isInteger(k) || k < 0 || k > before.length) continue;
+    if (now.length < k || before.slice(0, k) !== now.slice(0, k))
       return `text before offset ${String(k)} changed since revision ${String(endpoint.readAt)}`;
   }
   return null;

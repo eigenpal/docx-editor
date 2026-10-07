@@ -15,6 +15,29 @@ import { strFromU8, unzipSync } from 'fflate';
 import { DocxEditor, type DocxEditorServerRuntime, type RequestContext } from '../../index.ts';
 import { docx } from './support/docx.ts';
 
+test('text joining an empty run’s face leaves its hiding and pending format change behind', async () => {
+  const empty =
+    '<w:p><w:pPr><w:rPr><w:rStyle w:val="Emphasis"/></w:rPr></w:pPr>' +
+    '<w:r><w:rPr><w:rStyle w:val="Emphasis"/><w:b/><w:vanish/>' +
+    '<w:rPrChange w:id="4" w:author="Old"><w:rPr/></w:rPrChange></w:rPr></w:r></w:p>';
+  const r = await DocxEditor.createServer(docx(empty), { author: 'Agent' });
+  try {
+    await r.run(async (c) => {
+      c.document.body.paragraphs.getFirst().insertText('Hello', 'Start');
+      await c.sync();
+    });
+    const xml = strFromU8(unzipSync(await r.save())['word/document.xml']!);
+    const at = xml.indexOf('>Hello<');
+    const run = xml.slice(xml.lastIndexOf('<w:r>', at), xml.indexOf('</w:r>', at));
+    expect(run).toContain('<w:b/>');
+    expect(run).toContain('Emphasis');
+    expect(run).not.toContain('vanish');
+    expect(run).not.toContain('rPrChange');
+  } finally {
+    r.dispose();
+  }
+});
+
 const cell = (inner: string) =>
   `<w:tc><w:tcPr><w:tcW w:w="3000" w:type="dxa"/></w:tcPr>${inner}</w:tc>`;
 const table = (rows: string) =>

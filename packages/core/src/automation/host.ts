@@ -487,6 +487,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       unsubscribePort();
       port.dispose();
       reads = null;
+      texts.clear();
     },
   };
 }

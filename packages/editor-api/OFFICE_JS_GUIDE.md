@@ -107,7 +107,7 @@ For orientation, use `PageSetup['orientation']` in the same way after loading an
 
 ## Give each sync a purpose
 
-A sync either supplies data for the next decision or commits a complete edit. Batch independent reads and writes. For progressive agent review, one completed suggestion per sync is intentional: peers see each suggestion as it is ready. For independent edits in different paragraphs, multiple edits can share one sync and one transaction. Edits that claim the same paragraph can conflict; reconsider their anchors between commits.
+A sync either supplies data for the next decision or commits a complete edit. Batch independent reads and writes. For progressive agent review, one completed suggestion per sync is intentional: peers see each suggestion as it is ready. For independent edits in different paragraphs, multiple edits can share one sync and one transaction. Edits that claim the same paragraph can conflict; reconsider their anchors between commits. A range read before an earlier sync changed text before its end fails with `StaleDocument`, so search again in that paragraph before the next suggestion.
 
 Always await sync. Do not replace sequential syncs with `Promise.all()` or `forEach(async ...)`. Use an explicit final sync when writes remain queued. Do not add an empty sync after a completed read-only batch. These conventions follow Microsoft's [application-specific API model](https://learn.microsoft.com/en-us/office/dev/add-ins/develop/application-specific-api-model).
 
@@ -169,13 +169,7 @@ Standard `insertText('', 'Replace')` means deletion, and an empty insertion is a
 
 ## Pictures and page fields
 
-Insert a manual line break with `range.insertBreak('Line', 'After')` or `\v` in inserted text.
-Call `await context.sync()` after queuing the write.
-Manual line breaks support `TrackMineOnly` and text edits in the same sync.
-Single-line content controls refuse manual line breaks.
-Reads report manual line breaks as `\v`, column breaks as U+000E, and paragraph separators as `\r`.
-Text writes refuse U+000E and paragraph separators.
-Do not flatten these characters before sending read text back to the document.
+Insert a manual line break with `range.insertBreak('Line', 'After')` or `\v` in inserted text. Call `await context.sync()` after queuing the write. Manual line breaks support `TrackMineOnly` and text edits in the same sync. Single-line content controls refuse manual line breaks. Reads report manual line breaks as `\v`, column breaks as U+000E, and paragraph separators as `\r`. Text writes refuse U+000E and paragraph separators. Do not flatten these characters before sending read text back to the document.
 
 Insert PNG or JPEG images with `range.insertInlinePictureFromBase64(data, 'After')`. Sync before setting properties on the returned picture. Width and height use points. New pictures lock the aspect ratio. Set `lockAspectRatio = false` before setting independent dimensions. Set `altTextDescription` to describe the image. Deletion preserves shared media relationships.
 

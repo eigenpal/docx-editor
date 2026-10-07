@@ -16,6 +16,7 @@ import { WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import type { OoxmlNode, OoxmlParagraphNode } from '../package/ooxml-tree.ts';
 import { propertyContainer } from './direct-properties.ts';
 import { segmentsOf } from './tree-op-segments.ts';
+import { attributeValueOf } from './tree-op-nodes.ts';
 
 /** A `w:rStyle` naming `styleId`, the first child a `w:rPr` may hold (CT_RPr). */
 export function characterStyleElement(nextId: () => string, styleId: string): OoxmlNode {
@@ -113,12 +114,22 @@ export function emptyParagraphRunProperties(
   ];
 }
 
-function valOf(node: OoxmlNode): string | undefined {
-  if (node.kind === 'textValue') return undefined;
-  return node.attributes.find(
-    (attribute) => attribute.localName === 'val' && attribute.namespaceUri === WML_NAMESPACE_URI
-  )?.value;
-}
+/**
+ * Not carried into new text: another author's pending format change belongs to the run it
+ * was proposed on, and hidden formatting would hide the words being typed.
+ */
+const NOT_INHERITED = new Set([
+  'ins',
+  'del',
+  'moveFrom',
+  'moveTo',
+  'rPrChange',
+  'vanish',
+  'specVanish',
+  'webHidden',
+]);
+
+const valOf = (node: OoxmlNode) => attributeValueOf(node, 'val', WML_NAMESPACE_URI);
 
 /** The last run's `w:rPr` when it holds every one of `wanted`, by name and value. */
 function agreeingEmptyRunProperties(
@@ -144,5 +155,9 @@ function agreeingEmptyRunProperties(
         child.localName === want.localName &&
         valOf(child) === valOf(want)
     );
-  return wanted.every(has) ? rPr : undefined;
+  if (!wanted.every(has)) return undefined;
+  const kept = rPr.children.filter(
+    (child) => child.kind === 'textValue' || !NOT_INHERITED.has(child.localName)
+  );
+  return { ...rPr, children: kept } as OoxmlNode;
 }

@@ -23,7 +23,7 @@ import {
 } from '../package/ooxml-tree.ts';
 import type { WmlFreshNamespaceContext } from '../package/wml-namespace.ts';
 import { paragraphPropertiesNodeOf } from './tree-op-nodes.ts';
-import { isWmlElement } from './tree-op-table-shared.ts';
+import { isWmlElement, wmlAttributeValue } from './tree-op-table-shared.ts';
 
 const PPR_DROPPED = new Set(['pPrChange', 'sectPr', 'rPr']);
 // Revision markers, plus visibility: a hidden source must not hide the values written here.
@@ -48,7 +48,7 @@ const REVISION_RECORDS = new Set([
   'numberingChange',
 ]);
 /** Inline wrappers whose runs do not show the row's plain face. */
-const SKIPPED_WRAPPERS = new Set(['revisionDelete', 'revisionMoveFrom', 'hyperlink']);
+const SKIPPED_WRAPPERS = new Set(['revisionDelete', 'revisionMoveFrom', 'hyperlink', 'fldSimple']);
 
 function wmlChildren(node: OoxmlElement, dropped: ReadonlySet<string>): OoxmlNode[] {
   return node.children.filter(
@@ -59,13 +59,6 @@ function wmlChildren(node: OoxmlElement, dropped: ReadonlySet<string>): OoxmlNod
   );
 }
 
-function wmlVal(node: OoxmlNode): string | undefined {
-  if (node.kind === 'textValue') return undefined;
-  return node.attributes.find(
-    (attribute) => attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === 'val'
-  )?.value;
-}
-
 function withChildren(node: OoxmlElement, children: readonly OoxmlNode[]): OoxmlElement {
   return { ...node, children } as OoxmlElement;
 }
@@ -73,10 +66,7 @@ function withChildren(node: OoxmlElement, children: readonly OoxmlNode[]): Ooxml
 function fieldCharType(run: readonly OoxmlNode[]): string | undefined {
   const fldChar = run.find((leaf) => isWmlElement(leaf, 'fldChar')) as OoxmlElement | undefined;
   if (!fldChar) return undefined;
-  return fldChar.attributes.find(
-    (attribute) =>
-      attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === 'fldCharType'
-  )?.value;
+  return wmlAttributeValue(fldChar, 'fldCharType');
 }
 
 /**
@@ -98,7 +88,8 @@ function firstTextRunProperties(node: OoxmlNode, field = { depth: 0 }): OoxmlEle
       if (
         rPr &&
         rPr.children.some(
-          (leaf) => isWmlElement(leaf, 'rStyle') && wmlVal(leaf) === 'PlaceholderText'
+          (leaf) =>
+            isWmlElement(leaf, 'rStyle') && wmlAttributeValue(leaf, 'val') === 'PlaceholderText'
         )
       )
         continue;

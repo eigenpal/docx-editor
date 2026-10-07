@@ -281,3 +281,51 @@ test('a range read before a peer edited its paragraph refuses with StaleDocument
     a.destroy();
   }
 });
+
+test('an empty formatted row replicates, undoes, redoes, and survives save and reopen', async () => {
+  const a = await peer('Alice', undefined, formatted);
+  const b = await peer('Bob', a);
+  try {
+    await a.runtime.run(async (context) => {
+      context.document.body.tables.getFirst().addRows('End', 1);
+      await context.sync();
+    });
+    sync(a, b);
+    await converged(a, b);
+    const inserted = canonicalOoxmlFingerprint(await main(b));
+    expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
+    sync(a, b);
+    await converged(a, b);
+    expect(a.editor.exec({ type: 'redo' }).ok).toBe(true);
+    sync(a, b);
+    await converged(a, b);
+    expect(canonicalOoxmlFingerprint(await main(b))).toBe(inserted);
+    // Bob writes into the new row; it takes the copied face on both peers and after reopen.
+    await b.runtime.run(async (context) => {
+      context.document.body.tables.getFirst().getCell(1, 0).value = 'New';
+      await context.sync();
+    });
+    sync(a, b);
+    await converged(a, b);
+    const reopened = await ServerDocxEditor.createServer(new Uint8Array(await a.editor.save()));
+    try {
+      await reopened.run(async (context) => {
+        const table = context.document.body.tables.getFirst();
+        table.load('values');
+        const font = table.getCell(1, 0).body.getRange('Whole').font;
+        font.load('size');
+        await context.sync();
+        expect(table.values).toEqual([
+          ['A', 'B'],
+          ['New', ''],
+        ]);
+        expect(font.size).toBe(9.5);
+      });
+    } finally {
+      reopened.dispose();
+    }
+  } finally {
+    b.destroy();
+    a.destroy();
+  }
+});
