@@ -252,7 +252,7 @@ The command uses the scenario shape that the file names. To use another shape, p
 
 ### Keep a minimal case as a regression test
 
-Copy the shrunk file into `replays/` with a name that says what it exercises. `collaboration-replays.test.ts` replays every file there in strict mode and expects no problem. To also cover the case in the pro package tests, write the same edits with the two-peer harness in `packages/pro/src/collaboration/__tests__/document-peer-support.ts`.
+Copy the shrunk file into `replays/` with a name that says what it exercises. The `collaboration-replays-*.test.ts` files replay every file there in strict mode, spread over eight shares, and expect no problem. To run them all, run `bun test collaboration-replays`. To also cover the case in the pro package tests, write the same edits with the two-peer harness in `packages/pro/src/collaboration/__tests__/document-peer-support.ts`.
 
 ### Open cases
 

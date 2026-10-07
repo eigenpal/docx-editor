@@ -119,7 +119,7 @@ const OPEN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number;
   [];
 
 /** How many test files share the seeds. Each file defines one share with `scenarioShare`. */
-export const SCENARIO_SHARES = 3;
+export const SCENARIO_SHARES = 8;
 
 /** Define the tests for every `SCENARIO_SHARES`th seed, starting at `share`. */
 export function scenarioShare(share: number): void {
