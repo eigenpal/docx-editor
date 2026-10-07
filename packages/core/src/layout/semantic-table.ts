@@ -1,10 +1,14 @@
+import { cachedTableStructure } from './table-structure-cache.ts';
 import {
   revisionCellMetadata,
   wmlRevisionChild,
   wmlRevisionAttribute,
 } from './revision-cell-shading.ts';
 import { readTableAlignment } from './table-alignment.ts';
-import { withSharedGridLineSideRules } from './legacy-table-side-rules.ts';
+import {
+  withSharedGridLineSideRules,
+  retargetSharedGridLineSideRules,
+} from './legacy-table-side-rules.ts';
 import { withRowMinimumContentInsets } from './table-row-minimum-insets.ts';
 // Bounded table structure over the typed canonical tree.
 //
@@ -143,8 +147,9 @@ export type TableRowHeight =
 /** Highest grid column a cell may start on; keeps a row's total span bounded. */
 const LAST_GRID_COLUMN = MAX_TABLE_COLUMNS - 1;
 
-/** Distinct conditional-format combinations memoized per table; see `styleFormattingFor`. */
+/** Bound conditional cell formatting per immutable resolved table style. */
 const MAX_CELL_CONDITION_SETS = 256;
+const cellStyleFormattingMemos = new WeakMap<object, Map<string, TableCellStyleFormatting>>();
 
 /** `w:tblPr/w:jc` (17.4.29, ST_JcTable): where the table sits within the text column. */
 export type TableAlignment = 'left' | 'center' | 'right';
@@ -400,25 +405,6 @@ function readRowHeight(rowProperties: OoxmlElement | undefined): TableRowHeight 
   return { rule: effective, valuePt };
 }
 
-interface TableStructureMemo {
-  readonly contentWidthPt: number;
-  readonly depth: number;
-  readonly styleCascade: StyleCascadeTable | undefined;
-  readonly displayMode: RevisionDisplayMode;
-  readonly authorFilter: RevisionAuthorFilter | undefined;
-  readonly compatibilityMode: number | undefined;
-  readonly structure: SemanticTableStructure | null;
-}
-
-/** The last unfiltered structure for each immutable table node. */
-const tableStructureMemos = new WeakMap<object, TableStructureMemo>();
-
-/**
- * The last filtered structure for each immutable table node. A separate cache lets save-time
- * canonical layout keep both projections warm without slowing the common unfiltered lookup.
- */
-const filteredTableStructureMemos = new WeakMap<object, TableStructureMemo>();
-
 /**
  * Widened structures per base, by their widths. Readers that widen one base differently (two
  * measurers, two field contexts) keep separate entries instead of evicting each other.
@@ -445,41 +431,27 @@ export function readTableStructure(
   /** Widens autofit columns to their content minimums; layout passes its measurer. */
   autofit?: TableAutofitContext
 ): SemanticTableStructure | null {
-  const memoStore = authorFilter ? filteredTableStructureMemos : tableStructureMemos;
-  const memo = memoStore.get(table);
-  let base: SemanticTableStructure | null;
-  if (
-    memo &&
-    memo.contentWidthPt === contentWidthPt &&
-    memo.depth === depth &&
-    // Identity compare is sound because a cascade table is built once per styles part and
-    // never mutated; a fresh-but-equal cascade only misses the memo, never lies to it.
-    memo.styleCascade === styleCascade &&
-    memo.displayMode === displayMode &&
-    memo.authorFilter === authorFilter &&
-    memo.compatibilityMode === compatibilityMode
-  ) {
-    base = memo.structure;
-  } else {
-    base = readTableStructureUncached(
-      table,
-      contentWidthPt,
-      depth,
-      styleCascade,
-      displayMode,
-      authorFilter,
-      compatibilityMode
-    );
-    memoStore.set(table, {
+  const base = cachedTableStructure(
+    table,
+    {
       contentWidthPt,
       depth,
       styleCascade,
       displayMode,
       authorFilter,
       compatibilityMode,
-      structure: base,
-    });
-  }
+    },
+    () =>
+      readTableStructureUncached(
+        table,
+        contentWidthPt,
+        depth,
+        styleCascade,
+        displayMode,
+        authorFilter,
+        compatibilityMode
+      )
+  );
   if (!autofit || !base || (base.layoutFixed && depth === 0)) return base;
   // Most tables already hold their content: they come back as the shared base structure.
   const widths = autofitColumnWidthsPt(base, contentWidthPt, autofit, {
@@ -500,16 +472,33 @@ export function readTableStructure(
   let widened = widenedStructureMemos.get(base);
   const known = widened?.get(widthsKey);
   if (known) return known;
-  const structure = readTableStructureUncached(
-    table,
-    contentWidthPt,
-    depth,
-    styleCascade,
-    displayMode,
-    authorFilter,
-    compatibilityMode,
-    base.bidiVisual ? [...widths].reverse() : widths
+  const sideRules = retargetSharedGridLineSideRules(
+    base.rows,
+    {
+      compatibilityMode,
+      depth,
+      bidiVisual: base.bidiVisual === true,
+      floating: base.float !== undefined,
+      cellSpacingPt: base.cellSpacingPt,
+      widthType: base.tableWidth.type,
+      alignment: base.alignment,
+      layoutFixed: base.layoutFixed,
+      indentPt: base.indentPt,
+      columnWidthsPt: base.columnWidthsPt,
+      containerWidthPt: contentWidthPt,
+    },
+    widths
   );
+  // Top-level fixed tables returned above; nested fixed tables have no legacy content offset.
+  const { outerRuleOffsetPt: _previousOffset, ...unchanged } = base;
+  const structure: SemanticTableStructure = {
+    ...unchanged,
+    columnWidthsPt: widths,
+    rows: sideRules.rows,
+    ...(sideRules.outerRuleOffsetPt === undefined
+      ? {}
+      : { outerRuleOffsetPt: sideRules.outerRuleOffsetPt }),
+  };
   if (structure) {
     if (!widened) widenedStructureMemos.set(base, (widened = new Map()));
     if (widened.size >= MAX_WIDENED_PER_BASE) widened.delete(widened.keys().next().value!);
@@ -525,9 +514,7 @@ function readTableStructureUncached(
   styleCascade: StyleCascadeTable | undefined,
   displayMode: RevisionDisplayMode,
   authorFilter?: RevisionAuthorFilter,
-  compatibilityMode?: number,
-  /** Logical column widths that replace the resolved ones (autofit widening). */
-  columnWidthsOverridePt?: readonly number[]
+  compatibilityMode?: number
 ): SemanticTableStructure | null {
   if (depth >= MAX_TABLE_NESTING) return null;
   if (table.kind !== 'table') return null;
@@ -569,12 +556,10 @@ function readTableStructureUncached(
     tblPr ? readTableBorders(tblPr) : EMPTY_TABLE_BORDER_BOX
   );
 
-  // Cells under the same conditions resolve to the same paragraph/run material, and a table
-  // has few distinct condition sets. Memoized per table so a 10k-cell table flattens the
-  // style chain a handful of times, not once per cell. A hostile `w:cnfStyle` can still name
-  // up to 4096 distinct sets, so the memo stops growing at the ceiling and later cells simply
-  // resolve unmemoized — same bounded per-cell work either way.
-  const styleByConditions = new Map<string, TableCellStyleFormatting>();
+  // The same immutable style and conditions apply across tables and width variants.
+  // Bound the shared memo so hostile condition combinations do not grow it indefinitely.
+  let styleByConditions = cellStyleFormattingMemos.get(tableStyle);
+  if (!styleByConditions) cellStyleFormattingMemos.set(tableStyle, (styleByConditions = new Map()));
   // Word's `TableNormal` states `w:tblPr` and nothing else, and every table now resolves it,
   // so the identity check against `EMPTY_TABLE_FORMATTING` that used to short-circuit here
   // stopped firing — every cell of every unstyled table flattened a chain that could only
@@ -888,21 +873,19 @@ function readTableStructureUncached(
     floating: float !== undefined,
   });
 
-  const columnWidthsPt =
-    columnWidthsOverridePt ??
-    resolveColumnWidthsPt({
-      gridCols,
-      claims:
-        legacyWidth === undefined
-          ? claims
-          : legacyRoundedCellClaims(claims, gridCols, (legacyWidth * tableWidth.value) / 100),
-      columnCount,
-      contentWidthPt: legacyWidth ?? contentWidthPt,
-      tableWidth,
-      layoutFixed,
-      // A hidden revision row can still account for part of the authored grid.
-      hasOmittedRows,
-    });
+  const columnWidthsPt = resolveColumnWidthsPt({
+    gridCols,
+    claims:
+      legacyWidth === undefined
+        ? claims
+        : legacyRoundedCellClaims(claims, gridCols, (legacyWidth * tableWidth.value) / 100),
+    columnCount,
+    contentWidthPt: legacyWidth ?? contentWidthPt,
+    tableWidth,
+    layoutFixed,
+    // A hidden revision row can still account for part of the authored grid.
+    hasOmittedRows,
+  });
   // Project the grid visually; cell arrays retain document order for keyboard traversal.
   const visualRows = physicalTableRows(rows, columnWidthsPt.length, bidiVisual);
   let contentRows = withTableContentBorders(

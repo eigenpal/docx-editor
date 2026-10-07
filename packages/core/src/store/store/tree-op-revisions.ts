@@ -192,16 +192,15 @@ function collectRevisionSitesIn(
     nesting: number
   ): void => {
     if (node.kind === 'textValue') return;
-    // A PARAGRAPH's — or a TABLE's — sites depend on nothing outside it. Classification
-    // reads the parent and grandparent, and every case that consults them (`w:rPr` under
-    // `w:pPr`, a structural `w:trPr`/`w:tcPr` parent) is at least two levels inside the
-    // memoized subtree — so the answer for that subtree is a pure function of it, and an
-    // unchanged one can hand back what it said last time. Without this, a document with no
-    // tracked changes at all still paid a full-tree walk per keystroke, on this path and on
-    // the review queue's. Tables are memoized as a unit because their row and cell markers
-    // live OUTSIDE any paragraph: a long document of tables otherwise re-walked every
-    // `w:trPr`/`w:tcPr` per derivation even though only one paragraph had changed.
-    if (node.kind === 'paragraph' || node.kind === 'table') {
+    // Paragraphs, tables, and rows own the parents needed to classify their revision sites.
+    // A row's structural markers sit inside its properties or cells, so an unchanged row
+    // need not rescan those children after another row changes. Zero nesting makes its
+    // content depth independent of an enclosing content revision.
+    if (
+      node.kind === 'paragraph' ||
+      node.kind === 'table' ||
+      (node.kind === 'tableRow' && nesting === 0)
+    ) {
       const cached = retainAcrossReads ? subtreeSitesCache.get(node) : undefined;
       if (cached) {
         // A plain loop, not a spread: spreading is bounded by the engine's argument-count

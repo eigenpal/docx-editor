@@ -5,6 +5,8 @@
 // produces. No DOM and no session here: the surface closure passes in its current layout,
 // selection and part, so every function is a plain input-to-output computation.
 
+import { selectionMarkRects } from '../layout/selection-rects.ts';
+import type { TextMeasurer } from '../layout/semantic-records.ts';
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import { hiddenMarkRemovedIds, type RevisionView } from './hidden-mark-joins.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
@@ -594,4 +596,19 @@ export function planRangeDeletion(
     previous = id;
   }
   return { ops: ops as RangeDeletionPlan['ops'], collapseTo };
+}
+
+/** A collapsed caret has no selected marks and needs no document-order index. */
+export function surfaceSelectionMarkRects(
+  layout: SemanticLayout,
+  selection: SemanticSelection,
+  paragraphOrder: () => readonly string[],
+  measurer?: TextMeasurer
+) {
+  if (
+    selection.anchor.paragraphId === selection.head.paragraphId &&
+    selection.anchor.offset === selection.head.offset
+  )
+    return [];
+  return selectionMarkRects(layout, selection, paragraphOrder(), measurer);
 }

@@ -1,4 +1,4 @@
-import { paragraphLinesIndex, type PlacedLine } from './paragraph-lines.ts';
+import { paragraphLinesFor, type PlacedLine } from './paragraph-lines.ts';
 import { lineSegments } from './line-segments.ts';
 import type { SemanticLayout } from './semantic-records.ts';
 export interface MergedCaretGroup {
@@ -14,14 +14,13 @@ export function mergedCaretGroup(
   let groups = cache.get(layout);
   if (!groups) cache.set(layout, (groups = new Map()));
   if (groups.has(paragraphId)) return groups.get(paragraphId)!;
-  const index = paragraphLinesIndex(layout);
   const members = new Set([paragraphId]);
   const lines = new Map<string, PlacedLine>();
   const edges = new Map<string, Set<string>>();
   const indegree = new Map<string, number>();
   for (const member of members) {
     let previous: string | undefined;
-    for (const placed of index.get(member) ?? []) {
+    for (const placed of paragraphLinesFor(layout, member)) {
       const id = placed.line.id;
       lines.set(id, placed);
       if (!indegree.has(id)) indegree.set(id, 0);

@@ -33,6 +33,7 @@ import {
   revisionPresentationOf,
   type RevisionStyleContext,
 } from './revision-presentation.ts';
+import { blockContentSummary } from './block-content-summary.ts';
 
 /** Host port for safe blob URLs — only called for {@link ImageResourceState.kind} `ready`. */
 export interface PaintImageUrlPort {
@@ -801,26 +802,6 @@ export function paintAnchoredDrawingsLayer(
   return Object.freeze(painted);
 }
 
-/**
- * Every drawing one page paints, whatever story it is in.
- *
- * `paintPageNoteAreas` paints note fragments through the same `paintFragment` the body uses, so
- * a picture in a footnote gets a cached element and a blob URL like any other. Walking only the
- * body and the furniture stories meant the reconcile pass never saw those keys and treated them
- * as unused — so every repaint revoked the note image's resource and stripped its `src`. Typing
- * one character in the body blanked a picture in a footnote.
- *
- * Each story walks with {@link forEachStoryDrawing} — the SAME bounded walk the furniture
- * invalidation token uses, so what layout invalidates and what paint keeps alive cannot
- * drift apart.
- */
-function forEachPageDrawing(
-  page: PageRecord,
-  visitDrawing: (drawing: InlineDrawingRecord | AnchoredDrawingRecord) => void
-): void {
-  forEachPageStory(page, ({ host }) => forEachStoryDrawing(host, visitDrawing));
-}
-
 interface PageDrawingKeys {
   readonly resourceKeys: readonly string[];
   readonly elementKeys: readonly string[];
@@ -834,6 +815,15 @@ interface PageDrawingKeys {
  * Page records are reused by identity across incremental passes, and everything a key reads
  * (fragments, resource state, the page index the element key embeds) lives inside the record,
  * so the record's identity is the complete cache key.
+ *
+ * Every story the page paints is covered, notes included: `paintPageNoteAreas` paints note
+ * fragments through the same `paintFragment` the body uses, so a picture in a footnote gets a
+ * cached element and a blob URL like any other, and a reconcile that missed it would revoke
+ * the resource and strip its `src`. Each story walks with {@link forEachStoryDrawing} — the
+ * SAME bounded walk the furniture invalidation token uses, so what layout invalidates and what
+ * paint keeps alive cannot drift apart. A story that provably holds no drawing source skips
+ * both walks: no anchored drawing, and no inline drawing or picture bullet in any paragraph
+ * (`blockContentSummary`). Every drawing either walk can reach hangs off one of those.
  */
 const drawingKeysByPage = new WeakMap<PageRecord, PageDrawingKeys>();
 
@@ -842,19 +832,24 @@ function pageDrawingKeys(page: PageRecord): PageDrawingKeys {
   if (cached) return cached;
   const resourceKeys: string[] = [];
   const elementKeys: string[] = [];
-  forEachPageDrawing(page, (drawing) => {
-    if (drawing.resource.kind === 'ready') resourceKeys.push(drawing.resource.resourceKey);
-    elementKeys.push(`p${page.index}|${drawing.drawingNodeId}`);
-  });
-  // A picture-bullet marker mints a blob URL from the same registry, so its resource has to
-  // be reported used here too. Left out, the next reconcile revoked the URL and every list
-  // image went blank on the following repaint.
-  forEachPageStory(page, ({ host }) =>
+  forEachPageStory(page, ({ host }) => {
+    if (
+      (!('anchoredDrawings' in host) || (host.anchoredDrawings?.length ?? 0) === 0) &&
+      blockContentSummary(host.fragments).drawingFree
+    )
+      return;
+    forEachStoryDrawing(host, (drawing) => {
+      if (drawing.resource.kind === 'ready') resourceKeys.push(drawing.resource.resourceKey);
+      elementKeys.push(`p${page.index}|${drawing.drawingNodeId}`);
+    });
+    // A picture-bullet marker mints a blob URL from the same registry, so its resource has to
+    // be reported used here too. Left out, the next reconcile revoked the URL and every list
+    // image went blank on the following repaint.
     forEachStoryParagraphFragment(host, (fragment) => {
       const picture = fragment.marker?.picture;
       if (picture?.resource.kind === 'ready') resourceKeys.push(picture.resource.resourceKey);
-    })
-  );
+    });
+  });
   const keys: PageDrawingKeys = Object.freeze({
     resourceKeys: Object.freeze(resourceKeys),
     elementKeys: Object.freeze(elementKeys),

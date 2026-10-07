@@ -79,6 +79,8 @@ const subtreeDeepParagraphIdsCache = new WeakMap<
 
 function subtreeDeepParagraphIds(node: OoxmlNode, depth: number): readonly string[] {
   if (node.kind === 'textValue' || depth > 64) return EMPTY_DEEP_PARAGRAPH_IDS;
+  // Property leaves cannot contain paragraphs. Empty paragraphs still contribute their id.
+  if (node.kind !== 'paragraph' && node.children.length === 0) return EMPTY_DEEP_PARAGRAPH_IDS;
   const cached = subtreeDeepParagraphIdsCache.get(node);
   if (cached && cached.depth === depth) return cached.ids;
   let found: string[] | null = null;

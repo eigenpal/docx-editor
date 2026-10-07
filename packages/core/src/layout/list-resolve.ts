@@ -1,3 +1,4 @@
+import { walkStoryParagraphs } from './story-paragraph-walk.ts';
 import { readTwipsMeasure } from '@docx-editor.dev/core/store';
 import { styleSeparatorMembersOf } from './style-separator-group.ts';
 import { markerMeasureToken } from './list-marker-measure-key.ts';
@@ -9,7 +10,6 @@ import {
 // Resolve numbering into marker text, indentation, and font inputs for one story walk.
 
 import { paragraphIsRtl } from './rtl-paragraph.ts';
-import { flattenContentControls } from '@docx-editor.dev/core/store';
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { framedTokenJoin } from './layout-cache.ts';
@@ -41,7 +41,6 @@ import type { TextMeasurer } from './semantic-records.ts';
 import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
 import { paragraphIndent, propertiesOf } from './paragraph-flow.ts';
 import { numberingLevelTiers } from './numbering-level-tier.ts';
-import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
 import { DEPENDENCY_KEY_IDS } from '../store/registry/frozen-ids.ts';
 import type { LayoutScope } from './layout-scheduler.ts';
 import type { LayoutSession } from './layout-session.ts';
@@ -430,33 +429,7 @@ export function mergeListIndent(
  *
  * Caps nesting so a hostile nested-table document cannot recurse without bound.
  */
-export function walkStoryParagraphs(
-  blocks: readonly OoxmlElement[],
-  maxTableDepth = 8
-): OoxmlElement[] {
-  const out: OoxmlElement[] = [];
-  const visit = (blockList: readonly OoxmlElement[], depth: number): void => {
-    for (const block of blockList) {
-      if (block.kind === 'paragraph') {
-        out.push(block);
-        continue;
-      }
-      if (block.kind !== 'table' || depth >= maxTableDepth) continue;
-      for (const row of flattenContentControls(block.children)) {
-        if (row.kind !== 'tableRow') continue;
-        for (const cell of flattenContentControls(row.children)) {
-          if (cell.kind !== 'tableCell') continue;
-          // Flatten cell SDTs under the shared content-control budget; table nesting still
-          // uses `maxTableDepth` for the table walk itself.
-          const inner = collectFlowBlocks(cell.children);
-          visit(inner, depth + 1);
-        }
-      }
-    }
-  };
-  visit(blocks, 0);
-  return out;
-}
+export { walkStoryParagraphs } from './story-paragraph-walk.ts';
 
 /**
  * Per-paragraph prelude for the story walk below, memoized on the paragraph NODE: which

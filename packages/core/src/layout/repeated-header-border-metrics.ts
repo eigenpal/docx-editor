@@ -12,6 +12,7 @@ import {
 } from './table-cell-geometry.ts';
 import { canProbeBorderRows, hasTableMerge, physicalCells } from './table-border-probe.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
+import { readOnlyBreakCache } from './paragraph-cache-peek.ts';
 import { layoutRowFragment, type TableFlowDeps } from './semantic-table-layout.ts';
 import {
   MAX_TABLE_COLUMNS,
@@ -164,7 +165,8 @@ export function prepareRepeatedHeaderBorderPlan(
   let line = 0;
   const probeDeps: TableFlowDeps = {
     ...stripAnchorSinksForProbe(deps),
-    cache: undefined,
+    // Reads only: a probe never retains a break, but it may reuse one placement measured.
+    cache: readOnlyBreakCache(deps.cache),
     borderOwnershipBudget: undefined,
     vMergeResolveBudget: undefined,
     onCellBreakKey: undefined,

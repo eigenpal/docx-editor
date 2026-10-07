@@ -47,6 +47,7 @@ import {
   insideDeletedContent,
   paragraphDeletedRanges,
   paragraphLinesIndex,
+  paragraphLinesFor,
 } from './paragraph-lines.ts';
 import { wordBoundary } from './semantic-word-navigation.ts';
 import {
@@ -274,7 +275,7 @@ function paragraphCaretStops(
 ): IndexedCaretStops<CaretGeometry> {
   return paragraphCaretStopCache.get(layout, paragraphId, measurer, () => {
     const stops: CaretGeometry[] = [];
-    for (const { line, pageIndex, clipBox } of paragraphLinesIndex(layout).get(paragraphId) ?? []) {
+    for (const { line, pageIndex, clipBox } of paragraphLinesFor(layout, paragraphId) ?? []) {
       pushLineCaretStops(stops, layout, line, pageIndex, measurer, paragraphId, clipBox);
     }
     return indexCaretStops(stops);
@@ -330,7 +331,7 @@ export function caretAt(
   measurerOrOptions?: TextMeasurer | CaretAtOptions
 ): CaretGeometry | null {
   const options = resolveCaretAtOptions(measurerOrOptions);
-  const placed = paragraphLinesIndex(layout).get(position.paragraphId) ?? [];
+  const placed = paragraphLinesFor(layout, position.paragraphId) ?? [];
   const preferred = options.preferredPageIndex;
   const repeats =
     preferred === undefined ? [] : headerRepeatLinesOnPage(layout, preferred, position.paragraphId);
@@ -561,7 +562,7 @@ export type NavigationCommand =
 export function paragraphTextFromLayout(layout: SemanticLayout, paragraphId: string): string {
   const pieces: { start: number; text: string }[] = [];
   const seen = new Set<string>();
-  for (const { line } of paragraphLinesIndex(layout).get(paragraphId) ?? []) {
+  for (const { line } of paragraphLinesFor(layout, paragraphId) ?? []) {
     // ONLY this paragraph's part of the line. A resolved display mode lays merged paragraphs
     // out together, and both members count their offsets from zero, so reading the line whole
     // reconstructed one paragraph's text from the other's spans — and this IS the surface's
@@ -618,7 +619,7 @@ export function deletedTextBoundaries(
   paragraphId: string
 ): ReadonlySet<number> {
   const stops = new Set<number>();
-  for (const { line } of paragraphLinesIndex(layout).get(paragraphId) ?? []) {
+  for (const { line } of paragraphLinesFor(layout, paragraphId) ?? []) {
     const segment = lineSegmentFor(line, paragraphId);
     if (!segment) continue;
     for (const span of segment.spans) {
@@ -919,7 +920,7 @@ export function spansInSelection(
   // Only the paragraphs the selection touches; iterating every line of the document made
   // the toolbar's formatting read scale with document length instead of selection length.
   if (ordered.from.paragraphId === ordered.to.paragraphId) {
-    for (const { line } of paragraphLinesIndex(layout).get(ordered.from.paragraphId) ?? []) {
+    for (const { line } of paragraphLinesFor(layout, ordered.from.paragraphId) ?? []) {
       const segment = lineSegmentFor(line, ordered.from.paragraphId);
       if (!segment) continue;
       const overlap = segmentOverlap(layout, segment, ordered.from, ordered.to);
@@ -965,7 +966,7 @@ function caretSpan(layout: SemanticLayout, position: SemanticPosition): StyleSpa
   let leftward: StyleSpanRecord | null = null;
   let rightward: StyleSpanRecord | null = null;
   let furniture: StyleSpanRecord | null = null;
-  for (const { line } of paragraphLinesIndex(layout).get(position.paragraphId) ?? []) {
+  for (const { line } of paragraphLinesFor(layout, position.paragraphId) ?? []) {
     // This paragraph's spans only: on a merged line the other member's runs sit beside these
     // and would report their formatting for a caret that is not in them.
     for (const span of lineSegmentFor(line, position.paragraphId)?.spans ?? []) {

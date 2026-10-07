@@ -165,7 +165,7 @@ import {
 } from './revision-author-visibility.ts';
 import { PROPERTY_CHANGE_WRAPPER_OF_OP } from '../store/store/tree-op-tracked-properties.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
-import { selectionMarkRects } from '../layout/selection-rects.ts';
+import { surfaceSelectionMarkRects } from './surface-selection-ops.ts';
 import { paintSelectionOverlay, type OverlayRect } from '@docx-editor.dev/core/output';
 // By module path, like the roster walk below: dropping a retained paint is an engine
 // internal for the IME lane, not something the output barrel should offer consumers.
@@ -3525,7 +3525,6 @@ export function mountPaginatedSurface(
     ) {
       return commentRectCache.rects;
     }
-    const paragraphPages = paragraphPagesOf(currentLayout);
     /** Skip an item that cannot be on screen, before measuring anything about it. */
     const onScreen = (from: string, to: string): boolean => {
       if (!pages) return true;
@@ -3533,6 +3532,7 @@ export function mountPaginatedSurface(
       // 1–5 the moment page 1 scrolled away, so the highlight vanished from the middle of
       // its own range. `keyedRangeRects` clips to the visible pages anyway; this is only a
       // pre-filter, and a false keep costs one range's measurement.
+      const paragraphPages = paragraphPagesOf(currentLayout);
       const start = paragraphPages.get(from);
       const end = paragraphPages.get(to);
       if (start === undefined || end === undefined) return true;
@@ -3928,7 +3928,7 @@ export function mountPaginatedSurface(
       ? cellSelectionRects(currentLayout, cellSelection.cellIds)
       : retainedSelection
         ? selectionRects(editingLayout(), retainedSelection, paragraphOrder(), measurer)
-        : selectionMarkRects(editingLayout(), selection, paragraphOrder(), measurer);
+        : surfaceSelectionMarkRects(editingLayout(), selection, paragraphOrder, measurer);
     paintSelectionOverlay(
       overlayLayer,
       currentLayout,

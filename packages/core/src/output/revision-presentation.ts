@@ -11,11 +11,8 @@
 // they are one decision and a reviewer resolving one half resolves both.
 
 import type { RevisionAttribution } from '../layout/revision-projection.ts';
-import {
-  paragraphFragmentsOfBlocks,
-  type BlockFragmentRecord,
-  type SemanticLayout,
-} from '../layout/semantic-records.ts';
+import type { BlockFragmentRecord, SemanticLayout } from '../layout/semantic-records.ts';
+import { blockContentSummary } from './block-content-summary.ts';
 
 /** How many author slots the token ramp defines. */
 export const REVIEW_AUTHOR_SLOTS = 8;
@@ -419,7 +416,7 @@ export interface RevisionPresentation {
 
 /**
  * Every author a block list attributes anything to, in reading order, MEMOISED on the
- * list's identity.
+ * list's identity (see `blockContentSummary`).
  *
  * The identity is what makes this cheap. Layout reuses block arrays it did not have to
  * rebuild — on a 200-page document a keystroke replaces a handful of pages and hands back
@@ -428,90 +425,8 @@ export interface RevisionPresentation {
  * roster derivation from a whole-document scan on every commit into a scan of what
  * actually changed.
  */
-const blockAuthorCache = new WeakMap<readonly BlockFragmentRecord[], readonly string[]>();
-
 function blockAuthors(blocks: readonly BlockFragmentRecord[]): readonly string[] {
-  const cached = blockAuthorCache.get(blocks);
-  if (cached) return cached;
-  const found: string[] = [];
-  const seen = new Set<string>();
-  const see = (author: string): void => {
-    // A MISSING `w:author` is not a person. `@w:author` is required by the schema and a
-    // malformed file can still omit it, and recording `''` made the blank a roster entry that
-    // took slot 0 — pushing the first real reviewer off the colour Word gives them, and
-    // putting an empty, colour-consuming chip in any legend built from the roster. The review
-    // queue's own walk already skips it, so recording it here made the two disagree.
-    if (author === '' || seen.has(author)) return;
-    seen.add(author);
-    found.push(author);
-  };
-  for (const fragment of paragraphFragmentsOfBlocks(blocks)) {
-    for (const property of fragment.props) {
-      if (property.localName === 'pPrChange') see(property.attributes?.author ?? '');
-    }
-    for (const line of fragment.lines) {
-      if (line.changeSites) for (const revision of line.changeSites) see(revision.author);
-      for (const span of line.spans) {
-        // Index loops with an explicit guard: `?? []` allocated a throwaway array and an
-        // iterator for every untracked span, which is the overwhelming majority of them.
-        const revisions = span.revisions;
-        if (revisions !== undefined) {
-          for (let i = 0; i < revisions.length; i += 1) see(revisions[i]!.author);
-        }
-        // A tracked FORMAT change alters no characters, so it appears in neither list.
-        // Read inline rather than through `formatRevisionOf`, which builds an attribution
-        // object this walk would throw away once per revised span.
-        for (const property of span.props) {
-          if (property.localName !== 'rPrChange' && property.localName !== 'pPrChange') continue;
-          const author = property.attributes?.author;
-          // `formatRevisionOf` defaults a missing `@w:author` to the empty string, which
-          // `see` then drops: an anonymous change is not a person and must not take a ramp
-          // slot from one. It paints in slot 0's colour as any unknown author does — the
-          // alternative, a roster entry with no name in it, is worse everywhere the roster
-          // is read.
-          see(author ?? '');
-          break;
-        }
-      }
-    }
-    for (const line of fragment.lines) {
-      // Tracked inline DRAWINGS, after the line's spans: a reviewer whose only change is a
-      // picture is still a reviewer, and leaving them out silently painted their cue in
-      // slot 0's colour. A separate pass so a drawing mid-line cannot renumber the text
-      // authors around it relative to the pre-#479 assignment.
-      const drawings = line.drawings;
-      if (drawings === undefined) continue;
-      for (let i = 0; i < drawings.length; i += 1) {
-        const revisions = drawings[i]!.revisions;
-        if (revisions !== undefined) {
-          for (let j = 0; j < revisions.length; j += 1) see(revisions[j]!.author);
-        }
-        // An inline text box paints its own story on this line. Layout gives a story inside
-        // that story no text-box layout, so this descends one level at most.
-        const story = drawings[i]!.accessibility.hidden ? undefined : drawings[i]!.textboxStory;
-        if (story) for (const author of blockAuthors(story.fragments)) see(author);
-      }
-    }
-    // The paragraph MARK last: it carries no span of its own, and the pilcrow paints at the
-    // END of the fragment's final line. Reading it first gave a reviewer who only pressed
-    // Enter a lower slot than the author of the text beside them.
-    const marks = fragment.markRevisions;
-    if (marks) for (let i = 0; i < marks.length; i += 1) see(marks[i]!.author);
-  }
-  // Cell-only revisions carry no text span attribution. Retain their reviewers too.
-  const collectCells = (items: readonly BlockFragmentRecord[]): void => {
-    for (const block of items) {
-      if (block.kind !== 'table') continue;
-      for (const row of block.rows)
-        for (const cell of row.cells) {
-          if (cell.revisionShadingAuthor) see(cell.revisionShadingAuthor);
-          collectCells(cell.blocks);
-        }
-    }
-  };
-  collectCells(blocks);
-  blockAuthorCache.set(blocks, found);
-  return found;
+  return blockContentSummary(blocks).authors;
 }
 
 /**

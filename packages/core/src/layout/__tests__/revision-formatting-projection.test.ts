@@ -9,6 +9,7 @@ import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.
 import { linesOf } from '../semantic-records.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from '../revision-projection.ts';
 import { storyBlocks } from '../story-roots.ts';
+import { projectRevisionFormatting } from '../revision-formatting-projection.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const measurer = createFixedMeasurer(6, 14);
@@ -56,6 +57,28 @@ function resolved(part: OoxmlPart, action: 'accept' | 'reject'): OoxmlPart {
 }
 
 describe('Original view restores recorded formatting', () => {
+  test('preserves unchanged siblings around a changed run and keeps view caches separate', () => {
+    const part = load(
+      '<w:p><w:r><w:t>Before</w:t><w:tab/></w:r>' + run + '<w:r><w:t>After</w:t></w:r></w:p>'
+    );
+    const body = part.root.children[0]!;
+    if (body.kind === 'textValue') throw new Error('expected body');
+    const paragraph = body.children[0]!;
+    if (paragraph.kind === 'textValue') throw new Error('expected paragraph');
+    const original = projectRevisionFormatting(paragraph, 'original');
+    const proposed = projectRevisionFormatting(paragraph, 'proposed');
+    for (const projected of [original, proposed]) {
+      expect(projected.children).toHaveLength(3);
+      expect(projected.children[0]).toBe(paragraph.children[0]);
+      expect(projected.children[2]).toBe(paragraph.children[2]);
+      expect(projected.children[1]).not.toBe(paragraph.children[1]);
+    }
+    expect(original).not.toBe(proposed);
+    expect(projectRevisionFormatting(paragraph, 'original')).toBe(original);
+    expect(projectRevisionFormatting(paragraph, 'proposed')).toBe(proposed);
+    expect(projectRevisionFormatting(paragraph, 'all-markup')).toBe(paragraph);
+  });
+
   for (const [name, body] of [
     ['body', `<w:p>${properties}${run}</w:p>`],
     [

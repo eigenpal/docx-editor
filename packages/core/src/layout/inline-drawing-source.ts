@@ -1,4 +1,5 @@
 import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
+import { drawingInputsUnchangedByParagraphEdit } from './drawing-paragraph-change.ts';
 // Package-backed inline drawing layout source (typed-drawings-and-images task 6).
 //
 // Precomputes run-level drawing / MC atom projections from a bounded part traversal with
@@ -197,6 +198,10 @@ const drawingSourceOrdersByRoot = new WeakMap<
   OoxmlNode,
   WeakMap<InlineDrawingLayoutContext, ReadonlyMap<string, number>>
 >();
+const lastDrawingSourceOrder = new WeakMap<
+  InlineDrawingLayoutContext,
+  { readonly part: OoxmlPart; readonly order: ReadonlyMap<string, number> }
+>();
 
 /**
  * Canonical drawing traversal order for one immutable story root.
@@ -218,7 +223,17 @@ export function drawingSourceOrderInPart(
 ): ReadonlyMap<string, number> {
   let byContext = drawingSourceOrdersByRoot.get(part.root);
   const cached = byContext?.get(context);
-  if (cached) return cached;
+  if (cached) {
+    lastDrawingSourceOrder.set(context, { part, order: cached });
+    return cached;
+  }
+  const previous = lastDrawingSourceOrder.get(context);
+  if (previous && drawingInputsUnchangedByParagraphEdit(previous.part.root, part.root)) {
+    if (!byContext) drawingSourceOrdersByRoot.set(part.root, (byContext = new WeakMap()));
+    byContext.set(context, previous.order);
+    lastDrawingSourceOrder.set(context, { part, order: previous.order });
+    return previous.order;
+  }
   const identities = drawingAtomIdentities(part);
   const order = new Map<string, number>();
   let index = 0;
@@ -239,6 +254,7 @@ export function drawingSourceOrderInPart(
     drawingSourceOrdersByRoot.set(part.root, byContext);
   }
   byContext.set(context, order);
+  lastDrawingSourceOrder.set(context, { part, order });
   return order;
 }
 
@@ -456,6 +472,7 @@ function createPartDrawingContextSlot(options: {
   >();
   const atomsByParagraph = new WeakMap<OoxmlNode, readonly string[]>();
   let resourceEpoch = 0;
+  let lastCompatiblePart = part;
 
   const resolveRelationshipTarget = createDrawingRelationshipResolver(pkg, ownerPartName);
   const theme = createPackageShapeThemeResolvers(pkg);
@@ -629,7 +646,17 @@ function createPartDrawingContextSlot(options: {
     isCompatibleWith: (nextPart, nextPkg) => {
       const nextTheme = createPackageShapeThemeResolvers(nextPkg);
       if (nextTheme.cacheToken !== theme.cacheToken) return false;
-      if (nextPart === part && stylesPartOf(nextPkg) === stylesPart) return true;
+      if (nextPart === part && stylesPartOf(nextPkg) === stylesPart) {
+        lastCompatiblePart = nextPart;
+        return true;
+      }
+      if (
+        stylesPartOf(nextPkg) === stylesPart &&
+        drawingInputsUnchangedByParagraphEdit(lastCompatiblePart.root, nextPart.root)
+      ) {
+        lastCompatiblePart = nextPart;
+        return true;
+      }
       const nextAtomIdentities = drawingAtomIdentities(nextPart);
       if (
         !hasObjects &&
@@ -644,7 +671,10 @@ function createPartDrawingContextSlot(options: {
             break;
           }
         }
-        if (unchanged) return true;
+        if (unchanged) {
+          lastCompatiblePart = nextPart;
+          return true;
+        }
       }
       const nextProjections = indexInlineDrawingProjectionsInPart(nextPart, {
         stylesPart: stylesPartOf(nextPkg),
@@ -662,6 +692,7 @@ function createPartDrawingContextSlot(options: {
           return false;
         }
       }
+      lastCompatiblePart = nextPart;
       return true;
     },
     dispose: () => {

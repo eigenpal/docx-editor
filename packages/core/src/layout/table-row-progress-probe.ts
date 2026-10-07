@@ -7,6 +7,7 @@ import {
 } from './semantic-table-layout.ts';
 import type { SemanticTableRow } from './semantic-table.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
+import { readOnlyBreakCache } from './paragraph-cache-peek.ts';
 
 /**
  * Whether a bounded row placement can consume authored content without publishing anything.
@@ -41,7 +42,8 @@ export function probeRowFragmentProgress(
   let lineCounter = 0;
   const probeDeps: TableFlowDeps = {
     ...stripAnchorSinksForProbe(deps),
-    cache: undefined,
+    // Reads only: a probe never retains a break, but it may reuse one placement measured.
+    cache: readOnlyBreakCache(deps.cache),
     borderOwnershipBudget: undefined,
     vMergeResolveBudget: undefined,
     onCellBreakKey: undefined,

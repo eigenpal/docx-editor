@@ -11,11 +11,14 @@ import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlNode, type OoxmlPart } from '../package/ooxml-tree.ts';
 import {
   carryIndexToRebuiltRoot,
+  carryIndexToHistoryRoot,
   collectNodeIds,
   createNodeIdAllocator,
   findNode,
+  nodeIndexTestRecorder,
   parentNodeOf,
 } from '../package/ooxml-edit.ts';
+import { TreeDocumentStore } from '../store/tree-store.ts';
 import { applyTreeOp, paragraphTextOf, type TreeDocOp } from '../store/tree-ops.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -199,4 +202,89 @@ test('external root rebuilds retain allocations after a preview steals the index
   const next = createNodeIdAllocator(rebuilt)();
   expect(new Set([reserved, previewId, next]).size).toBe(3);
   expect(collectNodeIds(preview.part).has(next)).toBe(false);
+});
+
+test('history reuses node indexes while restoring exact nodes and parents', () => {
+  const store = new TreeDocumentStore(
+    load(Array.from({ length: 256 }, (_, i) => `Paragraph ${i}`))
+  );
+  const random = mulberry32(73);
+  const roots: OoxmlPart[] = [store.part];
+  for (let step = 0; step < 60; step += 1) {
+    const op = randomOp(store.part, random);
+    if (!op) continue;
+    const result = store.transact((transaction) => transaction.apply(op));
+    if (result.ok && result.change) roots.push(store.part);
+  }
+  expect(roots.length).toBeGreaterThan(30);
+  expectIndexMatchesTree(store.part, 'before undo');
+  const recorder = nodeIndexTestRecorder();
+  recorder.reset();
+  for (let index = roots.length - 2; index >= 0; index -= 1) {
+    expect(store.undo()).not.toBeNull();
+    expect(store.part).toBe(roots[index]!);
+    expectIndexMatchesTree(store.part, `undo ${index}`);
+  }
+  for (let index = 1; index < roots.length; index += 1) {
+    expect(store.redo()).not.toBeNull();
+    expect(store.part).toBe(roots[index]!);
+    expectIndexMatchesTree(store.part, `redo ${index}`);
+  }
+  expect(recorder.completeBuilds).toBe(0);
+  expect(recorder.completeVisits).toBe(0);
+});
+
+test('undo branches preserve allocator reservations and detached snapshot reads', () => {
+  const store = new TreeDocumentStore(load(['Draft', 'Tail']));
+  const original = store.part;
+  const reserved = createNodeIdAllocator(original)();
+  const paragraphId = paragraphIdsOf(original)[0]!;
+  expect(
+    store.transact((transaction) =>
+      transaction.apply({
+        op: 'splitParagraph',
+        paragraphId,
+        offset: 2,
+      })
+    ).ok
+  ).toBe(true);
+  const split = store.part;
+  const splitReservation = createNodeIdAllocator(split)();
+  store.undo();
+  const undoReservation = createNodeIdAllocator(store.part)();
+  expectIndexMatchesTree(split, 'detached split');
+  expectIndexMatchesTree(original, 'restored original');
+  expect(
+    store.transact((transaction) =>
+      transaction.apply({
+        op: 'splitParagraph',
+        paragraphId,
+        offset: 1,
+      })
+    ).ok
+  ).toBe(true);
+  const branchReservation = createNodeIdAllocator(store.part)();
+  expect(new Set([reserved, splitReservation, undoReservation, branchReservation]).size).toBe(4);
+  expect(store.canRedo).toBe(false);
+  expectIndexMatchesTree(store.part, 'new branch');
+  expectIndexMatchesTree(split, 'detached split after branching');
+  expectIndexMatchesTree(original, 'original after branching');
+});
+
+test('history does not transfer indexes between independently parsed roots', () => {
+  const first = load(['First']);
+  const second = load(['Second']);
+  expect(first.root.id).toBe(second.root.id);
+  const firstMint = createNodeIdAllocator(first);
+  const secondMint = createNodeIdAllocator(second);
+  firstMint();
+  for (let index = 0; index < 20; index += 1) secondMint();
+  carryIndexToHistoryRoot(first.root, second.root);
+  const recorder = nodeIndexTestRecorder();
+  recorder.reset();
+  expectIndexMatchesTree(first, 'independent first');
+  expectIndexMatchesTree(second, 'independent second');
+  expect(recorder.completeBuilds).toBe(0);
+  expect(createNodeIdAllocator(second)()).toBe(`${second.name}#new:20`);
+  expect(createNodeIdAllocator(first)()).toBe(`${first.name}#new:1`);
 });

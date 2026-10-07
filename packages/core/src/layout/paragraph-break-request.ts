@@ -4,7 +4,12 @@ import { paragraphIsRtl } from './rtl-paragraph.ts';
 import type { OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { FieldPageContext } from './field-projection.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
-import { breakParagraph, type ParagraphFlowOptions, type PendingLine } from './paragraph-flow.ts';
+import {
+  breakParagraph,
+  frozenLine,
+  type ParagraphFlowOptions,
+  type PendingLine,
+} from './paragraph-flow.ts';
 import {
   tabStopsFingerprint,
   withDefaultTabInterval,
@@ -157,6 +162,24 @@ export interface ParagraphBreakRequest {
     ParagraphFlowOptions,
     'lineSpacing' | 'typography' | 'equationCacheToken' | 'themeFonts' | 'markRunProperties'
   >;
+}
+
+/** Build placement-dependent flow options only when the measured break is absent. */
+export function breakPreparedParagraphLazily(
+  cache: ParagraphLayoutCache<readonly PendingLine[]> | undefined,
+  cacheKey: string | null,
+  prepare: () => Omit<ParagraphBreakRequest, 'cache' | 'cacheKey'>,
+  reuse?: () => readonly PendingLine[] | undefined
+): readonly PendingLine[] {
+  const cached = cache && cacheKey !== null ? cache.get(cacheKey) : undefined;
+  if (cached) return cached;
+  const reused = reuse?.();
+  if (reused) return reused;
+  const lines = breakPreparedParagraph({ ...prepare(), cache: undefined, cacheKey: null });
+  // Preserve the breaker's snapshot ownership and single lookup on a cache miss.
+  if (cache && cacheKey !== null)
+    cache.set(cacheKey, cache.retainAcrossPasses === false ? lines : lines.map(frozenLine));
+  return lines;
 }
 
 export function breakPreparedParagraph(request: ParagraphBreakRequest): readonly PendingLine[] {

@@ -1,9 +1,29 @@
 import type { SemanticTableCell } from './semantic-table.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
-import { resolveParagraphLayoutInputs } from './style-cascade.ts';
+import { cellParagraphInputs } from './cell-paragraph-inputs.ts';
+import type { ParagraphLayoutInputs, StyleCascadeTable } from './style-cascade.ts';
 import { markRunPropertiesWithoutCharacterStyle } from './paragraph-mark-run.ts';
 import { DEFAULT_RUN_STYLE, resolveRunStyle } from './run-style.ts';
 import { applyLineSpacing, type ParagraphSpacing } from './paragraph-style.ts';
+
+const markStyles = new WeakMap<
+  ParagraphLayoutInputs['markRunProperties'],
+  {
+    readonly theme: StyleCascadeTable['themeFonts'] | undefined;
+    readonly style: ReturnType<typeof resolveRunStyle>;
+  }
+>();
+
+function endMarkStyle(inputs: ParagraphLayoutInputs, deps: TableFlowDeps) {
+  const mark = markRunPropertiesWithoutCharacterStyle(inputs.markRunProperties);
+  if (mark.length === 0) return DEFAULT_RUN_STYLE;
+  const theme = deps.styleCascade?.themeFonts;
+  const known = markStyles.get(mark);
+  if (known && known.theme === theme) return known.style;
+  const style = resolveRunStyle(mark, theme);
+  markStyles.set(mark, { theme, style });
+  return style;
+}
 
 /** The end-of-cell paragraph's own line box and the gaps it asks for around it. */
 interface EndMarkBox {
@@ -26,20 +46,17 @@ function endMarkBox(
   if (cell.hideEndMark) return null;
   const paragraph = cell.blocks.at(-1);
   if (paragraph?.kind !== 'paragraph') return null;
-  const inputs = resolveParagraphLayoutInputs(
+  const inputs = cellParagraphInputs(
     paragraph,
     width,
     deps.styleCascade,
     deps.listItems?.get(paragraph.id),
     cell.styleFormatting,
-    true,
     deps.paragraphLineUnitPt
   );
   // The floor also stands under a cell with content, so it reads the mark WITHOUT its
   // character style (`paragraph-mark-run.ts`). An empty end paragraph's own line has it.
-  const mark = markRunPropertiesWithoutCharacterStyle(inputs.markRunProperties);
-  const style =
-    mark.length === 0 ? DEFAULT_RUN_STYLE : resolveRunStyle(mark, deps.styleCascade?.themeFonts);
+  const style = endMarkStyle(inputs, deps);
   if (style.hidden || deps.measurer.hasResolvedFont?.(style) === false) return null;
   const metrics = deps.measurer.lineMetrics(style);
   return {

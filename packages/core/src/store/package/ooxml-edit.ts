@@ -283,7 +283,7 @@ function withChildren(element: OoxmlElement, children: readonly OoxmlNode[]): Oo
  * with document size.
  *
  * The old index is STOLEN — mutated in place and re-keyed to the new root. The old root's
- * entry is dropped; a later lookup against it (undo walking history) rebuilds by full walk.
+ * entry is dropped; a later independent lookup against it rebuilds by full walk.
  * Removals are processed before additions at each level, so a node MOVED between siblings
  * in one rebuild (a join re-parenting runs) is never deleted after being re-added.
  * Exactness is guaranteed for trees without duplicate ids, which is an invariant the
@@ -315,6 +315,15 @@ function stealPatchedIndex(oldRoot: OoxmlElement, newRoot: OoxmlElement): void {
  */
 export function carryIndexToRebuiltRoot(oldRoot: OoxmlElement, newRoot: OoxmlElement): void {
   stealPatchedIndex(oldRoot, newRoot);
+}
+
+/** Reuse lookup storage only when history restores a root from the same edit lineage. */
+export function carryIndexToHistoryRoot(oldRoot: OoxmlElement, restoredRoot: OoxmlElement): void {
+  const lineage = mintStates.get(oldRoot);
+  // Package replacement can introduce a separately parsed tree with the same structural ids.
+  // Such a tree keeps its own allocation reservations and lookup storage.
+  if (!lineage || lineage !== mintStates.get(restoredRoot)) return;
+  stealPatchedIndex(oldRoot, restoredRoot);
 }
 
 function removeIndexedSubtree(index: PartIndex, node: OoxmlNode): void {

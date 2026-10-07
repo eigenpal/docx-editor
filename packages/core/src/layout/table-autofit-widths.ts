@@ -1,3 +1,5 @@
+import { cachedAutofitCellWidths, widenedCellInsets } from './table-autofit-cell-cache.ts';
+import { autofitReuseScope, carryAutofitScope } from './autofit-context-reuse.ts';
 import { withDefaultTabInterval } from './paragraph-tabs.ts';
 import {
   cellSpacingGapPt,
@@ -34,7 +36,7 @@ import type { FieldPageContext } from './field-projection.ts';
 import type { RefFieldContext } from './field-ref.ts';
 import type { NoteMarkContext } from './note-projection.ts';
 import type { TocLinkRanges } from './toc-link-formatting.ts';
-import { sha256FontBytes } from '../store/package/sha256.ts';
+import { valueDigest, cellStyleKey } from './autofit-value-token.ts';
 import { piecesOfParagraphForDisplay } from './field-projection-display.ts';
 import type { ResolvedListItem } from './list-resolve.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
@@ -120,24 +122,6 @@ interface AutofitFlowDeps extends AutofitFieldContext {
 /** One context per flow deps object, so every reader in a pass shares it. */
 const flowContexts = new WeakMap<object, TableAutofitContext>();
 
-const mapsAsEntries = (_key: string, value: unknown) => (value instanceof Map ? [...value] : value);
-
-/**
- * A fixed-width digest of a value object, once per object. File-controlled property text can
- * run to kilobytes, and the token joins every paragraph's cache key.
- */
-const valueDigests = new WeakMap<object, string>();
-const digestEncoder = new TextEncoder();
-function valueDigest(value: object | undefined): string {
-  if (!value) return '';
-  let digest = valueDigests.get(value);
-  if (digest === undefined) {
-    digest = sha256FontBytes(digestEncoder.encode(JSON.stringify(value, mapsAsEntries)));
-    valueDigests.set(value, digest);
-  }
-  return digest;
-}
-
 /** The autofit inputs a table flow already carries, so every reader widens alike. */
 export function autofitContextOf(deps: AutofitFlowDeps): TableAutofitContext {
   const known = flowContexts.get(deps);
@@ -184,6 +168,27 @@ export function autofitContextOf(deps: AutofitFlowDeps): TableAutofitContext {
   return context;
 }
 
+/** Share width measurements only after the section validates all dynamic projections. */
+export function carryTableAutofitScope(
+  previous: object | null | undefined,
+  next: object,
+  inputsEqual: boolean,
+  deps: AutofitFlowDeps
+): boolean {
+  const context = autofitContextOf(deps);
+  return carryAutofitScope(
+    previous,
+    next,
+    inputsEqual,
+    context,
+    [
+      valueDigest(deps.fieldCodeRanges),
+      valueDigest(deps.tocLinkStyleRanges),
+      valueDigest(deps.noteMarks),
+    ].join('\0')
+  );
+}
+
 /** The view a structure was read in: the cascade, display mode, and author filter. */
 export interface AutofitView {
   readonly styleCascade: StyleCascadeTable | undefined;
@@ -226,28 +231,16 @@ interface MinimumKey {
  */
 const paragraphMinimums = new WeakMap<
   TextMeasurer,
-  WeakMap<OoxmlElement, { readonly key: MinimumKey; readonly widths: ContentWidths }>
+  WeakMap<
+    OoxmlElement,
+    { readonly key: MinimumKey; readonly widths: ContentWidths; scope?: object }
+  >
 >();
 
 /** A paragraph's narrowest and widest width: unbreakable segments, and lines left unwrapped. */
 export interface ContentWidths {
   readonly min: number;
   readonly max: number;
-}
-
-/**
- * A table style's cell formatting, by content. A structure read builds new formatting objects
- * for every cell, so identity would miss the cache on every edit of a styled table.
- */
-const cellStyleKeys = new WeakMap<object, string>();
-function cellStyleKey(style: SemanticTableCell['styleFormatting'] | undefined): string {
-  if (!style) return '';
-  let key = cellStyleKeys.get(style);
-  if (key === undefined) {
-    key = JSON.stringify([style.paragraphProperties, style.runProperties]);
-    cellStyleKeys.set(style, key);
-  }
-  return key;
 }
 
 function minimumKey(paragraph: OoxmlElement, inputs: MinimumInputs): MinimumKey | null {
@@ -299,11 +292,24 @@ export function paragraphContentWidthsPt(
   const { context, view } = inputs;
   const { measurer } = context;
   const { styleCascade, displayMode } = view;
+  const scope = autofitReuseScope(context);
   let byParagraph = paragraphMinimums.get(measurer);
   if (!byParagraph) paragraphMinimums.set(measurer, (byParagraph = new WeakMap()));
+  const cached = byParagraph.get(paragraph);
+  if (
+    scope &&
+    cached?.scope === scope &&
+    cached.key.styleCascade === view.styleCascade &&
+    cached.key.displayMode === view.displayMode &&
+    cached.key.authorFilter === (view.authorFilter?.cacheKey ?? '') &&
+    cached.key.cellStyle === cellStyleKey(inputs.tableCellStyle)
+  )
+    return cached.widths;
   const key = minimumKey(paragraph, inputs);
-  const cached = key ? byParagraph.get(paragraph) : undefined;
-  if (key && cached && sameKey(cached.key, key)) return cached.widths;
+  if (key && cached && sameKey(cached.key, key)) {
+    cached.scope = scope;
+    return cached.widths;
+  }
   const layoutInputs = resolveParagraphLayoutInputs(
     paragraph,
     Number.MAX_SAFE_INTEGER,
@@ -486,27 +492,8 @@ export function paragraphContentWidthsPt(
   // An empty paragraph still keeps its first line's indents (a list item's marker slot).
   const min = widest > 0 ? widest : Math.max(0, left + right + firstShift);
   const widths = { min, max: Math.max(min, longest) };
-  if (key) byParagraph.set(paragraph, { key, widths });
+  if (key) byParagraph.set(paragraph, { key, widths, scope });
   return widths;
-}
-
-/**
- * The cell's horizontal insets after widening. A narrow table may share its grid lines or
- * keep legacy content alignment, and widening can end either; the larger insets of the two
- * geometries keep the word that widened the column whole in both.
- */
-function widenedCellInsets(
-  cell: SemanticTableCell,
-  collapsed: boolean,
-  current: { readonly left: number; readonly right: number }
-) {
-  if (!cell.centeredSideRules && !cell.legacyContentAlignment) return current;
-  const { centeredSideRules: _centered, legacyContentAlignment: _legacy, ...plain } = cell;
-  const fullStroke = cellContentInsets(plain, collapsed);
-  return {
-    left: Math.max(current.left, fullStroke.left),
-    right: Math.max(current.right, fullStroke.right),
-  };
 }
 
 /** The width a nested table needs from the column that holds it. */
@@ -728,27 +715,38 @@ export function autofitColumnMinimumsPt(
         continue;
       }
       if (cell.gridSpan !== 1 && !content) continue;
-      let least = -1;
-      let most = -1;
-      const insets = cellContentInsets(cell, collapsed);
-      for (const block of cell.blocks) {
-        if (block.kind === 'table') {
-          const nested = nestedTableMinimumPt(block, context, view);
-          least = Math.max(least, nested);
-          most = Math.max(most, nested);
+      const measured = cachedAutofitCellWidths(cell, collapsed, context, view, () => {
+        let least = -1;
+        let most = -1;
+        const insets = cellContentInsets(cell, collapsed);
+        for (const block of cell.blocks) {
+          if (block.kind === 'table') {
+            const nested = nestedTableMinimumPt(block, context, view);
+            least = Math.max(least, nested);
+            most = Math.max(most, nested);
+          }
+          if (block.kind !== 'paragraph') continue;
+          const widths = paragraphContentWidthsPt(block, {
+            context,
+            view,
+            tableCellStyle: cell.styleFormatting,
+          });
+          least = Math.max(least, widths.min);
+          most = Math.max(most, widths.max);
         }
-        if (block.kind !== 'paragraph') continue;
-        const widths = paragraphContentWidthsPt(block, {
-          context,
-          view,
-          tableCellStyle: cell.styleFormatting,
-        });
-        least = Math.max(least, widths.min);
-        most = Math.max(most, widths.max);
-      }
+        const widened = widenedCellInsets(cell, collapsed, insets);
+        return {
+          least,
+          most,
+          left: insets.left,
+          right: insets.right,
+          wideLeft: widened.left,
+          wideRight: widened.right,
+        };
+      });
+      const { least, most } = measured;
       if (least < 0) continue;
-      const widened = widenedCellInsets(cell, collapsed, insets);
-      const around = widened.left + widened.right;
+      const around = measured.wideLeft + measured.wideRight;
       if (cell.gridSpan !== 1) {
         // A spanning cell also covers the gaps between the columns it spans.
         const covered = (cell.gridSpan - 1) * gapPt;
@@ -756,11 +754,11 @@ export function autofitColumnMinimumsPt(
           from: cell.gridColumn,
           count: cell.gridSpan,
           minimum: Math.max(0, least + around - covered),
-          current: Math.max(0, least + insets.left + insets.right - covered),
+          current: Math.max(0, least + measured.left + measured.right - covered),
         });
         continue;
       }
-      const needed = least + insets.left + insets.right;
+      const needed = least + measured.left + measured.right;
       if (needed > minimums[cell.gridColumn]!) minimums[cell.gridColumn] = needed;
       if (least + around > wide[cell.gridColumn]!) wide[cell.gridColumn] = least + around;
       if (most + around > widest[cell.gridColumn]!) widest[cell.gridColumn] = most + around;
@@ -868,7 +866,7 @@ export function autofitTargetPt(
  * no token can change, so the memo is exact; it dies with the pass.
  */
 const passWidths = new WeakMap<
-  TableAutofitContext,
+  object,
   WeakMap<
     SemanticTableStructure,
     { readonly contentWidthPt: number; readonly widths: readonly number[] }
@@ -885,8 +883,9 @@ export function autofitColumnWidthsPt(
   context: TableAutofitContext,
   view: AutofitView
 ): readonly number[] {
-  let byStructure = passWidths.get(context);
-  if (!byStructure) passWidths.set(context, (byStructure = new WeakMap()));
+  const owner = autofitReuseScope(context) ?? context;
+  let byStructure = passWidths.get(owner);
+  if (!byStructure) passWidths.set(owner, (byStructure = new WeakMap()));
   const known = byStructure.get(structure);
   if (known && known.contentWidthPt === contentWidthPt) return known.widths;
   if (structure.layoutFixed) {

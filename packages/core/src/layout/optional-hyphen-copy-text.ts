@@ -8,7 +8,7 @@
 import { OPTIONAL_HYPHEN_TEXT } from '../store/package/hyphen-text.ts';
 import { lineSegmentFor } from './line-segments.ts';
 import { isOptionalHyphenSpan } from './optional-hyphen-break.ts';
-import { paragraphLinesIndex } from './paragraph-lines.ts';
+import { paragraphLinesFor } from './paragraph-lines.ts';
 import { paragraphTextFromLayout } from './semantic-interaction.ts';
 import type { SemanticLayout } from './semantic-records.ts';
 
@@ -20,7 +20,7 @@ export function paragraphTextMarkingOptionalHyphens(
   const text = paragraphTextFromLayout(layout, paragraphId);
   if (!text.includes('­')) return text;
   const units = text.split('');
-  for (const { line } of paragraphLinesIndex(layout).get(paragraphId) ?? []) {
+  for (const { line } of paragraphLinesFor(layout, paragraphId) ?? []) {
     for (const span of lineSegmentFor(line, paragraphId)?.spans ?? []) {
       if (isOptionalHyphenSpan(span) && span.range.start < units.length) {
         units[span.range.start] = OPTIONAL_HYPHEN_TEXT;

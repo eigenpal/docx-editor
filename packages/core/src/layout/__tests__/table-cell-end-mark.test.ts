@@ -3,6 +3,7 @@ import { readOoxmlPart, serializeOoxmlPart } from '../../store/package/ooxml-tre
 import { createLayoutSession, layoutSemanticDocument, linesOf } from '../index.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { flowBlocksInBox, layoutRowFragment } from '../semantic-table-layout.ts';
+import { cellEndMarkHeight } from '../table-cell-end-mark.ts';
 import { readTableStructure } from '../semantic-table.ts';
 import type { PendingLine, TextMeasurer } from '../paragraph-flow.ts';
 import { glyphSizeFactorOf, type ResolvedRunStyle } from '../run-style.ts';
@@ -150,4 +151,29 @@ test('the same paragraph cannot reuse a break from a different cell-end role', (
     expect(placed.lines[0]!.box.height).toBeCloseTo(end ? 5 * 0.65 : 5, 5);
   }
   expect(cache.stats.hits).toBeGreaterThan(0);
+});
+
+test('reused mark styles still read current font availability and metrics', () => {
+  const part = load(table(paragraph('Content')));
+  const body = part.root.children[0]!;
+  if (body.kind === 'textValue') throw Error('Missing body');
+  const node = body.children.find((child) => child.kind === 'table')!;
+  const cell = readTableStructure(node, 100, 0)!.rows[0]!.cells[0]!;
+  let resolved = false;
+  let height = 10;
+  const deps = {
+    producer: 'changing-font',
+    nextLineId: () => 'line',
+    measurer: {
+      ...measurer,
+      hasResolvedFont: () => resolved,
+      lineMetrics: () => ({ height, baseline: height * 0.8 }),
+    },
+  };
+  expect(cellEndMarkHeight(cell, 100, deps)).toBe(0);
+  resolved = true;
+  expect(cellEndMarkHeight(cell, 100, deps)).toBe(10);
+  height = 24;
+  expect(cellEndMarkHeight(cell, 100, deps)).toBe(24);
+  expect(cellEndMarkHeight({ ...cell, hideEndMark: true }, 100, deps)).toBe(0);
 });

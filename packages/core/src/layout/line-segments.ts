@@ -10,6 +10,7 @@ import { paragraphFragmentsOnPage } from './story-fragments.ts';
 import type {
   LineRecord,
   ListMarkerRecord,
+  PageRecord,
   ParagraphFragmentRecord,
   SemanticLayout,
   StyleSpanRecord,
@@ -194,13 +195,64 @@ export function mergedPredecessorsOf(
   layout: SemanticLayout,
   paragraphId: string
 ): readonly string[] {
+  const position = mergedPositions(layout).get(paragraphId);
+  return position ? position.members.slice(0, position.at).reverse() : [];
+}
+
+/** Where a member first sits after another member of its fragment: members and its index. */
+interface MergedPosition {
+  readonly members: readonly string[];
+  readonly at: number;
+}
+
+const EMPTY_MERGED_POSITIONS: ReadonlyMap<string, MergedPosition> = new Map();
+const mergedPositionsByPage = new WeakMap<PageRecord, ReadonlyMap<string, MergedPosition>>();
+const mergedPositionsByLayout = new WeakMap<SemanticLayout, ReadonlyMap<string, MergedPosition>>();
+
+/**
+ * The FIRST fragment, in page and fragment order, that holds each paragraph after position 0.
+ *
+ * One walk per page record, reused by every layout that keeps the page, and one merge per
+ * layout. A position stores the shared member list and an index, not a copied prefix, so a
+ * merged run of n paragraphs costs O(n) here however many of its members are asked about.
+ */
+function mergedPositions(layout: SemanticLayout): ReadonlyMap<string, MergedPosition> {
+  const cached = mergedPositionsByLayout.get(layout);
+  if (cached) return cached;
+  let merged: Map<string, MergedPosition> | undefined;
   for (const page of layout.pages) {
-    for (const fragment of paragraphFragmentsOf(page)) {
-      const at = fragmentParagraphs(fragment).indexOf(paragraphId);
-      if (at > 0) return fragmentParagraphs(fragment).slice(0, at).reverse();
+    for (const [paragraphId, position] of mergedPositionsOnPage(page)) {
+      merged ??= new Map();
+      if (!merged.has(paragraphId)) merged.set(paragraphId, position);
     }
   }
-  return [];
+  const result = merged ?? EMPTY_MERGED_POSITIONS;
+  mergedPositionsByLayout.set(layout, result);
+  return result;
+}
+
+function mergedPositionsOnPage(page: PageRecord): ReadonlyMap<string, MergedPosition> {
+  const cached = mergedPositionsByPage.get(page);
+  if (cached) return cached;
+  let found: Map<string, MergedPosition> | undefined;
+  for (const fragment of paragraphFragmentsOf(page)) {
+    const members = fragmentParagraphs(fragment);
+    if (members.length < 2) continue;
+    // `indexOf` semantics: a member listed twice answers from its first position only, and a
+    // member first listed at position 0 is not after anyone in this fragment.
+    const seen = new Set<string>();
+    for (let at = 0; at < members.length; at += 1) {
+      const paragraphId = members[at]!;
+      if (seen.has(paragraphId)) continue;
+      seen.add(paragraphId);
+      if (at === 0) continue;
+      found ??= new Map();
+      if (!found.has(paragraphId)) found.set(paragraphId, { members, at });
+    }
+  }
+  const result = found ?? EMPTY_MERGED_POSITIONS;
+  mergedPositionsByPage.set(page, result);
+  return result;
 }
 
 /** Cached per fragment: the answer is a walk of every line, and most callers ask repeatedly. */
@@ -218,6 +270,20 @@ const fragmentParagraphsCache = new WeakMap<ParagraphFragmentRecord, readonly st
 export function fragmentParagraphs(fragment: ParagraphFragmentRecord): readonly string[] {
   const cached = fragmentParagraphsCache.get(fragment);
   if (cached) return cached;
+  // Ordinary paragraphs need membership only, not allocated segment geometry.
+  if (
+    (fragment.lines ?? []).every(
+      (line) =>
+        line.range.paragraphId === fragment.paragraphId &&
+        line.spans.every((span) => span.range.paragraphId === fragment.paragraphId) &&
+        (line.drawings ?? []).every((drawing) => drawing.paragraphId === fragment.paragraphId)
+    )
+  ) {
+    const members = [fragment.paragraphId];
+    fragmentParagraphsCache.set(fragment, members);
+    return members;
+  }
+
   // From the LINES, so the order is the order the reader meets them, and the fragment's own
   // name last if no line named it — an empty paragraph has no span to speak for it.
   const held: string[] = [];

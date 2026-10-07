@@ -36,7 +36,7 @@ import type {
 } from '@docx-editor.dev/core/layout';
 import { numberingFlowBlocks } from '../layout/hidden-paragraph-mark.ts';
 import { paragraphTextOf } from '../store/store/tree-ops.ts';
-import { paragraphLinesIndex } from '../layout/paragraph-lines.ts';
+import { paragraphLinesFor } from '../layout/paragraph-lines.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from '../layout/revision-projection.ts';
 import { mergedFlowBlocks } from '../layout/story-roots.ts';
 
@@ -145,7 +145,7 @@ export function shownPosition(
   position: SemanticPosition,
   view: RevisionView
 ): SemanticPosition {
-  if (paragraphLinesIndex(layout).has(position.paragraphId)) return position;
+  if (paragraphLinesFor(layout, position.paragraphId).length > 0) return position;
   const parent = parentNodeOf(part, position.paragraphId);
   if (parent === null) return position;
   const target = joinTargetOf(parent.children, position.paragraphId, view);
@@ -169,7 +169,7 @@ export function removedCaretParagraphEdit(
   view: RevisionView,
   direction: 'backward' | 'forward'
 ): { readonly ops: TreeDocOp[]; readonly caret: SemanticPosition } | null {
-  if (paragraphLinesIndex(layout).has(position.paragraphId)) return null;
+  if (paragraphLinesFor(layout, position.paragraphId).length > 0) return null;
   const parent = parentNodeOf(part, position.paragraphId);
   if (parent === null) return null;
   if (!hiddenMarkRemovedIds(parent.children, view).has(position.paragraphId)) return null;

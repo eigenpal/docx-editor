@@ -26,18 +26,24 @@ export function prepareSectionBlocks<Node extends object, Prepared>(
 }
 
 /** A text edit changes a paragraph root without changing its place in drawing order. */
-export function sameSectionParagraphOrder(
-  before: readonly { readonly kind: string; readonly id: string }[],
-  after: readonly { readonly kind: string; readonly id: string }[]
+export function sameSectionParagraphOrder<
+  Node extends { readonly kind: string; readonly id: string },
+>(
+  before: readonly Node[],
+  after: readonly Node[],
+  unchangedTableOrder?: (before: Node, after: Node) => boolean
 ): boolean {
   return (
     before.length === after.length &&
     before.every((node, index) => {
       const next = after[index]!;
-      // A table's nested story order requires the exact subtree, not merely its ID.
+      // A table needs an immutable subtree proof; its ID alone cannot prove order.
       return (
         node === next ||
-        (node.kind === 'paragraph' && next.kind === 'paragraph' && node.id === next.id)
+        (node.kind === 'paragraph' && next.kind === 'paragraph' && node.id === next.id) ||
+        (node.kind === 'table' &&
+          next.kind === 'table' &&
+          unchangedTableOrder?.(node, next) === true)
       );
     })
   );

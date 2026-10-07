@@ -1,3 +1,6 @@
+import { drawingInputsUnchangedByTextEdit } from './drawing-text-only-change.ts';
+import { tryUpdateTableSession, reuseUnchangedLayout } from './table-text-session.ts';
+import { carryTableCaretContexts } from './table-caret-context.ts';
 import { createDrawingExclusionPasses } from './drawing-exclusion-passes.ts';
 import { resolveBodyRefFields } from './style-separator-ref.ts';
 import { styleSeparatorRanges, styleSeparatorToken } from './style-separator-group.ts';
@@ -85,7 +88,7 @@ import { positionedTableDeps } from './table-pinned-break.ts';
 import {
   prepareParagraphBreakInputs,
   bodyParagraphBreakKey,
-  breakPreparedParagraph,
+  breakPreparedParagraphLazily,
   createParagraphBreakRetention,
 } from './paragraph-break-request.ts';
 import { collapsingSpaceAfter, resolveParagraphLayoutInputs } from './style-cascade.ts';
@@ -369,6 +372,7 @@ export function layoutSemanticDocument(
       laid.layout
     );
     const finalized = finalizePageFieldProjection(annotated);
+    carryTableCaretContexts(laid.layout, finalized);
     // The notes pass mints overflow sheets from this layout; publish what index they land at.
     registerOverflowPageShell(finalized, (_sectionAnchorIndex, documentPageIndex, box) =>
       laid.overflowShellAt(documentPageIndex, box)
@@ -391,6 +395,7 @@ export function layoutSemanticDocument(
       };
     }
     const withBoundaries = attachContentControlBoundaries(projected, part, controlToken);
+    carryTableCaretContexts(layout, withBoundaries);
     if (options.session) {
       options.session.previous = withBoundaries;
     }
@@ -1218,7 +1223,12 @@ function layoutBlocksPass(
       prepared,
       keys,
       paragraphDocumentOrder:
-        reusable && sectionPrep.sameSectionParagraphOrder(reusable.bodies, bodies)
+        reusable &&
+        sectionPrep.sameSectionParagraphOrder(
+          reusable.bodies,
+          bodies,
+          drawingInputsUnchangedByTextEdit
+        )
           ? reusable.paragraphDocumentOrder
           : paragraphDocumentOrderOf(
               prepared,
@@ -1302,35 +1312,10 @@ function layoutBlocksPass(
   // layout still describes it exactly — re-placing it would allocate a second set of
   // identical records and destroy the identity a consumer uses to skip repainting.
   if (comparable && firstChanged === prepared.length && prepared.length === session.keys.length) {
-    // Keep prior content-control boundaries: `finish` re-attaches them and must see the same
-    // token/list to return `pages` by identity rather than mapping a twin array.
-    const unchanged: SemanticLayout = withContentControlMetadata(
-      { revision, pages: previous!.pages },
-      previous!
-    );
-    const translatedEndLineCounter =
-      lineCounterStart + (session.endLineCounter - session.startLineCounter);
-    session.previous = unchanged;
-    session.startLineCounter = lineCounterStart;
-    session.endLineCounter = translatedEndLineCounter;
-    // `comparable` already required parity equality whenever the session depends on it.
+    const unchanged = reuseUnchangedLayout(session, revision, lineCounterStart);
     session.startPageParity = startPageParity;
-    session.stats = {
-      placed: 0,
-      total: prepared.length,
-      reusedPages: previous!.pages.length,
-      fullPasses: session.stats.fullPasses,
-    };
     publishRetainedKeys();
-    return {
-      layout: unchanged,
-      pages: unchanged.pages,
-      lineCounter: translatedEndLineCounter,
-      endCursorY: session.endCursorY,
-      endSpaceAfter: session.endSpaceAfter,
-      endsOpenPage: session.endsOpenPage,
-      overflowShellAt,
-    };
+    return { ...unchanged, overflowShellAt };
   }
 
   const positionedFlow = tableFloat.positionedTableFlow(positionedTables, flowKeys);
@@ -1636,6 +1621,23 @@ function layoutBlocksPass(
     ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
   };
 
+  const tableUpdate = tryUpdateTableSession({
+    session,
+    previous: prepassMemo,
+    prepass,
+    inputsEqual: prepassInputsValid,
+    eligible: resumable && !furnitureHasWrap && !options.drawingExclusionZonesByPage?.size,
+    firstChanged,
+    commonSuffix,
+    deps: tableDeps,
+    revision,
+    lineCounterStart,
+  });
+  if (tableUpdate) {
+    publishRetainedKeys();
+    return { ...tableUpdate, overflowShellAt };
+  }
+
   type PreparedParagraph = Extract<PreparedBlock, { kind: 'paragraph' }>;
 
   const firstLineSlotOf = createListFirstLineMetrics(listItems, measurer);
@@ -1739,15 +1741,13 @@ function layoutBlocksPass(
       });
       rememberBreakKey(paragraphId, cacheKey);
     }
-    return breakPreparedParagraph({
+    return breakPreparedParagraphLazily(cache, cacheKey, () => ({
       compatibilityMode: options.compatibilityMode,
       paragraph: entry.paragraph,
       paragraphId,
       indentLeft: entry.indent.left,
       available,
       measurer,
-      cache,
-      cacheKey,
       formatting: entry,
       producer,
       styleCascade,
@@ -1778,7 +1778,7 @@ function layoutBlocksPass(
         ...(localPageZones.length > 0 ? { pageExclusionZones: localPageZones } : {}),
         ...(suppressChrome ? { suppressEmptyPlaceholderLine: true } : {}),
       },
-    });
+    }));
   };
 
   const pageExclusionZonesForEntry = (

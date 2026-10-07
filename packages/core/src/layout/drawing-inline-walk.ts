@@ -29,11 +29,15 @@ export function walkDrawingRunContent(
   for (const child of paragraph.children) visitInline(child, 0);
 }
 
+const paragraphsWithoutDrawingAtoms = new WeakSet<OoxmlNode>();
+
 /** Visit addressable drawing atoms with their transparent-container ancestry. */
 export function walkDrawingAtoms(
   paragraph: Exclude<OoxmlNode, { kind: 'textValue' }>,
   visit: (node: OoxmlNode, containers: readonly OoxmlNode[], run: OoxmlNode) => void
 ): void {
+  if (paragraphsWithoutDrawingAtoms.has(paragraph)) return;
+  let found = false;
   const containers: OoxmlNode[] = [];
   const walk = (child: OoxmlNode, depth: number): void => {
     if (depth >= MAX_INLINE_CONTAINER_DEPTH) return;
@@ -44,6 +48,7 @@ export function walkDrawingAtoms(
           isRunLevelMcAlternateContent(inner) ||
           isLegacyVmlAtom(inner)
         ) {
+          found = true;
           visit(inner, containers, child);
         }
       }
@@ -61,4 +66,5 @@ export function walkDrawingAtoms(
     containers.pop();
   };
   for (const child of paragraph.children) walk(child, 0);
+  if (!found) paragraphsWithoutDrawingAtoms.add(paragraph);
 }
