@@ -1,18 +1,6 @@
-// One undo step per typing run.
-//
-// The type buffer lands keystrokes through one transaction per flush, and a flush runs on
-// the next task, so at an ordinary typing speed every character was its own transaction
-// and its own undo step. A run of typing is one user intent, so its flushes share one
-// history group: the store extends the entry the run opened, and a collaboration session
-// merges the frames into one shared undo item however long the run takes.
-//
-// The run is scoped by intent, never by a clock. It continues only while the caret is
-// exactly where the run's last flush left it. Anything else ends it: a caret move by key,
-// pointer or API, any other edit (Backspace, Delete, Enter, paste, formatting), undo and
-// redo, a typing format armed at the caret, or a change from elsewhere (a collaborator, an
-// automation write, another editor on the same store) to the paragraph the run types in.
-// Typing over a selection starts a run, so the replacement and the text typed after it are
-// one step.
+// Typing uses short undo groups without changing transaction or repaint batching.
+// A pause or a maximum group duration starts a new group on the next flush.
+// Caret movement, another command, and edits to this paragraph also end the group.
 
 import type { HistoryGroup, OoxmlPackage, TreeModelChange } from '@docx-editor.dev/core/store';
 import type { SemanticSelection } from '../layout/semantic-interaction.ts';
@@ -36,21 +24,38 @@ function caretKey(selection: SemanticSelection): string | null {
   return `${head.paragraphId}\u0000${head.offset}`;
 }
 
+const TYPING_IDLE_MS = 1000;
+const TYPING_GROUP_MS = 2000;
+
 /** The open typing run of one surface. */
 export class TypingHistory {
   private group: HistoryGroup | undefined;
   private expected: string | null = null;
+  private startedAt = 0;
+  private lastTypedAt = 0;
   private paragraphId: string | null = null;
   /** The run's paragraph as its last flush left it, to tell whether a later change touched it. */
   private landedNode: OoxmlNode | null = null;
 
-  constructor(private readonly currentPackage: () => OoxmlPackage) {}
+  constructor(
+    private readonly currentPackage: () => OoxmlPackage,
+    private readonly now: () => number = () => performance.now()
+  ) {}
 
   /** The history group for a flush that starts at `selection`. */
   groupAt(selection: SemanticSelection): HistoryGroup {
-    if (this.group === undefined || caretKey(selection) !== this.expected) {
+    const now = this.now();
+    if (
+      this.group === undefined ||
+      caretKey(selection) !== this.expected ||
+      now - this.lastTypedAt >= TYPING_IDLE_MS ||
+      now - this.startedAt >= TYPING_GROUP_MS ||
+      now < this.lastTypedAt
+    ) {
       this.group = Symbol('typing');
+      this.startedAt = now;
     }
+    this.lastTypedAt = now;
     return this.group;
   }
 

@@ -1,11 +1,11 @@
-// A typing run is one undo step however slowly it is typed. Every keystroke here lands in
+// Typing within the timing limits stays in one undo step. Every keystroke here lands in
 // its own task, the way real typing does, so each one is its own type-buffer flush and its
 // own transaction; the grouping under test is what keeps them one undo step.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { serializeOoxmlPart } from '../../store/index.ts';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import { docx, mount as mountFixture, paragraph, putCaret } from './paginated-surface-fixtures.ts';
@@ -125,7 +125,7 @@ describe('typing history groups', () => {
     expect(undoTrail(surface, 3)).toEqual(['Hello thre', 'Hello there', '']);
   });
 
-  test('a long run with spaces and punctuation is still one step', async () => {
+  test('a quick run with spaces and punctuation stays one step', async () => {
     const { surface, container } = mount(paragraph(''));
     const sentence = 'The cat sat on the mat, and then it ran away to sleep.';
     await typeSlowly(container, sentence);
@@ -213,4 +213,49 @@ describe('typing history groups', () => {
       container.remove();
     }
   });
+});
+
+test('a pause splits words while Enter remains a separate undo step', async () => {
+  const { surface, container } = mount(paragraph(''));
+  let now = 0;
+  const clock = spyOn(performance, 'now').mockImplementation(() => now);
+  try {
+    await typeSlowly(container, 'One ');
+    now = 999;
+    await typeSlowly(container, 'two');
+    now = 1999;
+    await typeSlowly(container, ' three');
+    surface.splitParagraph();
+    await typeSlowly(container, 'Four five');
+    expect(undoTrail(surface, 4)).toEqual(['One two three\n', 'One two three', 'One two', '']);
+    for (let step = 0; step < 4; step++) surface.redo();
+    expect(surface.session.bodyText()).toBe('One two three\nFour five');
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+test('continuous typing is bounded without adding transactions or losing its caret', async () => {
+  const { surface, container } = mount(paragraph(''));
+  let now = 0;
+  const clock = spyOn(performance, 'now').mockImplementation(() => now);
+  const revision = surface.state().revision;
+  try {
+    for (const key of 'abcdef') {
+      await typeSlowly(container, key);
+      now += 600;
+    }
+    expect(surface.state().revision).toBe(revision + 6);
+    surface.undo();
+    expect(surface.session.bodyText()).toBe('abcd');
+    expect(surface.state().selection.head.offset).toBe(4);
+    surface.redo();
+    expect(surface.session.bodyText()).toBe('abcdef');
+    expect(surface.state().selection.head.offset).toBe(6);
+    surface.undo();
+    surface.undo();
+    expect(surface.session.bodyText()).toBe('');
+  } finally {
+    clock.mockRestore();
+  }
 });

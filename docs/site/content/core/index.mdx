@@ -76,7 +76,7 @@ For more information, see [Navigate a document](/docs/2.x/guides/navigation).
 
 ### Typing and undo
 
-A run of typing is one undo step, however slowly it is typed. These actions start a new step:
+Typing uses short undo groups. A pause of at least 1 second starts a new group on the next keystroke. Continuous typing starts a new group after 2 seconds. These actions also start a new step:
 
 - A caret move by keyboard, pointer, or API.
 - Another edit, such as Backspace, Delete, Enter, paste, or a formatting command.
@@ -84,7 +84,7 @@ A run of typing is one undo step, however slowly it is typed. These actions star
 - Undo and redo.
 - An edit to the same paragraph by a collaborator, by automation, or by another editor on the same document.
 
-Each Backspace, Delete, and Enter is its own undo step. Typing over a selection is one step that includes the text typed after it. Collaborative sessions group typing runs the same way. Separate editor deletion and formatting commands stay separate in collaborative sessions too. Undo restores the original text selection, including selections across paragraphs. Redo restores the final selection.
+Each Backspace, Delete, and Enter is its own undo step. Typing over a selection joins the text typed within the same time limits. Collaborative sessions group typing runs the same way. Separate editor deletion and formatting commands stay separate in collaborative sessions too. Undo restores the original text selection, including selections across paragraphs. Redo restores the final selection.
 
 Caret formatting has its own undo step. For example, type text, turn on **Bold**, and type more text. Undo removes the second text run, then undoes **Bold**, then removes the first text run. Caret formatting stays local to the editor and does not change the document until you type.
 

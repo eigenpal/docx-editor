@@ -4,8 +4,8 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // Typing runs on collaborating editors: one shared undo item per run, bounded by the same
-// intent rules as local history, never by the capture clock.
-import { afterEach, expect, test } from 'bun:test';
+// intent and timing rules as local history, independently of the shared capture clock.
+import { afterEach, expect, spyOn, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { collaborationModule } from '../collaboration-module.ts';
@@ -366,4 +366,56 @@ test('deletion undo restores the caret while retaining a concurrent edit through
   expect(saveReopenDigest(reopened.editor.surface!.session.currentPackage())).toEqual(
     saveReopenDigest(bob.editor.surface!.session.currentPackage())
   );
+});
+
+test('a pause splits shared typing without discarding the earlier words', async () => {
+  const { alice, bob, text, converge } = await pair();
+  caret(alice.editor, 0, 3);
+  let now = 0;
+  const clock = spyOn(performance, 'now').mockImplementation(() => now);
+  try {
+    await typeSlowly(alice, ' alpha');
+    now = 1000;
+    await typeSlowly(alice, ' beta');
+    converge();
+    alice.editor.exec({ type: 'undo' });
+    converge();
+    expect(text(bob)).toBe('one alpha\ntwo');
+    alice.editor.exec({ type: 'redo' });
+    converge();
+    expect(text(bob)).toBe('one alpha beta\ntwo');
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+test('bounded shared typing preserves concurrent deletion through reconnect and reopen', async () => {
+  const { alice, bob, text, converge, peers } = await pair(WITH_HEADER, offlineHarness);
+  caret(alice.editor, 0, 3);
+  caret(bob.editor, 1, 3);
+  peers.pause();
+  let now = 0;
+  const clock = spyOn(performance, 'now').mockImplementation(() => now);
+  try {
+    for (const key of 'abcdef') {
+      await typeSlowly(alice, key);
+      now += 600;
+    }
+    bob.editor.surface!.deleteBackward();
+    peers.resume();
+    converge();
+    alice.editor.exec({ type: 'undo' });
+    converge();
+    expect(text(bob)).toBe('oneabcd\ntw');
+    expect(alice.editor.surface!.state().selection.head.offset).toBe(7);
+    alice.editor.exec({ type: 'redo' });
+    converge();
+    expect(text(bob)).toBe('oneabcdef\ntw');
+    const reopened = mount({ document: new Uint8Array(await bob.editor.save()) });
+    expect(saveReopenDigest(reopened.editor.surface!.session.currentPackage())).toEqual(
+      saveReopenDigest(bob.editor.surface!.session.currentPackage())
+    );
+  } finally {
+    clock.mockRestore();
+  }
 });
