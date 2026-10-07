@@ -36,7 +36,8 @@ export interface EditorReviewHits {
    * A point hits the glyph band of a line, the same band a text highlight marks. A point in
    * the spacing between lines hits nothing. `query` filters the items the same way it
    * filters `getReviewItems()`. Coordinates that are not finite numbers return an empty
-   * array.
+   * array. Each call reads the whole review queue, so call it from a click, not on every
+   * pointer move.
    *
    * @example
    * ```ts

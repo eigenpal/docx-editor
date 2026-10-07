@@ -260,7 +260,7 @@ export function createReviewItemsAt(deps: {
       const live = liveFrame();
       if (!live) return [];
       const { frame, origin } = live;
-      const placement = findReviewPlacement(deps.placements, key, { placement: false });
+      const placement = findReviewPlacement(deps.placements, key);
       if (!placement) return [];
       const pages = new Set(
         frame.layout.pages.filter((page) => painted(frame, page)).map((page) => page.index)

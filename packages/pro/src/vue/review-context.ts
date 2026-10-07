@@ -118,13 +118,14 @@ export function useReviewAuthor(
   author: MaybeRefOrGetter<string | undefined>
 ): ComputedRef<ReviewAuthorInfo | undefined> {
   const rail = inject(ReviewContextKey, null);
-  const roster = useReviewAuthors();
+  // Inside the rail its own author map answers; only a caller outside it reads the roster.
+  const roster = rail ? null : useReviewAuthors();
   return computed(() => {
     const name = toValue(author);
     if (name === undefined) return undefined;
     return rail
       ? rail.value.authorInfo.get(name)
-      : roster.value.find((info) => info.author === name);
+      : roster?.value.find((info) => info.author === name);
   });
 }
 

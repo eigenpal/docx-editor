@@ -36,7 +36,7 @@ import { ReviewReplyScope, useRail, useReviewItem, useReviewLabel } from './revi
 import { useReviewStableId } from './stable-id.ts';
 import type { ReviewItemView } from './useReview.ts';
 import { authorCardStyle, authorSlot } from './review-author-styles.ts';
-import { isCardControl } from '../review/card-controls.ts';
+import { isCardControl, keepsPressFocus } from '../review/card-controls.ts';
 
 const { ReviewResolve, ReviewReopen } = createCommentResolutionParts({
   useRail,
@@ -554,7 +554,7 @@ export const ReviewCard = markPart(
           ...(!resolvedCollapsible
             ? {
                 onMousedown: (event: MouseEvent) => {
-                  if (isCardControl(event.target)) return;
+                  if (keepsPressFocus(event.target)) return;
                   (event.currentTarget as HTMLElement).focus({ preventScroll: true });
                 },
                 onClick: (event: MouseEvent) => {

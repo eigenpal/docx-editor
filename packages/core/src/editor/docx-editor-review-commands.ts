@@ -115,11 +115,22 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
   const bulkPlan = (command: Extract<EditorCommand, { type: 'resolveAllReviewChanges' }>) => {
     const styles = stylesPartOf(deps.surface()!.session.currentPackage());
     const items = all();
-    // A paired replacement's key selects both of its halves.
+    // A paired replacement's key selects both of its halves. The paired queue is read once,
+    // however many pair keys the command names.
+    let pairs: ReadonlyMap<string, ReviewItemPlacement> | undefined;
+    const pairOf = (key: string) => {
+      pairs ??= new Map(
+        deps
+          .placements({ placement: false, pairReplacements: true })
+          .filter((entry) => isReplacementPairKey(entry.key))
+          .map((entry) => [entry.key, entry])
+      );
+      return pairs.get(key);
+    };
     const selected = new Set(
       command.keys?.flatMap((key) => {
         if (!isReplacementPairKey(key)) return [key];
-        const pair = findReviewPlacement(deps.placements, key, { placement: false });
+        const pair = pairOf(key);
         return pair ? resolutionKeysOf(pair.item) : [key];
       }) ??
         (command.scope === 'document' ? items : deps.visible())
@@ -243,7 +254,7 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     );
     if (protectedWrite) return protectedWrite;
     deps.surface()!.flushPendingInput();
-    const item = findReviewPlacement(deps.placements, key, { placement: false })?.item;
+    const item = findReviewPlacement(deps.placements, key)?.item;
     if (!item || item.kind !== 'revision')
       return { ok: false, code: 'notFound', reason: 'no revision with that key' };
     if (item.readOnly)

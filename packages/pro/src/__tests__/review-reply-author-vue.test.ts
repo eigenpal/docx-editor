@@ -55,6 +55,26 @@ test('a host input in a card keeps focus, and pressing it does not activate the 
   }
 });
 
+test('a click on the card text activates the card', async () => {
+  const mounted = mountEditorTree(
+    () => [],
+    TRACKED,
+    () => [h(DocxEditorReview)],
+    [reviewModule()]
+  );
+  try {
+    await flush();
+    await waitFor(() => mounted.container.querySelector('[data-testid="review-summary"]') !== null);
+    const card = () => mounted.container.querySelector<HTMLElement>('[data-testid="review-card"]')!;
+    expect(card().hasAttribute('data-active')).toBe(false);
+    mounted.container.querySelector<HTMLElement>('[data-testid="review-summary"]')!.click();
+    await flush();
+    expect(card().hasAttribute('data-active')).toBe(true);
+  } finally {
+    mounted.unmount();
+  }
+});
+
 test('useReviewAuthor outside the rail reads the declared colour from the roster', async () => {
   const SidePanelProbe = defineComponent({
     setup() {

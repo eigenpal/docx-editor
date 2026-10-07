@@ -73,7 +73,7 @@ import {
   useRailWindow,
 } from './use-rail-geometry';
 import { useReviewSlotSizing } from './use-review-slot-sizing';
-import { isCardControl } from '../review/card-controls.ts';
+import { isCardControl, keepsPressFocus } from '../review/card-controls.ts';
 import { useReview, type ReviewItemView } from './useReview';
 import {
   authorAccent,
@@ -1530,7 +1530,7 @@ function ReviewCard({ className, asChild, hidden, children }: ReviewPartProps) {
     ...(!resolvedCollapsible
       ? {
           onMouseDown: (event: React.MouseEvent) => {
-            if (isCardControl(event.target)) return;
+            if (keepsPressFocus(event.target)) return;
             (event.currentTarget as HTMLElement).focus({ preventScroll: true });
           },
           onClick: (event: React.MouseEvent) => {

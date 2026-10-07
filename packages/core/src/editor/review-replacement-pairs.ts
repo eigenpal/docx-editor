@@ -169,17 +169,18 @@ export function isReplacementPairKey(key: string): boolean {
 }
 
 /**
- * The placement a key names. A paired key is looked up in a paired read, so key-addressed
- * verbs accept it whatever query produced it.
+ * The placement a key names, for key-addressed verbs that need the item and not its geometry.
+ * A paired key only exists in a paired read, so it is looked up there directly, whatever
+ * query produced it. One read per call, without the layout pass.
  */
 export function findReviewPlacement(
   placements: (query?: ReviewItemQuery) => readonly ReviewItemPlacement[],
-  key: string,
-  query?: ReviewItemQuery
+  key: string
 ): ReviewItemPlacement | undefined {
-  const found = placements(query).find((entry) => entry.key === key);
-  if (found || !isReplacementPairKey(key)) return found;
-  return placements({ ...query, pairReplacements: true }).find((entry) => entry.key === key);
+  const query: ReviewItemQuery = isReplacementPairKey(key)
+    ? { placement: false, pairReplacements: true }
+    : { placement: false };
+  return placements(query).find((entry) => entry.key === key);
 }
 
 /** The store keys a resolution must cover: the halves of a pair, else the item itself. */

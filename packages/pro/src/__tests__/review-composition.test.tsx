@@ -139,6 +139,23 @@ describe('review compound composition', () => {
     expect(card.hasAttribute('data-active')).toBe(false);
   });
 
+  test('a click on the card text activates the card', () => {
+    const view = render(
+      <DocxEditorRoot document={TRACKED} modules={[reviewModule()]}>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const card = view.getByTestId('review-card');
+    expect(card.hasAttribute('data-active')).toBe(false);
+    act(() => {
+      view.getByTestId('review-summary').click();
+    });
+    expect(view.getByTestId('review-card').hasAttribute('data-active')).toBe(true);
+  });
+
   test('keeps direct root Card children as a compatibility shorthand', () => {
     const view = render(
       <DocxEditorRoot document={TRACKED} modules={[reviewModule()]}>
