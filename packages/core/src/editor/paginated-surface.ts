@@ -1,3 +1,4 @@
+import { DocumentSelectionHistory } from './document-selection-history.ts';
 import {
   armedFormatAt,
   armCaretFormat,
@@ -623,14 +624,21 @@ export function mountPaginatedSurface(
   const caretFormatHistory = new CaretFormatHistory<CaretFormatSnapshot>(
     collaborationSession ?? session
   );
+  const documentSelectionHistory = new DocumentSelectionHistory(
+    collaborationSession ?? session,
+    () => selection,
+    () => partOfNodeId(session, selection.head.paragraphId) ?? session.part(),
+    () => session.packageRevision()
+  );
   function moveDocumentHistory(direction: 'undo' | 'redo'): void {
-    if (collaborationSession) {
-      if (collaborationSession[direction]()) restoreSelection(null);
-      return;
-    }
-    const revision = session.packageRevision();
-    const mark = session[direction]();
-    if (session.packageRevision() !== revision) restoreSelection(mark);
+    let mark: ReturnType<TreeDocxSession['undo']> = null;
+    const result = documentSelectionHistory.step(direction, () => {
+      if (collaborationSession) return collaborationSession[direction]();
+      const revision = session.packageRevision();
+      mark = session[direction]();
+      return session.packageRevision() !== revision;
+    });
+    if (result.changed) restoreSelection(result.selection ?? mark);
   }
   function restoreCaretFormat(value: CaretFormatSnapshot): void {
     selectionSync.noteModelMoved();
@@ -3024,6 +3032,7 @@ export function mountPaginatedSurface(
     options:
       | {
           readonly keepCellSelection?: boolean;
+          readonly automation?: boolean;
           /**
            * Re-anchor this armed typing format at the POST-edit caret instead of retiring
            * it. Word's rule: Backspace, Delete and Enter keep the typing format — bold
@@ -3039,6 +3048,7 @@ export function mountPaginatedSurface(
     // itself commits through here with an empty buffer.
     flushTypeBuffer();
     if (!flushingTypeBuffer) typingHistory.end();
+    const finishSelectionHistory = documentSelectionHistory.begin();
     // An edit invalidates the rectangle: its cells' content has changed, and the collapsed
     // DOM selection it installed still points at the PRE-edit anchor. Left standing it kept
     // painting a highlight over text that had moved, kept suppressing selection adoption, and
@@ -3061,8 +3071,11 @@ export function mountPaginatedSurface(
     commitRunDepth += 1;
     let refused = false;
     try {
-      const result = commitHistoryGroup.around(surface, run, (r) =>
-        typeof r === 'boolean' ? r : r.committed
+      const result = commitHistoryGroup.around(
+        surface,
+        run,
+        (r) => (typeof r === 'boolean' ? r : r.committed),
+        !options?.automation
       );
       const rejection = typeof result === 'boolean' || !result.rejected ? null : result;
       refused = rejection !== null;
@@ -3109,6 +3122,7 @@ export function mountPaginatedSurface(
       // the paint: under input pressure `publishAfterCommit` hands layout to a later task, and
       // a remote caret must not wait on this author's repaint to stop pointing at a position
       // they have left.
+      finishSelectionHistory();
       publishLocalCollaborationSelection();
     } catch (error) {
       if ((commitRunDepth -= 1) === 0 && commitPaintOwed) {
@@ -5189,16 +5203,8 @@ export function mountPaginatedSurface(
     revisionDisplayMode: reviewDisplayMode,
     replacementLanding,
     applyAutomationOps: (staged, scope, packageEdits, requiresReview = false) => {
-      // THE SAME PATH A KEYSTROKE TAKES, minus the keystroke. `applyOps` is where viewing
-      // refuses and where suggesting turns an edit into a proposal, and `commit` is where the
-      // refusal is recorded, the caret is re-clamped and the pages are repainted. A host that
-      // reached `session.applyTreeOps` instead — as this one did — typed into a document open
-      // for viewing and wrote permanent text while the chrome said Suggesting.
-      //
-      // The scope comes from the CALLER, because the handle named a story. It defaults to the
-      // body rather than to the reader's story: the input path follows the reader into a
-      // header, and a scripted edit must not, or an object model holding a body paragraph
-      // would write into whatever furniture happened to be open.
+      // Automation shares edit gates and repainting but retains its capture policy.
+      // Its explicit story remains independent of the reader's active story.
       let result: ReturnType<TreeDocxSession['applyTreeOps']> = {
         committed: false,
         rejected: false,
@@ -5266,7 +5272,8 @@ export function mountPaginatedSurface(
           const order = paragraphOrder();
           if (order.length === 0) return null;
           return clampedToDocument(editingLayout(), order, selection);
-        }
+        },
+        { automation: true }
       );
       return result;
     },
@@ -5767,7 +5774,7 @@ export function mountPaginatedSurface(
    * selection — so the caret stays where the user left it rather than jumping to the top.
    */
   function restoreSelection(
-    mark: { paragraphId: string; start: number; end: number } | null
+    mark: { paragraphId: string; start: number; end: number } | SemanticSelection | null
   ): void {
     // History restores text, input locale, and selection together. Retire pending typing
     // formats so the restored caret cannot inherit formatting armed against the old tree.
@@ -5780,31 +5787,23 @@ export function mountPaginatedSurface(
     selectionSync.noteModelMoved();
     flushLayout();
     if (!mark) {
-      // No recorded mark — a cross-paragraph edit records none, because a mark addresses one
-      // paragraph. The caret must still be CLAMPED to the tree undo just restored: leaving it
-      // pointed past the end of a shortened paragraph, or at a paragraph the undo removed,
-      // and every later keystroke was refused. Select All, type, undo froze the editor.
+      // Commands without selection metadata still need a caret within the restored tree.
       setSelection(clampedToDocument(editingLayout(), paragraphOrder(), selection));
       return;
     }
-    // CLAMPED LIKE THE BRANCH ABOVE. A mark addresses one paragraph of whatever story the
-    // edit was made in, and the reader may be somewhere else by the time they press Ctrl+Z:
-    // edit the header, click into the body, undo, and the caret was installed on a header
-    // paragraph while the body was the active story. The DOM caret then landed in furniture
-    // that is `contenteditable="false"`, and every keystroke after it was refused as
-    // `unknown-paragraph` — the editor looked dead until the user clicked.
+    if ('anchor' in mark) {
+      const order = paragraphOrder();
+      const local =
+        !collaborationSession &&
+        [mark.anchor, mark.head].every((p) => order.includes(p.paragraphId));
+      setSelection(local ? mark : clampedToDocument(editingLayout(), order, mark));
+      return;
+    }
     const restored = {
       anchor: { paragraphId: mark.paragraphId, offset: mark.start },
       head: { paragraphId: mark.paragraphId, offset: mark.end },
     };
-    // A MARK FROM ANOTHER STORY IS NOT AN ADDRESS HERE. It names one paragraph of whatever
-    // story the edit was made in, and the reader may be somewhere else by the time they press
-    // Ctrl+Z: edit the header, click into the body, undo, and the caret was installed on a
-    // header paragraph while the body was the active story. The DOM caret then landed in
-    // furniture that is `contenteditable="false"` and every keystroke after it was refused as
-    // `unknown-paragraph` — the editor looked dead until the user clicked. Clamped exactly
-    // like the no-mark branch above; a mark the active story does hold is installed verbatim,
-    // which is what keeps an ordinary undo on the offset it recorded.
+    // Another story's mark must stay outside the active editable region.
     setSelection(
       paragraphOrder().includes(mark.paragraphId)
         ? restored

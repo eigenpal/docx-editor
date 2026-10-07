@@ -1204,7 +1204,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'A run of typing is one undo step at any typing speed. A caret move, another edit, a typing format set at the caret, undo, redo, or a collaborator edit to the same paragraph starts a new step. Caret formatting has its own local undo step without changing shared document content. Each Backspace, Delete, and Enter is its own step. Typing over a selection is one step with the text typed after it. Collaborative sessions group typing runs the same way; other collaborative edits made within 5 seconds of each other can share one step.',
+      'A run of typing is one undo step at any typing speed. A caret move, another edit, a typing format set at the caret, undo, redo, or a collaborator edit to the same paragraph starts a new step. Caret formatting has its own local undo step without changing shared document content. Each Backspace, Delete, and Enter is its own step. Typing over a selection is one step with the text typed after it. Collaborative sessions use the same grouping rules. Undo restores the original text selection across paragraphs; redo restores the final selection.',
   },
   {
     id: 'collab.i18n',

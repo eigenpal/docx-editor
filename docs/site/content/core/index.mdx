@@ -84,7 +84,7 @@ A run of typing is one undo step, however slowly it is typed. These actions star
 - Undo and redo.
 - An edit to the same paragraph by a collaborator, by automation, or by another editor on the same document.
 
-Each Backspace, Delete, and Enter is its own undo step. Typing over a selection is one step that includes the text typed after it. Collaborative sessions group typing runs the same way. In a collaborative session, other edits made within 5 seconds of each other can share one undo step.
+Each Backspace, Delete, and Enter is its own undo step. Typing over a selection is one step that includes the text typed after it. Collaborative sessions group typing runs the same way. Separate editor deletion and formatting commands stay separate in collaborative sessions too. Undo restores the original text selection, including selections across paragraphs. Redo restores the final selection.
 
 Caret formatting has its own undo step. For example, type text, turn on **Bold**, and type more text. Undo removes the second text run, then undoes **Bold**, then removes the first text run. Caret formatting stays local to the editor and does not change the document until you type.
 

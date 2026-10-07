@@ -294,3 +294,76 @@ test('new caret formatting discards shared redo without publishing a document ch
   converge();
   expect(text(bob)).toBe('one\ntwo');
 });
+
+test('each shared Backspace is a separate undo step', async () => {
+  const { alice, bob, text, converge } = await pair();
+  caret(alice.editor, 0, 3);
+  alice.editor.surface!.deleteBackward();
+  alice.editor.surface!.deleteBackward();
+  converge();
+  expect(text(bob)).toBe('o\ntwo');
+  alice.editor.exec({ type: 'undo' });
+  converge();
+  expect(text(bob)).toBe('on\ntwo');
+  expect(alice.editor.surface!.state().selection.head.offset).toBe(2);
+  alice.editor.exec({ type: 'undo' });
+  converge();
+  expect(text(bob)).toBe('one\ntwo');
+});
+
+test('shared range formatting commands have separate undo steps', async () => {
+  const { alice, bob, converge } = await pair();
+  alice.editor.exec({ type: 'selectAll' });
+  expect(alice.editor.exec({ type: 'toggleMark', mark: 'bold' })).toMatchObject({ ok: true });
+  expect(alice.editor.surface!.formatting().bold).toBe(true);
+  expect(alice.editor.exec({ type: 'toggleMark', mark: 'italic' })).toMatchObject({ ok: true });
+  expect(alice.editor.surface!.formatting().italic).toBe(true);
+  converge();
+  alice.editor.exec({ type: 'undo' });
+  converge();
+  bob.editor.surface!.layout();
+  bob.editor.exec({ type: 'selectAll' });
+  expect(bob.editor.surface!.formatting().bold).toBe(true);
+  expect(bob.editor.surface!.formatting().italic).toBe(false);
+});
+
+test('shared replacement undo restores a cross-paragraph selection and redo restores its caret', async () => {
+  const { alice, bob, text, converge } = await pair();
+  alice.editor.exec({ type: 'selectAll' });
+  const before = alice.editor.surface!.state().selection;
+  await typeSlowly(alice, 'Replacement');
+  const after = alice.editor.surface!.state().selection;
+  converge();
+  alice.editor.exec({ type: 'undo' });
+  converge();
+  expect(text(bob)).toBe('one\ntwo');
+  expect(alice.editor.surface!.state().selection).toEqual(before);
+  alice.editor.exec({ type: 'redo' });
+  converge();
+  expect(text(bob)).toBe('Replacement');
+  expect(alice.editor.surface!.state().selection).toEqual(after);
+});
+
+test('deletion undo restores the caret while retaining a concurrent edit through reconnect', async () => {
+  const { alice, bob, text, converge, peers } = await pair(WITH_HEADER, offlineHarness);
+  caret(alice.editor, 0, 3);
+  caret(bob.editor, 1, 3);
+  peers.pause();
+  alice.editor.surface!.deleteBackward();
+  alice.editor.surface!.deleteBackward();
+  await typeSlowly(bob, '!');
+  peers.resume();
+  converge();
+  alice.editor.exec({ type: 'undo' });
+  converge();
+  expect(text(bob)).toBe('on\ntwo!');
+  expect(alice.editor.surface!.state().selection.head.offset).toBe(2);
+  alice.editor.exec({ type: 'redo' });
+  converge();
+  expect(text(bob)).toBe('o\ntwo!');
+  expect(alice.editor.surface!.state().selection.head.offset).toBe(1);
+  const reopened = mount({ document: new Uint8Array(await bob.editor.save()) });
+  expect(saveReopenDigest(reopened.editor.surface!.session.currentPackage())).toEqual(
+    saveReopenDigest(bob.editor.surface!.session.currentPackage())
+  );
+});

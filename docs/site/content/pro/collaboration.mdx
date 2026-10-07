@@ -666,7 +666,9 @@ The replica rejects two write paths. It rejects an edited ProseMirror document. 
 
 The replica rejects tree edits when the session is destroyed, not ready, or not attached. A transport interruption pauses editing until reconnection. To continue editing, enable [`offlineEditing`](#edit-offline).
 
-The session undo manager treats one typing run as one undo step. Runs end at the same points as local undo steps. For the rules, see [Typing and undo](/docs/2.x/core#typing-and-undo).
+The session undo manager treats one typing run as one undo step. Runs end at the same points as local undo steps. Separate editor deletion and formatting commands have separate undo steps. Undo restores the original selection; redo restores the final selection. For the rules, see [Typing and undo](/docs/2.x/core#typing-and-undo).
+
+Direct automation writes retain timed capture and can share an undo step within 5 seconds.
 
 Caret formatting has a separate local undo step. It does not create a shared document edit. Undo and redo preserve other participants' edits.
 

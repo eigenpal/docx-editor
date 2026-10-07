@@ -66,15 +66,16 @@ function returnHistoryGroup(owner: object, group: HistoryGroup): void {
 export class CommitHistoryGroup {
   private current: HistoryGroup | undefined;
 
-  /** The group the commit in flight carries, or `undefined` outside a grouped commit. */
+  /** The group the commit carries, or `undefined` for ungrouped automation. */
   get value(): HistoryGroup | undefined {
     return this.current;
   }
 
-  around<T>(owner: object, run: () => T, landed: (result: T) => boolean): T {
+  around<T>(owner: object, run: () => T, landed: (result: T) => boolean, separate = true): T {
     const outer = this.current;
     const group = takeHistoryGroup(owner);
-    this.current = group;
+    // Surface commands have explicit boundaries; automation retains its own capture policy.
+    this.current = group ?? (separate ? Symbol('command') : undefined);
     let result: T;
     try {
       result = run();
