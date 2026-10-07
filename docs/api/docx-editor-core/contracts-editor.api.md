@@ -1795,6 +1795,7 @@ export interface ReviewItemPlacementBase {
 export interface ReviewItemQuery {
     // (undocumented)
     readonly excludeRevisionKinds?: readonly ReviewRevisionKind[];
+    readonly pairReplacements?: boolean;
     readonly placement?: boolean;
 }
 
@@ -1850,8 +1851,8 @@ export interface ReviewRevisionItem {
 // @public
 export type ReviewRevisionKind = 'insert' | 'delete'
 /**
-* A combined decision supplied by a custom review provider.
-* The built-in reader exposes text replacements as separate deletion and insertion decisions.
+* A combined deletion and insertion decision. The built-in reader lists them separately,
+* unless a review query asks to pair replacements or a custom review provider combines them.
 */
 | 'replace' | 'moveFrom' | 'moveTo'
 /** `w:rPrChange` / `w:pPrChange` — the words are unchanged, their formatting is not. */

@@ -23,6 +23,7 @@ import type {
 import type { ReviewRange } from '../store/store/review-items.ts';
 import type { SurfaceOverlayFrame } from './surface-overlay-sheet.ts';
 import { textboxPresenceLayout } from './textbox-presence-layout.ts';
+import { findReviewPlacement } from './review-replacement-pairs.ts';
 
 /** Where a paragraph sits: the story it belongs to and its position in that story. */
 interface StoryPosition {
@@ -259,9 +260,7 @@ export function createReviewItemsAt(deps: {
       const live = liveFrame();
       if (!live) return [];
       const { frame, origin } = live;
-      const placement = deps
-        .placements({ placement: false })
-        .find((candidate) => candidate.key === key);
+      const placement = findReviewPlacement(deps.placements, key, { placement: false });
       if (!placement) return [];
       const pages = new Set(
         frame.layout.pages.filter((page) => painted(frame, page)).map((page) => page.index)

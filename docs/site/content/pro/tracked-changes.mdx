@@ -325,10 +325,41 @@ Use `useReviewOf(editor, query)` with an existing editor. React accepts `Editor 
 | ------------------------------- | -------------------------------------------------------------- |
 | `excludeRevisionKinds`          | Removes those kinds from returned `items`.                     |
 | `placement: false`              | Keeps metadata and sets placement fields to `null`.            |
+| `pairReplacements: true`        | Lists each replaced word run as one `'replace'` item.          |
 | `setReviewActivationExclusions` | Prevents caret-driven activation for hidden kinds.             |
 | `DocxEditorReview`              | Sets activation exclusions from `structural` and `formatting`. |
 
 A query filters returned data. It does not limit caret-driven activation.
+
+### Show a replacement as one item
+
+When an author selects words and types over them, the document records a deletion and an insertion. The review queue lists them as two items by default. To show one item for each such edit, pass `pairReplacements: true` in the query.
+
+```ts
+const { items, accept } = useReview({ pairReplacements: true });
+
+for (const entry of items) {
+  if (entry.kind === 'revision' && entry.revisionKind === 'replace') {
+    // entry.replacedText holds the deleted words; entry.text holds the inserted words.
+    console.log(`"${entry.replacedText}" -> "${entry.text}"`);
+  }
+}
+```
+
+A deletion and an insertion pair when all of these are true:
+
+- The insertion is the next revision in the queue after the deletion.
+- Both have the same author, nesting level, and `readOnly` value.
+- The deletion ends at the same paragraph and offset where the insertion starts.
+
+A pair acts as one item:
+
+- `acceptReviewItem(key)` and `rejectReviewItem(key)` resolve both halves in one transaction. One undo restores both.
+- `setActiveReviewItem(key)` opens the deletion. The pair reports `isActive` while the caret is in either half.
+- `replyToReviewItem(key, text)` writes a comment over the inserted words. Replies to either half list under the pair.
+- `getReviewItemRects(key)` returns the bands of both halves.
+
+The pair's `key` stays the same while both halves are pending. Key-based methods accept it with any query. The query removes kinds in `excludeRevisionKinds` before it pairs, so an excluded deletion or insertion never pairs. Add `'replace'` to `excludeRevisionKinds` to remove the pairs. The packaged `DocxEditorReview` rail lists the halves separately.
 
 ### Find the item under a pointer
 

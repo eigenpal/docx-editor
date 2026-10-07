@@ -30,6 +30,8 @@ export type {
   HighlightResult,
 } from './editor-highlights.ts';
 import type { EditorReviewHits } from './editor-review-hits.ts';
+import type { ReviewItemQuery } from './editor-review-query.ts';
+export type { ReviewItemQuery } from './editor-review-query.ts';
 export type { EditorReviewHits, ReviewItemHit } from './editor-review-hits.ts';
 export type { DocumentChange, EditorEvents } from './editor-events.ts';
 import type { DocumentEditingMode, ResolveReviewChangesOptions } from './editor-review.ts';
@@ -832,19 +834,6 @@ export type TrackedChangePredicate = (revision: ReviewRevisionItem) => boolean;
 export type TrackedChangeFilterMode = 'accept' | 'reject';
 
 /**
- * Narrows what `getReviewItems` returns.
- *
- * Both fields exist to keep the review rail cheap: filtering revision kinds is how a host hides
- * structural cards it has no UI for, and `placement: false` skips the layout pass entirely when
- * only metadata is wanted.
- */
-export interface ReviewItemQuery {
-  readonly excludeRevisionKinds?: readonly ReviewRevisionKind[];
-  /** When false, skip layout geometry; metadata is unchanged and anchors are null. Default true. */
-  readonly placement?: boolean;
-}
-
-/**
  * What every review card carries, whatever kind of decision it represents.
  *
  * Presentation-ready by design: author, initials, date and text are derived by the ENGINE,
@@ -946,8 +935,9 @@ export interface ReviewRevisionPlacement extends ReviewItemPlacementBase {
   /** Which decision this is. */
   readonly revisionKind: ReviewRevisionKind;
   /**
-   * The words a custom replacement decision removes when {@link revisionKind} is `'replace'`.
-   * The built-in reader exposes separate deletion and insertion cards.
+   * The words a replacement decision removes when {@link revisionKind} is `'replace'`.
+   * The built-in reader lists separate deletion and insertion cards unless the query sets
+   * {@link ReviewItemQuery.pairReplacements}.
    */
   readonly replacedText?: string;
   readonly item: ReviewRevisionItem;
