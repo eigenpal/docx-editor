@@ -14,7 +14,12 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Server } from '@hocuspocus/server';
-import { readCollaborationDocument } from '@docx-editor.dev/pro/collaboration';
+import {
+  checkCollaborationRoomGeneration,
+  compactCollaborationState,
+  prepareCollaborationServerDocument,
+  readCollaborationDocument,
+} from '@docx-editor.dev/pro/collaboration';
 import * as Y from 'yjs';
 import { admissionError, authenticateDemoToken } from '../shared/admission.ts';
 import { loadStoredDemoDocument } from './stored-room.ts';
@@ -66,8 +71,15 @@ const server = new Server({
     return { room: documentName };
   },
 
-  /** Seed a newly opened room from disk. A room nobody has saved yet stays empty. */
+  /**
+   * Seed a newly opened room from disk. A room nobody has saved yet stays empty.
+   *
+   * A room that has grown well past its content is compacted first, into a new generation:
+   * nobody is connected yet, so no edit is in flight. The new state is stored at once.
+   */
   async onLoadDocument({ documentName, document }) {
+    // First, before any update reaches it, so the server never writes a change of its own.
+    prepareCollaborationServerDocument(document);
     const file = roomFile(documentName);
     if (!file) return document;
     const stored = await readFile(file).catch((error: NodeJS.ErrnoException) => {
@@ -75,8 +87,20 @@ const server = new Server({
       console.warn(`[room ${documentName}] saved room unavailable: ${error.message}`);
       throw admissionError('saved-room-unavailable');
     });
-    if (stored) loadStoredDemoDocument(document, new Uint8Array(stored));
+    if (stored) {
+      const compacted = await compactCollaborationState(new Uint8Array(stored)).catch(() => null);
+      if (compacted) await writeFile(file, compacted);
+      loadStoredDemoDocument(document, compacted ?? new Uint8Array(stored));
+    }
     return document;
+  },
+
+  /**
+   * Refuse a client that still holds a generation of the room from before a compaction, before
+   * any of its state merges. It reports `room-generation-changed` and rejoins.
+   */
+  async beforeHandleMessage(payload) {
+    checkCollaborationRoomGeneration(payload);
   },
 
   /**

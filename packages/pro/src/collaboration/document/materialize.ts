@@ -12,11 +12,15 @@ import {
   type OoxmlPackage,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
-import type { LogicalId } from './identity.ts';
+import { withChildren } from './node-shapes.ts';
+import { idOf, type LogicalId } from './identity.ts';
+import { awaitingUpdates } from './yjs-items.ts';
 import { rejectDangerousKey, rejectPartName } from './limits.ts';
 import {
   isElementRecord,
   isTextRecord,
+  nodeRecordRemoved,
+  nodeRecordUndone,
   type ElementRecord,
   type EncodedRelationship,
   type RepairIssue,
@@ -41,9 +45,19 @@ import {
   isCustomXmlPropsPartName,
   planCustomXmlStores,
 } from './materialize-custom-xml.ts';
-import { partMemberSpecFor } from './materialize-part-members.ts';
+import { partMemberSpecFor, shownMemberChildren } from './materialize-part-members.ts';
+import { adoptLooseMembers } from './materialize-orphans.ts';
+import { rescuedPartEntries, typeUntypedParts } from './materialize-rescued-parts.ts';
 import { PackageProjectionCache } from './materialize-package-cache.ts';
 import { MaterializeSplitProjection } from './materialize-split-projection.ts';
+import { hasSingletonRules, partitionWithMerges, sharedChildShell } from './singleton-children.ts';
+import { spineChildren } from './materialize-spine.ts';
+import { NodeCache } from './materialize-node-cache.ts';
+import { dedupeIssues, ListingContests } from './materialize-contests.ts';
+import { splitWinnerOrder } from './split-dedup.ts';
+import { AdoptionTracker } from './materialize-adoption.ts';
+import { inlineChildren, reuseEqualNodes } from './paragraph-text-view.ts';
+import { reportOrphans } from './materialize-orphans.ts';
 import {
   attributesMatch,
   countPass,
@@ -77,26 +91,12 @@ export type MaterializeResult =
       readonly issues: readonly RepairIssue[];
     };
 
-function dedupeIssues(issues: readonly RepairIssue[]): RepairIssue[] {
-  const seen = new Set<string>();
-  const kept: RepairIssue[] = [];
-  for (const issue of issues) {
-    const key = `${issue.code}${issue.logicalId ?? ''}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    kept.push(issue);
-  }
-  return kept;
-}
-
 /**
  * Incremental package materializer. Repair is pure: it does not write Yjs.
  * Child-ID arrays remain membership authority. The derived parent index is not replicated.
  */
 export class PackageMaterializer {
-  private readonly cache = new Map<LogicalId, OoxmlNode>();
-  /** Depth of each cached subtree, so reuse cannot smuggle a node past `maxTreeDepth`. */
-  private readonly heights = new Map<LogicalId, number>();
+  private readonly cache = new NodeCache();
   private readonly partCache = new Map<string, OoxmlPart>();
   /** Package projections that only a package write can change. */
   private readonly packageCache: PackageProjectionCache;
@@ -106,20 +106,20 @@ export class PackageMaterializer {
   private pendingMembership = false;
   private pendingPackage = false;
   private lastDirty: ReadonlySet<LogicalId> = new Set();
+  /** The ids whose shared state changed in this pass, before the ancestors were added. */
+  private rawDirty: ReadonlySet<LogicalId> = new Set();
+  /** The parent each node had in the last tree this materializer built. */
+  private readonly shownUnder = new Map<LogicalId, LogicalId>();
+  private partRoots: ReadonlySet<LogicalId> = new Set();
+  private forceFull = false;
   /** Adoptee signature per survivor at the end of the last pass. */
-  private lastAdoption = new Map<LogicalId, string>();
-  private placementContested = false;
+  private readonly adoption = new AdoptionTracker();
+  /** Hidden property-container copies each shown winner also shows the children of. */
+  private readonly mergeSources = new Map<LogicalId, readonly LogicalId[]>();
+  /** The copies each winner showed in its cached build, to know when that build is stale. */
+  private readonly builtMerges = new Map<LogicalId, string>();
+  private readonly contests: ListingContests;
   private readonly splitProjection = new MaterializeSplitProjection();
-  /**
-   * What the last full pass decided for each contested id: the parent the registry resolved
-   * then, `null` for none. Holds only ids that pass evidenced as contested, so a hostile peer
-   * cannot grow it past the contests it actually keeps alive.
-   */
-  private lastContestResolution = new Map<LogicalId, LogicalId | null>();
-  /** Contested ids the current pass ran into. Reset per pass. */
-  private readonly contestEncountered = new Set<LogicalId>();
-  /** False when this pass placed a contested child under a parent the registry does not resolve. */
-  private contestMatchesResolution = true;
   /**
    * Whether this pass claims every node of a reused subtree, or only its root.
    *
@@ -166,6 +166,7 @@ export class PackageMaterializer {
     readonly blobs: BlobBytesStore
   ) {
     this.packageCache = new PackageProjectionCache(registry);
+    this.contests = new ListingContests(registry);
     this.stop = registry.observeDirty((paths) => {
       for (const id of paths.logicalIds) this.pendingDirty.add(id);
       if (paths.membershipChanged) this.pendingMembership = true;
@@ -194,28 +195,20 @@ export class PackageMaterializer {
   }
 
   /**
-   * Survivors whose derived adoption set moved since the last pass.
+   * Materialize from shared state alone, without reusing any cached subtree.
    *
-   * A join tombstones one node with a replacement and the survivor grows the orphaned
-   * children. Nothing about the survivor's own record changes, so no observer names it: the
-   * only witness is this index. The node cache would hand the survivor back untouched and
-   * the joined content would vanish, which is why the whole document used to rebuild
-   * whenever membership moved. The index holds one entry per join survivor, so comparing it
-   * costs nothing next to the walk it replaces.
+   * An incremental pass keeps the subtrees it did not rebuild. If the package it builds is
+   * refused downstream — a node shown twice after a concurrent move the dirty set missed —
+   * the full pass is the answer: every replica that runs it on the same shared state reaches
+   * the same tree, because the view is a function of shared state alone.
    */
-  private adoptionChanges(): readonly LogicalId[] {
-    const moved: LogicalId[] = [];
-    const next = new Map<LogicalId, string>();
-    for (const [survivor, adopted] of this.registry.adoptionIndex()) {
-      const signature = adopted.join('\u0001');
-      next.set(survivor, signature);
-      if (this.lastAdoption.get(survivor) !== signature) moved.push(survivor);
+  rebuildFull(): MaterializeResult {
+    this.forceFull = true;
+    try {
+      return this.rebuild();
+    } finally {
+      this.forceFull = false;
     }
-    for (const survivor of this.lastAdoption.keys()) {
-      if (!next.has(survivor)) moved.push(survivor);
-    }
-    this.lastAdoption = next;
-    return moved;
   }
 
   rebuild(): MaterializeResult {
@@ -235,9 +228,34 @@ export class PackageMaterializer {
     // An unobserved write can be a package write whose `packageChanged` flag has not been
     // delivered yet, so it disqualifies the package projections exactly as the flag does.
     if (packageChanged || unobserved) this.packageCache.invalidate();
-    for (const survivor of this.adoptionChanges()) rawDirty.add(survivor);
+    for (const survivor of this.adoption.changes(this.registry)) rawDirty.add(survivor);
+    // A paragraph shows other IDs, or hides other moved text, when another paragraph's text
+    // changes what they share.
+    for (const paragraph of this.registry.inline.takeAffected()) rawDirty.add(paragraph);
+    // A contested child whose winning lister changed moves between two cached builds.
+    for (const parent of this.registry.takeReparented()) rawDirty.add(parent);
+    // A deleted parent hands each child it won a contest for to the child's other listers,
+    // which kept a build without it; rebuild them so one of them takes the child.
+    for (const id of [...rawDirty]) {
+      if (!this.registry.isTombstoned(id)) continue;
+      const record = this.registry.record(id);
+      if (!record || !isElementRecord(record)) continue;
+      for (const child of record.childIds) {
+        for (const lister of this.registry.listingParents(child)) rawDirty.add(lister);
+      }
+    }
     for (const id of this.splitProjection.update(this.registry)) rawDirty.add(id);
     const dirty = expandAncestors(this.registry, rawDirty);
+    // Every ancestor of a changed node has to rebuild. The registry's parent index says
+    // where a node lives NOW; a node a peer moved or detached is still shown
+    // under its old ancestors, and they must rebuild too, or the view keeps the stale subtree.
+    for (const id of rawDirty) {
+      let at = this.shownUnder.get(id);
+      for (let depth = 0; at !== undefined && depth < this.registry.limits.maxTreeDepth; depth++) {
+        dirty.add(at);
+        at = this.shownUnder.get(at);
+      }
+    }
     // A relationship-only change dirties no nodes. Reuse the node cache, then project `.rels`.
     //
     // Membership does NOT disqualify the cache. Every child array that moved names its own
@@ -256,47 +274,34 @@ export class PackageMaterializer {
     // replaces asked the ancestor-EXPANDED set whether anything lacked a parent — and every
     // edit expands up to a part root, which by definition has none, so it answered yes to
     // every keystroke ever typed and no pass has been incremental since.
-    const partRoots = new Set(this.registry.partEntries().map((entry) => entry.rootLogicalId));
+    const partRoots = (this.partRoots = new Set(
+      this.registry.partEntries().map((entry) => entry.rootLogicalId)
+    ));
     const structureArrived = [...rawDirty].some(
       (id) =>
         partRoots.has(id) ||
         (this.registry.parentOf(id) === null && !this.registry.isTombstoned(id))
     );
     const incremental =
-      this.pkg !== null && !unobserved && !structureArrived && (dirty.size > 0 || packageChanged);
+      !this.forceFull &&
+      this.pkg !== null &&
+      !unobserved &&
+      !structureArrived &&
+      (dirty.size > 0 || packageChanged);
+    this.rawDirty = rawDirty;
     const first = this.materializePass(dirty, packageChanged, incremental);
-    if (!this.placementContested) return first;
+    if (!this.contests.contested) return first;
     // Two child arrays list one id and the cache disagrees with the rebuilt parent about
     // which one owns it. A full pass decides it the one deterministic way: first preorder
-    // placement wins, the rest report `duplicate-parent`.
-    //
-    // Unless the decision is already made. When every contest this pass ran into is one the
-    // last full pass decided, still resolves to the same parent, and this pass placed each
-    // contested child under exactly that parent, the incremental result IS the full pass's
-    // answer — the losers' cached subtrees were built without the child. A peer keeping one
-    // contest alive then costs its winner's rebuild, not the document, per keystroke.
-    if (first.ok && this.contestMatchesResolution && this.contestUnchanged()) {
+    // placement wins, the rest report `duplicate-parent`. Unless the decision is already
+    // made: the losers' cached subtrees were built without the child (`ListingContests`).
+    if (first.ok && this.contests.decided()) {
       // A rebuilt loser re-reports a duplicate the pass also carried forward; one is enough.
       return { ok: true, package: first.package, issues: dedupeIssues(first.issues) };
     }
     const second = this.materializePass(dirty, packageChanged, false);
-    this.recordContestResolution();
+    this.contests.record(this.lastDuplicateParents);
     return second;
-  }
-
-  private contestUnchanged(): boolean {
-    for (const id of this.contestEncountered) {
-      const resolved = this.lastContestResolution.get(id);
-      if (resolved === undefined || resolved !== this.registry.parentOf(id)) return false;
-    }
-    return true;
-  }
-
-  private recordContestResolution(): void {
-    const next = new Map<LogicalId, LogicalId | null>();
-    for (const id of this.contestEncountered) next.set(id, this.registry.parentOf(id));
-    for (const id of this.lastDuplicateParents) next.set(id, this.registry.parentOf(id));
-    this.lastContestResolution = next;
   }
 
   private materializePass(
@@ -306,9 +311,7 @@ export class PackageMaterializer {
   ): MaterializeResult {
     this.issues.length = 0;
     this.lastDirty = dirty;
-    this.placementContested = false;
-    this.contestEncountered.clear();
-    this.contestMatchesResolution = true;
+    this.contests.reset();
     // A full pass builds the tree from shared state alone, so it is the only one that can
     // claim placement by walking, and the only one that has to.
     this.claimsWholeSubtrees = !incremental;
@@ -324,7 +327,12 @@ export class PackageMaterializer {
     // The split projection was updated in `rebuild()`, which also dirtied changed products.
     const placed = new Set<LogicalId>();
     const parts = new Map<string, OoxmlPart>();
-    for (const entry of this.registry.partEntries()) {
+    const entries = this.registry.partEntries();
+    const relationships = [...this.packageCache.groupedByOwner(this.customXmlRels).values()].flat();
+    for (const entry of [
+      ...entries,
+      ...rescuedPartEntries(this.registry, entries, relationships),
+    ]) {
       const path = new Set<LogicalId>();
       const root = this.materialize(entry.rootLogicalId, placed, path, incremental);
       if (!root || root.kind === 'textValue') {
@@ -348,8 +356,10 @@ export class PackageMaterializer {
     // nothing about what came before. An incremental pass saw every child that left a parent
     // — no other id can have lost its last parent while it was running — plus whatever an
     // earlier pass already found loose, since that verdict has to be reached again to hold.
+    // An undo mark that comes or goes changes whether its record may be given an edge back.
+    const marked = this.registry.history.takeMarkChanges();
     const candidates = incremental
-      ? new Set([...this.droppedChildren, ...this.looseCandidates])
+      ? new Set([...this.droppedChildren, ...this.looseCandidates, ...marked])
       : this.registry.allLogicalIds();
     const loose = new Set<LogicalId>();
     this.projectRelsParts(parts);
@@ -362,12 +372,19 @@ export class PackageMaterializer {
       if (!parts.has(name)) this.relsProjection.delete(name);
     }
     this.evictDeadSubtrees(placed);
-    this.reportOrphans(candidates, placed, incremental, loose);
+    // A dirty node no part reached keeps its old build. If a later edit lists it again — a
+    // concurrent split moving a run an undo had just emptied — reusing that build shows
+    // content shared state no longer has, so the entry goes now.
+    for (const id of dirty) {
+      if (placed.has(id)) continue;
+      this.cache.forget(id);
+    }
+    reportOrphans(this.registry, this.pushIssue, candidates, placed, incremental, loose);
     this.looseCandidates = loose;
     if (!incremental) {
-      this.lastDuplicateParents = this.issues
-        .filter((issue) => issue.code === 'duplicate-parent' && issue.logicalId !== undefined)
-        .map((issue) => issue.logicalId as LogicalId);
+      this.lastDuplicateParents = this.issues.flatMap((issue) =>
+        issue.code === 'duplicate-parent' && issue.logicalId !== undefined ? [issue.logicalId] : []
+      );
     }
     const assembled = this.assemblePackage(parts);
     if (!assembled.ok) return assembled;
@@ -387,110 +404,8 @@ export class PackageMaterializer {
     this.issues.push(logicalId ? { code, logicalId } : { code });
   }
 
-  /**
-   * Report nodes that no part can reach.
-   *
-   * Reachability is read off the listings index rather than off a placement set built by
-   * walking, because filling that set was the whole cost of a received keystroke: every
-   * block the edit did not touch got visited to record that it is still where it was. A node
-   * that any live parent lists is in the tree, and a part root is reachable by definition.
-   *
-   * This reports the ROOT of a detached subtree rather than every node inside it — the nodes
-   * beneath it still have a parent, it just is not connected to a part. That is the more
-   * useful signal anyway: one issue names the break instead of one per node below it.
-   */
-  /**
-   * Whether some parent's CURRENT child array still names this id.
-   *
-   * The listings index answers "who has ever listed it", which is not the same question: a
-   * parent whose whole record was replaced can leave a listing behind for a child it no
-   * longer has. Reading the arrays back makes the answer authoritative, and the callers only
-   * ask it about ids this pass watched leave a parent, so the read is bounded by the edit.
-   *
-   * A tombstoned parent counts. Its children are adopted by the survivor rather than lost, so
-   * they have a place in the tree and must not be adopted into a part on top of it.
-   */
-  private stillListed(logicalId: LogicalId): boolean {
-    for (const parent of this.registry.listingParents(logicalId)) {
-      const record = this.registry.record(parent);
-      if (record && isElementRecord(record) && record.childIds.includes(logicalId)) return true;
-    }
-    return false;
-  }
-
-  private reportOrphans(
-    candidates: Iterable<LogicalId>,
-    placed: ReadonlySet<LogicalId>,
-    incremental: boolean,
-    loose: Set<LogicalId>
-  ): void {
-    if (!incremental) {
-      for (const id of candidates) {
-        if (this.registry.isTombstoned(id) || placed.has(id)) continue;
-        this.pushOrphan(id);
-        loose.add(id);
-      }
-      return;
-    }
-    const partRoots = new Set(this.registry.partEntries().map((entry) => entry.rootLogicalId));
-    const scanned = new Set<LogicalId>();
-    for (const root of candidates) {
-      if (scanned.has(root)) continue;
-      scanned.add(root);
-      if (this.reportOrphansUnder(root, placed, partRoots)) loose.add(root);
-    }
-  }
-
-  /**
-   * Report everything unreachable at or under `root`, and say whether anything was.
-   *
-   * A tombstone is a deliberate delete, so it is not itself a loss — but its CHILDREN can be.
-   * Deleting a paragraph while a peer types inside it leaves that text referenced by nothing,
-   * which is the one shape of silent loss this walk exists to name. A full pass finds it by
-   * scanning every id; descending from the tombstone instead keeps the work proportional to
-   * the subtree the edit removed.
-   */
-  private reportOrphansUnder(
-    root: LogicalId,
-    placed: ReadonlySet<LogicalId>,
-    partRoots: ReadonlySet<LogicalId>
-  ): boolean {
-    let reported = false;
-    const seen = new Set<LogicalId>();
-    const stack = [{ id: root, underTombstone: false }];
-    while (stack.length > 0) {
-      const { id, underTombstone } = stack.pop()!;
-      if (seen.has(id) || seen.size >= this.registry.limits.maxTreeDepth) continue;
-      seen.add(id);
-      if (this.registry.isTombstoned(id)) {
-        const record = this.registry.record(id);
-        if (record && isElementRecord(record)) {
-          for (const child of record.childIds) stack.push({ id: child, underTombstone: true });
-        }
-        continue;
-      }
-      if (partRoots.has(id)) continue;
-      // Beneath a tombstone the listings index cannot answer reachability: the dead parent
-      // still names the child, and `stillListed` counts that deliberately, because the
-      // registry re-homes an adopted child onto the survivor. Placement is the authority
-      // there — an adopter has to rebuild to take the child, so this pass placed it.
-      if (underTombstone ? placed.has(id) : this.stillListed(id)) continue;
-      this.pushOrphan(id);
-      reported = true;
-    }
-    return reported;
-  }
-
-  /** Name a node no part reaches, saying whether anything a reader could see went with it. */
-  private pushOrphan(logicalId: LogicalId): void {
-    const record = this.registry.record(logicalId);
-    const hasContent =
-      !!record &&
-      (isTextRecord(record)
-        ? record.value.length > 0
-        : record.childIds.length > 0 || record.attributes.length > 0);
-    this.push(hasContent ? 'orphan-with-content' : 'orphan', logicalId);
-  }
+  private readonly pushIssue = (code: RepairIssueCode, logicalId?: LogicalId): void =>
+    this.push(code, logicalId);
 
   private materialize(
     logicalId: LogicalId,
@@ -506,26 +421,33 @@ export class PackageMaterializer {
       this.push('duplicate-parent', logicalId);
       return null;
     }
-    if (incremental && !this.lastDirty.has(logicalId)) {
+    const mergeKey = this.mergeSources.get(logicalId)?.join('\u0001') ?? '';
+    if (
+      incremental &&
+      !this.lastDirty.has(logicalId) &&
+      mergeKey === (this.builtMerges.get(logicalId) ?? '')
+    ) {
       const cached = this.cache.get(logicalId);
       // A cached subtree carries the depth it was built at. Grafting it under a deeper
       // parent is how a peer would push the tree past `maxTreeDepth` without any walk ever
       // reaching the bottom, and every downstream oracle — validate, fingerprint, save —
       // recurses. So the recorded height is checked before the reuse, not after.
-      if (cached && path.size + this.heightOf(cached) <= this.registry.limits.maxTreeDepth) {
+      if (cached && path.size + this.cache.heightOf(cached) <= this.registry.limits.maxTreeDepth) {
         // Claiming the subtree node by node is what made receiving one character cost the
         // whole document: the body root rebuilds, every other block is reused, and the walk
         // visits all of them to fill a set. It is only needed when this pass has to decide
         // reachability for itself — see `claimsWholeSubtrees`.
         if (this.claimsWholeSubtrees) {
-          if (!markPlaced(cached, placed)) this.placementContested = true;
+          if (!markPlaced(cached, placed)) this.contests.contested = true;
         } else {
-          placed.add(cached.id);
+          placed.add(idOf(cached));
         }
         return cached;
       }
     }
     if (this.registry.isTombstoned(logicalId)) return null;
+    const spine = incremental ? this.rebuildSpine(logicalId, placed, path) : null;
+    if (spine) return spine;
     placed.add(logicalId);
     countRecordRead();
     const record = this.registry.record(logicalId);
@@ -534,21 +456,58 @@ export class PackageMaterializer {
       return null;
     }
     if (isTextRecord(record)) {
+      // Its source has not arrived: pending, as a Yjs update is, so it shows nothing yet.
+      if (this.splitProjection.awaiting.has(logicalId)) return null;
       const value = this.splitProjection.textValue(logicalId, record.value);
       const previous = this.cache.get(logicalId);
       if (previous?.kind === 'textValue' && previous.value === value) return previous;
       const next = freezeText(logicalId, value);
-      this.remember(logicalId, next);
+      this.cache.remember(logicalId, next);
       return next;
     }
     path.add(logicalId);
+    const issuesAtStart = this.issues.length;
     const seenChildren = new Set<LogicalId>();
-    const childIds = [...record.childIds];
-    for (const extra of this.registry.adoptedChildren(logicalId)) {
-      if (!childIds.includes(extra)) childIds.push(extra);
+    let childIds = [...record.childIds];
+    // A set for membership: a peer can give a merged copy as many children as a record holds.
+    const listed = new Set(childIds);
+    const addChild = (extra: LogicalId): void => {
+      if (listed.has(extra)) return;
+      listed.add(extra);
+      childIds.push(extra);
+    };
+    for (const extra of this.registry.adoptedChildren(logicalId)) addChild(extra);
+    // A winning property container shows the properties its hidden copies hold that it lacks.
+    for (const copy of this.mergeSources.get(logicalId) ?? []) {
+      const copyRecord = this.registry.record(copy);
+      if (!copyRecord || !isElementRecord(copyRecord)) continue;
+      for (const extra of copyRecord.childIds) addChild(extra);
     }
+    if (mergeKey) this.builtMerges.set(logicalId, mergeKey);
+    else this.builtMerges.delete(logicalId);
+    const losers = this.splitProjection.losers;
+    const winnerOrder =
+      losers.size === 0
+        ? null
+        : splitWinnerOrder(
+            childIds,
+            (id) => losers.has(id),
+            (id) => this.registry.splitLineageOf(id)
+          );
+    if (winnerOrder) childIds = winnerOrder.map((index) => childIds[index]!);
     const children: OoxmlNode[] = [];
-    for (const childId of childIds) {
+    // Concurrent peers can each write a child OOXML allows once; show one, in one order.
+    const order = partitionWithMerges(record.kind, childIds, (id) =>
+      this.splitProjection.losers.has(id) ? null : sharedChildShell(this.registry, id)
+    );
+    for (const id of order.hidden) placed.add(id);
+    for (const id of childIds) this.mergeSources.delete(id);
+    for (const [winner, copies] of order.merges ?? []) {
+      this.mergeSources.set(winner, copies);
+      // A copy's own changes reach the winner that shows its children.
+      for (const copy of copies) this.shownUnder.set(copy, winner);
+    }
+    for (const childId of order.shown) {
       if (childId === logicalId) {
         this.push('self-child', childId);
         continue;
@@ -573,40 +532,45 @@ export class PackageMaterializer {
       // its own child array — for every entry of every rebuilt child list is the same cost
       // as materializing it, and a cached child never needs it decoded at all.
       if (rejectDangerousKey(childId) || !this.registry.hasNode(childId)) {
-        this.push('child-id-not-in-registry', childId);
+        // A record that has not arrived is pending, as a Yjs update with missing dependencies
+        // is: it shows when it arrives, which dirties every parent that lists it. Only a
+        // record shared state removed is lost content.
+        if (rejectDangerousKey(childId) || nodeRecordRemoved(this.registry.schema.nodes, childId)) {
+          this.push('child-id-not-in-registry', childId);
+        }
         continue;
       }
-      // A pass that claims subtree roots only cannot notice a second parent by placement, so
-      // it asks the listings index instead: one lister means one parent, and more than one is
-      // the contest that sends the whole rebuild back through a full pass to be resolved
-      // deterministically. This rides inside the loop the rebuild already runs.
-      if (!this.claimsWholeSubtrees) {
-        const listers = this.registry.listingParents(childId);
-        if (listers.length > 1) {
-          this.placementContested = true;
-          this.contestEncountered.add(childId);
-          // A tombstoned lister with a survivor routes the child through ADOPTION, which
-          // places it somewhere `parentOf` does not model — the skip's oracle would approve
-          // a pass that leaves the child in the survivor's reused subtree AND under the
-          // rebuilt live lister. Adoption-involved contests always take the full pass. A
-          // survivor-less tombstone routes no adoption, so it keeps the skip.
-          if (
-            listers.some(
-              (lister) =>
-                this.registry.isTombstoned(lister) && this.registry.replacedByOf(lister) !== null
-            )
-          ) {
-            this.contestMatchesResolution = false;
-          }
-          // Placing the child here reproduces the full pass only when here is where the
-          // registry resolves it. A child already placed was checked at its own placement.
-          else if (!placed.has(childId) && this.registry.parentOf(childId) !== logicalId) {
-            this.contestMatchesResolution = false;
-          }
-        }
-      }
+      if (!this.claimsWholeSubtrees) this.contests.note(childId, logicalId, placed, this.partRoots);
       const child = this.materialize(childId, placed, path, incremental);
-      if (child) children.push(child);
+      if (child) {
+        children.push(child);
+        this.shownUnder.set(idOf(child), logicalId);
+      }
+    }
+    // A spine rebuild reuses this child list, so it may only when the list is the whole
+    // story: every listed child shows. A child skipped without an issue is pending, and its
+    // arrival dirties only itself, which the reused list would never show.
+    const complete =
+      order.hidden.length === 0 &&
+      children.length === order.shown.length &&
+      this.issues.length === issuesAtStart;
+    // A paragraph's inline content is its shared text; embedded nodes are records under it.
+    const inlineText = this.registry.inline.textOf(logicalId);
+    if (inlineText) {
+      const embedOf = (id: LogicalId): OoxmlNode | null => {
+        // A peer's text can arrive before the record it embeds, which Yjs holds back until
+        // what it depends on arrives: pending, so it shows nothing yet.
+        if (!this.registry.hasNode(id) && awaitingUpdates(this.registry.doc)) return null;
+        const node = this.materialize(id, placed, path, incremental);
+        if (node) this.shownUnder.set(id, logicalId);
+        return node;
+      };
+      const view = this.registry.inline.viewOf(logicalId);
+      const built = inlineChildren(logicalId, inlineText, embedOf, this.registry.limits, view);
+      const cached = this.cache.get(logicalId);
+      children.push(
+        ...reuseEqualNodes(cached?.kind === 'textValue' ? [] : (cached?.children ?? []), built)
+      );
     }
     path.delete(logicalId);
     const previous = this.cache.get(logicalId);
@@ -617,12 +581,86 @@ export class PackageMaterializer {
       previous.children.every((child, index) => child === children[index]) &&
       attributesMatch(previous, record)
     ) {
+      this.cache.markComplete(logicalId, complete);
       return previous;
     }
     const previousChildren = previous && previous.kind !== 'textValue' ? previous.children : [];
     this.recordDroppedChildren(previousChildren, children);
     const next = freezeElement(record, replaceChildRange(previousChildren, children), previous);
-    this.remember(logicalId, next);
+    this.cache.remember(logicalId, next);
+    this.cache.markComplete(logicalId, complete);
+    return next;
+  }
+
+  /**
+   * Rebuild a node whose own record did not change by its dirty children only. Null when the
+   * full rebuild has to decide: see `spineChildren`. A node with singleton rules, merged
+   * copies, adopted children or an issue in its last build always takes the full rebuild.
+   */
+  private rebuildSpine(
+    logicalId: LogicalId,
+    placed: Set<LogicalId>,
+    path: Set<LogicalId>
+  ): OoxmlNode | null {
+    const previous = this.cache.get(logicalId);
+    if (
+      !previous ||
+      previous.kind === 'textValue' ||
+      this.rawDirty.has(logicalId) ||
+      !this.cache.isComplete(logicalId) ||
+      hasSingletonRules(previous.kind) ||
+      this.builtMerges.has(logicalId) ||
+      this.mergeSources.has(logicalId) ||
+      this.splitProjection.losers.size > 0 ||
+      this.registry.adoptedChildren(logicalId).length > 0
+    ) {
+      return null;
+    }
+    const height = this.cache.heightOf(previous);
+    if (path.size + height > this.registry.limits.maxTreeDepth) return null;
+    const issuesAtStart = this.issues.length;
+    path.add(logicalId);
+    const result = spineChildren(previous, {
+      dirty: this.lastDirty,
+      placed,
+      isCached: (child) => this.cache.holds(child),
+      canRebuild: (childId) => {
+        if (
+          rejectDangerousKey(childId) ||
+          this.registry.isTombstoned(childId) ||
+          !this.registry.hasNode(childId)
+        ) {
+          return false;
+        }
+        this.contests.note(childId, logicalId, placed, this.partRoots);
+        return true;
+      },
+      rebuild: (childId) => {
+        const child = this.materialize(childId, placed, path, true);
+        if (child) this.shownUnder.set(idOf(child), logicalId);
+        return child;
+      },
+    });
+    path.delete(logicalId);
+    if (!result) return null;
+    placed.add(logicalId);
+    const complete = result.dropped.length === 0 && this.issues.length === issuesAtStart;
+    if (result.children === previous.children) {
+      this.cache.markComplete(logicalId, complete);
+      return previous;
+    }
+    for (const id of result.dropped) this.droppedChildren.add(id);
+    const next = Object.freeze(withChildren(previous, result.children));
+    this.cache.remember(logicalId, next);
+    this.cache.markComplete(logicalId, complete);
+    // The node is as deep as before or as one of its rebuilt children makes it.
+    let rebuiltHeight = height;
+    for (const child of result.children) {
+      if (this.lastDirty.has(idOf(child))) {
+        rebuiltHeight = Math.max(rebuiltHeight, this.cache.heightOf(child) + 1);
+      }
+    }
+    this.cache.setHeight(logicalId, rebuiltHeight);
     return next;
   }
 
@@ -638,13 +676,8 @@ export class PackageMaterializer {
     if (previous.length === 0) return;
     const kept = new Set(next.map((child) => child.id));
     for (const child of previous) {
-      if (!kept.has(child.id)) this.droppedChildren.add(child.id);
+      if (!kept.has(child.id)) this.droppedChildren.add(idOf(child));
     }
-  }
-
-  private remember(logicalId: LogicalId, node: OoxmlNode): void {
-    this.cache.set(logicalId, node);
-    this.heights.delete(logicalId);
   }
 
   /**
@@ -660,41 +693,14 @@ export class PackageMaterializer {
     for (const id of this.droppedChildren) {
       if (placed.has(id)) continue;
       if (this.registry.isTombstoned(id) || !this.registry.hasNode(id)) {
-        this.evictSubtree(id, placed);
+        this.cache.evictSubtree(id, placed, (evicted) => this.shownUnder.delete(evicted));
       }
-    }
-  }
-
-  private evictSubtree(id: LogicalId, placed: ReadonlySet<LogicalId>): void {
-    const node = this.cache.get(id);
-    this.cache.delete(id);
-    this.heights.delete(id);
-    if (!node || node.kind === 'textValue') return;
-    for (const child of node.children) {
-      if (!placed.has(child.id)) this.evictSubtree(child.id, placed);
     }
   }
 
   /** @internal Test-only view of which subtrees the node cache still retains. */
   retainedNodeIds(): readonly LogicalId[] {
-    return [...this.cache.keys()];
-  }
-
-  /**
-   * Depth of one cached subtree, memoized.
-   *
-   * A rebuilt node forgets its height, and a node whose height moved is necessarily rebuilt
-   * with a new identity, which rebuilds every ancestor. So a surviving entry is current.
-   */
-  private heightOf(node: OoxmlNode): number {
-    const known = this.heights.get(node.id);
-    if (known !== undefined) return known;
-    let height = 1;
-    if (node.kind !== 'textValue') {
-      for (const child of node.children) height = Math.max(height, this.heightOf(child) + 1);
-    }
-    this.heights.set(node.id, height);
-    return height;
+    return this.cache.ids();
   }
 
   /**
@@ -748,6 +754,16 @@ export class PackageMaterializer {
     return next;
   }
 
+  /** The node the last pass built for `id`, or null. Reads the cache only; builds nothing. */
+  builtNode(id: LogicalId): OoxmlNode | null {
+    return this.cache.get(id) ?? null;
+  }
+
+  /** The children a member part's root shows, in order, or null (`shownMemberChildren`). */
+  shownPartChildren(rootId: LogicalId): readonly LogicalId[] | null {
+    return shownMemberChildren(this.partCache.values(), rootId);
+  }
+
   /**
    * Re-parent directory members the part-map LWW dropped.
    *
@@ -772,14 +788,32 @@ export class PackageMaterializer {
         record.logicalId !== part.root.id && spec.isMember(record);
       const members: OoxmlElement[] = [];
       const seen = new Set<LogicalId>();
+      // A part reused from an earlier pass can still show a member that pass adopted and that
+      // adoption would not take now: deleted, taken out by an undo, or listed elsewhere. It
+      // goes, as a full pass would never have adopted it.
+      const gone = new Set<LogicalId>();
+      const rootRecord = this.registry.record(idOf(part.root));
+      const listed = new Set(rootRecord && isElementRecord(rootRecord) ? rootRecord.childIds : []);
       for (const child of part.root.children) {
         if (child.kind === 'textValue') continue;
-        const record = this.registry.record(child.id);
+        const id = idOf(child);
+        if (
+          this.registry.isTombstoned(id) ||
+          (!listed.has(id) &&
+            (nodeRecordUndone(this.registry.schema.nodes.get(id)) ||
+              this.registry.listingParents(id).length > 0))
+        ) {
+          gone.add(id);
+          continue;
+        }
+        const record = this.registry.record(idOf(child));
         if (!record || !isElementRecord(record) || !isMember(record)) continue;
         members.push(child);
-        seen.add(child.id);
+        seen.add(idOf(child));
       }
-      const adopted = this.adoptLooseMembers(
+      const adopted = adoptLooseMembers(
+        this.registry,
+        (id) => this.materialize(id, placed, new Set(), incremental),
         members,
         seen,
         isMember,
@@ -788,62 +822,32 @@ export class PackageMaterializer {
         candidates,
         loose
       );
-      if (adopted === 0) continue;
-      members.sort((left, right) => spec.sortKey(left).localeCompare(spec.sortKey(right)));
+      if (adopted === 0 && gone.size === 0) continue;
+      const bySortKey = (left: OoxmlElement, right: OoxmlElement): number =>
+        spec.sortKey(left).localeCompare(spec.sortKey(right));
+      if (spec.adoptedAfterListed) {
+        // Listed members keep their order and adopted ones follow, sorted, so a pass that
+        // adopts nothing and reuses this order agrees with a full pass.
+        const listed = members.length - adopted;
+        members.splice(listed, adopted, ...members.slice(listed).sort(bySortKey));
+      } else {
+        members.sort(bySortKey);
+      }
       const kept: OoxmlNode[] = [];
       for (const child of part.root.children) {
-        if (seen.has(child.id)) continue;
+        if (seen.has(idOf(child)) || gone.has(idOf(child))) continue;
         kept.push(child);
       }
       const nextChildren = replaceChildRange(part.root.children, [...kept, ...members]);
       if (nextChildren === part.root.children) continue;
-      const record = this.registry.record(part.root.id);
+      const record = this.registry.record(idOf(part.root));
       if (!record || !isElementRecord(record)) continue;
       const nextRoot = freezeElement(record, nextChildren, part.root);
-      this.remember(part.root.id, nextRoot);
+      this.cache.remember(idOf(part.root), nextRoot);
       const nextPart = Object.freeze({ ...part, root: nextRoot });
       parts.set(name, nextPart);
       this.partCache.set(name, nextPart);
     }
-  }
-
-  /**
-   * Find members of this part that no live parent lists, and give them an edge back.
-   *
-   * `candidates` is the whole node table only on a full pass. On an incremental one it is the
-   * ids that left a child array during this very pass, which is the only way a member can
-   * lose its last parent — and it is why receiving a character in a document that happens to
-   * have a comments part no longer reads every node key once per adoptable part.
-   */
-  private adoptLooseMembers(
-    members: OoxmlElement[],
-    seen: Set<LogicalId>,
-    isMember: (record: ElementRecord) => boolean,
-    placed: Set<LogicalId>,
-    incremental: boolean,
-    candidates: Iterable<LogicalId>,
-    loose: Set<LogicalId>
-  ): number {
-    let adopted = 0;
-    for (const id of candidates) {
-      if (placed.has(id) || seen.has(id) || this.registry.isTombstoned(id)) continue;
-      // `placed` is complete only on a full pass. On an incremental one a surviving parent may
-      // sit inside a subtree claimed by its root alone, so reachability has to be established
-      // another way — otherwise a child that merely MOVED would be adopted into the part as a
-      // second copy.
-      if (incremental && this.stillListed(id)) continue;
-      const record = this.registry.record(id);
-      if (!record || !isElementRecord(record) || !isMember(record)) continue;
-      const node = this.materialize(id, placed, new Set(), incremental);
-      if (!node || node.kind === 'textValue') continue;
-      members.push(node);
-      seen.add(id);
-      // The adoption itself is not written anywhere, so the next pass has to find this member
-      // again or it drops back out of the part it was just rescued into.
-      loose.add(id);
-      adopted += 1;
-    }
-    return adopted;
   }
 
   /**
@@ -895,7 +899,7 @@ export class PackageMaterializer {
     if (!record || !isElementRecord(record)) return root;
     const nextChildren = replaceChildRange(root.children, members);
     const nextRoot = freezeElement(record, nextChildren, root);
-    this.remember(rootId, nextRoot);
+    this.cache.remember(rootId, nextRoot);
     return nextRoot;
   }
 
@@ -959,6 +963,7 @@ export class PackageMaterializer {
       defaults: this.packageCache.contentTypeDefaults(),
       overrides,
     };
+    typeUntypedParts(parts, contentTypes, overrides);
     const mainDocumentPart =
       this.registry.mainDocumentPart() ||
       [...parts.keys()].find((name) => name.endsWith('document.xml')) ||

@@ -854,7 +854,20 @@
   },
   "collaboration": {
     "moreParticipants": "{count, plural, one {# autre personne} many {# autres personnes} other {# autres personnes}}",
-    "participants": "Personnes dans ce document"
+    "participants": "Personnes dans ce document",
+    "status": {
+      "connecting": "Connexion au document…",
+      "editRefused": "Votre dernière modification n’a pas pu être partagée ; elle a été annulée.",
+      "offline": "Hors ligne. Vous pouvez continuer à modifier ; vos modifications seront synchronisées au retour de la connexion.",
+      "outOfSync": "Cette copie n’est plus synchronisée avec le document partagé.",
+      "rejoin": "Rejoindre",
+      "syncing": "Récupération des dernières modifications…",
+      "waiting": "En attente des dernières modifications…",
+      "stalled": "Les dernières modifications ne sont pas arrivées. Rejoignez de nouveau pour charger le document partagé.",
+      "offlinePaused": "Hors ligne. La modification reprendra au retour de la connexion.",
+      "upgradeRequired": "Cette application et le document partagé utilisent des versions de collaboration différentes. Enregistrez une copie et contactez votre administrateur.",
+      "newRoomRequired": "Ce document partagé ne peut pas continuer. Enregistrez une copie et partagez-la de nouveau."
+    }
   },
   "textFormField": {
     "apply": "OK",

@@ -5,7 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { useRef, useSyncExternalStore } from 'react';
 import type { CollaborationParticipant } from '@docx-editor.dev/core/collaboration';
-import type { CollaborationSession } from '../collaboration/session.ts';
+import type { CollaborationSession } from '../collaboration/types.ts';
 import { useCollaborationSession } from './useCollaborationSession.ts';
 
 const NO_PARTICIPANTS: readonly CollaborationParticipant[] = Object.freeze([]);

@@ -6,6 +6,7 @@
 import {
   nextDenseDecimalId,
   nextStripedDecimalId,
+  partNumberCandidates,
   resolveAllocationActor,
 } from './actor-scoped-ids.ts';
 import { resolveContentType } from './content-types.ts';
@@ -295,7 +296,7 @@ export async function validateEmbeddedImageForCommit(
 }
 
 function allocateMediaPartName(pkg: OoxmlPackage, ext: string): string | null {
-  for (let index = 1; index <= Number.MAX_SAFE_INTEGER; index += 1) {
+  for (const index of partNumberCandidates(Number.MAX_SAFE_INTEGER)) {
     const canonical = `/word/media/image${index}.${ext}`;
     if (!partPresent(pkg, canonical)) return storagePartName(canonical, pkg);
   }

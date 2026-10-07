@@ -117,16 +117,26 @@ export interface CollaborationRoomState<TConnect, THandle extends CollaborationR
   readonly rejoin: (nextDocument: Uint8Array) => Promise<CollaborationFailure | null>;
 }
 
+/** Hook instances on this page, so two roots never share a room owner. */
+let ownerInstances = 0;
+
 export function useCollaborationRoom<TConnect, THandle extends CollaborationRoomHandle>(
   config: CollaborationRoomConfig<TConnect, THandle>
 ): CollaborationRoomState<TConnect, THandle> {
-  const owner = webrtcRoomOwnerFor<THandle>(config.ownerKey);
+  // `useId` alone repeats across roots that hydrate the same tree, as a page of server-rendered
+  // islands does, and one root then took over and destroyed the other's room. State survives
+  // StrictMode's double render and effect replay, as `useId` does, so a remount still finds
+  // its room.
+  const [instance] = useState(() => (ownerInstances += 1));
+  const owner = webrtcRoomOwnerFor<THandle>(`${config.ownerKey}#${instance}`);
   const configRef = useRef(config);
   configRef.current = config;
   assertHostModulesHaveNoCollaboration(config.hookName, config.hostModules);
 
   const generationRef = useRef(0);
   const lastConnectRef = useRef<TConnect | null>(null);
+  // The key of the room the `room` option connected. Only that room follows `room` changes;
+  // `connect` and `leave` hand the room to the host, so they clear it.
   const [room, setRoom] = useState<THandle | null>(() => owner.current());
   const [document, setDocument] = useState<Uint8Array | null>(
     () => owner.current()?.document ?? null
@@ -141,7 +151,7 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
     setDocument(next?.document ?? null);
   }, []);
 
-  const connect = useCallback(
+  const connectRoom = useCallback(
     async (next: TConnect): Promise<CollaborationFailure | null> => {
       const generation = ++generationRef.current;
       // Record the attempt, not the success: rejoin after a FAILED connect must retry
@@ -172,7 +182,15 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
     [owner, publish]
   );
 
-  const leave = useCallback(
+  const connect = useCallback(
+    (next: TConnect): Promise<CollaborationFailure | null> => {
+      owner.autoKey = null;
+      return connectRoom(next);
+    },
+    [connectRoom]
+  );
+
+  const leaveRoom = useCallback(
     (nextDocument: Uint8Array) => {
       requireLeaveBytes(configRef.current.hookName, nextDocument);
       generationRef.current += 1;
@@ -185,6 +203,14 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
     [owner]
   );
 
+  const leave = useCallback(
+    (nextDocument: Uint8Array) => {
+      owner.autoKey = null;
+      leaveRoom(nextDocument);
+    },
+    [leaveRoom]
+  );
+
   const rejoin = useCallback(
     async (nextDocument: Uint8Array): Promise<CollaborationFailure | null> => {
       const last = lastConnectRef.current;
@@ -195,10 +221,11 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
           `${configRef.current.hookName}: rejoin needs a room this hook connected before. Call connect first.`
         );
       }
-      leave(nextDocument);
-      return connect(configRef.current.rejoinOptionsOf(last));
+      // Rejoining keeps whoever owns the room: an auto room stays under the `room` option.
+      leaveRoom(nextDocument);
+      return connectRoom(configRef.current.rejoinOptionsOf(last));
     },
-    [connect, leave]
+    [connectRoom, leaveRoom]
   );
 
   useEffect(() => {
@@ -215,12 +242,21 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
   // connect promise — so without this the hook's `error` stayed null while the replica had
   // stopped replicating. `destroyed` is not folded in: leave and unmount reach it on purpose.
   const liveSession = room?.session ?? null;
+  // The failure this effect reported, so a session that heals clears it and nothing else.
+  const sessionFailureRef = useRef<CollaborationFailure | null>(null);
   useEffect(() => {
     if (!liveSession) return undefined;
     const apply = (): void => {
       const snapshot = liveSession.statusSnapshot();
-      if (snapshot.status !== 'error') return;
-      setError(snapshot.reason ?? snapshot.lastFailure ?? { code: 'transport' });
+      if (snapshot.status !== 'error') {
+        const reported = sessionFailureRef.current;
+        sessionFailureRef.current = null;
+        if (reported) setError((current) => (current === reported ? null : current));
+        return;
+      }
+      const failure = snapshot.reason ?? snapshot.lastFailure ?? { code: 'transport' };
+      sessionFailureRef.current = failure;
+      setError(failure);
     };
     apply();
     return liveSession.subscribeStatus(() => apply());
@@ -250,13 +286,26 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
   const autoKey = config.autoKey;
   useEffect(() => {
     const next = configRef.current.autoRoom;
+    const switched = owner.autoKey !== null && owner.autoKey !== autoKey;
+    if (switched) {
+      // A new room, server, bootstrap, or actor, or no room: leave the old one, and supersede a
+      // connect to it that is still in flight. Its document belongs to that room, so nothing
+      // stays mounted until the next room answers.
+      generationRef.current += 1;
+      owner.autoKey = null;
+      if (owner.current()) owner.leave();
+      publish(null);
+      setError(null);
+      setPending(false);
+    }
     if (!next) return;
     if (owner.current()) return;
+    owner.autoKey = autoKey;
     // `connect` rejects so that an awaiting caller can branch on the failure. This path has
     // no caller, and the failure already reaches the host through `error`, so swallow it
     // rather than raise an unhandled rejection for a room the host already renders as failed.
-    void connect(next).catch(() => {});
-  }, [autoKey, connect, owner]);
+    void connectRoom(next).catch(() => {});
+  }, [autoKey, connectRoom, owner, publish]);
 
   const hostModules = config.hostModules;
   const session = room?.session ?? null;

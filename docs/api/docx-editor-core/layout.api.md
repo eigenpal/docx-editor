@@ -4732,6 +4732,4 @@ export interface WordSegment {
 // @public
 export function wordSegmentsToGraphemeRecords(text: string, segments: readonly WordSegment[]): readonly GraphemeWordSegmentRecord[];
 
-// (No @packageDocumentation comment for this package)
-
 ```

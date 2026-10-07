@@ -34,3 +34,6 @@ export declare function entryMap(entry: string[] | Record<string, string>): Reco
 export declare function jsonType(value: unknown, indent?: string, siblingKeys?: string[]): string;
 export declare function typesCondition(target: unknown): string | undefined;
 export declare function publishedDeclaration(specifier: string, fromDir: string): string;
+
+/** The `@packageDocumentation` comment of an entry's source, or null. */
+export declare function packageDocumentationOf(source: string): string | null;

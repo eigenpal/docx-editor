@@ -27,6 +27,7 @@ import {
   type BlobBytesStore,
   type LogicalId,
 } from '../document/index.ts';
+import { asLogicalId, idOf } from '../document/identity.ts';
 
 export const WML = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 export const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
@@ -110,8 +111,8 @@ export function mainPart(pkg: OoxmlPackage): OoxmlPart {
   return part;
 }
 
-export function parentOf(registry: DocumentRegistry, start: LogicalId, kind: string): LogicalId {
-  let current: LogicalId | null = start;
+export function parentOf(registry: DocumentRegistry, start: string, kind: string): LogicalId {
+  let current: LogicalId | null = asLogicalId(start);
   while (current) {
     const record = registry.record(current);
     if (record && record.kind === kind) return current;
@@ -179,6 +180,48 @@ export function packageOf(replica: Replica): OoxmlPackage {
   const result = replica.materializer.current();
   if (!result.ok) throw new Error(result.code);
   return result.package;
+}
+
+/**
+ * The children a replica shows for a node, in the coordinates journals use: a paragraph's
+ * runs live in its shared text rather than in its record's child list.
+ */
+export function childIdsOf(replica: Replica, id: LogicalId): LogicalId[] {
+  for (const part of packageOf(replica).parts.values()) {
+    let found: LogicalId[] | null = null;
+    walk(part.root, (node) => {
+      if (!found && node.id === id && node.kind !== 'textValue') {
+        found = node.children.map(idOf);
+      }
+    });
+    if (found) return found;
+  }
+  throw new Error(`node ${id} not found`);
+}
+
+/** The nearest shown ancestor of a node with this kind, read from the replica's package. */
+export function shownParentOf(replica: Replica, id: string, kind: string): LogicalId {
+  for (const part of packageOf(replica).parts.values()) {
+    const path: OoxmlNode[] = [];
+    let found: LogicalId | null = null;
+    const visit = (node: OoxmlNode): boolean => {
+      if (node.id === id) {
+        const ancestor = [...path].reverse().find((candidate) => candidate.kind === kind);
+        found = ancestor ? idOf(ancestor) : null;
+        return true;
+      }
+      if (node.kind === 'textValue') return false;
+      path.push(node);
+      const hit = node.children.some(visit);
+      path.pop();
+      return hit;
+    };
+    if (visit(part.root)) {
+      if (!found) break;
+      return found;
+    }
+  }
+  throw new Error(`no ${kind} above ${id}`);
 }
 
 export function applyJournal(replica: Replica, journal: CanonicalPrimitiveJournal): void {

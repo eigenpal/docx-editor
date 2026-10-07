@@ -4,13 +4,24 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { projectedTextTarget } from './projected-text-target.ts';
-import { recordSplitTextSources, splitProductsOf } from './split-text-recording.ts';
-import type {
-  CanonicalNodeDescriptor,
-  CanonicalPrimitiveEffect,
-  CanonicalPrimitiveJournal,
-} from '@docx-editor.dev/core/collaboration/replication';
+import { routeInlineEffects, type InlinePlan } from './paragraph-text-writer.ts';
+import {
+  applyInlinePlan,
+  deleteCopiesOfRemoved,
+  deleteEmbedsOfRemoved,
+  deleteHeldOriginals,
+  recordDeletions,
+  type InlineWritten,
+} from './paragraph-text-apply.ts';
+import {
+  recordSplitAcrossParents,
+  recordSplitTextSources,
+  runTextPending,
+  splitProductsOf,
+} from './split-text-recording.ts';
+import type { CanonicalPrimitiveJournal } from '@docx-editor.dev/core/collaboration/replication';
 import type { LogicalId } from './identity.ts';
+import { sharedEffect, type SharedEffect, type SharedNodeDescriptor } from './shared-effect.ts';
 import {
   rejectBlobDescriptor,
   rejectDangerousKey,
@@ -18,7 +29,8 @@ import {
   rejectString,
   type LimitCode,
 } from './limits.ts';
-import { JOURNAL_ORIGIN } from './schema.ts';
+import { isNodeMap, JOURNAL_ORIGIN, mapFieldArriving } from './schema.ts';
+import { INLINE_FIELD } from './paragraph-text.ts';
 import { JournalProjection, projectEffect } from './journal-projection.ts';
 import type { DocumentRegistry } from './registry.ts';
 
@@ -30,9 +42,15 @@ export type JournalRefusalCode =
 
 export type ApplyJournalResult =
   | { readonly ok: true }
-  | { readonly ok: false; readonly code: JournalRefusalCode; readonly detail?: string };
+  | {
+      readonly ok: false;
+      readonly code: JournalRefusalCode;
+      readonly detail?: string;
+      /** The refusal waits on a peer's update in flight; the same edit can succeed later. */
+      readonly transient?: true;
+    };
 
-function requireKnown(projection: JournalProjection, id: string): ApplyJournalResult | null {
+function requireKnown(projection: JournalProjection, id: LogicalId): ApplyJournalResult | null {
   if (rejectDangerousKey(id) || id.length === 0) {
     return { ok: false, code: 'prototype-key', detail: id };
   }
@@ -42,7 +60,7 @@ function requireKnown(projection: JournalProjection, id: string): ApplyJournalRe
 
 function validateDescriptor(
   registry: DocumentRegistry,
-  descriptor: CanonicalNodeDescriptor,
+  descriptor: SharedNodeDescriptor,
   projection: JournalProjection
 ): ApplyJournalResult | null {
   if (rejectDangerousKey(descriptor.logicalId) || descriptor.logicalId.length === 0) {
@@ -66,7 +84,7 @@ function validateDescriptor(
 
 export function validateEffect(
   registry: DocumentRegistry,
-  effect: CanonicalPrimitiveEffect,
+  effect: SharedEffect,
   projection: JournalProjection
 ): ApplyJournalResult | null {
   switch (effect.kind) {
@@ -145,7 +163,10 @@ export function validateEffect(
       }
       const parent = projection.node(effect.parentLogicalId);
       if (parent && !parent.isText) {
-        if (effect.start + effect.deleteCount > parent.children.length) {
+        if (
+          effect.start + effect.deleteCount > parent.children.length &&
+          !appendsToPartRoot(registry, effect, parent.children.length)
+        ) {
           return { ok: false, code: 'invalid-bound', detail: effect.parentLogicalId };
         }
         if (
@@ -220,9 +241,41 @@ export function validateEffect(
   }
 }
 
+/**
+ * A delete followed by an insert at the same place in one text is one replacement, written
+ * as one splice so shared text can place the new characters before the ones they replace.
+ * Typing over a selection arrives this way. Both forms leave the same text.
+ */
+function mergeTextReplacements(effects: readonly SharedEffect[]): SharedEffect[] {
+  const merged: SharedEffect[] = [];
+  for (let index = 0; index < effects.length; index += 1) {
+    const effect = effects[index]!;
+    const next = effects[index + 1];
+    if (
+      effect.kind === 'spliceText' &&
+      effect.deleteCount > 0 &&
+      effect.insert.length === 0 &&
+      next?.kind === 'spliceText' &&
+      next.logicalId === effect.logicalId &&
+      next.utf16Start === effect.utf16Start &&
+      next.deleteCount === 0 &&
+      // A split-text slice keeps delete-first: a merged edit of one would write past the
+      // slice into its source.
+      !projectedTextTarget(effect) &&
+      !projectedTextTarget(next)
+    ) {
+      merged.push({ ...effect, insert: next.insert });
+      index += 1;
+      continue;
+    }
+    merged.push(effect);
+  }
+  return merged;
+}
+
 function applyEffect(
   registry: DocumentRegistry,
-  effect: CanonicalPrimitiveEffect,
+  effect: SharedEffect,
   initialText: ReadonlySet<string>
 ): void {
   switch (effect.kind) {
@@ -282,14 +335,17 @@ function applyEffect(
     case 'setNamespaceBinding':
       registry.setNamespaceBinding(effect.logicalId, effect.prefix, effect.uri);
       return;
-    case 'spliceChildren':
+    case 'spliceChildren': {
+      const listed = registry.record(effect.parentLogicalId);
+      const length = listed && 'childIds' in listed ? listed.childIds.length : effect.start;
       registry.spliceChildren(
         effect.parentLogicalId,
-        effect.start,
+        appendsToPartRoot(registry, effect, length) ? length : effect.start,
         effect.deleteCount,
         effect.childLogicalIds
       );
       return;
+    }
     case 'moveNode':
       registry.moveNode(
         effect.logicalId,
@@ -342,7 +398,7 @@ function inferReplacement(
   registry: DocumentRegistry,
   removedId: LogicalId,
   formerChildren: ReadonlyMap<LogicalId, readonly LogicalId[]>,
-  effects: readonly CanonicalPrimitiveEffect[]
+  effects: readonly SharedEffect[]
 ): LogicalId | undefined {
   const content = new Set(
     (formerChildren.get(removedId) ?? []).filter((id) => isContentWitness(registry, id))
@@ -381,7 +437,7 @@ interface JournalPlan {
    * later tombstone learns which runs replaced the dropped one, so two concurrent splits of
    * one run can be de-duplicated deterministically instead of duplicating the text (#581).
    */
-  readonly replacementsByEffect: ReadonlyMap<CanonicalPrimitiveEffect, readonly LogicalId[]>;
+  readonly replacementsByEffect: ReadonlyMap<SharedEffect, readonly LogicalId[]>;
 }
 
 /**
@@ -399,14 +455,14 @@ interface JournalPlan {
  */
 function planJournal(
   registry: DocumentRegistry,
-  effects: readonly CanonicalPrimitiveEffect[]
+  effects: readonly SharedEffect[]
 ): ApplyJournalResult | JournalPlan {
   const projection = new JournalProjection(registry);
   const removed: LogicalId[] = [];
   const reinserted = new Set<LogicalId>();
   const mintedText = new Set<string>();
   const mintedNodes = new Set<string>();
-  const replacementsByEffect = new Map<CanonicalPrimitiveEffect, LogicalId[]>();
+  const replacementsByEffect = new Map<SharedEffect, LogicalId[]>();
   for (const effect of effects) {
     const refusal = validateEffect(registry, effect, projection);
     if (refusal) return refusal;
@@ -438,7 +494,7 @@ function planJournal(
   return { removed, reinserted, mintedText, mintedNodes, replacementsByEffect };
 }
 
-function mintedNodeCount(effects: readonly CanonicalPrimitiveEffect[]): number {
+function mintedNodeCount(effects: readonly SharedEffect[]): number {
   let count = 0;
   for (const effect of effects) if (effect.kind === 'putNode') count += 1;
   return count;
@@ -454,14 +510,50 @@ function mintedNodeCount(effects: readonly CanonicalPrimitiveEffect[]): number {
  */
 export function applyPrimitiveJournal(
   registry: DocumentRegistry,
-  journal: CanonicalPrimitiveJournal
+  given: CanonicalPrimitiveJournal,
+  routed?: InlinePlan | null
 ): ApplyJournalResult {
-  if (registry.nodeCount() + mintedNodeCount(journal.effects) > registry.limits.maxNodes) {
+  // A journal the projection did not route (one in shared coordinates already) is routed
+  // here, so paragraph inline content always goes to shared text.
+  let plan = routed;
+  let journal = given;
+  if (plan === undefined) {
+    const routed = routeInlineEffects(registry, given.effects);
+    if (routed.refusal) return { ok: false, ...routed.refusal };
+    plan = routed.plan;
+    if (plan) journal = { ...given, effects: routed.passThrough };
+  }
+  const effects = journal.effects.map(sharedEffect);
+  if (registry.nodeCount() + mintedNodeCount(effects) > registry.limits.maxNodes) {
     return { ok: false, code: 'too-many-nodes' };
   }
   // Nothing is written until every effect is admitted.
-  const planned = planJournal(registry, journal.effects);
+  const planned = planJournal(registry, effects);
   if ('ok' in planned) return planned;
+  for (const removed of planned.replacementsByEffect.values()) {
+    for (const id of removed) {
+      if (registry.kindOf(id) === 'run' && runTextPending(registry, id)) {
+        return {
+          ok: false,
+          code: 'invalid-bound',
+          detail: `split of pending text in ${id}`,
+          transient: true,
+        };
+      }
+    }
+  }
+  const arriving = plan?.paragraphs.find(
+    ({ id }) => registry.inline.textOf(id) === null && paragraphTextArriving(registry, id)
+  );
+  if (arriving) {
+    // Its text is in an update Yjs holds back. A text written now would replace the author's.
+    return {
+      ok: false,
+      code: 'invalid-bound',
+      detail: `pending text of paragraph ${arriving.id}`,
+      transient: true,
+    };
+  }
   registry.doc.transact(() => {
     // Inside the transaction, so the flag is set before Yjs can deliver the events that clear
     // it. A flush that runs while a remote update is still being processed opens a DEFERRED
@@ -469,25 +561,74 @@ export function applyPrimitiveJournal(
     // reading a derived index in between has to know it is looking at the older tree.
     registry.noteWrite();
     const formerChildren = captureChildLists(registry, planned.removed);
-    for (const effect of journal.effects) {
+    const unaliased: { removedId: LogicalId; runs: LogicalId[] }[] = [];
+    const insertedRuns: LogicalId[] = [];
+    for (const effect of mergeTextReplacements(effects)) {
       applyEffect(registry, effect, planned.mintedText);
       if (effect.kind === 'spliceChildren') {
+        // Only a split that moves the tail into a paragraph this journal created (Enter) can
+        // carry a run's text across parents; formatting splits stay within one parent.
+        if (planned.mintedNodes.has(effect.parentLogicalId)) {
+          for (const id of effect.childLogicalIds) {
+            if (planned.mintedNodes.has(id) && registry.kindOf(id) === 'run') insertedRuns.push(id);
+          }
+        }
         recordSplitProvenance(
           registry,
           planned,
           planned.replacementsByEffect.get(effect) ?? [],
-          effect.childLogicalIds
+          effect.childLogicalIds,
+          unaliased
         );
       }
     }
-    tombstoneRemoved(registry, journal.effects, planned, formerChildren);
+    recordSplitAcrossParents(registry, unaliased, insertedRuns, (removedId, tail) => {
+      registry.recordRunSplit(
+        resolveSplitRoot(registry, removedId, planned.reinserted),
+        removedId,
+        tail
+      );
+    });
+    tombstoneRemoved(registry, effects, planned, formerChildren);
+    const removed = deleteCopiesOfRemoved(registry, planned.removed);
+    const written: InlineWritten = plan
+      ? applyInlinePlan(registry, plan)
+      : { copied: new Set<string>(), deleted: new Set<string>(), embedded: new Set<string>() };
+    deleteHeldOriginals(registry, removed.held, written.copied);
+    recordDeletions(registry, written, removed.shown);
+    deleteEmbedsOfRemoved(registry, removed.embeds, planned.removed, written);
   }, JOURNAL_ORIGIN);
   return { ok: true };
 }
 
+/**
+ * Whether an edit of this paragraph waits for an update shared state holds back: its text,
+ * or the text of one of its runs, is in that update. The journal would be refused after the
+ * editor committed it, so the operation gate refuses it first.
+ */
+export function paragraphEditWaits(registry: DocumentRegistry, paragraphId: LogicalId): boolean {
+  if (registry.inline.textOf(paragraphId) === null && paragraphTextArriving(registry, paragraphId))
+    return true;
+  const record = registry.record(paragraphId);
+  const children = record && 'childIds' in record ? record.childIds : [];
+  return children.some((id) => registry.kindOf(id) === 'run' && runTextPending(registry, id));
+}
+
+/** As `paragraphEditWaits`, for the paragraph that holds a node, or the node itself. */
+export function editWaits(registry: DocumentRegistry, id: LogicalId): boolean {
+  const paragraph =
+    registry.kindOf(id) === 'paragraph' ? id : (registry.inline.owner(id) ?? registry.parentOf(id));
+  return paragraph !== null && paragraphEditWaits(registry, paragraph);
+}
+
+function paragraphTextArriving(registry: DocumentRegistry, id: LogicalId): boolean {
+  const record = registry.schema.nodes.get(id);
+  return isNodeMap(record) && mapFieldArriving(record, INLINE_FIELD);
+}
+
 function tombstoneRemoved(
   registry: DocumentRegistry,
-  effects: readonly CanonicalPrimitiveEffect[],
+  effects: readonly SharedEffect[],
   planned: JournalPlan,
   formerChildren: ReadonlyMap<LogicalId, readonly LogicalId[]>
 ): void {
@@ -519,7 +660,8 @@ function recordSplitProvenance(
   registry: DocumentRegistry,
   planned: JournalPlan,
   removedIds: readonly LogicalId[],
-  insertedIds: readonly LogicalId[]
+  insertedIds: readonly LogicalId[],
+  unaliased: { removedId: LogicalId; runs: LogicalId[] }[]
 ): void {
   for (const removedId of removedIds) {
     const kind = registry.kindOf(removedId);
@@ -541,7 +683,7 @@ function recordSplitProvenance(
       continue;
     }
     const runs = insertedIds.filter((runId) => registry.kindOf(runId) === 'run');
-    recordSplitTextSources(registry, removedId, runs);
+    if (!recordSplitTextSources(registry, removedId, runs)) unaliased.push({ removedId, runs });
     registry.recordRunSplit(root, removedId, runs);
   }
 }
@@ -580,4 +722,26 @@ function captureChildLists(
     if (shape && !shape.isText) lists.set(id, shape.children);
   }
   return lists;
+}
+
+/**
+ * Whether a splice inserts past the end of a part root's listed children. The materializer
+ * shows a part's members, such as notes, sorted, and also those no parent lists any more,
+ * which an undo of their insert leaves behind. The editor counts those, so an insert at its
+ * end can stand past the listed children; it is appended, and the sort places it.
+ */
+function appendsToPartRoot(
+  registry: DocumentRegistry,
+  effect: {
+    readonly parentLogicalId: string;
+    readonly start: number;
+    readonly deleteCount: number;
+  },
+  length: number
+): boolean {
+  return (
+    effect.deleteCount === 0 &&
+    effect.start > length &&
+    registry.partEntries().some((entry) => entry.rootLogicalId === effect.parentLogicalId)
+  );
 }

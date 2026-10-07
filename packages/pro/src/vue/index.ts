@@ -78,7 +78,7 @@ export type {
   CollaborationBootstrap,
   CollaborationIdentityUpdate,
   CollaborationSession,
-} from '../collaboration/session.ts';
+} from '../collaboration/types.ts';
 export type { CreateDocumentCollaborationOptions } from '../collaboration/document-session.ts';
 export {
   DocxEditorCollaboration,
@@ -89,6 +89,11 @@ export {
   type CollaborationCaretLabelsProps,
   type DocxEditorCollaborationNamespace,
 } from './DocxEditorCollaboration.ts';
+export type {
+  CollaborationStatusNoticeProps,
+  CollaborationStatusNoticeRenderProps,
+} from './CollaborationStatusNotice.ts';
+export type { CollaborationNoticeKind } from '../collaboration/status-notice.ts';
 export { CustomNodeChrome, type CustomNodeChromeProps } from './CustomNodeChrome.ts';
 export {
   CustomNodeContextMenu,

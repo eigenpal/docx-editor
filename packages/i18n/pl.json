@@ -854,7 +854,20 @@
   },
   "collaboration": {
     "moreParticipants": "{count, plural, one {Jeszcze # osoba} few {Jeszcze # osoby} many {Jeszcze # osób} other {Jeszcze # osoby}}",
-    "participants": "Osoby w tym dokumencie"
+    "participants": "Osoby w tym dokumencie",
+    "status": {
+      "connecting": "Łączenie z dokumentem…",
+      "editRefused": "Nie udało się udostępnić ostatniej zmiany, więc została cofnięta.",
+      "offline": "Offline. Możesz dalej edytować; zmiany zostaną zsynchronizowane po przywróceniu połączenia.",
+      "outOfSync": "Ta kopia nie jest zsynchronizowana z udostępnionym dokumentem.",
+      "rejoin": "Dołącz ponownie",
+      "syncing": "Pobieranie najnowszych zmian…",
+      "waiting": "Oczekiwanie na najnowsze zmiany…",
+      "stalled": "Najnowsze zmiany nie dotarły. Dołącz ponownie, aby wczytać udostępniony dokument.",
+      "offlinePaused": "Offline. Edycja zostanie wznowiona po przywróceniu połączenia.",
+      "upgradeRequired": "Ta aplikacja i udostępniony dokument używają różnych wersji współpracy. Zapisz kopię i skontaktuj się z administratorem.",
+      "newRoomRequired": "Ten udostępniony dokument nie może być dalej edytowany. Zapisz kopię i udostępnij ją ponownie."
+    }
   },
   "textFormField": {
     "apply": "OK",

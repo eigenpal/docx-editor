@@ -49,6 +49,9 @@ function createPeer(): FakePeer {
     _onChannelMessage(event: { readonly data: unknown }) {
       passthrough.push(event.data);
     },
+    destroy() {
+      peer.destroyed = true;
+    },
   };
   return peer as unknown as FakePeer;
 }
@@ -86,8 +89,9 @@ describe('webrtc chunked framing', () => {
   test('reassembles a document-sized message that no single channel message could carry', async () => {
     const sender = createPeer();
     const receiver = createPeer();
+    let delivered = 0;
     installChunkedFraming(sender);
-    installChunkedFraming(receiver);
+    installChunkedFraming(receiver, { onDeliveredMessage: () => (delivered += 1) });
     const message = pattern(6304 * 1024);
 
     sender.send(message);
@@ -100,6 +104,8 @@ describe('webrtc chunked framing', () => {
     expect(receiver.delivered).toHaveLength(1);
     expect(receiver.delivered[0]).toEqual(message);
     expect(receiver.passthrough).toHaveLength(0);
+    // A whole large message tells the session this link carries large updates again.
+    expect(delivered).toBe(1);
   });
 
   test('keeps every frame under the browser single-message ceiling', async () => {
@@ -212,6 +218,8 @@ describe('webrtc chunked framing', () => {
 
     expect(reported).toEqual(['abandoned']);
     expect(receiver.delivered).toEqual([complete]);
+    // The connection can only drift after a lost payload, so it closes and y-webrtc resyncs.
+    expect(receiver.destroyed).toBe(true);
 
     receiver._onChannelMessage({ data: chunkFrame(1, 1, 3, pattern(8)) });
     receiver._onChannelMessage({ data: chunkFrame(1, 2, 3, pattern(8)) });

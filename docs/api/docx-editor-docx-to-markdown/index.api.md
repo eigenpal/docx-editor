@@ -997,6 +997,4 @@ export interface VectorShapeProjection {
     }>[])[];
 }
 
-// (No @packageDocumentation comment for this package)
-
 ```

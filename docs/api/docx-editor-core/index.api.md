@@ -3463,6 +3463,4 @@ export type ZoomMode = {
     readonly type: 'fit';
 };
 
-// (No @packageDocumentation comment for this package)
-
 ```

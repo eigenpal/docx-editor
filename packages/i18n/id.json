@@ -854,7 +854,20 @@
   },
   "collaboration": {
     "moreParticipants": "{count, plural, other {# orang lagi}}",
-    "participants": "Orang dalam dokumen ini"
+    "participants": "Orang dalam dokumen ini",
+    "status": {
+      "connecting": "Menghubungkan ke dokumen…",
+      "editRefused": "Perubahan terakhir Anda tidak dapat dibagikan, jadi perubahan itu dibatalkan.",
+      "offline": "Offline. Anda dapat terus mengedit; perubahan Anda akan disinkronkan saat koneksi kembali.",
+      "outOfSync": "Salinan ini tidak lagi sinkron dengan dokumen bersama.",
+      "rejoin": "Bergabung lagi",
+      "syncing": "Mengambil perubahan terbaru…",
+      "waiting": "Menunggu perubahan terbaru…",
+      "stalled": "Perubahan terbaru belum tiba. Bergabung lagi untuk memuat dokumen bersama.",
+      "offlinePaused": "Offline. Pengeditan akan dilanjutkan saat koneksi kembali.",
+      "upgradeRequired": "Aplikasi ini dan dokumen bersama menggunakan versi kolaborasi yang berbeda. Simpan salinan dan hubungi administrator Anda.",
+      "newRoomRequired": "Dokumen bersama ini tidak dapat dilanjutkan. Simpan salinan dan bagikan lagi."
+    }
   },
   "textFormField": {
     "apply": "OK",

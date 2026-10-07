@@ -7017,6 +7017,4 @@ export interface VerticalRulerProps {
 
 export { WORD_DEFAULT_FONT }
 
-// (No @packageDocumentation comment for this package)
-
 ```

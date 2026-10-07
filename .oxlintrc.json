@@ -394,6 +394,11 @@
       "rules": {
         "max-lines": ["error", { "max": 3500, "skipBlankLines": false, "skipComments": false }]
       }
+    },
+    // The benchmark and scenario tools are command-line programs: their report is console output.
+    {
+      "files": ["benchmarks/**/*.ts"],
+      "rules": { "no-console": "off" }
     }
   ]
 }

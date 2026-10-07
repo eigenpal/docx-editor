@@ -10,7 +10,7 @@ This reference documents the complete configuration and API behavior for real-ti
 
 For a basic WebRTC setup, use the [real-time collaboration quickstart](/docs/2.x/collaboration).
 
-The Pro module replicates text, structure, formatting, tables, headers, footers, notes, drawings, relationships, and embedded parts. Peers also share presence and remote selections across paragraphs.
+The Pro module replicates text, structure, formatting, tables, headers, footers, notes, drawings, relationships, and embedded parts. Peers also share presence and remote selections across paragraphs. Your caret and each remote caret stay beside the same character while others type, delete, split, or join the paragraph around it.
 
 Collaboration requires the collaboration module from [`@docx-editor.dev/pro`](/docs/2.x/pro).
 
@@ -173,9 +173,13 @@ async function leaveRoom() {
 
 With `create-or-join`, every peer uses the same room and bootstrap settings. Each peer must use a unique `actorId`. The first peer seeds the empty room from `document`. Later peers join the existing room. Use `create` or `join` when each host already knows its role.
 
+With Hocuspocus, `create` waits for the server's state before it seeds. If the room already holds a document, `create` fails with `already-initialized` and seeds nothing. If the server does not answer within `syncedTimeoutMs`, `create` fails with `initialization-timeout`.
+
 Two isolated peers can seed the same room at the same time. This creates a room that clients cannot repair. Each replica reports `concurrent-seed` and stops. Create a new room from saved bytes.
 
 Omit `room` when the user chooses to share or join later. Then call `connect` with the same options. `connect` and `leave` keep stable identities across renders.
+
+If you change the room, server, bootstrap kind, or `actorId` in `room`, the hook leaves the old room and connects to the new one. If you set `room` to `null`, the hook leaves. A room you open with `connect` stays connected until you call `leave`.
 
 The editor reads `modules` at construction time. Set `key` to the session `sessionId`, as shown in the examples. Without `key`, a connection after mount does not register the collaboration module. The editor continues local editing, and no changes replicate. The session logs a warning if you create it without attaching it.
 
@@ -239,7 +243,7 @@ import {
 } from '@docx-editor.dev/pro/vue/hocuspocus';
 
 const props = defineProps<{ room: UseHocuspocusCollaborationConnectOptions }>();
-const collaboration = reactive(useHocuspocusCollaboration({ room: props.room }));
+const collaboration = reactive(useHocuspocusCollaboration(() => ({ room: props.room })));
 </script>
 
 <template>
@@ -257,7 +261,7 @@ const collaboration = reactive(useHocuspocusCollaboration({ room: props.room }))
 </template>
 ```
 
-Vue composables return refs. Wrap the return with `reactive` before you pass it to `DocxEditorCollaborationRoot`. Vue renders the named `fallback` slot whenever `document` is `null`. Without that slot, it renders nothing. Handle `error` before you render the root.
+Pass the options as a getter so the composable follows a change to the `room` prop. Vue composables return refs. Wrap the return with `reactive` before you pass it to `DocxEditorCollaborationRoot`. Vue renders the named `fallback` slot whenever `document` is `null`. Without that slot, it renders nothing. Handle `error` before you render the root.
 
 </Framework>
 </FrameworkTabs>
@@ -291,10 +295,13 @@ return (
 `useCollaborationStatus()` returns these fields:
 
 - `status` gives the session state, or `inactive` when no session exists.
-- `reason` gives the failure for the present state. It clears after recovery.
-- `lastFailure` keeps the latest terminal error after the status changes.
+- `reason` gives the cause of the present state, such as a failing WebRTC peer link while the status is `ready`. It clears after recovery.
+- `lastFailure` keeps the latest `error` failure after the status changes. A reason that comes with `ready` or `disconnected` does not set it.
 - `live` is true when edits made now reach the room.
-- `diverged` is true when `status` is `error` or `destroyed`. Call `rejoin` to recover a room that the hook connected before.
+- `diverged` is true when `status` is `destroyed`, or `error` that does not heal on its own. Call `rejoin` to recover a room that the hook connected before.
+- `recovering` is true when `status` is `error` but the session heals on the next update. Show a short notice, not a rejoin action.
+- `waiting` is true while edits wait for the room: the editor cannot show a change until an update that it depends on arrives. The editor refuses edits meanwhile and accepts them again when the update arrives.
+- `failureCount` counts the failures the session recorded. It changes with each new failure, also when `lastFailure` repeats the same code, so you can tell users each time the room refuses an edit.
 - `attached` is true when an editor has attached its document port. A live, unattached session usually means the editor did not remount for the session.
 
 `useCollaborationParticipants()` returns the room participants.
@@ -304,6 +311,49 @@ Both hooks accept an optional `session`. Omit it to read the session from the ed
 All of these are available from `@docx-editor.dev/pro/react` and `@docx-editor.dev/pro/vue`.
 
 If you own the Yjs resources, use `useDocumentCollaboration` from the same entries. It provides the same `connect` and `leave` lifecycle without WebRTC.
+
+## Show the room status
+
+`DocxEditorCollaboration.Status` tells users what they need to know about the room. It shows nothing while everything is in order. It reports these states:
+
+- Connecting to the room.
+- Offline. The message says whether users can keep editing, which depends on `offlineEditing`.
+- Catching up after an update that the session could not apply yet.
+- Edits wait for the latest changes from the room. If the wait lasts longer than 10 seconds, the part offers **Rejoin**.
+- The room refused an edit, and the editor undid it.
+- Out of sync. If you handle the rejoin, the part shows a **Rejoin** button.
+- An upgrade is required, because this client and the room use different collaboration formats. Either side can be the older one; for the steps, see [collaboration upgrades](/docs/2.x/pro/collaboration-versions). Rejoining cannot fix this, so the part shows no button.
+- A new room is required, because the room itself cannot continue: two seeds merged, a stored file is damaged, or the room reached a resource limit. Rejoining the same room cannot fix this, so the part shows no button. Save a copy and share it in a new room.
+
+The messages come from the editor's translations. The part keeps an empty region with `role="status"` mounted, so screen readers announce each message when it appears.
+
+To show the **Rejoin** button, save the editor and pass the bytes to the `rejoin` function of your provider hook:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+const { rejoin } = useHocuspocusCollaboration({ room });
+
+async function rejoinRoom() {
+  const saved = await editorRef.current?.save();
+  if (saved) await rejoin(new Uint8Array(saved));
+}
+
+<DocxEditorCollaboration.Status onRejoin={rejoinRoom} />;
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditorCollaboration.Status @rejoin="rejoinRoom" />
+```
+
+</Framework>
+</FrameworkTabs>
+
+To render your own notice, pass a render function in React or a default slot in Vue. It receives `kind`, the translated `message`, and `rejoin` when the copy is out of sync. For CSS styling, use the `docx-collaboration-status` class and the `data-collaboration-status` attribute.
 
 ## Show avatars and caret labels
 
@@ -378,7 +428,11 @@ For CSS styling, use the `docx-remote-caret-label` class, `--doc-remote-color` c
 
 ## Recover a diverged replica
 
-A status of `error` is terminal. The replica refused an update and kept its copy. The session now refuses edits, and other peers might not have its latest changes. Waiting does not fix the replica.
+A status of `error` pauses editing. The replica keeps its last good copy of the document.
+
+Some errors heal on their own. If the replica could not show a peer's update yet, for example `remote-apply-failed` or `materialize-dropped-content`, it returns to its earlier status when a later update completes the shared state. Other errors are terminal: version mismatches, `concurrent-seed`, `blob-digest-mismatch`, resource limits, and `authentication-failed`. For those, waiting does not fix the replica.
+
+On WebRTC, a peer link that keeps losing large updates keeps the status `ready` and sets the reason `transport-disconnected` with the detail `a peer link cannot carry large updates`. Editing continues for every participant, and the other peers still receive each edit. The reason clears when that link recovers.
 
 For `collaboration-format-mismatch`, `protocol-version-mismatch`, or `schema-version-mismatch`, preserve local work and follow [collaboration upgrades](/docs/2.x/pro/collaboration-versions). Rejoining the same incompatible room cannot resolve these errors.
 
@@ -399,7 +453,27 @@ Save the editor bytes before you call `rejoin`. It leaves with those bytes, then
 
 ## Edit offline
 
-Set `offlineEditing: true` in the `room` or `connect` options. The session then accepts edits while its status is `disconnected`. It merges buffered updates after reconnection. Show the status so users know when edits have not reached the room. The `error` status remains terminal. Every room factory and hook accepts this option.
+The session accepts edits while its status is `disconnected`. It merges buffered updates after reconnection. Show the status so users know when edits have not reached the room.
+
+Buffered edits live in the browser's memory until they reach the room. A reload, an unmount, or a change of the `room` option drops them. To keep them across reloads, persist the Yjs document. For example, attach `y-indexeddb` to the `ydoc` you pass to `useDocumentCollaboration`.
+
+`useHocuspocusCollaboration` and `useWebrtcCollaboration` return `unsyncedChanges`, the number of local changes that no one else has yet:
+
+- With Hocuspocus, it counts the changes that the server has not confirmed.
+- With WebRTC, it counts the changes made while no peer was connected. A WebRTC room has no server, so these changes exist only in your browser until a peer connects and syncs. To warn users before they close a page with unsent edits, add a `beforeunload` listener while the count is above zero:
+
+```tsx
+const { unsyncedChanges } = useHocuspocusCollaboration({ room });
+
+useEffect(() => {
+  if (unsyncedChanges === 0) return;
+  const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+  window.addEventListener('beforeunload', warn);
+  return () => window.removeEventListener('beforeunload', warn);
+}, [unsyncedChanges]);
+```
+
+To pause editing while disconnected, set `offlineEditing: false` in the `room` or `connect` options. Every room factory and hook accepts this option. The session refuses edits in the `error` status in both cases.
 
 ## Use your own signaling
 
@@ -458,6 +532,99 @@ An unrecognized authentication refusal produces `initialization-aborted` during 
 The `createHocuspocusCollaboration` factory accepts the same options. Import it from `@docx-editor.dev/pro/collaboration/hocuspocus`. It returns the room, `ydoc`, and `provider`.
 
 The Hocuspocus v4 server runs on Node, not Bun. Use `@hocuspocus/provider` for the required authentication handshake.
+
+## Prepare the room document on a server
+
+If your server holds each room's `Y.Doc`, as a Hocuspocus server does, pass that document to `prepareCollaborationServerDocument` when the server creates or loads it. Call it before the server applies any update, including the room's saved state.
+
+Yjs removes formatting markers that it finds redundant after it receives an update. On a server, that removal is a change of the server's own, which the server sends to every participant. It can remove the formatting of text that a participant is typing. A prepared document does not remove markers.
+
+```ts
+import { readFile } from 'node:fs/promises';
+import { Server } from '@hocuspocus/server';
+import * as Y from 'yjs';
+import { prepareCollaborationServerDocument } from '@docx-editor.dev/pro/collaboration';
+
+const server = new Server({
+  async onLoadDocument({ documentName, document }) {
+    prepareCollaborationServerDocument(document);
+    // Load the saved state after the preparation.
+    const saved = await readFile(`${documentName}.ydoc`).catch(() => null);
+    if (saved) Y.applyUpdate(document, new Uint8Array(saved));
+    return document;
+  },
+});
+```
+
+A server that only relays updates, and holds no `Y.Doc`, needs no preparation.
+
+## Compact rooms on a server
+
+Yjs state only grows. Deleted text and records, formatting history, and media that nothing references stay in a room. A server keeps each room's size bounded by compacting it into a new generation: a fresh document that holds the room's current content.
+
+Compact a room when the server loads it, before any participant syncs. Pass the stored state to `compactCollaborationState`. It returns the new generation's state, or `null` when the room has not grown enough to need one. By default, a room is compacted once it is twice the size it had when it was seeded or last compacted. Store the new state in place of the old one.
+
+Every server that holds rooms must also call `checkCollaborationRoomGeneration` from `beforeHandleMessage`. A participant that still holds the previous generation is refused before any of its state merges into the new one.
+
+```ts
+import { readFile, writeFile } from 'node:fs/promises';
+import { Server } from '@hocuspocus/server';
+import * as Y from 'yjs';
+import {
+  checkCollaborationRoomGeneration,
+  compactCollaborationState,
+  prepareCollaborationServerDocument,
+} from '@docx-editor.dev/pro/collaboration';
+
+const server = new Server({
+  async onLoadDocument({ documentName, document }) {
+    prepareCollaborationServerDocument(document);
+    const file = `${documentName}.ydoc`;
+    const saved = await readFile(file).catch(() => null);
+    if (!saved) return document;
+    // A damaged room throws CollaborationSchemaError. Keep the stored state unchanged.
+    const compacted = await compactCollaborationState(new Uint8Array(saved)).catch(() => null);
+    if (compacted) await writeFile(file, compacted);
+    Y.applyUpdate(document, compacted ?? new Uint8Array(saved));
+    return document;
+  },
+  async beforeHandleMessage(payload) {
+    checkCollaborationRoomGeneration(payload);
+  },
+});
+```
+
+`compactCollaborationState` throws `CollaborationSchemaError` when it cannot read the stored state as a room, as `readCollaborationDocument` does. The example catches the error and keeps the stored state unchanged, so the server never overwrites its only copy of a damaged room.
+
+The new generation keeps the document, its comments, and its tracked changes. Participants who connect after the compaction join it as usual. Undo history does not carry over.
+
+A participant whose replica held the previous generation, because it stayed open while everyone left and the room was compacted, gets status `error` with reason `room-generation-changed`. Its document stays in the editor. Call `rejoin` to continue in the new generation. If the participant edited while disconnected, those edits are not in the room: save the editor's document first and offer it to the participant as a copy.
+
+```ts
+if (session.statusSnapshot().reason?.code === 'room-generation-changed') {
+  const saved = await editor.save();
+  if (saved) {
+    const failure = await rejoin(new Uint8Array(saved));
+    if (failure) showRecoveryMessage(failure.code);
+  }
+}
+```
+
+`save()` resolves with `null` when the editor has no document to save. `rejoin` resolves with the failure, or `null` after a successful join; it does not reject. `showRecoveryMessage` stands for your application's own recovery UI.
+
+`readCollaborationRoomGeneration(ydoc)` returns the generation a room holds, or an empty string for a room that was never compacted.
+
+## Run many rooms
+
+One server process or one page can host many rooms, for example one room for each tenant or document. Each room is its own Yjs document, and the session keeps every index, undo step, and caret anchor with that document. Rooms seeded from the same file do not share edits, undo history, or presence.
+
+Keep tenants apart in these places:
+
+- Give each document its own room name. On Hocuspocus, the room name is the `documentName`, so an `onAuthenticate` hook that checks the tenant of the name keeps one tenant out of another tenant's rooms.
+- Call `prepareCollaborationServerDocument`, `compactCollaborationState`, and `checkCollaborationRoomGeneration` for each room. They read only the room document or message that you pass.
+- Create one awareness instance for each room. Presence travels with the awareness instance, so a shared instance would show one room's carets in another.
+
+The collaboration hooks keep one room for each hook call. This holds for pages with several React roots, including server-rendered roots that hydrate the same component tree, and for Vue composables called outside a component, for example in a store that holds one room for each tenant.
 
 ## Read a room from a server
 
@@ -557,10 +724,15 @@ The second argument is a `CollaborationFailureCode`, not free text. Use `transpo
 
 The factory rejects with a typed `CollaborationSchemaError`. Handle these codes:
 
-- `initialization-timeout`: No synchronized room appeared.
+- `invalid-document-id`, `invalid-session-id`, `invalid-identity`, or `invalid-identity-color`: An option is empty or too long. Fix the value.
+- `initialization-timeout` or `initialization-aborted`: No synchronized room appeared, or your `signal` aborted the join.
+- `already-initialized`: A `create` bootstrap found a room that is already seeded. Use `join` or `create-or-join`.
 - `document-id-mismatch`: The room has a different `documentId`.
-- `protocol-version-mismatch`: The room is incompatible with this app deployment.
-- `schema-version-mismatch`: The room is incompatible with this app deployment.
+- `protocol-version-mismatch` or `schema-version-mismatch`: The room is incompatible with this app deployment.
+- `baseline-too-large`, `invalid-baseline`, or `no-main-document-part`: The seed bytes cannot open as a document.
+- `concurrent-seed`, `blob-digest-mismatch`, or a resource-limit code: The room cannot be used.
+
+For the cause and action of each code, see [Failure codes](#failure-codes).
 
 ### Version compatibility
 
@@ -589,8 +761,6 @@ For other errors, resolve the cause, then recreate the session:
 5. Call `createDocumentCollaboration` with `bootstrap: { kind: 'join' }`.
 
 Keep the editor mounted with the saved bytes until the room is ready. If the join fails, retain the saved DOCX for recovery. Rejoining does not automatically merge those local bytes into the room; reconcile outstanding changes separately.
-
-The same entry exports the experimental `createTextCollaboration`. It only replicates paragraph text and rejects structural edits. Use `createDocumentCollaboration`.
 
 ## Create a headless replica
 
@@ -664,7 +834,7 @@ Attached replicas synchronize comments, tracked-change decisions, tables of cont
 
 The replica rejects two write paths. It rejects an edited ProseMirror document. It also rejects review writes without a named intent.
 
-The replica rejects tree edits when the session is destroyed, not ready, or not attached. A transport interruption pauses editing until reconnection. To continue editing, enable [`offlineEditing`](#edit-offline).
+The replica rejects tree edits when the session is destroyed, not ready, or not attached. A transport interruption does not pause editing unless you turn off [`offlineEditing`](#edit-offline).
 
 The session undo manager uses short typing groups with the same pause and duration limits as local editing. Runs end at the same points as local undo steps. Separate editor deletion and formatting commands have separate undo steps. Undo restores the original selection; redo restores the final selection. For the rules, see [Typing and undo](/docs/2.x/core#typing-and-undo).
 
@@ -672,7 +842,37 @@ Direct automation writes retain timed capture and can share an undo step within 
 
 Caret formatting has a separate local undo step. It does not create a shared document edit. Undo and redo preserve other participants' edits.
 
-Repeated concurrent formatting, typing, deletion, and undo preserve document text across participants.
+Concurrent typing, formatting, splitting, joining, and undo keep every participant's text:
+
+- If one participant deletes or reformats a run while another participant types inside it, the typed text stays.
+- If one participant joins a paragraph into the one before it while another participant types in it, the typed text moves with the joined text.
+- If one participant presses Enter while another participant types after the split point, the typed text moves into the new paragraph with the text around it.
+- If one participant undoes an Enter while another participant types in the new paragraph, the typed text moves back with the text around it.
+- If two participants split or join the same text at the same time, each character shows once, in document order.
+- If two participants join the same paragraph at the same time, one into the paragraph before it and one taking in the paragraph after it, all of the text stays.
+- If one participant deletes text while another participant moves it, for example by pressing Enter inside it, the text stays deleted. This also holds when another participant undoes a change around it. The participant who deleted the text can undo the deletion.
+
+Your caret stays next to the character you typed while other participants edit the same paragraph, also when their changes arrive together after a reconnect. If another participant presses Enter before your caret or joins its paragraph into another, your caret moves with the text around it. Text that another participant types exactly at your caret goes after it. Other participants see your caret beside the same character, also when a join removed the paragraph it was in.
+
+If one participant replaces a word while another participant deletes that word, the new word stays whole.
+
+Sometimes an update from the room cannot apply until an earlier update arrives. While the editor cannot show that update, and in any paragraph whose text the update carries, the editor refuses edits before they apply and reports `collaboration-session-not-ready`. Nothing that you typed disappears, and you can edit other paragraphs meanwhile. Editing continues when the missing update arrives.
+
+If you type text and another participant then presses Enter before it or joins its paragraph into another, the text moves with the paragraph. Undo still removes your text where it moved to, and redo brings it back there.
+
+If a connection loses or repeats updates, the sync that runs when the connection returns brings every missing change, and every participant ends with the same document.
+
+If one participant joins or splits a paragraph while another participant formats text that the join or split moves, the moved text keeps the formatting it had before the move. Apply the formatting again after the edits synchronize.
+
+If one participant splits a paragraph and another joins it back while a third participant types after a character of the moved text, the typed text shows once but can stand earlier in the paragraph than where it was typed. Every participant sees the same text. Move the text after the edits synchronize.
+
+If two participants change different properties of the same paragraph at the same time, such as the alignment and the indent, both changes apply. The same is true for character formatting: if one participant applies bold and another applies italic to overlapping text, the overlap gets both. If they set the same property to different values, every participant keeps the same one of the two values, including participants who join later and server exports.
+
+If two participants add comments at the same time, both comments stay, also when the document had no comments before. Undo removes only your own comment, and redo brings it back.
+
+If two participants move, resize, or change the wrapping of the same image at the same time, every participant keeps the same one of the two values. If one participant deletes an image while another changes it, the image is deleted.
+
+If two participants paste several paragraphs at the same position at the same time, both pastes stay in the document. The text before the paste position stays first, and the text after it shows once.
 
 ### Concurrent line breaks and tabs
 
@@ -684,20 +884,32 @@ Most exceeded limits produce a typed failure code.
 
 | Limit | Value | Failure code | Remedy |
 | --- | --- | --- | --- |
-| Seed document | 20 MB | `baseline-too-large` | Reduce the document. |
+| Seed document | 20 MiB, both compressed and uncompressed | `baseline-too-large` or `invalid-baseline` | Reduce the document. |
+| Files in the seed document | 10,000 | `invalid-baseline` | Remove parts from the document. |
 | One embedded file | 32 MiB | `blob-too-large` | Compress the media. |
 | All embedded files | 64 MiB | `blob-store-full` | Remove media and create a new room. |
-| `actorId`, `name`, and `documentId` | 256 characters | `invalid-identity` or `invalid-document-id` | Shorten the value. |
+| Document nodes, deleted nodes included | 200,000 | `too-many-nodes` | Export the room and create a new one. |
+| Nesting depth | 256 levels | `tree-too-deep` | Flatten nested tables or content controls. |
+| Children of one node | 100,000 | `too-many-children` | Split the content. |
+| Attributes of one element | 4,096 | `too-many-attributes` | Reduce the document. |
+| Package parts | 512 | `too-many-parts` | Remove parts and create a new room. |
+| Relationships | 10,000 | `too-many-relationships` | Remove links or media and create a new room. |
+| Text in one paragraph | 1,048,576 characters | `text-too-long` | Split the paragraph. |
+| One inserted text | 1,048,576 characters | `collaboration-text-limit` | Insert the text in smaller pieces. |
+| `actorId`, `name`, `documentId`, and `sessionId` | 256 characters | `invalid-identity`, `invalid-document-id`, or `invalid-session-id` | Shorten the value. |
+| Identity `color` | 64 characters | `invalid-identity-color` | Shorten the value. |
 | Presence participants | 256 | None | Keep the room below 256 participants. |
 | Initial synchronization | 30 seconds | `initialization-timeout` | Connect the provider and confirm that the room exists. |
+
+An insert longer than the shared text limit is refused before it applies, so the editor keeps its document and the session stays `ready`.
 
 Presence reads return only the first 256 participants. For Hocuspocus, increase `syncedTimeoutMs` when the initial synchronization needs more time.
 
 ### Watch a room's size
 
-A room only grows. Deletion writes a tombstone, and deleted media bytes stay in the shared state, so a long-lived room under heavy editing moves toward the node and media limits. Crossing a limit is a terminal error for the room.
+Between compactions, a room grows. Deletion writes a tombstone, and deleted media bytes stay in the shared state, so a long-lived room under heavy editing moves toward the node and media limits. Crossing a limit is a terminal error for the room. A server that compacts rooms when it loads them keeps each room well below the limits; see [Compact rooms on a server](#compact-rooms-on-a-server). A WebRTC room has no server to compact it.
 
-Watch the growth and archive the room before that happens. `session.resourceUsage()` returns the replicated counts next to the limits:
+Watch the growth. `session.resourceUsage()` returns the replicated counts next to the limits:
 
 ```ts
 const usage = session.resourceUsage();
@@ -709,5 +921,48 @@ if (usage.nodes > usage.maxNodes * 0.8) {
 On a server, call `readCollaborationResourceUsage(ydoc)` from `@docx-editor.dev/pro/collaboration`. It reads a synchronized `Y.Doc` the same way `readCollaborationDocument` does: it joins nothing and writes nothing.
 
 Both probes walk the node map once per call. Read them on a schedule, not on every edit.
+
+`formattingMarkers` counts the formatting markers in paragraph text. Each formatting change leaves some, and deleting the formatted text does not remove them, because a participant who edited offline can still depend on them. Compaction removes them.
+
+## Failure codes
+
+Every failure carries a `CollaborationFailureCode`. A session reports it in `statusSnapshot().reason`, and the factories and server helpers throw it as `CollaborationSchemaError.code`. Branch on the code, and keep `detail` in diagnostic logs.
+
+The **Recovery** column uses these terms:
+
+- **Refused edit**: The session gate refuses the edit before it applies. The status does not change.
+- **Thrown**: A factory or server helper throws `CollaborationSchemaError`. No session exists.
+- **Heals**: The status is `error` until a later update completes the shared state. Then the session returns to its earlier status.
+- **Terminal**: The status stays `error`. Waiting does not fix the replica.
+
+| Code | Cause | Recovery | What the host does |
+| --- | --- | --- | --- |
+| `collaboration-session-not-ready` | The status is `initializing` or `error`, or `disconnected` with `offlineEditing: false`. Edits also wait while a peer's update is held back for an update it depends on. | Refused edit | Wait for `ready`, then edit again. |
+| `collaboration-session-not-attached` | No editor attached its document port to the session. | Refused edit | Remount the editor with the room's `modules`. |
+| `collaboration-session-destroyed` | The session was destroyed. | Refused edit | Mount a new session. |
+| `collaboration-text-limit` | One insert is longer than the shared text limit. | Refused edit | Insert the text in smaller pieces. |
+| `experimental-collaboration-body-text-only` | A review write has no named intent. | Refused edit | Use a named review command. |
+| `invalid-document-id`, `invalid-session-id`, `invalid-identity`, `invalid-identity-color` | An option is empty or too long. `setIdentity` also throws the identity codes. | Thrown | Fix the value. |
+| `already-initialized` | A `create` bootstrap found a seeded room. | Thrown | Use `join` or `create-or-join`. |
+| `document-id-mismatch` | The room holds another `documentId`, or an editor of another document attached. | Thrown or terminal | Check the room id and the document id. |
+| `initialization-timeout` | No synchronized room appeared in time. | Thrown | Connect the provider, confirm that the room exists, or raise the timeout. |
+| `initialization-aborted` | The `signal` aborted the join, or the server refused the credential during the join. | Thrown | Refresh the credential and connect again. |
+| `not-initialized` | A server helper read a room that nobody seeded. | Thrown | Wait for the provider's sync. Create a room only when your storage confirms that none exists. |
+| `baseline-too-large`, `invalid-baseline`, `no-main-document-part`, `blob-read`, `missing-local-blob` | The seed bytes cannot open as a document. | Thrown | Fix or reduce the file. |
+| `collaboration-format-mismatch`, `protocol-version-mismatch`, `schema-version-mismatch` | This client and the room have different collaboration formats. | Thrown or terminal | Save local work. Open a compatible deployment, or [upgrade the saved room](/docs/2.x/pro/collaboration-versions#upgrade-saved-rooms). |
+| `concurrent-seed` | Two peers seeded the room at the same time. | Thrown or terminal | Save local work and create a new room from the saved bytes. |
+| `blob-digest-mismatch` | An embedded file does not match its digest. | Thrown or terminal | Save local work and create a new room from the saved bytes. |
+| `port-already-attached` | A second editor attached to one session. | Terminal | Give each editor its own session. |
+| `remote-apply-failed`, `materialize-dropped-content`, `missing-blob`, `missing-root`, `invalid-relationships` | A peer's update is not complete yet. During join, the room does not form a document. | Heals, or thrown during join | Wait. If the error stays, save local work and call `rejoin`. |
+| `duplicate-paragraph-id`, `unknown-paragraph-id` | A custom integration sent a paragraph text update the document port cannot apply. | Port result | Send updates for paragraphs the port lists. |
+| `text-too-long`, `too-many-nodes`, `too-many-children`, `too-many-attributes`, `too-many-parts`, `too-many-relationships`, `tree-too-deep`, `blob-too-large`, `blob-store-full` | A document or edit crosses a [numeric limit](#numeric-limits). | Thrown, heals, or terminal | For one refused local edit, the replica realigns to the room and continues. For shared state over a limit, export the room and create a new one. |
+| `invalid-blob-descriptor`, `invalid-bound`, `invalid-logical-id`, `invalid-string`, `prototype-key`, `unknown-logical-id`, `unsafe-part-name` | Shared state or an edit fails a trust-boundary check. | Thrown, heals, or terminal | Treat the room as untrusted. Save local work and create a new room if the error stays. |
+| `transport-disconnected` | The connection dropped. On WebRTC, one peer link cannot carry large updates. | Recovers | Wait. Show the status. |
+| `authentication-failed` | The server rejected the credential after the join. | Terminal | Refresh the credential, then call `rejoin`. |
+| `room-generation-changed` | The server compacted the room while this replica was away. | Terminal | Save a copy if the replica holds unsent edits, then call `rejoin`. |
+| `transport` | A framework hook could not connect, and the provider gave no recognized code. | Hook `error` | Retry the connection. |
+| `invalid-saved-room`, `saved-room-unavailable` | Your room server refused to load a saved room. The provider passes these codes through. | Terminal | Repair the server's storage. |
+
+`baseline-digest-mismatch`, `experimental-collaboration-existing-paragraphs-only`, `experimental-collaboration-text-only`, `experimental-collaboration-untracked-text-only`, `immutable-baseline-changed`, `immutable-metadata-changed`, `invalid-shared-metadata`, `local-mirror-failed`, `paragraph-set-mismatch`, `shared-schema-invalid`, and `unsupported-root-key` are deprecated. Nothing emits them. They stay in the type for compatibility.
 
 For module registration and licensing, see the [Pro package documentation](/docs/2.x/pro).

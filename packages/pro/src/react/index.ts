@@ -58,6 +58,11 @@ export {
   type CollaborationCaretLabelsProps,
   type DocxEditorCollaborationNamespace,
 } from './DocxEditorCollaboration.tsx';
+export type {
+  CollaborationStatusNoticeProps,
+  CollaborationStatusNoticeRenderProps,
+} from './CollaborationStatusNotice.tsx';
+export type { CollaborationNoticeKind } from '../collaboration/status-notice.ts';
 export { CustomNodeChrome, type CustomNodeChromeProps } from './CustomNodeChrome.tsx';
 export {
   CustomNodeContextMenu,
@@ -110,5 +115,5 @@ export type {
   CollaborationBootstrap,
   CollaborationIdentityUpdate,
   CollaborationSession,
-} from '../collaboration/session.ts';
+} from '../collaboration/types.ts';
 export type { CreateDocumentCollaborationOptions } from '../collaboration/document-session.ts';

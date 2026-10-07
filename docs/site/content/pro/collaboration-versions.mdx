@@ -161,7 +161,7 @@ The assertion accepts an exact match. Missing, malformed, or different values th
 
 For a custom provider, perform the same checks in its connection admission flow. For WebRTC, your application must control access to room invitations before peers connect. Deploy compatible clients to every participant. The library detects incompatible room state, but does not provide a WebRTC admission server.
 
-The existing `DOCUMENT_COLLABORATION_VERSIONS` and `assertDocumentCollaborationCompatibility` APIs remain supported for integrations that already use them. Use the format-version API for new connection handshakes. The [Hocuspocus example](https://github.com/eigenpal/docx-editor/tree/main/examples/collaboration-hocuspocus) accepts compatible clients using either handshake.
+`DOCUMENT_COLLABORATION_VERSIONS` and `assertDocumentCollaborationCompatibility` are deprecated. They remain supported for integrations that already use them. Use `COLLABORATION_FORMAT_VERSION` and `assertCollaborationFormatCompatibility` for new connection handshakes. The [Hocuspocus example](https://github.com/eigenpal/docx-editor/tree/main/examples/collaboration-hocuspocus) accepts compatible clients using either handshake.
 
 ## Check saved rooms before loading
 
@@ -209,6 +209,18 @@ Use this procedure when the release notes require a room migration. Try it on a 
 
 The DOCX transfers document content. Collaboration undo history starts afresh, and participants reconnect. Unsynchronized edits do not transfer automatically. Keep recovered local documents until their changes have been reconciled.
 
+### Upgrade rooms to format 1.4.2.1
+
+Format `docx-collaboration:1.4.2.1` stores each paragraph's text, runs, and character formatting as one shared text, and changes how participants resolve concurrent edits:
+
+- Two participants who change different properties of one paragraph, or apply different formatting to the same characters, at the same time both keep their change. Earlier formats kept one participant's whole set of properties.
+- Text a participant types into a run that another participant deletes or reformats at the same time is kept.
+- Text a participant types into a paragraph that another participant joins into the paragraph before it is kept, after the text it was typed beside.
+- When two participants split or join the same text at the same time, each character shows once.
+- Text a participant types over a selection is placed before the text it replaces. Undo then restores the old text where the replacement stood, even after another participant typed at that place.
+
+Participants with earlier formats store paragraphs differently and would show different documents, so the formats refuse to share a room. Follow [Upgrade saved rooms](#upgrade-saved-rooms) for each saved room. Export with the build that created the room, then seed a replacement room with the new build. Check paragraph and character formatting in the reopened export before you resume editing.
+
 ### Roll back an upgrade
 
 Before editing starts in the replacement room, you can restore the previous deployment and route users back to the original room.
@@ -227,7 +239,7 @@ A thrown `CollaborationSchemaError` for a version mismatch includes recovery ins
 | Your server cannot open a saved room | “This document needs a collaboration upgrade. Contact your administrator.” | Keep the saved room and follow the migration procedure. |
 | An active session reports a version mismatch | “Collaboration stopped. Save a copy of your changes before continuing.” | Preserve local work and investigate the client and room versions. |
 
-The codes `collaboration-format-mismatch`, `protocol-version-mismatch`, and `schema-version-mismatch` require a compatibility check. The code alone does not identify whether a client or saved room needs attention. Use the operation that failed to choose the message. Repeated reconnects cannot upgrade an incompatible room.
+The codes `collaboration-format-mismatch`, `protocol-version-mismatch`, and `schema-version-mismatch` have one meaning: this client and the room use different collaboration formats. Stop reconnect attempts, preserve local work, and open a deployment that matches the room or upgrade the saved room. The code alone does not identify whether a client or saved room needs attention. Use the operation that failed to choose the message. Repeated reconnects cannot upgrade an incompatible room.
 
 If an editor is mounted, offer a DOCX download using `await editor.save()` before reloading or replacing its session. Keep the copy if reconnection fails. Rejoining uses the room's document; it does not merge the saved local copy.
 

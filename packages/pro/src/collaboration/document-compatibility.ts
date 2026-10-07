@@ -3,7 +3,7 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-import { CollaborationSchemaError } from './schema.ts';
+import { CollaborationSchemaError } from './errors.ts';
 
 /** Version contract for full-document collaboration clients and export workers. @public */
 export interface DocumentCollaborationVersions {
@@ -20,16 +20,20 @@ export interface DocumentCollaborationVersions {
 /**
  * Versions supported by this full-document collaboration release.
  *
- * Use assertDocumentCollaborationCompatibility before admitting a client to synchronization. These values
- * describe the application schema, not the DOCX format or the Yjs binary update format.
- * Releases with the same tuple can share rooms. A changed tuple requires a coordinated
- * upgrade. This descriptor does not migrate persisted rooms or authenticate clients.
+ * These values describe the application schema, not the DOCX format or the Yjs binary
+ * update format. Releases with the same tuple can share rooms. A changed tuple requires a
+ * coordinated upgrade. This descriptor does not migrate persisted rooms or authenticate
+ * clients.
+ *
+ * @deprecated Send `COLLABORATION_FORMAT_VERSION` in the connection handshake and check it
+ * with `assertCollaborationFormatCompatibility`. This tuple stays supported for existing
+ * handshakes.
  * @public
  */
 export const DOCUMENT_COLLABORATION_VERSIONS: DocumentCollaborationVersions = Object.freeze({
   protocolVersion: 1,
-  sharedSchemaVersion: 3,
-  repairVersion: 1,
+  sharedSchemaVersion: 4,
+  repairVersion: 2,
   canonicalModelVersion: 1,
 });
 
@@ -75,6 +79,9 @@ export function documentCompatibilityFailure(versions: unknown): {
  *
  * @throws CollaborationSchemaError with `protocol-version-mismatch` or
  * `schema-version-mismatch`, including the field and expected/received version in `detail`.
+ * Both codes mean that this client and the room have different collaboration formats.
+ * @deprecated Use `assertCollaborationFormatCompatibility` with
+ * `COLLABORATION_FORMAT_VERSION`. This function stays supported for existing handshakes.
  * @public
  */
 export function assertDocumentCollaborationCompatibility(versions: unknown): void {

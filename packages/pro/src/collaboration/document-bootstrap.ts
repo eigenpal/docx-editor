@@ -30,16 +30,19 @@ import {
 } from '@docx-editor.dev/core/store';
 import { seedPackage, type DocumentRegistry } from './document/index.ts';
 import type { SharedBlobStore } from './shared-blob-store.ts';
-import { CollaborationSchemaError } from './schema.ts';
+import { CollaborationSchemaError } from './errors.ts';
+import { PACKAGE_META_KEY, packageVersionFailure } from './document/schema.ts';
+import { limitFailure } from './shared-blob-store.ts';
+import type { CreateDocumentCollaborationOptions } from './document-session.ts';
 
 const MAX_BASELINE_BYTES = 20 * 1024 * 1024;
 
 /** Default wait for a synced room before a `join` bootstrap gives up. */
 export const DEFAULT_INITIALIZATION_TIMEOUT_MS = 30_000;
 /** Default probe wait for an existing initialized room before the seed election. */
-export const DEFAULT_PROBE_TIMEOUT_MS = 4_000;
+const DEFAULT_PROBE_TIMEOUT_MS = 4_000;
 /** Default window a seed candidate waits so competing candidates become visible. */
-export const DEFAULT_ELECTION_WINDOW_MS = 1_500;
+const DEFAULT_ELECTION_WINDOW_MS = 1_500;
 
 /**
  * Shared record of every `create-or-join` seed transaction. More than one entry means two
@@ -49,7 +52,7 @@ export const DEFAULT_ELECTION_WINDOW_MS = 1_500;
 export const SEED_RECORDS_KEY = 'docx-collaboration-seeds-v1';
 
 /** Awareness field a `create-or-join` candidate publishes during the seed election. */
-export const SEED_CANDIDATE_FIELD = 'docxEditorSeedCandidate';
+const SEED_CANDIDATE_FIELD = 'docxEditorSeedCandidate';
 
 const SEED_NONCE_PATTERN = /^[0-9a-f]{16}$/;
 const MAX_ELECTION_STATES = 256;
@@ -97,7 +100,7 @@ function sharedBinariesReady(registry: DocumentRegistry, blobs: SharedBlobStore)
   return true;
 }
 
-export function waitForSharedInitialization(
+function waitForSharedInitialization(
   registry: DocumentRegistry,
   blobs: SharedBlobStore,
   timeoutMs: number,
@@ -148,6 +151,26 @@ export function waitForSharedInitialization(
 
 function seedRecordsOf(ydoc: Y.Doc): Y.Array<unknown> {
   return ydoc.getArray<unknown>(SEED_RECORDS_KEY);
+}
+
+/**
+ * Record one seed. Every seeding path writes one, so two seeds that merged — two `create`
+ * calls on one room, or a `create` racing an election — are detected, not silently doubled.
+ */
+export function recordSeed(ydoc: Y.Doc): void {
+  seedRecordsOf(ydoc).push([seedNonce()]);
+}
+
+/** The shared metadata field that holds the size of the room's state right after its seed. */
+export const FRESH_BYTES_FIELD = 'freshBytes';
+
+/**
+ * Record the size of the room's state right after its seed. A server compares the room's size
+ * with it to tell when compacting the room is worth a new generation (`room-generation.ts`).
+ */
+export function recordFreshSize(ydoc: Y.Doc): void {
+  const size = Y.encodeStateAsUpdate(ydoc).byteLength;
+  ydoc.getMap(PACKAGE_META_KEY).set(FRESH_BYTES_FIELD, size);
 }
 
 /** How many seed transactions this room records. Only the count matters; entries are remote. */
@@ -263,7 +286,7 @@ export interface CreateOrJoinBootstrapOptions {
  * Probe, elect, then seed or join. Resolves only when the room is safe to hand out, so no
  * user edit can ride on a seed that loses the race.
  */
-export async function runCreateOrJoinBootstrap(
+async function runCreateOrJoinBootstrap(
   options: CreateOrJoinBootstrapOptions
 ): Promise<'seeded' | 'joined'> {
   const { ydoc, awareness, registry, blobs } = options;
@@ -311,8 +334,95 @@ export async function runCreateOrJoinBootstrap(
       registry.schema.meta.set('documentId', options.documentId);
       seedRecordsOf(ydoc).push([nonce]);
     });
+    recordFreshSize(ydoc);
     return 'seeded';
   } finally {
     awareness.setLocalStateField(SEED_CANDIDATE_FIELD, null);
+  }
+}
+
+/**
+ * Admit shared state another replica wrote, as joining and exporting read it: refuse an
+ * incompatible version, build the derived indexes, then refuse a room seeded twice or over a
+ * limit. The parent index is built from child-array events, and shared state can arrive
+ * before the registry exists, so without the rebuild a reader knows no parents.
+ */
+export function admitSharedState(
+  registry: DocumentRegistry,
+  blobs: SharedBlobStore,
+  ydoc: Y.Doc
+): void {
+  const versionFailure = packageVersionFailure(registry.schema.meta);
+  if (versionFailure)
+    throw new CollaborationSchemaError(versionFailure.code, versionFailure.detail);
+  registry.rebuildDerivedIndexes();
+  refuseUnusableRoom(registry, blobs, ydoc);
+}
+
+/** Refuse a room seeded twice, which duplicates the whole document, or one over a limit. */
+function refuseUnusableRoom(registry: DocumentRegistry, blobs: SharedBlobStore, ydoc: Y.Doc): void {
+  if (seedRecordCount(ydoc) > 1) throw new CollaborationSchemaError('concurrent-seed');
+  const exceeded = limitFailure(registry, blobs);
+  if (exceeded) throw new CollaborationSchemaError(exceeded.code, exceeded.detail);
+}
+
+/**
+ * Create, or join and wait for, the room's shared state, and refuse a room no replica can
+ * use: one seeded twice, of another document, of an incompatible version, or over a limit.
+ */
+export async function initializeSharedState(
+  options: Pick<CreateDocumentCollaborationOptions, 'ydoc' | 'awareness' | 'bootstrap'>,
+  registry: DocumentRegistry,
+  blobs: SharedBlobStore,
+  documentId: string
+): Promise<void> {
+  if (options.bootstrap.kind === 'create') {
+    if (registry.schema.meta.get('initialized') === true) {
+      throw new CollaborationSchemaError('already-initialized');
+    }
+    const seeded = await seedPackage(
+      registry,
+      openBaselinePackage(options.bootstrap.document),
+      blobs
+    );
+    if (!seeded.ok) throw new CollaborationSchemaError(seeded.code);
+    options.ydoc.transact(() => {
+      registry.schema.meta.set('documentId', documentId);
+      recordSeed(options.ydoc);
+    });
+    recordFreshSize(options.ydoc);
+    refuseUnusableRoom(registry, blobs, options.ydoc);
+  } else if (options.bootstrap.kind === 'create-or-join') {
+    const outcome = await runCreateOrJoinBootstrap({
+      ydoc: options.ydoc,
+      awareness: options.awareness,
+      registry,
+      blobs,
+      documentId,
+      document: options.bootstrap.document,
+      probeTimeoutMs: options.bootstrap.probeTimeoutMs,
+      electionWindowMs: options.bootstrap.electionWindowMs,
+      timeoutMs: options.bootstrap.timeoutMs,
+      signal: options.bootstrap.signal,
+    });
+    if (outcome === 'joined') {
+      if (registry.schema.meta.get('documentId') !== documentId) {
+        throw new CollaborationSchemaError('document-id-mismatch');
+      }
+      admitSharedState(registry, blobs, options.ydoc);
+    } else {
+      refuseUnusableRoom(registry, blobs, options.ydoc);
+    }
+  } else {
+    await waitForSharedInitialization(
+      registry,
+      blobs,
+      options.bootstrap.timeoutMs ?? DEFAULT_INITIALIZATION_TIMEOUT_MS,
+      options.bootstrap.signal
+    );
+    if (registry.schema.meta.get('documentId') !== documentId) {
+      throw new CollaborationSchemaError('document-id-mismatch');
+    }
+    admitSharedState(registry, blobs, options.ydoc);
   }
 }

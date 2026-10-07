@@ -103,12 +103,15 @@
         "CollaborationIdentity",
         "CollaborationIdentityUpdate",
         "CollaborationModuleOptions",
+        "CollaborationNoticeKind",
         "CollaborationParticipant",
         "CollaborationRemoteSelection",
         "CollaborationRemoteSelectionAddress",
         "CollaborationSelectionKind",
         "CollaborationSession",
         "CollaborationStatus",
+        "CollaborationStatusNoticeProps",
+        "CollaborationStatusNoticeRenderProps",
         "CollaborationStatusSnapshot",
         "CreateDocumentCollaborationOptions",
         "CustomNodeChrome",
@@ -183,7 +186,7 @@
       "vueExclusive": {}
     },
     "collaborationParts": {
-      "paired": ["Avatar", "Avatars", "CaretLabels"],
+      "paired": ["Avatar", "Avatars", "CaretLabels", "Status"],
       "deferredInVue": {},
       "vueExclusive": {}
     },
@@ -197,6 +200,8 @@
       "CollaborationCaretLabelRenderProps",
       "CollaborationCaretLabelsProps",
       "CollaborationFailure",
+      "CollaborationStatusNoticeProps",
+      "CollaborationStatusNoticeRenderProps",
       "CollaborationIdentity",
       "CollaborationIdentityUpdate",
       "CollaborationModuleOptions",
@@ -223,6 +228,10 @@
       "UseReviewReturn"
     ],
     "interfaceMemberExceptions": {
+      "CollaborationStatusNoticeProps": {
+        "reactOnly": ["children"],
+        "reason": "React takes the custom notice as a children render function. Vue takes it as the default slot, which a props interface does not declare."
+      },
       "ReviewMarkersProps": {
         "vueOnly": ["asChild", "children"],
         "reason": "Vue declares ReviewMarkersProps as extending ReviewPartProps, so asChild and children appear in the type although the markers part does not wire them. React declares only the wired members."

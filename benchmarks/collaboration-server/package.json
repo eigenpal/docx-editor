@@ -1,0 +1,24 @@
+{
+  "name": "docx-editor-benchmark-collaboration-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bench": "bun test ./collaboration-load.bench.ts",
+    "latency": "bun edit-latency.ts",
+    "scenarios": "bun scenarios.ts run",
+    "scenarios:matrix": "bun scenarios.ts matrix",
+    "test": "bun test --preload ./scenario-clock.ts ./analysis.test.ts ./edit-model.test.ts ./observer.test.ts ./collaboration-scenarios-1.test.ts ./collaboration-scenarios-2.test.ts ./collaboration-scenarios-3.test.ts ./collaboration-replays.test.ts ./scenario-tokens.test.ts",
+    "typecheck": "node ../../node_modules/typescript7/bin/tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@docx-editor.dev/core": "workspace:*",
+    "@docx-editor.dev/pro": "workspace:*",
+    "@hocuspocus/provider": "^4.6.0",
+    "@hocuspocus/server": "^4.6.0",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.32"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

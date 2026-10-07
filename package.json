@@ -24,7 +24,8 @@
     "python/docx-to-markdown",
     "examples/docx-to-pdf",
     "examples/document-refresh",
-    "examples/anchor-navigation"
+    "examples/anchor-navigation",
+    "benchmarks/collaboration-server"
   ],
   "type": "module",
   "scripts": {
@@ -51,6 +52,9 @@
     "build:preview": "bun run build:react:source && bun run build:vue:source && bun run build:igloo:source && bun run build:markdown:source && bun run build:pdf:source && bun run build:assemble && bun run check:demo-deployment",
     "build:react:source": "cd examples/vite && ENABLE_FRAMEWORK_SWITCHER=true VITE_ENABLE_FRAMEWORK_SWITCHER=true VITE_BASE_PATH=/react/ vite build",
     "build:vue:source": "cd examples/vue && ENABLE_FRAMEWORK_SWITCHER=true VITE_ENABLE_FRAMEWORK_SWITCHER=true VITE_BASE_PATH=/vue/ vite build",
+    "bench:collaboration": "bun run --filter docx-editor-benchmark-collaboration-server bench",
+    "bench:collaboration:scenarios": "bun run --filter docx-editor-benchmark-collaboration-server scenarios",
+    "bench:collaboration:matrix": "bun run --filter docx-editor-benchmark-collaboration-server scenarios:matrix",
     "bench:edit": "bun scripts/bench/edit-bench.ts",
     "bench:edit:browser": "playwright test --config e2e/edit-browser-bench.config.ts",
     "bench:huge": "bun scripts/bench/settle-bench.ts",
@@ -117,8 +121,8 @@
     "i18n:status": "node scripts/validate-i18n.mjs status",
     "i18n:validate": "node scripts/validate-i18n.mjs validate && node scripts/check-i18n-unused.mjs",
     "i18n:unused": "node scripts/check-i18n-unused.mjs --list",
-    "lint": "node scripts/check-max-lines-caps.mjs && node scripts/check-lockfile-workspaces.mjs && oxlint --report-unused-disable-directives-severity=warn packages/*/src/ packages/docx-to-markdown/test/ examples/*/src/ examples/*/app/ examples/shared/ api/",
-    "lint:fix": "node scripts/check-max-lines-caps.mjs && oxlint --report-unused-disable-directives-severity=warn --fix packages/*/src/ packages/docx-to-markdown/test/ examples/*/src/ examples/*/app/ examples/shared/ api/",
+    "lint": "node scripts/check-max-lines-caps.mjs && node scripts/check-lockfile-workspaces.mjs && oxlint --report-unused-disable-directives-severity=warn packages/*/src/ packages/docx-to-markdown/test/ examples/*/src/ examples/*/app/ examples/shared/ api/ benchmarks/",
+    "lint:fix": "node scripts/check-max-lines-caps.mjs && oxlint --report-unused-disable-directives-severity=warn --fix packages/*/src/ packages/docx-to-markdown/test/ examples/*/src/ examples/*/app/ examples/shared/ api/ benchmarks/",
     "notices:check": "bun scripts/generate-third-party-notices.mjs --check",
     "notices:generate": "bun scripts/generate-third-party-notices.mjs",
     "parity:prepublish": "node scripts/parity-prepublish.mjs",

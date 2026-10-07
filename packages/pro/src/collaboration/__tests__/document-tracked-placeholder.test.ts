@@ -126,6 +126,8 @@ test('tracked placeholder replacement converges, undoes, redoes, reconnects, and
 });
 
 test('deleting the tracked control during replacement converges without moving its text outside', async () => {
+  // A deletion removes only what its author saw. The replacement typed meanwhile stays, and
+  // stays inside its control rather than moving into the paragraph around it.
   const { pair, alice, bob, flush, converge } = await peers();
   pair.pause();
   caret(alice, 19);
@@ -138,6 +140,7 @@ test('deleting the tracked control during replacement converges without moving i
   flush();
   pair.resume();
   converge();
-  expect(controlText(alice)).toBeNull();
-  expect(alice.surface!.session.bodyText()).toBe(' after');
+  expect(controlText(alice)).toBe('#');
+  expect(controlText(bob)).toBe('#');
+  expect(alice.surface!.session.bodyText()).toBe('# after');
 });

@@ -22,6 +22,7 @@ import {
   absolutePaths,
   declarationCandidates,
   emitOptions,
+  packageDocumentationOf,
   packageName,
   runTypeScript7,
 } from './lib/declaration-files.mjs';
@@ -32,6 +33,8 @@ export function declarationExtensions(manifest) {
 }
 
 /** Normalize tsup's `entry` (array or object) to `{ name: source }`. */
+export { packageDocumentationOf };
+
 export function entryMap(entry) {
   if (!Array.isArray(entry)) return entry;
   return Object.fromEntries(
@@ -235,6 +238,12 @@ export async function buildDeclarations(configUrl, options) {
         /\.([cm]?)tsx?$/,
         '.d.$1ts'
       );
+    const packageDocs = new Map(
+      Object.entries(entries).map(([name, source]) => [
+        name,
+        packageDocumentationOf(readFileSync(resolve(packageDir, source), 'utf8')),
+      ])
+    );
     const bundle = await rollup({
       input: Object.fromEntries(
         Object.entries(entries).map(([name, source]) => [name, emitted(source)])
@@ -247,7 +256,11 @@ export async function buildDeclarations(configUrl, options) {
         await bundle.write({
           dir: dist,
           format: 'es',
-          banner: options.banner,
+          // API Extractor reads the first doc comment of an entry as the package's own.
+          banner: (chunk) =>
+            [options.banner, chunk.isEntry ? packageDocs.get(chunk.name) : null]
+              .filter(Boolean)
+              .join('\n'),
           entryFileNames: `[name]${extension}`,
           // A chunk takes its name from its first module, `types.d.ts`, so drop the `.d`.
           chunkFileNames: (chunk) => `${chunk.name.replace(/\.d$/, '')}-[hash]${extension}`,

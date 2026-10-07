@@ -104,3 +104,14 @@ export function runTypeScript7(packageDir, tsconfigPath) {
     });
   });
 }
+
+/**
+ * The `@packageDocumentation` comment of an entry's source, or null.
+ *
+ * The bundled declarations drop an entry's leading comments, so API Extractor never saw the
+ * package documentation every entry writes. Each entry chunk takes it back as its banner.
+ */
+export function packageDocumentationOf(source) {
+  const match = /\/\*\*(?:(?!\*\/)[\s\S])*?@packageDocumentation[\s\S]*?\*\//.exec(source);
+  return match ? match[0] : null;
+}

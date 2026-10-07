@@ -1421,7 +1421,7 @@
       "id": "table-properties-header-select",
       "commands": ["toggleHeaderRow", "selectTableRegion", "setTableProperties"],
       "layer": "EditorCommand",
-      "evidence": "planTableCommand refuses command '\u2026' is not supported by the tree editor. No TreeDocOp.",
+      "evidence": "planTableCommand refuses command '…' is not supported by the tree editor. No TreeDocOp.",
       "openSpec": ["typed-ooxml-paragraph-editor"]
     },
     {
@@ -1647,6 +1647,11 @@
       "name": "agent-editing-subset",
       "role": "mutation-extension",
       "notes": "Adds canonical table authoring, direct table properties, and page-field instruction writes; primitive replay convergence is covered."
+    },
+    {
+      "name": "paragraph-text-collaboration",
+      "role": "collaboration-packaging",
+      "notes": "Changes how paragraph inline content is shared. Adds no TreeDocOp kind, so the freeze holds."
     }
   ],
   "remainingAmbiguity": [

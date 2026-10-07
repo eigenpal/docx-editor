@@ -15,7 +15,7 @@ import {
   readCollaborationDocument,
 } from '../index.ts';
 import { PACKAGE_META_KEY } from '../document/schema.ts';
-import { CollaborationSchemaError } from '../schema.ts';
+import { CollaborationSchemaError } from '../errors.ts';
 
 function savedRoom(): Y.Doc {
   const doc = new Y.Doc();
@@ -41,7 +41,7 @@ test.each([
     expect(error.message).toContain('Collaboration upgrade required');
     expect(error.message).toContain('Save local changes');
     expect(error.message).toContain(
-      'https://www.docx-editor.dev/docs/latest/pro/collaboration-versions'
+      'https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions'
     );
   }
 );

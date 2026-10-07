@@ -287,6 +287,13 @@ export function createCollaborationDocumentPort(
     paragraphByNodeId(nodeId: string) {
       return paragraphs().find((paragraph) => paragraph.nodeId === nodeId) ?? null;
     },
+    paragraphTextOf(nodeId: string) {
+      for (const part of storyParts()) {
+        const text = paragraphTextOf(part, nodeId);
+        if (text !== null) return text;
+      }
+      return null;
+    },
     paragraphByStableId(paragraphId: string) {
       const stableId = paragraphId.toUpperCase();
       const address = resolveAddress(stableId);

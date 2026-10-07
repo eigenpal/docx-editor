@@ -220,6 +220,12 @@ import {
 } from './surface-input.ts';
 import { createSurfaceClipboardOps } from './surface-clipboard-ops.ts';
 import { createSurfaceRangeEditOps } from './surface-range-edit.ts';
+import {
+  carriedSelectionOf,
+  createRemoteCaret,
+  historySelectionOf,
+  mapSelectionAcrossText,
+} from './surface-remote-caret.ts';
 import { createNextStyleWrites } from './surface-next-style.ts';
 import {
   createFurnitureSource,
@@ -632,13 +638,25 @@ export function mountPaginatedSurface(
   );
   function moveDocumentHistory(direction: 'undo' | 'redo'): void {
     let mark: ReturnType<TreeDocxSession['undo']> = null;
-    const result = documentSelectionHistory.step(direction, () => {
-      if (collaborationSession) return collaborationSession[direction]();
-      const revision = session.packageRevision();
-      mark = session[direction]();
-      return session.packageRevision() !== revision;
-    });
-    if (result.changed) restoreSelection(result.selection ?? mark);
+    // The remote caret takes the commit a collaboration step makes for history, not a peer's.
+    if (collaborationSession) remoteCaret.expectHistory(true);
+    let result: ReturnType<DocumentSelectionHistory['step']>;
+    try {
+      result = documentSelectionHistory.step(direction, () => {
+        if (collaborationSession) return collaborationSession[direction]();
+        const revision = session.packageRevision();
+        mark = session[direction]();
+        return session.packageRevision() !== revision;
+      });
+    } finally {
+      if (collaborationSession) remoteCaret.expectHistory(false);
+    }
+    if (!result.changed) return;
+    // A shared undo restores the selection its step was made from, carried across the text
+    // peers changed since.
+    const carried =
+      direction === 'undo' ? historySelectionOf(collaborationSession, collaborationPort) : null;
+    restoreSelection(carried ?? result.selection ?? mark);
   }
   function restoreCaretFormat(value: CaretFormatSnapshot): void {
     selectionSync.noteModelMoved();
@@ -835,6 +853,11 @@ export function mountPaginatedSurface(
 
   const paragraphOrder = () =>
     scopedDocumentOrder(editingLayout(), hfScope?.getActive() ?? null, noteScopeId());
+  const remoteCaret = createRemoteCaret({
+    textOf: (id) => textOf(id),
+    order: paragraphOrder,
+    carried: () => carriedSelectionOf(collaborationSession),
+  });
   // Phase timers, one slot per phase rather than a log: the state reports the LAST pass,
   // and a host that wants history samples `onChange`. `performance.now()` where the host
   // has one — monotonic, sub-millisecond — and wall clock where it does not (a bare test
@@ -1580,6 +1603,12 @@ export function mountPaginatedSurface(
       // The review queue is released with it, for the same reason and by the same rule.
       reviewAuthors.releaseLayout();
       currentLayout = layout;
+      const carried = remoteCaret.map(selection);
+      // Peers see this caret move too, or they keep painting it at the old offset.
+      if (carried !== selection) {
+        selection = carried;
+        publishLocalCollaborationSelection();
+      }
       // Repaint from HERE, so a commit that never went through this surface — undo, or
       // another editor sharing the store — still reaches the screen. Otherwise the painted
       // pages keep showing a revision the model has already left.
@@ -1620,6 +1649,13 @@ export function mountPaginatedSurface(
     // external case.
     pendingFormats = null;
     if (!flushingTypeBuffer) typingHistory.noteForeignChange(modelChange);
+    if (modelChange.origin === ORIGIN_IDS.mutationRemote) {
+      remoteCaret.note(
+        selection,
+        modelChange.dirty,
+        currentLayout.revision === modelChange.fromRevision
+      );
+    } else remoteCaret.noteLocal();
     scheduler.notify(modelChange);
   });
   const collaborationPort = collaborationSession
@@ -2953,49 +2989,6 @@ export function mountPaginatedSurface(
    * `type()` ever supplied one, so redo put the caret back where the edit STARTED — after
    * redoing Enter the next character went into the paragraph above the one it belonged to.
    */
-  /**
-   * A selection carried across a change to ONE paragraph's text.
-   *
-   * The two strings are all this needs: what survives at the front stays put, what survives
-   * at the back moves by the length difference, and an offset inside the part that changed
-   * collapses to where the change began — which is where the words the caret was in used to
-   * be. Resolving a revision under the caret is the case: the offsets are still legal, so
-   * nothing clamps them, and they now address different characters.
-   */
-  function mappedAcrossTextChange(
-    current: SemanticSelection,
-    paragraphId: string,
-    beforeText: string
-  ): SemanticSelection {
-    const afterText = textOf(paragraphId);
-    if (afterText === beforeText) return current;
-    let prefix = 0;
-    while (
-      prefix < beforeText.length &&
-      prefix < afterText.length &&
-      beforeText[prefix] === afterText[prefix]
-    ) {
-      prefix += 1;
-    }
-    let suffix = 0;
-    while (
-      suffix < beforeText.length - prefix &&
-      suffix < afterText.length - prefix &&
-      beforeText[beforeText.length - 1 - suffix] === afterText[afterText.length - 1 - suffix]
-    ) {
-      suffix += 1;
-    }
-    const delta = afterText.length - beforeText.length;
-    const move = (position: SemanticPosition): SemanticPosition => {
-      if (position.paragraphId !== paragraphId) return position;
-      if (position.offset <= prefix) return position;
-      if (position.offset >= beforeText.length - suffix) {
-        return { ...position, offset: position.offset + delta };
-      }
-      return { ...position, offset: prefix };
-    };
-    return { anchor: move(current.anchor), head: move(current.head) };
-  }
 
   /** The view layout removes hidden-mark paragraphs in; see `hidden-mark-joins.ts`. */
   function revisionView(): RevisionView {
@@ -5195,7 +5188,12 @@ export function mountPaginatedSurface(
           // `unknown-paragraph`. Accepting a header card is exactly that situation.
           const order = paragraphOrder();
           if (order.length === 0) return null;
-          const mapped = mappedAcrossTextChange(selection, caretParagraph, beforeText);
+          const mapped = mapSelectionAcrossText(
+            selection,
+            caretParagraph,
+            beforeText,
+            textOf(caretParagraph)
+          );
           return clampedToDocument(editingLayout(), order, mapped);
         }
       );
@@ -5769,6 +5767,7 @@ export function mountPaginatedSurface(
     },
   };
 
+  /** After a shared undo: the selection the undone step was made from, else the change. */
   /**
    * Put the caret back where a reversed history entry left it.
    *

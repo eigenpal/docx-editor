@@ -457,7 +457,8 @@ function finish(part: OoxmlPart | null, options?: EditOptions): OoxmlEditResult 
  */
 function knownIdsIfCapturing(
   part: OoxmlPart,
-  introduced: readonly OoxmlNode[]
+  introduced: readonly OoxmlNode[],
+  kept?: ReadonlySet<OoxmlNode>
 ): Set<string> | undefined {
   if (!isCanonicalPrimitiveCaptureActive()) return undefined;
   const preEdit = nodeIndexFor(part.root).nodes;
@@ -467,7 +468,8 @@ function knownIdsIfCapturing(
     if (node.kind === 'textValue') return;
     for (const child of node.children) walk(child);
   };
-  for (const node of introduced) walk(node);
+  // A child kept by identity lowers as no change, so lowering never asks about its subtree.
+  for (const node of introduced) if (!kept?.has(node)) walk(node);
   return known;
 }
 
@@ -504,7 +506,7 @@ export function replaceChildren(
   children = children.map((child) =>
     kept.has(child) ? child : bindConflictingPrefixes(child, scope)
   );
-  const knownIds = knownIdsIfCapturing(part, children);
+  const knownIds = knownIdsIfCapturing(part, children, kept);
   const result = finish(rebuild(part, nodeId, withChildren(target, children)), options);
   if (result.ok) captureReplaceChildren(target, children, knownIds);
   return result;

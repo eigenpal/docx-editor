@@ -68,6 +68,7 @@ export interface ChunkablePeer {
   push(data: Uint8Array): void;
   _onChannelMessage(event: { readonly data: unknown }): void;
   readonly destroyed?: boolean;
+  destroy?(): void;
   readonly _channel?: { readonly bufferedAmount: number } | null;
 }
 
@@ -75,6 +76,8 @@ export interface ChunkablePeer {
 export interface ChunkedFramingOptions {
   readonly partialTimeoutMs?: number;
   readonly onAbandonedMessage?: () => void;
+  /** A chunked message arrived whole, so this link carries large updates again. */
+  readonly onDeliveredMessage?: () => void;
 }
 
 interface PartialMessage {
@@ -133,6 +136,7 @@ export function installChunkedFraming(peer: ChunkablePeer, options?: ChunkedFram
       ? requestedTimeout
       : DEFAULT_PARTIAL_IDLE_MS;
   const onAbandonedMessage = options?.onAbandonedMessage;
+  const onDeliveredMessage = options?.onDeliveredMessage;
 
   const queue: Uint8Array[] = [];
   const partials = new Map<number, PartialMessage>();
@@ -146,6 +150,9 @@ export function installChunkedFraming(peer: ChunkablePeer, options?: ChunkedFram
     partials.delete(messageId);
     if (peer.destroyed === true) return;
     onAbandonedMessage?.();
+    // Yjs will not apply later updates that depend on the lost payload, so this connection
+    // can only drift. Closing it makes y-webrtc reconnect and run a fresh sync.
+    peer.destroy?.();
   };
 
   const watchIdle = (messageId: number): void => {
@@ -180,7 +187,12 @@ export function installChunkedFraming(peer: ChunkablePeer, options?: ChunkedFram
     const messageId = nextMessageId;
     nextMessageId = (nextMessageId + 1) >>> 0 || 1;
     for (let index = 0; index < count; index += 1) {
-      if (!(await waitForCapacity())) return;
+      if (!(await waitForCapacity())) {
+        // A channel that never drains would leave the receiver with half a message. Close it
+        // so the peers reconnect and resync, rather than drop the rest of this update.
+        if (peer.destroyed !== true) peer.destroy?.();
+        return;
+      }
       const start = index * PAYLOAD_BYTES;
       const payload = message.subarray(start, Math.min(start + PAYLOAD_BYTES, message.byteLength));
       const frame = new Uint8Array(HEADER_BYTES + payload.byteLength);
@@ -265,6 +277,7 @@ export function installChunkedFraming(peer: ChunkablePeer, options?: ChunkedFram
     }
     if (peer.destroyed === true) return;
     peer.push(message);
+    onDeliveredMessage?.();
   };
 }
 

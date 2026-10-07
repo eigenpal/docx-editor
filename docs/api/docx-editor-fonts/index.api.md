@@ -153,6 +153,4 @@ export const WORD_DOCUMENT_DEFAULT_FAMILIES: readonly DefaultFontFamily[];
 // @public @deprecated (undocumented)
 export type WordDefaultFamily = DefaultFontFamily;
 
-// (No @packageDocumentation comment for this package)
-
 ```

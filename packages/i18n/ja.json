@@ -823,7 +823,20 @@
   },
   "collaboration": {
     "participants": "この文書の参加者",
-    "moreParticipants": "{count, plural, other {他 # 人}}"
+    "moreParticipants": "{count, plural, other {他 # 人}}",
+    "status": {
+      "connecting": "ドキュメントに接続しています…",
+      "editRefused": "直前の変更を共有できなかったため、元に戻しました。",
+      "offline": "オフラインです。編集は続けられます。接続が戻ると変更が同期されます。",
+      "outOfSync": "このコピーは共有ドキュメントと同期していません。",
+      "rejoin": "再参加",
+      "syncing": "最新の変更を取り込んでいます…",
+      "waiting": "最新の変更を待っています…",
+      "stalled": "最新の変更が届いていません。再参加して共有ドキュメントを読み込んでください。",
+      "offlinePaused": "オフラインです。接続が戻ると編集を再開できます。",
+      "upgradeRequired": "このアプリと共有ドキュメントでは、共同編集のバージョンが異なります。コピーを保存して、管理者に連絡してください。",
+      "newRoomRequired": "この共有ドキュメントは続行できません。コピーを保存して、もう一度共有してください。"
+    }
   },
   "review": {
     "displayForReview": "変更履歴の表示",

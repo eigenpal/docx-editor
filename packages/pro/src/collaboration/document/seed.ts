@@ -22,6 +22,10 @@ import {
   type EncodedBinding,
 } from './schema.ts';
 import type { DocumentRegistry } from './registry.ts';
+import { idOf, type LogicalId } from './identity.ts';
+import { linearizeParagraph } from './paragraph-linear.ts';
+import { writeInlineText } from './paragraph-text-view.ts';
+import { encodeItems } from './paragraph-text.ts';
 
 export interface BlobBytesStore {
   get(digest: string): Uint8Array | null;
@@ -55,17 +59,6 @@ export async function sha256Digest(bytes: Uint8Array): Promise<string> {
  * Image insert stores `/word/media/…` while some zip entries omit the slash. One lookup
  * must not walk the rest of the package.
  */
-export function partBytesOf(
-  partBytes: ReadonlyMap<string, Uint8Array>,
-  storageKey: string
-): Uint8Array | null {
-  return (
-    partBytes.get(storageKey) ??
-    partBytes.get(storageKey.startsWith('/') ? storageKey.slice(1) : `/${storageKey}`) ??
-    null
-  );
-}
-
 export type BinaryPartReader = (storageKey: string) => Uint8Array | null;
 
 /** Live package reader attached to a collaboration port. Absent when the port cannot see bytes. */
@@ -157,7 +150,7 @@ function encodedBindingsOf(node: OoxmlElement): EncodedBinding[] {
 function visitNode(
   registry: DocumentRegistry,
   node: OoxmlElement | OoxmlTextNode,
-  parentId: string | null,
+  parentId: LogicalId | null,
   depth: number,
   counts: { nodes: number }
 ): LimitCode | null {
@@ -167,7 +160,7 @@ function visitNode(
   if (counts.nodes > registry.limits.maxNodes) return 'too-many-nodes';
   if (node.kind === 'textValue') {
     if (node.value.length > registry.limits.maxTextLength) return 'text-too-long';
-    registry.putText(node.id, node.value);
+    registry.putText(idOf(node), node.value);
   } else {
     if (node.attributes.length > registry.limits.maxAttributes) return 'too-many-attributes';
     if (node.children.length > registry.limits.maxChildren) return 'too-many-children';
@@ -185,7 +178,7 @@ function visitNode(
       }
     }
     registry.putElement({
-      logicalId: node.id,
+      logicalId: idOf(node),
       kind: node.kind,
       namespaceUri: node.namespaceUri,
       localName: node.localName,
@@ -193,12 +186,45 @@ function visitNode(
       attributes: encodedAttributesOf(node),
       bindings: encodedBindingsOf(node),
     });
-    for (const child of node.children) {
-      const error = visitNode(registry, child, node.id, depth + 1, counts);
+    if (node.kind === 'paragraph') {
+      const error = visitParagraph(registry, node, depth, counts);
       if (error) return error;
+    } else {
+      for (const child of node.children) {
+        const error = visitNode(registry, child, idOf(node), depth + 1, counts);
+        if (error) return error;
+      }
     }
   }
-  if (parentId) registry.childArray(parentId).push([node.id]);
+  if (parentId) registry.childArray(parentId).push([idOf(node)]);
+  return null;
+}
+
+/**
+ * A paragraph's block children (`w:pPr`) are records under it; its inline content is one
+ * shared text, whose embedded nodes are records no child array lists.
+ */
+function visitParagraph(
+  registry: DocumentRegistry,
+  paragraph: OoxmlElement,
+  depth: number,
+  counts: { nodes: number }
+): LimitCode | null {
+  const linear = linearizeParagraph(paragraph);
+  for (const child of linear.shell.children) {
+    const error = visitNode(registry, child, idOf(paragraph), depth + 1, counts);
+    if (error) return error;
+  }
+  let length = 0;
+  for (const item of linear.items) {
+    length += 1;
+    if (item.kind !== 'embed') continue;
+    const error = visitNode(registry, item.node, null, depth + 1, counts);
+    if (error) return error;
+  }
+  if (length > registry.limits.maxTextLength) return 'text-too-long';
+  const record = registry.schema.nodes.get(paragraph.id);
+  if (record) writeInlineText(record, encodeItems(linear.items, paragraph.id));
   return null;
 }
 
@@ -269,7 +295,7 @@ export async function seedPackage(
         registry.putXmlPart({
           name,
           id: part.id,
-          rootLogicalId: part.root.id,
+          rootLogicalId: idOf(part.root),
           contentType: part.contentType,
         });
       }

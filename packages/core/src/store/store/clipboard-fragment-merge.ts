@@ -18,6 +18,7 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import type { OoxmlPackage } from '../package/ooxml-package.ts';
+import { partNumberCandidates, resolveAllocationActor } from '../package/actor-scoped-ids.ts';
 import { withPart } from '../package/ooxml-package.ts';
 import {
   relationshipsOf,
@@ -378,6 +379,8 @@ export function mergeFragmentIntoPackage(
   // bytes — expensive on an image-heavy host, useless when nothing dedupes against it).
   let targetMediaByHash: Map<string, string> | null = null;
   let nextMediaIndex = 1;
+  const stripedMedia =
+    resolveAllocationActor() === undefined ? null : partNumberCandidates(Number.MAX_SAFE_INTEGER);
   const mediaHashIndex = (): Map<string, string> => {
     if (targetMediaByHash) return targetMediaByHash;
     const index = new Map<string, string>();
@@ -487,12 +490,20 @@ export function mergeFragmentIntoPackage(
           pkg.partBytes.has(candidate.slice(1)) ||
           pkg.parts.has(candidate) ||
           pendingPartNames.has(candidate);
-        let candidate = `/word/media/image${nextMediaIndex}.${ext}`;
-        while (isPendingOrPresent(candidate)) {
-          nextMediaIndex += 1;
+        let candidate: string;
+        if (stripedMedia) {
+          // A collaborator takes numbers from its own stripe, so two people pasting images
+          // from one snapshot do not both name a part `image3`.
+          do candidate = `/word/media/image${stripedMedia.next().value}.${ext}`;
+          while (isPendingOrPresent(candidate));
+        } else {
           candidate = `/word/media/image${nextMediaIndex}.${ext}`;
+          while (isPendingOrPresent(candidate)) {
+            nextMediaIndex += 1;
+            candidate = `/word/media/image${nextMediaIndex}.${ext}`;
+          }
+          nextMediaIndex += 1;
         }
-        nextMediaIndex += 1;
         mediaPart = candidate;
         pendingBinary.push({ partName: mediaPart, bytes, contentType });
         pendingPartNames.add(mediaPart);

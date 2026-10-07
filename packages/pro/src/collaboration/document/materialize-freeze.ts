@@ -18,7 +18,8 @@ import {
   type OoxmlPart,
   type OoxmlTextNode,
 } from '@docx-editor.dev/core/store';
-import type { LogicalId } from './identity.ts';
+import { elementFrom, withChildren } from './node-shapes.ts';
+import { idOf, type LogicalId } from './identity.ts';
 import type { DocumentRegistry } from './registry.ts';
 import type { ElementRecord, EncodedAttribute } from './schema.ts';
 
@@ -72,10 +73,7 @@ export function withRelsChildren(part: OoxmlPart, children: readonly OoxmlNode[]
   ) {
     return part;
   }
-  const nextRoot = Object.freeze({
-    ...root,
-    children: replaceChildRange(root.children, children),
-  }) as OoxmlElement;
+  const nextRoot = Object.freeze(withChildren(root, replaceChildRange(root.children, children)));
   return Object.freeze({ ...part, root: nextRoot });
 }
 
@@ -212,22 +210,24 @@ export function freezeElement(
 ): OoxmlElement {
   materializedBuilds += 1;
   const prior = previous && previous.kind !== 'textValue' ? previous : undefined;
-  return Object.freeze({
-    id: record.logicalId,
-    kind: record.kind,
-    namespaceUri: record.namespaceUri,
-    localName: record.localName,
-    prefix: record.prefix,
-    namespaceBindings:
-      prior && sameBindings(prior, record)
-        ? prior.namespaceBindings
-        : Object.freeze(record.bindings.map((binding) => Object.freeze({ ...binding }))),
-    attributes:
-      prior && sameAttributes(prior, record)
-        ? prior.attributes
-        : Object.freeze(record.attributes.map(freezeAttribute)),
-    children,
-  }) as OoxmlElement;
+  return Object.freeze(
+    elementFrom({
+      id: record.logicalId,
+      kind: record.kind,
+      namespaceUri: record.namespaceUri,
+      localName: record.localName,
+      ...(record.prefix === undefined ? {} : { prefix: record.prefix }),
+      namespaceBindings:
+        prior && sameBindings(prior, record)
+          ? prior.namespaceBindings
+          : Object.freeze(record.bindings.map((binding) => Object.freeze({ ...binding }))),
+      attributes:
+        prior && sameAttributes(prior, record)
+          ? prior.attributes
+          : Object.freeze(record.attributes.map(freezeAttribute)),
+      children,
+    })
+  );
 }
 
 export function attributesMatch(node: OoxmlElement, record: ElementRecord): boolean {
@@ -260,7 +260,7 @@ export function markPlaced(node: OoxmlNode, placed: Set<LogicalId>): boolean {
   // so a second hash of an already-long logical id is a measurable share of a receive.
   materializedPlacementVisits += 1;
   const before = placed.size;
-  placed.add(node.id);
+  placed.add(idOf(node));
   let uncontested = placed.size !== before;
   if (node.kind === 'textValue') return uncontested;
   for (const child of node.children) {
@@ -274,15 +274,29 @@ export function expandAncestors(
   ids: ReadonlySet<LogicalId>
 ): Set<LogicalId> {
   const expanded = new Set(ids);
-  for (const id of ids) {
-    let parent = registry.parentOf(id);
+  const pending = [...ids];
+  const climb = (id: LogicalId): void => {
     // Stop at any id already expanded: it dedupes shared ancestor chains, and it is the
     // cycle guard. Two peers cross-nesting concurrently merge to parentOf(X)=Y and
     // parentOf(Y)=X — every value here is remote input, and an unguarded climb spins the
     // receive path forever on every replica.
-    while (parent && !expanded.has(parent)) {
-      expanded.add(parent);
-      parent = registry.parentOf(parent);
+    if (expanded.has(id)) return;
+    expanded.add(id);
+    pending.push(id);
+  };
+  while (pending.length > 0) {
+    const id = pending.pop()!;
+    // Climb every parent that lists this node, not only the one `parentOf` resolves. After a
+    // concurrent split or join, the node can be listed by a hidden or tombstoned parent and
+    // shown under another; climbing only the resolved parent left the one that shows it
+    // cached, and that replica kept the old text for good.
+    const parents = registry.listingParents(id);
+    const resolved = registry.parentOf(id);
+    for (const parent of resolved === null ? parents : [resolved, ...parents]) {
+      climb(parent);
+      // A tombstone's children show under its survivor by adoption.
+      const survivor = registry.isTombstoned(parent) ? registry.replacedByOf(parent) : null;
+      if (survivor !== null) climb(survivor);
     }
   }
   return expanded;

@@ -220,6 +220,4 @@ export interface RevisionMarkupDialogHost extends RevisionMarkupDialogSession {
     readonly translate?: (key: string) => string | undefined;
 }
 
-// (No @packageDocumentation comment for this package)
-
 ```
