@@ -356,7 +356,7 @@ export const ReviewDelete = markPart(
   'Delete'
 );
 
-/** @public */
+/** A reply's own author hooks, so it draws in its author's colour inside another's card. */
 function replyAuthorAttributes(
   author: string,
   rail: ReturnType<typeof useRail>['value']
@@ -371,6 +371,7 @@ function replyAuthorAttributes(
   };
 }
 
+/** @public */
 export const ReviewReplies = markPart(
   defineComponent({
     name: 'ReviewReplies',
