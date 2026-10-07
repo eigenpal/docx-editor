@@ -1,5 +1,14 @@
 # @docx-editor.dev/pro
 
+## 2.27.0
+
+### Patch Changes
+
+- 1e1b513: Text that another participant types into a run at the same time as a line break or tab is inserted in that run is no longer lost. Fixes #1129
+- 9318dc1: Keep replacement halves and revisions separated by unchanged text independently reviewable. Fixes #1139
+- 2246044: Keep separate editing commands in separate undo steps and restore text selections during undo and redo.
+- Updated dependencies: @docx-editor.dev/core@2.27.0, @docx-editor.dev/react@2.27.0, @docx-editor.dev/vue@2.27.0
+
 ## 2.26.0
 
 ### Patch Changes

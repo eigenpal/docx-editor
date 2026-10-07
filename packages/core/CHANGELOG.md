@@ -1,5 +1,34 @@
 # @docx-editor.dev/core
 
+## 2.27.0
+
+### Minor Changes
+
+- f4b7b73: Automation text reads report manual line breaks as `\v` and column breaks as U+000E instead of `\n`. Update text processing for these characters; paragraph separators remain `\r`.
+- a2bd25c: Add local tracked-change styling with optional text backgrounds through shared API settings and an accessible review dialog in React and Vue. Fixes #1113
+
+### Patch Changes
+
+- 2137ed4: Automation can insert manual line breaks with `insertBreak` and `Line`, or with `\v` in inserted text, including with change tracking. Fixes #1124
+- 2246044: Split typing undo groups after pauses and during continuous input to keep each undo step small.
+- 2246044: Give caret formatting its own undo and redo step in standalone and collaborative editors.
+- 4f19f31: Fix content after a floating table being pushed below the table: text in a following continuous section and text around no-overlap tables now flows beside floating tables. Fixes #1109
+- f64b50a: Header and footer drawings set in front of text no longer cover body text or body drawings in the editor and in PDF export. Fixes #1126
+- cd10695: Documents, scrolling, and zoom behave the same when the host page uses right-to-left direction. Fixes #1115
+- 2a6d116: Render and edit the text of legacy VML text boxes, and render VML lines, stroked and rounded rectangles, and aligned VML shapes. Fixes #1108
+- f00ea50: Open documents that contain a small, highly compressible entry, XML names with non-ASCII letters, or a malformed content type on a part the editor does not need. Fixes #1107
+- 79f3595: PAGE, NUMPAGES, and SECTIONPAGES fields with the Arabic, roman, alphabetic, or ArabicDash format switch now show the computed value on each page instead of the saved result. A numeric picture switch now applies in sections with a roman or alphabetic page-number format, and alphabetic page numbers past 26 repeat one letter. Fixes #1110
+- 7a3aa00: Require prosemirror-view 1.42.3 or later to include the paste security fix for GHSA-c8x8-7fp4-3x9w.
+- 2246044: Rename the review dialog to Track changes options, complete translations, and keep controls within narrow screens. Keep text inside tracked placeholder controls when replacing their prompts. Fixes #1128
+- 556210d: You can type before a locked custom node or content control at the start of a paragraph or between two of them, and typing next to a checkbox no longer writes into it.
+
+  Fixes #1121
+
+- 8fcab75: Undo and redo treat a run of typing as one step at any typing speed, in local and collaborative editing. Fixes #1114
+- e965797: A custom node without a review card no longer shows the active highlight when you place the cursor inside it.
+- 13785e8: Reads on a missing header or footer return empty results instead of refusing. Fixes #1125
+- Updated dependencies: @docx-editor.dev/i18n@2.27.0
+
 ## 2.26.0
 
 ### Minor Changes
