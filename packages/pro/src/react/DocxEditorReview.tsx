@@ -1534,7 +1534,7 @@ function ReviewCard({ className, asChild, hidden, children }: ReviewPartProps) {
             (event.currentTarget as HTMLElement).focus({ preventScroll: true });
           },
           onClick: (event: React.MouseEvent) => {
-            if (!isCardControl(event.target)) review.setActive(entry.key);
+            if (!isCardControl(event.target) && !entry.isActive) review.setActive(entry.key);
           },
           onKeyDown: (event: React.KeyboardEvent) => {
             if (event.target !== event.currentTarget) return;

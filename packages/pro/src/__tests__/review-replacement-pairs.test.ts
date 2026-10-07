@@ -182,6 +182,38 @@ describe('pairing replacements in the review queue', () => {
     expect(bodyText(editor)).toBe('The new fee applies.');
   });
 
+  test('a bulk resolution takes several pair keys and plain keys in one call', () => {
+    const editor = mount(
+      paragraph(run('The '), del(1, 'Ada', 'old'), ins(2, 'Ada', 'new'), run(' fee.')) +
+        paragraph(run('A '), del(3, 'Ada', 'short'), ins(4, 'Ada', 'long'), run(' term.')) +
+        paragraph(run('Pay '), ins(5, 'Ada', 'promptly'), run('.'))
+    );
+    const items = editor.getReviewItems(PAIRED);
+    const pairs = items.filter(
+      (item) => item.kind === 'revision' && item.revisionKind === 'replace'
+    );
+    expect(pairs).toHaveLength(2);
+    const plain = items.find((item) => item.kind === 'revision' && item.revisionKind === 'insert')!;
+    const result = editor.exec({
+      type: 'resolveAllReviewChanges',
+      action: 'accept',
+      keys: [pairs[0]!.key, plain.key, pairs[1]!.key],
+    });
+    expect(result.ok).toBe(true);
+    expect(editor.getReviewItems()).toHaveLength(0);
+    expect(bodyText(editor)).toBe('The new fee.\nA long term.\nPay promptly.');
+  });
+
+  test('a pair key returns the painted bands of both halves', () => {
+    const editor = mount(REPLACED);
+    const [deletion, insertion] = editor.getReviewItems();
+    const both = editor.getReviewItemRects(pairOf(editor).key);
+    const halves =
+      editor.getReviewItemRects(deletion!.key).length +
+      editor.getReviewItemRects(insertion!.key).length;
+    expect(both.length).toBe(halves);
+  });
+
   test('activating a pair opens it, and either half keeps it active', () => {
     const editor = mount(REPLACED);
     const pair = pairOf(editor);
