@@ -1774,6 +1774,7 @@ function layoutBlocksPass(
           columnCount > 1 ? columnWidth() : entry.indent.left + available + entry.indent.right,
         paragraphStartY,
         anchorParagraphStartY,
+        anchorFrameBase: anchorFrameBase(),
         regionBottomY: contentHeight(),
         ...(paragraphSpaceBefore > 0 ? { paragraphSpaceBefore } : {}),
         ...(localPageZones.length > 0 ? { pageExclusionZones: localPageZones } : {}),
@@ -1782,14 +1783,10 @@ function layoutBlocksPass(
     });
   };
 
-  const pageExclusionZonesForEntry = (
-    entry: PreparedParagraph,
-    entryIndex: number
-  ): readonly ExclusionZone[] => {
-    return paragraphDrawingWrap.select(entry, entryIndex, flowColumnIndex, pageExclusionZones(), {
+  const pageExclusionZonesForEntry = (entry: PreparedParagraph, entryIndex: number) =>
+    paragraphDrawingWrap.select(entry, entryIndex, flowColumnIndex, pageExclusionZones(), {
       placement: true,
     });
-  };
 
   const placementZonesForLine = (
     entry: PreparedParagraph,
@@ -1817,6 +1814,7 @@ function layoutBlocksPass(
       columnIndex: flowColumnIndex,
       displayMode,
       ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
+      frameBase: anchorFrameBase(),
       pageZones,
       brokenLines,
       lineIndex,

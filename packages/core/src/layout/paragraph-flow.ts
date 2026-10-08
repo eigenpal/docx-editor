@@ -462,6 +462,7 @@ export function breakParagraph(
             anchorLineTopByModelStart,
             anchorCellBox: flow.anchorCellBox,
             cellAnchorScope: flow.cellAnchorScope,
+            ...(flow.anchorFrameBase ? { frameBase: flow.anchorFrameBase } : {}),
             displayMode: anchorDisplayMode,
             ...(flow.revisionAuthorFilter
               ? { revisionAuthorFilter: flow.revisionAuthorFilter }

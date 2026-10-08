@@ -7,7 +7,7 @@ import { describe, expect, test } from 'bun:test';
 import { WML_NAMESPACE_URI } from '../../store/package/ooxml-tree.ts';
 import { layoutContext, load } from './anchored-drawing-test-fixtures.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
-import { anchoredDrawingsOf, paragraphFragmentsOf } from '../semantic-records.ts';
+import { anchoredDrawingsOf, linesOf, paragraphFragmentsOf } from '../semantic-records.ts';
 import { topAndBottomBandAnchorY } from '../top-and-bottom-clearance.ts';
 
 const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
@@ -117,5 +117,85 @@ describe('the band anchor keeps the anchor line for frames it cannot resolve', (
     expect(topAndBottomBandAnchorY(100, null)).toBe(100);
     expect(topAndBottomBandAnchorY(100, vertical('paragraph', null, null))).toBe(100);
     expect(topAndBottomBandAnchorY(100, vertical('paragraph', null, Number.NaN))).toBe(100);
+  });
+});
+
+/**
+ * Thirty one-line paragraphs on a letter page with 72 pt margins. Paragraph `anchorAt` holds a
+ * 72 pt tall band whose `wp:positionV` uses `relativeFrom` with an offset of `offsetPt`.
+ */
+function bandDocument(options: {
+  readonly relativeFrom: 'page' | 'margin' | 'paragraph';
+  readonly offsetPt: number;
+  readonly anchorAt: number;
+}): string {
+  const anchor = band({ posOffsetEmu: 0, distBEmu: 0 }).replace(
+    '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset>',
+    `<wp:positionV relativeFrom="${options.relativeFrom}"><wp:posOffset>${Math.round(options.offsetPt * 12_700)}</wp:posOffset>`
+  );
+  const paragraphs = Array.from(
+    { length: 30 },
+    (_, index) =>
+      `<w:p>${index === options.anchorAt ? anchor : ''}<w:r><w:t>P${index}</w:t></w:r></w:p>`
+  ).join('');
+  return (
+    `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}">` +
+    `<w:body>${paragraphs}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/>` +
+    '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/>' +
+    '</w:sectPr></w:body></w:document>'
+  );
+}
+
+/** The content-box top of each paragraph's line, and the band the drawing paints. */
+function bandLayout(options: Parameters<typeof bandDocument>[0]) {
+  const part = load(bandDocument(options));
+  const layout = layoutSemanticDocument(part, 1, {
+    measurer,
+    inlineDrawingLayout: layoutContext(part),
+  });
+  const tops = linesOf(layout).map((line) => line.box.y);
+  const drawing = anchoredDrawingsOf(layout.pages[0]!)[0]!;
+  return { tops, bandTop: drawing.y, bandBottom: drawing.y + drawing.paintBounds.height };
+}
+
+describe('a page- or margin-framed top-and-bottom band reserves its space once', () => {
+  // The line pitch, from a document whose band sits below the last line.
+  const pitch = bandLayout({ relativeFrom: 'paragraph', offsetPt: 600, anchorAt: 29 }).tops[1]!;
+
+  /** Lines keep their pitch, except that the first line that meets the band starts below it. */
+  const expectOneBand = (tops: readonly number[], bandTop: number, bandBottom: number) => {
+    const moved = tops.findIndex((top) => top + pitch > bandTop + 0.01);
+    expect(moved).toBeGreaterThan(0);
+    for (let index = 0; index < moved; index += 1)
+      expect(tops[index]).toBeCloseTo(index * pitch, 6);
+    for (let index = moved; index < tops.length; index += 1)
+      expect(tops[index]).toBeCloseTo(bandBottom + (index - moved) * pitch, 6);
+  };
+
+  for (const relativeFrom of ['page', 'margin'] as const) {
+    // Content-box y 228 in both frames: 300 pt below the page top, or 228 pt below the margin.
+    const offsetPt = relativeFrom === 'page' ? 300 : 228;
+    for (const [where, anchorAt] of [
+      ['in the first paragraph', 0],
+      ['in a paragraph above the band', 3],
+      ['in a paragraph below the band', 28],
+    ] as const) {
+      test(`${relativeFrom}-framed, anchored ${where}`, () => {
+        const { tops, bandTop, bandBottom } = bandLayout({ relativeFrom, offsetPt, anchorAt });
+        expect(bandTop).toBeCloseTo(228, 6);
+        expect(bandBottom).toBeCloseTo(300, 6);
+        expectOneBand(tops, bandTop, bandBottom);
+      });
+    }
+  }
+
+  test('a paragraph-framed band still starts at its own anchor paragraph', () => {
+    const { tops, bandTop, bandBottom } = bandLayout({
+      relativeFrom: 'paragraph',
+      offsetPt: 200,
+      anchorAt: 3,
+    });
+    expect(bandTop).toBeCloseTo(3 * pitch + 200, 6);
+    expectOneBand(tops, bandTop, bandBottom);
   });
 });

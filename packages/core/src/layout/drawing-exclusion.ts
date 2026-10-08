@@ -608,6 +608,8 @@ export function synthesizeParagraphTopAndBottomZones(options: {
   /** Which revisions this pass resolves away — see {@link publishAnchoredDrawingsForParagraph}. */
   readonly displayMode?: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
+  /** The body page's frames, which place a page- or margin-framed band at its own position. */
+  readonly frameBase?: ReturnType<typeof import('./body-flow-helpers.ts').bodyAnchorFrameBase>;
 }): readonly ExclusionZone[] {
   const atoms = anchoredDrawingAtomsInParagraph(options.paragraph, options.drawingLayout);
   if (atoms.length === 0) return Object.freeze([]);
@@ -632,10 +634,13 @@ export function synthesizeParagraphTopAndBottomZones(options: {
     if (modelStart === undefined) continue;
     const lineTop = options.anchorLineTopByModelStart.get(modelStart);
     if (lineTop === undefined) continue;
-    const anchorY = topAndBottomBandAnchorY(
-      options.paragraphStartY + lineTop,
-      atom.projection.position?.vertical ?? null
-    );
+    const pageFramed = pageFramedBandY(atom.projection, options);
+    const anchorY =
+      pageFramed ??
+      topAndBottomBandAnchorY(
+        options.paragraphStartY + lineTop,
+        atom.projection.position?.vertical ?? null
+      );
     const measure = measureInlineDrawing(atom.projection);
     const geometry = drawingGeometryFromProjection({
       projection: atom.projection,
@@ -666,6 +671,7 @@ export function synthesizeParagraphTopAndBottomZones(options: {
         relativeHeight: atom.projection.anchor?.relativeHeight ?? 0,
         allowOverlap: atom.projection.anchor?.allowOverlap ?? true,
         columnIndex: options.columnIndex ?? 0,
+        ...(pageFramed !== null ? { pageFramedBand: true } : {}),
         y: anchorY,
         verticalBand: verticalBandOfExclusion(input),
         input,
@@ -674,6 +680,41 @@ export function synthesizeParagraphTopAndBottomZones(options: {
   }
   zones.sort((left, right) => left.sourceOrder - right.sourceOrder);
   return Object.freeze(zones);
+}
+
+/**
+ * Page-content y of a body band that the page or a margin positions: where the drawing is
+ * placed on the page, whatever line holds its anchor. Null for a band that its anchor's flow
+ * positions, and when the caller has no page frames.
+ */
+function pageFramedBandY(
+  projection: DrawingProjection,
+  options: {
+    readonly frameBase?: ReturnType<typeof import('./body-flow-helpers.ts').bodyAnchorFrameBase>;
+    readonly contentLeft: number;
+    readonly contentRight: number;
+    readonly anchorCellBox?: LayoutBox | null;
+  }
+): number | null {
+  const vertical = projection.position?.vertical;
+  if (!options.frameBase || options.anchorCellBox != null || !vertical) return null;
+  if (!pageFramedVertically(vertical.relativeFrom) || projection.anchor?.simplePos) return null;
+  const box = Object.freeze({
+    x: options.contentLeft,
+    y: 0,
+    width: Math.max(1, options.contentRight - options.contentLeft),
+    height: 0,
+  });
+  const resolved = resolveAnchoredDrawingPosition(projection, {
+    ...options.frameBase,
+    paragraphBox: box,
+    anchorLineBox: box,
+    anchorCharacterX: options.contentLeft,
+    columnBox: box,
+    cellBox: null,
+    layoutInCell: false,
+  });
+  return resolved.layoutFallback ? null : resolved.y;
 }
 
 function intervalToken(intervals: readonly ScanlineInterval[]): string {
