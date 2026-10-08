@@ -20,6 +20,7 @@ import type {
   DocumentSource,
   Editor,
   EditorFontError,
+  ExecResult,
   FontConfiguration,
   Unsubscribe,
   ZoomMode,
@@ -392,16 +393,21 @@ export interface DocxEditorInstance extends Editor {
    */
   setRevisionMarkup(options: RevisionMarkupOptions): void;
   /**
-   * Change review pane settings. An omitted field keeps its value. Invalid settings throw a
-   * `TypeError` and change nothing. The new values show in `snapshot().reviewPane`. They
-   * stay in force across `load()` and are never saved into the document.
+   * Change review pane settings. An omitted field keeps its value. The new values show in
+   * `snapshot().reviewPane`. They stay in force across `load()` and are never saved into the
+   * document. To open or close the pane, use `useReview().setPaneOpen` or the
+   * `toggleReviewPane` command instead.
+   *
+   * Refused with `unsupported` when no review module is registered, and with `invalidArgs`
+   * for an unknown field or value. A refusal changes nothing.
    *
    * @example
    * ```ts
-   * editor.setReviewPane({ opening: 'manual', overflow: 'shrinkPage' });
+   * const result = editor.setReviewPane({ opening: 'manual', overflow: 'shrinkPage' });
+   * if (!result.ok) console.warn(result.reason);
    * ```
    */
-  setReviewPane(options: ReviewPaneOptions): void;
+  setReviewPane(options: ReviewPaneOptions): ExecResult;
   /**
    * Mount into `el`. If the instance holds pending document bytes (created without a
    * container, or previously detached), they mount now — under the shaped measurer when

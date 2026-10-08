@@ -267,7 +267,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const reviewEnabled = modules.review !== null;
   // Review pane view settings: seeded by the review module, changed by `setReviewPane`.
   const reviewPane = createReviewPaneState(modules.review?.pane, {
-    changed: () => {
+    enabled: reviewEnabled,
+    changed: (value, previous) => {
+      // Moving tracked changes into balloons can leave an open pane with nothing to list.
+      if (
+        reviewPaneOpen &&
+        value.revisionsIn !== previous.revisionsIn &&
+        !reviewPane.shows(surface?.session.reviewItems() ?? [])
+      )
+        reviewPaneOpen = false;
       bump();
       emitSelectionChange();
       zoomLane.refit();
