@@ -37,6 +37,8 @@ export {
   type RevisionBatchEntry,
   type RevisionBatchSkipReason,
   type RevisionAuthorEntry,
+  type RevisionAuthorSelection,
+  type RevisionAuthorOptions,
   type RevisionAuthorResult,
   type RevisionAuthorSkipReason,
 } from './review.ts';

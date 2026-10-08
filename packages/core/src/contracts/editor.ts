@@ -36,11 +36,7 @@ import type {
   SetReviewChangesAuthorOptions,
 } from './editor-review.ts';
 import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
-export type {
-  DocumentEditingMode,
-  ResolveReviewChangesOptions,
-  SetReviewChangesAuthorOptions,
-} from './editor-review.ts';
+export type * from './editor-review.ts';
 export type { RevisionBatchResult } from '../store/store/revision-batch.ts';
 export type { RevisionAuthorResult } from '../store/store/revision-author-change.ts';
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from './document.ts';

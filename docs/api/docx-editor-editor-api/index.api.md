@@ -1245,7 +1245,18 @@ export class Revision extends ModelObject implements PromisedItem {
 
 export { RevisionAuthorEntry }
 
+// @public
+export interface RevisionAuthorOptions {
+    readonly date?: Date;
+}
+
 export { RevisionAuthorResult }
+
+// @public
+export interface RevisionAuthorSelection {
+    // (undocumented)
+    readonly authors: readonly string[];
+}
 
 export { RevisionAuthorSkipReason }
 
@@ -1268,10 +1279,7 @@ export class RevisionCollection extends HandleCollection<Revision> {
     protected promised(label: string, nullable: boolean): Revision & PromisedItem;
     rejectAll(): void;
     resolve(action: 'accept' | 'reject', revisions?: readonly Revision[]): ClientResult<RevisionBatchResult>;
-    setAuthor(author: string, revisions?: readonly Revision[], options?: {
-        readonly authors?: readonly string[];
-        readonly date?: Date;
-    }): ClientResult<RevisionAuthorResult>;
+    setAuthor(author: string, selection?: readonly Revision[] | RevisionAuthorSelection, options?: RevisionAuthorOptions): ClientResult<RevisionAuthorResult>;
 }
 
 // @public

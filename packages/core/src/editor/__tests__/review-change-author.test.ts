@@ -141,12 +141,21 @@ describe('setReviewChangesAuthor', () => {
     expect(result.revisionAuthors!.updated).toHaveLength(2);
     expect(revisionAuthors(editor)).toEqual(['Lin', 'Ada', 'Lin']);
     expect(
+      // The type refuses this combination too; untyped callers meet the runtime check.
       editor.can({
         type: 'setReviewChangesAuthor',
         author: 'Lin',
         authors: ['Ada'],
         keys: [editor.getReviewItems()[1]!.key],
-      })
+      } as never)
+    ).toMatchObject({ ok: false, code: 'invalidArgs' });
+    expect(
+      editor.can({
+        type: 'setReviewChangesAuthor',
+        author: 'Lin',
+        scope: 'document',
+        keys: [editor.getReviewItems()[1]!.key],
+      } as never)
     ).toMatchObject({ ok: false, code: 'invalidArgs' });
     expect(
       editor.can({ type: 'setReviewChangesAuthor', author: 'Lin', authors: ['Nobody'] })
@@ -219,6 +228,38 @@ describe('setReviewChangesAuthor', () => {
     });
     expect(revisionAuthors(protectedEditor)).toEqual(['AI']);
     protectedEditor.destroy();
+  });
+
+  test('an omitted author is the editor author, and follows setAuthor', () => {
+    const editor = mountEditor(ins(1, 'AI') + ins(2, 'AI'));
+    const [first, second] = editor.getReviewItems();
+    expect(editor.exec({ type: 'setReviewChangesAuthor', keys: [first!.key] }).ok).toBe(true);
+    expect(revisionAuthors(editor)).toEqual(['Grace Hopper', 'AI']);
+    editor.setAuthor('Ada');
+    expect(editor.exec({ type: 'setReviewChangesAuthor', keys: [second!.key] }).ok).toBe(true);
+    expect(revisionAuthors(editor)).toEqual(['Grace Hopper', 'Ada']);
+    editor.setAuthor(undefined);
+    expect(editor.can({ type: 'setReviewChangesAuthor' })).toMatchObject({
+      ok: false,
+      code: 'invalidArgs',
+    });
+    editor.destroy();
+  });
+
+  test('stored w:id values select changes through their review keys, as documented', () => {
+    const editor = mountEditor(ins(1, 'AI') + ins(2, 'AI') + ins(3, 'AI'));
+    const ids = ['1', '3'];
+    const keys = editor
+      .getReviewItems({ placement: false })
+      .filter(
+        (entry) =>
+          entry.kind === 'revision' &&
+          entry.item.addresses.some((address) => ids.includes(address.id))
+      )
+      .map((entry) => entry.key);
+    expect(editor.exec({ type: 'setReviewChangesAuthor', keys }).ok).toBe(true);
+    expect(revisionAuthors(editor)).toEqual(['Grace Hopper', 'AI', 'Grace Hopper']);
+    editor.destroy();
   });
 
   test('without the review module the command refuses', () => {

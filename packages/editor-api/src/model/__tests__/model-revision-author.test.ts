@@ -124,19 +124,20 @@ test('omitted revisions select the whole story, structural rows included', async
   }
 });
 
-test('options.authors takes every change those authors made', async () => {
+test('an authors filter takes every change those authors made', async () => {
   const runtime = await createServer(docx(ins(1, 'AI') + ins(2, 'Grace') + ins(3, 'AI')));
   try {
     await runtime.run(async (context) => {
-      const result = context.document.revisions.setAuthor('Ada', undefined, { authors: ['AI'] });
+      const result = context.document.revisions.setAuthor('Ada', { authors: ['AI'] });
       await context.sync();
       expect(result.value.updated.map((entry) => entry.previousAuthor)).toEqual(['AI', 'AI']);
       const revisions = context.document.revisions;
       revisions.load('items');
       await context.sync();
-      expect(() => revisions.setAuthor('Ada', revisions.items, { authors: ['AI'] })).toThrow(
-        expect.objectContaining({ code: 'InvalidArgument' })
-      );
+      for (const selection of [{ authors: 'AI' }, { authors: [7] }, null])
+        expect(() => revisions.setAuthor('Ada', selection as never)).toThrow(
+          expect.objectContaining({ code: 'InvalidArgument' })
+        );
     });
     expect(xml(await runtime.save()).match(/w:author="Ada"/g)).toHaveLength(2);
   } finally {

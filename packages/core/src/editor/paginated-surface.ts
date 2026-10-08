@@ -5280,6 +5280,7 @@ export function mountPaginatedSurface(
     },
 
     editingMode: () => editingMode,
+    author: () => author,
     setAuthor: (nextAuthor) => {
       if (author === nextAuthor) return;
       flushTypeBuffer();

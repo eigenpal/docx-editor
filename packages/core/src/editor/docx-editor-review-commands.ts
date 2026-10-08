@@ -177,10 +177,13 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     }
     return { ...routed(plans), result: { resolved, skipped, remaining } };
   };
+  /** The command's author, or the editor's own when the command names none. */
+  const authorOf = (command: Extract<EditorCommand, { type: 'setReviewChangesAuthor' }>) =>
+    command.author === undefined ? deps.surface()?.author() : command.author;
   const authorPlan = (command: Extract<EditorCommand, { type: 'setReviewChangesAuthor' }>) => {
     const { scopes, missing } = selection(command);
     const attribution = {
-      author: command.author,
+      author: authorOf(command) ?? '',
       ...(command.date === undefined ? {} : { date: command.date }),
     };
     const unknown: RevisionAuthorResult['skipped'][number][] = missing.map((key) => ({
@@ -246,11 +249,20 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       return { gate: { ok: false, code: 'locked', reason: 'the document is open for viewing' } };
     const protectedWrite = commandProtectionRefusal(command, deps.surface()!);
     if (protectedWrite) return { gate: protectedWrite };
+    const author = authorOf(command);
+    if (author === undefined)
+      return {
+        gate: {
+          ok: false,
+          code: 'invalidArgs',
+          reason: 'pass an author, or configure the editor author, to change the author',
+        },
+      };
     if (
-      typeof command.author !== 'string' ||
+      typeof author !== 'string' ||
       (command.date !== undefined && typeof command.date !== 'string') ||
       invalidRevisionAuthorInput({
-        author: command.author,
+        author,
         ...(command.date === undefined ? {} : { date: command.date }),
       })
     )
@@ -263,17 +275,19 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       };
     const invalidSelection = selectionRefusal(command);
     if (invalidSelection) return { gate: invalidSelection };
+    // Exact keys and a scope narrowed by authors are two selections; the type excludes the mix.
     if (
-      command.authors !== undefined &&
-      (command.keys !== undefined ||
-        !Array.isArray(command.authors) ||
-        command.authors.some((name) => typeof name !== 'string'))
+      (command.keys !== undefined &&
+        (command.scope !== undefined || command.authors !== undefined)) ||
+      (command.authors !== undefined &&
+        (!Array.isArray(command.authors) ||
+          command.authors.some((name) => typeof name !== 'string')))
     )
       return {
         gate: {
           ok: false,
           code: 'invalidArgs',
-          reason: 'authors must be a list of names, and cannot be combined with keys',
+          reason: 'select by keys, or by scope and authors; authors must be a list of names',
         },
       };
     const plan = authorPlan(command);

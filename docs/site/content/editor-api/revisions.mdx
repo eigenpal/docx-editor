@@ -197,20 +197,21 @@ The result has the same fields as an API batch; `remaining` counts pending decis
 
 A change can belong to a different person than the one who made it. For example, an agent proposes edits, and a reviewer adopts them while tracking stays on. Change the author to the reviewer. The changes stay pending, so another reviewer can still accept or reject them.
 
-`RevisionCollection.setAuthor(author, revisions?, options?)` changes `w:author` on the selected changes in one story. Select changes in one of these ways:
+`RevisionCollection.setAuthor(author, selection?, options?)` changes `w:author` on the selected changes in one story. Pass one of these as `selection`:
 
-- Pass `options.authors` to select every change those authors made.
-- Pass `revisions` to select specific revision objects.
-- Omit both to select every change in the story, by every author.
+- `{ authors }` selects every change those authors made.
+- An array of `Revision` objects selects those changes.
+- Nothing selects every change in the story, by every author.
 
 To also record a new date, pass `options.date`. Otherwise each change keeps its own date. For example, give the agent's changes to the reviewer:
 
 ```ts
 await runtime.run(async (context) => {
-  const result = context.document.revisions.setAuthor('Ada Lovelace', undefined, {
-    authors: ['Contract agent'],
-    date: new Date(),
-  });
+  const result = context.document.revisions.setAuthor(
+    'Ada Lovelace',
+    { authors: ['Contract agent'] },
+    { date: new Date() }
+  );
   await context.sync();
 
   console.log(result.value.updated.length, result.value.skipped);
@@ -237,13 +238,13 @@ await runtime.run(async (context) => {
 });
 ```
 
-Omitting a selection includes structural changes, such as tracked rows, that `items` omits. It also takes the changes of human authors, so pass `options.authors` or `revisions` when you mean only some authors. Pass an empty array to select nothing. You can't combine `revisions` with `options.authors`.
+Omitting a selection includes structural changes, such as tracked rows, that `items` omits. It also takes the changes of human authors, so pass a selection when you mean only some authors. An empty array selects nothing.
 
 The revision objects you pass stay valid. After the sync, load `author` again to read the new value. Selection rules and transactions match `resolve()`. Browser writes require the Pro review module and an editable document.
 
 | Error code | Cause |
 | --- | --- |
-| `InvalidArgument` | A blank author, an invalid date, both `revisions` and `options.authors`, or a revision object from another request context. Thrown before anything is queued. |
+| `InvalidArgument` | A blank author, an invalid date or selection, or a revision object from another request context. `setAuthor()` throws before it queues anything. |
 | `ConflictingChanges` | `setAuthor()` shares its sync batch with another write. Keep it as the only write in its batch. |
 | `GeneralException` | Document protection refuses the change. |
 | `NotSupported` | A browser runtime has no Pro review module. |
@@ -264,12 +265,11 @@ Document protection for tracked changes refuses author changes, because that pro
 
 ### Change authors in the editor
 
-To change the author of changes in the editor, run the `setReviewChangesAuthor` command. It takes the same `keys`, `scope`, and `unsupported` options as `resolveAllReviewChanges`, and an `authors` filter. It runs in one undo step:
+To change the author of changes in the editor, run the `setReviewChangesAuthor` command. It selects changes by exact `keys`, or by `scope` narrowed by `authors`. These two selections exclude each other. `unsupported` works as it does in `resolveAllReviewChanges`. Without `author`, it records the editor's `author`, so a reviewer adopts the changes as their own. It runs in one undo step:
 
 ```ts
 const result = editor.exec({
   type: 'setReviewChangesAuthor',
-  author: 'Ada Lovelace',
   authors: ['Contract agent'],
   date: new Date().toISOString(),
 });
@@ -278,40 +278,33 @@ if (result.ok) {
 }
 ```
 
-Without `keys`, the command selects the changes shown by the active filters, or every change with `scope: 'document'`. `authors` narrows that selection and matches `w:author` exactly. You can't combine it with `keys`. With the default `scope: 'visible'`, an author that a filter hides selects nothing, so pass `scope: 'document'` to include hidden authors. `date` is an ISO 8601 string, because editor commands carry plain data; `setAuthor()` takes a `Date`.
+Without `keys`, the command selects the changes shown by the active filters, or every change with `scope: 'document'`. `authors` narrows that selection and matches `w:author` exactly. With the default `scope: 'visible'`, an author that a filter hides selects nothing, so pass `scope: 'document'` to include hidden authors. `date` is an ISO 8601 string, because editor commands carry plain data; `setAuthor()` and `adopt()` take a `Date`.
+
+To select changes by the `w:id` values your application stored, match them to the revision addresses of review items, and pass their keys:
+
+```ts
+const ids: readonly string[] = storedRevisionIds;
+const keys = editor
+  .getReviewItems({ placement: false })
+  .filter(
+    (entry) =>
+      entry.kind === 'revision' && entry.item.addresses.some((address) => ids.includes(address.id))
+  )
+  .map((entry) => entry.key);
+editor.exec({ type: 'setReviewChangesAuthor', keys });
+```
+
+A `w:id` can repeat in a document, so prefer keys while the document stays open.
 
 Review keys include the author and the date, so an updated change gets a new key. Use `revisionAuthors.updated` to map each `previousKey` to its new `key`. An active review card stays active. If every selected change already has the author and date, the command succeeds with `changed: false` and adds no undo step. In that case `previousKey` equals `key`.
 
-In React, run the command through `useDocxEditor()`. For example, a button that adopts the agent's suggestions:
-
-```tsx
-import { useDocxEditor } from '@docx-editor.dev/react';
-
-function AdoptAgentChanges({ reviewer }: { reviewer: string }) {
-  const editor = useDocxEditor();
-  return (
-    <button
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={() =>
-        editor?.exec({
-          type: 'setReviewChangesAuthor',
-          author: reviewer,
-          authors: ['Contract agent'],
-          scope: 'document',
-        })
-      }
-    >
-      Adopt suggestions
-    </button>
-  );
-}
-```
+In React and Vue, `useReview().adopt(items)` runs this command for review items. See [Adopt suggestions as your own](/docs/2.x/pro/tracked-changes#adopt-suggestions-as-your-own).
 
 A refused command returns one of these codes and changes nothing:
 
 | Code | Cause |
 | --- | --- |
-| `invalidArgs` | A blank author, an invalid date, an invalid selection, or `authors` with `keys`. |
+| `invalidArgs` | A blank author, no author on the command or the editor, an invalid date, an invalid selection, or `keys` with `scope` or `authors`. |
 | `locked` | The document is open for viewing, or document protection refuses the change. |
 | `notFound` | No selected change exists. |
 | `unsupported` | No Pro review module, a selection of records with no author, or a skipped change with `unsupported: 'fail'`. |

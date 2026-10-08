@@ -2768,6 +2768,13 @@ export interface ReviewActivationOptions {
 }
 
 // @public
+export interface ReviewChangesAttribution {
+    author?: string;
+    date?: string;
+    unsupported?: 'skip' | 'fail';
+}
+
+// @public
 export interface ReviewCommentItem {
     // (undocumented)
     readonly comment: CommentRecord;
@@ -2821,6 +2828,9 @@ export interface ReviewCustomPlacement extends ReviewItemPlacementBase {
     // (undocumented)
     readonly kind: 'custom';
 }
+
+// @public
+export type ReviewDisplayMode = RevisionDisplayMode | 'simple-markup';
 
 // @public
 export type ReviewItem = ReviewRevisionItem | ReviewCommentItem | ReviewCustomItem;
@@ -3199,14 +3209,15 @@ export type SemanticTarget = {
 };
 
 // @public
-export interface SetReviewChangesAuthorOptions {
-    author: string;
+export type SetReviewChangesAuthorOptions = ReviewChangesAttribution & ({
+    authors?: never;
+    keys: readonly string[];
+    scope?: never;
+} | {
     authors?: readonly string[];
-    date?: string;
-    keys?: readonly string[];
+    keys?: never;
     scope?: 'visible' | 'document';
-    unsupported?: 'skip' | 'fail';
-}
+});
 
 // @public
 export interface StyleDefinition {

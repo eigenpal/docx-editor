@@ -588,6 +588,26 @@ export class Revision extends ModelObject implements PromisedItem {
 }
 
 /**
+ * Select every change these authors made, for {@link RevisionCollection.setAuthor}.
+ * Matches `w:author` exactly.
+ *
+ * @public
+ */
+export interface RevisionAuthorSelection {
+  readonly authors: readonly string[];
+}
+
+/**
+ * Options for {@link RevisionCollection.setAuthor}.
+ *
+ * @public
+ */
+export interface RevisionAuthorOptions {
+  /** The date to record. Omit it to keep each change's own date. */
+  readonly date?: Date;
+}
+
+/**
  * The tracked changes on a document, story or range, as of the batch that loaded them.
  *
  * `items` omits structural cards whose Word subtype this API cannot name; see {@link Revision}.
@@ -681,37 +701,43 @@ export class RevisionCollection extends HandleCollection<Revision> {
 
   /**
    * Attribute changes in this story to another author. The changes stay pending.
-   * Select changes with `revisions`, or with `options.authors` to take every change those
-   * authors made. Omitting both selects every change in the story, by every author, including
-   * structural ones absent from items. Pass an empty array to select nothing. Each change
-   * keeps its date unless `options.date` is given. This must be the only write in its sync
-   * batch. Revision objects for updated changes stay valid and read the new author after a load.
+   *
+   * Pass revision objects to change those changes, or `{ authors }` to change every change
+   * those authors made. Omit the selection to change every change in the story, by every
+   * author, including structural ones absent from `items`. An empty array selects nothing.
+   * Each change keeps its date unless you pass `options.date`. Keep this the only write in
+   * its sync batch. Revision objects you pass stay valid and read the new author after a load.
    *
    * @example
    * ```ts
-   * const result = revisions.setAuthor('Ada Lovelace', undefined, { authors: ['AI'] });
+   * const result = context.document.revisions.setAuthor('Ada Lovelace', { authors: ['AI'] });
    * await context.sync();
    * console.log(result.value.updated.length, result.value.skipped);
    * ```
    */
   setAuthor(
     author: string,
-    revisions?: readonly Revision[],
-    options?: { readonly date?: Date; readonly authors?: readonly string[] }
+    selection?: readonly Revision[] | RevisionAuthorSelection,
+    options?: RevisionAuthorOptions
   ): ClientResult<RevisionAuthorResult> {
     const label = `${this.path.label}.setAuthor`;
     const date = options?.date;
-    const authors = options?.authors;
+    const revisions = Array.isArray(selection) ? (selection as readonly Revision[]) : undefined;
+    const authors =
+      selection !== undefined && !Array.isArray(selection)
+        ? (selection as RevisionAuthorSelection | null)?.authors
+        : undefined;
     if (
       typeof author !== 'string' ||
       author.trim().length === 0 ||
-      (revisions !== undefined && !Array.isArray(revisions)) ||
-      (options !== undefined && (typeof options !== 'object' || options === null)) ||
-      (date !== undefined && (!(date instanceof Date) || Number.isNaN(date.getTime()))) ||
-      (authors !== undefined &&
-        (revisions !== undefined ||
+      (selection !== undefined &&
+        !Array.isArray(selection) &&
+        (typeof selection !== 'object' ||
+          selection === null ||
           !Array.isArray(authors) ||
           authors.some((name) => typeof name !== 'string'))) ||
+      (options !== undefined && (typeof options !== 'object' || options === null)) ||
+      (date !== undefined && (!(date instanceof Date) || Number.isNaN(date.getTime()))) ||
       // Checked now so a foreign or non-revision object refuses before anything queues.
       revisions?.some(
         (revision) => !(revision instanceof Revision) || revision.context !== this.context

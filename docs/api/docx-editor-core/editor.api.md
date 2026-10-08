@@ -2000,6 +2000,7 @@ export interface PaginatedSurface {
     applyImageProperties(input: ApplyImagePropertiesInput): ImageIntentResult;
     applyTableCommandPlan(plan: TableCommandPlan): ExecResult;
     armForcePlainPaste(): void;
+    author(): string | undefined;
     bookmarks(): BookmarkIndex;
     canAdjustIndent(direction: 'increase' | 'decrease'): boolean;
     canEditTextFormField(): boolean;
