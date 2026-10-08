@@ -2,7 +2,7 @@
 // global, or with NODE_ENV replaced by "production", is production.
 
 import { afterEach, expect, mock, test } from 'bun:test';
-import { isDevelopment } from '../src/lib/is-development';
+import { developmentFrom, isDevelopment } from '../src/lib/is-development';
 import { toolbarDevWarning } from '../src/editor/toolbar/toolbar-warnings';
 
 const savedProcess = globalThis.process;
@@ -52,4 +52,28 @@ test('a production build prints nothing and a development build prints once', ()
   toolbarDevWarning('development build');
   toolbarDevWarning('development build');
   expect(warn).toHaveBeenCalledTimes(1);
+});
+
+test('a Vite build answers through import.meta.env.DEV, in development and in production', () => {
+  // Vite leaves no `process` in the browser; its flag decides either way.
+  expect(developmentFrom({ viteEnv: { DEV: true }, nodeEnv: undefined, hasProcess: false })).toBe(
+    true
+  );
+  expect(developmentFrom({ viteEnv: { DEV: false }, nodeEnv: undefined, hasProcess: false })).toBe(
+    false
+  );
+  // A production Vite build stays silent even where a `process` shim says development.
+  expect(
+    developmentFrom({ viteEnv: { DEV: false }, nodeEnv: 'development', hasProcess: true })
+  ).toBe(false);
+});
+
+test('without a Vite flag the Node convention decides', () => {
+  expect(developmentFrom({ viteEnv: undefined, nodeEnv: 'development', hasProcess: true })).toBe(
+    true
+  );
+  expect(developmentFrom({ viteEnv: {}, nodeEnv: 'production', hasProcess: true })).toBe(false);
+  expect(developmentFrom({ viteEnv: undefined, nodeEnv: undefined, hasProcess: false })).toBe(
+    false
+  );
 });

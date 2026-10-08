@@ -1,3 +1,4 @@
+import { warnDeprecatedSlotProp } from './menu-warnings';
 import { computed, defineComponent, h, isVNode, ref, type PropType, type VNode } from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { flattenChildren } from '../../lib/flattenChildren';
@@ -227,7 +228,9 @@ export const MenuGroup = defineComponent({
 /** Props for `DocxEditor.Menu.Item`: one chrome slot as a menu row. @public */
 export interface MenuItemProps {
   /** The chrome slot this row drives (`'text.bold'`, `'insert.pageBreak'`, …). */
-  slot: ChromeSlotId;
+  slotId?: ChromeSlotId;
+  /** @deprecated Use `slotId`. Still read in this release, with a development warning. */
+  slot?: ChromeSlotId;
   /** Plain-label i18n key, overriding the slot's tooltip-shaped one. */
   labelKey?: string;
   /** i18n key of the shortcut shown in the right column. */
@@ -235,6 +238,26 @@ export interface MenuItemProps {
   className?: string;
   /** Render nothing — inside a packaged menu this removes the row. */
   hidden?: boolean;
+}
+
+/** The slot a menu row names: `slotId`, else the deprecated `slot`. @internal */
+export function menuItemSlotId(
+  props: Pick<MenuItemProps, 'slotId' | 'slot'>
+): ChromeSlotId | undefined {
+  if (props.slotId) return props.slotId;
+  if (props.slot) warnDeprecatedSlotProp(props.slot);
+  return props.slot;
+}
+
+/** {@link menuItemSlotId} read off a vnode, whose template props may be kebab-case. @internal */
+export function menuItemSlotIdOfVNode(child: VNode): ChromeSlotId | undefined {
+  const props = (child.props ?? {}) as Record<string, unknown>;
+  const slotId = props.slotId ?? props['slot-id'];
+  const slot = props.slot;
+  return menuItemSlotId({
+    ...(typeof slotId === 'string' ? { slotId: slotId as ChromeSlotId } : {}),
+    ...(typeof slot === 'string' ? { slot: slot as ChromeSlotId } : {}),
+  });
 }
 
 /**
@@ -247,19 +270,20 @@ export interface MenuItemProps {
 export const MenuItem = defineComponent({
   name: 'MenuItem',
   props: {
-    slot: { type: String as PropType<ChromeSlotId>, required: true },
+    slotId: { type: String as PropType<ChromeSlotId>, default: undefined },
+    slot: { type: String as PropType<ChromeSlotId>, default: undefined },
     labelKey: { type: String, default: undefined },
     shortcutKey: { type: String, default: undefined },
     className: { type: String, default: undefined },
     hidden: { type: Boolean, default: undefined },
   },
   setup(props) {
-    const slotId = computed(() => props.slot as ChromeSlotId);
+    const slotId = computed(() => menuItemSlotId(props) ?? ('' as ChromeSlotId));
     const slotCmd = useEditorCommand(slotId as unknown as ChromeSlotId);
     const menuContext = useMenuContext();
     const label = useMenuLabel();
     return () => {
-      if (props.hidden) return null;
+      if (props.hidden || !slotId.value) return null;
       const { setOpenMenu } = menuContext.value;
       const slot = slotId.value;
       const control = chromeControlForSlot(slot);
@@ -601,7 +625,7 @@ export const MenuEntry = defineComponent({
       if (entry.picker === 'tableGrid') return <MenuTablePicker entry={entry} />;
       return (
         <MenuItem
-          {...({ slot: entry.slot } as { slot: ChromeSlotId })}
+          slotId={entry.slot}
           {...(entry.labelKey ? { labelKey: entry.labelKey } : {})}
           {...(entry.shortcutKey ? { shortcutKey: entry.shortcutKey } : {})}
         />
@@ -618,8 +642,7 @@ function rowKeyOfChild(child: VNode): string | null {
   if (slot) return slot;
   const type = child.type as { docxMenuRow?: unknown };
   if (typeof type === 'object' && type !== null && type.docxMenuRow === true) {
-    const slotProp = child.props?.slot;
-    if (typeof slotProp === 'string') return slotProp;
+    return menuItemSlotIdOfVNode(child) ?? null;
   }
   return null;
 }

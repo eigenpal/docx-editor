@@ -6,7 +6,7 @@
 //   whether they may run, and still grey out with its reason;
 // - a packaged row RE-ICONED in place (`Cut`, `Copy`) without losing that wiring;
 // - a packaged row REMOVED (`review.comments`, replaced below by the demo's own version);
-// - a chrome slot pulled in as a row (`Slot slot="format.clear"`);
+// - a chrome slot pulled in as a row (`Slot slotId="format.clear"`);
 // - the demo's OWN rows (`Item`), which the engine knows nothing about;
 // - a submenu of real insert commands.
 //
@@ -60,7 +60,7 @@ export function IglooContextMenu() {
       <DocxEditor.ContextMenu.Copy icon={IceCopy} />
 
       {/* The packaged comment row, dropped in favour of the demo's own below. */}
-      <DocxEditor.ContextMenu.Slot slot="review.comments" hidden />
+      <DocxEditor.ContextMenu.Slot slotId="review.addComment" hidden />
 
       {/* The demo's own rows. No slot, no command — the host supplies the label, the
           enabled state and the action, and the engine has no opinion about any of it. */}
@@ -124,7 +124,7 @@ export function IglooContextMenu() {
 
       {/* A chrome slot as a row: label, icon and enabled state all from the registry, so it
           cannot disagree with its toolbar twin. */}
-      <DocxEditor.ContextMenu.Slot slot="format.clear" />
+      <DocxEditor.ContextMenu.Slot slotId="format.clear" />
     </DocxEditor.ContextMenu>
   );
 }

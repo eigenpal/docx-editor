@@ -4307,6 +4307,7 @@ export interface DocxEditorToolbarProps {
 // @public
 export interface DocxEditorToolbarSlotProps {
     children?: DocxEditorChildren;
+    hidden?: boolean;
     overflowContent?: () => DocxEditorChildren;
     slotId: ChromeSlotId;
 }
@@ -5020,7 +5021,9 @@ export interface MenuItemProps {
     hidden?: boolean;
     labelKey?: string;
     shortcutKey?: string;
-    slot: ChromeSlotId;
+    // @deprecated (undocumented)
+    slot?: ChromeSlotId;
+    slotId?: ChromeSlotId;
 }
 
 // @public

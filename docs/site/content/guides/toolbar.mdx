@@ -260,7 +260,7 @@ In every other case, the toolbar measures its own box and collapses as before. T
 
 ### Replace a slot's content
 
-`Toolbar.Slot` replaces one built-in slot with your own content. Name the slot with `slotId`. The content keeps the slot's place and collapses with the slot's group. In the panel, it renders under the slot's label, or as `overflowContent` when you pass it. To remove a slot, use its own part with `hidden`, for example `<DocxEditor.Toolbar.Bold hidden />`.
+`Toolbar.Slot` replaces one built-in slot with your own content. Name the slot with `slotId`. The content keeps the slot's place and collapses with the slot's group. In the panel, it renders under the slot's label, or as `overflowContent` when you pass it. To remove a slot, render any part for it with `hidden`: its named part, such as `<DocxEditor.Toolbar.Bold hidden />`, or `Toolbar.Slot` with its `slotId`. The context menu works the same way: `ContextMenu.Slot` takes `slotId` and `hidden`.
 
 <FrameworkTabs>
 <Framework value="react">
@@ -311,7 +311,7 @@ The toolbar renders a misplaced part and prints a development warning that names
 
 `Toolbar.TableInsert` opens a 6×6 size grid, the same grid as **Insert** > **Table** in the menu bar. Arrow keys move in the grid, a press inserts a table of that size, and `Esc` closes the grid. In the toolbar, the grid stays inside the viewport. In the **More** panel, the grid opens inside the panel, and an insert also closes the panel. When focus leaves the grid, the grid closes.
 
-`Toolbar.AddComment` starts a comment draft on the selection in the review rail. Its slot is `review.addComment`, the same slot as the context menu's **Add a comment** row, and `toolbarCommandState` decides when it is enabled. Without the review module, in viewing mode, or with no selection on the page, it is disabled and its tooltip gives the reason. If the review module allows a comment but no review rail is mounted to open the draft, the control is not rendered. In the **More** panel, a press also closes the panel. `Toolbar.Comments` is a different control: it shows or hides the **Comments & Changes** pane.
+`Toolbar.AddComment` starts a comment draft on the selection in the review rail. Its slot is `review.addComment`, the same slot as the context menu's **Add a comment** row, and `toolbarCommandState` decides when it is enabled. Without the review module, in viewing mode, or with no selection on the page, it is disabled and its tooltip gives the reason. Without a mounted review rail to open the draft, the control is not rendered. The context menu row follows the same rule. In the **More** panel, a press also closes the panel. `Toolbar.Comments` is a different control: it shows or hides the **Comments & Changes** pane.
 
 ### Menu bar overflow
 

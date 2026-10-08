@@ -137,6 +137,8 @@ export const ToolbarHostGroup = Object.assign(
 export interface DocxEditorToolbarSlotProps {
   /** The built-in slot this content replaces, for example `'text.bold'`. */
   slotId: ChromeSlotId;
+  /** Render nothing: inside the preset arrangement this removes the slot, as on every part. */
+  hidden?: boolean;
   /**
    * Content for the slot's "⋯" panel row when its group collapses. Without it the panel row
    * shows the default slot content under the slot's label.
@@ -149,8 +151,8 @@ export interface DocxEditorToolbarSlotProps {
 /**
  * Replaces one built-in slot with arbitrary content. The content takes the slot's place and
  * collapses with the slot's group. A slot the preset arrangement does not draw has no place
- * to take, so the content is appended and a development warning names the slot. To remove a
- * slot, use its own part with `hidden`, for example `h(DocxEditorToolbar.Bold, { hidden: true })`.
+ * to take, so the content is appended and a development warning names the slot. `hidden`
+ * removes the slot, as it does on every part.
  *
  * @example
  * ```ts
@@ -166,13 +168,14 @@ export const ToolbarSlot = Object.assign(
     name: 'ToolbarSlot',
     props: {
       slotId: { type: String as PropType<ChromeSlotId>, required: true },
+      hidden: { type: Boolean, default: undefined },
       overflowContent: {
         type: Function as PropType<() => DocxEditorChildren>,
         default: undefined,
       },
     },
-    setup(_, { slots }) {
-      return () => slots.default?.() ?? null;
+    setup(props, { slots }) {
+      return () => (props.hidden ? null : (slots.default?.() ?? null));
     },
   }),
   // Marker for the toolbar root, which reads `slotId` from a vnode that carries it.

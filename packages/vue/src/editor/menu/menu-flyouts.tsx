@@ -239,7 +239,7 @@ export const MenuTablePicker = defineComponent({
       if (!pickerCmd.isEnabled.value) {
         return (
           <MenuItem
-            {...({ slot: props.entry.slot } as { slot: ChromeSlotId })}
+            slotId={props.entry.slot}
             {...(props.entry.labelKey ? { labelKey: props.entry.labelKey } : {})}
           />
         );

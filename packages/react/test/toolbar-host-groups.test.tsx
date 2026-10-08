@@ -675,7 +675,7 @@ describe('AddComment', () => {
   const button = (view: ReturnType<typeof render>) =>
     view.container.querySelector<HTMLButtonElement>('[data-slot="review.addComment"]');
 
-  test('an allowed comment with no review rail to open it renders nothing', async () => {
+  test('with no review rail to open the draft it renders nothing', async () => {
     const { view, editor } = mount(
       <T preset={false}>
         <T.AddComment />
@@ -697,18 +697,18 @@ describe('AddComment', () => {
       });
     });
     expect(button(view)).toBeNull();
-    // Viewing mode refuses the comment, so the part shows why instead of disappearing.
     await act(async () => {
       editor().exec({ type: 'setEditingMode', mode: 'viewing' });
     });
-    await waitFor(() => expect(button(view)?.disabled).toBe(true));
+    expect(button(view)).toBeNull();
   });
 
   test('is disabled with the localized engine reason when no review module is registered', async () => {
     const { view, editor } = mount(
       <T preset={false}>
         <T.AddComment />
-      </T>
+      </T>,
+      { extra: <FakeRail onDraft={() => {}} /> }
     );
     await waitFor(() => expect(editor().surface).not.toBeNull());
     await waitFor(() => expect(button(view)).not.toBeNull());

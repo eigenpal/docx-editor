@@ -1,3 +1,4 @@
+import { warnDeprecatedSlotProp } from './menu-warnings';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { ReactNode } from 'react';
 // The menu bar's rows.
@@ -217,7 +218,9 @@ export function MenuGroup({
 /** Props for `DocxEditor.Menu.Item`: one chrome slot as a menu row. @public */
 export interface MenuItemProps {
   /** The chrome slot this row drives (`'text.bold'`, `'insert.pageBreak'`, …). */
-  slot: ChromeSlotId;
+  slotId?: ChromeSlotId;
+  /** @deprecated Use `slotId`. Still read in this release, with a development warning. */
+  slot?: ChromeSlotId;
   /** Plain-label i18n key, overriding the slot's tooltip-shaped one. */
   labelKey?: string;
   /** i18n key of the shortcut shown in the right column. */
@@ -227,6 +230,15 @@ export interface MenuItemProps {
   hidden?: boolean;
 }
 
+/** The slot a menu row names: `slotId`, else the deprecated `slot`. @internal */
+export function menuItemSlotId(
+  props: Pick<MenuItemProps, 'slotId' | 'slot'>
+): ChromeSlotId | undefined {
+  if (props.slotId) return props.slotId;
+  if (props.slot) warnDeprecatedSlotProp(props.slot);
+  return props.slot;
+}
+
 /**
  * One chrome slot as a live menu row: enabled and active from the engine's
  * can-before-exec answer, labelled and iconed from the registry. Selecting it runs the
@@ -234,11 +246,13 @@ export interface MenuItemProps {
  *
  * @public
  */
-export function MenuItem({ slot, labelKey, shortcutKey, className, hidden }: MenuItemProps) {
+export function MenuItem(props: MenuItemProps) {
+  const { labelKey, shortcutKey, className, hidden } = props;
+  const slot = menuItemSlotId(props) ?? ('' as ChromeSlotId);
   const { execute, isActive, isEnabled, disabledReason, value } = useEditorCommand(slot);
   const { setOpenMenu } = useMenuContext();
   const label = useMenuLabel();
-  if (hidden) return null;
+  if (hidden || !slot) return null;
   const control = chromeControlForSlot(slot);
   const text = label(labelKey ?? control?.labelKey ?? slot);
   // Checked-ness only where it is meaningful — the ENGINE's rule, the same one
@@ -655,7 +669,9 @@ function MenuTablePicker({ entry }: { entry: ChromeMenuItemEntry }) {
   const { isEnabled } = useEditorCommand(entry.slot);
   const control = chromeControlForSlot(entry.slot);
   if (!isEnabled) {
-    return <MenuItem slot={entry.slot} {...(entry.labelKey ? { labelKey: entry.labelKey } : {})} />;
+    return (
+      <MenuItem slotId={entry.slot} {...(entry.labelKey ? { labelKey: entry.labelKey } : {})} />
+    );
   }
   return (
     <MenuSubmenu
@@ -711,7 +727,7 @@ export function MenuEntry({ entry, children }: { entry: ChromeMenuEntry; childre
   if (entry.picker === 'tableGrid') return <MenuTablePicker entry={entry} />;
   return (
     <MenuItem
-      slot={entry.slot}
+      slotId={entry.slot}
       {...(entry.labelKey ? { labelKey: entry.labelKey } : {})}
       {...(entry.shortcutKey ? { shortcutKey: entry.shortcutKey } : {})}
     />
@@ -734,10 +750,7 @@ function rowKeyOfChild(child: ReactNode): string | null {
   const type = child.type as { docxSlot?: unknown; docxMenuRow?: unknown };
   if (typeof type !== 'function' && typeof type !== 'object') return null;
   if (typeof type.docxSlot === 'string') return type.docxSlot;
-  if (type.docxMenuRow === true) {
-    const slot = (child.props as { slot?: unknown }).slot;
-    if (typeof slot === 'string') return slot;
-  }
+  if (type.docxMenuRow === true) return menuItemSlotId(child.props as MenuItemProps) ?? null;
   return null;
 }
 

@@ -18,6 +18,8 @@ import { mergeArrangement } from '../merge-arrangement';
 import { flattenChildren } from '../../lib/flattenChildren';
 import { useDocxEditor, useEditorStateTick, useReviewRailRegistry } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
+import { useEditorState } from '../useEditorState';
+import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation, type TranslationKey } from '../../i18n';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import {
@@ -27,7 +29,15 @@ import {
   type MenuContextValue,
 } from '../menu/menu-context';
 import { focusBy, focusEdge, panelItems } from '../menu/menu-keyboard';
-import { MenuGroup, MenuItem, MenuRow, MenuSeparator, MenuSubmenu } from '../menu/parts';
+import {
+  MenuGroup,
+  MenuItem,
+  MenuRow,
+  MenuSeparator,
+  MenuSubmenu,
+  menuItemSlotIdOfVNode,
+} from '../menu/parts';
+import { warnRenamedContextRow, warnUnmatchedHiddenRow } from '../menu/menu-warnings';
 import { ContextMenuContext, type ContextMenuAnchor } from './contextmenu-context';
 import {
   ContextMenuCopy,
@@ -77,18 +87,24 @@ const ContextMenuAddComment = defineComponent({
     const menu = useMenuContext();
     const label = useMenuLabel();
     // The same slot as `Toolbar.AddComment`, so enabled state and its reason have one
-    // source: `toolbarCommandState`. An allowed comment with no review rail to open the
-    // draft would be a row that does nothing, so the row is left out instead.
+    // source: `toolbarCommandState`. The row needs a mounted review rail to open the draft,
+    // so without one it is left out, whatever the engine answers.
     const { isEnabled, disabledReason } = useEditorCommand('review.addComment');
+    const viewing = useEditorState(
+      (snapshot: EditorSnapshot) => snapshot.editingMode === 'viewing'
+    );
     return () => {
-      if (isEnabled.value && rail.value.mounted === 0) return null;
+      if (rail.value.mounted === 0) return null;
       const control = chromeControlForSlot('review.addComment');
       return (
         <MenuRow
           icon={chromeIcon(control?.paths) ?? undefined}
           {...{ rowSlot: 'review.addComment' }}
           disabled={!isEnabled.value}
-          title={disabledReason.value ?? undefined}
+          // Viewing mode explains itself with the editing-mode hint, as the mode pill does.
+          title={
+            (viewing.value ? label('editingMode.viewingHint') : disabledReason.value) ?? undefined
+          }
           selectHandler={() => {
             if (!rail.value.requestCommentDraft()) return;
             menu.value.setOpenMenu(null);
@@ -145,12 +161,7 @@ const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
   {
     kind: 'row',
     id: 'text.link',
-    render: () => (
-      <MenuItem
-        {...({ slot: 'text.link' } as { slot: 'text.link' })}
-        labelKey="formattingBar.insertLink"
-      />
-    ),
+    render: () => <MenuItem slotId="text.link" labelKey="formattingBar.insertLink" />,
   },
   {
     kind: 'row',
@@ -244,10 +255,20 @@ function rowOfChild(child: unknown): string | null {
   if (typeof type.docxRow === 'string') return type.docxRow;
   if (typeof type.docxSlot === 'string') return type.docxSlot;
   if (type.docxMenuRow === true) {
-    const slot = (child.props as { slot?: unknown }).slot;
-    if (typeof slot === 'string') return slot;
+    const slot = menuItemSlotIdOfVNode(child as VNode);
+    if (slot) return renamedContextRow(slot);
   }
   return null;
+}
+
+/**
+ * The row an override names. `review.comments` named the Add Comment row before it got its
+ * own slot, so it still names that row in this release, with a development warning.
+ */
+function renamedContextRow(id: string): string {
+  if (id !== 'review.comments') return id;
+  warnRenamedContextRow(id, 'review.addComment');
+  return 'review.addComment';
 }
 
 function startPlacedChild(child: unknown): boolean {
@@ -456,6 +477,11 @@ export const DocxEditorContextMenu = defineComponent({
                 keyOfChild: rowOfChild,
                 renderEntry: (entry) =>
                   entry.kind === 'separator' ? <MenuSeparator /> : entry.render(),
+                onUnmatched: (id, vnode) => {
+                  // An unmatched override is the host's own row, unless it is hidden.
+                  const hidden = vnode.props?.hidden;
+                  if (hidden === true || hidden === '') warnUnmatchedHiddenRow(id);
+                },
               }),
             ];
 

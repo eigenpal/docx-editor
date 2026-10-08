@@ -3,9 +3,8 @@
 // `review.comments` is the "Comments & Changes" pane toggle, not an authoring command, so a
 // host that wanted a button that ADDS a comment had none. Enabled state and the disabled
 // reason come from `toolbarCommandState`, like every other slot. The press asks the
-// composed review rail for a draft, the same request the context menu's row makes. When the
-// engine would allow a comment but no review rail is mounted to open the draft, the part
-// renders nothing rather than an enabled button that does nothing.
+// composed review rail for a draft, the same request the context menu's row makes. Without
+// a mounted review rail there is nothing to open the draft, so the part renders nothing.
 
 import { useContext } from 'react';
 import type { ChromeSlotId } from '@docx-editor.dev/core/editor';
@@ -25,7 +24,7 @@ function ToolbarAddCommentImpl({ className, hidden, icon, asChild, children }: T
   const { isEnabled, disabledReason } = useEditorCommand(SLOT);
   // Inside the "⋯" panel, the press also closes the panel. Outside it this does nothing.
   const closePanel = useToolbarOverflowClose();
-  if (hidden || (isEnabled && (rail?.mounted ?? 0) === 0)) return null;
+  if (hidden || (rail?.mounted ?? 0) === 0) return null;
   const control = chromeControlForSlot(SLOT);
   const text = label(control?.labelKey ?? SLOT);
   const shared = {

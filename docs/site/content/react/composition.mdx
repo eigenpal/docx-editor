@@ -283,7 +283,7 @@ You can combine packaged rows, custom rows, slots, and submenus. This example al
   <DocxEditor.ContextMenu.Copy icon={MyCopy} />
 
   {/* Remove a packaged row. */}
-  <DocxEditor.ContextMenu.Slot slot="review.comments" hidden />
+  <DocxEditor.ContextMenu.Slot slotId="review.addComment" hidden />
 
   {/* Supply all behavior for a custom row. */}
   <DocxEditor.ContextMenu.Item
@@ -305,7 +305,7 @@ You can combine packaged rows, custom rows, slots, and submenus. This example al
   </DocxEditor.ContextMenu.Submenu>
 
   {/* Get the label, icon, and enabled state from the registry. */}
-  <DocxEditor.ContextMenu.Slot slot="format.clear" />
+  <DocxEditor.ContextMenu.Slot slotId="format.clear" />
 </DocxEditor.ContextMenu>;
 ```
 

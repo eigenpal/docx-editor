@@ -29,9 +29,12 @@ import {
   useState,
 } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
+import { warnRenamedContextRow, warnUnmatchedHiddenRow } from '../menu/menu-warnings';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import { ReviewRailContext, useDocxEditor } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
+import { useEditorState } from '../useEditorState';
+import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
@@ -42,7 +45,15 @@ import {
   type MenuContextValue,
 } from '../menu/menu-context';
 import { focusBy, focusEdge, panelItems } from '../menu/menu-keyboard';
-import { MenuGroup, MenuItem, MenuRow, MenuSeparator, MenuSubmenu } from '../menu/parts';
+import {
+  MenuGroup,
+  MenuItem,
+  MenuRow,
+  MenuSeparator,
+  MenuSubmenu,
+  menuItemSlotId,
+  type MenuItemProps,
+} from '../menu/parts';
 import { ContextMenuContext, type ContextMenuAnchor } from './contextmenu-context';
 import {
   ContextMenuCopy,
@@ -98,22 +109,26 @@ type DefaultEntry =
   | { readonly kind: 'row'; readonly id: string; readonly render: () => ReactElement }
   | { readonly kind: 'separator'; readonly id: string };
 
+const selectViewing = (snapshot: EditorSnapshot): boolean => snapshot.editingMode === 'viewing';
+
 function ContextMenuAddComment() {
   const rail = useContext(ReviewRailContext);
   const menu = useMenuContext();
   const label = useMenuLabel();
   // The same slot as `Toolbar.AddComment`, so enabled state and its reason have one source:
-  // `toolbarCommandState`. An allowed comment with no review rail to open the draft would be
-  // a row that does nothing, so the row is left out instead.
+  // `toolbarCommandState`. The row needs a mounted review rail to open the draft, so without
+  // one it is left out, whatever the engine answers.
   const { isEnabled, disabledReason } = useEditorCommand('review.addComment');
-  if (isEnabled && (rail?.mounted ?? 0) === 0) return null;
+  const viewing = useEditorState(selectViewing);
+  if ((rail?.mounted ?? 0) === 0) return null;
   const control = chromeControlForSlot('review.addComment');
   return (
     <MenuRow
       icon={chromeIcon(control?.paths)}
       slot="review.addComment"
       disabled={!isEnabled}
-      title={disabledReason ?? undefined}
+      // Viewing mode explains itself with the editing-mode hint, as the mode pill does.
+      title={(viewing ? label('editingMode.viewingHint') : disabledReason) ?? undefined}
       onSelect={() => {
         if (!rail?.requestCommentDraft()) return;
         menu.setOpenMenu(null);
@@ -173,7 +188,7 @@ const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
     render: () => (
       // No shortcut column: the catalogue has no plain "Ctrl+K" key, and inventing one
       // here would put a literal English keystroke in a row every locale renders.
-      <MenuItem slot="text.link" labelKey="formattingBar.insertLink" />
+      <MenuItem slotId="text.link" labelKey="formattingBar.insertLink" />
     ),
   },
   {
@@ -271,10 +286,20 @@ function rowOfChild(child: ReactNode): string | null {
   if (typeof type.docxRow === 'string') return type.docxRow;
   if (typeof type.docxSlot === 'string') return type.docxSlot;
   if (type.docxMenuRow === true) {
-    const slot = (child.props as { slot?: unknown }).slot;
-    if (typeof slot === 'string') return slot;
+    const slot = menuItemSlotId(child.props as MenuItemProps);
+    if (slot) return renamedContextRow(slot);
   }
   return null;
+}
+
+/**
+ * The row an override names. `review.comments` named the Add Comment row before it got its
+ * own slot, so it still names that row in this release, with a development warning.
+ */
+function renamedContextRow(id: string): string {
+  if (id !== 'review.comments') return id;
+  warnRenamedContextRow(id, 'review.addComment');
+  return 'review.addComment';
 }
 
 /**
@@ -559,6 +584,10 @@ export function DocxEditorContextMenu({
                 keyOfChild: rowOfChild,
                 renderEntry: (entry) =>
                   entry.kind === 'separator' ? <MenuSeparator /> : entry.render(),
+                onUnmatched: (id, element) => {
+                  // An unmatched override is the host's own row, unless it is hidden.
+                  if ((element.props as { hidden?: unknown }).hidden) warnUnmatchedHiddenRow(id);
+                },
               })}
             </div>
           </ContextMenuContext.Provider>

@@ -270,7 +270,7 @@ You can keep packaged rows, remove rows, add registry slots, and add host rows.
 <DocxEditorContextMenu class-name="my-menu">
   <DocxEditorContextMenu.Cut />
   <DocxEditorContextMenu.Copy />
-  <DocxEditorContextMenu.Slot slot="review.comments" hidden />
+  <DocxEditorContextMenu.Slot slot-id="review.addComment" hidden />
 
   <DocxEditorContextMenu.Row
     :disabled="!enabled"
@@ -288,7 +288,7 @@ You can keep packaged rows, remove rows, add registry slots, and add host rows.
     </DocxEditorContextMenu.Row>
   </DocxEditorContextMenu.Submenu>
 
-  <DocxEditorContextMenu.Slot slot="format.clear" />
+  <DocxEditorContextMenu.Slot slot-id="format.clear" />
 </DocxEditorContextMenu>
 ```
 

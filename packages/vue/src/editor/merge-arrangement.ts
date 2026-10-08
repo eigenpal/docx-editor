@@ -53,6 +53,8 @@ export interface MergeArrangementInput<Entry> {
   readonly renderEntry: (entry: Entry, index: number, children?: VNode[]) => DocxEditorChildren;
   /** Nested registry entries use the same slot overrides as their parent panel. */
   readonly childrenOfEntry?: (entry: Entry) => readonly Entry[] | undefined;
+  /** Told of each keyed child that names no entry; it still renders after the default set. */
+  readonly onUnmatched?: (key: string, vnode: VNode) => void;
 }
 
 /**
@@ -67,6 +69,7 @@ export function mergeArrangement<Entry>({
   keyOfChild,
   renderEntry,
   childrenOfEntry,
+  onUnmatched,
 }: MergeArrangementInput<Entry>): VNodeArrayChildren {
   if (!preset) return children;
   const overrides = new Map<string, VNode>();
@@ -89,6 +92,9 @@ export function mergeArrangement<Entry>({
   const base = renderEntries(entries);
   const unmatched = [...overrides.entries()]
     .filter(([key]) => !known.has(key))
-    .map(([, vnode]) => vnode);
+    .map(([key, vnode]) => {
+      onUnmatched?.(key, vnode);
+      return vnode;
+    });
   return [...base, ...unmatched, ...appended];
 }

@@ -380,14 +380,10 @@ describe('Vue TableInsert and AddComment', () => {
     view.unmount();
   });
 
-  test('Add Comment without the review module is disabled with a reason', async () => {
+  test('Add Comment renders nothing without a review rail', async () => {
     const view = mountEditorTree(() => h(T, { preset: false }, () => [h(T.AddComment)]));
     await flush();
-    const button = view.container.querySelector<HTMLButtonElement>(
-      '[data-slot="review.addComment"]'
-    )!;
-    expect(button.disabled).toBe(true);
-    expect(button.title).not.toBe(en.formattingBar.addComment);
+    expect(view.container.querySelector('[data-slot="review.addComment"]')).toBeNull();
     view.unmount();
   });
 

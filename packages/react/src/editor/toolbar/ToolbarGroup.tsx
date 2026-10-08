@@ -109,6 +109,8 @@ ToolbarHostGroup.docxToolbarGroup = true as const;
 export interface DocxEditorToolbarSlotProps {
   /** The built-in slot this content replaces, for example `'text.bold'`. */
   slotId: ChromeSlotId;
+  /** Render nothing: inside the preset arrangement this removes the slot, as on every part. */
+  hidden?: boolean;
   /**
    * Content for the slot's "⋯" panel row when its group collapses. Without it the panel row
    * shows the children under the slot's label.
@@ -120,8 +122,8 @@ export interface DocxEditorToolbarSlotProps {
 /**
  * Replaces one built-in slot with arbitrary content. The content takes the slot's place and
  * collapses with the slot's group. A slot the preset arrangement does not draw has no place
- * to take, so the content is appended and a development warning names the slot. To remove a
- * slot, use its own part with `hidden`, for example `<DocxEditor.Toolbar.Bold hidden />`.
+ * to take, so the content is appended and a development warning names the slot. `hidden`
+ * removes the slot, as it does on every part.
  *
  * @example
  * ```tsx
@@ -135,6 +137,7 @@ export interface DocxEditorToolbarSlotProps {
  * @public
  */
 export function ToolbarSlot(props: DocxEditorToolbarSlotProps) {
+  if (props.hidden) return null;
   return <>{props.children}</>;
 }
 
