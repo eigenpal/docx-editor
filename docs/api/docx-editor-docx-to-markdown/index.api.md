@@ -950,6 +950,7 @@ export interface TextboxStoryLayout {
         y: number;
     }>;
     readonly contentWidth: number;
+    readonly extentWidth?: number;
     readonly fallbackReason?: TextboxStoryFallbackReason;
     readonly fillHex: string | null;
     readonly flowHeight: number;

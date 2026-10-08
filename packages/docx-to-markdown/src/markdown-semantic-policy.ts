@@ -310,6 +310,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     contentOffset: 'explicitly-omitted',
     contentWidth: 'explicitly-omitted',
     contentHeight: 'explicitly-omitted',
+    extentWidth: 'explicitly-omitted',
     fillHex: 'explicitly-omitted',
     strokeHex: 'explicitly-omitted',
     strokeWidthPt: 'explicitly-omitted',
