@@ -135,16 +135,11 @@ export function sameZoomMode(a: ZoomMode, b: ZoomMode): boolean {
 export function reviewPaneEntitledZoom(mode: ZoomMode | undefined, zoom: number): number | null {
   if (mode?.type !== 'fit') return zoom;
   if (mode.shrinkForReviewPane === true) {
-    const lower =
-      mode.minZoom !== undefined && Number.isFinite(mode.minZoom)
-        ? clampToRange(mode.minZoom)
-        : ZOOM_MIN;
-    const upper =
-      mode.maxZoom !== undefined && Number.isFinite(mode.maxZoom)
-        ? clampToRange(mode.maxZoom)
-        : ZOOM_MAX;
-    // `fitZoom` lets the lower bound win a contradiction; the entitlement follows it.
-    return Math.min(lower, Math.max(upper, lower));
+    // The fit's lower bound. `fitZoom` lets that bound win when it exceeds the cap, so the
+    // entitlement is the lower bound in every case.
+    return mode.minZoom !== undefined && Number.isFinite(mode.minZoom)
+      ? clampToRange(mode.minZoom)
+      : ZOOM_MIN;
   }
   return mode.maxZoom !== undefined && mode.maxZoom < ZOOM_MAX ? mode.maxZoom : null;
 }
