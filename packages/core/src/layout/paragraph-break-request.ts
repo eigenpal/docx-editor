@@ -111,6 +111,13 @@ export function bodyParagraphBreakKey(
     readonly paragraphSpaceBefore?: number;
     /** The paragraph anchors its own topAndBottom band, which the spacing moves. */
     readonly anchorsTopAndBottom?: boolean;
+    /** That band sits at a fixed page position, so the paragraph's start Y moves its lines. */
+    readonly ownBandPageFramed?: boolean;
+    /**
+     * The region bottom. An opening line that would clear its own band past it keeps to the
+     * passages beside the band, so a paragraph with its own band keys the room below it.
+     */
+    readonly regionBottomY?: number;
     readonly columnIndex: number;
     readonly startOffset: number;
   }
@@ -124,6 +131,11 @@ export function bodyParagraphBreakKey(
   const spaceBefore = placement.paragraphSpaceBefore ?? 0;
   if ((positioned || placement.anchorsTopAndBottom) && spaceBefore > 0)
     key += `\0before:${spaceBefore.toFixed(3)}`;
+  // The paragraph's own band is synthesized during the break, so it is in no exclusion
+  // token: its position inputs join here instead.
+  if (placement.anchorsTopAndBottom && placement.regionBottomY !== undefined)
+    key += `\0region:${(placement.regionBottomY - placement.paragraphStartY).toFixed(3)}`;
+  if (placement.ownBandPageFramed) key += `\0at:${placement.paragraphStartY.toFixed(3)}`;
   if (
     placement.anchorParagraphStartY !== undefined &&
     placement.anchorParagraphStartY !== placement.paragraphStartY

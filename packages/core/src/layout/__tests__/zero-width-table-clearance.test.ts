@@ -94,11 +94,11 @@ for (const control of ['\u200f', '\u200e', '\u200b', '\u0301']) {
   }
 }
 
-test('an oversized glyph after a zero-width prefix moves below a passage too narrow for it', () => {
-  // 48pt WW beside a 20pt passage: no glyph fits there, so the zero-width prefix and the
-  // word open one line below the band instead of overflowing beside it. Reference renders
-  // of a left floating table, with and without borders and cell margins, leaving an 18pt
-  // to 40pt right passage, place the word below the table with and without the RLM prefix.
+test('an oversized glyph after a zero-width prefix overflows its admitted passage', () => {
+  // Observed: 48pt WW beside a nominal 20pt passage. The RLM occupies an empty first line;
+  // one W overflows beside the table and the next starts below. The zero-width prefix
+  // admits the passage, so the opening segment is broken there rather than moved below.
+  // This synthetic band isolates those line origins from the table border inset.
   for (const table of [false, true])
     for (const split of [false, true]) {
       const lines = layoutPrefix('\u200f', split, {
@@ -109,13 +109,20 @@ test('an oversized glyph after a zero-width prefix moves below a passage too nar
         lineHeight: 54.96,
         zoneHeight: 100,
       });
-      expect(lines.map((line) => line.box.y)).toEqual([100]);
+      expect(lines.map((line) => line.box.y)).toEqual([0, 54.96, 109.92]);
       expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
-        '\u200fWW',
+        '\u200f',
+        'W',
+        'W',
       ]);
       const spans = lines.flatMap((line) => line.spans);
-      expect(spans[0]!.box.x).toBe(0);
-      expect(spans.at(-1)!.range.end).toBe(3);
+      expect(spans.map((span) => span.box.x)).toEqual([160, 160, 0]);
+      expect(spans[1]!.box.x + spans[1]!.box.width).toBeGreaterThan(180);
+      expect(spans.map((span) => [span.range.start, span.range.end])).toEqual([
+        [0, 1],
+        [1, 2],
+        [2, 3],
+      ]);
     }
 });
 

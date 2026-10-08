@@ -2,11 +2,10 @@ import {
   projectRevisionMarkup,
   markupRevisionOf,
   recordHiddenMarkup,
-  projectBufferedRevisionMarkup,
 } from './revision-markup-projection.ts';
 import { tocLinkCascader } from './toc-link-formatting.ts';
 import { fieldResultIsDirectionOnly } from './field-result-style.ts';
-import { displayFieldCodes } from './field-code-display.ts';
+import { finishParagraphPieces } from './field-projection-finish.ts';
 import { breakPieceFields, hardBreakPieceFields } from './text-wrapping-break-clear.ts';
 // Project allowlisted field instructions into layout; never execute authored instructions.
 // Computed fields occupy one model unit. FORMTEXT preserves literal offsets; malformed fields demote.
@@ -55,7 +54,6 @@ import { synthesizeAtomicField } from './field-synthesis.ts';
 import { isSymbolRunChild, symbolGlyphOf, symbolRunStyle } from './symbol-run.ts';
 import {
   appendModelRange,
-  applyEastAsiaFontSlots,
   positionalTabOf,
   type FieldAwarePiece,
   type FieldLinkProjector,
@@ -830,22 +828,19 @@ export function unmergedPiecesOfParagraphForDisplay(
    * their nesting. Every transparent wrapper shares {@link MAX_INLINE_CONTAINER_DEPTH} with
    * paragraph offsets; field-scan depth stays separate.
    */
+  const finishOptions = {
+    showFieldCodes,
+    inheritedRunProperties,
+    cascadeRuns,
+    themeFonts,
+    displayMode,
+    authorFilter,
+    fieldCodeRanges,
+    changeSites,
+  };
+  // Out of scan budget before the walk: nothing was buffered, so no markup to project.
   if (!consumeScanNode(budget))
-    return applyEastAsiaFontSlots(
-      showFieldCodes
-        ? displayFieldCodes(
-            paragraph,
-            pieces,
-            inheritedRunProperties,
-            cascadeRuns,
-            themeFonts,
-            displayMode,
-            authorFilter,
-            fieldCodeRanges
-          )
-        : pieces,
-      themeFonts
-    );
+    return finishParagraphPieces(paragraph, pieces, { ...finishOptions, projectMarkup: false });
   const paragraphScope = emptyNamespaceScope();
 
   /**
@@ -980,21 +975,7 @@ export function unmergedPiecesOfParagraphForDisplay(
   // Malformed field missing end: demote — surface cached/buffered text, no live projection.
   abandonPending();
 
-  return applyEastAsiaFontSlots(
-    showFieldCodes
-      ? displayFieldCodes(
-          paragraph,
-          pieces,
-          inheritedRunProperties,
-          cascadeRuns,
-          themeFonts,
-          displayMode,
-          authorFilter,
-          fieldCodeRanges
-        )
-      : projectBufferedRevisionMarkup(pieces, paragraph, displayMode, authorFilter, changeSites),
-    themeFonts
-  );
+  return finishParagraphPieces(paragraph, pieces, finishOptions);
 }
 
 export { piecesOfParagraphForDisplay } from './field-projection-display.ts';

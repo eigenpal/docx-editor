@@ -9,15 +9,6 @@ import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawi
 import type { LayoutBox } from '../layout/semantic-records.ts';
 import type { DrawingPaintContext } from './semantic-paint-drawings.ts';
 
-/** Binding attributes a painted story carries; a read-only member story drops every one. */
-const STORY_BINDING_ATTRIBUTES = [
-  'data-paragraph-id',
-  'data-start',
-  'data-drawing-paragraph-id',
-  'data-drawing-start',
-  'data-drawing-node-id',
-] as const;
-
 /**
  * The member text layer of a group drawing, or null when it has none to paint.
  * Positioned like the drawing itself, so it lands over the group in either layer.
@@ -68,12 +59,8 @@ export function paintGroupTextboxStories(
       content.style.transform = `rotate(${turn}deg)`;
     }
     for (const fragment of story.fragments) {
-      content.append(ctx.paintStoryFragment(document, fragment));
-    }
-    for (const attribute of STORY_BINDING_ATTRIBUTES) {
-      for (const bound of content.querySelectorAll<HTMLElement>(`[${attribute}]`)) {
-        bound.removeAttribute(attribute);
-      }
+      // Painted read-only: no selection, editing, or drawing bindings at all.
+      content.append(ctx.paintStoryFragment(document, fragment, { readOnly: true }));
     }
     // Pictures and equations inside the story are inert too: no drawing selection target,
     // and no pointer target that would turn back on inside the inert layer.

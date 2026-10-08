@@ -12,6 +12,7 @@ import {
   lineHoldsContent,
   markPendingLineWrapAdvances,
   placeLeadingIgnoredBreaks,
+  admittedToNarrowPassage,
 } from './pending-line.ts';
 import { spaceShrinkWordTail } from './space-shrink-word-tail.ts';
 import { wordFollowsOnlyTabs } from './leading-tab-word.ts';
@@ -547,6 +548,7 @@ export function breakParagraph(
       startOffset > 0 || !flow?.inlineDrawingLayout
         ? []
         : ownParagraphFramedClearZones({
+            ...(flow.anchorFrameBase ? { frameBase: flow.anchorFrameBase } : {}),
             paragraph,
             paragraphId,
             drawingLayout: flow.inlineDrawingLayout,
@@ -745,6 +747,11 @@ export function breakParagraph(
     if (zones.length > 0) applyTopAndBottomSkipIfNeeded(holdsContent());
   };
 
+  // A line admitted to its passage breaks an oversized segment there instead of moving it.
+  const movesOpeningSegment = (width: number): boolean =>
+    !admittedToNarrowPassage(pieces, line.start, lines.length > 0) &&
+    applyOpeningSegmentSkipIfNeeded(width, exclusionProbe.height());
+
   const ensurePlacementWidth = (width: number, depth = 0): boolean => {
     if (depth > 64) return remainingLineWidth() >= width;
     applyTopAndBottomSkipIfNeeded();
@@ -753,8 +760,7 @@ export function breakParagraph(
         closeLine();
         return ensurePlacementWidth(width, depth + 1);
       }
-      if (applyOpeningSegmentSkipIfNeeded(width, exclusionProbe.height()))
-        return ensurePlacementWidth(width, depth + 1);
+      if (movesOpeningSegment(width)) return ensurePlacementWidth(width, depth + 1);
       return true;
     }
     if (width <= remainingLineWidth() + 0.001) return true;
@@ -770,8 +776,7 @@ export function breakParagraph(
     if (tryAdvanceToNextPassage()) return ensurePlacementWidth(width, depth + 1);
     // No passage at this height holds the segment: the line moves down to the first height
     // where one does. Each move clears at least one band, so the recursion makes progress.
-    if (applyOpeningSegmentSkipIfNeeded(width, exclusionProbe.height()))
-      return ensurePlacementWidth(width, depth + 1);
+    if (movesOpeningSegment(width)) return ensurePlacementWidth(width, depth + 1);
     // Only a segment wider than the clear column remains; it overflows and is broken here.
     return true;
   };

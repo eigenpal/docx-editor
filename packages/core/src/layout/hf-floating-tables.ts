@@ -2,9 +2,8 @@
 //
 // Such a table sits at its anchor position, outside the story's text flow: the blocks after
 // it start where the table would have started, and wrap around it as they do around a
-// floating body table. In a letterhead, a reference table sits at its `w:tblpX`/`w:tblpY`
-// page position beside the address block, and the title paragraph after it stays at the top
-// of the header. A table as wide as the story moves the blocks after it below it, so the
+// floating body table. A narrow table at a `w:tblpX`/`w:tblpY` page position sits beside
+// the header text, and the paragraph after it stays at the top of the header. A table as wide as the story moves the blocks after it below it, so the
 // story, and the body under a header, grows with it.
 //
 // Only the top-level table floats. A table inside a cell keeps its `w:tblpPr` ignored, as in

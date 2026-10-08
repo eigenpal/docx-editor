@@ -93,8 +93,14 @@ export function furnitureTableZones(
       Object.freeze({
         ...zone,
         sourceKind: 'furniture',
-        drawingNodeId: `${story.partName}:table:${table.tableId}`,
-        anchorParagraphId: `${story.partName}:table:${table.tableId}`,
+        furnitureSource: Object.freeze({
+          partName: story.partName,
+          kind: 'table' as const,
+          nodeId: table.tableId,
+        }),
+        drawingNodeId: table.tableId,
+        // No body paragraph anchors it: the zone reaches every body line on the page.
+        anchorParagraphId: '',
       })
     );
   }

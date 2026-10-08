@@ -8,6 +8,6 @@
     "packages/core/src/layout/__tests__/textbox-unwrapped-layout.test.ts",
     "packages/core/src/layout/__tests__/legacy-vml-textbox-layout.test.ts"
   ],
-  "changeset": "textbox-unwrapped-text",
+  "changeset": "header-drawing-fidelity",
   "migration": null
 }

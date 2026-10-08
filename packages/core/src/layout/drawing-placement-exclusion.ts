@@ -4,7 +4,11 @@ import {
   drawingModelOffsetsInParagraph,
 } from './drawing-atom-walk.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
-import { synthesizeParagraphTopAndBottomZones, type ExclusionZone } from './drawing-exclusion.ts';
+import {
+  pageFramedVertically,
+  synthesizeParagraphTopAndBottomZones,
+  type ExclusionZone,
+} from './drawing-exclusion.ts';
 import type { PendingLine } from './pending-line.ts';
 import { holdsClearingBreak } from './text-wrapping-break-clear.ts';
 
@@ -27,6 +31,45 @@ export function anchorsSpacingDependentBand(
       atoms.some((atom) => atom.projection.wrap === 'topAndBottom') ||
       (atoms.length > 0 && holdsClearingBreak(paragraph));
     topAndBottomAnchorMemo.set(paragraph, value);
+  }
+  return value;
+}
+
+/** What the break cache keys for a paragraph's own spacing-dependent band. */
+export interface OwnBandKeyInputs {
+  /** The paragraph synthesizes its own band during the break (see above). */
+  readonly anchorsTopAndBottom: boolean;
+  /**
+   * The band sits at a fixed page position (a page- or margin-framed vertical frame), so the
+   * lines around it depend on where the paragraph starts on the page.
+   */
+  readonly ownBandPageFramed: boolean;
+}
+
+const NO_OWN_BAND: OwnBandKeyInputs = Object.freeze({
+  anchorsTopAndBottom: false,
+  ownBandPageFramed: false,
+});
+const ownBandMemo = new WeakMap<OoxmlElement, OwnBandKeyInputs>();
+
+/** The own-band inputs of a paragraph's break key; one frozen answer per paragraph node. */
+export function ownBandKeyInputs(
+  paragraph: OoxmlElement,
+  context: InlineDrawingLayoutContext | undefined
+): OwnBandKeyInputs {
+  if (!context || !anchorsSpacingDependentBand(paragraph, context)) return NO_OWN_BAND;
+  let value = ownBandMemo.get(paragraph);
+  if (value === undefined) {
+    const ownBandPageFramed = anchoredDrawingAtomsInParagraph(paragraph, context).some((atom) => {
+      const vertical = atom.projection.position?.vertical;
+      return (
+        !!vertical &&
+        !atom.projection.anchor?.simplePos &&
+        pageFramedVertically(vertical.relativeFrom)
+      );
+    });
+    value = Object.freeze({ anchorsTopAndBottom: true, ownBandPageFramed });
+    ownBandMemo.set(paragraph, value);
   }
   return value;
 }

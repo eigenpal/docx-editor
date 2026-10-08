@@ -72,8 +72,12 @@ export interface DrawingPaintContext {
    */
   readonly paintStoryFragment?: (
     document: Document,
-    fragment: ParagraphFragmentRecord | TableFragmentRecord
+    fragment: ParagraphFragmentRecord | TableFragmentRecord,
+    /** `readOnly` paints without selection and editing bindings. */
+    options?: { readonly readOnly?: boolean }
   ) => HTMLElement;
+  /** Paint drawings without their node binding, inside a story no command may reach. */
+  readonly unbound?: boolean;
   /** Resolved author colouring, so a tracked drawing's cue follows the span scheme. */
   readonly revisionStyles?: RevisionStyleContext;
 }
@@ -397,7 +401,7 @@ function paintPlaceholderCard(
 ): HTMLElement {
   const outer = document.createElement('div');
   outer.className = 'docx-drawing docx-drawing-placeholder';
-  outer.dataset.drawingNodeId = drawing.drawingNodeId;
+  if (!ctx.unbound) outer.dataset.drawingNodeId = drawing.drawingNodeId;
   positionedBox(outer, drawing.paintBounds, ctx.scale, origin);
 
   const card = document.createElement('div');
@@ -441,7 +445,7 @@ function paintReadyImage(
   if (reusable && readyImagePaintSignatures.get(outer) === paintSignature) return outer;
   outer.className = 'docx-drawing docx-drawing-ready';
   outer.style.cssText = '';
-  outer.dataset.drawingNodeId = drawing.drawingNodeId;
+  if (!ctx.unbound) outer.dataset.drawingNodeId = drawing.drawingNodeId;
   delete outer.dataset.docxDrawingLink;
   delete outer.dataset.docxDrawingLinkKind;
   delete outer.dataset.docxDrawingLinkHref;
@@ -556,7 +560,7 @@ function paintVectorShape(
 ): HTMLElement {
   const outer = document.createElement('div');
   outer.className = 'docx-drawing docx-drawing-shape';
-  outer.dataset.drawingNodeId = drawing.drawingNodeId;
+  if (!ctx.unbound) outer.dataset.drawingNodeId = drawing.drawingNodeId;
   const paint = drawing.paintBounds;
   positionedBox(outer, paint, ctx.scale, origin);
   const frame = vectorShapeFrame(document, drawing, ctx.scale);
@@ -590,7 +594,7 @@ function paintTextboxStory(
   const scale = ctx.scale;
   const outer = document.createElement('div');
   outer.className = 'docx-drawing docx-drawing-textbox';
-  outer.dataset.drawingNodeId = drawing.drawingNodeId;
+  if (!ctx.unbound) outer.dataset.drawingNodeId = drawing.drawingNodeId;
   outer.setAttribute('contenteditable', 'false');
   positionedBox(outer, drawing.paintBounds, ctx.scale, origin);
   outer.style.overflow = 'hidden';
@@ -732,7 +736,7 @@ function paintDrawingRecordElement(
   if (drawing.groupTextboxStories && !drawing.groupPicture && !drawing.vectorShape) {
     const frame = document.createElement('div');
     frame.className = 'docx-drawing docx-drawing-group-frame';
-    frame.dataset.drawingNodeId = drawing.drawingNodeId;
+    if (!ctx.unbound) frame.dataset.drawingNodeId = drawing.drawingNodeId;
     positionedBox(frame, drawing.paintBounds, ctx.scale, origin);
     applyAccessibility(frame, drawing, false);
     return frame;
@@ -768,7 +772,7 @@ function paintDrawingRecordElement(
         ?.closest<HTMLElement>('.docx-drawing-ready');
     if (retained) {
       readyImagePaintSignatures.delete(retained);
-      retained.dataset.drawingNodeId = drawing.drawingNodeId;
+      if (!ctx.unbound) retained.dataset.drawingNodeId = drawing.drawingNodeId;
       positionedBox(retained, drawing.paintBounds, ctx.scale, origin);
       return retained;
     }

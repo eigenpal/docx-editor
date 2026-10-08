@@ -267,6 +267,39 @@ describe('story blocks wrap around a floating table', () => {
     expect(above).toContain(14400);
   });
 
+  test('a footer takes the page top it is handed, and its height is a fixed point', () => {
+    // The page furniture hands a footer the top its own last height implies and repeats until
+    // the height stops changing. A table that lifts the text must give the same answer then.
+    const tblpPr =
+      '<w:tblpPr w:vertAnchor="page" w:horzAnchor="margin" w:tblpXSpec="center" w:tblpY="14400"/>';
+    const cold = header(wide(tblpPr), { storyDistance: 36, footer: true, compatibilityMode: 15 });
+    const handed = header(wide(tblpPr), {
+      storyDistance: 36,
+      footer: true,
+      compatibilityMode: 15,
+      storyTop: 756 - cold.story.flowHeight,
+    });
+    expect(handed.story.flowHeight).toBeCloseTo(cold.story.flowHeight, 6);
+    expect(handed.table.box.y).toBeCloseTo(cold.table.box.y, 6);
+    expect(handed.title.lines[0]!.box.y).toBeCloseTo(cold.title.lines[0]!.box.y, 6);
+  });
+
+  test('the handed footer top converges for every page-framed table position', () => {
+    for (let y = 13000; y <= 15800; y += 200) {
+      const tblpPr = `<w:tblpPr w:vertAnchor="page" w:horzAnchor="margin" w:tblpXSpec="center" w:tblpY="${y}"/>`;
+      const options = { storyDistance: 36, footer: true, compatibilityMode: 15 } as const;
+      let height = header(wide(tblpPr), options).story.flowHeight;
+      let settled = false;
+      // The page furniture's own loop: hand the top the last height implies, eight times.
+      for (let pass = 0; pass < 8 && !settled; pass += 1) {
+        const next = header(wide(tblpPr), { ...options, storyTop: 756 - height }).story.flowHeight;
+        settled = Math.abs(next - height) <= 0.001;
+        height = next;
+      }
+      expect(settled).toBe(true);
+    }
+  });
+
   test('footer text around a page-framed table always stays on the sheet', () => {
     // Text moved below a wide table rises above it when it would pass the sheet bottom. Text
     // wrapped beside a narrow table grows the footer upward, and never covers the table.

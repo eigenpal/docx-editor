@@ -1,5 +1,5 @@
 import { withOwnAnchorOnlyZones } from './empty-anchor-exclusion.ts';
-import type { bodyAnchorFrameBase } from './body-flow-helpers.ts';
+import type { BodyAnchorFrameBase } from './body-flow-helpers.ts';
 import type { RevisionDisplayMode, RevisionAuthorFilter } from './revision-projection.ts';
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
 import { anchoredDrawingAtomsInParagraph } from './drawing-atom-walk.ts';
@@ -73,7 +73,7 @@ export function createParagraphDrawingWrap(options: {
       index: number,
       columnIndex: number,
       zones: readonly ExclusionZone[],
-      frameBase: () => ReturnType<typeof bodyAnchorFrameBase>,
+      frameBase: () => BodyAnchorFrameBase,
       top: number,
       left: number,
       right: number,

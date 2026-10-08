@@ -4,6 +4,8 @@
 // the named side do not interrupt. `none`, an absent value, and page or column breaks lay out as
 // ordinary breaks. The attribute stays in the tree either way, so saving keeps it.
 
+import type { BodyAnchorFrameBase } from './body-flow-helpers.ts';
+import { resolveParagraphAnchorPosition } from './paragraph-anchor-position.ts';
 import {
   WML_NAMESPACE_URI,
   hardBreakKind,
@@ -11,6 +13,7 @@ import {
   type OoxmlHardBreakNode,
 } from '@docx-editor.dev/core/store';
 import {
+  exclusionZoneIdentity,
   mergeAvailableIntervalsAtY,
   snapXToAvailableInterval,
   verticalBandOfExclusion,
@@ -136,6 +139,9 @@ export function zonesClearedByBreak(
   );
 }
 
+/** Own clearing bands built without the sheet's frames, whose X is only a stand-in. */
+const horizontallyUnresolved = new WeakSet<ExclusionZone>();
+
 /** Choose the zones a break clears on its own line; the result picks them from a later list. */
 export function breakClearSelector(
   clear: TextWrappingBreakClear,
@@ -143,8 +149,9 @@ export function breakClearSelector(
   at: BreakLineGeometry
 ): (current: readonly ExclusionZone[]) => readonly ExclusionZone[] {
   if (clear === 'all') return (current) => current;
-  const ids = new Set(zonesClearedByBreak(clear, zones, at).map((zone) => zone.drawingNodeId));
-  return (current) => (ids.size === 0 ? [] : current.filter((zone) => ids.has(zone.drawingNodeId)));
+  const ids = new Set(zonesClearedByBreak(clear, zones, at).map(exclusionZoneIdentity));
+  return (current) =>
+    ids.size === 0 ? [] : current.filter((zone) => ids.has(exclusionZoneIdentity(zone)));
 }
 
 /**
@@ -168,6 +175,8 @@ export function breakClearanceSkip(
     .filter((zone) => {
       const box = zone.verticalBand;
       if (!(box.height > EPSILON)) return false;
+      // A band whose X is not known counts on its vertical extent alone.
+      if (horizontallyUnresolved.has(zone)) return true;
       const open = mergeAvailableIntervalsAtY(box.y, [zone], left, right, box.height);
       return !(
         open.length === 1 &&
@@ -191,10 +200,13 @@ export function breakClearanceSkip(
  *
  * The page's zones hold a float where an earlier pass placed its paragraph. When the paragraph
  * moves to another page or column, those zones are missing, and a clearing break would restart
- * on the picture. These bands move with the paragraph. Only the vertical band is exact: the
- * horizontal extent starts at `contentLeft`, so use these bands to clear, never to wrap.
+ * on the picture. These bands move with the paragraph. With the sheet's frames the band takes
+ * the float's resolved X. Without them it starts at `contentLeft`, so it clears whatever its
+ * vertical band meets (see {@link breakClearanceSkip}) and is never used to wrap.
  */
 export function ownParagraphFramedClearZones(options: {
+  /** The sheet's frames. With them the band resolves its real X; without, see below. */
+  readonly frameBase?: BodyAnchorFrameBase;
   readonly paragraph: OoxmlNode;
   readonly paragraphId: string;
   readonly drawingLayout: InlineDrawingLayoutContext;
@@ -224,10 +236,20 @@ export function ownParagraphFramedClearZones(options: {
     const offset = emuToPointsSafe(vertical.offsetEmu ?? 0);
     if (modelStart === undefined || offset === null) continue;
     const anchorY = options.paragraphTop + offset;
+    // The X the page zone for this float gets, so the band clears what that zone would.
+    const anchorX = options.frameBase
+      ? resolveParagraphAnchorPosition(projection, {
+          frameBase: options.frameBase,
+          contentLeft: options.contentLeft,
+          contentRight: options.contentRight,
+          lineY: options.paragraphTop,
+          ownerPartName: options.drawingLayout.ownerPartName,
+        }).x
+      : options.contentLeft;
     const measure = measureInlineDrawing(projection);
     const geometry = drawingGeometryFromProjection({
       projection,
-      anchorX: options.contentLeft,
+      anchorX,
       anchorY,
       extentWidth: measure.width,
       extentHeight: measure.height,
@@ -237,25 +259,26 @@ export function ownParagraphFramedClearZones(options: {
       geometry,
       contentLeft: options.contentLeft,
       contentRight: options.contentRight,
-      anchorX: options.contentLeft,
+      anchorX,
       anchorY,
     });
     if (!input) continue;
-    zones.push(
-      Object.freeze({
-        drawingNodeId: atom.atomId,
-        anchorParagraphId: options.paragraphId,
-        anchorModelStart: modelStart,
-        sourceOrder: 0,
-        paintLayer: projection.anchor?.behindDocument ? ('behind' as const) : ('inFront' as const),
-        relativeHeight: projection.anchor?.relativeHeight ?? 0,
-        allowOverlap: projection.anchor?.allowOverlap ?? true,
-        columnIndex: 0,
-        y: anchorY,
-        verticalBand: verticalBandOfExclusion(input),
-        input,
-      })
-    );
+    const zone: ExclusionZone = Object.freeze({
+      drawingNodeId: atom.atomId,
+      anchorParagraphId: options.paragraphId,
+      anchorModelStart: modelStart,
+      sourceOrder: 0,
+      paintLayer: projection.anchor?.behindDocument ? ('behind' as const) : ('inFront' as const),
+      relativeHeight: projection.anchor?.relativeHeight ?? 0,
+      allowOverlap: projection.anchor?.allowOverlap ?? true,
+      columnIndex: 0,
+      y: anchorY,
+      verticalBand: verticalBandOfExclusion(input),
+      input,
+    });
+    // Without the sheet's frames the X is the content edge, which is not where the float is.
+    if (!options.frameBase) horizontallyUnresolved.add(zone);
+    zones.push(zone);
   }
   return zones;
 }
@@ -266,7 +289,7 @@ export function withOwnClearZones(
   own: readonly ExclusionZone[]
 ): readonly ExclusionZone[] {
   if (own.length === 0) return zones;
-  const placed = new Set(zones.map((zone) => zone.drawingNodeId));
-  const missing = own.filter((zone) => !placed.has(zone.drawingNodeId));
+  const placed = new Set(zones.map(exclusionZoneIdentity));
+  const missing = own.filter((zone) => !placed.has(exclusionZoneIdentity(zone)));
   return missing.length === 0 ? zones : [...zones, ...missing];
 }

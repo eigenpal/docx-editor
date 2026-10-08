@@ -149,6 +149,11 @@ export function furnitureDrawingExclusionsForPage(
         Object.freeze({
           ...localized,
           sourceKind: 'furniture',
+          furnitureSource: Object.freeze({
+            partName: story.partName,
+            kind: 'drawing' as const,
+            nodeId: drawing.drawingNodeId,
+          }),
           drawingNodeId: `${story.partName}:${drawing.drawingNodeId}`,
           anchorParagraphId: `${story.partName}:${drawing.anchorParagraphId}`,
         })

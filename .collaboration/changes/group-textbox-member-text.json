@@ -9,6 +9,6 @@
     "packages/core/src/editor/__tests__/inline-group-textbox-member.test.ts",
     "packages/docx-to-pdf/test/textbox.test.ts"
   ],
-  "changeset": "group-textbox-member-text",
+  "changeset": "header-drawing-fidelity",
   "migration": null
 }

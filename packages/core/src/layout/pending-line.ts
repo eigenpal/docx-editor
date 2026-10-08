@@ -90,6 +90,45 @@ export function growLineMetrics(
   line.height = line.baseline + descent;
 }
 
+/** The character at a model offset among a paragraph's pieces, if a piece holds it. */
+function characterAt(
+  pieces: readonly { readonly start: number; readonly text: string }[],
+  offset: number
+): string | undefined {
+  for (const piece of pieces) {
+    if (offset >= piece.start && offset < piece.start + piece.text.length) {
+      return piece.text[offset - piece.start];
+    }
+  }
+  return undefined;
+}
+
+/** Zero-width format characters and combining marks: they take no room in a passage. */
+const ZERO_WIDTH_OPENER = /^[\u200b-\u200f\u2060\ufeff\p{Mn}]$/u;
+
+/**
+ * Whether a line that opens at `offset` has already been admitted to the passage it stands
+ * in, so a segment too wide for that passage is broken there by character rather than moved
+ * below the floats.
+ *
+ * Two cases, both observed in reference renders: the line opens with a zero-width character,
+ * which fits any passage and so admits it; or the line continues a segment that the line
+ * before broke by character (the character before `offset` is neither a space nor a
+ * hyphen). In both, an oversized glyph overflows beside the float on the next line instead
+ * of opening below it.
+ */
+export function admittedToNarrowPassage(
+  pieces: readonly { readonly start: number; readonly text: string }[],
+  offset: number,
+  continuesLine: boolean
+): boolean {
+  const opening = characterAt(pieces, offset);
+  if (opening !== undefined && ZERO_WIDTH_OPENER.test(opening)) return true;
+  if (!continuesLine) return false;
+  const previous = characterAt(pieces, offset - 1);
+  return previous !== undefined && !/[\s\-\u00ad\u2010\u2011]/u.test(previous);
+}
+
 /** Whether page breaks, and nothing else, precede `offset` among a paragraph's pieces. */
 export function onlyPageBreaksBefore(
   pieces: readonly { readonly start: number; readonly text: string }[],

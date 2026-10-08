@@ -9,6 +9,6 @@
     "packages/core/src/store/__tests__/drawing-wrap-footprint.test.ts",
     "packages/core/src/editor/__tests__/inline-group-textbox-member.test.ts"
   ],
-  "changeset": "group-textbox-member-pictures",
+  "changeset": "header-drawing-fidelity",
   "migration": null
 }

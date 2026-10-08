@@ -1,6 +1,6 @@
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
-import type { bodyAnchorFrameBase } from './body-flow-helpers.ts';
+import type { BodyAnchorFrameBase } from './body-flow-helpers.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import {
   anchoredDrawingAtomsInParagraph,
@@ -16,7 +16,7 @@ export function withOwnAnchorOnlyZones(
   zones: readonly ExclusionZone[],
   paragraph: OoxmlElement,
   drawings: InlineDrawingLayoutContext | undefined,
-  frameBase: () => ReturnType<typeof bodyAnchorFrameBase>,
+  frameBase: () => BodyAnchorFrameBase,
   top: number,
   left: number,
   right: number,

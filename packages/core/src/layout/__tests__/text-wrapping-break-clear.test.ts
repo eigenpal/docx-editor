@@ -3,12 +3,18 @@
 // the break's line, `right` the floats past the pen, and `all` every float.
 
 import { describe, expect, test } from 'bun:test';
+import { bodyAnchorFrameBase } from '../body-flow-helpers.ts';
+import { synthesizeParagraphWrapExclusionZones } from '../drawing-exclusion.ts';
 import { WML_NAMESPACE_URI, readOoxmlPart } from '../../store/package/ooxml-tree.ts';
 import type { OoxmlHardBreakNode } from '../../store/package/ooxml-tree.ts';
 import { layoutContext, load } from './anchored-drawing-test-fixtures.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { anchoredDrawingsOf, linesOf, type SemanticLayout } from '../semantic-records.ts';
-import { textWrappingBreakClearOf } from '../text-wrapping-break-clear.ts';
+import {
+  breakClearanceSkip,
+  ownParagraphFramedClearZones,
+  textWrappingBreakClearOf,
+} from '../text-wrapping-break-clear.ts';
 
 const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
 const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
@@ -160,6 +166,30 @@ describe('the side a break clears', () => {
   test('an untyped w:br clears as a text wrapping break does', () => {
     const result = layout(paragraph(run('Before') + float(LEFT) + br('all', null) + run('After')));
     expect(lineAt(result, 'After').y).toBe(80);
+  });
+});
+
+describe('the side a break clears in a right-to-left paragraph', () => {
+  // ST_BrClear names the left and right sides of the page and gives no reading-order rule, so
+  // the sides stay physical in a `w:bidi` paragraph. This pins that reading; it has not been
+  // compared with a reference render.
+  const after = (picture: Float, clear: string) =>
+    lineAt(
+      layout(
+        paragraph(run('Before') + float(picture) + br(clear) + run('After'), '<w:bidi/>') +
+          paragraph(run('Next'))
+      ),
+      'After'
+    );
+
+  test('left clears the float on the physical left', () => {
+    expect(after(LEFT, 'left').y).toBe(80);
+    expect(after(RIGHT, 'left').y).toBe(LINE);
+  });
+
+  test('right clears the float on the physical right', () => {
+    expect(after(RIGHT, 'right').y).toBe(80);
+    expect(after(LEFT, 'right').y).toBe(LINE);
   });
 });
 
@@ -336,4 +366,61 @@ describe('a clearing break across a region boundary', () => {
       for (const line of lines) expect(round(line.contentX)).toBe(0);
     });
   }
+});
+
+describe('own clearing bands of a paragraph that moved', () => {
+  // The float sits in the right margin, 480 pt from the margin edge: it blocks no part of the
+  // 468 pt column. The page zone for it, built with the sheet's frames, clears nothing.
+  const inMargin = float({ x: 480, y: 0, width: 60, height: 120 }).replace(
+    '<wp:positionH relativeFrom="column">',
+    '<wp:positionH relativeFrom="margin">'
+  );
+  const part = load(
+    `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}">` +
+      `<w:body>${paragraph(inMargin + br('all') + run('Caption'))}</w:body></w:document>`
+  );
+  const node = part.root.children
+    .flatMap((child) => ('children' in child ? child.children : []))
+    .find((child) => child.kind === 'paragraph')!;
+  const frameBase = bodyAnchorFrameBase({
+    pageNumber: 1,
+    onPageParityRead: () => {},
+    geometry: { width: 612, height: 792, margin: { left: 72, right: 72, bottom: 72 } },
+    insets: { top: 72, bottom: 72, height: 648 },
+    contentWidth: 468,
+    contentHeight: 648,
+    ownerPartName: '/word/document.xml',
+  });
+  const own = (withFrames: boolean) =>
+    ownParagraphFramedClearZones({
+      ...(withFrames ? { frameBase } : {}),
+      paragraph: node,
+      paragraphId: node.id,
+      drawingLayout: layoutContext(part),
+      contentLeft: 0,
+      contentRight: 468,
+      paragraphTop: 0,
+      displayMode: 'proposed',
+    });
+
+  test('with the sheet frames the band takes the float X and clears nothing in the column', () => {
+    const zones = own(true);
+    expect(zones).toHaveLength(1);
+    const page = synthesizeParagraphWrapExclusionZones({
+      frameBase,
+      paragraph: node,
+      paragraphId: node.id,
+      drawingLayout: layoutContext(part),
+      contentLeft: 0,
+      contentRight: 468,
+      paragraphStartY: 0,
+      anchorLineTopByModelStart: new Map([[0, 0]]),
+    });
+    expect(zones[0]!.input.contentBounds.x).toBeCloseTo(page[0]!.input.contentBounds.x, 6);
+    expect(breakClearanceSkip(0, LINE, zones, 0, 468)).toBe(0);
+  });
+
+  test('without the frames the band counts on its vertical extent alone', () => {
+    expect(breakClearanceSkip(0, LINE, own(false), 0, 468)).toBe(120);
+  });
 });

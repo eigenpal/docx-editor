@@ -76,6 +76,15 @@ import { withoutFloatingTableZones } from './table-float-overlap.ts';
 import { placeHeaderPageFrame, readHeaderPageFrame } from './header-page-frame.ts';
 
 /**
+ * How many times a footer grows upward when text wrapped beside a page-framed table runs past
+ * the sheet. Each growth moves the top edge up by the overflow and wraps again; a narrower
+ * passage can add a line each time, so the growth is bounded rather than iterated to a fixed
+ * point. Three covers a wrap that adds a line per pass for the passages a footer table leaves;
+ * past that, the text is lifted above every table it meets, which always fits the sheet.
+ */
+const FOOTER_GROWTH_PASSES = 3;
+
+/**
  * Distinct PAGE-dependent contexts retained before LRU eviction.
  *
  * Finalize stores projected furniture on each page record, so eviction cannot drop published
@@ -646,13 +655,17 @@ export function layoutHeaderFooterStory(
       const anchors = flow;
       // A footer's bottom edge is fixed and its top rises with its height. The tables resolve
       // once, against the flow before wrapping, so they stay where the text wraps around them.
+      // The page furniture hands a footer the top its last height implies (`sheet bottom -
+      // distance - flowHeight`) and repeats until the height settles; without it, the top
+      // follows the unwrapped flow. The height reported below is the distance from that top to
+      // the fixed bottom edge, so a handed top that already holds a lift reproduces it.
       const footerBottom =
         part.root.localName === 'ftr' && floatingGeometry.storyDistance !== undefined
           ? floatingGeometry.pageHeight - floatingGeometry.storyDistance
           : undefined;
       let storyTop =
         footerBottom !== undefined
-          ? footerBottom - anchors.bottom
+          ? (effectiveCtx?.storyTop ?? footerBottom - anchors.bottom)
           : (effectiveCtx?.storyTop ?? floatingGeometry.storyDistance!);
       const placeTables = () =>
         placeFloatingStoryTables(
@@ -699,7 +712,7 @@ export function layoutHeaderFooterStory(
       // The footer then grows upward by that height, a bounded number of times, and as a last
       // resort its text rises above every table it meets.
       const offSheet = () => storyTop + flow.bottom > floatingGeometry.pageHeight + 0.01;
-      for (let pass = 0; framedFooter && pass < 3 && offSheet(); pass++) {
+      for (let pass = 0; framedFooter && pass < FOOTER_GROWTH_PASSES && offSheet(); pass++) {
         storyTop = Math.min(storyTop, footerBottom - flow.bottom);
         tables = placeTables();
         wrapTables();
