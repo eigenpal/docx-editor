@@ -63,11 +63,7 @@ import type {
 import type { StyleCascadeTable } from './style-cascade.ts';
 import { storyBlocks } from './story-roots.ts';
 import { positionLegacyFooterPageFrame } from './legacy-footer-page-frame.ts';
-import {
-  MAX_FLOATING_TABLE_WRAP_PASSES,
-  placeFloatingStoryTables,
-  splitFloatingStoryTables,
-} from './hf-floating-tables.ts';
+import { placeFloatingStoryTables, splitFloatingStoryTables } from './hf-floating-tables.ts';
 import { withoutFloatingTableZones } from './table-float-overlap.ts';
 import { placeHeaderPageFrame, readHeaderPageFrame } from './header-page-frame.ts';
 
@@ -640,21 +636,18 @@ export function layoutHeaderFooterStory(
 
     if (floatingGeometry) {
       const anchors = flow;
+      // A footer's top edge rises with its flow height. Page and margin anchors resolve once,
+      // against the flow before wrapping, so the tables stay where the text wraps around them.
+      const storyTop =
+        part.root.localName === 'ftr' && floatingGeometry.storyDistance !== undefined
+          ? floatingGeometry.pageHeight - floatingGeometry.storyDistance - anchors.bottom
+          : (effectiveCtx?.storyTop ?? floatingGeometry.storyDistance!);
       const placeTables = () =>
         placeFloatingStoryTables(
           anchors.blocks,
           anchors.bottom,
           floatingSplit.floating,
-          {
-            ...floatingGeometry,
-            contentWidth,
-            // A footer's top edge depends on its own flow height, which wrapping can grow.
-            storyTop:
-              effectiveCtx?.storyTop ??
-              (part.root.localName === 'ftr'
-                ? floatingGeometry.pageHeight - floatingGeometry.storyDistance! - flow.bottom
-                : floatingGeometry.storyDistance!),
-          },
+          { ...floatingGeometry, contentWidth, storyTop },
           anchorsWrapText,
           // A table never wraps around its own zone, or another table's.
           (table, left, top, placed) =>
@@ -670,9 +663,9 @@ export function layoutHeaderFooterStory(
             ).blocks
         );
       let tables = placeTables();
-      // A footer page anchor moves with the footer's height, so wrap until the zones settle.
-      for (let pass = 0; pass < MAX_FLOATING_TABLE_WRAP_PASSES && tables.zones.length; pass++) {
-        if (exclusionLayoutToken(tables.zones) === exclusionLayoutToken(tableZones)) break;
+      // The placement reads only the unwrapped flow, so one wrapped pass settles it. Placing
+      // again after that pass publishes the drawings inside the tables once.
+      if (tables.zones.length) {
         tableZones = tables.zones;
         flowStory(flowBlocks, 0);
         tables = placeTables();

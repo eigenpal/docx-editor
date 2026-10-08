@@ -209,6 +209,26 @@ describe('story blocks wrap around a floating table', () => {
     expect(placed.box.y).toBeCloseTo(0, 3);
   });
 
+  test('a page-anchored footer table and the text below it never overlap', () => {
+    // The footer grows by the text the table pushes down, which moves the footer's top edge.
+    // The table keeps the place it resolved against the unwrapped footer, so the two agree.
+    for (const y of [14000, 14401, 14801]) {
+      const tblpPr = `<w:tblpPr w:vertAnchor="page" w:horzAnchor="margin" w:tblpXSpec="center" w:tblpY="${y}"/>`;
+      const {
+        story,
+        table: placed,
+        title,
+      } = header(wide(tblpPr), {
+        storyDistance: 36,
+        footer: true,
+        compatibilityMode: 15,
+      });
+      const line = title.lines[0]!.box;
+      expect(line.y).toBeGreaterThanOrEqual(placed.box.y + placed.box.height - 0.01);
+      expect(story.flowHeight).toBeCloseTo(line.y + line.height, 1);
+    }
+  });
+
   test('compatibility mode 14, or no mode, runs header text under the table', () => {
     for (const compatibilityMode of [14, undefined]) {
       const { story, title } = header(wide(), { storyTop: 36, compatibilityMode });

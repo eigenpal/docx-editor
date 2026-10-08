@@ -19,9 +19,6 @@ import { tableFloatOriginY, type TableVerticalAnchorFrames } from './table-float
 import { readTableFloatPosition, type TableFloatPosition } from './table-float-properties.ts';
 import { tableFloatOriginX } from './table-origin.ts';
 
-/** Flow passes that may wrap the story around its floating tables before placement stands. */
-export const MAX_FLOATING_TABLE_WRAP_PASSES = 4;
-
 export interface FloatingStoryTable {
   readonly table: OoxmlElement;
   readonly float: TableFloatPosition;
