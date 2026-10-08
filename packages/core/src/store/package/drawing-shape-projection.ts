@@ -455,6 +455,7 @@ export function isUnpaintedGroupTextbox(
   if (member.namespaceUri !== WPS_NAMESPACE_URI || member.localName !== 'wsp') return false;
   const spPr = shapeProperties(member);
   if (!spPr || !hasTextbox(member) || !supportedGroupVisuals(member, spPr, false)) return false;
+  if (!identityGroupThemeEffect(member, resolveStyleMatrixReference)) return false;
   const paint = shapePaint(member, spPr, resolveSchemeColor, resolveStyleMatrixReference);
   return paint.fill === null && paint.stroke === null;
 }

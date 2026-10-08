@@ -157,6 +157,12 @@ describe('group picture projection', () => {
       '</a:prstGeom><a:effectLst><a:outerShdw dist="38100"/></a:effectLst>'
     );
     expect(projectionsOf(mcWrapped(groupDrawing(pictureMember() + shadowed)))).toHaveLength(0);
+    // So does one whose theme effect the group cannot resolve.
+    const themed = textboxMember().replace(
+      '</wps:spPr>',
+      '</wps:spPr><wps:style><a:effectRef idx="1"><a:schemeClr val="accent1"/></a:effectRef></wps:style>'
+    );
+    expect(projectionsOf(mcWrapped(groupDrawing(pictureMember() + themed)))).toHaveLength(0);
   });
 
   test('the picture frame maps through the group child offset and extent', () => {

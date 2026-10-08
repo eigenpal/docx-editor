@@ -1,10 +1,10 @@
 // The footprint of an `mc:AlternateContent` payload the engine cannot draw.
 //
-// Such a payload (a shape group whose members do not paint, a group whose picture resource
-// fails) stays invisible: no placeholder card, no partial group. An anchor still states an
-// extent, a position and a wrap, and text flows around that area whether or not the graphic
-// paints. An inline drawing still takes its extent on its line. The footprint keeps exactly
-// those layout facts and removes every paint payload, so layout reserves the space and every
+// Such a payload (a shape group with a member it cannot paint, a group whose picture resource
+// fails) stays invisible: no placeholder card. An anchor still states an extent, a position
+// and a wrap, and text flows around that area whether or not the graphic paints. An inline
+// drawing still takes its extent on its line. The footprint keeps exactly those layout facts
+// and removes every paint payload, so layout reserves the space and every
 // output sees a hidden record with nothing to draw.
 
 import type { DrawingProjection, ImageWrapTarget } from './drawing-projection.ts';
