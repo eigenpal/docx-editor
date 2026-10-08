@@ -631,9 +631,39 @@ export async function paint(
       if (visit.paragraph.clipToBox) out.push('Q');
     }
   }
+  // A group's text box members: the group's own picture and shapes, then each member's
+  // decorations and the text its spans collected, all clipped to the group's paint bounds.
+  const paintGroupText = async (visit: SemanticDrawingVisit, page: PDFPage): Promise<string> => {
+    const d = visit.drawing;
+    const base = d.groupPicture || d.vectorShape ? await images.paint(visit, page) : '';
+    const bounds = visit.absolutePaintBounds;
+    if (d.accessibility.hidden || bounds.width <= 0 || bounds.height <= 0) return base;
+    const body: string[] = [];
+    for (const member of d.groupTextboxStories ?? []) {
+      const x = visit.drawingOrigin.x + member.box.x + member.story.contentOffset.x;
+      const y = visit.drawingOrigin.y + member.box.y + member.story.contentOffset.y;
+      body.push(
+        ...decorations(
+          member.story.fragments,
+          x - visit.page.box.x,
+          y - visit.page.box.y,
+          page,
+          work,
+          visit.page.index,
+          layout.displayMode === 'all-markup' ? layout.revisionMarkup : undefined,
+          authorSlots
+        )
+      );
+    }
+    body.push(...(textboxBuffers.get(visit.page.index)?.get(d) ?? []));
+    if (body.length === 0) return base;
+    const clip = rect(bounds, -visit.page.box.x, -visit.page.box.y, pageHeight(page));
+    return [base, `q ${clip} W n`, ...body, 'Q'].filter(Boolean).join('\n');
+  };
   const paintDrawing = async (visit: SemanticDrawingVisit): Promise<string> => {
     const page = pages[visit.page.index]!;
     const d = visit.drawing;
+    if (d.groupTextboxStories) return paintGroupText(visit, page);
     if (!d.textboxStory) return images.paint(visit, page);
     const story = d.textboxStory;
     const origin = {

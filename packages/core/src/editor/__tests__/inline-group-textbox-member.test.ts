@@ -1,6 +1,6 @@
-// An inline shape group whose members are a picture and a text box. The group does not lay out
-// text box text, so the text box member paints nothing. The picture member still paints, and
-// the group keeps its extent on its line, with or without `mc:AlternateContent`.
+// An inline shape group whose members are a picture and a text box. The picture member paints,
+// the text box member's text paints read-only over it, and the group keeps its extent on its
+// line, with or without `mc:AlternateContent`.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -102,6 +102,10 @@ function laidOut(surface: PaginatedSurface): Laid {
   };
 }
 
+function paintedMemberText(container: HTMLElement): string | undefined {
+  return container.querySelector('.docx-drawing-group-text')?.textContent ?? undefined;
+}
+
 async function withMounted(
   bytes: Uint8Array,
   run: (surface: PaginatedSurface, container: HTMLElement) => Promise<void> | void
@@ -127,18 +131,37 @@ describe('an inline group with a picture and a text box member', () => {
         const painted = container.querySelector('.docx-drawing-ready img');
         expect(painted).not.toBeNull();
         expect(container.querySelectorAll('.docx-drawing-placeholder')).toHaveLength(0);
+        expect(paintedMemberText(container)).toBe('Caption words');
       });
     });
   }
 
-  test('a text box alone keeps the group extent and paints nothing', async () => {
+  test('a text box alone keeps the group extent and paints its text', async () => {
     await withMounted(docx(TEXTBOX_MEMBER), (surface, container) => {
       const { drawing, nextLineTop } = laidOut(surface);
       expect(drawing).toMatchObject({ width: 400, height: 100 });
-      expect(drawing!.accessibility.hidden).toBe(true);
+      expect(drawing!.accessibility.hidden).toBe(false);
+      expect(drawing!.groupTextboxStories).toHaveLength(1);
       expect(nextLineTop).toBeGreaterThanOrEqual(100);
       expect(container.querySelectorAll('.docx-drawing-ready')).toHaveLength(0);
       expect(container.querySelectorAll('.docx-drawing-placeholder')).toHaveLength(0);
+      expect(paintedMemberText(container)).toBe('Caption words');
+    });
+  });
+
+  test('the member text is read-only: no selection or editing bindings, no pointer events', async () => {
+    await withMounted(docx(PICTURE_MEMBER + TEXTBOX_MEMBER), (_surface, container) => {
+      const layer = container.querySelector<HTMLElement>('.docx-drawing-group-text')!;
+      expect(layer.getAttribute('contenteditable')).toBe('false');
+      expect(layer.style.pointerEvents).toBe('none');
+      for (const name of [
+        'data-paragraph-id',
+        'data-textbox-paragraph-id',
+        'data-start',
+        'data-drawing-paragraph-id',
+      ]) {
+        expect(layer.querySelectorAll(`[${name}]`)).toHaveLength(0);
+      }
     });
   });
 
@@ -167,6 +190,11 @@ describe('an inline group with a picture and a text box member', () => {
     try {
       expect(editor.findMatches('Tail')).toHaveLength(1);
       expect(editor.findMatches('After the group')).toHaveLength(1);
+      // Member text is found, and selecting the match selects the group, read-only.
+      const [match] = editor.findMatches('Caption words');
+      expect(match?.scope?.kind).toBe('frame');
+      expect(editor.selectMatch(match!).ok).toBe(true);
+      expect(editor.surface!.activeScope().kind).toBe('body');
     } finally {
       editor.destroy();
     }

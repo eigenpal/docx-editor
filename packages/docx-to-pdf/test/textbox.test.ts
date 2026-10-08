@@ -144,3 +144,32 @@ test('an inline textbox paints its fill and text on the line instead of a placeh
   expect(stream.slice(fillAt, fillAt + 80)).toMatch(/ 144 36 re f/);
   expect(stream.indexOf(' Tm ', fillAt)).toBeGreaterThan(fillAt);
 });
+
+test('a group exports the text of its text box member inside the group', async () => {
+  const WPG = 'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup';
+  // A 2in x 0.5in group at (1in, 1in); its member starts 0.5in in and is 1.5in wide.
+  const group =
+    `<w:drawing ${NS} xmlns:wpg="${WPG}"><wp:anchor distT="0" distB="0" distL="0" distR="0"` +
+    ' simplePos="0" relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1">' +
+    '<wp:simplePos x="0" y="0"/>' +
+    '<wp:positionH relativeFrom="page"><wp:posOffset>914400</wp:posOffset></wp:positionH>' +
+    '<wp:positionV relativeFrom="page"><wp:posOffset>914400</wp:posOffset></wp:positionV>' +
+    '<wp:extent cx="1828800" cy="457200"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/>' +
+    `<wp:docPr id="1" name="G"/><a:graphic><a:graphicData uri="${WPG}"><wpg:wgp>` +
+    '<wpg:cNvGrpSpPr/><wpg:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1828800" cy="457200"/>' +
+    '<a:chOff x="0" y="0"/><a:chExt cx="1828800" cy="457200"/></a:xfrm></wpg:grpSpPr>' +
+    '<wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm><a:off x="457200" y="0"/>' +
+    '<a:ext cx="1371600" cy="457200"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
+    `</wps:spPr><wps:txbx><w:txbxContent>${paragraph('Grouped')}</w:txbxContent></wps:txbx>` +
+    '<wps:bodyPr lIns="0" tIns="0" rIns="0" bIns="0"/></wps:wsp>' +
+    '</wpg:wgp></a:graphicData></a:graphic></wp:anchor></w:drawing>';
+  const { result, stream, text } = await exported(
+    `<w:p><w:r>${group}</w:r></w:p>${paragraph('Body')}`
+  );
+  expect(result.diagnostics.filter((entry) => entry.code === 'drawing')).toEqual([]);
+  expect(text).toContain('Grouped');
+  // Clipped to the group's 144pt x 36pt bounds at (72pt, 72pt) on the 792pt page.
+  const clipAt = stream.indexOf('72 684 144 36 re W n');
+  expect(clipAt).toBeGreaterThan(-1);
+  expect(stream.indexOf(' Tm ', clipAt)).toBeGreaterThan(clipAt);
+});

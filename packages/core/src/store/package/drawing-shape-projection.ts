@@ -634,7 +634,7 @@ function pathScale(size: number, space: number): number | null {
  * height, so a zero axis is valid. The child's own geometry checks still decide whether it
  * paints. A negative extent is invalid and refuses.
  */
-function childTransform(wsp: OoxmlElement): {
+export function childTransform(wsp: OoxmlElement): {
   readonly offset: Readonly<{ x: number; y: number }>;
   readonly extent: Readonly<{ cx: number; cy: number }>;
 } | null {
@@ -783,9 +783,22 @@ export function projectTextboxStory(
   resolveSchemeColor?: ShapeSchemeColorResolver,
   resolveStyleMatrixReference?: ShapeStyleMatrixResolver
 ): TextboxStoryProjection | null {
-  if (extent.cx <= 0 || extent.cy <= 0) return null;
   const wsp = findWspInAnchor(anchor);
   if (!wsp) return null;
+  return projectWspTextboxStory(wsp, extent, resolveSchemeColor, resolveStyleMatrixReference);
+}
+
+/**
+ * Story projection of one `wps:wsp` element at `extent`: a top-level text box, or a text box
+ * member of a group at its scaled member size. Null when the shape holds no story.
+ */
+export function projectWspTextboxStory(
+  wsp: OoxmlElement,
+  extent: Readonly<{ cx: number; cy: number }>,
+  resolveSchemeColor?: ShapeSchemeColorResolver,
+  resolveStyleMatrixReference?: ShapeStyleMatrixResolver
+): TextboxStoryProjection | null {
+  if (extent.cx <= 0 || extent.cy <= 0) return null;
   const txbx = findDirectChild(wsp.children, {
     namespaceUri: WPS_NAMESPACE_URI,
     localName: 'txbx',

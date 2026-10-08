@@ -28,6 +28,7 @@ import {
 import type { SemanticLayout } from '@docx-editor.dev/core/layout';
 import { paintLayerOf } from '../layout/drawing-exclusion.ts';
 import { applyVectorInkReach, vectorShapeFrame } from './semantic-paint-vector-shape.ts';
+import { paintGroupTextboxStories } from './semantic-paint-group-text.ts';
 import {
   REVIEW_AUTHOR_SLOTS,
   revisionPresentationOf,
@@ -726,6 +727,9 @@ function paintDrawingRecordElement(
     return paintTextboxStory(document, drawing, drawing.textboxStory, ctx, origin);
   }
 
+  // A group made only of text box members paints its text in its own layer and nothing here.
+  if (drawing.groupTextboxStories && !drawing.groupPicture && !drawing.vectorShape) return null;
+
   const { resource } = drawing;
   const url =
     resource.kind === 'ready' && ctx.imageUrlPort && urlRegistry
@@ -777,6 +781,8 @@ export function paintInlineDrawingsOnLine(
   for (const drawing of line.drawings ?? []) {
     const element = paintDrawingRecord(document, drawing, ctx, urlRegistry, lineOrigin);
     if (element) painted.push(element);
+    const text = paintGroupTextboxStories(document, drawing, ctx, lineOrigin);
+    if (text) painted.push(text);
   }
   return Object.freeze(painted);
 }
@@ -796,6 +802,11 @@ export function paintAnchoredDrawingsLayer(
     if (element) {
       element.dataset.drawingLayer = layer;
       painted.push(element);
+    }
+    const text = paintGroupTextboxStories(document, drawing, ctx, pageOrigin);
+    if (text) {
+      text.dataset.drawingLayer = layer;
+      painted.push(text);
     }
   }
   return Object.freeze(painted);

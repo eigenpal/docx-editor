@@ -1,0 +1,72 @@
+// Paint for the text box members of a drawing group.
+//
+// The group's picture and shapes paint through the ordinary drawing paths; the member text
+// paints as one more layer over them, clipped to the group's paint bounds. The layer is
+// read-only furniture: it carries no selection or editing bindings, takes no pointer events
+// (a click still reaches the group itself), and builds DOM only through element APIs.
+
+import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
+import type { LayoutBox } from '../layout/semantic-records.ts';
+import type { DrawingPaintContext } from './semantic-paint-drawings.ts';
+
+/** Binding attributes a painted story carries; a read-only member story drops every one. */
+const STORY_BINDING_ATTRIBUTES = [
+  'data-paragraph-id',
+  'data-start',
+  'data-drawing-paragraph-id',
+  'data-drawing-start',
+] as const;
+
+/**
+ * The member text layer of a group drawing, or null when it has none to paint.
+ * Positioned like the drawing itself, so it lands over the group in either layer.
+ */
+export function paintGroupTextboxStories(
+  document: Document,
+  drawing: InlineDrawingRecord | AnchoredDrawingRecord,
+  ctx: DrawingPaintContext,
+  origin?: LayoutBox
+): HTMLElement | null {
+  const members = drawing.groupTextboxStories;
+  if (!members || drawing.accessibility.hidden || !ctx.paintStoryFragment) return null;
+  const bounds = drawing.paintBounds;
+  if (bounds.width <= 0 || bounds.height <= 0) return null;
+  const scale = ctx.scale;
+  const layer = document.createElement('div');
+  layer.className = 'docx-drawing-group-text';
+  layer.dataset.groupTextFor = drawing.drawingNodeId;
+  layer.setAttribute('contenteditable', 'false');
+  const ox = origin?.x ?? 0;
+  const oy = origin?.y ?? 0;
+  layer.style.position = 'absolute';
+  layer.style.left = `${(bounds.x - ox) * scale}px`;
+  layer.style.top = `${(bounds.y - oy) * scale}px`;
+  layer.style.width = `${bounds.width * scale}px`;
+  layer.style.height = `${bounds.height * scale}px`;
+  layer.style.overflow = 'hidden';
+  layer.style.pointerEvents = 'none';
+  // Extent origin inside the clipped paint bounds.
+  const extentLeft = drawing.x - bounds.x;
+  const extentTop = drawing.y - bounds.y;
+  for (const member of members) {
+    const story = member.story;
+    const content = document.createElement('div');
+    content.className = 'docx-drawing-textbox-content';
+    content.style.position = 'absolute';
+    content.style.left = `${(extentLeft + member.box.x + story.contentOffset.x) * scale}px`;
+    content.style.top = `${(extentTop + member.box.y + story.contentOffset.y) * scale}px`;
+    content.style.width = `${story.contentWidth * scale}px`;
+    content.style.height = `${Math.max(0, story.contentHeight) * scale}px`;
+    content.style.overflow = 'hidden';
+    for (const fragment of story.fragments) {
+      content.append(ctx.paintStoryFragment(document, fragment));
+    }
+    for (const attribute of STORY_BINDING_ATTRIBUTES) {
+      for (const bound of content.querySelectorAll<HTMLElement>(`[${attribute}]`)) {
+        bound.removeAttribute(attribute);
+      }
+    }
+    layer.append(content);
+  }
+  return layer;
+}

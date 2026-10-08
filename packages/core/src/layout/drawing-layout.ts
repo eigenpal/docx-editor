@@ -40,6 +40,7 @@ import {
 } from './drawing-geometry.ts';
 import type { LayoutBox } from './semantic-records.ts';
 import { textboxPlacementProjection } from './textbox-placement.ts';
+import { withGroupTextboxStories } from './group-textbox-layout.ts';
 import {
   anchoredDrawingAtomsInParagraph,
   drawingModelOffsetsInParagraph,
@@ -352,6 +353,8 @@ export interface InlineDrawingRecord {
    * inline text box carries one too: its story sits inside the extent the line reserves.
    */
   readonly textboxStory?: import('./textbox-story-layout.ts').TextboxStoryLayout;
+  /** Read-only stories of a group's text box members, each placed in its member box. */
+  readonly groupTextboxStories?: readonly import('./group-textbox-layout.ts').GroupTextboxStoryRecord[];
 }
 
 export type LineLayoutAtom =
@@ -1298,7 +1301,7 @@ export function publishAnchoredDrawingsForParagraph(
         : {}),
       ...(textboxStory !== undefined ? { textboxStory } : {}),
     });
-    records.push(record);
+    records.push(withGroupTextboxStories(record, projection, options.layoutTextboxStory));
   }
   return Object.freeze(records);
 }
@@ -1352,7 +1355,7 @@ export function buildInlineDrawingRecord(options: {
     paintBounds.width > 0 && paintBounds.height > 0
       ? paintBounds
       : Object.freeze({ ...paintBounds });
-  return Object.freeze({
+  const record: InlineDrawingRecord = Object.freeze({
     kind: 'inlineDrawing',
     drawingNodeId: options.input.drawingNodeId,
     paragraphId: options.paragraphId,
@@ -1379,4 +1382,5 @@ export function buildInlineDrawingRecord(options: {
     ...(options.bidiLevel !== undefined ? { bidiLevel: options.bidiLevel } : {}),
     ...(textboxStory ? { textboxStory } : {}),
   });
+  return withGroupTextboxStories(record, options.input.projection, options.layoutTextboxStory);
 }

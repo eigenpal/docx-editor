@@ -1,3 +1,4 @@
+import { groupTextboxesLayoutToken } from './group-textbox-layout.ts';
 import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
 // Package-backed inline drawing layout source (typed-drawings-and-images task 6).
 //
@@ -286,6 +287,7 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
     ]),
     wrap: projection.wrap,
     textboxStory: projection.textboxStory ? textboxLayoutToken(projection.textboxStory) : '',
+    groupTextboxes: groupTextboxesLayoutToken(projection.groupTextboxes),
     compatibilityBranchNodeId: projection.compatibilityBranchNodeId ?? '',
     footprintOnly: projection.footprintOnly ? 'footprint' : '',
     anchor: anchor
