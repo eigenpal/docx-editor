@@ -674,6 +674,7 @@
     },
     "openAriaLabel": "打开导航",
     "openTitle": "导航",
+    "openShortcutTitle": "导航 ({shortcut})",
     "tabs": {
       "find": "查找",
       "headings": "标题"

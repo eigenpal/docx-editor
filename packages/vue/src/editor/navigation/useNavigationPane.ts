@@ -199,7 +199,9 @@ export function useNavigationPane(
 
   const reservation = computed(() => navigationPaneReservation(paneWidthVal.value));
   const overlay = computed(
-    () => openVal.value && navigationPaneOverlays(viewportWidth.value, reservation.value)
+    () =>
+      openVal.value &&
+      navigationPaneOverlays(viewportWidth.value - inlineEndReservation.value, reservation.value)
   );
 
   const shift = computed(() => {

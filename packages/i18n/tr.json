@@ -674,6 +674,7 @@
     },
     "openAriaLabel": "Gezintiyi aç",
     "openTitle": "Gezinti",
+    "openShortcutTitle": "Gezinti ({shortcut})",
     "tabs": {
       "find": "Bul",
       "headings": "Başlıklar"

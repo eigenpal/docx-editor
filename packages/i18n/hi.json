@@ -674,6 +674,7 @@
     },
     "openAriaLabel": "नेविगेशन खोलें",
     "openTitle": "नेविगेशन",
+    "openShortcutTitle": "नेविगेशन ({shortcut})",
     "tabs": {
       "find": "ढूँढें",
       "headings": "शीर्षक"

@@ -674,6 +674,7 @@
     },
     "openAriaLabel": "Ouvrir la navigation",
     "openTitle": "Navigation",
+    "openShortcutTitle": "Navigation ({shortcut})",
     "tabs": {
       "find": "Rechercher",
       "headings": "Titres"

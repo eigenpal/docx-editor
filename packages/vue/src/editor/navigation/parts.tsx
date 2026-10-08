@@ -12,8 +12,8 @@ import { MaterialSymbol } from '../../components/ui/Icons';
 import { selectDocumentAbsent } from '../document-presence';
 import { useEditorState } from '../useEditorState';
 import { usePlatformShortcut } from '../usePlatformShortcut';
-import { useLiveNavigationContext, useNavigationContext } from './navigation-context';
-import { findKeyShortcuts, findShortcutTitle } from './navigation-keys';
+import { useLiveNavigationContext } from './navigation-context';
+import { findKeyShortcuts } from './navigation-keys';
 import type { NavigationTab as NavigationTabId } from './useNavigationPane';
 
 import type { DocxEditorChildren } from '../../docx-editor-children';
@@ -63,7 +63,14 @@ export const NavigationClose = defineComponent({
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props, { slots }) {
-    const { intents, t } = useNavigationContext('Close');
+    // Live: `t` and the intents follow the pane's props without a remount.
+    const nav = useLiveNavigationContext('Close');
+    const t = (key: string, params?: Record<string, string | number>) => nav.t(key, params);
+    const intents = {
+      toggle: () => nav.intents.toggle(),
+      close: () => nav.intents.close(),
+      picked: () => nav.intents.picked(),
+    };
     return () => (
       <button
         type="button"
@@ -87,7 +94,9 @@ export const NavigationTitle = defineComponent({
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props, { slots }) {
-    const { t } = useNavigationContext('Title');
+    // Live: `t` and the intents follow the pane's props without a remount.
+    const nav = useLiveNavigationContext('Title');
+    const t = (key: string, params?: Record<string, string | number>) => nav.t(key, params);
     return () => (
       <h2 class={cx('docx-nav__title', props.className)} style={props.style}>
         {slots.default?.() ?? t('navigation.title')}
@@ -104,7 +113,10 @@ export const NavigationTabs = defineComponent({
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props, { slots }) {
-    const { pane, t } = useNavigationContext('Tabs');
+    // Live: `t` and the intents follow the pane's props without a remount.
+    const nav = useLiveNavigationContext('Tabs');
+    const { pane } = nav;
+    const t = (key: string, params?: Record<string, string | number>) => nav.t(key, params);
     const onKeyDown = (event: KeyboardEvent) => {
       const delta = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
       if (delta === 0) return;
@@ -135,7 +147,10 @@ export const NavigationTab = defineComponent({
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props, { slots }) {
-    const { pane, t } = useNavigationContext('Tab');
+    // Live: `t` and the intents follow the pane's props without a remount.
+    const nav = useLiveNavigationContext('Tab');
+    const { pane } = nav;
+    const t = (key: string, params?: Record<string, string | number>) => nav.t(key, params);
     return () => {
       const selected = pane.tab.value === props.value;
       return (
@@ -221,7 +236,15 @@ export const NavigationHeadings = defineComponent({
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props) {
-    const { pane, outline, intents, t } = useNavigationContext('Headings');
+    // Live: `t` and the intents follow the pane's props without a remount.
+    const nav = useLiveNavigationContext('Headings');
+    const { pane, outline } = nav;
+    const t = (key: string, params?: Record<string, string | number>) => nav.t(key, params);
+    const intents = {
+      toggle: () => nav.intents.toggle(),
+      close: () => nav.intents.close(),
+      picked: () => nav.intents.picked(),
+    };
     const filter = ref('');
     const documentAbsent = useEditorState(selectDocumentAbsent);
     const items = computed(() => {
@@ -321,7 +344,15 @@ export const NavigationFind = defineComponent({
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props) {
-    const { pane, search, intents, t } = useNavigationContext('Find');
+    // Live: `t` and the intents follow the pane's props without a remount.
+    const nav = useLiveNavigationContext('Find');
+    const { pane, search } = nav;
+    const t = (key: string, params?: Record<string, string | number>) => nav.t(key, params);
+    const intents = {
+      toggle: () => nav.intents.toggle(),
+      close: () => nav.intents.close(),
+      picked: () => nav.intents.picked(),
+    };
     return () => {
       const hidden = pane.tab.value !== 'find';
       const autoFocus = pane.open.value && !hidden;
@@ -472,7 +503,9 @@ export const NavigationToggle = defineComponent({
           aria-keyshortcuts={findShortcut ? findKeyShortcuts(label) : undefined}
           title={
             findShortcut
-              ? findShortcutTitle(t('navigation.openTitle'), label)
+              ? // The resolved label goes in as a parameter, never as catalog text: a translated
+                // modifier (German "Strg") would name a key that does not open Find on macOS.
+                t('navigation.openShortcutTitle', { shortcut: label })
               : t('navigation.openTitle')
           }
           onMousedown={(event) => event.preventDefault()}

@@ -20,7 +20,7 @@ import { selectDocumentAbsent } from '../document-presence';
 import { useEditorState } from '../useEditorState';
 import { usePlatformShortcut } from '../usePlatformShortcut';
 import { useNavigationContext } from './navigation-context';
-import { findKeyShortcuts, findShortcutTitle } from './navigation-keys';
+import { findKeyShortcuts } from './navigation-keys';
 // Aliased: this module also EXPORTS a component called `NavigationTab`, and the two
 // declarations would collide in the generated .d.ts.
 import type { NavigationTab as NavigationTabId } from './useNavigationPane';
@@ -473,7 +473,9 @@ export function NavigationToggle({
   const label = shortcut('Ctrl+F');
   const keyShortcuts = findShortcut ? findKeyShortcuts(label) : undefined;
   const title = findShortcut
-    ? findShortcutTitle(t('navigation.openTitle'), label)
+    ? // The resolved label goes in as a parameter, never as catalog text: a translated
+      // modifier (German "Strg") would name a key that does not open Find on macOS.
+      t('navigation.openShortcutTitle', { shortcut: label })
     : t('navigation.openTitle');
   return (
     <button

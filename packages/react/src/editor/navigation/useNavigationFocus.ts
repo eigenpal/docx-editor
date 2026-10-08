@@ -17,6 +17,7 @@ import type { NavigationIntents } from './navigation-context';
 import { useNavigationViewportElement } from './navigation-layout';
 import {
   focusPaneEntry,
+  inertBehindPane,
   isFindShortcut,
   ownsShortcutTarget,
   paneEntryTarget,
@@ -57,6 +58,9 @@ export function useNavigationFocus(
 
   const paneRef = useRef(pane);
   paneRef.current = pane;
+  // Undoes the overlay's `inert` on the page area. Called before focus moves back to the
+  // document, which an inert ancestor would refuse.
+  const releaseInert = useRef<(() => void) | null>(null);
 
   const focusEntry = useCallback(() => {
     focusRequest.current = false;
@@ -66,6 +70,7 @@ export function useNavigationFocus(
 
   const restoreFocus = useCallback(() => {
     restoreRequest.current = false;
+    releaseInert.current?.();
     const back = opener.current;
     opener.current = null;
     const disc = rootRef.current?.querySelector<HTMLElement>('.docx-nav__toggle') ?? null;
@@ -110,6 +115,7 @@ export function useNavigationFocus(
         current.setOpen(false);
         // The chosen row is about to turn inert; send focus to the document it pointed at.
         const active = rootRef.current?.ownerDocument.activeElement;
+        releaseInert.current?.();
         if (active && rootRef.current?.contains(active)) editor?.focus();
       },
     }),
@@ -157,6 +163,19 @@ export function useNavigationFocus(
       else restoreRequest.current = false;
     }
   });
+
+  // An overlaying pane hides the page, so the page leaves the tab order while it does.
+  const covering = pane.open && pane.overlay;
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!covering || !root || !viewport) return undefined;
+    const release = inertBehindPane(root, viewport);
+    releaseInert.current = release;
+    return () => {
+      release();
+      if (releaseInert.current === release) releaseInert.current = null;
+    };
+  }, [covering, viewport]);
 
   // A pane inside the scroll container is sticky and sizes itself from these properties.
   useEffect(() => {

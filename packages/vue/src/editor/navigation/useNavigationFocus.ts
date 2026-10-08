@@ -12,6 +12,7 @@ import type { NavigationIntents } from './navigation-context';
 import { useNavigationViewportElement } from './navigation-layout';
 import {
   focusPaneEntry,
+  inertBehindPane,
   isFindShortcut,
   ownsShortcutTarget,
   paneEntryTarget,
@@ -39,6 +40,9 @@ export function useNavigationFocus(
   let opener: HTMLElement | null = null;
   let focusRequest = false;
   let restoreRequest = false;
+  // Undoes the overlay's `inert` on the page area. Called before focus moves back to the
+  // document, which an inert ancestor would refuse.
+  let releaseInert: (() => void) | null = null;
 
   const focusEntry = () => {
     focusRequest = false;
@@ -48,6 +52,7 @@ export function useNavigationFocus(
 
   const restoreFocus = () => {
     restoreRequest = false;
+    releaseInert?.();
     const back = opener;
     opener = null;
     const disc = rootRef.value?.querySelector<HTMLElement>('.docx-nav__toggle') ?? null;
@@ -94,6 +99,7 @@ export function useNavigationFocus(
       pane.setOpen(false);
       // The chosen row is about to turn inert; send focus to the document it pointed at.
       const active = rootRef.value?.ownerDocument.activeElement;
+      releaseInert?.();
       if (active && rootRef.value?.contains(active)) editor.value?.focus();
     },
   };
@@ -130,6 +136,23 @@ export function useNavigationFocus(
     // unmount then answers the pending return of focus.
     if (restoreRequest) restoreFocus();
   });
+
+  // An overlaying pane hides the page, so the page leaves the tab order while it does.
+  scopeDispose(
+    watch(
+      [rootRef, viewport, () => pane.open.value && pane.overlay.value],
+      ([root, element, covering], _previous, onCleanup) => {
+        if (!covering || !root || !element) return;
+        const release = inertBehindPane(root, element);
+        releaseInert = release;
+        onCleanup(() => {
+          release();
+          if (releaseInert === release) releaseInert = null;
+        });
+      },
+      { immediate: true, flush: 'post' }
+    )
+  );
 
   // A pane inside the scroll container is sticky and sizes itself from these properties.
   scopeDispose(

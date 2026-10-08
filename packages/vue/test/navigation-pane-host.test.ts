@@ -139,12 +139,15 @@ async function ctrlF(target: Element, init: KeyboardEventInit = { ctrlKey: true 
 const q = (root: ParentNode, selector: string) => root.querySelector(selector) as HTMLElement;
 
 /** A resolver over the German catalogue source, as a host passes it to Root. */
-function germanTranslate(key: string): string {
+function germanTranslate(key: string, params: Record<string, string | number> = {}): string {
   let node: unknown = deCatalog;
   for (const part of key.split('.')) {
     node = node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : null;
   }
-  return typeof node === 'string' ? node : key;
+  if (typeof node !== 'string') return key;
+  return node.replace(/\{(\w+)\}/g, (match, name: string) =>
+    name in params ? String(params[name]) : match
+  );
 }
 
 describe('the pane in the documented composition', () => {
@@ -508,6 +511,44 @@ describe('narrow viewports', () => {
     q(view.container, '.docx-nav__heading').click();
     await flush();
     expect(nav.getAttribute('data-open')).toBe('false');
+  });
+
+  test('the review rail counts: room the rail takes is not room beside the pane', async () => {
+    scrollerWidth = 700;
+    const view = mountPane({});
+    await flush();
+    const scroller = q(view.container, '.docx-editor__scroll-container');
+    // 700 less the 328px reservation leaves 372px, enough on its own; a 300px rail does not.
+    scroller.style.setProperty('padding-inline-end', '300px');
+    q(view.container, '.docx-nav__toggle').click();
+    await flush();
+    expect(q(view.container, '.docx-nav').classList.contains('docx-nav--overlay')).toBe(true);
+  });
+
+  test('without a rail the same viewport docks the pane', async () => {
+    scrollerWidth = 700;
+    const view = mountPane({ defaultOpen: true });
+    await flush();
+    expect(q(view.container, '.docx-nav').classList.contains('docx-nav--overlay')).toBe(false);
+  });
+
+  test('an overlaying pane makes the page area inert until it closes', async () => {
+    scrollerWidth = 390;
+    const view = mountPane({ defaultOpen: true });
+    await flush();
+    const pages = q(view.container, '.docx-pages');
+    expect(pages.closest('[inert]')).not.toBeNull();
+    expect(q(view.container, '.docx-nav__panel-shell').closest('[inert]')).toBeNull();
+    q(view.container, '.docx-nav__heading').click();
+    await flush();
+    expect(q(view.container, '.docx-nav').getAttribute('data-open')).toBe('false');
+    expect(pages.closest('[inert]')).toBeNull();
+  });
+
+  test('a docked pane leaves the page area interactive', async () => {
+    const view = mountPane({ defaultOpen: true });
+    await flush();
+    expect(q(view.container, '.docx-pages').closest('[inert]')).toBeNull();
   });
 
   test('a wide viewport keeps the pane open after a pick', async () => {

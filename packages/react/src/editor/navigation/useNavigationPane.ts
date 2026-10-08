@@ -216,7 +216,9 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
   useEffect(() => widestTracker.current?.nudge(), [pageCount, pageWidthTwips]);
 
   const reservation = navigationPaneReservation(paneWidth);
-  const overlay = open && navigationPaneOverlays(viewportWidth, reservation);
+  // The review rail takes the inline-end padding, so the room beside the pane is the width
+  // left after it.
+  const overlay = open && navigationPaneOverlays(viewportWidth - inlineEndReservation, reservation);
 
   const shift = useMemo(() => {
     if (!open || overlay) return 0;

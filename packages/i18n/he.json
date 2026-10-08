@@ -674,6 +674,7 @@
     },
     "openAriaLabel": "פתח ניווט",
     "openTitle": "ניווט",
+    "openShortcutTitle": "ניווט ({shortcut})",
     "tabs": {
       "find": "חיפוש",
       "headings": "כותרות"

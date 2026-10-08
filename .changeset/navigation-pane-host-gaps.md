@@ -1,5 +1,7 @@
 ---
+'@docx-editor.dev/core': minor
 '@docx-editor.dev/react': minor
+'@docx-editor.dev/vue': minor
 ---
 
-The navigation pane stays in place when mounted inside the viewport, opens Find on Cmd+F on macOS or Ctrl+F elsewhere, moves focus in and out, covers the page on narrow screens, and uses the Root translator. Its page shift also accounts for the widest page in the document.
+The navigation pane now works inside `DocxEditor.Viewport`, covers the page on narrow screens, and captures the browser's find shortcut (Ctrl+F, or Cmd+F on macOS) while focus is in the editor; set `findShortcut` to `false` on the pane, or in the `navigation` prop, to leave the shortcut to the browser.

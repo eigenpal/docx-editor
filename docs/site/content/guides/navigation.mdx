@@ -425,11 +425,34 @@ The pane handles the shortcut only while focus is in the same editor: the pages,
 
 A controlled pane receives `onTabChange('find')` and `onOpenChange(true)`. Focus moves into the pane if your state opens it in the same update. If your state doesn't open it, the request lapses, and a later open leaves focus where it is.
 
-To leave the shortcut to the browser everywhere, set `findShortcut` to `false`. The pane button then doesn't name the shortcut:
+To leave the shortcut to the browser everywhere, set `findShortcut` to `false`. The pane button then doesn't name the shortcut. Set it on the packaged editor's `navigation` prop, or on a composed pane:
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
+// The packaged editor.
+<DocxEditor document={file} navigation={{ findShortcut: false }} />
+
+// A composed pane.
 <DocxEditor.Navigation findShortcut={false} />
 ```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<template>
+  <!-- The packaged editor. -->
+  <DocxEditor :document="file" :navigation="{ findShortcut: false }" />
+
+  <!-- A composed pane. -->
+  <DocxEditorNavigation :find-shortcut="false" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
 
 ### Pane focus
 

@@ -3,6 +3,7 @@
 // Both adapters carry an identical copy of this file. It is plain DOM, so the two panes
 // answer every key and focus question the same way.
 
+import { chordLetter } from '@docx-editor.dev/core/editor';
 import { isApplePlatform } from '@docx-editor.dev/i18n';
 import { editorScopeFor } from '../editor-scope';
 import type { NavigationTab } from './useNavigationPane';
@@ -16,11 +17,9 @@ import type { NavigationTab } from './useNavigationPane';
 export function isFindShortcut(event: KeyboardEvent, apple = isApplePlatform()): boolean {
   if (event.altKey || event.shiftKey || event.isComposing) return false;
   if (apple ? !event.metaKey || event.ctrlKey : !event.ctrlKey || event.metaKey) return false;
-  const key = event.key.toLowerCase();
-  if (key === 'f') return true;
-  // A non-Latin layout reports its own letter in `key`; the physical F key still means Find.
-  // A Latin layout keeps `key`, so a remapped layout (F position typing `u`) stays Underline.
-  return !/^[a-z]$/.test(key) && event.code === 'KeyF';
+  // The engine keymap's own letter rule: a Latin `key` answers, so a remapped layout (F
+  // position typing `u`) stays Underline; a non-Latin layout falls back to the physical key.
+  return chordLetter(event) === 'f';
 }
 
 /**
@@ -30,16 +29,6 @@ export function isFindShortcut(event: KeyboardEvent, apple = isApplePlatform()):
  */
 export function findKeyShortcuts(resolvedLabel: string): string {
   return resolvedLabel.startsWith('Ctrl') ? 'Control+F' : 'Meta+F';
-}
-
-/**
- * The disc's tooltip: the pane's localized name, then the shortcut label resolved for this
- * platform. Built here rather than written into the catalogue, because a translated
- * modifier (German "Strg") is left alone by `platformShortcut` and would name a key that
- * does not open Find on macOS.
- */
-export function findShortcutTitle(name: string, resolvedLabel: string): string {
-  return `${name} (${resolvedLabel})`;
 }
 
 /**
@@ -114,6 +103,34 @@ export function focusPaneEntry(element: HTMLElement): void {
   if (typeof HTMLInputElement !== 'undefined' && element instanceof HTMLInputElement) {
     element.select();
   }
+}
+
+/**
+ * Make the page area `inert` while an overlaying pane covers it, so Tab and the pointer
+ * cannot reach content the pane hides. A pane inside the scroll container leaves its own
+ * ancestors alone and marks their other children; a pane beside the container marks the
+ * container. Only attributes set here are removed again. Returns the cleanup.
+ */
+export function inertBehindPane(pane: Element, viewport: Element): () => void {
+  const marked: Element[] = [];
+  const mark = (element: Element) => {
+    if (element.hasAttribute('inert')) return;
+    element.setAttribute('inert', '');
+    marked.push(element);
+  };
+  if (viewport.contains(pane)) {
+    let node: Element = pane;
+    while (node !== viewport && node.parentElement) {
+      for (const sibling of node.parentElement.children) if (sibling !== node) mark(sibling);
+      node = node.parentElement;
+    }
+  } else {
+    mark(viewport);
+  }
+  return () => {
+    for (const element of marked) element.removeAttribute('inert');
+    marked.length = 0;
+  };
 }
 
 /** Parse a computed length, treating anything unreadable as 0. */

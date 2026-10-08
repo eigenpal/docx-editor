@@ -3754,7 +3754,6 @@ export interface DocxEditorProps {
     menu?: boolean | DocxEditorMenuProps;
     mode?: EditorMode;
     modules?: readonly EditorModule[];
-    // (undocumented)
     navigation?: boolean | DocxEditorNavigationProps;
     // (undocumented)
     popups?: DocxEditorPopups;

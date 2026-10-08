@@ -468,6 +468,7 @@
     "title": "ナビゲーション",
     "openAriaLabel": "ナビゲーションを開く",
     "openTitle": "ナビゲーション",
+    "openShortcutTitle": "ナビゲーション ({shortcut})",
     "closeAriaLabel": "ナビゲーションを閉じる",
     "closeTitle": "ナビゲーションを閉じる",
     "tabs": {

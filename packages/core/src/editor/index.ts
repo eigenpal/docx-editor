@@ -110,6 +110,7 @@ export {
   type ToolbarCommandState,
 } from './toolbar-commands.ts';
 export { editorCommandKey } from './command-key.ts';
+export { chordLetter } from './chord-letter.ts';
 export { tableCommandState } from './docx-editor-derive.ts';
 export {
   applyTableChromePick,

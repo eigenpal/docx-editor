@@ -5,13 +5,14 @@ import { afterEach, beforeEach, describe, expect, jest, test } from 'bun:test';
 import {
   WIDEST_PAGE_SETTLE_MS,
   trackWidestPage,
+  type WidestPageChange,
   type WidestPageSource,
 } from '../src/editor/navigation/navigation-widest-page.ts';
 
 function fakeSource(widths: number[]) {
   let pages = widths;
   let reads = 0;
-  const listeners = new Set<() => void>();
+  const listeners = new Set<(change: WidestPageChange) => void>();
   const source: WidestPageSource = {
     getPageGeometry() {
       reads++;
@@ -29,8 +30,8 @@ function fakeSource(widths: number[]) {
     setPages(next: number[]) {
       pages = next;
     },
-    change() {
-      for (const listener of [...listeners]) listener();
+    change(change: WidestPageChange = { revision: 1, created: ['b1'] } as WidestPageChange) {
+      for (const listener of [...listeners]) listener(change);
     },
   };
 }
@@ -76,6 +77,17 @@ describe('trackWidestPage', () => {
     jest.advanceTimersByTime(WIDEST_PAGE_SETTLE_MS);
     expect(fake.reads()).toBe(2);
     expect(published).toEqual([816, 1056]);
+  });
+
+  test('a text edit inside existing blocks does not force a layout read', () => {
+    const fake = fakeSource([816]);
+    trackWidestPage(fake.source, () => {});
+    fake.change({ dirty: ['b1'] } as WidestPageChange);
+    jest.advanceTimersByTime(WIDEST_PAGE_SETTLE_MS * 2);
+    expect(fake.reads()).toBe(1);
+    fake.change({ source: 'load' });
+    jest.advanceTimersByTime(WIDEST_PAGE_SETTLE_MS);
+    expect(fake.reads()).toBe(2);
   });
 
   test('dispose cancels a pending read, publishes nothing more, and unsubscribes', () => {
