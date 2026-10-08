@@ -122,6 +122,7 @@ import { createPublishSignal } from './surface-publish-signal.ts';
 import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
 import { resolveDocTargetSelection } from './doc-target-resolution.ts';
 import { createOpenScheduler } from './docx-editor-open-scheduler.ts';
+import { prepareOpen, takePreparedOpen } from './docx-editor-prepared-open.ts';
 import {
   customNodeDiagnosticReporter,
   sweepCustomNodePayloadsOnOpen,
@@ -287,10 +288,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let pendingBytes: Uint8Array | null = null;
   /** Pending input belongs to these exact remount bytes, including a deferred mount. */
   let pendingTextFormInputs = new WeakMap<Uint8Array, PendingTextFormInput>();
-  /** A big document's mount, deferred behind one painted frame so a loading screen can
-   *  show — `snapshot().isOpening` holds for that window. See `docx-editor-open-scheduler.ts`. */
+  /** Defers a big document's open behind a painted frame; see `docx-editor-open-scheduler.ts`. */
   const openScheduler = createOpenScheduler({
     mount: (bytes) => mountBytes(bytes),
+    prepare: (bytes) => prepareOpen(bytes, reviewModelOption(modules, reportDiagnostic)),
     scheduled: () => {
       bump();
       emitSelectionChange();
@@ -621,6 +622,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       revisionDisplayMode: reviewEnabled ? reviewDisplayMode : 'proposed',
       revisionMarkup: revisionMarkupState.current(),
       ...reviewModelOption(modules, reportDiagnostic),
+      ...takePreparedOpen(bytes),
       ...(shapedMeasurer
         ? { measurer: shapedMeasurer, ...(shapedProducer ? { producer: shapedProducer } : {}) }
         : {}),
@@ -1249,8 +1251,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // WITHIN a paragraph, a structural edit at an unmoved caret — derive value-equal
       // snapshots, and a host subscribed through `useSyncExternalStore` never re-renders —
       // freezing every control whose state is a question the snapshot does not carry,
-      // because `toolbarCommandState` re-asks `Editor.can`/`isActive` only when the store
-      // ticks.
+      // because `toolbarCommandState` re-asks `Editor.can`/`isActive` only on a store tick.
       //
       // Caret: Decrease Indent stayed live on a list item already at the outermost level,
       // and the bullet button stayed pressed after the caret moved into a numbered one.
@@ -2368,8 +2369,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // the page already said: the open item draws its own `--active` band, at full
         // tint with a rule under it, which is what marks the change while the card is
         // open. The selection added a second, competing highlight and left the reader
-        // holding a range they never made, one keystroke away from replacing the very
-        // text under review.
+        // holding a range they never made, one keystroke from replacing the text under review.
         //
         // The caret still MOVES, to the start of the span. That is what keeps the keyboard
         // where the reader is looking, what `activeReviewKey` classifies at, and what the

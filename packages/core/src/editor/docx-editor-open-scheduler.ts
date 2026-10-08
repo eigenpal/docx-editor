@@ -71,6 +71,13 @@ function zipContentExceeds(bytes: Uint8Array, limit: number): boolean {
 export interface OpenSchedulerHooks {
   /** The real synchronous mount (`mountBytes`). */
   readonly mount: (bytes: Uint8Array) => void;
+  /**
+   * Optional first half of the mount, run in its own task before `mount`. Parsing a long
+   * document and laying it out in ONE task froze the page for long enough to get it
+   * reported as unresponsive. `mount` must still work when this has not run, because
+   * `flush` mounts at once.
+   */
+  readonly prepare?: (bytes: Uint8Array) => void;
   /** Called once when a mount is scheduled — the facade bumps and emits here. */
   readonly scheduled: () => void;
 }
@@ -122,7 +129,19 @@ export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
     schedule(bytes) {
       let timer: ReturnType<typeof setTimeout> | null = null;
       let fallback: ReturnType<typeof setTimeout> | null = null;
+      let prepared = hooks.prepare === undefined;
       const run = () => {
+        if (!prepared) {
+          // The mount gets its own task, so input and paint can run in between.
+          prepared = true;
+          timer = setTimeout(run, 0);
+          try {
+            hooks.prepare?.(bytes);
+          } catch {
+            // The mount opens the bytes again and reports the failure itself.
+          }
+          return;
+        }
         scheduled = null;
         hooks.mount(bytes);
       };
