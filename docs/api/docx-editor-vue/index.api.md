@@ -4208,7 +4208,7 @@ export interface DocxEditorToolbarNamespace {
     readonly FontFamily: typeof FontFamily;
     // (undocumented)
     readonly FontSize: ToolbarSlotPartComponent;
-    readonly Group: typeof ToolbarGroup$1;
+    readonly Group: typeof ToolbarHostGroup;
     // (undocumented)
     readonly Highlight: ToolbarColorSplitComponent;
     // (undocumented)
