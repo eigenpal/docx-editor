@@ -233,12 +233,12 @@ describe('fonts for a large open', () => {
         return dejaVu;
       },
     });
-    // Settled fonts are not reported before the document they belong to is mounted. Checked
-    // on every notification, because the window between the two tasks is too short to poll.
+    // Shaped fonts are not reported before the document they belong to is mounted. Checked on
+    // every notification, because the window between the two tasks is too short to poll.
     const early: string[] = [];
     editor.on('selectionChange', () => {
-      const { measurer, resolving } = editor.fontMeasurement();
-      if (editor.surface === null && measurer === 'shaped' && !resolving) early.push(measurer);
+      const { measurer } = editor.fontMeasurement();
+      if (editor.surface === null && measurer === 'shaped') early.push(measurer);
     });
     const container = document.createElement('div');
     editor.attach(container);
