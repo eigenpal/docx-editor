@@ -255,7 +255,7 @@ A toolbar is content-sized when its `width` is `auto`, `max-content`, `fit-conte
 - A block-level toolbar in a `block` or `flow-root` container.
 - An item of a single-line flex row. A sibling that grows, such as a `flex: 1` spacer, counts by its flex basis, and `auto` margins count as free space.
 
-In every other case, the toolbar measures its own box and collapses as before. These cases include a grid cell, a table cell, an inline or floated toolbar, an explicit `width`, a `max-width` such as `calc()` or `min()`, a growing sibling with content such as a title or search field, and a browser without the CSS Typed Object Model. The room from the container only brings groups back: while the toolbar's content overflows its box, it measures its own box.
+In every other case, the toolbar measures its own box and collapses as before. These cases include a grid cell, a table cell, an inline or floated toolbar, an explicit `width`, a `max-width` such as `calc()` or `min()`, a growing sibling with content such as a title or search field, loose text beside the toolbar, and a browser without the CSS Typed Object Model. The room from the container only brings groups back: while the toolbar's controls overflow its box, it measures its own box. If groups that came back then overflow, the toolbar keeps its width until the container's width changes, so it does not flicker.
 
 ### Replace a slot's content
 

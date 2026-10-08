@@ -482,9 +482,12 @@ describe('available width', () => {
       margins?: [string, string];
       tag?: string;
       text?: string;
+      svg?: boolean;
+      contents?: boolean;
     }[];
     typedOm?: boolean;
-    scrollWidth?: number;
+    overflow?: boolean;
+    parentText?: string;
   }): HTMLElement {
     const parent = document.createElement('div');
     parent.setAttribute('style', options.parent);
@@ -496,10 +499,16 @@ describe('available width', () => {
     bar.setAttribute('style', `${options.barStyle ?? ''}`);
     Object.defineProperty(bar, 'clientWidth', { configurable: true, get: () => options.own });
     Object.defineProperty(bar, 'offsetWidth', { configurable: true, get: () => options.own });
-    Object.defineProperty(bar, 'scrollWidth', {
-      configurable: true,
-      get: () => options.scrollWidth ?? options.own,
-    });
+    bar.getBoundingClientRect = () =>
+      ({ left: 0, right: options.own, width: options.own }) as DOMRect;
+    if (options.overflow) {
+      const control = document.createElement('div');
+      control.setAttribute('data-toolbar-group', 'overflowing');
+      control.getBoundingClientRect = () =>
+        ({ left: 0, right: options.own + 50, width: options.own + 50 }) as DOMRect;
+      bar.appendChild(control);
+    }
+    if (options.parentText) parent.appendChild(document.createTextNode(options.parentText));
     const keywords: Record<string, string> = {};
     if (options.width) keywords.width = options.width;
     if (options.margins?.left === 'auto') keywords['margin-left'] = 'auto';
@@ -511,10 +520,13 @@ describe('available width', () => {
       });
     }
     for (const sibling of options.siblings ?? []) {
-      const node = document.createElement(sibling.tag ?? 'div');
+      const node: Element = sibling.svg
+        ? document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+        : document.createElement(sibling.tag ?? 'div');
       node.setAttribute('style', sibling.style);
       if (sibling.text) node.textContent = sibling.text;
-      Object.defineProperty(node, 'offsetWidth', { configurable: true, get: () => sibling.width });
+      node.getBoundingClientRect = () =>
+        ({ left: 0, right: sibling.width, width: sibling.width }) as DOMRect;
       const [left, right] = sibling.margins ?? ['', ''];
       (node as unknown as { computedStyleMap: () => unknown }).computedStyleMap = () => ({
         get: (property: string) =>
@@ -523,7 +535,14 @@ describe('available width', () => {
             ? { value: 'auto' }
             : { value: 0, unit: 'px' },
       });
-      parent.appendChild(node);
+      if (sibling.contents) {
+        const wrapper = document.createElement('div');
+        wrapper.setAttribute('style', 'display: contents');
+        wrapper.appendChild(node);
+        parent.appendChild(wrapper);
+      } else {
+        parent.appendChild(node);
+      }
     }
     parent.appendChild(bar);
     document.body.appendChild(parent);
@@ -608,7 +627,7 @@ describe('available width', () => {
       parentWidth: 1000,
       own: 300,
       width: 'max-content',
-      scrollWidth: 420,
+      overflow: true,
     });
     expect(available(overflowing)).toBe(300);
     document.body.innerHTML = '';
@@ -640,6 +659,76 @@ describe('available width', () => {
       siblings: [{ style: 'flex: 1 1 0px', width: 600, text: 'Quarterly plan' }],
     });
     expect(available(titled)).toBe(300);
+  });
+
+  test('the net is sticky: a wrong room does not flicker until the parent width changes', () => {
+    const bar = layout({
+      parent: 'display: flex',
+      parentWidth: 1000,
+      own: 300,
+      width: 'max-content',
+    });
+    const control = document.createElement('div');
+    control.setAttribute('data-toolbar-group', 'g');
+    bar.appendChild(control);
+    let right = 200;
+    control.getBoundingClientRect = () => ({ left: 0, right, width: right }) as DOMRect;
+    bar.getBoundingClientRect = () => ({ left: 0, right: 300, width: 300 }) as DOMRect;
+    expect(available(bar)).toBe(1000);
+    // Groups came back from that room and overflow: the room was wrong.
+    right = 420;
+    expect(available(bar)).toBe(300);
+    // They collapsed and fit again. The room stays capped, so they do not come back.
+    right = 200;
+    expect(available(bar)).toBe(300);
+    expect(available(bar)).toBe(300);
+    // A new parent width is a new question.
+    Object.defineProperty(bar.parentElement!, 'clientWidth', {
+      configurable: true,
+      get: () => 1200,
+    });
+    expect(available(bar)).toBe(1200);
+  });
+
+  test('an open popup past the bar edge is not an overflow', () => {
+    const bar = layout({
+      parent: 'display: flex',
+      parentWidth: 1000,
+      own: 300,
+      width: 'max-content',
+    });
+    const popup = document.createElement('div');
+    popup.className = 'docx-toolbar__more-panel';
+    popup.getBoundingClientRect = () => ({ left: 100, right: 900, width: 800 }) as DOMRect;
+    bar.appendChild(popup);
+    bar.getBoundingClientRect = () => ({ left: 0, right: 300, width: 300 }) as DOMRect;
+    expect(available(bar)).toBe(1000);
+  });
+
+  test('every sibling counts: an svg logo, a display: contents wrapper, a min-width', () => {
+    const bar = layout({
+      parent: 'display: flex',
+      parentWidth: 1000,
+      own: 300,
+      width: 'max-content',
+      siblings: [
+        { style: '', width: 40, svg: true },
+        { style: '', width: 60, contents: true },
+        { style: 'flex: 1 1 0px; min-width: 200px', width: 500 },
+      ],
+    });
+    expect(available(bar)).toBe(700);
+  });
+
+  test('loose text in the row keeps the bar to its own box', () => {
+    const bar = layout({
+      parent: 'display: flex',
+      parentWidth: 1000,
+      own: 300,
+      width: 'max-content',
+      parentText: 'Draft',
+    });
+    expect(available(bar)).toBe(300);
   });
 
   test('a flex: 1 spacer and an auto margin do not take the room', () => {
@@ -792,7 +881,7 @@ describe('TableInsert', () => {
     const trigger = view.container.querySelector<HTMLButtonElement>('[data-slot="table.insert"]')!;
     await waitFor(() => expect(trigger.disabled).toBe(false));
     const focus = mock(() => {});
-    editor().focus = focus;
+    editor().focus = focus as never;
     await act(async () => {
       trigger.click();
     });
