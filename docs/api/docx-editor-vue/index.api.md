@@ -3406,7 +3406,7 @@ export interface DocxEditorNotesContextMenuProps {
     y: number;
 }
 
-// @public (undocumented)
+// @public
 export const DocxEditorPageNumber: vue.DefineComponent<vue.ExtractPropTypes<{
     className: {
         default: undefined;
