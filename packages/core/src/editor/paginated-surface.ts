@@ -93,6 +93,7 @@ import { isRevisionCapable, isTrackedEdit } from './surface-tracked-ops.ts';
 import { isMissingAuthorRefusal } from './docx-editor-author.ts';
 import {
   openTreeSession,
+  type OpenTreeSessionResult,
   type TreeApplyResult,
   type TreeDocxSession,
 } from '@docx-editor.dev/core/binding';
@@ -364,11 +365,15 @@ export function mountPaginatedSurface(
     /** Restore the model range on a font remount without claiming DOM selection/focus. */
     readonly initialSelection?: SemanticSelection;
     readonly initialTextFormInput?: PendingTextFormInput;
+    /**
+     * These bytes, already opened with the same review model in an earlier task, so a long
+     * document does not parse and lay out in one blocking task. Used once.
+     */
+    readonly openedSession?: OpenTreeSessionResult;
   };
-  const opened = openTreeSession(
-    bytes,
-    options.reviewModel ? { reviewModel: options.reviewModel } : {}
-  );
+  const opened =
+    runtimeOptions.openedSession ??
+    openTreeSession(bytes, options.reviewModel ? { reviewModel: options.reviewModel } : {});
   if (!opened.ok) {
     return {
       ok: false,
