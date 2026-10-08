@@ -1022,6 +1022,7 @@ export interface ReviewBalloonProps {
 // @public
 export interface ReviewItemRevealEvent {
     readonly key: string;
+    readonly pairKey?: string;
     readonly source: ReviewItemRevealSource;
 }
 

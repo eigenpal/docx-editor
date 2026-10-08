@@ -1816,6 +1816,7 @@ export interface ReviewItemQuery {
 // @public
 export interface ReviewItemRevealEvent {
     readonly key: string;
+    readonly pairKey?: string;
     readonly source: ReviewItemRevealSource;
 }
 

@@ -14,6 +14,7 @@ import { strToU8, zipSync } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import type {
   ReviewItemPlacement,
+  ReviewItemRevealEvent,
   ReviewRevisionPlacement,
 } from '@docx-editor.dev/core/contracts/editor';
 import { reviewModule } from '../review/review-module.ts';
@@ -276,5 +277,44 @@ describe('the activated key of a paired replacement', () => {
     expect(editor.getActivatedReviewItemKey({ pairReplacements: true })).toBe(pair.key);
     // Read without the pairing query, it names the half the caret is in.
     expect(editor.getActivatedReviewItemKey()).toBe(deletion.key);
+  });
+
+  test('a host call with a pair key reports the pair key in both fields', () => {
+    const editor = mount(REPLACED);
+    const pair = pairOf(editor);
+    const events: ReviewItemRevealEvent[] = [];
+    editor.on('reviewItemReveal', (event) => events.push(event));
+    expect(editor.setActiveReviewItem(pair.key, { announce: true }).ok).toBe(true);
+    expect(events).toEqual([{ key: pair.key, pairKey: pair.key, source: 'host' }]);
+  });
+});
+
+describe('the pair key of a revealed replacement half', () => {
+  test('Next Change on a replacement half reports the pair key', () => {
+    const editor = mount(REPLACED);
+    const pair = pairOf(editor);
+    const halves = editor
+      .getReviewItems({ placement: false })
+      .filter((item) => item.kind === 'revision')
+      .map((item) => item.key);
+    const events: ReviewItemRevealEvent[] = [];
+    editor.on('reviewItemReveal', (event) => events.push(event));
+    expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
+    expect(events).toHaveLength(1);
+    // The key names the half that navigation stepped to; pairKey names the listed pair.
+    expect(halves).toContain(events[0]!.key);
+    expect(events[0]!.key).not.toBe(pair.key);
+    expect(events[0]).toMatchObject({ pairKey: pair.key, source: 'navigate' });
+  });
+
+  test('a change that is not part of a replacement reports no pair key', () => {
+    const editor = mount(paragraph(run('The fee '), ins(3, 'Ada', 'now '), run('applies.')));
+    const [insertion] = editor.getReviewItems({ placement: false });
+    const events: ReviewItemRevealEvent[] = [];
+    editor.on('reviewItemReveal', (event) => events.push(event));
+    expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
+    expect(events).toEqual([{ key: insertion!.key, source: 'navigate' }]);
+    expect(editor.setActiveReviewItem(insertion!.key, { announce: true }).ok).toBe(true);
+    expect(events[1]).toEqual({ key: insertion!.key, source: 'host' });
   });
 });

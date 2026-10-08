@@ -388,6 +388,8 @@ To anchor a balloon to an item without a pointer, call `editor.getReviewItemRect
 
 To open your own balloon on navigation but not on a caret move, listen for the `reviewItemReveal` event. It fires each time **Next Change** or **Previous Change** lands on an item, and each time `setActiveReviewItem(key, { announce: true })` succeeds. It also fires when the item is already active, so a balloon that the reader closed opens again. The event does not fire for a caret move, a click in the page, a dismissal, a refused activation, or a call without `{ announce: true }`. It is a local view event, so edits from other participants in a collaboration session never fire it.
 
+The event's `key` is the item's key without `pairReplacements`. **Next Change** and **Previous Change** step through that queue, so for a replacement the key names its deletion or its insertion. When the item is a paired replacement or one half of one, the event also carries `pairKey`, the key that `getReviewItems({ pairReplacements: true })` gives the pair. If you list pairs, open `pairKey ?? key`.
+
 The following example opens a host balloon in React. In Vue, use `useEditorEvent` from `@docx-editor.dev/vue` with the same handler:
 
 ```tsx
@@ -409,7 +411,7 @@ The packaged balloons and review pane use the same event. With the `revisionsIn:
 | `getReviewItemsAt(clientX, clientY, query?)` | The review items under a point, narrowest first. |
 | `getReviewItemRects(key)` | The item's bands on painted pages, in client coordinates. |
 | `getActivatedReviewItemKey(query?)` | The activated item's key under `query`, or `null`. |
-| `on('reviewItemReveal', handler)` | Each explicit reveal, as `{ key, source }`. |
+| `on('reviewItemReveal', handler)` | Each explicit reveal, as `{ key, pairKey, source }`. |
 
 The packaged review rail can draw these balloons for you. See [Control the review pane](/docs/2.x/pro#control-the-review-pane).
 

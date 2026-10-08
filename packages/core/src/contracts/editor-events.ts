@@ -46,10 +46,19 @@ export interface EditorEvents {
  */
 export interface ReviewItemRevealEvent {
   /**
-   * The key of the review item to open. It matches `ReviewItemPlacement.key` in
-   * `getReviewItems()`, including a paired replacement's key.
+   * The key of the review item to open, as `getReviewItems()` without `pairReplacements`
+   * lists it. Next Change and Previous Change step through that unpaired queue, so for a
+   * replacement this is the key of its deletion or its insertion. `setActiveReviewItem`
+   * reports the key it was given, so a call with a pair's key reports that key here and in
+   * {@link ReviewItemRevealEvent.pairKey}.
    */
   readonly key: string;
+  /**
+   * The key that `getReviewItems({ pairReplacements: true })` gives the replacement this item
+   * belongs to. Present only when the item is a paired replacement or one half of one. A
+   * host that lists pairs opens `pairKey ?? key`.
+   */
+  readonly pairKey?: string;
   /**
    * What asked for the item. `'navigate'` is Next Change or Previous Change, from the menu,
    * the toolbar, a shortcut, or `exec({ type: 'navigateReviewChange' })`. `'host'` is a call

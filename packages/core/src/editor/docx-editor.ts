@@ -30,6 +30,7 @@ import {
   narrowReviewItems,
   replacementPairHalves,
   reviewItemWithHalves,
+  withRevealPairKey,
 } from './review-replacement-pairs.ts';
 import { captureSearchResult } from './document-search-result.ts';
 import { createDocumentProtectionCommands } from './docx-editor-protection.ts';
@@ -1708,7 +1709,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     visible: () =>
       filterReviewItemsByAuthor(surface?.session.reviewItems() ?? [], reviewAuthorVisibility),
     scope: storyScopeOfReviewItem,
-    reveal: events.emitReviewItemReveal,
+    reveal: (event) => events.emitReviewItemReveal(withRevealPairKey(reviewPlacements, event)),
     activate: (key, allowExcludedFormat) => {
       allowExcludedFormatNavigation = allowExcludedFormat ?? false;
       try {
@@ -2412,7 +2413,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // not respond to any number of further clicks.
       bump();
       emitSelectionChange();
-      if (options?.announce === true) events.emitReviewItemReveal({ key, source: 'host' });
+      if (options?.announce === true)
+        events.emitReviewItemReveal(withRevealPairKey(reviewPlacements, { key, source: 'host' }));
       // `changed: false` — activation moves the caret and the open card, and neither is
       // document state. A host must not mark its document dirty for opening a card.
       return { ok: true, changed: false };
