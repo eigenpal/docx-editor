@@ -340,10 +340,26 @@ export function createLineExclusionClearance(context: {
       line.anchorClearanceBefore = inherited;
     }
   };
+  /**
+   * Move an empty paragraph's line below the floats when none leaves a passage beside it for
+   * the paragraph mark. A passage keeps the line in place beside the floats.
+   */
+  const clearBlockedEmptyLine = (): void => {
+    const line = context.line();
+    if (context.holdsContent()) return;
+    const zones = context.zones();
+    if (zones.length === 0) return;
+    const top = context.top() + (line.exclusionSkipBefore ?? 0);
+    const width = context.measurer.measure('¶', context.emptyStyle);
+    const left = context.left();
+    const skip = narrowRectangularWrapSkip(top, line.height, zones, left, context.right, width);
+    if (skip > 0.001) line.exclusionSkipBefore = (line.exclusionSkipBefore ?? 0) + skip;
+  };
   return {
     applyBreakClearance,
     commitBreakClearance,
     clearEmptyParagraph,
+    clearBlockedEmptyLine,
     applyTopAndBottomSkipIfNeeded,
     applyNarrowWrapSkipIfNeeded,
     applyInlineObjectSkipIfNeeded,

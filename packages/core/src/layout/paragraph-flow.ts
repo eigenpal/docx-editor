@@ -520,6 +520,7 @@ export function breakParagraph(
     applyOpeningSegmentSkipIfNeeded,
     finalizeTopAndBottomClearance,
     clearEmptyParagraph,
+    clearBlockedEmptyLine,
     applyBreakClearance,
     commitBreakClearance,
   } = createLineExclusionClearance({
@@ -941,6 +942,7 @@ export function breakParagraph(
     commitBreakClearance();
     if (empty && (wrapAnchorStarts.size > 0 || topAndBottomAnchorStarts.size > 0))
       clearEmptyParagraph(paragraphId);
+    else if (empty && firstLine) clearBlockedEmptyLine();
     // Mark wrap advances after merging, using the shape paint receives.
     coalesceIdeographicSpans(line);
     markPendingLineWrapAdvances(line);
