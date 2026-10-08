@@ -722,6 +722,8 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
                 <CitationCardActions />
               </DocxEditorReview>
             </DocxEditor.Viewport>
+            {/* Absolute in `.demo-main`, the positioned row. Placed inside the viewport, it would
+                still render into this row, so it never scrolls away with the pages. */}
             <DocxEditor.PageNumber />
             {/* The library's loading overlay, pinned over the workspace (`.demo-main` is
                 the positioned ancestor). Zero conditions wired here: the engine opens a

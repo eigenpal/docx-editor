@@ -64,7 +64,7 @@ export const DocxEditorPageNumber = defineComponent({
     const editorRef = useDocxEditor();
     const viewport = useNavigationViewportElement();
     // Inside the scroll container, an absolute overlay scrolls away with the pages.
-    const { inside, host } = useViewportOverlayHost(viewport);
+    const { inside, target: overlayTarget } = useViewportOverlayHost(viewport);
     const total = useEditorState(selectTotalPages);
     const { t } = useTranslation();
     const translate = inject(PageNumberTranslationContext, null);
@@ -97,10 +97,10 @@ export const DocxEditorPageNumber = defineComponent({
 
     return () => {
       if (total.value <= 1) return null;
-      const target = host.value;
+      const target = overlayTarget.value?.host ?? null;
       // The viewport scoped everything inside it; its parent may not be scoped.
       const scopeClassName = target
-        ? target.closest('.docx-editor')
+        ? overlayTarget.value?.scoped
           ? ''
           : 'docx-editor '
         : ancestorScope;

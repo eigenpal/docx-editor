@@ -11,6 +11,11 @@ import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorPageNumber } from '../src/editor/DocxEditorPageNumber.tsx';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
+import {
+  InsideViewportContext,
+  useViewportOverlayHost,
+  type ViewportOverlayHost,
+} from '../src/editor/viewport-context.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -162,5 +167,44 @@ describe('DocxEditor.PageNumber', () => {
     const status = view.getByRole('status');
     expect(status.parentElement?.classList.contains('host-workspace')).toBe(true);
     expect(status.classList.contains('docx-editor')).toBe(false);
+  });
+
+  test('has no host inside a viewport that is not mounted yet, so it renders nothing', () => {
+    const seen: ViewportOverlayHost[] = [];
+    function Probe({ viewport }: { viewport: HTMLElement | null }) {
+      seen.push(useViewportOverlayHost(viewport));
+      return null;
+    }
+    const detached = document.createElement('div');
+    render(
+      <InsideViewportContext.Provider value={true}>
+        <Probe viewport={null} />
+        <Probe viewport={detached} />
+      </InsideViewportContext.Provider>
+    );
+    expect(seen.length).toBeGreaterThan(0);
+    for (const answer of seen) {
+      expect(answer.inside).toBe(true);
+      expect(answer.host).toBeNull();
+    }
+  });
+
+  test('inside the packaged editor viewport it joins the workspace row under one scope', () => {
+    const view = render(
+      <DocxEditor document={THREE_PAGES}>
+        <DocxEditorPageNumber className="host-chip" />
+      </DocxEditor>
+    );
+    const viewport = view.getByTestId('docx-editor-scroll');
+    const chip = view.container.querySelector<HTMLElement>('.host-chip')!;
+    expect(chip).not.toBeNull();
+    // The workspace row: the viewport's parent, beside the packaged indicator.
+    expect(chip.parentElement).toBe(viewport.parentElement);
+    expect(viewport.contains(chip)).toBe(false);
+    // One `.docx-editor` scope: the packaged wrapper, not a second one on the chip.
+    expect(chip.classList.contains('docx-editor')).toBe(false);
+    const scope = chip.closest('.docx-editor');
+    expect(scope).not.toBeNull();
+    expect(scope!.parentElement?.closest('.docx-editor') ?? null).toBeNull();
   });
 });

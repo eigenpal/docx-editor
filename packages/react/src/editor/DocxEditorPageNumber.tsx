@@ -50,7 +50,7 @@ export function DocxEditorPageNumber({ className, style }: DocxEditorPageNumberP
   const editor = useDocxEditor();
   const viewport = useNavigationViewportElement();
   // Inside the scroll container, an absolute overlay scrolls away with the pages.
-  const { inside, host } = useViewportOverlayHost(viewport);
+  const { inside, host, hostScoped } = useViewportOverlayHost(viewport);
   const total = useEditorState(selectTotalPages);
   const { t } = useTranslation();
   const translate = useContext(PageNumberTranslationContext);
@@ -77,11 +77,7 @@ export function DocxEditorPageNumber({ className, style }: DocxEditorPageNumberP
 
   if (total <= 1) return null;
   // The viewport scoped everything inside it; its parent may not be scoped.
-  const scopeClassName = host
-    ? host.closest('.docx-editor')
-      ? ''
-      : 'docx-editor '
-    : ancestorScope;
+  const scopeClassName = host ? (hostScoped ? '' : 'docx-editor ') : ancestorScope;
   const label = translate
     ? translate('viewer.pageIndicator')
         .replace(/\{current\}/g, String(current))
