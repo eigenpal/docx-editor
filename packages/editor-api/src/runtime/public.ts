@@ -84,6 +84,9 @@ export {
   type RevisionBatchResult,
   type RevisionBatchEntry,
   type RevisionBatchSkipReason,
+  type RevisionAuthorEntry,
+  type RevisionAuthorResult,
+  type RevisionAuthorSkipReason,
   type SearchOptions,
   type SelectionMode,
 } from '../model/index.ts';

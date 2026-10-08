@@ -14,6 +14,9 @@ import { AutomationSpanRef } from '@docx-editor.dev/core/automation';
 import { AutomationValue } from '@docx-editor.dev/core/automation';
 import { CollaborationModuleContribution } from '@docx-editor.dev/core/collaboration';
 import { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
+import { RevisionAuthorEntry } from '@docx-editor.dev/core/automation';
+import { RevisionAuthorResult } from '@docx-editor.dev/core/automation';
+import { RevisionAuthorSkipReason } from '@docx-editor.dev/core/automation';
 import { RevisionBatchEntry } from '@docx-editor.dev/core/automation';
 import { RevisionBatchResult } from '@docx-editor.dev/core/automation';
 import { RevisionBatchSkipReason } from '@docx-editor.dev/core/automation';
@@ -1225,7 +1228,7 @@ export class Revision extends ModelObject implements PromisedItem {
     static at(context: RequestContext, label: string, address: ObjectAddress): Revision;
     get author(): string;
     // @internal
-    static batchHandle(revision: Revision, context: RequestContext): AutomationHandle;
+    static batchHandle(revision: Revision, context: RequestContext, target?: string): AutomationHandle;
     get date(): Date | null;
     // @internal
     hydrateAddress(address: ObjectAddress): void;
@@ -1239,6 +1242,12 @@ export class Revision extends ModelObject implements PromisedItem {
     reject(): void;
     get type(): RevisionType;
 }
+
+export { RevisionAuthorEntry }
+
+export { RevisionAuthorResult }
+
+export { RevisionAuthorSkipReason }
 
 export { RevisionBatchEntry }
 
@@ -1259,6 +1268,10 @@ export class RevisionCollection extends HandleCollection<Revision> {
     protected promised(label: string, nullable: boolean): Revision & PromisedItem;
     rejectAll(): void;
     resolve(action: 'accept' | 'reject', revisions?: readonly Revision[]): ClientResult<RevisionBatchResult>;
+    setAuthor(author: string, revisions?: readonly Revision[], options?: {
+        readonly authors?: readonly string[];
+        readonly date?: Date;
+    }): ClientResult<RevisionAuthorResult>;
 }
 
 // @public

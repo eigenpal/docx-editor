@@ -2835,7 +2835,8 @@ export function mountPaginatedSurface(
       op.op !== 'acceptRevision' &&
       op.op !== 'rejectRevision' &&
       op.op !== 'acceptAllRevisions' &&
-      op.op !== 'rejectAllRevisions'
+      op.op !== 'rejectAllRevisions' &&
+      op.op !== 'setRevisionAttribution'
     );
   }
 

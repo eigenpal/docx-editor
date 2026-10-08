@@ -42,8 +42,11 @@ import { HandleCollection, type PromisedItem } from './item-collection.ts';
 import { ModelObject } from './model-object.ts';
 import { Range } from './range.ts';
 import { clientResult, type ClientResult } from '../runtime/client-result.ts';
-import type { RevisionBatchResult } from '@docx-editor.dev/core/automation';
+import type { RevisionAuthorResult, RevisionBatchResult } from '@docx-editor.dev/core/automation';
 export type {
+  RevisionAuthorEntry,
+  RevisionAuthorResult,
+  RevisionAuthorSkipReason,
   RevisionBatchResult,
   RevisionBatchEntry,
   RevisionBatchSkipReason,
@@ -568,9 +571,13 @@ export class Revision extends ModelObject implements PromisedItem {
   }
 
   /** @internal Capture a batch target without exposing engine identity. */
-  static batchHandle(revision: Revision, context: RequestContext): AutomationHandle {
+  static batchHandle(
+    revision: Revision,
+    context: RequestContext,
+    target = 'RevisionCollection.resolve'
+  ): AutomationHandle {
     if (!(revision instanceof Revision) || revision.context !== context)
-      fail({ code: 'InvalidArgument', target: 'RevisionCollection.resolve' });
+      fail({ code: 'InvalidArgument', target });
     return revision.#handle();
   }
 
@@ -666,6 +673,72 @@ export class RevisionCollection extends HandleCollection<Revision> {
       }),
       settle: (value) => {
         if (value.kind !== 'revisionBatch') fail({ code: 'GeneralException', target: label });
+        fill(value.result);
+      },
+    });
+    return result;
+  }
+
+  /**
+   * Attribute changes in this story to another author. The changes stay pending.
+   * Select changes with `revisions`, or with `options.authors` to take every change those
+   * authors made. Omitting both selects every change in the story, by every author, including
+   * structural ones absent from items. Pass an empty array to select nothing. Each change
+   * keeps its date unless `options.date` is given. This must be the only write in its sync
+   * batch. Revision objects for updated changes stay valid and read the new author after a load.
+   *
+   * @example
+   * ```ts
+   * const result = revisions.setAuthor('Ada Lovelace', undefined, { authors: ['AI'] });
+   * await context.sync();
+   * console.log(result.value.updated.length, result.value.skipped);
+   * ```
+   */
+  setAuthor(
+    author: string,
+    revisions?: readonly Revision[],
+    options?: { readonly date?: Date; readonly authors?: readonly string[] }
+  ): ClientResult<RevisionAuthorResult> {
+    const label = `${this.path.label}.setAuthor`;
+    const date = options?.date;
+    const authors = options?.authors;
+    if (
+      typeof author !== 'string' ||
+      author.trim().length === 0 ||
+      (revisions !== undefined && !Array.isArray(revisions)) ||
+      (options !== undefined && (typeof options !== 'object' || options === null)) ||
+      (date !== undefined && (!(date instanceof Date) || Number.isNaN(date.getTime()))) ||
+      (authors !== undefined &&
+        (revisions !== undefined ||
+          !Array.isArray(authors) ||
+          authors.some((name) => typeof name !== 'string'))) ||
+      // Checked now so a foreign or non-revision object refuses before anything queues.
+      revisions?.some(
+        (revision) => !(revision instanceof Revision) || revision.context !== this.context
+      )
+    )
+      fail({ code: 'InvalidArgument', target: label });
+    const targets = revisions === undefined ? undefined : [...revisions];
+    const { result, fill } = clientResult<RevisionAuthorResult>(label);
+    this.enqueue({
+      sort: 'write',
+      label,
+      plan: () => ({
+        op: 'setRevisionAuthorBatch',
+        body: this.#body,
+        author,
+        ...(date === undefined ? {} : { date: date.toISOString() }),
+        ...(authors === undefined ? {} : { authors: [...authors] }),
+        ...(targets === undefined
+          ? {}
+          : {
+              revisions: targets.map((revision) =>
+                Revision.batchHandle(revision, this.context, label)
+              ),
+            }),
+      }),
+      settle: (value) => {
+        if (value.kind !== 'revisionAuthors') fail({ code: 'GeneralException', target: label });
         fill(value.result);
       },
     });

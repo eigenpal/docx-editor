@@ -65,6 +65,7 @@ import {
   type ParagraphOffsetIndex,
 } from './tree-op-segments.ts';
 import { scopedRevisionRoot } from './tree-op-revision-scope.ts';
+import { attributionTargets } from './revision-author-change.ts';
 import { revisionStructuralReach, type RevisionOpAction } from './tree-op-revisions.ts';
 import type {
   RevisionAddress,
@@ -424,6 +425,7 @@ const TREE_OP_REACH: {
     ...(op.siteNodeIds === undefined ? {} : { siteNodeIds: op.siteNodeIds }),
     ...(op.scopeRootId === undefined ? {} : { scopeRootId: op.scopeRootId }),
   }),
+  setRevisionAttribution: (op) => ({ kind: 'nodes', targets: attributionTargets(op) }),
   // The value path rebuilds `w:sdtContent`; a tag or an alias leaves every child where it was.
   setContentControlValue: (op) => ({
     kind: 'control',

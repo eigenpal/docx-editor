@@ -170,6 +170,17 @@ export interface AutomationHandleTable {
    */
   retarget(fromParagraphId: string, toParagraphId: string): void;
   /**
+   * Keep an issued revision handle on its change after the change's identity moved.
+   *
+   * A revision's identity includes its author, so a committed attribution change gives the
+   * same pending decision a new id. Only that commit may call this: the decision did not change.
+   * All moves apply together, so one change may take an id another change just left.
+   */
+  retargetRevisions(
+    story: AutomationStoryId,
+    moves: readonly { readonly from: string; readonly to: string }[]
+  ): void;
+  /**
    * What a handle names, or null when this table never minted it or the caller's declared
    * kind disagrees with what was minted. Both are `invalid-handle` to the protocol: a ref
    * whose kind can be talked into something else is not opaque.
@@ -306,6 +317,20 @@ export function createHandleTable(): AutomationHandleTable {
         nodeId,
         story,
       });
+    },
+    retargetRevisions(story, moves) {
+      const name = (revisionId: string) => `revision\u0000${storyKey(story)}\u0000${revisionId}`;
+      const moving = moves.flatMap(({ from, to }) => {
+        const ref = from === to ? undefined : refByName.get(name(from));
+        return ref ? [{ ref, from, to }] : [];
+      });
+      // Two phases: every old name is released before any new one is taken.
+      for (const { from } of moving) refByName.delete(name(from));
+      for (const { ref, to } of moving) {
+        if (refByName.has(name(to))) continue;
+        refByName.set(name(to), ref);
+        targets.set(ref, { kind: 'revision', revisionId: to, story });
+      }
     },
     retarget(fromParagraphId, toParagraphId) {
       const ref = refByParagraph.get(fromParagraphId);

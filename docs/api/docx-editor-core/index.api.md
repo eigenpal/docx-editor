@@ -1741,6 +1741,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         afterPt?: number | null;
         beforePt?: number | null;
     };
+    setReviewChangesAuthor: SetReviewChangesAuthorOptions;
     setReviewDisplayMode: {
         mode: ReviewDisplayMode;
     };
@@ -2096,11 +2097,13 @@ export type ExecResult = {
     changed: boolean;
     history?: HistoryGroupOutcome;
     ok: true;
+    revisionAuthors?: RevisionAuthorResult;
     revisions?: RevisionBatchResult;
 } | {
     code: ExecErrorCode;
     ok: false;
     reason: string;
+    revisionAuthors?: RevisionAuthorResult;
     revisions?: RevisionBatchResult;
     target?: DocTarget;
 };
@@ -2969,6 +2972,16 @@ export interface RevisionAddress {
 }
 
 // @public
+export interface RevisionAuthorResult {
+    readonly skipped: readonly {
+        readonly key: string;
+        readonly reason: RevisionAuthorSkipReason;
+        readonly revision?: RevisionBatchEntry;
+    }[];
+    readonly updated: readonly RevisionAuthorEntry[];
+}
+
+// @public
 export interface RevisionBatchResult {
     readonly remaining: number;
     // (undocumented)
@@ -3184,6 +3197,16 @@ export type SemanticTarget = {
     readonly objectId: string;
     readonly scope: ViewScope;
 };
+
+// @public
+export interface SetReviewChangesAuthorOptions {
+    author: string;
+    authors?: readonly string[];
+    date?: string;
+    keys?: readonly string[];
+    scope?: 'visible' | 'document';
+    unsupported?: 'skip' | 'fail';
+}
 
 // @public
 export interface StyleDefinition {

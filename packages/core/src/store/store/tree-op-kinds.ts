@@ -18,6 +18,7 @@ export const TREE_DOC_OP_KINDS = [
   'rejectRevision',
   'acceptAllRevisions',
   'rejectAllRevisions',
+  'setRevisionAttribution',
   'insertTab',
   'insertHardBreak',
   'insertPageBreak',

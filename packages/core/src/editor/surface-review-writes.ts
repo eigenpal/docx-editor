@@ -19,4 +19,5 @@ export const REPLICABLE_REVIEW_WRITES: ReadonlySet<ReviewWriteIntent> = new Set<
   'comment-resolve',
   'package-scoped',
   'revision-resolve',
+  'revision-attribution',
 ]);

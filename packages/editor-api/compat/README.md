@@ -41,6 +41,10 @@ bun run --filter '@docx-editor.dev/editor-api' compat:fetch-inventory
 
 This maintenance command downloads the pinned npm tarball and verifies its integrity. It records normalized facts and source provenance, not upstream declaration files. Commit the generated inventory with the change. Reports and tests use committed reference data without network access.
 
+## DocxEditor additions
+
+Some public members have no Office.js equivalent, such as `RevisionCollection.resolve()` and `RevisionCollection.setAuthor()`. They are outside `manifest.json`, the reports, and the conformance checks, so no score counts them. The public [Office.js API page](../../../docs/site/content/editor-api/office-js-api.mdx) lists them under common DocxEditor additions. Add a new addition there, never to the manifest.
+
 ## Selected subset conformance
 
 The selected-subset check compares repository-authored declarations in `docxeditor/declarations.ts` with normalized Word API reference data. The published package does not include or depend on Microsoft's declarations. Reference maintenance scripts extract names, signatures, requirement sets, and provenance from a pinned upstream release.
