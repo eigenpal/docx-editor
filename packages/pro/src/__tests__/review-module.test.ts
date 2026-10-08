@@ -153,6 +153,20 @@ describe('review pane opening', () => {
     expect(() => reviewModule(oldValue)).toThrow(TypeError);
   });
 
+  test('without a review module, setReviewPane is refused and changes nothing', () => {
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docx(PLAIN),
+    });
+    const before = editor.snapshot().reviewPane;
+    expect(editor.setReviewPane({ opening: 'manual' })).toMatchObject({
+      ok: false,
+      code: 'unsupported',
+    });
+    expect(editor.snapshot().reviewPane).toBe(before);
+    editor.destroy();
+  });
+
   test('manual stays in force across a second load', () => {
     const editor = open(PLAIN, 'manual');
     expect(editor.snapshot().reviewPane?.opening).toBe('manual');
@@ -177,7 +191,7 @@ describe('review pane opening', () => {
     editor.setReviewPane({ opening: 'manual' });
     expect(editor.snapshot().reviewPane).toBe(same);
     const bad = { overflow: 'scrollPage' } as unknown as { overflow: 'float' };
-    expect(() => editor.setReviewPane(bad)).toThrow(TypeError);
+    expect(editor.setReviewPane(bad)).toMatchObject({ ok: false, code: 'invalidArgs' });
     expect(editor.snapshot().reviewPane).toBe(same);
     editor.setReviewPane({ opening: 'auto' });
     editor.load(docx(TRACKED));

@@ -140,7 +140,7 @@ editor.setReviewPane({ opening: 'auto', overflow: 'shrinkPage' });
 const opening = editor.snapshot().reviewPane?.opening;
 ```
 
-The settings stay in force when you load another document. An unknown field or value throws a `TypeError` and changes nothing.
+The settings stay in force when you load another document. `setReviewPane` returns an `ExecResult`. It refuses an unknown field or value with `invalidArgs`, and refuses with `unsupported` when no review module is registered. A refusal changes nothing.
 
 To open or close the pane, call `setPaneOpen` from `useReview()`, or run the `toggleReviewPane` command.
 

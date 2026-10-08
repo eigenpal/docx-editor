@@ -168,7 +168,7 @@ To change the setting at runtime, call `setReviewPane` on the editor instance. R
 editor.setReviewPane({ overflow: 'float' });
 ```
 
-`setReviewPane` throws a `TypeError` for an unknown field or value and keeps the previous settings. For more information, see [Control the review pane](/docs/2.x/pro#control-the-review-pane).
+`setReviewPane` refuses an unknown field or value with `invalidArgs` and keeps the previous settings. For more information, see [Control the review pane](/docs/2.x/pro#control-the-review-pane).
 
 ## Without an adapter
 
