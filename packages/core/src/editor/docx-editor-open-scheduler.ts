@@ -67,6 +67,12 @@ function zipContentExceeds(bytes: Uint8Array, limit: number): boolean {
   return false;
 }
 
+/**
+ * The longest a mount waits for its prepare work. The page stays responsive while it waits,
+ * and a mount that starts without the work still completes; it only pays for it later.
+ */
+export const PREPARED_WORK_WAIT_MS = 2000;
+
 /** What the facade hands the scheduler; both close over facade-owned state. */
 export interface OpenSchedulerHooks {
   /** The real synchronous mount (`mountBytes`). */
@@ -76,8 +82,12 @@ export interface OpenSchedulerHooks {
    * document and laying it out in ONE task froze the page for long enough to get it
    * reported as unresponsive. `mount` must still work when this has not run, because
    * `flush` mounts at once.
+   *
+   * A returned promise is work the mount would rather start after, such as font resolution
+   * that would otherwise lay the document out a second time. The mount waits for it, but
+   * never longer than {@link PREPARED_WORK_WAIT_MS}.
    */
-  readonly prepare?: (bytes: Uint8Array) => void;
+  readonly prepare?: (bytes: Uint8Array) => void | Promise<unknown>;
   /** Called once when a mount is scheduled — the facade bumps and emits here. */
   readonly scheduled: () => void;
 }
@@ -130,16 +140,31 @@ export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
       let timer: ReturnType<typeof setTimeout> | null = null;
       let fallback: ReturnType<typeof setTimeout> | null = null;
       let prepared = hooks.prepare === undefined;
+      let cancelled = false;
       const run = () => {
+        if (cancelled) return;
         if (!prepared) {
-          // The mount gets its own task, so input and paint can run in between.
           prepared = true;
-          timer = setTimeout(run, 0);
+          let work: void | Promise<unknown> = undefined;
           try {
-            hooks.prepare?.(bytes);
+            work = hooks.prepare?.(bytes);
           } catch {
             // The mount opens the bytes again and reports the failure itself.
           }
+          if (!work) {
+            // The mount gets its own task, so input and paint can run in between.
+            timer = setTimeout(run, 0);
+            return;
+          }
+          let waiting = true;
+          const proceed = () => {
+            if (!waiting) return;
+            waiting = false;
+            if (timer !== null) clearTimeout(timer);
+            timer = setTimeout(run, 0);
+          };
+          timer = setTimeout(proceed, PREPARED_WORK_WAIT_MS);
+          work.then(proceed, proceed);
           return;
         }
         scheduled = null;
@@ -157,6 +182,7 @@ export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
       scheduled = {
         bytes,
         cancel: () => {
+          cancelled = true;
           cancelAnimationFrame(raf);
           if (timer !== null) clearTimeout(timer);
           if (fallback !== null) clearTimeout(fallback);

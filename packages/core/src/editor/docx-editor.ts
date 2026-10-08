@@ -5,10 +5,9 @@ import { queryEditorDocument } from './docx-editor-query.ts';
 import { refreshWriteBlocked } from './refresh-write-guard.ts';
 import { registerRefreshHost, type RefreshHost } from './document-refresh-host.ts';
 import { reviewChangesLocked } from './command-protection.ts';
-import { supportedFontFamilies } from '../layout/supported-font-families.ts';
 import { resolvedFontMeasurement } from './resolved-font-measurement.ts';
 import { updateSurfaceMeasurement } from './surface-measurement.ts';
-import { createLiveFontResolution } from './live-font-resolution.ts';
+import { createLiveFontResolution, liveFontFamilies } from './live-font-resolution.ts';
 import { composeFontOrigins, defineFontResolver } from './font-resolver.ts';
 import { createEditorPopupChrome } from './text-form-field-chrome.ts';
 import {
@@ -123,6 +122,7 @@ import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
 import { resolveDocTargetSelection } from './doc-target-resolution.ts';
 import { createOpenScheduler } from './docx-editor-open-scheduler.ts';
 import { prepareOpen, takePreparedOpen } from './docx-editor-prepared-open.ts';
+import type { TreeDocxSession } from '@docx-editor.dev/core/binding';
 import {
   customNodeDiagnosticReporter,
   sweepCustomNodePayloadsOnOpen,
@@ -167,7 +167,6 @@ import {
   warnFontFailureOnce,
 } from './font-configuration.ts';
 import {
-  MAX_RESOLVER_FAMILIES,
   composeFontConfiguration,
   normalizeFontResolverResult,
   type FontConfigurationBase,
@@ -183,9 +182,7 @@ import {
   coveredFontFamiliesOf,
   createLocalFontProbe,
   detectFontSubstitutions,
-  fontResolverFamilies,
 } from './font-availability.ts';
-import { resolverGlyphFontFamilies } from './resolver-glyph-font-families.ts';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import {
   registerEmbeddedFontFaces,
@@ -258,6 +255,10 @@ const EMPTY_FONT_SUBSTITUTIONS: readonly string[] = Object.freeze([]);
 export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let refreshHost: RefreshHost | undefined = undefined;
   let deferredRefreshBytes: Uint8Array | null = null;
+  /** The opening document's session between the prepare and mount tasks, for font work. */
+  let preparedFontSession: TreeDocxSession | null = null;
+  let fontWork: Promise<void> | null = null;
+  let mountedSeq = -1;
   const hostConfig = createDocxEditorHostConfigState(config);
   let author = normalizeEditorAuthor(config.author);
   let container: HTMLElement | null = config.container ?? null;
@@ -291,7 +292,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   /** Defers a big document's open behind a painted frame; see `docx-editor-open-scheduler.ts`. */
   const openScheduler = createOpenScheduler({
     mount: (bytes) => mountBytes(bytes),
-    prepare: (bytes) => prepareOpen(bytes, reviewModelOption(modules, reportDiagnostic)),
+    prepare: (bytes) => {
+      const opened = prepareOpen(bytes, reviewModelOption(modules, reportDiagnostic));
+      // Fonts resolved now are laid out once, by the mount, not a second time after it.
+      if (!opened.ok || deferredRefreshBytes === bytes) return;
+      preparedFontSession = opened.session;
+      fontWork = null;
+      liveFonts.schedule(true);
+      return fontWork ?? undefined;
+    },
     scheduled: () => {
       bump();
       emitSelectionChange();
@@ -390,29 +399,19 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     typeof config.fonts === 'function' ? resolvedFontConfiguration : config.fonts;
   const liveFonts = createLiveFontResolution(
     () => {
-      if (destroyed || !surface) return null;
-      const { session } = surface;
-      const [selected] = supportedFontFamilies([[snapshotNow().formatting?.fontFamily]]);
+      const session = preparedFontSession ?? surface?.session;
+      if (destroyed || !session) return null;
+      const caret = preparedFontSession ? undefined : snapshotNow().formatting?.fontFamily;
       return {
         generation: loadSeq,
         dynamic: typeof config.fonts === 'function',
         families: () =>
-          fontResolverFamilies(
-            [
-              ...new Set([
-                ...(selected && selected !== configuredDefaultFontFamily(fontConfiguration())
-                  ? [selected]
-                  : []),
-                ...session.documentFonts(),
-              ]),
-            ],
-            resolverGlyphFontFamilies(session),
-            MAX_RESOLVER_FAMILIES
-          ),
+          liveFontFamilies(session, caret, configuredDefaultFontFamily(fontConfiguration())),
       };
     },
     async (families) => {
-      if (surface) await resolveDocumentFonts(loadSeq, surface, families);
+      const target = preparedFontSession ? { session: preparedFontSession } : surface;
+      if (target) await (fontWork = resolveDocumentFonts(loadSeq, target, families));
     }
   );
   let fontsResolving = false;
@@ -578,6 +577,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   ): void {
     initialTextFormInput ??= pendingTextFormInputs.get(bytes);
     pendingTextFormInputs.delete(bytes);
+    preparedFontSession = null;
     if (!container) {
       // Detached: no DOM work. The bytes wait for `attach`, which mounts them under
       // whatever measurer has resolved by then. A previous document's parse failure is
@@ -682,6 +682,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     }
     parseError = null;
     surface = result.surface;
+    mountedSeq = loadSeq;
     // A refresh or recovery mounts different content: node ids no longer name the same text.
     highlights.attach(surface, refreshHost?.source !== undefined);
     // Before anything can publish: the mount decides the mode itself just below, and a sync
@@ -757,6 +758,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   function loadBytes(bytes: Uint8Array, immediate = false): void {
     // Keep the live font resources intact until a deferred refresh actually mounts.
     openScheduler.cancel();
+    preparedFontSession = null;
     deferredRefreshBytes = null;
     if (refreshHost?.source && !immediate && container && openScheduler.shouldYield(bytes)) {
       deferredRefreshBytes = bytes;
@@ -828,20 +830,17 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
   // Fonts resolve asynchronously (HarfBuzz init + validation) PER LOAD, composing the
   // app's `config.fonts` with the faces the document itself embeds — explicit sources
-  // beat embedded ones, and both beat substitutions. The surface samples its measurer at
-  // mount, so the document opens on the fixed measurer immediately, and when the shaped
-  // measurer arrives the surface is remounted FROM THE CURRENT TREE — `session.save()` —
-  // so every edit made before fonts resolved survives. What does not survive is the undo
-  // stack; the semantic selection is restored after the shaped surface mounts so an
-  // `onReady` selection does not disappear as fonts settle. In the not-yet-attached case
-  // there is nothing to remount: the measurer is simply picked up by the next mount.
+  // beat embedded ones, and both beat substitutions. A large open resolves them between
+  // its prepare and mount tasks, so the mount lays out once, already shaped. Otherwise the
+  // document opens on the fixed measurer and is measured again when fonts arrive; a load
+  // with no surface of its own yet just leaves the measurer for its mount to pick up.
   //
   // Failure is DEGRADATION, never a blocked load: a face the validator refuses drops
   // with a typed report and the remaining faces admit; a wholly failed resolution leaves
   // the document editable on the fixed measurer.
   async function resolveDocumentFonts(
     seq: number,
-    mounted: PaginatedSurface,
+    mounted: { readonly session: Pick<TreeDocxSession, 'embeddedFonts'> },
     families: readonly string[]
   ): Promise<void> {
     const configured = config.fonts;
@@ -1082,7 +1081,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         shapedMeasurer = measurement.measurer;
         shapedProducer = measurement.producer;
         fontsResolving = false;
-        if (surface) {
+        if (surface && mountedSeq === seq) {
           updateSurfaceMeasurement(surface, {
             measurer: shapedMeasurer,
             producer: shapedProducer,
@@ -1754,7 +1753,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     fontMeasurement: () => ({
       measurer: shapedMeasurer ? ('shaped' as const) : ('fixed' as const),
-      resolving: fontsResolving,
+      // Fonts settled for a document that is not mounted yet are not usable yet.
+      resolving: fontsResolving || preparedFontSession !== null,
       ...(shapedMeasurer && shapedProducer ? { producer: shapedProducer } : {}),
     }),
 

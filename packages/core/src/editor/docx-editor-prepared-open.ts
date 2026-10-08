@@ -8,15 +8,17 @@ import type { ReviewModuleContribution } from '../contracts/modules.ts';
 
 const prepared = new WeakMap<Uint8Array, OpenTreeSessionResult>();
 
-/** Open `bytes` now with the review model the mount will pass. */
+/** Open `bytes` now with the review model the mount will pass, and return the result. */
 export function prepareOpen(
   bytes: Uint8Array,
   review: { readonly reviewModel?: ReviewModuleContribution }
-): void {
-  prepared.set(
+): OpenTreeSessionResult {
+  const opened = openTreeSession(
     bytes,
-    openTreeSession(bytes, review.reviewModel ? { reviewModel: review.reviewModel } : {})
+    review.reviewModel ? { reviewModel: review.reviewModel } : {}
   );
+  prepared.set(bytes, opened);
+  return opened;
 }
 
 /** The mount option for a prepared open of `bytes`, or nothing. Removes the entry. */
