@@ -7,6 +7,7 @@ import {
 import { tocLinkCascader } from './toc-link-formatting.ts';
 import { fieldResultIsDirectionOnly } from './field-result-style.ts';
 import { displayFieldCodes } from './field-code-display.ts';
+import { breakPieceFields, hardBreakPieceFields } from './text-wrapping-break-clear.ts';
 // Project allowlisted field instructions into layout; never execute authored instructions.
 // Computed fields occupy one model unit. FORMTEXT preserves literal offsets; malformed fields demote.
 // Header/footer page fields use their page context. Body page fields publish placeholders for pagination.
@@ -14,7 +15,6 @@ import { displayFieldCodes } from './field-code-display.ts';
 // Projection happens before measurement, never as a paint-time replacement.
 
 import {
-  hardBreakKind,
   hasLegacyFormFieldData,
   isFldSimple,
   projectOmmlAtom,
@@ -217,7 +217,7 @@ export function unmergedPiecesOfParagraphForDisplay(
       start,
       end,
       ...(extras?.positionalTab ? { positionalTab: extras.positionalTab } : {}),
-      ...(extras?.breakKind ? { breakKind: extras.breakKind } : {}),
+      ...breakPieceFields(extras),
       ...link,
     });
   };
@@ -445,7 +445,7 @@ export function unmergedPiecesOfParagraphForDisplay(
     const measured = hyphen?.measureText !== undefined;
     if (!suppressed) {
       push(hyphen?.text ?? text, props, style, measured, offset, offset + text.length, {
-        ...(grand.kind === 'hardBreak' ? { breakKind: hardBreakKind(grand) } : {}),
+        ...(grand.kind === 'hardBreak' ? hardBreakPieceFields(grand) : {}),
         ...(measured ? { measureText: hyphen.measureText } : {}),
       });
     }

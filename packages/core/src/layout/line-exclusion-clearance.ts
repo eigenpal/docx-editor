@@ -5,6 +5,7 @@ import {
 } from './drawing-exclusion.ts';
 import { shiftInlineDrawingRecord } from './drawing-layout.ts';
 import { narrowRectangularWrapSkip } from './narrow-wrap-clearance.ts';
+import { breakClearanceSkip } from './text-wrapping-break-clear.ts';
 import type { PendingLine } from './pending-line.ts';
 import { applyLineSpacing, type ParagraphLineSpacing } from './paragraph-style.ts';
 import { displayText, type ResolvedRunStyle } from './run-style.ts';
@@ -235,6 +236,52 @@ export function createLineExclusionClearance(context: {
     if (skip > 0.001) line.exclusionSkipBefore = skip;
     else delete (line as { exclusionSkipBefore?: number }).exclusionSkipBefore;
   };
+  /** The line after a clearing break, and the zones the break clears from those it sees. */
+  let breakClear:
+    | {
+        readonly line: PendingLine;
+        readonly select: (zones: readonly ExclusionZone[]) => readonly ExclusionZone[];
+      }
+    | undefined;
+  const clearBreakZones = (line: PendingLine, height: number): void => {
+    const zones = breakClear!.select(context.zones());
+    const prior = line.exclusionSkipBefore ?? 0;
+    const skip = breakClearanceSkip(
+      context.top() + prior,
+      height,
+      zones,
+      context.left(),
+      context.right
+    );
+    if (!(skip > 0.001)) return;
+    line.exclusionSkipBefore = prior + skip;
+    appliedLine = line;
+    estimatedLine = undefined;
+  };
+  /**
+   * Open the line after a text wrapping break below the floats it clears (`w:br w:clear`),
+   * measured at the paragraph mark's height. {@link commitBreakClearance} checks the band of
+   * the height the line takes.
+   */
+  const applyBreakClearance = (
+    select: (zones: readonly ExclusionZone[]) => readonly ExclusionZone[]
+  ): void => {
+    const line = context.line();
+    line.breakClearance = true;
+    applyTopAndBottomSkipIfNeeded();
+    breakClear = { line, select };
+    const metrics = context.measurer.lineMetrics(context.emptyStyle);
+    clearBreakZones(
+      line,
+      applyLineSpacing(context.lineSpacing, metrics.height, metrics.baseline).height
+    );
+  };
+  const commitBreakClearance = (): void => {
+    const line = context.line();
+    if (breakClear?.line !== line) return;
+    clearBreakZones(line, line.height);
+    breakClear = undefined;
+  };
   const clearEmptyParagraph = (paragraphId: string): void => {
     // An anchor-only paragraph needs a passage for its floating objects' attachment.
     // Its own rectangles clear the mark too, but only inherited clearance moves their origin.
@@ -290,6 +337,8 @@ export function createLineExclusionClearance(context: {
     }
   };
   return {
+    applyBreakClearance,
+    commitBreakClearance,
     clearEmptyParagraph,
     applyTopAndBottomSkipIfNeeded,
     applyNarrowWrapSkipIfNeeded,

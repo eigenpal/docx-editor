@@ -98,6 +98,12 @@ import { createEquationLayouter } from './equation-layout.ts';
 import { anchorLineStartsByModelOffset } from './anchor-line-probe.ts';
 import * as lineEndSpaces from './line-end-whitespace.ts';
 import { chopOversizedWord } from './oversized-word-break.ts';
+import {
+  breakClearSelector,
+  ownParagraphFramedClearZones,
+  withOwnClearZones,
+  type TextWrappingBreakClear,
+} from './text-wrapping-break-clear.ts';
 import { canChopPiece, isLayoutOwnedPiece } from './layout-owned-piece.ts';
 import type { WordCarryContext } from './word-carry.ts';
 import { carryWordAtOptionalHyphens } from './optional-hyphen-break.ts';
@@ -496,6 +502,8 @@ export function breakParagraph(
     applyOpeningSegmentSkipIfNeeded,
     finalizeTopAndBottomClearance,
     clearEmptyParagraph,
+    applyBreakClearance,
+    commitBreakClearance,
   } = createLineExclusionClearance({
     line: () => line,
     top: currentLineTopY,
@@ -511,6 +519,41 @@ export function breakParagraph(
     paragraphId,
     ...(flow?.regionBottomY !== undefined ? { regionBottom: flow.regionBottomY } : {}),
   });
+
+  // Own floats placed from the paragraph top, which a clearing break finds wherever the paragraph
+  // lands, even before a pass has published them on this page.
+  let ownClear: readonly ExclusionZone[] | undefined;
+  const ownClearZones = (): readonly ExclusionZone[] =>
+    (ownClear ??=
+      startOffset > 0 || !flow?.inlineDrawingLayout
+        ? []
+        : ownParagraphFramedClearZones({
+            paragraph,
+            paragraphId,
+            drawingLayout: flow.inlineDrawingLayout,
+            contentLeft,
+            contentRight,
+            paragraphTop:
+              (flow.anchorParagraphStartY ?? flow.paragraphStartY ?? 0) -
+              (flow.paragraphSpaceBefore ?? 0),
+            displayMode: anchorDisplayMode,
+            ...(flow.revisionAuthorFilter
+              ? { revisionAuthorFilter: flow.revisionAuthorFilter }
+              : {}),
+          })).filter((zone) =>
+      exclusionZoneAppliesToLine(zone, paragraphId, line, anchorLineStartByOffset)
+    );
+  /** The floats a `w:br w:clear` on the line being built clears, chosen where the pen stands. */
+  const breakClearOnLine = (clear: TextWrappingBreakClear) =>
+    clear === 'all'
+      ? (zones: readonly ExclusionZone[]) => withOwnClearZones(zones, ownClearZones())
+      : breakClearSelector(clear, activeExclusionZones(), {
+          y: currentLineTopY() + (line.exclusionSkipBefore ?? 0),
+          height: line.height,
+          left: Math.max(contentLeft, lineOrigin()),
+          right: wrapRight,
+          penX: lineOrigin() + line.width,
+        });
 
   // Where the line will actually sit. A band that pushed this line down has already been
   // recorded on it, so probing must ask about the shifted position — probing the unshifted
@@ -871,6 +914,7 @@ export function breakParagraph(
         ? Math.max(0, spaced.trailing ?? spaced.height - naturalHeight)
         : drawingLineTrailing;
     finalizeTopAndBottomClearance();
+    commitBreakClearance();
     if (empty && (wrapAnchorStarts.size > 0 || topAndBottomAnchorStarts.size > 0))
       clearEmptyParagraph(paragraphId);
     // Mark wrap advances after merging, using the shape paint receives.
@@ -932,6 +976,12 @@ export function breakParagraph(
     setProbeWidth: (width) => exclusionProbe.setWidth(width),
   };
 
+  // A remainder re-broken after a clearing break (on a later page, say) opens clear as well.
+  const restartClear =
+    startOffset > 0
+      ? allPieces.find((p) => p.end === startOffset && p.breakClear)?.breakClear
+      : undefined;
+  if (restartClear) applyBreakClearance(breakClearOnLine(restartClear));
   const shrinkTail = spaceShrinkWordTail(pieces, measurer);
   for (let pieceIndex = 0; pieceIndex < pieces.length; pieceIndex += 1) {
     const piece = pieces[pieceIndex]!;
@@ -1119,7 +1169,9 @@ export function breakParagraph(
       });
       growLineMetrics(line, breakMetrics);
       line.end = piece.end;
+      const cleared = piece.breakClear ? breakClearOnLine(piece.breakClear) : undefined;
       closeLine();
+      if (cleared) applyBreakClearance(cleared);
       trailingLineBreak = true;
       continue;
     }

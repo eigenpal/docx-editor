@@ -6,23 +6,26 @@ import {
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { synthesizeParagraphTopAndBottomZones, type ExclusionZone } from './drawing-exclusion.ts';
 import type { PendingLine } from './pending-line.ts';
+import { holdsClearingBreak } from './text-wrapping-break-clear.ts';
 
 const topAndBottomAnchorMemo = new WeakMap<OoxmlElement, boolean>();
 
 /**
- * True when the paragraph anchors a `wrapTopAndBottom` drawing. Its own band then depends on
- * the paragraph's spacing before, so the break cache must key that spacing.
+ * True when the paragraph anchors a `wrapTopAndBottom` drawing, or anchors a drawing and holds
+ * a line break that clears floats. Its own band then depends on the paragraph's spacing before,
+ * so the break cache must key that spacing.
  */
-export function anchorsTopAndBottomDrawing(
+export function anchorsSpacingDependentBand(
   paragraph: OoxmlElement,
   context: InlineDrawingLayoutContext | undefined
 ): boolean {
   if (!context) return false;
   let value = topAndBottomAnchorMemo.get(paragraph);
   if (value === undefined) {
-    value = anchoredDrawingAtomsInParagraph(paragraph, context).some(
-      (atom) => atom.projection.wrap === 'topAndBottom'
-    );
+    const atoms = anchoredDrawingAtomsInParagraph(paragraph, context);
+    value =
+      atoms.some((atom) => atom.projection.wrap === 'topAndBottom') ||
+      (atoms.length > 0 && holdsClearingBreak(paragraph));
     topAndBottomAnchorMemo.set(paragraph, value);
   }
   return value;
@@ -56,7 +59,8 @@ export function anchorLineSkipsExclusion(
   context: InlineDrawingLayoutContext | undefined,
   line: PendingLine
 ): boolean {
-  if (!context) return false;
+  // A break's clearance belongs to the break, not to the paragraph's anchors.
+  if (!context || line.breakClearance) return false;
   const offsets = drawingModelOffsetsInParagraph(paragraph);
   const atoms = anchoredDrawingAtomsInParagraph(paragraph, context);
   const starts = atoms

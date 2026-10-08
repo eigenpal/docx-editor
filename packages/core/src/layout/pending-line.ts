@@ -50,6 +50,11 @@ export interface PendingLine {
   deletedRanges?: readonly ModelRange[];
   /** Vertical gap inserted before this line to clear a drawing exclusion band. */
   exclusionSkipBefore?: number;
+  /**
+   * The line follows a text wrapping break that clears floating objects (`w:br w:clear`).
+   * Placement keeps its skip even on a line before the paragraph's first anchor.
+   */
+  breakClearance?: true;
   /** Clearance inherited by an empty anchor paragraph from other drawing bands. */
   anchorClearanceBefore?: number;
   /**
@@ -378,6 +383,7 @@ export function frozenLine(line: PendingLine): PendingLine {
     ...(line.spaceShrink ? { spaceShrink: true } : {}),
     ...(line.deletedRanges ? { deletedRanges: Object.freeze(line.deletedRanges) } : {}),
     ...(line.exclusionSkipBefore ? { exclusionSkipBefore: line.exclusionSkipBefore } : {}),
+    ...(line.breakClearance ? { breakClearance: true } : {}),
     ...(line.anchorClearanceBefore !== undefined
       ? { anchorClearanceBefore: line.anchorClearanceBefore }
       : {}),

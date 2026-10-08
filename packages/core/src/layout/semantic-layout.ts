@@ -10,7 +10,7 @@ import {
 import { resolveParagraphFrame } from './paragraph-drop-cap.ts';
 import {
   anchorLineSkipsExclusion,
-  anchorsTopAndBottomDrawing,
+  anchorsSpacingDependentBand,
   drawingZonesAtLinePlacement,
 } from './drawing-placement-exclusion.ts';
 import { createParagraphDrawingWrap } from './paragraph-drawing-wrap.ts';
@@ -1730,7 +1730,7 @@ function layoutBlocksPass(
         paragraphStartY,
         anchorParagraphStartY,
         paragraphSpaceBefore,
-        anchorsTopAndBottom: anchorsTopAndBottomDrawing(
+        anchorsTopAndBottom: anchorsSpacingDependentBand(
           entry.paragraph,
           options.inlineDrawingLayout
         ),
@@ -2001,7 +2001,7 @@ function layoutBlocksPass(
       blocks: prepared,
       dynamicBlock: (at) =>
         prepared[at]?.kind === 'paragraph' &&
-        anchorsTopAndBottomDrawing(prepared[at].paragraph, options.inlineDrawingLayout),
+        anchorsSpacingDependentBand(prepared[at].paragraph, options.inlineDrawingLayout),
       contextKey: () => {
         const zones = pageExclusionZones();
         const base = `${columnWidth()}:${markOnBreakSheet}:`;
