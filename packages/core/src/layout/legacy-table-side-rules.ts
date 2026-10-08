@@ -3,6 +3,7 @@ import type { PreferredWidthType } from './table-widths.ts';
 import type { TableBorderSide } from './table-borders.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { shareRowFacts } from './table-row-facts.ts';
+import { carryPartialSimpleSideGrid, hasPartialSimpleSideGrid } from './table-partial-side-grid.ts';
 import { carryWidenedCellContentInsets } from './cell-content-insets-memo.ts';
 
 const SIMPLE_SIDE_STYLES = ['single', 'thick'];
@@ -151,6 +152,7 @@ function carryUniformTable(
   source: readonly SemanticTableRow[],
   copy: readonly SemanticTableRow[]
 ): readonly SemanticTableRow[] {
+  carryPartialSimpleSideGrid(source, copy);
   const known = uniformTables.get(source);
   if (known) uniformTables.set(copy, known);
   return copy;
@@ -268,7 +270,13 @@ function sharedGridLineDecision(
     MODERN_GRID_WIDTH_TYPES.includes(table.widthType);
   const modernCentred = modernGridWidth && table.alignment === 'center';
   const outerRuleOffsetPt = legacyMode ? undefined : modernEdgeAlignedOffsetPt(rows, table);
-  if (!legacyMode && !modernCentred && outerRuleOffsetPt === undefined) return null;
+  const partialGrid =
+    modernGridWidth &&
+    !modernCentred &&
+    outerRuleOffsetPt === undefined &&
+    uniformSimpleSideRuleWidth(rows, table.columnWidthsPt.length) === undefined &&
+    hasPartialSimpleSideGrid(rows, table.columnWidthsPt.length);
+  if (!legacyMode && !modernCentred && !partialGrid && outerRuleOffsetPt === undefined) return null;
   return { legacyMode, modernGridWidth, outerRuleOffsetPt };
 }
 
