@@ -2,6 +2,8 @@ import type { SemanticTableCell, SemanticTableRow, TableAlignment } from './sema
 import type { PreferredWidthType } from './table-widths.ts';
 import type { TableBorderSide } from './table-borders.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
+import { shareRowFacts } from './table-row-facts.ts';
+import { carryWidenedCellContentInsets } from './cell-content-insets-memo.ts';
 
 const SIMPLE_SIDE_STYLES = ['single', 'thick'];
 
@@ -57,12 +59,15 @@ function mapCells(
   simpleSidesOnly = false
 ): readonly SemanticTableRow[] {
   const mapped = rows.map((row) =>
-    carryUniformRow(row, {
-      ...row,
-      cells: row.cells.map((cell) =>
-        sharesSideRuleGridLine(cell, simpleSidesOnly) ? extend(cell) : cell
-      ),
-    })
+    shareRowFacts(
+      row,
+      carryUniformRow(row, {
+        ...row,
+        cells: row.cells.map((cell) =>
+          sharesSideRuleGridLine(cell, simpleSidesOnly) ? extend(cell) : cell
+        ),
+      })
+    )
   );
   return carryUniformTable(rows, mapped);
 }
@@ -276,11 +281,39 @@ function withoutSharedSides(row: SemanticTableRow): SemanticTableRow {
     if (!cell.centeredSideRules && !cell.centeredSidePaint) return cell;
     changed = true;
     const { centeredSideRules: _rules, centeredSidePaint: _paint, ...plain } = cell;
+    carryWidenedCellContentInsets(cell, plain);
     return plain;
   });
-  const result = changed ? carryUniformRow(row, { ...row, cells }) : row;
+  const result = changed ? shareRowFacts(row, carryUniformRow(row, { ...row, cells })) : row;
   rowsWithoutSharedSides.set(row, result);
   return result;
+}
+
+/**
+ * Reuse the flag-free cells AutoFit needs for its widened measurement in a later retarget.
+ * Only prepare a whole row when every cell participates in that measurement. Other rows
+ * keep per-cell measurement, so merge continuations and vertical cells add no unused copies.
+ */
+export function rowForWidenedMeasurement(
+  row: SemanticTableRow,
+  columnCount: number,
+  measureSpanning: boolean
+): SemanticTableRow | undefined {
+  const known = rowsWithoutSharedSides.get(row);
+  if (known) return known;
+  if (
+    !row.cells.every(
+      (cell) =>
+        !cell.legacyContentAlignment &&
+        !cell.vMergeContinue &&
+        cell.gridColumn >= 0 &&
+        cell.gridColumn < columnCount &&
+        cell.textDirection === 'horizontal' &&
+        (cell.gridSpan === 1 || measureSpanning)
+    )
+  )
+    return undefined;
+  return withoutSharedSides(row);
 }
 
 /** Reapply only the width-dependent side rules; authored cell material stays unchanged. */

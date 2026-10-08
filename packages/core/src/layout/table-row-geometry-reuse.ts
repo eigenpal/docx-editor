@@ -243,6 +243,19 @@ function onlyMovableFields(block: ParagraphFragmentRecord): boolean {
 const movableBlocks = new WeakSet<ParagraphFragmentRecord>();
 
 /**
+ * Check a derived copy while placement still owns it, when its source was movable.
+ * The copy is checked independently: added paragraph furniture must still refuse reuse.
+ * This avoids repeating the check when a later width change reads the placed copy.
+ */
+export function rememberMovableCopy(
+  source: ParagraphFragmentRecord,
+  copy: ParagraphFragmentRecord
+): ParagraphFragmentRecord {
+  if (movableBlocks.has(source) && onlyMovableFields(copy)) movableBlocks.add(copy);
+  return copy;
+}
+
+/**
  * `block` with new `lines`, keeping what is known about its fields. Every paragraph fragment
  * owns `lines`, so the copy has exactly the keys of `block`.
  */

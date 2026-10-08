@@ -1,4 +1,5 @@
 import { cachedAutofitCellWidths, widenedCellInsets } from './table-autofit-cell-cache.ts';
+import { rowForWidenedMeasurement } from './legacy-table-side-rules.ts';
 import { autofitReuseScope, carryAutofitScope } from './autofit-context-reuse.ts';
 import { withDefaultTabInterval } from './paragraph-tabs.ts';
 import {
@@ -691,7 +692,12 @@ export function autofitColumnMinimumsPt(
   const gapPt = cellSpacingGapPt(structure.cellSpacingPt);
   const cellWidths = spacedCellWidths(structure);
   for (const row of structure.rows) {
-    for (const cell of row.cells) {
+    const widenedRow =
+      structure.outerRuleOffsetPt !== undefined && !structure.legacyContentAlignment
+        ? rowForWidenedMeasurement(row, columnCount, content !== undefined)
+        : undefined;
+    for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex += 1) {
+      const cell = row.cells[cellIndex]!;
       if (cell.vMergeContinue) continue;
       if (cell.gridColumn < 0 || cell.gridColumn >= columnCount) continue;
       if (cell.gridSpan === 1 && cell.preferredWidth.value > 0) {
@@ -734,7 +740,7 @@ export function autofitColumnMinimumsPt(
           least = Math.max(least, widths.min);
           most = Math.max(most, widths.max);
         }
-        const widened = widenedCellInsets(cell, collapsed, insets);
+        const widened = widenedCellInsets(cell, collapsed, insets, widenedRow?.cells[cellIndex]);
         return {
           least,
           most,

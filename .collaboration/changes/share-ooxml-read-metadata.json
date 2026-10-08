@@ -2,7 +2,7 @@
   "impact": "no-impact",
   "fields": [],
   "before": "Parsed elements, layout hashes, and review indexes retain redundant metadata.",
-  "after": "Reads share immutable metadata, hashes use compact strings, and review indexes skip irrelevant leaves. Undo and redo reuse node lookup storage. Layout keys avoid temporary attribute pairs, and cached table paragraphs skip break-option construction. Proven ordinary text edits reuse bounded drawing projections and source order. Unchanged page and row records retain their layout and painting data. Ordinary text edits reuse table formatting and column measurements when their dependencies match. Cache recency avoids repeated key insertion, and complete fitting text lines retain their measurements across compatible width changes. Ordinary rows reuse the latest compatible measurement during placement. Formatting reads share paragraph membership indexes. Formatting reads share one demand-loaded paragraph index across properties, tabs, indentation, and empty styles. Empty cell paragraphs retain their line boxes when the cell ignores its end marker height. AutoFit width changes retain compatible table geometry and painted content. Paragraph cache retention uses byte budgets, and bulk selection reads share layout indexes. Last table rows can grow within the paginator page band when row membership stays unchanged. Whole-subtree read caches omit small leaf groups. Ordered table borders and moved rows reuse proven layout facts. Cell spans share immutable ranges.",
+  "after": "Reads share immutable metadata, hashes use compact strings, and review indexes skip irrelevant leaves. Undo and redo reuse node lookup storage. Layout keys avoid temporary attribute pairs, and cached table paragraphs skip break-option construction. Proven ordinary text edits reuse bounded drawing projections and source order. Unchanged page and row records retain their layout and painting data. Ordinary text edits reuse table formatting and column measurements when their dependencies match. Cache recency avoids repeated key insertion, and complete fitting text lines retain their measurements across compatible width changes. Ordinary rows reuse the latest compatible measurement during placement. Formatting reads share paragraph membership indexes. Formatting reads share one demand-loaded paragraph index across properties, tabs, indentation, and empty styles. Empty cell paragraphs retain their line boxes when the cell ignores its end marker height. AutoFit width changes retain compatible table geometry and painted content. Paragraph cache retention uses byte budgets, and bulk selection reads share layout indexes. Last table rows can grow within the paginator page band when row membership stays unchanged. Whole-subtree read caches omit small leaf groups. Ordered table borders and moved rows reuse proven layout facts. Cell spans share immutable ranges. Side-rule copies share width-independent row facts and compatible cell insets.",
   "reason": "Node identities, collaboration hashes, document projections, operations, and serialized content stay unchanged. Layout cache keys are private to each editor instance.",
   "tests": [
     "packages/core/src/store/__tests__/ooxml-read-metadata.test.ts",
@@ -70,7 +70,9 @@
     "packages/core/src/layout/__tests__/cell-line-alignment.test.ts",
     "packages/core/src/layout/__tests__/table-border-ordered-ownership.test.ts",
     "packages/core/src/layout/__tests__/table-row-movable-proof.test.ts",
-    "packages/core/src/layout/__tests__/table-width-moved-row-compare.test.ts"
+    "packages/core/src/layout/__tests__/table-width-moved-row-compare.test.ts",
+    "packages/core/src/layout/__tests__/table-row-facts.test.ts",
+    "packages/core/src/layout/__tests__/widened-cell-insets.test.ts"
   ],
   "changeset": "share-ooxml-read-metadata",
   "migration": null

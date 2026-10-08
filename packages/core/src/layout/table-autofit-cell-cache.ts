@@ -1,4 +1,4 @@
-import { cellContentInsets } from './table-cell-geometry.ts';
+import { sharedCellContentInsets, widenedCellContentInsets } from './cell-content-insets-memo.ts';
 import { autofitReuseScope } from './autofit-context-reuse.ts';
 import type { AutofitView, TableAutofitContext } from './table-autofit-widths.ts';
 import type { SemanticTableCell } from './semantic-table.ts';
@@ -62,11 +62,15 @@ export function cachedAutofitCellWidths(
 export function widenedCellInsets(
   cell: SemanticTableCell,
   collapsed: boolean,
-  current: { readonly left: number; readonly right: number }
+  current: { readonly left: number; readonly right: number },
+  /** A flag-free copy from the same row, retained for width-dependent side-rule retargeting. */
+  widenedCell?: SemanticTableCell
 ) {
   if (!cell.centeredSideRules && !cell.legacyContentAlignment) return current;
-  const { centeredSideRules: _centered, legacyContentAlignment: _legacy, ...plain } = cell;
-  const fullStroke = cellContentInsets(plain, collapsed);
+  const fullStroke =
+    widenedCell && !widenedCell.legacyContentAlignment && !widenedCell.centeredSideRules
+      ? sharedCellContentInsets(widenedCell, collapsed)
+      : widenedCellContentInsets(cell, collapsed);
   return {
     left: Math.max(current.left, fullStroke.left),
     right: Math.max(current.right, fullStroke.right),

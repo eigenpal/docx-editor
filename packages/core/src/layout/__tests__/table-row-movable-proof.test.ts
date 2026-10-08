@@ -9,7 +9,12 @@ import {
 import { createLayoutSession } from '../layout-session.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { readTableStructure } from '../semantic-table.ts';
-import { moveRowToWidths, movedRowsTestRecorder, withLines } from '../table-row-geometry-reuse.ts';
+import {
+  moveRowToWidths,
+  movedRowsTestRecorder,
+  rememberMovableCopy,
+  withLines,
+} from '../table-row-geometry-reuse.ts';
 import { layoutRowFragment } from '../semantic-table-layout.ts';
 import { bodyLineId } from '../body-line-id.ts';
 import type {
@@ -22,7 +27,7 @@ import { lay, load, measurer, styleCascade } from './table-row-keep-fixtures.ts'
 
 // A full layout checks each remembered cell fragment for unmovable fields once. The first
 // width change then moves that very fragment without checking its fields again. A copy of
-// it, such as a vertically aligned cell's shifted blocks, is a new object and is checked.
+// it is checked separately. Placement records that check for vertically shifted copies too.
 
 // Page body: 310pt wide, 170pt tall, twelve 14pt lines.
 const p = (text: string, pPr = '') =>
@@ -127,7 +132,7 @@ test('the first width change moves fully laid out fragments without scanning the
   }
 });
 
-test('shifted copies of remembered fragments are scanned again and still move exactly', () => {
+test('vertical placement checks shifted copies before a later width change reads them', () => {
   // Rows taller than their line: the centered cell content is shifted, which copies blocks.
   const rows = Array.from({ length: 20 }, (_, i) =>
     body(i, '<w:vAlign w:val="center"/>', '<w:trHeight w:val="560" w:hRule="atLeast"/>')
@@ -135,14 +140,9 @@ test('shifted copies of remembered fragments are scanned again and still move ex
   const part = load(autofit(rows));
   const edits = typeAfterFullLayout(part, 9, 'wider ');
   expect(edits.length).toBeGreaterThan(1);
-  const [first, ...later] = edits;
-  expect(first!.moved).toBeGreaterThan(0);
-  expect(first!.fieldScans).toBeGreaterThan(0);
-  // Later edits read blocks the previous move built, which carry the proof. Only the edited
-  // row is placed again, and its shifted blocks are scanned on the next edit.
-  for (const edit of later) {
+  for (const edit of edits) {
     expect(edit.moved).toBeGreaterThan(0);
-    expect(edit.fieldScans).toBe(3);
+    expect(edit.fieldScans).toBe(0);
   }
 });
 
@@ -195,6 +195,7 @@ test('copies keep the proof only through withLines; unmovable fields are refused
   expect(scansFor(withBlocks((block) => withLines(block, block.lines.slice())))).toBe(0);
   // Any other copy is checked again, and moves when its fields allow.
   expect(scansFor(withBlocks((block) => ({ ...block })))).toBe(placed.cells.length);
+  expect(scansFor(withBlocks((block) => rememberMovableCopy(block, { ...block })))).toBe(0);
   for (const extra of [
     { shadingBox: { x: 0, y: 0, width: 1, height: 1 } },
     { marker: {} },
@@ -203,6 +204,13 @@ test('copies keep the proof only through withLines; unmovable fields are refused
   ]) {
     const copy = withBlocks((block) => ({ ...block, ...extra }) as ParagraphFragmentRecord);
     expect(scansFor(copy)).toBeNull();
+    expect(
+      scansFor(
+        withBlocks((block) =>
+          rememberMovableCopy(block, { ...block, ...extra } as ParagraphFragmentRecord)
+        )
+      )
+    ).toBeNull();
     // The restamp of an unproven copy carries nothing.
     expect(
       scansFor({

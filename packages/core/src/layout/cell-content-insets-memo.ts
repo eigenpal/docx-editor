@@ -7,6 +7,7 @@
 import {
   borderContentInset,
   cellContentInsets,
+  contentInsets,
   type CellContentInsets,
 } from './table-cell-geometry.ts';
 import { effectiveBorderSide } from './table-border-cascade.ts';
@@ -15,6 +16,55 @@ import type { SemanticTableCell } from './semantic-table.ts';
 
 const collapsed = new WeakMap<SemanticTableCell, CellContentInsets>();
 const separated = new WeakMap<SemanticTableCell, CellContentInsets>();
+const widenedCollapsed = new WeakMap<SemanticTableCell, CellContentInsets>();
+const widenedSeparated = new WeakMap<SemanticTableCell, CellContentInsets>();
+
+/** Insets without the width-dependent centered and legacy content alignment flags. */
+export function widenedCellContentInsets(
+  cell: SemanticTableCell,
+  collapsedBorders: boolean
+): CellContentInsets {
+  const memo = collapsedBorders ? widenedCollapsed : widenedSeparated;
+  let known = memo.get(cell);
+  if (!known) {
+    known = contentInsets(
+      cell.margins,
+      cell.contentBorders ?? cell.borders,
+      false,
+      collapsedBorders,
+      cell.contentBottomIsOuter,
+      false,
+      cell.topBandClearancePt
+    );
+    memo.set(cell, known);
+  }
+  return known;
+}
+
+/**
+ * Reuse the uncentered geometry AutoFit already measured when side-rule copies need it.
+ * A copy that keeps legacy content alignment needs different insets and stays uncached.
+ * Values hold no source cell or layout pass; the source keys remain weak.
+ */
+export function carryWidenedCellContentInsets(
+  source: SemanticTableCell,
+  copy: SemanticTableCell
+): void {
+  if (
+    copy.centeredSideRules ||
+    copy.legacyContentAlignment ||
+    source.margins !== copy.margins ||
+    source.borders !== copy.borders ||
+    source.contentBorders !== copy.contentBorders ||
+    source.contentBottomIsOuter !== copy.contentBottomIsOuter ||
+    source.topBandClearancePt !== copy.topBandClearancePt
+  )
+    return;
+  const collapsedInsets = widenedCollapsed.get(source);
+  const separatedInsets = widenedSeparated.get(source);
+  if (collapsedInsets) collapsed.set(copy, collapsedInsets);
+  if (separatedInsets) separated.set(copy, separatedInsets);
+}
 
 const bottomFloors = new WeakMap<
   SemanticTableCell,
