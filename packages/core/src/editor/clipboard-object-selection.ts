@@ -1,7 +1,10 @@
 import { readOoxmlPackage } from '../store/package/ooxml-package.ts';
-import { containsClipboardObject } from '../store/store/clipboard-object-policy.ts';
+import {
+  containsClipboardObject,
+  isClipboardObject,
+} from '../store/store/clipboard-object-policy.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
-import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlPart } from '../store/package/ooxml-tree.ts';
+import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
 
 /** Check canonical content, including unpainted atoms and stories outside the body. */
@@ -19,7 +22,7 @@ export function selectionContainsClipboardObject(
       while (children.length) {
         const child = children.pop()!;
         if (child.kind === 'textValue') continue;
-        if (child.namespaceUri === WML_NAMESPACE_URI && child.localName === 'object') {
+        if (isClipboardObject(child)) {
           const span = index.spanOf(child);
           // Opaque objects have no span; a whole-paragraph transfer must still refuse them.
           if (
