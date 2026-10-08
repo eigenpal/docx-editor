@@ -49,10 +49,10 @@ const tab = '<w:r><w:tab/></w:r>';
 const TABS =
   '<w:tabs><w:tab w:val="left" w:pos="3960"/><w:tab w:val="left" w:pos="7380"/></w:tabs>';
 
-function layout(content: string): SemanticLayout {
+function layout(content: string, lead = '<w:r><w:t>Lead</w:t></w:r>'): SemanticLayout {
   const part = load(
     `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}"><w:body>` +
-      '<w:p><w:r><w:t>Lead</w:t></w:r></w:p>' +
+      `<w:p>${lead}</w:p>` +
       `<w:p><w:pPr>${TABS}</w:pPr>${content}</w:p><w:p><w:r><w:t>Next</w:t></w:r></w:p>` +
       '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>' +
       '</w:body></w:document>'
@@ -61,11 +61,15 @@ function layout(content: string): SemanticLayout {
 }
 
 function lineAt(result: SemanticLayout, prefix: string) {
+  return lineRecordAt(result, prefix).summary;
+}
+
+function lineRecordAt(result: SemanticLayout, prefix: string) {
   for (const [pageIndex, page] of result.pages.entries()) {
     for (const line of linesOf({ ...result, pages: [page] })) {
       const text = line.spans.map((span) => span.text).join('');
       if (text.replace(/^\t/, '').startsWith(prefix))
-        return { pageIndex, y: Math.round(line.box.y * 1000) / 1000, text };
+        return { line, summary: { pageIndex, y: Math.round(line.box.y * 1000) / 1000, text } };
     }
   }
   throw new Error(`no line starts with ${prefix}`);
@@ -97,5 +101,32 @@ describe('a top-and-bottom anchor in the middle of a line', () => {
     const band = anchor({ x: 60, y: 500, width: 117, height: 70, vertical: 'margin', wrap: BAND });
     const result = layout(run('Before ') + band + run('after'));
     expect(lineAt(result, 'Before')).toEqual({ pageIndex: 0, y: LINE, text: 'Before after' });
+  });
+
+  test('a line the band moves wraps beside a float at its new height', () => {
+    // An earlier paragraph's float covers the left 150 pt from 60 pt to 160 pt below the
+    // margin. The band, anchored on the first line, moves that line to 82 pt, beside it.
+    const float = anchor({
+      x: 0,
+      y: 60,
+      width: 150,
+      height: 100,
+      vertical: 'margin',
+      wrap: SQUARE,
+    });
+    const band = anchor({
+      x: 200,
+      y: 0,
+      width: 100,
+      height: 70,
+      vertical: 'paragraph',
+      wrap: BAND,
+    });
+    const { line, summary } = lineRecordAt(
+      layout(run('Before ') + band + run('after'), `<w:r><w:t>Lead</w:t></w:r>${float}`),
+      'Before'
+    );
+    expect(summary.y).toBeCloseTo(LINE + 70, 3);
+    for (const span of line.spans) expect(span.box.x).toBeGreaterThanOrEqual(150 - 0.001);
   });
 });
