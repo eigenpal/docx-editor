@@ -123,6 +123,12 @@ describe('an mc:AlternateContent whose chosen branch cannot paint', () => {
     });
   });
 
+  test('a chosen branch without a drawing leaves its fallback inactive', () => {
+    const source = part(alternate('<w:t>Chosen text</w:t>', VML_RECT));
+    expect(indexInlineDrawingProjectionsInPart(source).size).toBe(0);
+    expect(projectDrawingsInPart(source)).toHaveLength(0);
+  });
+
   test('without a fallback that paints, keeps the hidden extent of the chosen branch', () => {
     const unpaintable = '<w:pict><v:group style="width:10pt;height:10pt"/></w:pict>';
     const source = part(alternate(NESTED_GROUP, unpaintable));

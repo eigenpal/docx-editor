@@ -1603,7 +1603,7 @@ export function projectRunLevelMcDrawing(
     context.supportedMcRequires,
     context.limits
   );
-  if (atom.drawing === null) return paintableMcFallback(wrapper, context.ownerPartName);
+  if (atom.drawing === null) return null;
   const projection = projectDrawing(atom.drawing, {
     ...context,
     namespaceScope: context.namespaceScope,
