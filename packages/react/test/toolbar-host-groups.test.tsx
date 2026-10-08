@@ -750,6 +750,6 @@ describe('AddComment', () => {
       editor().exec({ type: 'setEditingMode', mode: 'viewing' });
     });
     await waitFor(() => expect(button(view)!.disabled).toBe(true));
-    expect(button(view)!.title).toBe(en.disabledReason.viewing);
+    expect(button(view)!.title).toBe(en.editingMode.viewingHint);
   });
 });

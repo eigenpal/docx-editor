@@ -5015,16 +5015,22 @@ export interface MenuGroupProps {
 export type MenuId = ChromeMenuId | (string & {});
 
 // @public
-export interface MenuItemProps {
+export interface MenuItemBaseProps {
     // (undocumented)
     className?: string;
     hidden?: boolean;
     labelKey?: string;
     shortcutKey?: string;
-    // @deprecated (undocumented)
-    slot?: ChromeSlotId;
-    slotId?: ChromeSlotId;
 }
+
+// @public
+export type MenuItemProps = MenuItemBaseProps & ({
+    slot?: never;
+    slotId: ChromeSlotId;
+} | {
+    slot: ChromeSlotId;
+    slotId?: never;
+});
 
 // @public
 export interface MenuPartComponent {
@@ -5089,16 +5095,23 @@ export interface MenuSeparatorProps {
     className?: string;
 }
 
-// @public (undocumented)
-export interface MenuSubmenuProps {
+// @public
+export interface MenuSubmenuBaseProps {
     // (undocumented)
     children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
-    label?: string;
-    labelKey: string;
     paths?: readonly string[] | null;
 }
+
+// @public (undocumented)
+export type MenuSubmenuProps = MenuSubmenuBaseProps & ({
+    label?: string;
+    labelKey: string;
+} | {
+    label: string;
+    labelKey?: string;
+});
 
 // @public
 export interface MenuTableGridProps {

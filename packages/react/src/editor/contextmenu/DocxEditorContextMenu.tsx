@@ -32,9 +32,7 @@ import type { CSSProperties, ReactElement } from 'react';
 import { warnUnmatchedHiddenRow } from '../menu/menu-warnings';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import { ReviewRailContext, useDocxEditor } from '../context';
-import { useEditorCommand } from '../useEditorCommand';
-import { useEditorState } from '../useEditorState';
-import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
+import { useAddCommentState } from '../toolbar/add-comment-state';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
@@ -109,8 +107,6 @@ type DefaultEntry =
   | { readonly kind: 'row'; readonly id: string; readonly render: () => ReactElement }
   | { readonly kind: 'separator'; readonly id: string };
 
-const selectViewing = (snapshot: EditorSnapshot): boolean => snapshot.editingMode === 'viewing';
-
 function ContextMenuAddComment() {
   const rail = useContext(ReviewRailContext);
   const menu = useMenuContext();
@@ -118,8 +114,7 @@ function ContextMenuAddComment() {
   // The same slot as `Toolbar.AddComment`, so enabled state and its reason have one source:
   // `toolbarCommandState`. The row needs a mounted review rail to open the draft, so without
   // one it is left out, whatever the engine answers.
-  const { isEnabled, disabledReason } = useEditorCommand('review.addComment');
-  const viewing = useEditorState(selectViewing);
+  const { isEnabled, reason } = useAddCommentState(label);
   if ((rail?.mounted ?? 0) === 0) return null;
   const control = chromeControlForSlot('review.addComment');
   return (
@@ -127,8 +122,7 @@ function ContextMenuAddComment() {
       icon={chromeIcon(control?.paths)}
       slot="review.addComment"
       disabled={!isEnabled}
-      // Viewing mode explains itself with the editing-mode hint, as the mode pill does.
-      title={(viewing ? label('editingMode.viewingHint') : disabledReason) ?? undefined}
+      title={reason ?? undefined}
       onSelect={() => {
         if (!rail?.requestCommentDraft()) return;
         menu.setOpenMenu(null);
@@ -612,7 +606,7 @@ export interface DocxEditorContextMenuNamespace {
   readonly RefreshTocPageNumbers: typeof ContextMenuRefreshTocPageNumbers;
   /** A host-owned row: no slot, no command, the host's own label and action. */
   readonly Item: typeof ContextMenuItem;
-  /** Any chrome slot as a live row (`<ContextMenu.Slot slot="text.bold" />`). */
+  /** Any chrome slot as a live row (`<ContextMenu.Slot slotId="text.bold" />`). */
   readonly Slot: typeof MenuItem;
   /** Bare row presentation, for a host building something the parts do not cover. */
   readonly Row: typeof MenuRow;

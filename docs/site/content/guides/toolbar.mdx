@@ -300,7 +300,7 @@ const zoomList = () => h(ZoomList);
 
 ### Development warnings
 
-The toolbar renders a misplaced part and prints a development warning that names it. A build counts as development when `process.env.NODE_ENV` is not `production`. A page without a `process` global, such as a browser bundle that does not replace `process.env.NODE_ENV`, prints no warnings.
+The toolbar renders a misplaced part and prints a development warning that names it. Two checks decide whether a build is a development build, in this order. First, when the bundler provides `import.meta.env.DEV`, as Vite does, its value decides. Otherwise, the build counts as development when a `process` global exists and `process.env.NODE_ENV` is not `production`. A page with neither, such as a browser bundle that replaces neither value, prints no warnings.
 
 - A `Toolbar.Group` whose `after` names no group goes to the end of the bar.
 - A `Toolbar.Group` with a built-in id ignores `label`, `labelKey`, and `after`.

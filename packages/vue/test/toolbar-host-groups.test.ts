@@ -162,6 +162,33 @@ describe('Vue Toolbar.Group', () => {
   });
 });
 
+describe('Vue Toolbar.Group class', () => {
+  test('a template class and a className both style the group, in the preset and alone', async () => {
+    const preset = mountEditorTree(() =>
+      h(T, null, () => [
+        h(T.Group, { id: 'mine', class: 'from-class', className: 'from-name' }, () => [
+          h(T.Action, { label: 'A' }),
+        ]),
+      ])
+    );
+    await flush();
+    const group = preset.container.querySelector('[data-toolbar-group="mine"]')!;
+    expect(group.classList.contains('from-class')).toBe(true);
+    expect(group.classList.contains('from-name')).toBe(true);
+    preset.unmount();
+    const bare = mountEditorTree(() =>
+      h(T, { preset: false }, () => [
+        h(T.Group, { id: 'mine', class: 'from-class' }, () => [h(T.Action, { label: 'A' })]),
+      ])
+    );
+    await flush();
+    const own = bare.container.querySelector('[data-toolbar-host-group="mine"]')!;
+    expect(own.classList.contains('from-class')).toBe(true);
+    expect(own.classList.contains('docx-toolbar__group')).toBe(true);
+    bare.unmount();
+  });
+});
+
 describe('Vue Toolbar.Slot', () => {
   test('replaces a built-in slot in place and collapses with its group', async () => {
     useMockObserver();
@@ -376,7 +403,7 @@ describe('Vue TableInsert and AddComment', () => {
     editor.exec({ type: 'setEditingMode', mode: 'viewing' });
     await flush();
     expect(button.disabled).toBe(true);
-    expect(button.title).toBe(en.disabledReason.viewing);
+    expect(button.title).toBe(en.editingMode.viewingHint);
     view.unmount();
   });
 

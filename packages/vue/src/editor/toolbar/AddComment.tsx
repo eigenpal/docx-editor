@@ -9,7 +9,7 @@
 import { defineComponent, h, type PropType, type VNode } from 'vue';
 import type { ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { useReviewRailRegistry } from '../context';
-import { useEditorCommand } from '../useEditorCommand';
+import { useAddCommentState } from './add-comment-state';
 import { mergeHostClass } from '../../lib/mergeHostClass';
 import { useToolbarLabel } from './toolbar-context';
 import { Slot } from './Slot';
@@ -45,7 +45,7 @@ export const ToolbarAddComment = defineComponent({
   setup(props, { slots }) {
     const rail = useReviewRailRegistry();
     const label = useToolbarLabel();
-    const { isEnabled, disabledReason } = useEditorCommand(SLOT);
+    const { isEnabled, reason } = useAddCommentState(label);
     // Inside the "⋯" panel, the press also closes the panel. Outside it this does nothing.
     const closePanel = useToolbarOverflowClose();
     return () => {
@@ -59,7 +59,7 @@ export const ToolbarAddComment = defineComponent({
         disabled: !enabled,
         ...(!enabled ? { 'data-disabled': '' } : {}),
         'aria-label': text,
-        title: disabledReason.value ?? text,
+        title: reason.value ?? text,
         onMousedown: guardToolbarMousedown,
         onClick: () => {
           if (rail.value.requestCommentDraft()) closePanel(false);

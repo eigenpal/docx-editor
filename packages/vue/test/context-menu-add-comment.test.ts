@@ -104,3 +104,10 @@ test('in viewing mode the row explains itself with the translated viewing hint',
   const addComment = row(view, 'review.addComment');
   expect(addComment?.getAttribute('title')).toBe('editingMode.viewingHint');
 });
+
+test('a slot override with no slotId warns that it renders nothing', async () => {
+  const { messages } = await capturingWarnings(() =>
+    open(() => [h(DocxEditorContextMenu.Slot, { labelKey: 'nothing' } as never)])
+  );
+  expect(messages.some((text) => text.includes('has no slotId'))).toBe(true);
+});

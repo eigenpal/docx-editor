@@ -23,11 +23,13 @@ export {
   menuRowSlot,
   type MenuActionProps,
   type MenuGroupProps,
+  type MenuItemBaseProps,
   type MenuItemProps,
   type MenuPartComponent,
   type MenuProps,
   type MenuRowProps,
   type MenuSeparatorProps,
+  type MenuSubmenuBaseProps,
   type MenuSubmenuProps,
   type MenuTableGridProps,
 } from './parts';

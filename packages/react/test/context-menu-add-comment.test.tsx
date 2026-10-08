@@ -132,3 +132,16 @@ test('in viewing mode the row explains itself with the translated viewing hint',
   expect(addComment.getAttribute('aria-disabled')).toBe('true');
   expect(addComment.getAttribute('title')).toBe('editingMode.viewingHint');
 });
+
+test('a slot override with no slotId warns that it renders nothing', () => {
+  // The props type refuses it; a host composing from untyped data can still reach it.
+  const Untyped = ContextMenu.Slot as unknown as (props: { labelKey?: string }) => ReactNode;
+  const { messages } = capturingWarnings(() =>
+    mount(
+      <ContextMenu t={t}>
+        <Untyped labelKey="nothing" />
+      </ContextMenu>
+    )
+  );
+  expect(messages.some((text) => text.includes('has no slotId'))).toBe(true);
+});

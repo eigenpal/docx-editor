@@ -9,7 +9,7 @@
 import { useContext } from 'react';
 import type { ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { ReviewRailContext } from '../context';
-import { useEditorCommand } from '../useEditorCommand';
+import { useAddCommentState } from './add-comment-state';
 import { useToolbarLabel } from './toolbar-context';
 import { Slot } from './Slot';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
@@ -21,7 +21,7 @@ const SLOT: ChromeSlotId = 'review.addComment';
 function ToolbarAddCommentImpl({ className, hidden, icon, asChild, children }: ToolbarPartProps) {
   const rail = useContext(ReviewRailContext);
   const label = useToolbarLabel();
-  const { isEnabled, disabledReason } = useEditorCommand(SLOT);
+  const { isEnabled, reason } = useAddCommentState(label);
   // Inside the "⋯" panel, the press also closes the panel. Outside it this does nothing.
   const closePanel = useToolbarOverflowClose();
   if (hidden || (rail?.mounted ?? 0) === 0) return null;
@@ -34,7 +34,7 @@ function ToolbarAddCommentImpl({ className, hidden, icon, asChild, children }: T
     disabled: !isEnabled,
     ...(!isEnabled ? { 'data-disabled': '' } : {}),
     'aria-label': text,
-    title: disabledReason ?? text,
+    title: reason ?? text,
     onMouseDown: guardToolbarMousedown,
     onClick: () => {
       if (rail?.requestCommentDraft()) closePanel(false);

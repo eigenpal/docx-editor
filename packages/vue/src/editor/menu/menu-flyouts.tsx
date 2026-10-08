@@ -1,3 +1,4 @@
+import { warnMissingSubmenuLabel } from './menu-warnings';
 import { defineComponent, ref, watch, type PropType } from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { type ChromeMenuItemEntry, type ChromeSlotId } from '@docx-editor.dev/core/editor';
@@ -14,11 +15,24 @@ import { TableSizeGrid } from '../toolbar/TableSizeGrid';
 /** How close a floating panel may come to the window edge, in px. */
 const EDGE_INSET = 8;
 
-export interface MenuSubmenuProps {
-  /** i18n key of the parent row's label. */
-  labelKey: string;
-  /** Literal parent row label, already resolved. Wins over `labelKey`. */
-  label?: string;
+export type MenuSubmenuProps = MenuSubmenuBaseProps &
+  (
+    | {
+        /** i18n key of the parent row's label. */
+        labelKey: string;
+        /** Literal parent row label, already resolved. Wins over `labelKey`. */
+        label?: string;
+      }
+    | {
+        /** i18n key of the parent row's label. */
+        labelKey?: string;
+        /** Literal parent row label, already resolved. Wins over `labelKey`. */
+        label: string;
+      }
+  );
+
+/** The props every `Menu.Submenu` takes besides its label. @public */
+export interface MenuSubmenuBaseProps {
   /** Material Symbols paths for the parent row's icon. */
   paths?: readonly string[] | null;
   className?: string;
@@ -38,7 +52,7 @@ export interface MenuSubmenuProps {
 export const MenuSubmenu = defineComponent({
   name: 'MenuSubmenu',
   props: {
-    labelKey: { type: String, required: true },
+    labelKey: { type: String, default: undefined },
     label: { type: String, default: undefined },
     paths: { type: null as unknown as PropType<readonly string[] | null>, default: undefined },
     className: { type: String, default: undefined },
@@ -77,7 +91,8 @@ export const MenuSubmenu = defineComponent({
     );
 
     return () => {
-      const text = props.label ?? label(props.labelKey);
+      if (props.label === undefined && props.labelKey === undefined) warnMissingSubmenuLabel();
+      const text = props.label ?? label(props.labelKey ?? '');
       return (
         <div
           role="none"

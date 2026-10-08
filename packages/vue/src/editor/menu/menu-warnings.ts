@@ -27,3 +27,13 @@ export function warnUnmatchedHiddenRow(id: string): void {
       `nothing is removed.`
   );
 }
+
+/** A `Menu.Item` or `ContextMenu.Slot` with neither `slotId` nor `slot`, so it renders nothing. */
+export function warnMissingSlotId(): void {
+  menuDevWarning('A Menu.Item or ContextMenu.Slot has no slotId, so it renders nothing.');
+}
+
+/** A `Menu.Submenu` with neither `label` nor `labelKey`. */
+export function warnMissingSubmenuLabel(): void {
+  menuDevWarning('A Menu.Submenu has neither label nor labelKey, so its row has no name.');
+}

@@ -25,6 +25,7 @@ import {
 } from 'vue';
 import type { ChromeGroupId, ChromeSlotId } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../../docx-editor-children';
+import { mergeHostClass } from '../../lib/mergeHostClass';
 import { useToolbarLabel } from './toolbar-context';
 
 /** Props for `DocxEditor.Toolbar.Group`. @public */
@@ -110,6 +111,7 @@ export const ToolbarHostGroup = Object.assign(
         type: Function as PropType<() => DocxEditorChildren>,
         default: undefined,
       },
+      class: { type: String, default: undefined },
       className: { type: String, default: undefined },
     },
     setup(props, { slots }) {
@@ -122,7 +124,7 @@ export const ToolbarHostGroup = Object.assign(
               {
                 role: 'group',
                 'aria-label': hostGroupText(props, label),
-                class: `docx-toolbar__group${props.className ? ` ${props.className}` : ''}`,
+                class: mergeHostClass('docx-toolbar__group', props.class, props.className),
                 'data-toolbar-host-group': props.id,
               },
               slots.default?.()

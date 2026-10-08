@@ -337,6 +337,7 @@ export {
   type MenuActionProps,
   type MenuGroupProps,
   type MenuId,
+  type MenuItemBaseProps,
   type MenuItemProps,
   type MenuPartComponent,
   type MenuProps,
@@ -344,6 +345,7 @@ export {
   type MenuReviewersProps,
   type MenuRowProps,
   type MenuSeparatorProps,
+  type MenuSubmenuBaseProps,
   type MenuSubmenuProps,
   type MenuTableGridProps,
 } from './editor/menu';

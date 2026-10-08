@@ -1,4 +1,4 @@
-import { warnDeprecatedSlotProp } from './menu-warnings';
+import { warnDeprecatedSlotProp, warnMissingSlotId } from './menu-warnings';
 import { computed, defineComponent, h, isVNode, ref, type PropType, type VNode } from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { flattenChildren } from '../../lib/flattenChildren';
@@ -226,11 +226,22 @@ export const MenuGroup = defineComponent({
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Props for `DocxEditor.Menu.Item`: one chrome slot as a menu row. @public */
-export interface MenuItemProps {
-  /** The chrome slot this row drives (`'text.bold'`, `'insert.pageBreak'`, …). */
-  slotId?: ChromeSlotId;
-  /** @deprecated Use `slotId`. Still read in this release, with a development warning. */
-  slot?: ChromeSlotId;
+export type MenuItemProps = MenuItemBaseProps &
+  (
+    | {
+        /** The chrome slot this row drives (`'text.bold'`, `'insert.pageBreak'`, …). */
+        slotId: ChromeSlotId;
+        slot?: never;
+      }
+    | {
+        /** @deprecated Use `slotId`. Still read in this release, with a development warning. */
+        slot: ChromeSlotId;
+        slotId?: never;
+      }
+  );
+
+/** The props every `Menu.Item` takes besides the slot it names. @public */
+export interface MenuItemBaseProps {
   /** Plain-label i18n key, overriding the slot's tooltip-shaped one. */
   labelKey?: string;
   /** i18n key of the shortcut shown in the right column. */
@@ -245,12 +256,17 @@ export interface MenuItemProps {
 }
 
 /** The slot a menu row names: `slotId`, else the deprecated `slot`. @internal */
-export function menuItemSlotId(
-  props: Pick<MenuItemProps, 'slotId' | 'slot'>
-): ChromeSlotId | undefined {
+export function menuItemSlotId(props: {
+  readonly slotId?: ChromeSlotId | undefined;
+  readonly slot?: ChromeSlotId | undefined;
+}): ChromeSlotId | undefined {
   if (props.slotId) return props.slotId;
-  if (props.slot) warnDeprecatedSlotProp(props.slot);
-  return props.slot;
+  if (props.slot) {
+    warnDeprecatedSlotProp(props.slot);
+    return props.slot;
+  }
+  warnMissingSlotId();
+  return undefined;
 }
 
 /** {@link menuItemSlotId} read off a vnode, whose template props may be kebab-case. @internal */
@@ -567,7 +583,7 @@ export const MenuImageInsert = Object.assign(MenuImageInsertImpl, {
 
 import { MenuSubmenu, MenuTablePicker } from './menu-flyouts';
 export { MenuSubmenu, MenuTableGrid } from './menu-flyouts';
-export type { MenuSubmenuProps, MenuTableGridProps } from './menu-flyouts';
+export type { MenuSubmenuBaseProps, MenuSubmenuProps, MenuTableGridProps } from './menu-flyouts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Separator, and the registry-driven entry renderer

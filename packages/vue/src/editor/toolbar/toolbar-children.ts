@@ -3,6 +3,7 @@
 
 import { camelize, Comment, isVNode, type VNode } from 'vue';
 import { flattenChildren } from '../../lib/flattenChildren';
+import { mergeHostClass } from '../../lib/mergeHostClass';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { DocxEditorToolbarGroupProps } from './ToolbarGroup';
 
@@ -45,6 +46,11 @@ function groupSpec(vnode: VNode): ToolbarGroupSpec {
   const slots = vnode.children as { default?: () => DocxEditorChildren } | null;
   const content = typeof slots?.default === 'function' ? slots.default() : null;
   const priority = raw.priority === undefined ? undefined : Number(raw.priority);
+  const hostClass = mergeHostClass(
+    '',
+    typeof raw.class === 'string' ? raw.class : null,
+    typeof raw.className === 'string' ? raw.className : null
+  ).trim();
   return {
     id: String(raw.id),
     ...(typeof raw.labelKey === 'string' ? { labelKey: raw.labelKey } : {}),
@@ -56,7 +62,8 @@ function groupSpec(vnode: VNode): ToolbarGroupSpec {
     ...(typeof raw.overflowContent === 'function'
       ? { overflowContent: raw.overflowContent as () => DocxEditorChildren }
       : {}),
-    ...(typeof raw.className === 'string' ? { className: raw.className } : {}),
+    // A template's `class` and a render function's `className` both style the group.
+    ...(hostClass ? { className: hostClass } : {}),
     // `v-if` branches that render nothing leave comment nodes, which are no content.
     children: flattenChildren(content).filter((node) => node.type !== Comment),
   };

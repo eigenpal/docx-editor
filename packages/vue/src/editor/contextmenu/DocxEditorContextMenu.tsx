@@ -17,9 +17,7 @@ import type { DocxEditorChildren } from '../../docx-editor-children';
 import { mergeArrangement } from '../merge-arrangement';
 import { flattenChildren } from '../../lib/flattenChildren';
 import { useDocxEditor, useEditorStateTick, useReviewRailRegistry } from '../context';
-import { useEditorCommand } from '../useEditorCommand';
-import { useEditorState } from '../useEditorState';
-import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
+import { useAddCommentState } from '../toolbar/add-comment-state';
 import { useTranslation, type TranslationKey } from '../../i18n';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import {
@@ -89,10 +87,7 @@ const ContextMenuAddComment = defineComponent({
     // The same slot as `Toolbar.AddComment`, so enabled state and its reason have one
     // source: `toolbarCommandState`. The row needs a mounted review rail to open the draft,
     // so without one it is left out, whatever the engine answers.
-    const { isEnabled, disabledReason } = useEditorCommand('review.addComment');
-    const viewing = useEditorState(
-      (snapshot: EditorSnapshot) => snapshot.editingMode === 'viewing'
-    );
+    const { isEnabled, reason } = useAddCommentState(label);
     return () => {
       if (rail.value.mounted === 0) return null;
       const control = chromeControlForSlot('review.addComment');
@@ -101,10 +96,7 @@ const ContextMenuAddComment = defineComponent({
           icon={chromeIcon(control?.paths) ?? undefined}
           {...{ rowSlot: 'review.addComment' }}
           disabled={!isEnabled.value}
-          // Viewing mode explains itself with the editing-mode hint, as the mode pill does.
-          title={
-            (viewing.value ? label('editingMode.viewingHint') : disabledReason.value) ?? undefined
-          }
+          title={reason.value ?? undefined}
           selectHandler={() => {
             if (!rail.value.requestCommentDraft()) return;
             menu.value.setOpenMenu(null);

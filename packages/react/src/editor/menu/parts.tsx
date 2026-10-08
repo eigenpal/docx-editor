@@ -1,4 +1,8 @@
-import { warnDeprecatedSlotProp } from './menu-warnings';
+import {
+  warnDeprecatedSlotProp,
+  warnMissingSlotId,
+  warnMissingSubmenuLabel,
+} from './menu-warnings';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { ReactNode } from 'react';
 // The menu bar's rows.
@@ -216,11 +220,22 @@ export function MenuGroup({
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Props for `DocxEditor.Menu.Item`: one chrome slot as a menu row. @public */
-export interface MenuItemProps {
-  /** The chrome slot this row drives (`'text.bold'`, `'insert.pageBreak'`, …). */
-  slotId?: ChromeSlotId;
-  /** @deprecated Use `slotId`. Still read in this release, with a development warning. */
-  slot?: ChromeSlotId;
+export type MenuItemProps = MenuItemBaseProps &
+  (
+    | {
+        /** The chrome slot this row drives (`'text.bold'`, `'insert.pageBreak'`, …). */
+        slotId: ChromeSlotId;
+        slot?: never;
+      }
+    | {
+        /** @deprecated Use `slotId`. Still read in this release, with a development warning. */
+        slot: ChromeSlotId;
+        slotId?: never;
+      }
+  );
+
+/** The props every `Menu.Item` takes besides the slot it names. @public */
+export interface MenuItemBaseProps {
   /** Plain-label i18n key, overriding the slot's tooltip-shaped one. */
   labelKey?: string;
   /** i18n key of the shortcut shown in the right column. */
@@ -235,12 +250,17 @@ export interface MenuItemProps {
 }
 
 /** The slot a menu row names: `slotId`, else the deprecated `slot`. @internal */
-export function menuItemSlotId(
-  props: Pick<MenuItemProps, 'slotId' | 'slot'>
-): ChromeSlotId | undefined {
+export function menuItemSlotId(props: {
+  readonly slotId?: ChromeSlotId | undefined;
+  readonly slot?: ChromeSlotId | undefined;
+}): ChromeSlotId | undefined {
   if (props.slotId) return props.slotId;
-  if (props.slot) warnDeprecatedSlotProp(props.slot);
-  return props.slot;
+  if (props.slot) {
+    warnDeprecatedSlotProp(props.slot);
+    return props.slot;
+  }
+  warnMissingSlotId();
+  return undefined;
 }
 
 /**
@@ -498,11 +518,24 @@ export const MenuImageInsert = Object.assign(MenuImageInsertImpl, {
 /** How close a floating panel may come to the window edge, in px. */
 const EDGE_INSET = 8;
 
-export interface MenuSubmenuProps {
-  /** i18n key of the parent row's label. */
-  labelKey: string;
-  /** Literal parent row label, already resolved. Wins over `labelKey`. */
-  label?: string;
+export type MenuSubmenuProps = MenuSubmenuBaseProps &
+  (
+    | {
+        /** i18n key of the parent row's label. */
+        labelKey: string;
+        /** Literal parent row label, already resolved. Wins over `labelKey`. */
+        label?: string;
+      }
+    | {
+        /** i18n key of the parent row's label. */
+        labelKey?: string;
+        /** Literal parent row label, already resolved. Wins over `labelKey`. */
+        label: string;
+      }
+  );
+
+/** The props every `Menu.Submenu` takes besides its label. @public */
+export interface MenuSubmenuBaseProps {
   /** Material Symbols paths for the parent row's icon. */
   paths?: readonly string[] | null;
   className?: string;
@@ -531,7 +564,8 @@ export function MenuSubmenu({
   const parentRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const panelId = useId();
-  const text = literal ?? label(labelKey);
+  if (literal === undefined && labelKey === undefined) warnMissingSubmenuLabel();
+  const text = literal ?? label(labelKey ?? '');
 
   // Placed in client space, not with `left: 100%`. The context menu is a scroller
   // (`max-height` plus `overflow-y: auto`, which forces the other axis to `auto` with it), so
