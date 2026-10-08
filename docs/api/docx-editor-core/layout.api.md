@@ -1312,6 +1312,7 @@ export interface GraphemeWordSegmentRecord {
 export interface GroupTextboxStoryRecord {
     readonly box: LayoutBox;
     readonly memberNodeId: string;
+    readonly rotationDegrees: number;
     readonly story: TextboxStoryLayout;
 }
 
