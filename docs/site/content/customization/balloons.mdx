@@ -89,7 +89,7 @@ Read the item and its position from the editor, not from the painted pages:
 
 - On a click, call `editor.getReviewItemsAt(event.clientX, event.clientY, { pairReplacements: true })`. It returns the review items under the point, innermost first. Open the first revision. Do not call `setActive` on a click, because it moves the caret to the start of the change.
 - To place the balloon, call `editor.getReviewItemRects(key)`. It returns the painted bands of the item in client coordinates. Anchor the balloon to the first band. If the array is empty, the item has no painted text, so hide the balloon. Read the bands again after a scroll, a resize, each `change` event, a zoom change, and when the review pane opens or closes.
-- To follow **Next Change** and **Previous Change**, listen for `reviewItemReveal` with `useEditorEvent`. Navigation steps through the unpaired queue, so for a replacement the event's `key` names one half. The event also carries `pairKey`, the key of the pair, so open `pairKey ?? key`. You can read `activatedKey` from `useReview()` instead. Do not open the balloon for `activeKey`. It follows the caret, so the balloon opens each time the caret lands in a change.
+- To follow **Next Change** and **Previous Change**, listen for `reviewItemReveal` with `useEditorEvent`. Navigation steps through the unpaired queue, so for a replacement the event's `key` names one half. The event also carries `pairKey`, the key of the pair, so open `pairKey ?? key`. If your query excludes replacements, with `excludeRevisionKinds: ['replace']`, open `key`, because `pairKey` is not in that list. You can read `activatedKey` from `useReview()` instead. Do not open the balloon for `activeKey`. It follows the caret, so the balloon opens each time the caret lands in a change.
 - Pass the same query, `{ pairReplacements: true }`, to `useReview()` and to the hit test, so that a hit names an item in your list. A replacement is then one item with `revisionKind: 'replace'`.
 - Check the Boolean that `accept` and `reject` return. Handle Escape, dismissal, read-only items, and cleanup.
 
@@ -474,7 +474,7 @@ Import `ContractBalloons` into your editor component. Declare `const container =
 
 ## Place the balloon
 
-Create `watch-balloon-anchor.ts` beside the balloon component. The helper reads the bands of the item from the editor with `getReviewItemRects(key)`, so it reads no painted page markup. It places the balloon under the first band, relative to your container. It reads the bands again after a scroll, a resize, each document change, a zoom change, and when the review pane opens or closes. It hides the balloon when the item has no painted band.
+Create `watch-balloon-anchor.ts` beside the balloon component. The helper reads the bands of the item from the editor with `getReviewItemRects(key)`, so it reads no painted page markup. It places the balloon under the first band, relative to your container. It reads the bands again after a scroll, a resize, each document change, a zoom change, and when the review pane opens or closes. The pages slide while the pane opens or closes, so it also reads the bands when that transition ends. It hides the balloon when the item has no painted band.
 
 ```ts
 import type { Editor } from '@docx-editor.dev/core';
@@ -513,6 +513,8 @@ export function watchBalloonAnchor(
   const resize = new ResizeObserver(schedule);
   resize.observe(host);
   host.addEventListener('scroll', schedule, true);
+  // The pages slide when the review pane opens or closes; read again when they stop.
+  host.addEventListener('transitionend', schedule);
   const offChange = editor.on('change', schedule);
   // Zoom and the review pane move the pages without a document change.
   let { zoom, reviewPaneOpen } = editor.snapshot();
@@ -525,6 +527,7 @@ export function watchBalloonAnchor(
     cancelAnimationFrame(frame);
     resize.disconnect();
     host.removeEventListener('scroll', schedule, true);
+    host.removeEventListener('transitionend', schedule);
     offChange();
     offView();
   };
