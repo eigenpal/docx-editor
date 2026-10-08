@@ -100,3 +100,30 @@ test('a text edit in one run of a long paragraph re-reads only that run', async 
     recorder.dispose();
   }
 });
+
+test('a short namespace code cannot stand in for a file namespace with the same text', () => {
+  const keyIn = (declarations: string, attribute: string) => {
+    const read = readOoxmlPart(
+      `<w:document xmlns:w="${W}" ${declarations}><w:body><w:p><w:r><w:rPr><w:sz ${attribute}="22"/></w:rPr></w:r></w:p></w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!read.ok) throw new Error(read.reason);
+    const body = read.part.root.children[0]!;
+    if (body.kind === 'textValue') throw new Error('missing body');
+    return paragraphLayoutKey({
+      paragraph: body.children[0]!,
+      properties: [],
+      width: 100,
+      producer: 'p',
+    });
+  };
+  const keys = [
+    keyIn('', 'w:val'),
+    keyIn('xmlns:x="k0"', 'x:val'),
+    keyIn('xmlns:x="uk0"', 'x:val'),
+    keyIn(`xmlns:x="u${W}"`, 'x:val'),
+    keyIn('', 'val'),
+  ];
+  expect(new Set(keys).size).toBe(keys.length);
+  expect(keyIn('xmlns:x="k0"', 'x:val')).toBe(keyIn('xmlns:y="k0"', 'y:val'));
+});

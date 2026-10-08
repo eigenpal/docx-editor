@@ -30,6 +30,18 @@ import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { registerParagraphCacheDiagnostics } from './paragraph-cache-diagnostics.ts';
 import { sha256FontBytes } from '../store/package/sha256.ts';
+import {
+  DRAWINGML_MAIN_NAMESPACE_URI,
+  MC_NAMESPACE_URI,
+  PIC_NAMESPACE_URI,
+  RELATIONSHIPS_NAMESPACE_URI,
+  W14_NAMESPACE_URI,
+  WML_NAMESPACE_URI,
+  WP_NAMESPACE_URI,
+  XML_NAMESPACE_URI,
+  XMLNS_NAMESPACE_URI,
+  XSI_NAMESPACE_URI,
+} from '../store/package/ooxml-shared.ts';
 import { keepsSubtreeMemo } from '../store/package/subtree-memo-policy.ts';
 import { framedTokenJoin } from './framed-token.ts';
 import { tableCellBreakKeyChunksOf } from './table-cell-break-keys.ts';
@@ -287,6 +299,35 @@ function readsInline(child: Exclude<OoxmlNode, { kind: 'textValue' }>): boolean 
   return holdsOnlyText(child) || !keepsSubtreeMemo(child);
 }
 
+/**
+ * Short codes for common namespace URIs. A namespace URI is about 60 characters and repeats
+ * on almost every attribute, so written out in full it was a large part of all hashed key
+ * text on a long document.
+ */
+const KNOWN_NAMESPACE_TOKENS = new Map(
+  [
+    WML_NAMESPACE_URI,
+    XML_NAMESPACE_URI,
+    XMLNS_NAMESPACE_URI,
+    MC_NAMESPACE_URI,
+    XSI_NAMESPACE_URI,
+    W14_NAMESPACE_URI,
+    DRAWINGML_MAIN_NAMESPACE_URI,
+    WP_NAMESPACE_URI,
+    PIC_NAMESPACE_URI,
+    RELATIONSHIPS_NAMESPACE_URI,
+  ].map((uri, index) => [uri, `k${index}`])
+);
+
+/**
+ * A short, injective token for an attribute namespace. A known URI becomes `k<index>`. Any
+ * other value keeps its full text behind a `u` prefix, so file text cannot match a code.
+ */
+function namespaceToken(namespaceUri: string | undefined): string {
+  if (namespaceUri === undefined) return '';
+  return KNOWN_NAMESPACE_TOKENS.get(namespaceUri) ?? `u${namespaceUri}`;
+}
+
 function computeNodeToken(
   node: OoxmlNode,
   scope: LayoutKeyMemoScope = sharedLayoutKeyMemoScope
@@ -300,7 +341,11 @@ function computeNodeToken(
   // engine's argument-count limit before the document reaches configured byte limits.
   for (const attribute of node.attributes) {
     attributes.push(
-      framedTokenJoin([attribute.namespaceUri ?? '', attribute.localName, attribute.value])
+      framedTokenJoin([
+        namespaceToken(attribute.namespaceUri),
+        attribute.localName,
+        attribute.value,
+      ])
     );
   }
   attributes.sort();
