@@ -1752,10 +1752,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     stateVersion: () => stateVersion,
 
     fontMeasurement: () => ({
-      measurer: shapedMeasurer ? ('shaped' as const) : ('fixed' as const),
-      // Fonts settled for a document that is not mounted yet are not usable yet.
+      measurer: shapedMeasurer && !preparedFontSession ? ('shaped' as const) : ('fixed' as const),
       resolving: fontsResolving || preparedFontSession !== null,
-      ...(shapedMeasurer && shapedProducer ? { producer: shapedProducer } : {}),
+      ...(shapedMeasurer && shapedProducer && !preparedFontSession
+        ? { producer: shapedProducer }
+        : {}),
     }),
 
     attach(el) {
@@ -2379,8 +2380,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         const caret = { paragraphId: span.start.paragraphId, offset: span.start.offset };
         // Through `activateReview`, not `setSelection`: the card this opens has to be named
         // before the selection is published, or the surface reports whichever card the caret
-        // classifies to — the wrong twin, when two cards share one span — and corrects itself
-        // a frame later.
+        // classifies to — the wrong twin, when two cards share one span — for one frame.
         surface.activateReview(
           pinKey,
           { anchor: caret, head: caret },
