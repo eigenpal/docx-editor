@@ -145,12 +145,36 @@ describe('auto line spacing on a line carrying an inline drawing', () => {
     expect(line!.trailingSpacing ?? 0).toBe(0);
   });
 
-  test('a multiple below single spacing keeps the picture as the floor', () => {
+  test('a multiple below single spacing takes its missing text band off the picture line', () => {
     const [line] = linesOfFirstParagraph(
       documentWith({ spacing: 'w:line="192" w:lineRule="auto"' })
     );
-    expect(line!.box.height).toBeCloseTo(PICTURE_HEIGHT_PT, 4);
+    // 0.8 of a text band: the line is the picture less a fifth of one band.
+    const height = PICTURE_HEIGHT_PT - TEXT_LINE_PT * 0.2;
+    expect(line!.box.height).toBeCloseTo(height, 4);
     expect(line!.trailingSpacing ?? 0).toBe(0);
+    // The picture keeps its place against the line bottom and paints from the line top down.
+    const picture = line!.drawings![0]!;
+    expect(picture.y + picture.height).toBeCloseTo(height, 4);
+    expect(picture.paintBounds.y).toBeCloseTo(0, 4);
+    expect(picture.paintBounds.height).toBeCloseTo(height, 4);
+  });
+
+  test('a small multiple leaves a thin picture line the scaled text band', () => {
+    // 28/240 of a band, with a 1.45 pt rule: the line is the scaled band, not a text line.
+    const part = documentWith({
+      spacing: 'w:line="28" w:lineRule="auto"',
+      cy: 18_415,
+      caption: '',
+      leadParagraph: true,
+    });
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer,
+      inlineDrawingLayout: layoutContext(part),
+    });
+    const [lead, rule] = paragraphFragmentsOf(layout.pages[0]!);
+    expect(rule!.lines[0]!.box.height).toBeCloseTo((TEXT_LINE_PT * 28) / 240, 4);
+    expect(rule!.lines[0]!.box.y).toBeCloseTo(lead!.lines[0]!.box.height, 4);
   });
 
   for (const line of [360, 720]) {

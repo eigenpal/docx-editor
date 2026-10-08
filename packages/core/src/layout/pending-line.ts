@@ -6,7 +6,7 @@ import { baselineShiftPtOf, type ResolvedRunStyle } from './run-style.ts';
 import { isIdeographicForLineBreak, lastCodePointOf } from './cjk-line-break.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
 import type { StyleSpanRecord } from './semantic-records.ts';
-import type { InlineDrawingRecord } from './drawing-layout.ts';
+import { clipInlineDrawingRecordVertically, type InlineDrawingRecord } from './drawing-layout.ts';
 import { topAndBottomSkipBeforeLine, type ExclusionZone } from './drawing-exclusion.ts';
 import type { ModelRange } from './field-pieces.ts';
 import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
@@ -471,4 +471,14 @@ export function markPendingLineWrapAdvances(line: PendingLine): void {
 export function growPendingLineDrawingExtent(line: PendingLine): void {
   for (const drawing of line.drawings)
     line.height = Math.max(line.height, drawing.y + drawing.height + drawing.distB);
+}
+
+/** Clip each inline drawing that reaches above its line's top to paint from that top down. */
+export function clipLineDrawingsAtTop(line: PendingLine): void {
+  for (let index = 0; index < line.drawings.length; index += 1) {
+    const drawing = line.drawings[index]!;
+    const bounds = drawing.paintBounds;
+    if (bounds.y >= -0.001) continue;
+    line.drawings[index] = clipInlineDrawingRecordVertically(drawing, 0, bounds.y + bounds.height);
+  }
 }

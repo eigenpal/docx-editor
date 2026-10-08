@@ -6,6 +6,7 @@ import {
 } from './paragraph-tab-flow.ts';
 import { growRunBorderLineMetrics, textBandHeightWithBorders } from './run-border-strokes.ts';
 import {
+  clipLineDrawingsAtTop,
   growPendingLineDrawingExtent,
   lineContentX,
   lineHoldsContent,
@@ -879,12 +880,15 @@ export function breakParagraph(
     const hasUnscaledInlineExtent =
       line.drawings.length > 0 || line.spans.some((span) => span.equation !== undefined);
     const scalesTextBandOnly = lineSpacing.rule === 'auto' && hasUnscaledInlineExtent;
-    const addsTextBandExtra =
+    const picturesOnly =
       scalesTextBandOnly &&
       line.drawings.length > 0 &&
       !line.spans.some((span) => span.equation !== undefined) &&
-      lineSpacing.gridPitch === undefined &&
-      lineSpacing.value > 240;
+      lineSpacing.gridPitch === undefined;
+    const addsTextBandExtra = picturesOnly && lineSpacing.value > 240;
+    // Below single spacing the multiple takes its missing text band off the line's top: the
+    // line is the picture less that band, never less than the scaled text band.
+    const removesTextBand = picturesOnly && lineSpacing.value < 240;
     const spacingBase = scalesTextBandOnly
       ? textBandHeightWithBorders(
           line.spans,
@@ -901,10 +905,20 @@ export function breakParagraph(
     // Space ABOVE the glyph band only (exact baseline placement, not auto/atLeast). Never negative.
     line.leading = Math.max(0, line.baseline - glyphBaseline);
     // The multiple's extra over the text band sits below the drawing.
-    const textBandExtra = addsTextBandExtra ? Math.max(0, spaced.height - spacingBase) : 0;
+    const textBandExtra = addsTextBandExtra
+      ? Math.max(0, spaced.height - spacingBase)
+      : removesTextBand
+        ? Math.min(0, spaced.height - spacingBase)
+        : 0;
     line.height = scalesTextBandOnly
       ? Math.max(spaced.height, naturalHeight + textBandExtra)
       : spaced.height;
+    // The content keeps its place against the line bottom, so the pictures sit there.
+    if (removesTextBand && line.height < naturalHeight)
+      line.baseline = Math.max(
+        line.baseline - (naturalHeight - line.height),
+        Math.min(line.baseline, line.height)
+      );
     // Like a text line's auto extra, the depth below the drawing may cross the bottom margin.
     const drawingLineTrailing = addsTextBandExtra ? Math.max(0, line.height - naturalHeight) : 0;
     line.height += markerFloor;
@@ -912,6 +926,8 @@ export function breakParagraph(
     // and the text baseline drift apart. For `exact`, keep the authored box — tall drawings
     // clip/overflow per content-clip policy; auto/atLeast still grow to contain distB.
     repositionDrawingsToFinalBaseline();
+    // A picture taller than a shortened line paints only below the line's top.
+    if (removesTextBand) clipLineDrawingsAtTop(line);
     if (lineSpacing.rule !== 'exact') growPendingLineDrawingExtent(line);
     line.trailingSpacing =
       line.drawings.length === 0 && lineSpacing.rule !== 'exact'
