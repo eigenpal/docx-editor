@@ -24,7 +24,6 @@ function ToolbarTableInsertImpl({ className, hidden, icon, asChild, children }: 
   const rootRef = useRef<HTMLSpanElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const popupId = useId();
-  const focusGridRef = useRef(false);
   // Inside the "⋯" panel, a pick also closes the panel. Outside it this does nothing.
   const closePanel = useToolbarOverflowClose();
 
@@ -37,24 +36,14 @@ function ToolbarTableInsertImpl({ className, hidden, icon, asChild, children }: 
       if (root && event.target instanceof Node && root.contains(event.target)) return;
       setOpen(false);
     };
-    // Escape closes the grid wherever focus is. A pointer open leaves focus in the document,
-    // so the popup's own key handler never sees the key.
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return;
-      setOpen(false);
-    };
     document.addEventListener('mousedown', onMouseDown, true);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', onMouseDown, true);
-      document.removeEventListener('keydown', onKeyDown);
-    };
+    return () => document.removeEventListener('mousedown', onMouseDown, true);
   }, [open]);
 
-  // A keyboard open moves focus into the grid's tab stop.
+  // Every open, by pointer or key, moves focus into the grid's tab stop, so the grid's own
+  // key handler sees Escape and the arrows.
   useEffect(() => {
-    if (!open || !focusGridRef.current) return;
-    focusGridRef.current = false;
+    if (!open) return;
     rootRef.current?.querySelector<HTMLElement>('[role="gridcell"][tabindex="0"]')?.focus();
   }, [open]);
 
@@ -85,7 +74,6 @@ function ToolbarTableInsertImpl({ className, hidden, icon, asChild, children }: 
     onKeyDown: (event: ReactKeyboardEvent) => {
       if (event.key !== 'ArrowDown') return;
       event.preventDefault();
-      focusGridRef.current = true;
       setOpen(true);
     },
   };

@@ -53,7 +53,7 @@ export const ToolbarAddComment = defineComponent({
       const readOnly = editor?.snapshot().editingMode === 'viewing';
       const placed = editor ? editor.getSelectionPlacement() !== null : false;
       const enabled = gate?.ok === true && !readOnly && rail.value.mounted > 0 && placed;
-      const text = label('comments.addComment');
+      const text = label('common.comment');
       const reason =
         gate && !gate.ok ? gate.reason : readOnly ? label('editingMode.viewingHint') : undefined;
       const shared = {

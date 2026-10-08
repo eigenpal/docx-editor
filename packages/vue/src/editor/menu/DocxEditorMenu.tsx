@@ -430,11 +430,14 @@ const DocxEditorMenuRoot = defineComponent({
       let menus: VNode[];
       if (props.preset === false) {
         menus = kids.filter(isMenu);
-        content = slots.default
-          ? kids.map((child, index) =>
-              isMenu(child) ? child : hostBlock([child], `host-${index}`)
-            )
-          : undefined;
+        // Wrapped only while the bar measures: a wrapping bar renders the host's markup as is.
+        content = !slots.default
+          ? undefined
+          : props.overflow
+            ? kids.map((child, index) =>
+                isMenu(child) ? child : hostBlock([child], `host-${index}`)
+              )
+            : kids;
       } else {
         const overrides = new Map<ChromeMenuId, VNode>();
         const appended: VNode[] = [];

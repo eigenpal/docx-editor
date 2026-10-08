@@ -476,9 +476,10 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
   let content: ReactNode;
   if (!preset) {
     menus = kids.filter(isMenu);
-    content = kids.map((child, index) =>
-      isMenu(child) ? child : hostBlock([child], `host-${index}`)
-    );
+    // Wrapped only while the bar measures: a wrapping bar renders the host's markup as is.
+    content = overflowEnabled
+      ? kids.map((child, index) => (isMenu(child) ? child : hostBlock([child], `host-${index}`)))
+      : children;
   } else {
     const overrides = new Map<ChromeMenuId, ReactElement>();
     const appended: ReactNode[] = [];

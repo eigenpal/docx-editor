@@ -10,6 +10,7 @@ import { DocxEditorToolbar as T } from '../src/editor/toolbar';
 import { DocxEditorMenu } from '../src/editor/menu';
 import { useReviewRailRegistry } from '../src/editor/context';
 import { flush, mountEditorTree } from './helpers/mount';
+import { readAvailableWidth } from '../src/editor/toolbar/toolbar-measure';
 
 class MockResizeObserver {
   static readonly instances: MockResizeObserver[] = [];
@@ -201,6 +202,9 @@ describe('Vue shrink-wrapped toolbar', () => {
     toolbar.style.width = 'max-content';
     toolbar.style.maxWidth = '100%';
     toolbar.style.boxSizing = 'border-box';
+    (toolbar as unknown as { computedStyleMap: () => unknown }).computedStyleMap = () => ({
+      get: (property: string) => (property === 'width' ? { value: 'max-content' } : undefined),
+    });
     let room = 2000;
     Object.defineProperty(parent, 'clientWidth', { configurable: true, get: () => room });
     const contentWidth = () =>
@@ -352,6 +356,136 @@ describe('Vue TableInsert and AddComment', () => {
   });
 });
 
+describe('available width', () => {
+  /** A parent with a bar of `own` px; the bar specifies `width` through a Typed OM stub. */
+  function layout(options: {
+    parent: string;
+    parentWidth: number;
+    own: number;
+    width?: string;
+    barStyle?: string;
+    margins?: { left: string; right: string };
+    siblings?: { style: string; width: number; margins?: [string, string] }[];
+    typedOm?: boolean;
+  }): HTMLElement {
+    const parent = document.createElement('div');
+    parent.setAttribute('style', options.parent);
+    Object.defineProperty(parent, 'clientWidth', {
+      configurable: true,
+      get: () => options.parentWidth,
+    });
+    const bar = document.createElement('div');
+    bar.setAttribute('style', `${options.barStyle ?? ''}`);
+    Object.defineProperty(bar, 'clientWidth', { configurable: true, get: () => options.own });
+    Object.defineProperty(bar, 'offsetWidth', { configurable: true, get: () => options.own });
+    const keywords: Record<string, string> = {};
+    if (options.width) keywords.width = options.width;
+    if (options.margins?.left === 'auto') keywords['margin-left'] = 'auto';
+    if (options.margins?.right === 'auto') keywords['margin-right'] = 'auto';
+    if (options.typedOm !== false) {
+      (bar as unknown as { computedStyleMap: () => unknown }).computedStyleMap = () => ({
+        get: (property: string) =>
+          property in keywords ? { value: keywords[property] } : { value: 0, unit: 'px' },
+      });
+    }
+    for (const sibling of options.siblings ?? []) {
+      const node = document.createElement('div');
+      node.setAttribute('style', sibling.style);
+      Object.defineProperty(node, 'offsetWidth', { configurable: true, get: () => sibling.width });
+      const [left, right] = sibling.margins ?? ['', ''];
+      (node as unknown as { computedStyleMap: () => unknown }).computedStyleMap = () => ({
+        get: (property: string) =>
+          (property === 'margin-left' && left === 'auto') ||
+          (property === 'margin-right' && right === 'auto')
+            ? { value: 'auto' }
+            : { value: 0, unit: 'px' },
+      });
+      parent.appendChild(node);
+    }
+    parent.appendChild(bar);
+    document.body.appendChild(parent);
+    return bar;
+  }
+  const available = (bar: HTMLElement) => readAvailableWidth(bar, getComputedStyle(bar));
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  test('a content-sized bar in a flex row gets the parent room', () => {
+    const bar = layout({
+      parent: 'display: flex',
+      parentWidth: 1000,
+      own: 300,
+      width: 'max-content',
+    });
+    expect(available(bar)).toBe(1000);
+  });
+
+  test('a bar in a grid cell, or with a fixed width, keeps its own box', () => {
+    const grid = layout({
+      parent: 'display: grid; grid-template-columns: auto 1fr auto',
+      parentWidth: 1000,
+      own: 300,
+      width: 'auto',
+    });
+    expect(available(grid)).toBe(300);
+    document.body.innerHTML = '';
+    const fixed = layout({ parent: 'display: flex', parentWidth: 1000, own: 600 });
+    expect(available(fixed)).toBe(600);
+    document.body.innerHTML = '';
+    const inline = layout({
+      parent: 'display: block',
+      parentWidth: 1000,
+      own: 300,
+      width: 'auto',
+      barStyle: 'display: inline-flex',
+    });
+    expect(available(inline)).toBe(300);
+  });
+
+  test('without Typed OM the bar keeps its own box', () => {
+    const bar = layout({ parent: 'display: flex', parentWidth: 1000, own: 300, typedOm: false });
+    expect(available(bar)).toBe(300);
+  });
+
+  test('equal fixed margins count, auto margins do not', () => {
+    const fixed = layout({
+      parent: 'display: flex',
+      parentWidth: 1000,
+      own: 300,
+      width: 'max-content',
+      barStyle: 'margin: 0 40px',
+    });
+    expect(available(fixed)).toBe(920);
+    document.body.innerHTML = '';
+    const centered = layout({
+      parent: 'display: block',
+      parentWidth: 1000,
+      own: 300,
+      width: 'max-content',
+      barStyle: 'margin: 0 350px',
+      margins: { left: 'auto', right: 'auto' },
+    });
+    expect(available(centered)).toBe(1000);
+  });
+
+  test('a flex: 1 spacer and an auto margin do not take the room', () => {
+    const bar = layout({
+      parent: 'display: flex',
+      parentWidth: 1000,
+      own: 300,
+      width: 'max-content',
+      siblings: [
+        { style: 'flex: 1 1 0px', width: 500 },
+        { style: 'margin-left: 100px', width: 100, margins: ['auto', ''] },
+      ],
+    });
+    // 1000 less the 100px button; the spacer and the auto margin are free space.
+    expect(available(bar)).toBe(900);
+  });
+});
+
 describe('Vue review fixes', () => {
   test('a right-to-left panel keeps its clamp', async () => {
     useMockObserver();
@@ -432,7 +566,11 @@ describe('Vue review fixes', () => {
     panel.querySelector<HTMLButtonElement>('[data-slot="table.insert"]')!.click();
     await flush();
     expect(panel.querySelector('[role="grid"]')).not.toBeNull();
-    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    // A pointer open moves focus into the grid, so its own handler sees Escape.
+    expect(document.activeElement?.getAttribute('role')).toBe('gridcell');
+    document.activeElement!.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    );
     await flush();
     expect(panel.querySelector('[role="grid"]')).toBeNull();
 

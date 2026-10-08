@@ -54,7 +54,7 @@ export function ToolbarAddComment({
   const gate = editor?.can({ type: 'toggleReviewPane' });
   const placed = editor ? editor.getSelectionPlacement() !== null : false;
   const enabled = gate?.ok === true && !readOnly && (rail?.mounted ?? 0) > 0 && placed;
-  const text = label('comments.addComment');
+  const text = label('common.comment');
   const reason =
     gate && !gate.ok ? gate.reason : readOnly ? label('editingMode.viewingHint') : undefined;
   const shared = {

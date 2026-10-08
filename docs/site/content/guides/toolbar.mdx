@@ -248,7 +248,14 @@ Loose children of `Toolbar`, outside a group, keep their earlier behavior. They 
 
 ### Toolbar width
 
-The toolbar can fill its container or be as wide as its content, for example a floating bar with `width: max-content; max-width: 100%` centered in a flex row. In both cases it measures the room it can take: the container's content width, less the siblings on the same line and the toolbar's margins, capped by its `max-width`. When the container grows again, the collapsed groups come back.
+The toolbar can fill its container or be as wide as its content, for example a floating bar with `width: max-content; max-width: 100%` centered in a flex row. A content-sized toolbar measures the room it can take, so collapsed groups come back when the container grows again.
+
+A toolbar is content-sized when its `width` is `auto`, `max-content`, `fit-content`, or `min-content`, and it does not grow as a flex item. Its room is the container's content width, less the toolbar's own margins and the siblings on the same line, capped by its `max-width`. This applies in two layouts:
+
+- A block-level toolbar in a `block` or `flow-root` container.
+- An item of a single-line flex row. A sibling that grows, such as a `flex: 1` spacer, counts by its flex basis, and `auto` margins count as free space.
+
+In every other case, the toolbar measures its own box. These cases include a grid cell, a table cell, an inline toolbar, an explicit `width`, and a browser without the CSS Typed Object Model. The toolbar then collapses as before and never runs over the next column.
 
 ### Replace a slot's content
 

@@ -35,7 +35,6 @@ export const ToolbarTableInsert = defineComponent({
     const rootRef = ref<HTMLSpanElement | null>(null);
     const triggerRef = ref<HTMLButtonElement | null>(null);
     const popupId = useStableDocxId('table-insert');
-    let focusGrid = false;
     // Inside the "⋯" panel, a pick also closes the panel. Outside it this does nothing.
     const closePanel = useToolbarOverflowClose();
 
@@ -48,24 +47,13 @@ export const ToolbarTableInsert = defineComponent({
         if (root && event.target instanceof Node && root.contains(event.target)) return;
         open.value = false;
       };
-      // Escape closes the grid wherever focus is. A pointer open leaves focus in the
-      // document, so the popup's own key handler never sees the key.
-      const onKeyDown = (event: KeyboardEvent) => {
-        if (event.key !== 'Escape' || event.defaultPrevented) return;
-        open.value = false;
-      };
       document.addEventListener('mousedown', onMouseDown, true);
-      document.addEventListener('keydown', onKeyDown);
-      onCleanup(() => {
-        document.removeEventListener('mousedown', onMouseDown, true);
-        document.removeEventListener('keydown', onKeyDown);
-      });
-      if (focusGrid) {
-        focusGrid = false;
-        void nextTick(() =>
-          rootRef.value?.querySelector<HTMLElement>('[role="gridcell"][tabindex="0"]')?.focus()
-        );
-      }
+      onCleanup(() => document.removeEventListener('mousedown', onMouseDown, true));
+      // Every open, by pointer or key, moves focus into the grid's tab stop, so the grid's
+      // own key handler sees Escape and the arrows.
+      void nextTick(() =>
+        rootRef.value?.querySelector<HTMLElement>('[role="gridcell"][tabindex="0"]')?.focus()
+      );
     });
 
     const close = () => {
@@ -99,7 +87,6 @@ export const ToolbarTableInsert = defineComponent({
         onKeydown: (event: KeyboardEvent) => {
           if (event.key !== 'ArrowDown') return;
           event.preventDefault();
-          focusGrid = true;
           open.value = true;
         },
       };

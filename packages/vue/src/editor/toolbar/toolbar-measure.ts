@@ -87,13 +87,59 @@ function outOfFlow(style: CSSStyleDeclaration): boolean {
   return style.position === 'absolute' || style.position === 'fixed' || style.display === 'none';
 }
 
-/** The width that siblings take beside the bar in a single-line flex row, gaps included. */
+/** The minimal Typed OM surface this file reads. */
+type SpecifiedStyle = { get(property: string): unknown } | null;
+
+/**
+ * The element's specified (not used) values, through Typed OM. Null where the browser has no
+ * `computedStyleMap`: the caller then keeps the bar's own measurement.
+ */
+function specifiedStyle(element: Element): SpecifiedStyle {
+  const read = (element as { computedStyleMap?: () => SpecifiedStyle }).computedStyleMap;
+  if (typeof read !== 'function') return null;
+  try {
+    return read.call(element);
+  } catch {
+    return null;
+  }
+}
+
+/** The keyword a property specifies (`auto`, `max-content`), or null for a length. */
+function keywordOf(style: SpecifiedStyle, property: string): string | null {
+  const value = style?.get(property) as { value?: unknown } | undefined;
+  return value && typeof value.value === 'string' ? value.value : null;
+}
+
+/** Widths that size an element to its content rather than to its container. */
+const CONTENT_WIDTHS = new Set(['auto', 'max-content', 'fit-content', 'min-content']);
+
+/** True for a single-line flex row. */
+function isFlexRow(style: CSSStyleDeclaration): boolean {
+  return (
+    style.display.includes('flex') &&
+    !style.flexDirection.startsWith('column') &&
+    !style.flexWrap.startsWith('wrap')
+  );
+}
+
+/** An inline margin as the room it takes: an `auto` margin takes none. */
+function marginWidth(
+  specified: SpecifiedStyle,
+  style: CSSStyleDeclaration,
+  side: 'left' | 'right'
+) {
+  if (keywordOf(specified, `margin-${side}`) === 'auto') return 0;
+  return px(side === 'left' ? style.marginLeft : style.marginRight);
+}
+
+/**
+ * The width that siblings take beside the bar in a single-line flex row, gaps included.
+ *
+ * A sibling that grows (a `flex: 1` spacer) fills the free space, so its box is not what it
+ * needs: it counts by its flex basis instead. Auto margins are free space too.
+ */
 function readSiblingWidth(bar: HTMLElement, parentStyle: CSSStyleDeclaration): number {
-  const row =
-    parentStyle.display.includes('flex') &&
-    !parentStyle.flexDirection.startsWith('column') &&
-    !parentStyle.flexWrap.startsWith('wrap');
-  if (!row || !bar.parentElement) return 0;
+  if (!isFlexRow(parentStyle) || !bar.parentElement) return 0;
   let width = 0;
   let items = 0;
   for (const child of bar.parentElement.children) {
@@ -102,7 +148,14 @@ function readSiblingWidth(bar: HTMLElement, parentStyle: CSSStyleDeclaration): n
     if (outOfFlow(childStyle)) continue;
     items += 1;
     if (child === bar) continue;
-    width += child.offsetWidth + px(childStyle.marginLeft) + px(childStyle.marginRight);
+    const specified = specifiedStyle(child);
+    const grows = Number.parseFloat(childStyle.flexGrow) > 0;
+    const basis = childStyle.flexBasis.trim();
+    const box = grows ? (basis.endsWith('px') ? px(basis) : 0) : child.offsetWidth;
+    width +=
+      box +
+      marginWidth(specified, childStyle, 'left') +
+      marginWidth(specified, childStyle, 'right');
   }
   return width + Math.max(0, items - 1) * px(parentStyle.columnGap);
 }
@@ -123,29 +176,39 @@ function readMaxWidth(
 }
 
 /**
- * The bar's available content width: the room it can take, see {@link barRoomWidth}. A bar
- * that is positioned out of flow, or has no parent, measures its own box.
+ * The bar's available content width.
+ *
+ * The bar's own box, except for a CONTENT-SIZED bar (specified width `auto`, `max-content`,
+ * `fit-content`, or `min-content`, and not growing as a flex item) in a layout this file
+ * understands: a block-level bar in a `block` or `flow-root` parent, or an item of a
+ * single-line flex row. That bar gets the room it can take, see {@link barRoomWidth}. A grid
+ * cell, a table cell, an inline bar, an explicit width, an out-of-flow bar, and a browser
+ * without Typed OM all keep the bar's own box: the safe side, which collapses early rather
+ * than overflowing the next column.
  */
 export function readAvailableWidth(bar: HTMLElement, style: CSSStyleDeclaration): number {
   const padding = px(style.paddingLeft) + px(style.paddingRight);
   const own = bar.clientWidth - padding;
   const parent = bar.parentElement;
   if (!parent || outOfFlow(style)) return own;
+  const specified = specifiedStyle(bar);
+  const width = keywordOf(specified, 'width');
+  if (width === null || !CONTENT_WIDTHS.has(width)) return own;
   const parentStyle = getComputedStyle(parent);
+  const flexItem = isFlexRow(parentStyle);
+  const blockChild =
+    (parentStyle.display === 'block' || parentStyle.display === 'flow-root') &&
+    !style.display.startsWith('inline');
+  if (!flexItem && !blockChild) return own;
+  if (flexItem && Number.parseFloat(style.flexGrow) > 0) return own;
   const parentContent =
     parent.clientWidth - px(parentStyle.paddingLeft) - px(parentStyle.paddingRight);
   const chrome = Math.max(0, bar.offsetWidth - bar.clientWidth) + padding;
-  const left = px(style.marginLeft);
-  const right = px(style.marginRight);
-  // Auto margins that center the bar report the free space as margin. They are room the
-  // bar can grow into, not room it gives up.
-  const centered =
-    left === right && left > 0 && left + right + bar.offsetWidth >= parentContent - 1;
   return barRoomWidth({
     own,
     parentContent,
     siblings: readSiblingWidth(bar, parentStyle),
-    margins: centered ? 0 : left + right,
+    margins: marginWidth(specified, style, 'left') + marginWidth(specified, style, 'right'),
     chrome,
     maxWidth: readMaxWidth(style, parentContent, chrome),
   });
