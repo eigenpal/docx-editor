@@ -341,6 +341,9 @@ export function breakParagraph(
   // resolves away publishes no record, so it must reserve no line top and carve no hole.
   const anchorDisplayMode = flow?.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
 
+  // A remainder re-broken on a later page (`startOffset`) holds only the anchors in its own
+  // text. A float anchored before it stays with the earlier lines; its band reaches this page
+  // only through the zones the page publishes.
   const topAndBottomAnchorStarts = (() => {
     const starts = new Set<number>();
     if (!flow?.inlineDrawingLayout) return starts;
@@ -353,7 +356,7 @@ export function breakParagraph(
         continue;
       if (atom.projection.wrap !== 'topAndBottom') continue;
       const modelStart = offsets.get(atom.atomId);
-      if (modelStart !== undefined) starts.add(modelStart);
+      if (modelStart !== undefined && modelStart >= startOffset) starts.add(modelStart);
     }
     return starts;
   })();
@@ -377,7 +380,7 @@ export function breakParagraph(
         continue;
       }
       const modelStart = offsets.get(atom.atomId);
-      if (modelStart !== undefined) starts.add(modelStart);
+      if (modelStart !== undefined && modelStart >= startOffset) starts.add(modelStart);
     }
     return starts;
   })();

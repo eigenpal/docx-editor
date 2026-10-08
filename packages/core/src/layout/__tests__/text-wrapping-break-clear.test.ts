@@ -313,4 +313,27 @@ describe('a clearing break across a region boundary', () => {
       expect(after.y).toBe(0);
     });
   }
+
+  /** `Before`, a 500 pt float, then 40 short lines. */
+  const spilling = () =>
+    run('Before') +
+    float(tall(500)) +
+    Array.from({ length: 40 }, (_, index) => br() + run(`W${index}`)).join('');
+  const spilledLines = (result: SemanticLayout) =>
+    linesOf({ ...result, pages: [result.pages[1]!] }).filter((line) =>
+      line.spans.some((span) => span.text.startsWith('W'))
+    );
+
+  for (const [where, body] of [
+    ['a table cell', () => fill(25) + table(paragraph(spilling()))],
+    ['the body', () => fill(25) + paragraph(spilling())],
+  ] as const) {
+    test(`lines continued from ${where} do not wrap around a float left on the earlier page`, () => {
+      const result = layout(body());
+      expect(anchoredDrawingsOf(result.pages[1]!)).toHaveLength(0);
+      const lines = spilledLines(result);
+      expect(lines.length).toBeGreaterThan(0);
+      for (const line of lines) expect(round(line.contentX)).toBe(0);
+    });
+  }
 });
