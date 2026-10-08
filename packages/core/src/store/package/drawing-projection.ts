@@ -1518,7 +1518,7 @@ export function projectDrawingWithState(
       : null;
   const groupRead = pictureResult.picture
     ? null
-    : readGroupPicture(anchor, extent, ctx.resolveStyleMatrixReference);
+    : readGroupPicture(anchor, extent, ctx.resolveStyleMatrixReference, ctx.resolveSchemeColor);
   const vectorMembers = pictureResult.picture
     ? null
     : projectVectorShape(

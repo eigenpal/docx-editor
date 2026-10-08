@@ -236,11 +236,11 @@ test('a picture offset far outside the group exports under both policies', async
 const TEXTBOX_MEMBER =
   '<wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm><a:off x="0" y="1270000"/>' +
   '<a:ext cx="1270000" cy="635000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
-  '</wps:spPr><wps:txbx><w:txbxContent><w:p><w:r><w:t>Label</w:t></w:r></w:p></w:txbxContent>' +
+  '<a:effectLst><a:outerShdw dist="38100"/></a:effectLst></wps:spPr><wps:txbx><w:txbxContent><w:p><w:r><w:t>Label</w:t></w:r></w:p></w:txbxContent>' +
   '</wps:txbx><wps:bodyPr/></wps:wsp>';
 
 test('an MC group that cannot paint keeps its wrap band and exports nothing of it', async () => {
-  // A picture beside a text box member: no part of the group paints, and the strict export
+  // A picture beside a shadowed text box member: no part of the group paints, and the strict export
   // reports nothing. The 200pt top-and-bottom band still moves the lines after it.
   const members = pictureMember(0) + TEXTBOX_MEMBER;
   const pages = async (options: GroupInput) =>

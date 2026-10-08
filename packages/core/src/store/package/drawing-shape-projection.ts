@@ -408,33 +408,13 @@ function findWspInAnchor(anchor: OoxmlElement): OoxmlElement | null {
   );
 }
 
-function projectWspComponent(
+/** The fill and outline a `wps:wsp` paints with, from its own properties or its style. */
+function shapePaint(
   wsp: OoxmlElement,
-  extent: Readonly<{ cx: number; cy: number }>,
-  pointBudget: { remaining: number },
+  spPr: OoxmlElement,
   resolveSchemeColor?: ShapeSchemeColorResolver,
   resolveStyleMatrixReference?: ShapeStyleMatrixResolver
-): VectorShapeComponent | null {
-  if (findDirectChild(wsp.children, { namespaceUri: WPS_NAMESPACE_URI, localName: 'txbx' })) {
-    return null;
-  }
-  const spPr = findDirectChild(wsp.children, {
-    namespaceUri: WPS_NAMESPACE_URI,
-    localName: 'spPr',
-  });
-  if (!spPr) return null;
-  const xfrm = findDirectChild(spPr.children, {
-    namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-    localName: 'xfrm',
-  });
-  if (xfrm) {
-    if (!schemaAngleIsZero(schemaAttributeValue(xfrm.attributes, 'rot'))) return null;
-    for (const name of ['flipH', 'flipV']) {
-      const value = schemaAttributeValue(xfrm.attributes, name);
-      if (!schemaFlagIsUnset(value) && !schemaFlagIsSet(value)) return null;
-    }
-  }
-
+) {
   const authoredFill = directFill(spPr, resolveSchemeColor);
   const styleFill = authoredFill.present
     ? null
@@ -451,6 +431,66 @@ function projectWspComponent(
       : readStyleReference(wsp, 'lnRef', resolveSchemeColor, resolveStyleMatrixReference);
   const stroke =
     authoredStroke?.present === true ? authoredStroke.color : (styleStroke?.color ?? null);
+  return { fill, ln, stroke, styleStroke };
+}
+
+function shapeProperties(wsp: OoxmlElement): OoxmlElement | null {
+  return findDirectChild(wsp.children, { namespaceUri: WPS_NAMESPACE_URI, localName: 'spPr' });
+}
+
+function hasTextbox(wsp: OoxmlElement): boolean {
+  return !!findDirectChild(wsp.children, { namespaceUri: WPS_NAMESPACE_URI, localName: 'txbx' });
+}
+
+/**
+ * Whether a group member is a text box with no fill, no outline and no unsupported visuals.
+ * Its only content is its text, which a group does not lay out, so the member paints nothing
+ * and the group skips it.
+ */
+export function isUnpaintedGroupTextbox(
+  member: OoxmlElement,
+  resolveSchemeColor?: ShapeSchemeColorResolver,
+  resolveStyleMatrixReference?: ShapeStyleMatrixResolver
+): boolean {
+  if (member.namespaceUri !== WPS_NAMESPACE_URI || member.localName !== 'wsp') return false;
+  const spPr = shapeProperties(member);
+  if (!spPr || !hasTextbox(member) || !supportedGroupVisuals(member, spPr, false)) return false;
+  const paint = shapePaint(member, spPr, resolveSchemeColor, resolveStyleMatrixReference);
+  return paint.fill === null && paint.stroke === null;
+}
+
+/**
+ * `groupMember` lets a text box member paint its shape. A group does not lay out its text, so
+ * only the fill and outline paint. A top-level text box paints through its story instead.
+ */
+function projectWspComponent(
+  wsp: OoxmlElement,
+  extent: Readonly<{ cx: number; cy: number }>,
+  pointBudget: { remaining: number },
+  resolveSchemeColor?: ShapeSchemeColorResolver,
+  resolveStyleMatrixReference?: ShapeStyleMatrixResolver,
+  groupMember = false
+): VectorShapeComponent | null {
+  if (!groupMember && hasTextbox(wsp)) return null;
+  const spPr = shapeProperties(wsp);
+  if (!spPr) return null;
+  const xfrm = findDirectChild(spPr.children, {
+    namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
+    localName: 'xfrm',
+  });
+  if (xfrm) {
+    if (!schemaAngleIsZero(schemaAttributeValue(xfrm.attributes, 'rot'))) return null;
+    for (const name of ['flipH', 'flipV']) {
+      const value = schemaAttributeValue(xfrm.attributes, name);
+      if (!schemaFlagIsUnset(value) && !schemaFlagIsSet(value)) return null;
+    }
+  }
+  const { fill, ln, stroke, styleStroke } = shapePaint(
+    wsp,
+    spPr,
+    resolveSchemeColor,
+    resolveStyleMatrixReference
+  );
   const line =
     stroke !== null
       ? readLineProperties(wsp, ln, resolveStyleMatrixReference, styleStroke?.matrix)
@@ -684,6 +724,7 @@ export function projectVectorShape(
       });
       if (!properties || !supportedGroupVisuals(child, properties, false)) return null;
       if (!identityGroupThemeEffect(child, resolveStyleMatrixReference)) return null;
+      if (isUnpaintedGroupTextbox(child, resolveSchemeColor, resolveStyleMatrixReference)) continue;
       const transform = childTransform(child);
       if (!transform) return null;
       const component = projectWspComponent(
@@ -691,7 +732,8 @@ export function projectVectorShape(
         transform.extent,
         pointBudget,
         resolveSchemeColor,
-        resolveStyleMatrixReference
+        resolveStyleMatrixReference,
+        true
       );
       if (!component) return null;
       components.push(

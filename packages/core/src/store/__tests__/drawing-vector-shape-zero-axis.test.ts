@@ -82,13 +82,13 @@ describe('zero-width and zero-height group children', () => {
 
   test('a 0x0 child is a point and still passes the child checks', () => {
     expect(shapeOf(lineChild(0, 0, 1000000) + lineChild(0, 0, 0))?.components).toHaveLength(2);
-    // A zero-extent text box refuses the group as before.
+    // A zero-extent text box paints its shape as a point too; a group does not lay out its text.
     const emptyTextbox =
       '<wps:wsp><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></a:xfrm>' +
       '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
       '<a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></wps:spPr>' +
       '<wps:txbx><w:txbxContent><w:p/></w:txbxContent></wps:txbx><wps:bodyPr/></wps:wsp>';
-    expect(shapeOf(lineChild(0, 0, 1000000) + emptyTextbox)).toBeNull();
+    expect(shapeOf(lineChild(0, 0, 1000000) + emptyTextbox)?.components).toHaveLength(2);
     const plainRect = emptyTextbox.replace(/<wps:txbx>.*<\/wps:txbx>/, '');
     expect(shapeOf(lineChild(0, 0, 1000000) + plainRect)?.components).toHaveLength(2);
   });
