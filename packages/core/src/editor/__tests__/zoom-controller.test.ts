@@ -66,6 +66,8 @@ interface Harness {
   pane(open: boolean): void;
   /** Publish the navigation pane's shift, as the viewport's `--docx-nav-shift` does. */
   navShift(px: number): void;
+  /** Publish the closed pane's strip width, as the viewport's `--docx-review-strip` does. */
+  strip(px: number): void;
   /** Deliver the resize callback and let the coalescing frame run. */
   settle(): Promise<void>;
 }
@@ -102,6 +104,9 @@ function mount(options: Parameters<typeof createDocxEditor>[0] = {}): Harness {
     },
     navShift(px) {
       scroller.style.setProperty('--docx-nav-shift', `${px}px`);
+    },
+    strip(px) {
+      scroller.style.setProperty('--docx-review-strip', `${px}px`);
     },
     async settle() {
       for (const callback of [...observerCallbacks]) callback();
@@ -243,6 +248,7 @@ describe('tracking the viewport', () => {
   test("paneOverflow: 'scroll' with the pane closed still fits inside the marker strip", async () => {
     const harness = mount({ revisionMarkup: { paneOverflow: 'scroll' } });
     harness.pane(false);
+    harness.strip(88);
     harness.resize(800);
     harness.reserve(44);
     harness.reserveStart(44);
@@ -255,6 +261,32 @@ describe('tracking the viewport', () => {
     harness.navShift(304);
     await harness.settle();
     expect(harness.editor.getZoom()).toBe(fitted);
+  });
+
+  // The point of 'scroll': the page has ONE size. Opening the pane swaps the strip for the
+  // full column and the start clearance, and the fit must not relay out the document for it.
+  test("paneOverflow: 'scroll' keeps one page size whether the pane is open or closed", async () => {
+    const harness = mount({ revisionMarkup: { paneOverflow: 'scroll' } });
+    harness.strip(88);
+    harness.resize(800);
+    harness.pane(false);
+    harness.reserve(44);
+    harness.reserveStart(44);
+    await harness.settle();
+    const closed = harness.editor.getZoom();
+    expect(closed * 816).toBeLessThanOrEqual(800 - 88);
+
+    harness.pane(true);
+    harness.reserve(316);
+    harness.reserveStart(24);
+    await harness.settle();
+    expect(harness.editor.getZoom()).toBe(closed);
+
+    harness.pane(false);
+    harness.reserve(44);
+    harness.reserveStart(44);
+    await harness.settle();
+    expect(harness.editor.getZoom()).toBe(closed);
   });
 
   test('a refit is PUBLISHED, not just readable', async () => {

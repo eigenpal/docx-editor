@@ -17,8 +17,9 @@
 //     markers and the add-comment affordance beside the page. The open card floats over
 //     the page.
 //   - Not affordable, `paneOverflow: 'scroll'`: the full column stays at the end and the
-//     page's clearance is reserved at the start. The page keeps its fit size, and the
-//     viewport scrolls sideways to reach the cards.
+//     page's clearance is reserved at the start. The fit measures the viewport less the
+//     closed pane's strip in both states, so the page keeps ONE size whether the pane is
+//     open or closed, and the viewport scrolls sideways to reach the cards.
 //   - Closed: the marker strip on both edges, whichever overflow is set.
 //
 // THE PAGE'S WIDTH IN THAT ARITHMETIC IS ITS ENTITLEMENT, NOT ITS PAINT. Under a fit the
@@ -118,7 +119,8 @@ export interface ReviewGutterInput {
   readonly docked?: boolean;
   /**
    * `paneOverflow: 'scroll'`: the full column stands even when it does not fit. The page
-   * keeps its size and the viewport scrolls sideways to reach the cards.
+   * keeps the one size it has with the pane closed, and the viewport scrolls sideways to
+   * reach the cards.
    */
   readonly scroll?: boolean;
 }

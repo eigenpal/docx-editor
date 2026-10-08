@@ -178,7 +178,7 @@ describe('Vue review layout preferences', () => {
     }
   }, 20000);
 
-  test("paneOverflow: 'scroll' with the pane closed fits the page inside the marker strip", async () => {
+  test("paneOverflow: 'scroll' fits inside the marker strip and keeps one size when toggled", async () => {
     // The stylesheet's padding rule, which the fit measures; this file loads no CSS.
     const style = document.createElement('style');
     style.textContent =
@@ -207,6 +207,18 @@ describe('Vue review layout preferences', () => {
       });
       expect(editor.snapshot().reviewPaneOpen).toBe(false);
       expect(editor.getZoom() * 816).toBeLessThanOrEqual(800 - 88);
+      // One page size: opening and closing the pane leaves the fit where it was.
+      const closed = editor.getZoom();
+      for (let toggle = 0; toggle < 2; toggle += 1) {
+        await change(() => editor.exec({ type: 'toggleReviewPane' }));
+        await change(() => {
+          editor.setZoomMode({ type: 'fixed' });
+        });
+        await change(() => {
+          editor.setZoomMode('auto');
+        });
+        expect(editor.getZoom()).toBe(closed);
+      }
     } finally {
       mounted.unmount();
       style.remove();

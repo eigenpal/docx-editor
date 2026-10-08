@@ -18,7 +18,8 @@ export const REVIEW_MARKERS_GUTTER = 44;
 
 // The column is either fully reserved or not at all. Not affordable, `paneOverflow: 'float'`
 // mirrors the marker strip onto both edges so the page centres; `paneOverflow: 'scroll'`
-// keeps the full column and the page's start clearance, and the viewport scrolls sideways.
+// keeps the full column and the page's start clearance, the page keeps one size whether
+// the pane is open or closed, and the viewport scrolls sideways.
 // A closed pane reserves the mirrored strip either way. The React twin documents the rule.
 
 /** Page-edge clearance required before the full column stands. @public */

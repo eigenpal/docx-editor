@@ -5384,6 +5384,13 @@ a.docx-hyperlink:focus-visible {
   transition: transform 140ms var(--doc-motion-ease-out);
 }
 
+/* On a dark surface the darker author colours lose their edge; a hairline ring keeps it. */
+.docx-editor.dark .docx-review__badge:not([data-resolved]) {
+  box-shadow:
+    0 0 0 1px var(--doc-border),
+    0 1px 2px var(--doc-shadow);
+}
+
 /* Resolved: quiet. Surface ground, muted ink, a hairline ring — present, not calling out. */
 .docx-review__badge[data-resolved] {
   background: var(--doc-surface);
@@ -5946,7 +5953,9 @@ a.docx-hyperlink:focus-visible {
    references `--doc-review-author-current` has to be computed where that property is actually set —
    an ancestor rule would resolve the fallback and inherit it down.
    Light: the page and the chrome agree on the value. Dark: the PAGE is rendered through an
-   inverting filter and the chrome is not, so only the chrome lifts. */
+   inverting filter and the chrome is not, so only the chrome lifts.
+   `--doc-review-author-disc` is kept for host CSS only: the packaged avatar and badge fill
+   with the full author colour instead (see `--doc-review-avatar-ink`). */
 .docx-review__card,
 .docx-review__reply,
 .docx-review__reply-avatar,

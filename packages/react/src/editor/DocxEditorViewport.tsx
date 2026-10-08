@@ -16,7 +16,7 @@ import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { ReviewRailContext, useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';
-import { useReviewGutter } from './review-gutter';
+import { REVIEW_MARKERS_GUTTER, useReviewGutter } from './review-gutter';
 import { zoomLevelForShortcut } from './zoom-levels';
 import { ScopedByAncestorContext, useScopeClassName } from './scope-context';
 
@@ -111,6 +111,9 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
             ? {
                 ['--docx-review-gutter' as string]: `${reviewGutter.inlineEnd}px`,
                 ['--docx-review-gutter-start' as string]: `${reviewGutter.inlineStart}px`,
+                // What a closed pane reserves on both edges. Under `paneOverflow: 'scroll'`
+                // the fit subtracts this in both pane states, so the page keeps one size.
+                ['--docx-review-strip' as string]: `${2 * REVIEW_MARKERS_GUTTER}px`,
               }
             : {}),
         } as CSSProperties

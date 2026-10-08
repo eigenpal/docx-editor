@@ -63,17 +63,21 @@ export interface ZoomController {
  * The scroller's content box, or null when it cannot be measured.
  *
  * `panesScroll` (`paneOverflow: 'scroll'`) lets the panes that scroll beside the page stop
- * shrinking it: an OPEN review column (its whole reservation) and the navigation pane's
- * shift. A closed review pane's marker strip still counts. It is narrow, it is always
- * there, and ignoring it made the page overflow sideways with no pane open at all.
+ * shrinking it. With a review rail mounted, the fit subtracts only the closed pane's marker
+ * strip (`--docx-review-strip`), and does so whether the pane is open or closed: the page
+ * then has ONE size, and opening or closing the pane never relays it out. Without a rail,
+ * only the navigation pane's shift stops counting.
  */
 function availableWidth(container: HTMLElement, panesScroll = false): number | null {
   const scroller = surfaceScroller(container);
   if (!scroller) return null;
   const width = scroller.clientWidth;
   if (!Number.isFinite(width) || width <= 0) return null;
-  if (panesScroll && scroller.getAttribute('data-review-pane') === 'open') return width;
   const style = scroller.ownerDocument.defaultView?.getComputedStyle(scroller);
+  if (panesScroll && scroller.hasAttribute('data-review-pane')) {
+    const strip = Number.parseFloat(style?.getPropertyValue('--docx-review-strip') ?? '') || 0;
+    return Math.max(width - strip, 0);
+  }
   if (!style) return width;
   // PHYSICAL, not logical. `clientWidth` is content + padding in physical terms, so these are
   // the two that reduce it whichever way the text runs — and the chrome above uses both

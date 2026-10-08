@@ -631,11 +631,8 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    */
   setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult;
 
-  /**
-   * The key that {@link setActiveReviewItem} or Next/Previous Change opened, while the caret it
-   * placed is still live; null when only the caret makes an item active. A paired replacement
-   * reports its deletion's key. Lets a surface open on navigation but not on a caret move.
-   */
+  /** Key {@link setActiveReviewItem} or Next/Previous Change opened, while its caret stands;
+   * null when only the caret made an item active. A pair reports its deletion's key. */
   getActivatedReviewKey(): string | null;
 
   /**

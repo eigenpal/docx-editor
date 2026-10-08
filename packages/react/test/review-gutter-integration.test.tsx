@@ -196,7 +196,7 @@ describe('the viewport’s review gutter', () => {
     expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('44px');
   });
 
-  test("paneOverflow: 'scroll' with the pane closed fits the page inside the marker strip", async () => {
+  test("paneOverflow: 'scroll' fits inside the marker strip and keeps one size when toggled", async () => {
     // The stylesheet's padding rule, which the fit measures; this file loads no CSS.
     const style = document.createElement('style');
     style.textContent =
@@ -236,6 +236,22 @@ describe('the viewport’s review gutter', () => {
       await settle();
       expect(editor!.snapshot().reviewPaneOpen).toBe(false);
       expect(editor!.getZoom() * 816).toBeLessThanOrEqual(800 - 88);
+      // One page size: opening and closing the pane leaves the fit where it was.
+      const closed = editor!.getZoom();
+      for (let toggle = 0; toggle < 2; toggle += 1) {
+        act(() => {
+          editor!.exec({ type: 'toggleReviewPane' });
+        });
+        await settle();
+        act(() => {
+          editor!.setZoomMode({ type: 'fixed' });
+        });
+        act(() => {
+          editor!.setZoomMode('auto');
+        });
+        await settle();
+        expect(editor!.getZoom()).toBe(closed);
+      }
     } finally {
       style.remove();
     }
