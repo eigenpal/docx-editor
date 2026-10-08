@@ -240,3 +240,26 @@ test('a turned table cell inside a rotated member turns inside the member clip',
   expect(glyphs).toBeGreaterThan(cellTurn);
   expect(stream.indexOf(' Tm ')).toBe(glyphs);
 });
+
+test('a turned table cell inside a standalone text box turns inside the box clip', async () => {
+  const table =
+    '<w:tbl><w:tblPr><w:tblW w:w="1000" w:type="dxa"/></w:tblPr>' +
+    '<w:tblGrid><w:gridCol w:w="1000"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:val="600"/></w:trPr>' +
+    '<w:tc><w:tcPr><w:tcW w:w="1000" w:type="dxa"/><w:textDirection w:val="btLr"/></w:tcPr>' +
+    `${paragraph('Cell')}</w:tc></w:tr></w:tbl>${paragraph('')}`;
+  const { stream, text } = await exported(`<w:p><w:r>${textbox(table, false)}</w:r></w:p>`);
+  expect(text).toContain('Cell');
+  // The box's content clip (144pt x 36pt at 72pt, 72pt), then the cell's own turn, then its
+  // glyphs: the turned cell paints inside the box, never in the page's text stream.
+  const boxClip = stream.indexOf('72 684 144 36 re W n');
+  expect(boxClip).toBeGreaterThan(-1);
+  const cellTurn = stream.indexOf(' cm', boxClip);
+  expect(cellTurn).toBeGreaterThan(boxClip);
+  // A quarter turn: the matrix starts `0 1 -1 0` or `0 -1 1 0`.
+  expect(stream.slice(stream.lastIndexOf('\n', cellTurn) + 1, cellTurn)).toMatch(
+    /^0 (-1 1|1 -1) 0 /
+  );
+  const glyphs = stream.indexOf(' Tm ', cellTurn);
+  expect(glyphs).toBeGreaterThan(cellTurn);
+  expect(stream.indexOf(' Tm ')).toBe(glyphs);
+});
