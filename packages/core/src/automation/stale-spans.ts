@@ -9,15 +9,24 @@
 // an older revision is still valid while the paragraph's first k characters are unchanged: an
 // edit after it, or a formatting edit anywhere, moves nothing. A span's end endpoint covers its
 // content in a one-paragraph span. A span's start in an EARLIER paragraph than its end covers
-// the rest of that paragraph too, so there the whole paragraph must be unchanged. A revision the
-// history no longer holds cannot be checked, so it is stale too: the caller reads again.
+// the rest of that paragraph too, so there the whole paragraph must be unchanged, and so must every
+// paragraph between the two endpoints and the list of those paragraphs: a paragraph that another
+// writer inserted or removed between them changes what the span covers. A revision the history
+// no longer holds cannot be checked, so it is stale too: the caller reads again.
+//
+// The history is kept per paragraph, not per revision: a paragraph whose text does not change
+// keeps one record for as long as it stays unchanged, so a long run of writes elsewhere never
+// expires it. Superseded records go first, oldest first, once the total text exceeds a budget.
 
 import type { AutomationHandleTable } from './handles.ts';
 import type { AutomationPackageReads } from './reads.ts';
 import { resolveParagraphHandle } from './spans.ts';
 
-/** Revisions the host remembers for this check. Older endpoints must be read again. */
-export const STALE_SPAN_HISTORY = 64;
+/**
+ * UTF-16 code units of SUPERSEDED paragraph text the host keeps for this check. The current
+ * record of each paragraph does not count against it and never expires.
+ */
+export const STALE_SPAN_TEXT_BUDGET = 4_000_000;
 
 /** Nesting a request or answer may use before the walk stops looking for endpoints. */
 const MAX_DEPTH = 12;
@@ -40,46 +49,63 @@ function isEndpoint(
   return 'paragraph' in value && typeof value.offset === 'number';
 }
 
+/** One text a key held, from the first to the last revision it was read at. */
+interface TextRecord {
+  readonly from: number;
+  to: number;
+  readonly text: string;
+}
+
 /**
- * The text of each answered endpoint's paragraph, by the revision it was answered at.
+ * The text each key (a paragraph, or the paragraphs between a span's endpoints) held at the
+ * revisions it was read at.
  *
- * Kept for the most recent revisions only; the oldest revision goes first. A paragraph whose
- * text is unchanged since its last record shares that record's string, so re-reading a whole
- * document at every revision does not keep a copy of it per revision.
+ * A key gets a new record only when its text changes. A read at a later revision with the same
+ * text extends the current record. Superseded records leave in the order they were superseded,
+ * once their total length exceeds `budget`; the current record of a key never leaves.
  */
-export function createReadTexts(limit = STALE_SPAN_HISTORY) {
-  const byRevision = new Map<number, Map<string, string>>();
-  const latest = new Map<string, string>();
+export function createReadTexts(budget = STALE_SPAN_TEXT_BUDGET) {
+  const byKey = new Map<string, TextRecord[]>();
+  const superseded: { readonly key: string; readonly record: TextRecord }[] = [];
+  let supersededLength = 0;
   return {
-    record(revision: number, paragraphId: string, read: string): void {
-      let texts = byRevision.get(revision);
-      if (!texts) {
-        texts = new Map();
-        byRevision.set(revision, texts);
-        let evicted = false;
-        while (byRevision.size > limit) {
-          byRevision.delete(byRevision.keys().next().value!);
-          evicted = true;
-        }
-        // Keep shared strings only for paragraphs a retained revision still records.
-        if (evicted) {
-          const retained = new Set<string>();
-          for (const kept of byRevision.values()) for (const id of kept.keys()) retained.add(id);
-          for (const id of latest.keys()) if (!retained.has(id)) latest.delete(id);
-        }
+    record(revision: number, key: string, read: string): void {
+      const records = byKey.get(key);
+      const current = records?.at(-1);
+      if (current && current.text === read) {
+        if (revision > current.to) current.to = revision;
+        return;
       }
-      // An unchanged paragraph keeps one string across revisions, not one per read.
-      const previous = latest.get(paragraphId);
-      const text = previous === read ? previous : read;
-      latest.set(paragraphId, text);
-      texts.set(paragraphId, text);
+      const record: TextRecord = { from: revision, to: revision, text: read };
+      if (!records || !current) {
+        byKey.set(key, [record]);
+        return;
+      }
+      records.push(record);
+      superseded.push({ key, record: current });
+      supersededLength += current.text.length;
+      while (supersededLength > budget && superseded.length > 0) {
+        const oldest = superseded.shift()!;
+        supersededLength -= oldest.record.text.length;
+        const list = byKey.get(oldest.key);
+        // Records of one key are superseded, and so leave, oldest first.
+        if (list?.[0] === oldest.record) list.shift();
+      }
     },
     clear(): void {
-      byRevision.clear();
-      latest.clear();
+      byKey.clear();
+      superseded.length = 0;
+      supersededLength = 0;
     },
-    at(revision: number, paragraphId: string): string | undefined {
-      return byRevision.get(revision)?.get(paragraphId);
+    /** The text `key` held at `revision`, or undefined when no kept record covers it. */
+    at(revision: number, key: string): string | undefined {
+      const records = byKey.get(key);
+      if (!records) return undefined;
+      for (let index = records.length - 1; index >= 0; index -= 1) {
+        const record = records[index]!;
+        if (record.from <= revision) return revision <= record.to ? record.text : undefined;
+      }
+      return undefined;
     },
   };
 }
@@ -97,8 +123,42 @@ function paragraphOf(
     reads
   );
   if (!point.ok) return null;
-  const text = reads.story(point.value.story)?.rawText(point.value.paragraphId);
-  return text === null || text === undefined ? null : { id: point.value.paragraphId, text };
+  const story = reads.story(point.value.story);
+  const text = story?.rawText(point.value.paragraphId);
+  return text === null || text === undefined || !story
+    ? null
+    : { id: point.value.paragraphId, text, story };
+}
+
+/** The key under which the paragraph after an endpoint's paragraph is recorded. */
+const nextKey = (paragraphId: string): string => `next\u0000${paragraphId}`;
+
+/** The key under which the paragraphs between two endpoints' paragraphs are recorded. */
+const betweenKey = (startId: string, endId: string): string =>
+  `between\u0000${startId}\u0000${endId}`;
+
+/**
+ * The paragraphs strictly between a span's start and end paragraphs, or null when the two are
+ * the same paragraph, sit in different stories, or come in the wrong order.
+ */
+function paragraphsBetween(
+  start: StampedEndpoint,
+  end: StampedEndpoint,
+  handles: AutomationHandleTable,
+  reads: AutomationPackageReads
+) {
+  const first = paragraphOf(start, handles, reads);
+  const last = paragraphOf(end, handles, reads);
+  if (!first || !last || first.id === last.id || first.story !== last.story) return null;
+  const from = first.story.indexOf(first.id);
+  const to = first.story.indexOf(last.id);
+  if (from < 0 || to <= from) return null;
+  const ids = first.story.paragraphIds.slice(from + 1, to);
+  return {
+    key: betweenKey(first.id, last.id),
+    ids,
+    texts: ids.map((id) => first.story.rawText(id) ?? ''),
+  };
 }
 
 /**
@@ -126,11 +186,24 @@ export function stampEndpoints<T>(
     return (changed ? Object.freeze(mapped) : value) as T;
   }
   if (!isPlain(value)) return value;
+  // A span across paragraphs also records the paragraphs between its endpoints.
+  const { start, end } = value;
+  if (isPlain(start) && isEndpoint(start) && isPlain(end) && isEndpoint(end)) {
+    const between = paragraphsBetween(start, end, handles, reads);
+    if (between) {
+      texts.record(revision, between.key, between.ids.join('\u0000'));
+      between.ids.forEach((id, index) => texts.record(revision, id, between.texts[index]!));
+    }
+  }
   if (isEndpoint(value)) {
     const paragraph = paragraphOf(value, handles, reads);
     // An endpoint the host cannot place is not stamped: there is nothing to check it against.
     if (!paragraph) return value;
     texts.record(revision, paragraph.id, paragraph.text);
+    // The paragraph after it, so two endpoints read in different answers can still be told
+    // to be neighbours with nothing between them.
+    const index = paragraph.story.indexOf(paragraph.id);
+    texts.record(revision, nextKey(paragraph.id), paragraph.story.paragraphIds[index + 1] ?? '');
     return Object.freeze({ ...value, readAt: revision }) as T;
   }
   let copy: Record<string, unknown> | null = null;
@@ -190,6 +263,9 @@ export function staleEndpointDetail(
     if (endpoint.readAt === revision) continue;
     if (typeof endpoint.readAt !== 'number' || !Number.isSafeInteger(endpoint.readAt))
       return 'invalid-read-revision';
+    // A revision the host has not reached yet was never read.
+    if (endpoint.readAt > revision)
+      return `read-at ${String(endpoint.readAt)} is no longer checkable`;
     const paragraph = paragraphOf(endpoint, handles, reads);
     if (!paragraph) continue;
     const before = texts.at(endpoint.readAt, paragraph.id);
@@ -204,6 +280,39 @@ export function staleEndpointDetail(
       return spansOn
         ? `the paragraph a span starts in changed since revision ${String(endpoint.readAt)}`
         : `text before offset ${String(k)} changed since revision ${String(endpoint.readAt)}`;
+    if (spansOn) {
+      const detail = betweenDetail(endpoint, end!, endpoint.readAt, texts, handles, reads);
+      if (detail) return detail;
+    }
+  }
+  return null;
+}
+
+/** Why the paragraphs between a span's endpoints changed since `readAt`, or null. */
+function betweenDetail(
+  start: StampedEndpoint,
+  end: StampedEndpoint,
+  readAt: number,
+  texts: ReadTexts,
+  handles: AutomationHandleTable,
+  reads: AutomationPackageReads
+): string | null {
+  const first = paragraphOf(start, handles, reads);
+  const last = paragraphOf(end, handles, reads);
+  if (!first || !last) return null;
+  const now = paragraphsBetween(start, end, handles, reads);
+  const key = betweenKey(first.id, last.id);
+  // Endpoints read in different answers carry no record of what lies between them. They are
+  // checkable only as neighbours that are still neighbours.
+  const recorded =
+    texts.at(readAt, key) ?? (texts.at(readAt, nextKey(first.id)) === last.id ? '' : undefined);
+  if (recorded === undefined)
+    return `the paragraphs a span covers are no longer checkable at revision ${String(readAt)}`;
+  if (!now || now.ids.join('\u0000') !== recorded)
+    return `a paragraph was inserted or removed inside a span since revision ${String(readAt)}`;
+  for (const [index, id] of now.ids.entries()) {
+    if (texts.at(readAt, id) !== now.texts[index])
+      return `a paragraph inside a span changed since revision ${String(readAt)}`;
   }
   return null;
 }

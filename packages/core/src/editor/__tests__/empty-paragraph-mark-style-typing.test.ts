@@ -163,6 +163,33 @@ describe('typing into an empty paragraph whose mark names a character style', ()
       expect(editor.getSelectionFormatting()?.italic).toBe(false);
     }));
 
+  test('an empty run that states the mark’s style plus more lends none of the extra', () =>
+    withEditor(
+      `<w:p>${mark(BIG)}<w:r><w:rPr>${BIG}<w:i/></w:rPr></w:r></w:p>${AFTER}`,
+      (editor) => {
+        caretAt(editor, 0, 0);
+        expect(editor.getSelectionFormatting()?.italic).toBe(false);
+        editor.surface!.type('x');
+        // The typed text shows the face the toolbar reported before typing.
+        expect(firstParagraphRuns(editor).at(-1)).toEqual(['rStyle=Big']);
+        expect(editor.getSelectionFormatting()?.italic).toBe(false);
+        expect(face(editor)).toEqual([24, true]);
+      }
+    ));
+
+  test('an empty run that states exactly the mark’s face is the face typed text joins', () =>
+    withEditor(
+      `<w:p>${mark(`${BIG}<w:sz w:val="32"/>`)}<w:r><w:rPr>${BIG}<w:sz w:val="32"/><w:vanish/></w:rPr></w:r></w:p>${AFTER}`,
+      (editor) => {
+        caretAt(editor, 0, 0);
+        expect(face(editor)).toEqual([16, true]);
+        editor.surface!.type('x');
+        const runs = firstParagraphRuns(editor);
+        expect(runs.at(-1)).toEqual(['rStyle=Big', 'sz=32']);
+        expect(face(editor)).toEqual([16, true]);
+      }
+    ));
+
   test('the insertText command takes the style too', () =>
     withEditor(`<w:p>${mark(BIG)}</w:p>${AFTER}`, (editor) => {
       caretAt(editor, 0, 0);

@@ -211,8 +211,9 @@ test('concurrent row insertion and cell edits converge; deletion keeps the survi
   }
 });
 
+// The size sits on the paragraph mark, the only run properties a new row copies.
 const sized = (text: string) =>
-  `<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:sz w:val="19"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
+  `<w:p><w:pPr><w:jc w:val="center"/><w:rPr><w:sz w:val="19"/></w:rPr></w:pPr><w:r><w:rPr><w:sz w:val="19"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
 const formatted = zipDocument(
   '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>' +
     `<w:tr><w:tc>${sized('A')}</w:tc><w:tc>${sized('B')}</w:tc></w:tr></w:tbl>` +

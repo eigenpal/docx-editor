@@ -130,3 +130,38 @@ test('a range tracked across runs refuses once another run edited its paragraph'
     r.dispose();
   }
 });
+
+test('reads and font writes through a stale range fail with StaleDocument', async () => {
+  const r = await DocxEditor.createServer(docx(SAMPLE), { author: 'Agent' });
+  try {
+    await r.run(async (c) => {
+      const county = await find(c, 'New York County');
+      (await find(c, 'the State of New York')).insertText('the State of Delaware', 'Replace');
+      await c.sync();
+
+      county.load('text');
+      await expect(c.sync()).rejects.toMatchObject({ code: 'StaleDocument' });
+
+      county.font.bold = true;
+      const error = await c.sync().catch((caught: unknown) => caught);
+      expect(error).toMatchObject({ code: 'StaleDocument' });
+      // Equal revisions: no other writer; the range itself moved, here through an own sync.
+      const { expectedRevision, actualRevision } = error as {
+        expectedRevision?: number;
+        actualRevision?: number;
+      };
+      expect(expectedRevision).toBeDefined();
+      expect(expectedRevision).toBe(actualRevision);
+    });
+    // The font write changed nothing.
+    const bold = await r.run(async (c) => {
+      const county = await find(c, 'New York County');
+      county.font.load('bold');
+      await c.sync();
+      return county.font.bold;
+    });
+    expect(bold).not.toBe(true);
+  } finally {
+    r.dispose();
+  }
+});

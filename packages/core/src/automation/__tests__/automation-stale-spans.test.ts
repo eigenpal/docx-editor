@@ -9,7 +9,7 @@
 import { describe, expect, test } from 'bun:test';
 import { richDocx } from './support/furniture.ts';
 import { open, paragraphsOf, refusal, roots, storyText } from './support/protocol.ts';
-import { STALE_SPAN_HISTORY } from '../stale-spans.ts';
+import { createReadTexts } from '../stale-spans.ts';
 import type { AutomationBatchResponse, AutomationHost, AutomationSpan } from '../protocol.ts';
 
 function fixture() {
@@ -118,15 +118,101 @@ describe('stamped endpoints', () => {
     expect(refusal(replace(host, negative, 'A'))).toBe('invalid-offset');
   });
 
-  test('a read revision the host no longer remembers refuses', () => {
-    const { host, first, second } = fixture();
+  test('a long run of writes elsewhere keeps an untouched early range valid', () => {
+    const { host, body, first, second } = fixture();
     const alpha = find(host, first, 'alpha');
-    for (let i = 0; i <= STALE_SPAN_HISTORY; i += 1)
+    // One tracked-size write per sync, far more than any fixed revision window.
+    for (let i = 0; i < 150; i += 1)
       expect(
         replace(host, find(host, second, i % 2 ? 'x' : 'other'), i % 2 ? 'other' : 'x').ok
       ).toBe(true);
-    expect(refusal(replace(host, alpha, 'A'))).toBe('stale-revision');
+    expect(replace(host, alpha, 'A').ok).toBe(true);
+    expect(storyText(host, body)).toContain('A beta gamma');
+  });
+
+  test('a read revision the host has not reached refuses', () => {
+    const { host, first } = fixture();
+    const alpha = find(host, first, 'alpha');
     const unknown = { ...alpha, start: { ...alpha.start, readAt: 1e9 } };
     expect(refusal(replace(host, unknown, 'A'))).toBe('stale-revision');
+  });
+});
+
+function threeParagraphs() {
+  const host = open(
+    richDocx({
+      body:
+        '<w:p><w:r><w:t>one start</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:t>two middle</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:t>three end</w:t></w:r></w:p>',
+    })
+  );
+  const { body } = roots(host);
+  const [first, middle, last] = paragraphsOf(host, body);
+  return { host, body, first: first!, middle: middle!, last: last! };
+}
+
+describe('spans across several paragraphs', () => {
+  /** The whole body as one span, read in one answer, as `body.getRange('Whole')` reads it. */
+  function wholeSpan(host: AutomationHost, body: unknown): AutomationSpan {
+    const response = host.execute({
+      operations: [{ op: 'getRange', span: { body }, location: 'Whole' } as never],
+    });
+    const result = response.results[0];
+    if (result?.status !== 'ok') throw new Error(JSON.stringify(result));
+    const value = result.value as unknown as { span?: AutomationSpan; spans?: AutomationSpan[] };
+    const span = value.span ?? value.spans?.[0];
+    if (!span) throw new Error(JSON.stringify(value));
+    return span;
+  }
+
+  test('an untouched span across three paragraphs still writes after an unrelated edit', () => {
+    const { host, body, middle } = threeParagraphs();
+    const span = wholeSpan(host, body);
+    // A formatting edit inside the span moves no text, so the revision moves and the span holds.
+    const middleWord = find(host, middle, 'middle');
+    expect(
+      host.execute({
+        operations: [{ op: 'setFont', span: middleWord, font: { bold: true } } as never],
+      }).ok
+    ).toBe(true);
+    expect(replace(host, span, 'joined').ok).toBe(true);
+    expect(storyText(host, body)).toContain('joined');
+  });
+
+  test('an edit to a paragraph between the endpoints refuses the span', () => {
+    const { host, body, middle } = threeParagraphs();
+    const span = wholeSpan(host, body);
+    expect(replace(host, find(host, middle, 'middle'), 'MIDDLE').ok).toBe(true);
+    const before = storyText(host, body);
+    expect(refusal(replace(host, span, 'x'))).toBe('stale-revision');
+    expect(storyText(host, body)).toBe(before);
+  });
+});
+
+describe('the per-paragraph history', () => {
+  test('an unchanged paragraph never expires; superseded text leaves past the budget', () => {
+    const texts = createReadTexts(10);
+    texts.record(1, 'kept', 'stays the same');
+    texts.record(1, 'busy', 'v1');
+    for (let revision = 2; revision < 500; revision += 1) {
+      texts.record(revision, 'busy', `v${String(revision)}-padding`);
+      texts.record(revision, 'kept', 'stays the same');
+    }
+    expect(texts.at(1, 'kept')).toBe('stays the same');
+    expect(texts.at(499, 'kept')).toBe('stays the same');
+    expect(texts.at(499, 'busy')).toBe('v499-padding');
+    // Superseded records past the budget are gone, so those reads are not checkable.
+    expect(texts.at(1, 'busy')).toBeUndefined();
+    expect(texts.at(2, 'busy')).toBeUndefined();
+  });
+
+  test('a revision between two records of a key, never read, is not checkable', () => {
+    const texts = createReadTexts();
+    texts.record(1, 'p', 'a');
+    texts.record(5, 'p', 'b');
+    expect(texts.at(1, 'p')).toBe('a');
+    expect(texts.at(3, 'p')).toBeUndefined();
+    expect(texts.at(5, 'p')).toBe('b');
   });
 });

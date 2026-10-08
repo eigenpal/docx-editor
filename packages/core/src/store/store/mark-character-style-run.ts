@@ -96,9 +96,10 @@ export function emptyParagraphRunProperties(
     }
   }
   if (children.length === 0) return [];
-  // An empty run that already carries the mark's style and flags is the face the paragraph
-  // was given, a new table row's seed run among them: keep the rest of its formatting too.
-  const seeded = agreeingEmptyRunProperties(paragraph, children);
+  // An empty run that carries exactly the mark's formatting is the face the paragraph was
+  // given, a new table row's seed run among them: keep all of it. Any other empty run keeps
+  // its formatting to itself, so typed text shows the face the toolbar reported for the mark.
+  const seeded = agreeingEmptyRunProperties(paragraph, mark);
   if (seeded) return [withFreshIds(seeded, nextId)];
   return [
     {
@@ -131,11 +132,29 @@ export const NOT_INHERITED: ReadonlySet<string> = new Set([
 
 const valOf = (node: OoxmlNode) => attributeValueOf(node, 'val', WML_NAMESPACE_URI);
 
-/** The last run's `w:rPr` when it holds every one of `wanted`, by name and value. */
+/** A run-properties element's inherited children, as `name=value` keys. */
+function inheritedKeys(rPr: OoxmlNode): string[] {
+  if (rPr.kind === 'textValue') return [];
+  return rPr.children
+    .filter(
+      (child) =>
+        child.kind !== 'textValue' &&
+        child.namespaceUri === WML_NAMESPACE_URI &&
+        !NOT_INHERITED.has(child.localName)
+    )
+    .map((child) => `${(child as { localName: string }).localName}=${valOf(child) ?? ''}`)
+    .sort();
+}
+
+/**
+ * The last run's `w:rPr`, without what new text never inherits, when it states exactly what
+ * the paragraph mark states: the same properties with the same values, nothing more or less.
+ */
 function agreeingEmptyRunProperties(
   paragraph: OoxmlParagraphNode,
-  wanted: readonly OoxmlNode[]
+  mark: OoxmlNode | undefined
 ): OoxmlNode | undefined {
+  if (!mark || mark.kind === 'textValue') return undefined;
   const runs = paragraph.children.filter((child) => child.kind === 'run');
   const last = runs[runs.length - 1];
   if (!last) return undefined;
@@ -146,16 +165,7 @@ function agreeingEmptyRunProperties(
       child.localName === 'rPr'
   );
   if (!rPr || rPr.kind === 'textValue') return undefined;
-  const has = (want: OoxmlNode) =>
-    want.kind !== 'textValue' &&
-    rPr.children.some(
-      (child) =>
-        child.kind !== 'textValue' &&
-        child.namespaceUri === WML_NAMESPACE_URI &&
-        child.localName === want.localName &&
-        valOf(child) === valOf(want)
-    );
-  if (!wanted.every(has)) return undefined;
+  if (inheritedKeys(rPr).join('|') !== inheritedKeys(mark).join('|')) return undefined;
   const kept = rPr.children.filter(
     (child) => child.kind === 'textValue' || !NOT_INHERITED.has(child.localName)
   );

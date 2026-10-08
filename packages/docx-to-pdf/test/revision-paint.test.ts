@@ -467,3 +467,66 @@ test('proposed and original views do not mark rows they resolve', async () => {
     expect(await commands(kept.bytes)).toBe(await commands(plain.bytes));
   }
 });
+
+/** Filled rectangles thinner than 3 pt: the strike and underline lines, as `[x, y, w, h]`. */
+function lineRects(stream: string): number[][] {
+  return [...stream.matchAll(/(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) re f/g)]
+    .map((match) => match.slice(1, 5).map(Number))
+    .filter(([, , , height]) => Math.abs(height!) < 3);
+}
+
+/** Baselines of every text line, from its `Tm` operator. */
+function baselines(stream: string): number[] {
+  return [...stream.matchAll(/[\d.-]+ [\d.-]+ [\d.-]+ [\d.-]+ ([\d.-]+) ([\d.-]+) Tm/g)].map(
+    (match) => Number(match[2])
+  );
+}
+
+test.each([
+  ['del', 'above'],
+  ['ins', 'below'],
+] as const)('a tracked %s row draws its line %s the text baseline', async (kind, side) => {
+  const options = {
+    displayMode: 'all-markup',
+    useSystemFonts: false,
+    revisionMarkup: markedSettings,
+  } as const;
+  const tracked = await commands((await exportPdf(docx(trackedRow(rowMark(kind))), options)).bytes);
+  const plain = await commands((await exportPdf(docx(trackedRow('')), options)).bytes);
+  const known = new Set(lineRects(plain).map((rect) => rect.join(' ')));
+  const added = lineRects(tracked).filter((rect) => !known.has(rect.join(' ')));
+  // One line under or through the one line of text.
+  expect(added).toHaveLength(1);
+  const [, y, width] = added[0]!;
+  expect(width!).toBeGreaterThan(0);
+  const baseline = baselines(tracked)[0]!;
+  if (side === 'above') expect(y!).toBeGreaterThan(baseline);
+  else expect(y!).toBeLessThan(baseline);
+});
+
+test('a repeated header row stays unmarked across a page break inside a tracked row', async () => {
+  const lines = Array.from(
+    { length: 70 },
+    (_, index) => `<w:p><w:r><w:t>Line${index}</w:t></w:r></w:p>`
+  ).join('');
+  const table = (revision: string) =>
+    '<w:tbl><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>' +
+    '<w:tr><w:trPr><w:tblHeader/></w:trPr><w:tc><w:p><w:r><w:t>Head</w:t></w:r></w:p></w:tc></w:tr>' +
+    `<w:tr>${revision}<w:tc>${lines}</w:tc></w:tr></w:tbl><w:p/>`;
+  const options = {
+    displayMode: 'all-markup',
+    useSystemFonts: false,
+    revisionMarkup: markedSettings,
+  } as const;
+  const trackedResult = await exportPdf(docx(table(rowMark('ins'))), options);
+  const plainResult = await exportPdf(docx(table('')), options);
+  const document = await PDFDocument.load(trackedResult.bytes);
+  // The tracked row splits, so the header repeats on the next page.
+  expect(document.getPageCount()).toBeGreaterThan(1);
+  const tracked = await commands(trackedResult.bytes);
+  const plain = await commands(plainResult.bytes);
+  // The header paints once per page: it repeats after the break.
+  expect(baselines(tracked)).toHaveLength(70 + document.getPageCount());
+  // Every line of the tracked row is underlined, on both pages; the header rows are not.
+  expect(lineRects(tracked).length - lineRects(plain).length).toBe(70);
+});

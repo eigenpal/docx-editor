@@ -2,12 +2,13 @@
 //
 // Inserting a row copies each source cell's first-paragraph properties, paragraph mark
 // included, into the new cell's empty paragraph, so a new row matches the row it was made
-// from instead of falling back to the document defaults. The mark copies as it is; when it has
-// no formatting of its own, the seed run below borrows the cell's first plain text run's face.
+// from instead of falling back to the document defaults. Only the paragraph mark's run
+// properties carry over as the text face. The source's text runs never do: a bold "Label:"
+// at the start of a cell is that cell's content, not the face of values written below it.
 //
 // A mark formats only the empty line; text written into the cell needs a run that carries the
-// face. So the new paragraph also holds an empty run with that face: written or typed text
-// joins it, the way it joins any run already in a paragraph.
+// face. So when the mark has formatting, the new paragraph also holds an empty run with it:
+// written or typed text joins it, the way it joins any run already in a paragraph.
 //
 // Only WordprocessingML properties are copied, re-spelled under the prefix the new row uses.
 // An extension namespace may be bound only on the source paragraph, where a copy cannot
@@ -23,7 +24,7 @@ import {
 } from '../package/ooxml-tree.ts';
 import type { WmlFreshNamespaceContext } from '../package/wml-namespace.ts';
 import { paragraphPropertiesNodeOf } from './tree-op-nodes.ts';
-import { isWmlElement, wmlAttributeValue } from './tree-op-table-shared.ts';
+import { isWmlElement } from './tree-op-table-shared.ts';
 import { NOT_INHERITED } from './mark-character-style-run.ts';
 
 const PPR_DROPPED = new Set(['pPrChange', 'sectPr', 'rPr']);
@@ -40,9 +41,6 @@ const REVISION_RECORDS = new Set([
   'pPrChange',
   'numberingChange',
 ]);
-/** Inline wrappers whose runs do not show the row's plain face. */
-const SKIPPED_WRAPPERS = new Set(['revisionDelete', 'revisionMoveFrom', 'hyperlink', 'fldSimple']);
-
 function wmlChildren(node: OoxmlElement, dropped: ReadonlySet<string>): OoxmlNode[] {
   return node.children.filter(
     (child) =>
@@ -54,49 +52,6 @@ function wmlChildren(node: OoxmlElement, dropped: ReadonlySet<string>): OoxmlNod
 
 function withChildren(node: OoxmlElement, children: readonly OoxmlNode[]): OoxmlElement {
   return { ...node, children } as OoxmlElement;
-}
-
-function fieldCharType(run: readonly OoxmlNode[]): string | undefined {
-  const fldChar = run.find((leaf) => isWmlElement(leaf, 'fldChar')) as OoxmlElement | undefined;
-  if (!fldChar) return undefined;
-  return wmlAttributeValue(fldChar, 'fldCharType');
-}
-
-/**
- * The first run that shows plain text: not struck, not a link, not a field result, not a
- * reference mark. `field` counts the complex fields open at the walk's position.
- */
-function firstTextRunProperties(
-  node: OoxmlNode,
-  field = { depth: 0 }
-): { readonly rPr: OoxmlElement | undefined } | undefined {
-  if (node.kind === 'textValue') return undefined;
-  for (const child of node.children) {
-    if (child.kind === 'textValue' || SKIPPED_WRAPPERS.has(child.kind)) continue;
-    if (child.kind === 'run') {
-      const children: readonly OoxmlNode[] = child.children;
-      const fieldChar = fieldCharType(children);
-      if (fieldChar === 'begin') field.depth += 1;
-      else if (fieldChar === 'end') field.depth = Math.max(0, field.depth - 1);
-      if (field.depth > 0 || !children.some((leaf) => isWmlElement(leaf, 't'))) continue;
-      const rPr = children.find((leaf): leaf is OoxmlElement => isWmlElement(leaf, 'rPr'));
-      // A content control's prompt shows placeholder styling, not the row's face.
-      if (
-        rPr &&
-        rPr.children.some(
-          (leaf) =>
-            isWmlElement(leaf, 'rStyle') && wmlAttributeValue(leaf, 'val') === 'PlaceholderText'
-        )
-      )
-        continue;
-      // Found, plain or not: an unformatted first run is the face too.
-      return { rPr };
-    }
-    if (child.kind === 'paragraphProperties') continue;
-    const nested = firstTextRunProperties(child, field);
-    if (nested) return nested;
-  }
-  return undefined;
 }
 
 interface SourceContent {
@@ -138,11 +93,8 @@ function sourceContent(cell: OoxmlElement): SourceContent | null {
     // from it. A mark holding only revision markers has no formatting of its own.
     const ownChildren = ownMark ? wmlChildren(ownMark, MARK_DROPPED) : [];
     const mark = ownChildren.length > 0 ? withChildren(ownMark!, ownChildren) : undefined;
-    // The seed run carries the face written text shows: the mark's, or else the first text run's.
-    const borrowed = mark ? undefined : firstTextRunProperties(paragraph)?.rPr;
-    const borrowedChildren = borrowed ? wmlChildren(borrowed, MARK_DROPPED) : [];
-    const face =
-      mark ?? (borrowedChildren.length > 0 ? withChildren(borrowed!, borrowedChildren) : undefined);
+    // The seed run carries the face written text shows: the mark's, and nothing else.
+    const face = mark;
     const properties = pPr ? wmlChildren(pPr, PPR_DROPPED) : [];
     const pPrChildren = mark ? [...properties, mark] : properties;
     const nodes: OoxmlNode[] = [];

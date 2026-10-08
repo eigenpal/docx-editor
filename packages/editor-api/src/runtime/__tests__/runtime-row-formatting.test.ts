@@ -7,8 +7,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 //
 // A row added with `addRows` or `insertRows` copies each source cell's paragraph properties,
 // paragraph mark included, so values written into it keep the table's font size and alignment.
-// When the source mark has no formatting, written values take the cell's first run formatting. Inside a row the
-// author proposed inserting, formatting records nothing of its own: rejecting the row removes it.
+// Only the paragraph mark's run properties carry over; the source cell's text runs never set
+// the face of written values. Inside a row the author proposed inserting, formatting records nothing of its own: rejecting the row removes it.
 
 import { expect, test } from 'bun:test';
 import { strFromU8, unzipSync } from 'fflate';
@@ -17,7 +17,7 @@ import { docx } from './support/docx.ts';
 
 test('text joining an empty run’s face leaves its hiding and pending format change behind', async () => {
   const empty =
-    '<w:p><w:pPr><w:rPr><w:rStyle w:val="Emphasis"/></w:rPr></w:pPr>' +
+    '<w:p><w:pPr><w:rPr><w:rStyle w:val="Emphasis"/><w:b/></w:rPr></w:pPr>' +
     '<w:r><w:rPr><w:rStyle w:val="Emphasis"/><w:b/><w:vanish/>' +
     '<w:rPrChange w:id="4" w:author="Old"><w:rPr/></w:rPrChange></w:rPr></w:r></w:p>';
   const r = await DocxEditor.createServer(docx(empty), { author: 'Agent' });
@@ -67,9 +67,18 @@ async function rows(c: RequestContext) {
   return { table: tables.items[0]!, rows: collection.items };
 }
 
-test('rows added below take the source row’s run size when its mark has none', async () => {
+/** The run that holds `value` in `xml`. */
+function runOf(xml: string, value: string): string {
+  const at = xml.indexOf(`>${value}<`);
+  return xml.slice(xml.lastIndexOf('<w:r>', at), xml.indexOf('</w:r>', at));
+}
+
+test('a source cell’s text runs never set the face of written values', async () => {
+  // A bold label at the start of a cell is that cell's content, not the row's face.
+  const labelled = (label: string) =>
+    `<w:p><w:r><w:rPr><w:b/><w:sz w:val="19"/></w:rPr><w:t xml:space="preserve">${label}</w:t></w:r><w:r><w:t>value</w:t></w:r></w:p>`;
   const r = await DocxEditor.createServer(
-    docx(table(`<w:tr>${cell(runSized('Name'))}${cell(runSized('Role'))}</w:tr>`)),
+    docx(table(`<w:tr>${cell(labelled('Name: '))}${cell(runSized('Role'))}</w:tr>`)),
     { author: 'Agent' }
   );
   try {
@@ -78,13 +87,12 @@ test('rows added below take the source row’s run size when its mark has none',
       await c.sync();
     });
     const added = await rowXml(r, 'Ada');
-    // The written runs carry the size; the unformatted source mark stays unformatted, so a list
-    // marker or empty line in the new row looks like the source row's.
     for (const value of ['Ada', 'Counsel']) {
-      const at = added.indexOf(`>${value}<`);
-      const run = added.slice(added.lastIndexOf('<w:r>', at), added.indexOf('</w:r>', at));
-      expect(run).toContain('<w:sz w:val="19"/>');
+      const run = runOf(added, value);
+      expect(run).not.toContain('<w:b/>');
+      expect(run).not.toContain('<w:sz w:val="19"/>');
     }
+    // An unformatted source mark stays unformatted.
     expect(added).not.toContain('<w:pPr><w:rPr>');
   } finally {
     r.dispose();
@@ -148,7 +156,7 @@ test('a leading reference, link, or struck run does not set the new row’s face
       await c.sync();
     });
     const added = await rowXml(r, 'Ada');
-    expect(added).toContain('<w:i/>');
+    expect(added).not.toContain('<w:i/>');
     expect(added).not.toContain('superscript');
     expect(added).not.toContain('<w:strike/>');
   } finally {
@@ -156,7 +164,7 @@ test('a leading reference, link, or struck run does not set the new row’s face
   }
 });
 
-test('a source mark holding only a revision marker borrows the run face, minus hiding', async () => {
+test('a source mark holding only a revision marker gives no face', async () => {
   const proposed = (text: string) =>
     `<w:p><w:pPr><w:rPr><w:ins w:id="3" w:author="Old"/></w:rPr></w:pPr><w:r><w:rPr><w:vanish/><w:sz w:val="19"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
   const r = await DocxEditor.createServer(
@@ -169,7 +177,7 @@ test('a source mark holding only a revision marker borrows the run face, minus h
       await c.sync();
     });
     const added = await rowXml(r, 'Ada');
-    expect(added).toContain('<w:sz w:val="19"/>');
+    expect(added).not.toContain('<w:sz w:val="19"/>');
     expect(added).not.toContain('vanish');
     expect(added).not.toContain('w:author="Old"');
   } finally {
@@ -178,9 +186,9 @@ test('a source mark holding only a revision marker borrows the run face, minus h
 });
 
 for (const tracking of ['Off', 'TrackMineOnly'] as const) {
-  test(`a styled source run keeps its style and size in written values (${tracking})`, async () => {
+  test(`a styled source mark keeps its style and size in written values (${tracking})`, async () => {
     const styled = (text: string) =>
-      `<w:p><w:r><w:rPr><w:rStyle w:val="Emphasis"/><w:sz w:val="18"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
+      `<w:p><w:pPr><w:rPr><w:rStyle w:val="Emphasis"/><w:sz w:val="18"/></w:rPr></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
     const r = await DocxEditor.createServer(
       docx(table(`<w:tr>${cell(styled('Name'))}${cell(styled('Role'))}</w:tr>`)),
       { author: 'Agent' }
@@ -220,7 +228,7 @@ test('a leading field result and nested revision records do not reach the new ro
       await c.sync();
     });
     const added = await rowXml(r, 'Ada');
-    expect(added).toContain('<w:b/>');
+    expect(added).not.toContain('<w:b/>');
     expect(added).not.toContain('Hyperlink');
     expect(added).not.toContain('w:author="Old"');
   } finally {
