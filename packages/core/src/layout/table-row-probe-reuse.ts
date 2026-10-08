@@ -96,9 +96,15 @@ export function createRowProbeReuse(
           measuringFlowDeps(deps, false),
           cellSpacingPt
         );
-      if (!reused && cellSpacingPt === 0) rememberRowPlacement(row, result, top, deps);
+      // A row rebuilt at a new top is remembered there, so the next pass can move it in place.
+      if (cellSpacingPt === 0 && (!reused || before!.box.y !== top))
+        rememberRowPlacement(row, result, top, deps);
       if (result.remainder === null) probe = { row, result, deps, left, top };
       return result.record.box.height;
+    },
+    /** What a `measure` call that keeps no probe leaves behind: no probe to take. */
+    forget(): void {
+      probe = undefined;
     },
     take(row: SemanticTableRow, left: number, top: number, deps: TableFlowDeps): Placement | null {
       const known = probe;

@@ -14,12 +14,20 @@
 // finalize, annotation and moves, so it dies with the fragments that share it. A row whose
 // final height differs from its probe (the terminal-row correction) is never reused.
 //
+// A row the change moved down or up keeps everything but its top. `moveRowToTop` rebuilds it
+// as a fresh placement at the new top computes it, for the row shapes it covers; such a row is
+// not settled, so finalize runs on it exactly as on that fresh placement.
+//
 // The previous rows of a table are offered by the session only when its table update refused,
 // and the paginator takes them once.
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { sharedCellContentInsets } from './cell-content-insets-memo.ts';
-import { moveRowToWidths } from './table-row-geometry-reuse.ts';
+import {
+  moveRowToTop,
+  moveRowToWidths,
+  noteShiftedRowRefusal,
+} from './table-row-geometry-reuse.ts';
 import { finalizedWithHeadroom } from './table-budget-proof.ts';
 import type { LayoutRowBoundedResult, TableFlowDeps } from './semantic-table-layout.ts';
 import type { SemanticTableRow } from './semantic-table.ts';
@@ -136,15 +144,27 @@ export function placementFromPrevious(
   const known = key ? placements.get(key) : undefined;
   if (
     !known ||
-    known.top !== top ||
-    previous.box.y !== top ||
+    previous.box.y !== known.top ||
     previous.box.height !== known.height ||
     row.height.rule !== known.heightRule.rule ||
     (row.height.rule !== 'auto' &&
       (known.heightRule.rule === 'auto' || row.height.valuePt !== known.heightRule.valuePt)) ||
     !sameVertical(row, deps, known.vertical)
   )
-    return null;
+    return previous.box.y === top ? null : noteShiftedRowRefusal('record');
+  if (known.top !== top) {
+    // The row moved down or up: rebuilt as a fresh placement at `top` gives it. It is not
+    // settled, so finalize treats it exactly as it treats that fresh placement.
+    const shifted = moveRowToTop(row, previous, cols, left, top, deps);
+    if (!shifted) return null;
+    return {
+      record: shifted.record,
+      bottom: shifted.bottom,
+      remainder: null,
+      fitted: known.fitted,
+      nestedSplitBlocked: false,
+    };
+  }
   const record = moveRowToWidths(row, previous, cols, left, deps);
   if (!record) return null;
   settledPreviousRows.add(record);

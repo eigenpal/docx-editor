@@ -47,6 +47,8 @@ export interface HeaderGroupPlan {
    * a remainder, so the committed row never cuts merged content.
    */
   optionsAt(index: number, rowTopPt: number): RowVMergeLayoutOptions | undefined;
+  /** True while no read has changed the plan since it was built (no `withdrawAt`). */
+  unchanged(): boolean;
 }
 
 /**
@@ -86,6 +88,23 @@ export function planFixedHeaderGroup(
   return planGroup(structure, headerRows, () => left, top, deps, rowHeightOf, repeatable);
 }
 
+/**
+ * {@link planHeaderGroup} for the paginator's header reuse (`table-header-flow-reuse.ts`). The
+ * plan also counts break keys its merge planner reports after it is built: a read that has to
+ * measure what the build did not leaves the plan `unchanged()` false, so a reuse never skips a
+ * measurement a fresh plan would make.
+ */
+export function planTrackedHeaderGroup(
+  structure: SemanticTableStructure,
+  headerRows: readonly SemanticTableRow[],
+  left: () => number,
+  top: number,
+  deps: TableFlowDeps,
+  rowHeightOf: (row: SemanticTableRow, top: number, deps: TableFlowDeps) => number
+): HeaderGroupPlan {
+  return planGroup(structure, headerRows, left, top, deps, rowHeightOf, false, true);
+}
+
 function planGroup(
   structure: SemanticTableStructure,
   headerRows: readonly SemanticTableRow[],
@@ -93,10 +112,22 @@ function planGroup(
   top: number,
   deps: TableFlowDeps,
   rowHeightOf: (row: SemanticTableRow, top: number, deps: TableFlowDeps) => number,
-  repeatable: boolean
+  repeatable: boolean,
+  trackPlanner = false
 ): HeaderGroupPlan {
   const count = headerRows.length;
   const first = headerRows[0];
+  let building = true;
+  let laterPlannerReports = 0;
+  const plannerDeps: TableFlowDeps = trackPlanner
+    ? {
+        ...deps,
+        onCellBreakKey: (key) => {
+          if (!building) laterPlannerReports += 1;
+          deps.onCellBreakKey?.(key);
+        },
+      }
+    : deps;
   const unplannedHeightOf = (index: number, y: number): number =>
     rowHeightOf(
       headerRows[index]!,
@@ -113,7 +144,7 @@ function planGroup(
           structure,
           left,
           0,
-          deps,
+          plannerDeps,
           following ? [...headerRows, following] : headerRows,
           (row) => row.id === first!.id
         );
@@ -122,7 +153,7 @@ function planGroup(
     let heightPt = 0;
     for (let index = 0; index < count; index += 1)
       heightPt += unplannedHeightOf(index, top + heightPt);
-    return { heightPt, planned: false, optionsAt: () => undefined };
+    return { heightPt, planned: false, optionsAt: () => undefined, unchanged: () => true };
   }
 
   // Placement lays every header row out with the group's first-row insets; so does the probe.
@@ -194,9 +225,12 @@ function planGroup(
     return settle(index, rowTopPt, options, heard).options;
   };
   const reads = repeatable ? createRepeatedPlanReads(placeDeps) : null;
+  const built = changes;
+  building = false;
   return {
     heightPt,
     planned: true,
+    unchanged: () => changes === built && laterPlannerReports === 0,
     optionsAt: reads
       ? (index, rowTopPt) =>
           reads.read(

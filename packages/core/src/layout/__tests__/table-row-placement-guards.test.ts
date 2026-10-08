@@ -8,9 +8,8 @@ import { cellContentInsets } from '../table-cell-geometry.ts';
 import { placementFromPrevious, rememberRowPlacement } from '../table-row-placement-reuse.ts';
 import { lay, load, measurer, styleCascade } from './table-row-keep-fixtures.ts';
 
-// A previous placement stands in for a fresh row probe only at the same top, with the same
-// vertical inputs, and when its finalized height is still the probe's height. Each case
-// below changes exactly one of those and must refuse.
+// A previous placement requires unchanged vertical inputs and a finalized height equal to
+// the probe's height. A changed top can replay the original vertical calculations.
 
 const tc = (text: string, tcPr = '') =>
   `<w:tc><w:tcPr>${tcPr}</w:tcPr><w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr>` +
@@ -54,9 +53,17 @@ test('the unchanged case reuses the previous placement', () => {
   expect(reused!.record).toEqual(layoutRowFragment(row, wide, 2.5, top, false, 0, deps).record);
 });
 
-test('a different top, terminal height, or row height rule refuses', () => {
+test('a different top replays the fresh placement', () => {
   const { row, deps, wide, top, previous } = setup();
-  expect(placementFromPrevious(row, previous, wide, 2.5, top + 1, deps)).toBeNull();
+  const reused = placementFromPrevious(row, previous, wide, 2.5, top + 1, deps);
+  expect(reused).not.toBeNull();
+  expect(JSON.stringify(reused!.record)).toBe(
+    JSON.stringify(layoutRowFragment(row, wide, 2.5, top + 1, false, 0, deps).record)
+  );
+});
+
+test('a different terminal height or row height rule refuses', () => {
+  const { row, deps, wide, top, previous } = setup();
   // The terminal-row correction finalizes a different height than the probe measured.
   const terminal = { ...previous, box: { ...previous.box, height: previous.box.height + 2 } };
   expect(placementFromPrevious(row, terminal, wide, 2.5, top, deps)).toBeNull();

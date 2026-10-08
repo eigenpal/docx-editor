@@ -35,13 +35,27 @@ import {
   lineTiedToPlacement,
   tokenLineHoldsAtWidth,
 } from './paragraph-cache-width-reuse.ts';
-import { lineContentX, type PendingLine } from './pending-line.ts';
+import {
+  lineContentX,
+  pendingLineExclusionSkipAtPlacement,
+  type PendingLine,
+} from './pending-line.ts';
 import type { SemanticTableRow } from './semantic-table.ts';
 import { MIN_CELL_BOX_PT, sumCols, type TableFlowDeps } from './semantic-table-layout.ts';
 import type { ParagraphLayoutInputs } from './style-cascade.ts';
 import { sharedCellContentInsets } from './cell-content-insets-memo.ts';
 import { cellFlowBox } from './table-cell-text-direction.ts';
+import { cellReservedMarkHeights } from './table-cell-end-mark.ts';
+import { authoredRowMinimumFloorPt } from './table-row-minimum-insets.ts';
+import { shiftBlocks } from './table-fragment-finalize.ts';
+import {
+  cellAlignmentRoom,
+  cellAlignmentShift,
+  cellParagraphFirstTop,
+} from './table-row-vertical.ts';
+import type { CellContentInsets } from './table-cell-geometry.ts';
 import type {
+  BlockFragmentRecord,
   LineRecord,
   ParagraphFragmentRecord,
   TableCellFragmentRecord,
@@ -61,6 +75,18 @@ interface CellLine {
   readonly compatibilityMode: TableFlowDeps['compatibilityMode'];
   readonly displayMode: TableFlowDeps['displayMode'];
   readonly revisionAuthorFilter: number;
+  /** The vertical operands placement used; see `CellLineVertical`. */
+  readonly vertical: CellLineVertical;
+}
+
+/**
+ * The operands a complete, first-fragment cell paragraph placement added to its top, captured
+ * where `placeCellParagraph` used them. None depends on where the row stands.
+ */
+export interface CellLineVertical {
+  readonly appliedBefore: number;
+  readonly topExtent: number;
+  readonly appliedAfter: number;
 }
 
 /** Per row: the identities every cell of it compares, read once. */
@@ -161,7 +187,8 @@ export function rememberCellLine(
   properties: readonly OoxmlProperty[],
   parts: CellBreakKeyParts,
   deps: TableFlowDeps,
-  key: string | undefined
+  key: string | undefined,
+  vertical: CellLineVertical
 ): void {
   const pending = lines[0];
   const line = fragment.lines[0];
@@ -181,6 +208,7 @@ export function rememberCellLine(
     compatibilityMode: deps.compatibilityMode,
     displayMode: deps.displayMode,
     revisionAuthorFilter: identityOf(deps.revisionAuthorFilter),
+    vertical,
   });
 }
 
@@ -292,12 +320,49 @@ function columnGeometryOf(cols: readonly number[]): ColumnGeometry {
   return known;
 }
 
+/** A cell paragraph at new widths, and for a new row top what the row's height reads. */
+interface MovedParagraph {
+  readonly block: ParagraphFragmentRecord;
+  readonly x: number;
+  readonly width: number;
+  readonly insets: CellContentInsets;
+  /** Width of the cell's flow box, as `cellReservedMarkHeights` reads it. */
+  readonly flowWidth: number;
+  /** The content band `layoutRowFragmentBounded` gets back from the cell flow; NaN in place. */
+  readonly contentTop: number;
+  readonly contentBottom: number;
+}
+
+const NO_ZONES: readonly never[] = [];
+
 /** The cell at new widths, or null when a fresh placement could differ. */
 function moveCell(
   cell: SemanticTableRow['cells'][number],
   placed: TableCellFragmentRecord,
   context: MoveContext
 ): TableCellFragmentRecord | null {
+  const moved = moveCellParagraph(cell, placed, context, undefined);
+  // Row finalize resolves `borders` again in the same key position.
+  return (
+    moved && {
+      ...placed,
+      blocks: [moved.block],
+      box: { ...placed.box, x: moved.x, width: moved.width },
+    }
+  );
+}
+
+/**
+ * The cell's paragraph at new widths. With `rowTop`, also at that row top: its vertical values
+ * are computed as `placeCellParagraph` computes them for a complete first fragment, through the
+ * shared expressions of `table-row-vertical.ts`, from the operands placement captured.
+ */
+function moveCellParagraph(
+  cell: SemanticTableRow['cells'][number],
+  placed: TableCellFragmentRecord,
+  context: MoveContext,
+  rowTop: number | undefined
+): MovedParagraph | null {
   const { deps, cache, cols, geometry } = context;
   const paragraph = cell.blocks[0];
   const block = placed.blocks[0];
@@ -334,7 +399,9 @@ function moveCell(
     MIN_CELL_BOX_PT
   );
   const insets = deps.cellContentInsets?.get(cell.id) ?? sharedCellContentInsets(cell, true);
-  const { flowLeft, flowRight } = cellFlowBox(false, x, width, 0, 0, insets);
+  // `cellFlowBox` as row placement calls it: an unbounded row, so the content has no floor.
+  const flowBox = cellFlowBox(false, x, width, rowTop ?? 0, Number.POSITIVE_INFINITY, insets);
+  const { flowLeft, flowRight } = flowBox;
   const contentWidth = Math.max(1, flowRight - flowLeft);
   // A move reads the memo without replacing it: only `available` depends on width.
   const inputs =
@@ -400,11 +467,19 @@ function moveCell(
   );
   const lineIndent = flowLeft + indent.left + firstLineOffset;
   const lineWidth = Math.max(1, available - firstLineOffset);
+  // In place the line keeps its y. At a new top: the first line's top, plus the exclusion skip,
+  // which is 0 without zones and for a line not tied to placement (`placedFrom`).
+  let lineTop = old.box.y;
+  if (rowTop !== undefined) {
+    const { appliedBefore, topExtent } = known.vertical;
+    const first = cellParagraphFirstTop(flowBox.contentTop, appliedBefore, topExtent);
+    lineTop = first + pendingLineExclusionSkipAtPlacement(pending, first, NO_ZONES);
+  }
   const content = alignCellLine(
     pending,
     paragraph.id,
     flowLeft,
-    old.box.y,
+    lineTop,
     [],
     lineIndent,
     lineWidth,
@@ -422,22 +497,46 @@ function moveCell(
   // Alignment moves spans along x only; anything else is not this line any more.
   if (spans.length !== old.spans.length) return null;
   for (let index = 0; index < spans.length; index += 1)
-    if (spans[index]!.box.y !== old.spans[index]!.box.y) return null;
+    if (spans[index]!.box.y !== (rowTop === undefined ? old.spans[index]!.box.y : lineTop))
+      return null;
   const line = {
     ...old,
     spans,
     contentX: lineContentX(spans, [], lineIndent + content.offset),
-    box: { ...old.box, x: flowLeft + indent.left, width: available },
+    box:
+      rowTop === undefined
+        ? { ...old.box, x: flowLeft + indent.left, width: available }
+        : { ...old.box, x: flowLeft + indent.left, y: lineTop, width: available },
   };
+  // A complete paragraph without rules: the lines end one line below the top, then its space
+  // after (`placeCellParagraph`); its box runs from the flow top to there.
+  const linesBottom = lineTop + pending.height;
+  const bottom = linesBottom + known.vertical.appliedAfter;
   const moved: ParagraphFragmentRecord = {
     ...block,
     lines: [line],
-    box: { ...block.box, x: flowLeft + indent.left, width: available },
+    box:
+      rowTop === undefined
+        ? { ...block.box, x: flowLeft + indent.left, width: available }
+        : {
+            ...block.box,
+            x: flowLeft + indent.left,
+            y: flowBox.contentTop,
+            width: available,
+            height: bottom - flowBox.contentTop,
+          },
   };
   movableBlocks.add(moved);
   deps.onCellBreakKey?.(known.key);
-  // Row finalize resolves `borders` again in the same key position.
-  return { ...placed, blocks: [moved], box: { ...placed.box, x, width } };
+  return {
+    block: moved,
+    x,
+    width,
+    insets,
+    flowWidth: flowRight - flowLeft,
+    contentTop: rowTop === undefined ? Number.NaN : flowBox.contentTop,
+    contentBottom: rowTop === undefined ? Number.NaN : bottom,
+  };
 }
 
 /**
@@ -489,4 +588,163 @@ export function moveRowToWidths(
   }
   if (movedRowsObserver) movedRowsObserver.moved += 1;
   return { ...placed, cells, box: { ...placed.box, x: left, width: geometry.total } };
+}
+
+/** Why a row at a new top was placed fresh; see `shiftedRowsTestRecorder`. */
+export type ShiftedRowRefusal = 'record' | 'row' | 'height' | 'cell' | 'floor';
+
+let shiftedRowsObserver: {
+  moved: number;
+  refused: Record<ShiftedRowRefusal, number>;
+} | null = null;
+
+/** @internal Counts rows rebuilt at a new top and refusals by first reason, for tests and probes. */
+export function shiftedRowsTestRecorder(): {
+  readonly moved: number;
+  readonly refused: Readonly<Record<ShiftedRowRefusal, number>>;
+  dispose(): void;
+} {
+  const observer = {
+    moved: 0,
+    refused: { record: 0, row: 0, height: 0, cell: 0, floor: 0 },
+  };
+  shiftedRowsObserver = observer;
+  return {
+    get moved() {
+      return observer.moved;
+    },
+    get refused() {
+      return observer.refused;
+    },
+    dispose() {
+      if (shiftedRowsObserver === observer) shiftedRowsObserver = null;
+    },
+  };
+}
+
+/** Count one refusal; returns null for the caller to return. */
+export function noteShiftedRowRefusal(reason: ShiftedRowRefusal): null {
+  if (shiftedRowsObserver) shiftedRowsObserver.refused[reason] += 1;
+  return null;
+}
+
+/**
+ * `placed` (a row of an earlier layout) at new widths and the new row top `top`: the record and
+ * bottom a fresh complete `layoutRowFragment(row, cols, left, top)` gives, or null.
+ *
+ * Each cell comes from `moveCellParagraph` at `top`. The row then repeats the vertical steps of
+ * `layoutRowFragmentBounded` for an unbounded row with no merge, no wrap zones and no spacing:
+ * each cell's bottom from its mark floor and content, the row bottom, the `w:trHeight` atLeast
+ * floor (`authoredRowMinimumFloorPt`), the row height, and vertical alignment through
+ * `shiftBlocks`. Multi-term expressions come from `table-row-vertical.ts`, shared with row
+ * placement; the rest are single operations or `Math.min`/`Math.max`.
+ */
+export function moveRowToTop(
+  row: SemanticTableRow,
+  placed: TableRowFragmentRecord,
+  cols: readonly number[],
+  left: number,
+  top: number,
+  deps: TableFlowDeps
+): { readonly record: TableRowFragmentRecord; readonly bottom: number } | null {
+  if (
+    row.isHeader ||
+    placed.isHeaderRepeat ||
+    placed.isContinuation ||
+    placed.hasContinuation ||
+    row.cells.length === 0 ||
+    row.cells.length !== placed.cells.length ||
+    !deps.cache
+  )
+    return noteShiftedRowRefusal('row');
+  // An exact row clips to its authored box, a branch this does not repeat.
+  if (row.height.rule === 'exact') return noteShiftedRowRefusal('height');
+  const geometry = columnGeometryOf(cols);
+  const context: MoveContext = {
+    deps,
+    cache: deps.cache,
+    measurer: identityOf(deps.measurer),
+    styleCascade: identityOf(deps.styleCascade),
+    revisionAuthorFilter: identityOf(deps.revisionAuthorFilter),
+    cols,
+    geometry,
+    left,
+  };
+  const entries: { cell: SemanticTableRow['cells'][number]; moved: MovedParagraph }[] = [];
+  const bottoms: number[] = [];
+  let rowBottom = top;
+  for (let index = 0; index < row.cells.length; index += 1) {
+    const cell = row.cells[index]!;
+    const before = placed.cells[index]!;
+    if (
+      cell.id !== before.id ||
+      cell.vMergeContinue ||
+      cell.textDirection !== 'horizontal' ||
+      before.rowSpan !== 1 ||
+      before.paintInert
+    )
+      return noteShiftedRowRefusal('cell');
+    const moved = moveCellParagraph(cell, before, context, top);
+    if (!moved) return noteShiftedRowRefusal('cell');
+    // A complete paragraph cell: its mark floor applies when its box has height.
+    const { markFloor } = cellReservedMarkHeights(cell, moved.flowWidth, deps, {
+      vertical: false,
+      markSizedRow: false,
+    });
+    const appliedMarkFloor = moved.block.box.height > 0 ? markFloor : 0;
+    const cellBottom = Math.min(
+      Number.POSITIVE_INFINITY,
+      Math.max(top + appliedMarkFloor, moved.contentBottom + moved.insets.bottom)
+    );
+    if (cellBottom > rowBottom) rowBottom = cellBottom;
+    entries.push({ cell, moved });
+    bottoms.push(cellBottom);
+  }
+  rowBottom = Math.min(Number.POSITIVE_INFINITY, Math.max(rowBottom, top));
+  for (const needed of bottoms)
+    if (needed > rowBottom && needed <= Number.POSITIVE_INFINITY + 0.001) rowBottom = needed;
+  // Placement gives a row nothing raised its line-height fallback; this does not repeat it.
+  if (rowBottom <= top + 0.001) return noteShiftedRowRefusal('floor');
+  rowBottom = Math.min(Number.POSITIVE_INFINITY, rowBottom);
+  const authoredFloorPt =
+    row.height.rule === 'atLeast'
+      ? authoredRowMinimumFloorPt(
+          row.height.valuePt,
+          entries.map((entry) => ({ cell: entry.cell, insets: entry.moved.insets })),
+          deps.cellMinimumContentInsets
+        )
+      : 0;
+  const minBottom = top + Math.max(authoredFloorPt, 0);
+  if (minBottom > rowBottom && minBottom <= Number.POSITIVE_INFINITY + 0.001) rowBottom = minBottom;
+  rowBottom = Math.min(Number.POSITIVE_INFINITY, rowBottom);
+  const rowHeight = Math.max(0, rowBottom - top);
+  const cells = entries.map(({ cell, moved }, index): TableCellFragmentRecord => {
+    let blocks: BlockFragmentRecord[] = [moved.block];
+    if (cell.vAlign !== 'top') {
+      const contentHeight = moved.contentBottom - moved.contentTop;
+      const available = cellAlignmentRoom(
+        rowHeight,
+        moved.insets.top,
+        moved.insets.bottom,
+        contentHeight
+      );
+      if (available > 0) blocks = shiftBlocks(blocks, cellAlignmentShift(cell.vAlign, available));
+    }
+    // A fresh placement has no borders yet; finalize adds them, at the end, as it does there.
+    const { borders: _borders, ...unresolved } = placed.cells[index]!;
+    return {
+      ...unresolved,
+      blocks,
+      box: { x: moved.x, y: top, width: moved.width, height: rowHeight },
+    };
+  });
+  if (shiftedRowsObserver) shiftedRowsObserver.moved += 1;
+  return {
+    record: {
+      ...placed,
+      cells,
+      box: { x: left, y: top, width: geometry.total, height: rowHeight },
+    },
+    bottom: rowBottom,
+  };
 }

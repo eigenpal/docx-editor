@@ -41,7 +41,8 @@ import {
 } from './repeated-header-border-metrics.ts';
 import { cellContentInsets, type CellContentInsets } from './table-cell-geometry.ts';
 import { admitVMergeSpansAt, type RowVMergeLayoutOptions } from './table-vmerge-heights.ts';
-import { planHeaderGroup, type HeaderGroupPlan } from './table-header-vmerge.ts';
+import type { HeaderGroupPlan } from './table-header-vmerge.ts';
+import { createFlowHeaderReuse } from './table-header-flow-reuse.ts';
 import { createMergedTextCarry, deferMergedTextPastHeadRow } from './table-vmerge-boundary.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import { readTableStructure, tableOriginX, type SemanticTableRow } from './semantic-table.ts';
@@ -178,9 +179,17 @@ export function paginateTableInFlow(
     else break;
   }
   // A merge inside the header rows is planned where the group is about to be placed, and the
-  // same plan places it; see `table-header-vmerge.ts`.
-  const headerPlanAt = (top: number): HeaderGroupPlan =>
-    planHeaderGroup(structure, headerRows, () => tableLeft, top, tableDeps, rowHeightOf);
+  // same plan places it (`table-header-vmerge.ts`); a repeat at a kept top reuses both.
+  const headers = createFlowHeaderReuse({
+    structure,
+    headerRows,
+    deps: tableDeps,
+    left: () => tableLeft,
+    rowHeightOf,
+    rowProbes,
+    admitted: !outOfFlow && !structure.float && !pinnedBreak,
+  });
+  const headerPlanAt = (top: number): HeaderGroupPlan => headers.plan(top);
   // Word treats a header prefix taller than a true fresh page as ordinary authored rows. A note
   // reservation only shrinks an advisory band and must never split an otherwise valid prefix.
   const initialHeaderPlan = headerPlanAt(flow.cursorY);
@@ -379,19 +388,20 @@ export function paginateTableInFlow(
     if (asRepeat && !candidate && admitsBodyAfter && !admitsBodyAfter(flow.cursorY + groupHeight))
       return;
 
-    const headerDeps = firstRowContentDeps(structure, headerRows[0]!, candidate?.deps ?? tableDeps);
+    const headerDeps = candidate
+      ? firstRowContentDeps(structure, headerRows[0]!, candidate.deps)
+      : headers.headerDeps();
 
     for (const [index, headerRow] of headerRows.entries()) {
-      const placed = layoutRowFragment(
-        headerRow,
-        structure.columnWidthsPt,
-        tableLeft,
-        flow.cursorY,
+      const options = plan?.optionsAt(index, flow.cursorY);
+      const placed = headers.place(
         asRepeat,
-        0,
+        !!candidate,
+        index,
+        headerRow,
+        flow.cursorY,
         headerDeps,
-        structure.cellSpacingPt,
-        plan?.optionsAt(index, flow.cursorY)
+        options
       );
       if (placed.bottom > placementBottom + 0.001) {
         throw new TablePaginationError(
