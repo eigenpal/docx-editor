@@ -16,7 +16,8 @@ interface BreakingParagraph {
  *
  * `breaksBeforeAt` is the authored break, except on an empty section mark after its section's
  * content. `keepsBeforeAtPageStart` says whether a paragraph keeps its space before when it
- * opens a page: the first paragraph of a section does, and one with a page break before does
+ * opens a page. The first paragraph of a section does, also when its own page break before
+ * opens the page from a continuous section. Any other paragraph with a page break before does
  * only in legacy compatibility modes. Ordinary pagination drops it.
  */
 export function pageBreakBeforeRules(
@@ -31,6 +32,6 @@ export function pageBreakBeforeRules(
   return {
     breaksBeforeAt,
     keepsBeforeAtPageStart: (at: number, entry: BreakingParagraph): boolean =>
-      opensSection() || (breakKeepsBefore && breaksBeforeAt(at, entry)),
+      opensSection() || ((breakKeepsBefore || at === 0) && breaksBeforeAt(at, entry)),
   };
 }

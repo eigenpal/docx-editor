@@ -393,6 +393,31 @@ describe('Word 2013+ top-of-page space-before suppression', () => {
     expect(second.lines[0]!.box.y).toBe(0);
   });
 
+  for (const [label, between, before] of [
+    ['opens a continuous section', '', 10],
+    ['follows the first paragraph of a continuous section', paragraph('zero'), 0],
+  ] as const) {
+    test(`in mode 15, pageBreakBefore on a paragraph that ${label}`, () => {
+      // The first section ends with an empty mark; the second, continuous, holds the rest.
+      const part = load(
+        paragraph('first') +
+          '<w:p><w:pPr><w:sectPr/></w:pPr></w:p>' +
+          between +
+          paragraph('second', '<w:pageBreakBefore/><w:spacing w:before="200"/>') +
+          '<w:sectPr><w:type w:val="continuous"/></w:sectPr>'
+      );
+      const layout = layoutSemanticDocument(part, 1, {
+        measurer,
+        styleCascade: elevenPointDefaults(),
+        compatibilityMode: 15,
+      });
+      const second = firstParagraphOnPage(layout, 1);
+      expect(second.lines[0]!.spans.map((span) => span.text).join('')).toBe('second');
+      expect(second.spacing.before).toBe(before);
+      expect(second.lines[0]!.box.y).toBe(before);
+    });
+  }
+
   test('natural pagination suppresses before when a paragraph moves to the next page', () => {
     // Content height 80pt; first paragraph's after pushes the second onto page 2.
     const layout = lay(
