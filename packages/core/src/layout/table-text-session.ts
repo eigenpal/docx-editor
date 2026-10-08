@@ -4,7 +4,9 @@ import type { SectionPrepass } from './section-prepass-types.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
 import type { BlockLayoutResult } from './column-balance-layout.ts';
 import { withContentControlMetadata } from './content-control-boundary-layout.ts';
-import { carryTableAutofitScope } from './table-autofit-widths.ts';
+import { autofitContextMatches } from './autofit-context-reuse.ts';
+import { valueDigest } from './autofit-value-token.ts';
+import { autofitContextOf, carryTableAutofitScope } from './table-autofit-widths.ts';
 import { updateTableText } from './table-text-update.ts';
 import type { TablePageBand } from './table-width-update.ts';
 import { carryTableCaretContexts } from './table-caret-context.ts';
@@ -46,6 +48,8 @@ export function tryUpdateTableSession(input: {
   previous: SectionPrepass | null | undefined;
   prepass: SectionPrepass;
   inputsEqual: boolean;
+  /** Unchanged section inputs except list items; each table key proves its own list tokens. */
+  rowInputsEqual?: boolean;
   eligible: boolean;
   firstChanged: number;
   commonSuffix: number;
@@ -57,7 +61,20 @@ export function tryUpdateTableSession(input: {
 }): Result | null {
   const { session, previous, prepass, firstChanged, deps, revision, lineCounterStart } = input;
   const sameInputs = carryTableAutofitScope(previous, prepass, input.inputsEqual, deps);
-  if (input.eligible && sameInputs && previous && session?.previous)
+  const rowInputsEqual =
+    sameInputs ||
+    (input.rowInputsEqual &&
+      autofitContextMatches(
+        previous,
+        true,
+        autofitContextOf(deps),
+        [
+          valueDigest(deps.fieldCodeRanges),
+          valueDigest(deps.tocLinkStyleRanges),
+          valueDigest(deps.noteMarks),
+        ].join('\0')
+      ));
+  if (input.eligible && rowInputsEqual && previous && session?.previous)
     offerUnchangedTableRows(deps, previous, prepass, session.previous.pages);
   if (
     !input.eligible ||

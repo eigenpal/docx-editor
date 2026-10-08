@@ -43,9 +43,12 @@ const allowedElements = new Set([
   'highlight',
 ]);
 const ordinaryParagraphs = new WeakMap<OoxmlNode, boolean>();
+const drawingParagraphs = new WeakMap<OoxmlNode, boolean>();
+const numberingElements = new Set(['numPr', 'numId', 'ilvl']);
 
-export function ordinaryTableParagraph(root: OoxmlNode): boolean {
-  const known = ordinaryParagraphs.get(root);
+function ordinaryParagraph(root: OoxmlNode, numbering: boolean): boolean {
+  const cache = numbering ? drawingParagraphs : ordinaryParagraphs;
+  const known = cache.get(root);
   if (known !== undefined) return known;
   let visited = 0;
   const visit = (node: OoxmlNode, depth: number): boolean => {
@@ -54,10 +57,23 @@ export function ordinaryTableParagraph(root: OoxmlNode): boolean {
     if (node.namespaceUri !== WML_NAMESPACE_URI) return false;
     // A saved pagination marker carries no content or break instruction.
     if (node.localName === 'lastRenderedPageBreak') return node.children.length === 0;
-    if (!allowedElements.has(node.localName)) return false;
+    if (
+      !allowedElements.has(node.localName) &&
+      !(numbering && numberingElements.has(node.localName))
+    )
+      return false;
     return node.children.every((child) => visit(child, depth + 1));
   };
   const result = visit(root, 0);
-  ordinaryParagraphs.set(root, result);
+  cache.set(root, result);
   return result;
+}
+
+export function ordinaryTableParagraph(root: OoxmlNode): boolean {
+  return ordinaryParagraph(root, false);
+}
+
+/** Numbering affects paragraph flow, but does not introduce projected drawing atoms. */
+export function ordinaryDrawingParagraph(root: OoxmlNode): boolean {
+  return ordinaryParagraph(root, true);
 }
