@@ -880,7 +880,6 @@ function layoutBlocksPass(
       ...(options.projectLink ? { projectLink: options.projectLink } : {}),
       ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
       showFieldCodes: options.showFieldCodes,
-
       ...(options.numberingIndex ? { numberingIndex: options.numberingIndex } : {}),
       inlineDrawingLayout: options.inlineDrawingLayout,
       drawingTokenForParagraph: options.drawingTokenForParagraph,
@@ -1648,6 +1647,7 @@ function layoutBlocksPass(
     revisionAuthorFilter: authorFilter,
     seedForwardOnly: (options.drawingExclusionPass ?? 0) < 0,
     drawingLayout: options.inlineDrawingLayout,
+    ...(hostedStory ? { layoutTextboxStory: hostedStory.layoutTextboxStoryFor } : {}),
     paragraphAt: (index) => {
       const entry = prepared[index];
       return entry?.kind === 'paragraph' ? entry : undefined;

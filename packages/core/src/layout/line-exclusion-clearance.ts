@@ -208,7 +208,10 @@ export function createLineExclusionClearance(context: {
     if (
       bottom !== undefined &&
       context.top() + (line.exclusionSkipBefore ?? 0) + skip + height > bottom + 0.001 &&
-      zones.some((zone) => zone.anchorParagraphId === context.paragraphId)
+      zones.some(
+        (zone) =>
+          zone.anchorParagraphId === context.paragraphId && zone.input.mode !== 'topAndBottom'
+      )
     )
       return false;
     pushTextLineDown(line, skip);

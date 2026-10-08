@@ -7,6 +7,7 @@ import {
   drawingModelOffsetsInParagraph,
 } from './drawing-atom-walk.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
+import type { TextboxStoryLayouter } from './inline-textbox-flow.ts';
 import { synthesizeParagraphWrapExclusionZones, type ExclusionZone } from './drawing-exclusion.ts';
 import type { RevisionDisplayMode, RevisionAuthorFilter } from './revision-projection.ts';
 
@@ -22,7 +23,8 @@ export function withOwnAnchorOnlyZones(
   columnIndex: number,
   compatibilityMode: number | undefined,
   displayMode: RevisionDisplayMode,
-  revisionAuthorFilter?: RevisionAuthorFilter
+  revisionAuthorFilter?: RevisionAuthorFilter,
+  layoutTextboxStory?: TextboxStoryLayouter
 ): readonly ExclusionZone[] {
   if (
     !drawings ||
@@ -45,6 +47,7 @@ export function withOwnAnchorOnlyZones(
     ),
     displayMode,
     revisionAuthorFilter,
+    ...(layoutTextboxStory ? { layoutTextboxStory } : {}),
   });
   return [
     ...zones.filter(

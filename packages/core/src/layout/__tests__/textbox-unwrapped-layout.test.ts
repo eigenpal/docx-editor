@@ -48,6 +48,7 @@ function textbox(
     readonly widthPt?: number;
     readonly positionH?: string;
     readonly fill?: string;
+    readonly wrap?: string;
   } = {}
 ): string {
   const cx = (options.widthPt ?? 10) * EMU_PER_PT;
@@ -59,7 +60,7 @@ function textbox(
     '<wp:simplePos x="0" y="0"/>' +
     (options.positionH ?? OFFSET_H) +
     `<wp:positionV relativeFrom="page"><wp:posOffset>${100 * EMU_PER_PT}</wp:posOffset></wp:positionV>` +
-    `<wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/>` +
+    `<wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>${options.wrap ?? '<wp:wrapNone/>'}` +
     '<wp:docPr id="1" name="TB"/>' +
     `<a:graphic><a:graphicData uri="${WPS}"><wps:wsp>` +
     `<wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>` +
@@ -295,5 +296,37 @@ describe('unwrapped text box text', () => {
     expect(parseFloat(fill!.style.width)).toBeCloseTo(13 * CHAR, 1);
     expect(parseFloat(content!.style.width)).toBeCloseTo(13 * CHAR, 1);
     expect(content!.textContent).toBe('painted label');
+  });
+  test('a table cell wraps its text around the sized box', () => {
+    const drawing = textbox(para('Hello world'), {
+      wrap: '<wp:wrapSquare wrapText="bothSides"/>',
+      positionH:
+        '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>',
+    });
+    const cell = `<w:p>${drawing}<w:r><w:t>${'word '.repeat(60)}</w:t></w:r></w:p>`;
+    const doc = readOoxmlPart(
+      `<w:document ${NS}><w:body><w:tbl><w:tblPr><w:tblW w:w="6000" w:type="dxa"/></w:tblPr>` +
+        '<w:tblGrid><w:gridCol w:w="6000"/></w:tblGrid><w:tr><w:tc>' +
+        `<w:tcPr><w:tcW w:w="6000" w:type="dxa"/></w:tcPr>${cell}</w:tc></w:tr></w:tbl><w:p/>` +
+        `<w:sectPr><w:pgSz w:w="${PAGE_WIDTH * 20}" w:h="15840"/>` +
+        '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>' +
+        '</w:body></w:document>',
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!doc.ok) throw new Error(doc.reason);
+    const layout = layoutSemanticDocument(doc.part, 1, {
+      measurer,
+      producer: 'test',
+      inlineDrawingLayout: drawingLayoutFor(doc.part),
+    });
+    const table = layout.pages[0]!.fragments.find((fragment) => fragment.kind === 'table');
+    if (table?.kind !== 'table') throw new Error('no table fragment');
+    const cellParagraph = paragraphFragmentsOfBlocks(table.rows[0]!.cells[0]!.blocks, true)[0]!;
+    const record = layout.pages[0]!.anchoredDrawings!.find((entry) => entry.textboxStory)!;
+    expect(record.width).toBeGreaterThan(20);
+    // Every line beside the box starts past its sized right edge, not its authored 10pt.
+    for (const line of cellParagraph.lines.slice(0, 3)) {
+      expect(line.contentX).toBeGreaterThanOrEqual(record.width - 0.01);
+    }
   });
 });

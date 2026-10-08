@@ -34,6 +34,8 @@ import {
   wrapExclusionFromProjection,
 } from './drawing-wrap.ts';
 import type { LayoutBox } from './semantic-records.ts';
+import type { TextboxStoryLayouter } from './inline-textbox-flow.ts';
+import { textboxPlacementProjection } from './textbox-placement.ts';
 
 /** Paint layer relative to body text — not the OOXML wrap element. */
 export type DrawingPaintLayer = 'behind' | 'inFront';
@@ -467,6 +469,8 @@ export function synthesizeParagraphWrapExclusionZones(options: {
   /** Which revisions this pass resolves away — see {@link publishAnchoredDrawingsForParagraph}. */
   readonly displayMode?: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
+  /** Lays out a text box story, so an unwrapped box carves the width its text gives it. */
+  readonly layoutTextboxStory?: TextboxStoryLayouter;
 }): readonly ExclusionZone[] {
   const atoms = anchoredDrawingAtomsInParagraph(options.paragraph, options.drawingLayout);
   if (atoms.length === 0) return Object.freeze([]);
@@ -496,7 +500,11 @@ export function synthesizeParagraphWrapExclusionZones(options: {
       height: 14,
     });
     const layoutInCell = options.anchorCellBox != null;
-    const resolved = resolveAnchoredDrawingPosition(atom.projection, {
+    const projection =
+      atom.projection.textboxStory?.noWrap && options.layoutTextboxStory
+        ? textboxPlacementProjection(atom.projection, options.layoutTextboxStory(atom.projection))
+        : atom.projection;
+    const resolved = resolveAnchoredDrawingPosition(projection, {
       pageNumber: 1,
       pageWidth: options.contentRight + options.contentLeft + contentWidth,
       pageHeight: 792,
@@ -519,16 +527,16 @@ export function synthesizeParagraphWrapExclusionZones(options: {
       ...options.frameBase,
     });
     const anchorY = options.frameBase ? resolved.y : options.paragraphStartY + lineTop;
-    const measure = measureInlineDrawing(atom.projection);
+    const measure = measureInlineDrawing(projection);
     const geometry = drawingGeometryFromProjection({
-      projection: atom.projection,
+      projection,
       anchorX: resolved.x,
       anchorY,
       extentWidth: measure.width,
       extentHeight: measure.height,
     });
     const input = wrapExclusionInputForProjection({
-      projection: atom.projection,
+      projection,
       geometry,
       contentLeft: options.contentLeft,
       contentRight: options.contentRight,

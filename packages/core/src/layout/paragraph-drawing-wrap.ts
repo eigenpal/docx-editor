@@ -31,6 +31,8 @@ export function createParagraphDrawingWrap(options: {
   readonly compatibilityMode?: number;
   readonly displayMode?: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
+  /** Sizes unwrapped text boxes before an anchor-only paragraph carves their zones. */
+  readonly layoutTextboxStory?: import('./inline-textbox-flow.ts').TextboxStoryLayouter;
 }) {
   // A rectangular exclusion anchored at the next paragraph can reach back into the
   // preceding paragraph's after-spacing. Its origin excludes the extra lines that
@@ -90,7 +92,8 @@ export function createParagraphDrawingWrap(options: {
             columnIndex,
             options.compatibilityMode,
             options.displayMode ?? 'proposed',
-            options.revisionAuthorFilter
+            options.revisionAuthorFilter,
+            options.layoutTextboxStory
           );
       const selected = this.select(entry, index, columnIndex, all, { omittedAnchor });
       // Break spans are column-local; placement adds the column origin once.
