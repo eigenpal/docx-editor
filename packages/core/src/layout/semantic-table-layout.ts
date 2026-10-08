@@ -130,6 +130,11 @@ export { finalizeTableRows } from './table-fragment-finalize.ts';
 import type { RowVMergeLayoutOptions, VMergeRowHeights } from './table-vmerge-heights.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { inlineDrawingFlow } from './inline-textbox-flow.ts';
+import {
+  cellAlignmentRoom,
+  cellAlignmentShift,
+  cellParagraphFirstTop,
+} from './table-row-vertical.ts';
 
 export {
   createTableBorderOwnershipBudget,
@@ -588,7 +593,7 @@ function placeCellParagraph(
   // only: a paragraph continued onto the next page opens once, the way it closes once.
   const topExtent = startsParagraph && !collapseHeight ? paragraphBorderExtentPt(topEdge) : 0;
   const rawRecords: LineRecord[] = [];
-  let y = top + appliedBefore + topExtent;
+  let y = cellParagraphFirstTop(top, appliedBefore, topExtent);
   let nextLineIndex = lineStart;
   let fitted = false;
 
@@ -974,7 +979,8 @@ function placeCellParagraph(
       breakProperties,
       keyParts,
       deps,
-      reportedKey
+      reportedKey,
+      { appliedBefore, topExtent, appliedAfter }
     );
   return {
     fragment,
@@ -1520,11 +1526,9 @@ export function layoutRowFragmentBounded(
       const available =
         entry.cell.textDirection === 'btLr'
           ? entry.width - entry.insets.left - entry.insets.right - contentHeight
-          : rowHeight - entry.insets.top - entry.insets.bottom - contentHeight;
-      if (available > 0) {
-        const dy = entry.cell.vAlign === 'center' ? available / 2 : available;
-        blocks = shiftBlocks(blocks, dy);
-      }
+          : cellAlignmentRoom(rowHeight, entry.insets.top, entry.insets.bottom, contentHeight);
+      if (available > 0)
+        blocks = shiftBlocks(blocks, cellAlignmentShift(entry.cell.vAlign, available));
     }
     return {
       id: entry.cell.id,

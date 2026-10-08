@@ -84,7 +84,7 @@ function sameSpans(
 }
 
 /** The same own keys in the same order, each a known option with the same value. */
-function sameOptions(
+export function sameOptions(
   a: RowVMergeLayoutOptions | undefined,
   b: RowVMergeLayoutOptions | undefined
 ): boolean {

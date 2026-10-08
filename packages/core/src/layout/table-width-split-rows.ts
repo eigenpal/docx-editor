@@ -14,8 +14,9 @@
 // natural height, which the placed occurrences do not show in full, are refused instead:
 // `w:cantSplit` and exact rows, keep-with-next on either side, a row that starts a page, a split
 // row opening its fragment below repeated headers (the repeated-header border plan), the first
-// body row, and a continuation fragment without the repeated header group. The admission probe
-// that decides whether headers repeat above a continuation is run again and must agree.
+// body row, and a fragment without the repeated header group in a table that has one, for the
+// first occurrence as for every later one. The admission probe that decides whether headers
+// repeat above a continuation is run again and must agree.
 
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import {
@@ -40,8 +41,10 @@ export interface SplitRowPlacement {
   readonly insets: ReadonlyMap<string, CellContentInsets> | undefined;
 }
 
-interface Occurrence {
-  readonly fragmentIndex: number;
+/** One occurrence of a split row: its fragment, and its row index there. */
+export interface SplitRowOccurrence {
+  /** The fragment's position in `SplitRowInput.fragments`, not its index in the table. */
+  readonly listPosition: number;
   readonly fragment: TableFragmentRecord;
   readonly index: number;
   readonly old: TableRowFragmentRecord;
@@ -95,13 +98,13 @@ export function splitRowWidthTestRecorder(): {
 export function createSplitRowPlacements(
   input: SplitRowInput
 ): (old: TableRowFragmentRecord) => SplitRowPlacement | null {
-  const chains = new Map<string, Occurrence[]>();
-  for (const [fragmentIndex, fragment] of input.fragments.entries())
+  const chains = new Map<string, SplitRowOccurrence[]>();
+  for (const [listPosition, fragment] of input.fragments.entries())
     fragment.rows.forEach((old, index) => {
       if (!old.isContinuation && !old.hasContinuation) return;
       let chain = chains.get(old.id);
       if (!chain) chains.set(old.id, (chain = []));
-      chain.push({ fragmentIndex, fragment, index, old });
+      chain.push({ listPosition, fragment, index, old });
     });
   const placed = new Map<TableRowFragmentRecord, SplitRowPlacement | null>();
   return (old) => {
@@ -119,8 +122,15 @@ export function createSplitRowPlacements(
   };
 }
 
-/** Whether the chain has the shape the paginator gives a split row; see the module comment. */
-function admissibleChain(input: SplitRowInput, chain: readonly Occurrence[]): boolean {
+/**
+ * Whether the chain has the shape the paginator gives a split row; see the module comment.
+ *
+ * @internal Exported for tests of each refused shape.
+ */
+export function admissibleSplitChain(
+  input: Pick<SplitRowInput, 'pageIndexOf' | 'pages' | 'pageBand' | 'headerCount'>,
+  chain: readonly SplitRowOccurrence[]
+): boolean {
   const { pageIndexOf, pages, pageBand, headerCount } = input;
   const last = chain.length - 1;
   if (last < 1 || !pageBand) return false;
@@ -134,11 +144,16 @@ function admissibleChain(input: SplitRowInput, chain: readonly Occurrence[]): bo
     if (k < last && index !== fragment.rows.length - 1) return false;
     if (k > 0) {
       const previous = chain[k - 1]!.fragment;
-      if (chain[k]!.fragmentIndex !== chain[k - 1]!.fragmentIndex + 1) return false;
+      if (chain[k]!.listPosition !== chain[k - 1]!.listPosition + 1) return false;
       if (pageIndex !== pageIndexOf.get(previous)! + 1) return false;
       // Below the whole repeated header group, or at the top when the table has none.
       if (index !== headerCount) return false;
       for (let at = 0; at < index; at += 1) if (!fragment.rows[at]!.isHeaderRepeat) return false;
+    } else if (index === 0 && headerCount > 0) {
+      // A fragment the row opens without the table's header group: the paginator decided not
+      // to repeat the headers with `admitsRepeatedHeaders`, a probe this lane runs again only
+      // for later occurrences. Refused rather than inferred from the row's equal lines.
+      return false;
     } else if (index > 0 && fragment.rows.slice(0, index).every((row) => row.isHeaderRepeat)) {
       // A row first below repeated headers may take the repeated-header border plan's deps.
       return false;
@@ -149,7 +164,7 @@ function admissibleChain(input: SplitRowInput, chain: readonly Occurrence[]): bo
 
 function placeChain(
   input: SplitRowInput,
-  chain: readonly Occurrence[]
+  chain: readonly SplitRowOccurrence[]
 ): Map<TableRowFragmentRecord, SplitRowPlacement> | null {
   const { structure, sources, ordinals, base, left, headerCount } = input;
   const source = sources.get(chain[0]!.old.id);
@@ -168,7 +183,7 @@ function placeChain(
     rowStartsPage(structure, ordinal, cascade, base.compatibilityMode)
   )
     return null;
-  if (!admissibleChain(input, chain)) return null;
+  if (!admissibleSplitChain(input, chain)) return null;
   const cols = structure.columnWidthsPt;
   const last = chain.length - 1;
   const results = new Map<TableRowFragmentRecord, SplitRowPlacement>();
