@@ -52,7 +52,8 @@ export function proposalRevisionError(
   start: number,
   end: number,
   ownAuthor?: string,
-  allowOwnDeleted = false
+  allowOwnDeleted = false,
+  ownEdgeAuthor?: string
 ): AutomationError | null {
   // Shared note parts can group one revision identity across several stories. Check the
   // individual sites and ranges, rather than discarding a group that spans note boundaries.
@@ -96,6 +97,7 @@ export function proposalRevisionError(
       // These card anchors must not prevent edits in an unrelated cell or row.
       if (sites.length > 0 && ownedSites === sites.length) return false;
     }
+    const own = ownEdgeAuthor !== undefined && item.author === ownEdgeAuthor;
     return item.ranges.some((r) => {
       const first = story.indexOf(r.start.paragraphId);
       const last = story.indexOf(r.end.paragraphId);
@@ -104,7 +106,18 @@ export function proposalRevisionError(
       if (index < first || index > last) return false;
       const a = index === first ? r.start.offset : 0;
       const b = index === last ? r.end.offset : Infinity;
-      return start <= b && end >= a;
+      if (start < b && end > a) return true;
+      if (start > b || end < a) return false;
+      // Touching. A replacement or deletion may START where the author's own inserted text
+      // ends: the new strike cannot join anyone's decision there. Ending where it starts
+      // would put a strike directly before their insertion, which reviews as one
+      // replacement; beside their own struck text it would join that deletion. Both refuse.
+      if (!own || start !== b) return true;
+      return !(
+        item.revisionKind === 'insert' ||
+        item.revisionKind === 'replace' ||
+        (item.revisionKind === 'paragraphMark' && item.markDirection === 'insert')
+      );
     });
   });
   if (overlaps)

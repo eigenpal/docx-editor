@@ -6,11 +6,13 @@ import {
 } from './paragraph-tab-flow.ts';
 import { growRunBorderLineMetrics, textBandHeightWithBorders } from './run-border-strokes.ts';
 import {
+  clipLineDrawingsAtTop,
   growPendingLineDrawingExtent,
   lineContentX,
   lineHoldsContent,
   markPendingLineWrapAdvances,
   placeLeadingIgnoredBreaks,
+  admittedToNarrowPassage,
 } from './pending-line.ts';
 import { spaceShrinkWordTail } from './space-shrink-word-tail.ts';
 import { wordFollowsOnlyTabs } from './leading-tab-word.ts';
@@ -98,6 +100,12 @@ import { createEquationLayouter } from './equation-layout.ts';
 import { anchorLineStartsByModelOffset } from './anchor-line-probe.ts';
 import * as lineEndSpaces from './line-end-whitespace.ts';
 import { chopOversizedWord } from './oversized-word-break.ts';
+import {
+  breakClearSelector,
+  ownParagraphFramedClearZones,
+  withOwnClearZones,
+  type TextWrappingBreakClear,
+} from './text-wrapping-break-clear.ts';
 import { canChopPiece, isLayoutOwnedPiece } from './layout-owned-piece.ts';
 import type { WordCarryContext } from './word-carry.ts';
 import { carryWordAtOptionalHyphens } from './optional-hyphen-break.ts';
@@ -317,6 +325,7 @@ export function breakParagraph(
   const rtlLeadingIndent = Math.max(0, (flow?.marginExtent?.right ?? rightEdge) - rightEdge);
   const wrapRight = Math.min(contentRight, contentOriginX + rightEdge);
   const lines: PendingLine[] = [];
+  let previousLineCut = false; // The last line closed inside a word the oversized cut split.
   let alignedTabRight = 0;
   let line: PendingLine = {
     spans: [],
@@ -335,6 +344,9 @@ export function breakParagraph(
   // resolves away publishes no record, so it must reserve no line top and carve no hole.
   const anchorDisplayMode = flow?.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
 
+  // A remainder re-broken on a later page (`startOffset`) holds only the anchors in its own
+  // text. A float anchored before it stays with the earlier lines; its band reaches this page
+  // only through the zones the page publishes.
   const topAndBottomAnchorStarts = (() => {
     const starts = new Set<number>();
     if (!flow?.inlineDrawingLayout) return starts;
@@ -347,7 +359,7 @@ export function breakParagraph(
         continue;
       if (atom.projection.wrap !== 'topAndBottom') continue;
       const modelStart = offsets.get(atom.atomId);
-      if (modelStart !== undefined) starts.add(modelStart);
+      if (modelStart !== undefined && modelStart >= startOffset) starts.add(modelStart);
     }
     return starts;
   })();
@@ -371,7 +383,7 @@ export function breakParagraph(
         continue;
       }
       const modelStart = offsets.get(atom.atomId);
-      if (modelStart !== undefined) starts.add(modelStart);
+      if (modelStart !== undefined && modelStart >= startOffset) starts.add(modelStart);
     }
     return starts;
   })();
@@ -434,6 +446,7 @@ export function breakParagraph(
             anchorLineTopByModelStart,
             anchorCellBox: flow.anchorCellBox,
             cellAnchorScope: flow.cellAnchorScope,
+            ...(flow.layoutTextboxStory ? { layoutTextboxStory: flow.layoutTextboxStory } : {}),
             displayMode: anchorDisplayMode,
             ...(flow.revisionAuthorFilter
               ? { revisionAuthorFilter: flow.revisionAuthorFilter }
@@ -455,6 +468,7 @@ export function breakParagraph(
             anchorLineTopByModelStart,
             anchorCellBox: flow.anchorCellBox,
             cellAnchorScope: flow.cellAnchorScope,
+            ...(flow.anchorFrameBase ? { frameBase: flow.anchorFrameBase } : {}),
             displayMode: anchorDisplayMode,
             ...(flow.revisionAuthorFilter
               ? { revisionAuthorFilter: flow.revisionAuthorFilter }
@@ -487,13 +501,30 @@ export function breakParagraph(
       anchorLineTopByModelStart.set(modelStart, priorLineExtent());
     }
   };
+  /**
+   * Record the top of each top-and-bottom anchor the probe puts on the line that opens, so the
+   * band moves that line before any text on it is placed beside floats at the old height.
+   */
+  const recordTopAndBottomAnchorsOnOpeningLine = (): void => {
+    for (const start of topAndBottomAnchorStarts) {
+      if (
+        anchorLineStartByOffset.get(start) === line.start &&
+        !anchorLineTopByModelStart.has(start)
+      )
+        anchorLineTopByModelStart.set(start, priorLineExtent());
+    }
+  };
 
   const {
     applyTopAndBottomSkipIfNeeded,
     applyNarrowWrapSkipIfNeeded,
     applyInlineObjectSkipIfNeeded,
+    applyOpeningSegmentSkipIfNeeded,
     finalizeTopAndBottomClearance,
     clearEmptyParagraph,
+    clearBlockedEmptyLine,
+    applyBreakClearance,
+    commitBreakClearance,
   } = createLineExclusionClearance({
     line: () => line,
     top: currentLineTopY,
@@ -506,7 +537,45 @@ export function breakParagraph(
     measurer,
     lineSpacing,
     holdsContent,
+    paragraphId,
+    ...(flow?.regionBottomY !== undefined ? { regionBottom: flow.regionBottomY } : {}),
   });
+
+  // Own floats placed from the paragraph top, which a clearing break finds wherever the paragraph
+  // lands, even before a pass has published them on this page.
+  let ownClear: readonly ExclusionZone[] | undefined;
+  const ownClearZones = (): readonly ExclusionZone[] =>
+    (ownClear ??=
+      startOffset > 0 || !flow?.inlineDrawingLayout
+        ? []
+        : ownParagraphFramedClearZones({
+            ...(flow.anchorFrameBase ? { frameBase: flow.anchorFrameBase } : {}),
+            paragraph,
+            paragraphId,
+            drawingLayout: flow.inlineDrawingLayout,
+            contentLeft,
+            contentRight,
+            paragraphTop:
+              (flow.anchorParagraphStartY ?? flow.paragraphStartY ?? 0) -
+              (flow.paragraphSpaceBefore ?? 0),
+            displayMode: anchorDisplayMode,
+            ...(flow.revisionAuthorFilter
+              ? { revisionAuthorFilter: flow.revisionAuthorFilter }
+              : {}),
+          })).filter((zone) =>
+      exclusionZoneAppliesToLine(zone, paragraphId, line, anchorLineStartByOffset)
+    );
+  /** The floats a `w:br w:clear` on the line being built clears, chosen where the pen stands. */
+  const breakClearOnLine = (clear: TextWrappingBreakClear) =>
+    clear === 'all'
+      ? (zones: readonly ExclusionZone[]) => withOwnClearZones(zones, ownClearZones())
+      : breakClearSelector(clear, activeExclusionZones(), {
+          y: currentLineTopY() + (line.exclusionSkipBefore ?? 0),
+          height: line.height,
+          left: Math.max(contentLeft, lineOrigin()),
+          right: wrapRight,
+          penX: lineOrigin() + line.width,
+        });
 
   // Where the line will actually sit. A band that pushed this line down has already been
   // recorded on it, so probing must ask about the shifted position — probing the unshifted
@@ -667,22 +736,22 @@ export function breakParagraph(
     }
   };
 
-  const closeForTopAndBottomAfterAnchor = (modelStart: number): void => {
+  // A top-and-bottom anchor does not end its line: the text before and after it shares one
+  // line, which moves below the band as a whole when the band crosses it.
+  const clearTopAndBottomAfterAnchor = (modelStart: number): void => {
     const zones = activeExclusionZones().filter(
       (zone) =>
         zone.input.mode === 'topAndBottom' &&
         zone.anchorParagraphId === paragraphId &&
         modelStart >= zone.anchorModelStart
     );
-    if (zones.length === 0) return;
-    // The band ends the line it is anchored ON, once. A piece that already sits on the line
-    // the anchor opened is ordinary content, so closing again gave every later run in the
-    // paragraph a line of its own: a paragraph-final whitespace run became a phantom blank
-    // line, and an ordinary second run broke mid-sentence at the run seam.
-    const opensAfterAnchor = zones.some((zone) => line.start < zone.anchorModelStart);
-    if (opensAfterAnchor && holdsContent()) closeLine();
-    applyTopAndBottomSkipIfNeeded();
+    if (zones.length > 0) applyTopAndBottomSkipIfNeeded(holdsContent());
   };
+
+  // A line admitted to its passage breaks an oversized segment there instead of moving it.
+  const movesOpeningSegment = (width: number): boolean =>
+    !admittedToNarrowPassage(pieces, line.start, previousLineCut) &&
+    applyOpeningSegmentSkipIfNeeded(width, exclusionProbe.height());
 
   const ensurePlacementWidth = (width: number, depth = 0): boolean => {
     if (depth > 64) return remainingLineWidth() >= width;
@@ -692,6 +761,7 @@ export function breakParagraph(
         closeLine();
         return ensurePlacementWidth(width, depth + 1);
       }
+      if (movesOpeningSegment(width)) return ensurePlacementWidth(width, depth + 1);
       return true;
     }
     if (width <= remainingLineWidth() + 0.001) return true;
@@ -705,7 +775,10 @@ export function breakParagraph(
     // this the word was chopped at the character to fill that sliver, one letter per line,
     // while the usable column to its right stayed empty.
     if (tryAdvanceToNextPassage()) return ensurePlacementWidth(width, depth + 1);
-    // Nowhere wider left on this line — place anyway (overflow) rather than stacking blanks.
+    // No passage at this height holds the segment: the line moves down to the first height
+    // where one does. Each move clears at least one band, so the recursion makes progress.
+    if (movesOpeningSegment(width)) return ensurePlacementWidth(width, depth + 1);
+    // Only a segment wider than the clear column remains; it overflows and is broken here.
     return true;
   };
 
@@ -783,6 +856,7 @@ export function breakParagraph(
   };
 
   const closeLine = (options?: { readonly includeParagraphMark?: boolean }): void => {
+    previousLineCut = false; // Only the oversized-word cut sets it again.
     placeLeadingIgnoredBreaks(line, pageBreaksIgnored);
     const empty =
       line.drawings.length === 0 && line.spans.every((span) => isHeightlessWhitespace(span.text));
@@ -815,11 +889,22 @@ export function breakParagraph(
     growPendingLineDrawingExtent(line);
     // Apply paragraph line spacing once to the finished box.
     const naturalHeight = line.height;
-    // `auto` scales the TEXT band, not a tall inline drawing or equation. The atom remains
-    // a floor, while a larger text multiple can still win (ECMA-376 17.3.1.33).
+    // `auto` scales the TEXT band, not a tall inline drawing or equation (ECMA-376
+    // 17.3.1.33). A drawing line above single spacing keeps the drawing's box and adds the
+    // multiple's extra text band below it; an equation or a smaller multiple keeps the atom
+    // as a floor, while a larger text multiple can still win.
     const hasUnscaledInlineExtent =
       line.drawings.length > 0 || line.spans.some((span) => span.equation !== undefined);
     const scalesTextBandOnly = lineSpacing.rule === 'auto' && hasUnscaledInlineExtent;
+    const holdsUnscaledPicture =
+      scalesTextBandOnly &&
+      line.drawings.length > 0 &&
+      !line.spans.some((span) => span.equation !== undefined) &&
+      lineSpacing.gridPitch === undefined;
+    const addsTextBandExtra = holdsUnscaledPicture && lineSpacing.value > 240;
+    // Below single spacing the multiple takes its missing text band off the line's top: the
+    // line is the picture less that band, never less than the scaled text band.
+    const removesTextBand = holdsUnscaledPicture && lineSpacing.value < 240;
     const spacingBase = scalesTextBandOnly
       ? textBandHeightWithBorders(
           line.spans,
@@ -835,20 +920,36 @@ export function breakParagraph(
     line.baseline += markerFloor;
     // Space ABOVE the glyph band only (exact baseline placement, not auto/atLeast). Never negative.
     line.leading = Math.max(0, line.baseline - glyphBaseline);
-    line.height = scalesTextBandOnly ? Math.max(spaced.height, naturalHeight) : spaced.height;
+    // The multiple's extra over the text band sits below the drawing.
+    const textBandExtra = addsTextBandExtra
+      ? Math.max(0, spaced.height - spacingBase)
+      : removesTextBand
+        ? Math.min(0, spaced.height - spacingBase)
+        : 0;
+    line.height = scalesTextBandOnly
+      ? Math.max(spaced.height, naturalHeight + textBandExtra)
+      : spaced.height;
+    // A baseline below the shortened line's foot moves up to it, so a picture ends there.
+    if (removesTextBand) line.baseline = Math.min(line.baseline, line.height);
+    // Like a text line's auto extra, the depth below the drawing may cross the bottom margin.
+    const drawingLineTrailing = addsTextBandExtra ? Math.max(0, line.height - naturalHeight) : 0;
     line.height += markerFloor;
     // Baseline shifts from line spacing must move inline drawings too, or authored distT/distB
     // and the text baseline drift apart. For `exact`, keep the authored box — tall drawings
     // clip/overflow per content-clip policy; auto/atLeast still grow to contain distB.
     repositionDrawingsToFinalBaseline();
+    // A picture taller than a shortened line paints only below the line's top.
+    if (removesTextBand) clipLineDrawingsAtTop(line);
     if (lineSpacing.rule !== 'exact') growPendingLineDrawingExtent(line);
     line.trailingSpacing =
       line.drawings.length === 0 && lineSpacing.rule !== 'exact'
         ? Math.max(0, spaced.trailing ?? spaced.height - naturalHeight)
-        : 0;
+        : drawingLineTrailing;
     finalizeTopAndBottomClearance();
+    commitBreakClearance();
     if (empty && (wrapAnchorStarts.size > 0 || topAndBottomAnchorStarts.size > 0))
       clearEmptyParagraph(paragraphId);
+    else if (empty && firstLine) clearBlockedEmptyLine();
     // Mark wrap advances after merging, using the shape paint receives.
     coalesceIdeographicSpans(line);
     markPendingLineWrapAdvances(line);
@@ -875,6 +976,7 @@ export function breakParagraph(
       leading: 0,
       trailingSpacing: 0,
     };
+    recordTopAndBottomAnchorsOnOpeningLine();
     applyTopAndBottomSkipIfNeeded();
   };
 
@@ -908,6 +1010,23 @@ export function breakParagraph(
     setProbeWidth: (width) => exclusionProbe.setWidth(width),
   };
 
+  // A remainder re-broken after a clearing break (on a later page, say) opens clear as well.
+  recordTopAndBottomAnchorsOnOpeningLine();
+  const restartClear =
+    startOffset > 0
+      ? allPieces.find((p) => p.end === startOffset && p.breakClear)?.breakClear
+      : undefined;
+  if (restartClear) {
+    // A remainder clears only floats its region's page publishes, and floats of other
+    // paragraphs. A zone of its own rebuilt from the remainder's top (in a table cell) is not
+    // where a float anchored earlier is; one anchored on this line moves with it, so clearing
+    // it again on every region would leave the line no region to fit.
+    const select = breakClearOnLine(restartClear);
+    const placed = new Set(flow?.pageExclusionZones ?? []);
+    applyBreakClearance((zones) =>
+      select(zones).filter((zone) => zone.anchorParagraphId !== paragraphId || placed.has(zone))
+    );
+  }
   const shrinkTail = spaceShrinkWordTail(pieces, measurer);
   for (let pieceIndex = 0; pieceIndex < pieces.length; pieceIndex += 1) {
     const piece = pieces[pieceIndex]!;
@@ -1095,12 +1214,14 @@ export function breakParagraph(
       });
       growLineMetrics(line, breakMetrics);
       line.end = piece.end;
+      const cleared = piece.breakClear ? breakClearOnLine(piece.breakClear) : undefined;
       closeLine();
+      if (cleared) applyBreakClearance(cleared);
       trailingLineBreak = true;
       continue;
     }
     trailingLineBreak = false;
-    closeForTopAndBottomAfterAnchor(piece.start);
+    clearTopAndBottomAfterAnchor(piece.start);
     if (
       sameParagraphAnchorStarts.length > 0 &&
       piece.start >= Math.min(...sameParagraphAnchorStarts)
@@ -1418,7 +1539,9 @@ export function breakParagraph(
           clippedWordEnd = clipWordEndAtPen();
           width = clippedWordEnd?.width ?? naturalWidth;
         }
-      } else if (!holdsContent() && fitWidth > lineAvailable() + 0.001) {
+      } else if (!holdsContent() && fitWidth > remainingLineWidth() + 0.001) {
+        // The pen of an empty line may already stand in a later passage: the test above is
+        // the room ahead of it, not the line's capacity from its origin.
         if (!ensurePlacementWidth(fitWidth)) continue;
       } else if (borrowsSpace && endsParagraph(pieceIndex, boundary)) {
         // Only this admission may compress the paragraph's last line when it is aligned.
@@ -1487,6 +1610,11 @@ export function breakParagraph(
             opening = null;
           },
           closeLine,
+          // A line the cut closes ends inside the word, so the next line continues it.
+          closeCutLine: () => {
+            closeLine();
+            previousLineCut = true;
+          },
           overflowTolerancePt: OVERFLOW_TOLERANCE_PT,
           keepWithPrevious: openDecision === 'forbidden',
           // Kinsoku vetoes measured cuts: 天。地。人。 must not chop onto a leading 。.

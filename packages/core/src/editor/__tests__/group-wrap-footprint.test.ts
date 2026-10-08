@@ -1,4 +1,4 @@
-// A shape group with a picture and a text box member cannot paint, so under
+// A shape group with a picture and a shadowed text box member cannot paint, so under
 // `mc:AlternateContent` it stays invisible. Its anchor still wraps text: a top-and-bottom band
 // 24pt below its paragraph pushed the rest of the page down, and without it every later line
 // sat 84pt too high. These tests mount real bytes and check that the hidden group moves text
@@ -47,7 +47,7 @@ const PICTURE_MEMBER =
 const TEXTBOX_MEMBER =
   '<wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm><a:off x="889000" y="0"/>' +
   '<a:ext cx="2540000" cy="762000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
-  '</wps:spPr><wps:txbx><w:txbxContent><w:p><w:r><w:t>Group label</w:t></w:r></w:p>' +
+  '<a:effectLst><a:outerShdw dist="38100"/></a:effectLst></wps:spPr><wps:txbx><w:txbxContent><w:p><w:r><w:t>Group label</w:t></w:r></w:p>' +
   '</w:txbxContent></wps:txbx><wps:bodyPr/></wps:wsp>';
 
 interface GroupOptions {

@@ -128,23 +128,37 @@ describe('a full-page top-and-bottom picture in its own paragraph', () => {
     );
     expect(pages.map((page) => page.lines.map((line) => [line[3], line[4]]))).toEqual([
       [['Lead paragraph before the picture.', 0]],
-      [['after', 792]],
+      // The band is where the page puts the picture: it ends 720 pt into the content box.
+      [['after', 720]],
       [['tail', 0]],
     ]);
     expect(pages.map((page) => page.drawings)).toEqual([[], [FULL_PAGE_PICTURE], []]);
   });
 
   test('a band that leaves no room for its line adds no blank pages', () => {
-    // 640 pt from the page top: the line below the band ends past the 648 pt content box.
+    // 760 pt from the page top: the band ends 688 pt into the 648 pt content box.
     const pages = summary(
-      layoutBody(`${LEAD}<w:p>${pagePicture('0', 0, PAGE_CX, 8128000)}</w:p>${text('tail')}`)
+      layoutBody(`${LEAD}<w:p>${pagePicture('0', 0, PAGE_CX, 9652000)}</w:p>${text('tail')}`)
     );
     expect(pages.map((page) => page.lines.map((line) => [line[3], line[4]]))).toEqual([
       [['Lead paragraph before the picture.', 0]],
-      [['', 640]],
+      [['', 688]],
       [['tail', 0]],
     ]);
-    expect(pages[1]!.drawings).toEqual([[-72, -72, 612, 640, null]]);
+    expect(pages[1]!.drawings).toEqual([[-72, -72, 612, 760, null]]);
+  });
+
+  test('a band that ends on the page moves the lines before and after it below it', () => {
+    // 640 pt from the page top: the band ends 568 pt into the content box. The paragraph
+    // before the anchor meets the band, so it starts below it as the anchor line does.
+    const pages = summary(
+      layoutBody(`${LEAD}<w:p>${pagePicture('0', 0, PAGE_CX, 8128000)}</w:p>${text('tail')}`)
+    );
+    expect(pages.map((page) => page.lines.map((line) => line[3]))).toEqual([
+      ['Lead paragraph before the picture.', '', 'tail'],
+    ]);
+    expect(pages[0]!.lines[0]![4]).toBe(568);
+    expect(pages[0]!.drawings).toEqual([[-72, -72, 612, 640, null]]);
   });
 
   test('two full-page pictures in a row take one page each', () => {
@@ -174,7 +188,8 @@ describe('a full-page top-and-bottom picture in its own paragraph', () => {
   });
 
   test('a band that fits an empty page keeps its line below the band', () => {
-    // Control: 600 pt from the page top leaves room for the line on the page after the break.
+    // Control: 600 pt from the page top, 528 pt into the content box, leaves room for the line
+    // on the page after the break.
     const pages = summary(
       layoutBody(
         '<w:p><w:r><w:t>Lead</w:t><w:br w:type="page"/></w:r></w:p>' +
@@ -182,7 +197,7 @@ describe('a full-page top-and-bottom picture in its own paragraph', () => {
       )
     );
     expect(pages).toHaveLength(2);
-    expect(pages[1]!.lines.map((line) => line[4])).toEqual([600]);
+    expect(pages[1]!.lines.map((line) => line[4])).toEqual([528]);
     expect(pages[1]!.drawings).toEqual([[-72, -72, 612, 600, null]]);
   });
 

@@ -1309,6 +1309,14 @@ export interface GraphemeWordSegmentRecord {
 }
 
 // @public
+export interface GroupTextboxStoryRecord {
+    readonly box: LayoutBox;
+    readonly memberNodeId: string;
+    readonly rotationDegrees: number;
+    readonly story: TextboxStoryLayout;
+}
+
+// @public
 export const guardOperationSnapshot: (captured: OperationSnapshot, current: OperationSnapshot) => OperationSnapshotGuard;
 
 // @public
@@ -1519,6 +1527,7 @@ export interface InlineDrawingRecord {
     // (undocumented)
     readonly geometry: DrawingGeometry;
     readonly groupPicture?: DrawingGroupPictureRecord;
+    readonly groupTextboxStories?: readonly GroupTextboxStoryRecord[];
     // (undocumented)
     readonly height: number;
     // (undocumented)
@@ -4551,6 +4560,7 @@ export interface TextboxStoryLayout {
         y: number;
     }>;
     readonly contentWidth: number;
+    readonly extentWidth?: number;
     readonly fallbackReason?: TextboxStoryFallbackReason;
     readonly fillHex: string | null;
     readonly flowHeight: number;

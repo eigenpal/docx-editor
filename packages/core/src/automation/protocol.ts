@@ -95,7 +95,11 @@ export interface AutomationCapabilities {
  * `stale-revision` must not retry an `invalid-handle`.
  */
 export type AutomationErrorCode =
-  /** `expectedRevision` did not match the host's current revision; nothing was applied. */
+  /**
+   * Nothing was applied because the request was built from an older read: `expectedRevision`
+   * did not match the host's current revision, or an endpoint's `readAt` names a position
+   * that moved since. Read again before retrying; resending the same endpoints fails again.
+   */
   | 'stale-revision'
   /** A handle this host never minted, or one naming a different kind of object. */
   | 'invalid-handle'
@@ -174,6 +178,13 @@ export interface AutomationEndpoint {
    */
   readonly paragraph: AutomationHandle;
   readonly offset: number;
+  /**
+   * The host revision this endpoint was read at. Hosts stamp every endpoint they answer with
+   * it; send it back unchanged. An endpoint whose paragraph text changed since then is refused
+   * with `stale-revision` instead of addressing whatever text now sits at its offset. Omit it
+   * for an endpoint built by hand, which the host then takes as current.
+   */
+  readonly readAt?: number;
 }
 
 /** A stretch of a story between two endpoints, in reading order. */

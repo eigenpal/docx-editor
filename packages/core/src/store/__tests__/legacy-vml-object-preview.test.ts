@@ -212,10 +212,6 @@ describe('embedded object cached previews', () => {
       embeddedObject({ objectAttributes: ' w:unknown="1"' }),
       embeddedObject({ objectAttributes: ' r:id="rOle"' }),
       embeddedObject().replace('w:dxaOrig="2000"', 'w:dxaOrig="-1"'),
-      embeddedObject({
-        style:
-          'position:absolute;margin-left:10pt;margin-top:10pt;width:100pt;height:28.5pt;z-index:1',
-      }),
       embeddedObject({ style: 'width:100pt;height:28.5pt;rotation:90' }),
       embeddedObject({
         shapeExtra: ' o:borderleftcolor="black"',

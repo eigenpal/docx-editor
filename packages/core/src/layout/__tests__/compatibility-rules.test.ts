@@ -35,6 +35,7 @@ const MODE_MATRIX = {
   modernGridLineSideRules: 'modern',
   noteTableCellKeeps: 'modern',
   positionedTableBreaksAtMargin: 'modern',
+  pageBreakBeforeKeepsSpace: 'legacy',
   pageBreakLinesStretch: 'legacy',
   rowPageBreakYieldsToKeep: 'modern',
   tableParagraphWidowControl: 'modern',

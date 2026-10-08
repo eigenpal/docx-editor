@@ -6,6 +6,7 @@
 // the little state it cannot own — so React, Vue and a plain page get identical behaviour
 // instead of three hand-written keymaps that drift.
 
+import { chordLetter } from './chord-letter.ts';
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { NavigationCommand } from '@docx-editor.dev/core/layout';
 import { paragraphTextOf } from '@docx-editor.dev/core/store';
@@ -73,7 +74,7 @@ const FORMATTING: Record<string, { localName: string; attributes?: Record<string
  * layout that has an AltGr level — so refusing on it alone would have taken the long-shipped
  * `Ctrl+Alt+F` and `Ctrl+Alt+D` note chords down on Polish and Croatian, where those two keys
  * compose nothing. What settles it is whether a character WAS composed, which is exactly what
- * `letterOf` answers: a composed character is not a Latin letter, so the letter it returns came
+ * `chordLetter` answers: a composed character is not a Latin letter, so the letter it returns came
  * from the KEYCAP and differs from what was typed.
  *
  * The macOS half never reaches any of that: the chord there is Cmd+Option, and Command is not
@@ -88,34 +89,6 @@ function isAltAccelerator(event: KeyboardEvent, letter: string): boolean {
   // "no AltGraph" is the honest default for a keystroke that cannot say.
   if (!(event.getModifierState?.('AltGraph') ?? false)) return true;
   return event.key.toLowerCase() === letter;
-}
-
-/** A single Latin letter, which is what every chord in this keymap is named by. */
-const CHORD_LETTER = /^[a-z]$/;
-
-/**
- * Which LETTER a chord names, for the accelerators held with Alt.
- *
- * The CHARACTER first. A user reaching for Ctrl+Alt+F presses the key that types `f`,
- * wherever their layout puts it, and Windows resolves accelerators the same way — so reading
- * the physical position first sent Dvorak's footnote chord to the key that types `u`.
- *
- * `event.code` is the fallback, for the case that makes `key` unreadable: a modifier that
- * COMPOSES. macOS turns Option+F into `ƒ`, Option+C into `ç` and Option+D into `∂`, none of
- * them a letter — so falling through to the keycap is the only way those chords work there,
- * and it costs nothing, because a `key` that IS a letter has already answered.
- *
- * Never both for one event: consulting `code` as well would claim a second chord wherever
- * the two disagree, which is every remapped layout.
- */
-function letterOf(event: KeyboardEvent): string {
-  const typed = event.key.toLowerCase();
-  if (CHORD_LETTER.test(typed)) return typed;
-  // Defaulted, like `getModifierState` above: a synthesised event — this repo's own keymap
-  // tests build several — carries no `code`, and reading `.length` off it would throw out of
-  // the keydown handler.
-  const physical = event.code ?? '';
-  return physical.length === 4 && physical.startsWith('Key') ? physical[3]!.toLowerCase() : '';
 }
 
 export function createKeyDownHandler(
@@ -193,7 +166,7 @@ export function createKeyDownHandler(
       return;
     }
     // Word: Ctrl/Cmd+Alt+F footnote, Ctrl/Cmd+Alt+D endnote, and the Format Painter pair.
-    const altLetter = letterOf(event);
+    const altLetter = chordLetter(event);
     if (isAltAccelerator(event, altLetter) && !event.shiftKey) {
       const key = altLetter;
       if (key === 'f') {

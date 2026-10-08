@@ -94,7 +94,7 @@ describe('DocxEditorContextMenu', () => {
     }
   });
 
-  test('the default set is the packaged rows, ending with review.comments', async () => {
+  test('the default set is the packaged rows; Add comment needs a review rail', async () => {
     const mounted = mountMenu();
     try {
       await flush();
@@ -109,20 +109,18 @@ describe('DocxEditorContextMenu', () => {
         'edit.delete',
         'edit.selectAll',
         'text.link',
-        'review.comments',
       ]);
     } finally {
       mounted.unmount();
     }
   });
 
-  test('review.comments row is present for Add a comment entry point', async () => {
+  test('without a review rail there is no Add comment row', async () => {
     const mounted = mountMenu();
     try {
       await flush();
       await openMenu(mounted.container);
-      const commentRow = mounted.container.querySelector('[data-slot="review.comments"]');
-      expect(commentRow?.textContent).toContain('comments.addComment');
+      expect(mounted.container.querySelector('[data-slot="review.addComment"]')).toBeNull();
     } finally {
       mounted.unmount();
     }

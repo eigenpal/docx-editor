@@ -156,6 +156,14 @@ Wrap changes are **layout-structural**: exclusion zones feed line breaking befor
 
 Text distances inherit each missing side from `wp:anchor`; an explicit wrap-child value, including zero, overrides that side. When square or rectangular tight wrapping leaves no passage wide enough for the next glyph, text clears the image before continuing. The clearance participates in pagination without repeating the gap on subsequent lines. Nonrectangular contours keep their existing scanline behavior.
 
+A line break (`w:br`) with `w:clear` restarts the text after it on the next line that the floating objects on one side do not interrupt. The picture keeps its position; only the restart line moves.
+
+- `left` clears the objects that block the start of the line that holds the break.
+- `right` clears the objects that come after the break on that line.
+- `all` clears every object that wraps text, including objects from earlier paragraphs and objects in the same table cell.
+
+Objects with no text wrapping, in front of text or behind it, are not cleared. If the restart line does not fit above the bottom margin, it starts on the next page or column. The value `none` lays out as an ordinary line break, and the attribute is kept when you save.
+
 An inline picture flows like a word. If it does not fit before a floating picture, it continues past the floating picture on the same line. Text after an inline picture starts at the picture's edge, and a click past the picture places the caret after it. A click in the space that a floating picture leaves between two pieces of content places the caret between them.
 
 ## Accessibility

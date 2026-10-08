@@ -1,9 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import {
-  collapsibleGroupCost,
-  separatorLeadingCost,
-  trailingGapCost,
-} from '../src/editor/toolbar/toolbar-measure.ts';
+import { collapsibleGroupCost, separatorLeadingCost, trailingGapCost } from '../toolbar-measure.ts';
 
 describe('toolbar width accounting', () => {
   test('separator leading cost includes width, inline margins, and both flex gaps', () => {

@@ -10,6 +10,7 @@
 
 import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { HardBreakKind } from '@docx-editor.dev/core/store';
+import type { TextWrappingBreakClear } from './text-wrapping-break-clear.ts';
 import type { LegacyFormFieldData } from '../store/package/field-nodes.ts';
 import type { InlineDrawingLayoutInput } from './drawing-layout.ts';
 import { eastAsiaRunsOfSegments, type FontSlot } from './script-itemization.ts';
@@ -141,6 +142,8 @@ export interface FieldAwarePiece {
   readonly positionalTab?: PositionalTab;
   /** Typed hard-break intent; model text remains one newline-compatible UTF-16 unit. */
   readonly breakKind?: HardBreakKind;
+  /** The floating objects a text wrapping break restarts below (`w:br w:clear`). */
+  readonly breakClear?: TextWrappingBreakClear;
   /** The hyperlink this piece came from, already sanitized, or absent for ordinary text. */
   readonly link?: SpanLinkRecord;
   /**
@@ -339,6 +342,7 @@ export type FieldLinkProjector = (spec: HyperlinkFieldSpec) => SpanLinkRecord | 
 export interface PieceEmitExtras {
   readonly positionalTab?: PositionalTab;
   readonly breakKind?: HardBreakKind;
+  readonly breakClear?: TextWrappingBreakClear;
   readonly measureText?: string;
   readonly noteNav?: FieldAwarePiece['noteNav'];
   readonly noteSeparator?: FieldAwarePiece['noteSeparator'];

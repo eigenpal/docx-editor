@@ -43,7 +43,7 @@ Search follows the runtime's `revisionTextView`, including its treatment of pend
 
 `RangeCollection` exposes `items`, `getFirst()`, `getLast()`, and `getFirstOrNullObject()`. A non-null accessor fails with `ItemNotFound` when no match exists. After `sync()`, check `isNullObject` before reading a nullable result. See [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) for object lifetimes.
 
-Search results retain their original paragraph offsets across later syncs. After editing a matched paragraph, search again before editing another target there. For inserted text, use the range returned by the insertion after sync. See [Text and ranges](/docs/2.x/editor-api/text-and-ranges#refresh-ranges-after-edits) for snapshot and batching limits.
+Search results retain their original paragraph offsets across later syncs. A result whose text moved because of a later edit before its end fails with `StaleDocument`. After editing a matched paragraph, search again before editing another target there. For inserted text, use the range returned by the insertion after sync. See [Text and ranges](/docs/2.x/editor-api/text-and-ranges#refresh-ranges-after-edits) for snapshot and batching limits.
 
 ## Split paragraph text into ranges
 

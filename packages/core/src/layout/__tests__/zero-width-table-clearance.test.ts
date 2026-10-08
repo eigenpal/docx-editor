@@ -94,10 +94,11 @@ for (const control of ['\u200f', '\u200e', '\u200b', '\u0301']) {
   }
 }
 
-test('Word retains oversized glyph overflow after a zero prefix in an admitted passage', () => {
-  // Native Word: 48pt Arial WW beside a nominal20pt passage. The RLM occupies
-  // an empty first line; one W overflows beside the table and the next starts below.
-  // This synthetic band isolates those line origins from Word's table border inset.
+test('an oversized glyph after a zero-width prefix overflows its admitted passage', () => {
+  // Observed: 48pt WW beside a nominal 20pt passage. The RLM occupies an empty first line;
+  // one W overflows beside the table and the next starts below. The zero-width prefix
+  // admits the passage, so the opening segment is broken there rather than moved below.
+  // This synthetic band isolates those line origins from the table border inset.
   for (const table of [false, true])
     for (const split of [false, true]) {
       const lines = layoutPrefix('\u200f', split, {

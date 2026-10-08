@@ -32,8 +32,8 @@ import { ToolbarSeparator } from './parts';
 import { Slot } from './Slot';
 import { ToolbarHexColorPickerBody } from './ColorSplit';
 import { useTableChromeProviderVisible, useTableChromeSlot } from './useTableChrome';
+import { useDropdownClose } from './useDropdownClose';
 import {
-  useDropdownClose,
   useTableChromeTriggerA11y,
   useTableDialogKeyboard,
   useTableMenuKeyboard,
@@ -210,7 +210,7 @@ function buildMenuCompound(slot: TableChromeSlotId, classBase: string, defaultLa
     const [open, setOpen] = useState(false);
     const rootRef = useRef<HTMLDivElement | null>(null);
     const triggerRef = useRef<HTMLButtonElement | null>(null);
-    useDropdownClose(open, setOpen, rootRef);
+    useDropdownClose(open, setOpen, rootRef, hidden || !visible);
 
     const value = useMemo<TableSlotContextValue>(
       () => ({ open, setOpen, enabled, disabledReason, apply, draft, triggerRef }),
@@ -557,7 +557,7 @@ function buildColorSplitCompound(
     const [lastHex, setLastHex] = useState(defaultHex);
     const rootRef = useRef<HTMLDivElement | null>(null);
     const triggerRef = useRef<HTMLButtonElement | null>(null);
-    useDropdownClose(open, setOpen, rootRef);
+    useDropdownClose(open, setOpen, rootRef, hidden || !visible);
 
     const value = useMemo<TableSlotContextValue>(
       () => ({

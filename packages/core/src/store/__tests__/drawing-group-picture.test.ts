@@ -135,6 +135,36 @@ describe('group picture projection', () => {
     );
   });
 
+  test('a text box member paints only its shape, and one without paint is skipped', () => {
+    // A group does not lay out text box text. An unfilled, unoutlined text box paints nothing.
+    const [plain] = projectionsOf(mcWrapped(groupDrawing(pictureMember() + textboxMember())));
+    expect(plain!.groupPicture).toMatchObject({ embeddedRelationshipId: 'rIdImg' });
+    expect(plain!.vectorShape).toBeNull();
+    // A text box member before the picture paints nothing, so it does not order the picture.
+    const [first] = projectionsOf(mcWrapped(groupDrawing(textboxMember() + pictureMember())));
+    expect(first!.groupPicture).toMatchObject({ embeddedRelationshipId: 'rIdImg' });
+    // A filled text box paints its fill above the picture.
+    const filled = textboxMember().replace(
+      '</a:prstGeom>',
+      '</a:prstGeom><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill>'
+    );
+    const [painted] = projectionsOf(mcWrapped(groupDrawing(pictureMember() + filled)));
+    expect(painted!.groupPicture).not.toBeNull();
+    expect(painted!.vectorShape?.components.map((c) => c.fillHex)).toEqual(['00FF00']);
+    // A text box with an effect the group cannot paint still leaves the group unpainted.
+    const shadowed = textboxMember().replace(
+      '</a:prstGeom>',
+      '</a:prstGeom><a:effectLst><a:outerShdw dist="38100"/></a:effectLst>'
+    );
+    expect(projectionsOf(mcWrapped(groupDrawing(pictureMember() + shadowed)))).toHaveLength(0);
+    // So does one whose theme effect the group cannot resolve.
+    const themed = textboxMember().replace(
+      '</wps:spPr>',
+      '</wps:spPr><wps:style><a:effectRef idx="1"><a:schemeClr val="accent1"/></a:effectRef></wps:style>'
+    );
+    expect(projectionsOf(mcWrapped(groupDrawing(pictureMember() + themed)))).toHaveLength(0);
+  });
+
   test('the picture frame maps through the group child offset and extent', () => {
     const [projection] = projectionsOf(
       groupDrawing(
@@ -401,7 +431,6 @@ describe('group picture projection', () => {
     ],
     ['a picture without a relationship', groupDrawing(pictureMember({ blip: '<a:blip/>' }))],
     ['a picture without an extent', groupDrawing(pictureMember({ cx: 0 }))],
-    ['a picture beside a text box member', groupDrawing(pictureMember() + textboxMember())],
     ['a picture beside a nested group', groupDrawing(pictureMember() + '<wpg:grpSp/>')],
     ['a rotated group', groupDrawing(pictureMember(), ' rot="60000"')],
     // A zero child extent is legal for a group of straight lines, but leaves a picture no size.

@@ -48,6 +48,11 @@ export interface ToolbarButtonProps {
   class?: string;
   className?: string;
   children?: DocxEditorChildren;
+  /**
+   * Render nothing: inside the default arrangement this removes the slot in place. A named
+   * part is shorthand for the slot override, so `<Toolbar.Bold hidden />` is
+   * `<Toolbar.Slot slotId="text.bold" hidden />`.
+   */
   hidden?: boolean;
 }
 

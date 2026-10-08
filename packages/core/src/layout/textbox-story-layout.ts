@@ -2,9 +2,10 @@
 //
 // A text-box drawing (`wps:wsp` → `wps:txbx` → `w:txbxContent`) carries a STORY: ordinary
 // paragraphs flowed inside the drawing's declared extent — same shape as a footnote story
-// ({@link layoutNoteStory}), but bounded by the box instead of the page. The extent is
+// ({@link layoutNoteStory}), but bounded by the box instead of the page. The extent height is
 // authoritative: content that does not fit clips with a named fallback reason, never grows
-// the box.
+// the box. The width is authoritative too, except for unwrapped text (`noWrap`): those lines
+// never break at the box edge, and the box takes its widest line plus the insets.
 //
 // PAGE / NUMPAGES / SECTIONPAGES fields inside the story project through the same
 // `pageContext` path the host story uses, so a footer whose page number lives inside an
@@ -38,6 +39,12 @@ import { textboxStoryBlocks } from './story-roots.ts';
 /** Hard ceiling on textbox-in-textbox story descent (mirrors `MAX_TABLE_NESTING`'s role). */
 export const MAX_TEXTBOX_STORY_NESTING = 4;
 
+/**
+ * Line measure for the first pass over unwrapped text: the widest page OOXML allows (22in).
+ * A line longer than this still breaks here, which keeps every bound fixed.
+ */
+const UNWRAPPED_MEASURE_PT = 1584;
+
 /** Hard ceiling on fragments emitted for one textbox story. */
 export const MAX_TEXTBOX_STORY_FRAGMENTS = 256;
 
@@ -67,8 +74,13 @@ export interface TextboxStoryLayout {
   readonly flowHeight: number;
   /** Offset of the content box inside the drawing extent: insets plus vertical anchoring. */
   readonly contentOffset: Readonly<{ x: number; y: number }>;
-  /** Content box width (extent minus horizontal insets). */
+  /** Content box width (extent minus horizontal insets; the widest line when unwrapped). */
   readonly contentWidth: number;
+  /**
+   * Box width (points) that unwrapped text sizes its shape to: the widest line plus the
+   * insets. Placement resolves the shape at this width. Absent when the extent width holds.
+   */
+  readonly extentWidth?: number;
   /** Content box height (extent minus vertical insets). */
   readonly contentHeight: number;
   /** Solid fill of the hosting shape, painted behind the story; null for no fill. */
@@ -474,14 +486,14 @@ export function layoutTextboxStory(
   const insetRight = emuToPoints(story.insetsEmu.right) + outlineInset;
   const insetTop = emuToPoints(story.insetsEmu.top) + outlineInset;
   const insetBottom = emuToPoints(story.insetsEmu.bottom) + outlineInset;
-  const contentWidth = Math.max(1, extentWidth - insetLeft - insetRight);
+  const extentContentWidth = Math.max(1, extentWidth - insetLeft - insetRight);
   const contentHeight = Math.max(0, extentHeight - insetTop - insetBottom);
 
   const chrome = {
     fillHex: story.fillHex,
     strokeHex: story.strokeHex,
     strokeWidthPt,
-    contentWidth,
+    contentWidth: extentContentWidth,
     contentHeight,
   };
 
@@ -514,36 +526,57 @@ export function layoutTextboxStory(
   const prefix = textboxLineIdPrefix(projection.drawingNodeId);
   let lineCounter = 0;
 
-  const flow = flowBlocksInBox(blocks, 0, contentWidth, 0, 0, {
-    measurer: options.measurer,
-    cache: options.cache,
-    producer: `${options.producer}${options.showFieldCodes ? '|field-codes' : ''}|txbx:${projection.drawingNodeId}`,
-    nextLineId: () => `${prefix}-line-${lineCounter++}`,
-    styleCascade: options.styleCascade,
-    ...(listItems ? { listItems } : {}),
-    ...(options.pageContext ? { pageContext: options.pageContext } : {}),
-    ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
-    ...(options.projectLink ? { projectLink: options.projectLink } : {}),
-    ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
-    showFieldCodes: options.showFieldCodes,
-    compatibilityMode: options.compatibilityMode,
-    tableNestingOffset: 1,
-    ...(options.defaultTabStopPt !== undefined
-      ? { defaultTabStopPt: options.defaultTabStopPt }
-      : {}),
-    ...(options.displayMode ? { displayMode: options.displayMode } : {}),
-    ...(options.revisionAuthorFilter ? { revisionAuthorFilter: options.revisionAuthorFilter } : {}),
-    ...(options.inlineDrawingLayout ? { inlineDrawingLayout: options.inlineDrawingLayout } : {}),
-    ...(options.drawingTokenForParagraph
-      ? { drawingTokenForParagraph: options.drawingTokenForParagraph }
-      : {}),
-    ...(options.projectionTokenForParagraph
-      ? { projectionTokenForParagraph: options.projectionTokenForParagraph }
-      : {}),
-    ...(options.projectionTokenForTable
-      ? { projectionTokenForTable: options.projectionTokenForTable }
-      : {}),
-  });
+  // Every pass numbers its lines from zero, so line ids do not depend on the pass count.
+  const flowAt = (width: number) => (
+    (lineCounter = 0),
+    flowBlocksInBox(blocks, 0, width, 0, 0, {
+      measurer: options.measurer,
+      cache: options.cache,
+      producer: `${options.producer}${options.showFieldCodes ? '|field-codes' : ''}|txbx:${projection.drawingNodeId}`,
+      nextLineId: () => `${prefix}-line-${lineCounter++}`,
+      styleCascade: options.styleCascade,
+      ...(listItems ? { listItems } : {}),
+      ...(options.pageContext ? { pageContext: options.pageContext } : {}),
+      ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
+      ...(options.projectLink ? { projectLink: options.projectLink } : {}),
+      ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
+      showFieldCodes: options.showFieldCodes,
+      compatibilityMode: options.compatibilityMode,
+      tableNestingOffset: 1,
+      ...(options.defaultTabStopPt !== undefined
+        ? { defaultTabStopPt: options.defaultTabStopPt }
+        : {}),
+      ...(options.displayMode ? { displayMode: options.displayMode } : {}),
+      ...(options.revisionAuthorFilter
+        ? { revisionAuthorFilter: options.revisionAuthorFilter }
+        : {}),
+      ...(options.inlineDrawingLayout ? { inlineDrawingLayout: options.inlineDrawingLayout } : {}),
+      ...(options.drawingTokenForParagraph
+        ? { drawingTokenForParagraph: options.drawingTokenForParagraph }
+        : {}),
+      ...(options.projectionTokenForParagraph
+        ? { projectionTokenForParagraph: options.projectionTokenForParagraph }
+        : {}),
+      ...(options.projectionTokenForTable
+        ? { projectionTokenForTable: options.projectionTokenForTable }
+        : {}),
+    })
+  );
+
+  // Unwrapped text lays out once at an unbounded measure to find its widest line, then again
+  // at that width, so paragraph alignment places each line inside the widest line's column.
+  // An inline box keeps its extent: the host line already reserved that advance, so a box
+  // that grew here would paint and hit-test outside the space its line gave it.
+  const noWrap = story.noWrap === true && projection.wrap !== 'inline';
+  let contentWidth = extentContentWidth;
+  let flow = flowAt(noWrap ? UNWRAPPED_MEASURE_PT : contentWidth);
+  const unwrappedWidth = noWrap ? widestLineWidth(flow.blocks) : 0;
+  if (unwrappedWidth > 0) {
+    contentWidth = unwrappedWidth;
+    flow = flowAt(contentWidth);
+  } else if (noWrap) {
+    flow = flowAt(contentWidth);
+  }
 
   let fragments = flow.blocks;
   let flowHeight = flow.bottom;
@@ -586,6 +619,8 @@ export function layoutTextboxStory(
     flowHeight,
     contentOffset: { x: insetLeft, y: insetTop + anchorOffset },
     ...chrome,
+    contentWidth,
+    ...(unwrappedWidth > 0 ? { extentWidth: unwrappedWidth + insetLeft + insetRight } : {}),
     ...(fallbackReason ? { fallbackReason } : {}),
     ...(clippedResourceTokens.length > 0
       ? // Length-framed — resource keys embed file-derived ids, so any separator boundary
@@ -593,6 +628,37 @@ export function layoutTextboxStory(
         { clippedResourceToken: framedTokenJoin(clippedResourceTokens) }
       : {}),
   };
+}
+
+/**
+ * The width unwrapped paragraph lines need: each line's content extent plus its paragraph's
+ * start and end indents, with the first-line offset (hanging wins over firstLine) on the
+ * paragraph's first line only. Indents are direction-free sums, so RTL needs no mirror.
+ * Zero when no line holds content, so the extent width holds. Other blocks reflow inside.
+ */
+function widestLineWidth(blocks: readonly BlockFragmentRecord[]): number {
+  let widest = 0;
+  for (const block of blocks) {
+    if (block.kind !== 'paragraph') continue;
+    const { left, right: end, firstLine, hanging } = block.indent;
+    const firstLineOffset = hanging > 0 ? -hanging : firstLine;
+    block.lines.forEach((line, index) => {
+      let right = Number.NEGATIVE_INFINITY;
+      for (const span of line.spans) right = Math.max(right, span.box.x + span.box.width);
+      for (const drawing of line.drawings ?? []) {
+        right = Math.max(right, drawing.x + drawing.width);
+      }
+      if (!Number.isFinite(right) || right <= line.contentX) return;
+      const opensParagraph = index === 0 && block.fragmentIndex === 0;
+      const start = left + (opensParagraph ? firstLineOffset : 0);
+      // A list marker is furniture, not a span, but it opens the line at the hanging slot.
+      const markerX = opensParagraph ? block.marker?.box.x : undefined;
+      const origin = markerX === undefined ? line.contentX : Math.min(line.contentX, markerX);
+      widest = Math.max(widest, start + right - origin + end);
+    });
+  }
+  // A hair of slack so the second pass, at exactly this width, cannot break a line on rounding.
+  return widest > 0 ? Math.min(UNWRAPPED_MEASURE_PT, widest + 0.01) : 0;
 }
 
 /**

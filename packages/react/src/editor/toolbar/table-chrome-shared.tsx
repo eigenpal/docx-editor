@@ -15,24 +15,6 @@ export function restoreToolbarDocumentFocus(from: HTMLElement | null): void {
   root?.querySelector<HTMLElement>('.docx-pages')?.focus();
 }
 
-/** Outside mousedown closes a toolbar popup. */
-export function useDropdownClose(
-  open: boolean,
-  setOpen: (open: boolean) => void,
-  rootRef: RefObject<HTMLElement | null>
-): void {
-  useEffect(() => {
-    if (!open) return undefined;
-    const onMouseDown = (event: globalThis.MouseEvent) => {
-      const root = rootRef.current;
-      if (root && event.target instanceof Node && root.contains(event.target)) return;
-      setOpen(false);
-    };
-    document.addEventListener('mousedown', onMouseDown);
-    return () => document.removeEventListener('mousedown', onMouseDown);
-  }, [open, setOpen, rootRef]);
-}
-
 /** Props for a focusable disabled toolbar trigger with an announced reason. */
 export interface TableChromeTriggerA11y {
   readonly enabled: boolean;
@@ -104,6 +86,7 @@ export function useTableMenuKeyboard(
     queueMicrotask(focusInitial);
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || event.keyCode === 229) return;
       const list = items();
       if (event.key === 'Escape') {
         event.preventDefault();

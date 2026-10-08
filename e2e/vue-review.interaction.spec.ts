@@ -38,7 +38,7 @@ async function ensureReviewPaneOpen(page: Page): Promise<void> {
 }
 
 test.describe('Vue review chrome', () => {
-  test('right-click lists review.comments before other packaged rows end', async ({ page }) => {
+  test('right-click lists review.addComment before other packaged rows end', async ({ page }) => {
     await waitForEditor(page, CLEAN_URL);
     const click = await openContextMenu(page);
     const menu = await page.locator('.docx-contextmenu').boundingBox();
@@ -48,7 +48,7 @@ test.describe('Vue review chrome', () => {
     const slots = await page
       .locator('.docx-contextmenu [data-slot]')
       .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-slot')));
-    expect(slots.at(-1)).toBe('review.comments');
+    expect(slots.at(-1)).toBe('review.addComment');
     await expect(page.getByRole('menuitem', { name: /Add a comment/i })).toBeVisible();
   });
 

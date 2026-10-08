@@ -17,6 +17,7 @@ import {
   DEFAULT_DRAWING_PROJECTION_LIMITS,
   DEFAULT_SUPPORTED_MC_REQUIRES,
   projectDrawingWithState,
+  projectDrawingsInPart,
 } from '../package/drawing-projection.ts';
 import { createWalkState, type DrawingDiagnostic } from '../package/drawing-projection-walk.ts';
 import { createPackageShapeThemeResolvers } from '../package/theme-color-resolution.ts';
@@ -935,7 +936,7 @@ describe('wps vector shape projection', () => {
     expect(projection.diagnostics.filter((d) => d.code === 'unsupported-graphic')).toHaveLength(1);
   });
 
-  test('an MC-wrapped chart stays invisible, like its VML fallback always was', () => {
+  test('an MC-wrapped inline chart paints nothing and keeps its extent on the line', () => {
     const drawing =
       '<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
       '<wp:extent cx="914400" cy="457200"/><wp:docPr id="10" name="Chart 10"/>' +
@@ -944,7 +945,10 @@ describe('wps vector shape projection', () => {
       '</a:graphicData></a:graphic></wp:inline></w:drawing>';
     const part = parsePart(`<w:p><w:r>${mcWrapped(drawing)}</w:r></w:p>`);
     const atoms = indexInlineDrawingProjectionsInPart(part);
-    expect(atoms.size).toBe(0);
+    expect([...atoms.values()].map((atom) => [atom.footprintOnly, atom.extentEmu])).toEqual([
+      [true, { cx: 914400, cy: 457200 }],
+    ]);
+    expect(projectDrawingsInPart(part)).toHaveLength(0);
   });
 
   test('unsupported path verbs refuse vector geometry and stay invisible under MC', () => {

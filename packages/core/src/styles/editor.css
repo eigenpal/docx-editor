@@ -2543,8 +2543,9 @@ a.docx-hyperlink:focus-visible {
   pointer-events: none;
 }
 
-/* Public React page-number primitive. It is an overlay sibling of the viewport inside the
- * positioned workspace, so scrolling the document never moves the readout itself. */
+/* Public page-number primitive. It is an overlay sibling of the viewport inside the
+ * positioned workspace, so scrolling the document never moves the readout itself. A part
+ * placed inside the viewport renders into the viewport's parent element for the same reason. */
 .docx-editor__page-number {
   position: absolute;
   right: 24px;
@@ -3834,6 +3835,47 @@ a.docx-hyperlink:focus-visible {
   line-height: 18px;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* A collapsed host group's content. Actions render as full-width command rows; other
+ * host content keeps its own shape and wraps in the row. */
+.docx-toolbar__more-host {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px 2px 10px;
+}
+
+.docx-toolbar__more-host > .docx-toolbar__more-command {
+  flex: 1 0 100%;
+  margin-inline-start: -4px;
+}
+
+/* Insert Table: the size grid opens under its button. */
+.docx-toolbar__table-insert {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.docx-toolbar__table-insert-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: var(--doc-z-overlay);
+  margin-top: 4px;
+}
+
+/* In the "⋯" panel the grid is panel content: it opens in the flow under its row, so the
+ * panel keeps its max-height and scrolls instead of letting the grid spill past it. */
+.docx-toolbar__more-panel .docx-toolbar__table-insert {
+  flex-wrap: wrap;
+}
+
+.docx-toolbar__more-panel .docx-toolbar__table-insert-menu {
+  position: static;
+  flex-basis: 100%;
 }
 
 /* Separator: `w-px h-6 bg-border mx-1.5`. */
@@ -5417,6 +5459,62 @@ a.docx-hyperlink:focus-visible {
   display: flex;
 }
 
+/* A pane mounted INSIDE `DocxEditor.Viewport`. The viewport is the scroller and is
+ * itself positioned, so an absolute pane would scroll away with the pages. Sticky keeps
+ * it on the scrollport instead: a zero-height strip pinned to the top-left, first in the
+ * column whatever its source order, holding the panel at the viewport's content height
+ * (`--docx-nav-block-size`, published by the adapter). Sticky offsets resolve inside the
+ * scroller's padding, so the start offset cancels the shift padding the pane causes and
+ * the review gutter's mirrored strip; the page still moves, the pane does not. */
+.docx-editor .docx-editor__scroll-container > .docx-nav,
+.docx-editor.docx-editor__scroll-container > .docx-nav {
+  position: sticky;
+  order: -1;
+  flex: none;
+  align-self: flex-start;
+  inset-block: 0 auto;
+  /* The margin moves the strip's normal position back over the start padding; the
+   * negative offset lets sticky keep it there. Both are needed. The margin follows the
+   * padding's transition, so the two cancel at every frame and the pane holds still. */
+  inset-inline-start: calc(
+    -1 * (var(--docx-nav-shift, 0px) + var(--docx-review-gutter-start, 0px))
+  );
+  margin-inline-start: calc(
+    -1 * (var(--docx-nav-shift, 0px) + var(--docx-review-gutter-start, 0px))
+  );
+  transition: margin-inline-start 0.2s ease;
+  height: 0;
+}
+
+.docx-editor .docx-editor__scroll-container[data-zoom-fit] > .docx-nav,
+.docx-editor.docx-editor__scroll-container[data-zoom-fit] > .docx-nav {
+  transition: none;
+}
+
+.docx-editor .docx-editor__scroll-container > .docx-nav .docx-nav__panel-shell,
+.docx-editor.docx-editor__scroll-container > .docx-nav .docx-nav__panel-shell {
+  inset-block-end: auto;
+  height: var(--docx-nav-block-size, 100vh);
+}
+
+/* Narrow viewports: the pane covers the page instead of pushing it off screen. The
+ * adapter sets the class below `NAVIGATION_PANE_MIN_PAGE_ROOM` and publishes no shift.
+ * The panel spans the viewport less the inset on each side. */
+.docx-editor .docx-nav--overlay {
+  width: 100%;
+}
+
+.docx-editor .docx-editor__scroll-container > .docx-nav--overlay,
+.docx-editor.docx-editor__scroll-container > .docx-nav--overlay {
+  width: var(--docx-nav-inline-size, 100%);
+}
+
+.docx-editor .docx-nav--overlay .docx-nav__panel-shell {
+  width: auto;
+  inset-inline-end: var(--docx-nav-inset, 32px);
+  box-shadow: 0 4px 16px var(--doc-shadow);
+}
+
 /* The collapsed disc. Aligned with the page's top edge, not the viewport's, so it
  * sits where the panel's back arrow will appear, and inset past the vertical
  * ruler's 20px tick column so it never covers the ticks. */
@@ -6530,7 +6628,9 @@ a.docx-hyperlink:focus-visible {
 /* Reduced motion: the page still moves when it has to, it just does not glide. */
 @media (prefers-reduced-motion: reduce) {
   .docx-editor .docx-editor__scroll-container,
-  .docx-editor.docx-editor__scroll-container {
+  .docx-editor.docx-editor__scroll-container,
+  .docx-editor .docx-editor__scroll-container > .docx-nav,
+  .docx-editor.docx-editor__scroll-container > .docx-nav {
     transition-duration: 0s;
   }
 }
@@ -6582,6 +6682,29 @@ a.docx-hyperlink:focus-visible {
   margin-right: 5px;
   vertical-align: -2px;
   color: inherit;
+}
+
+/* A measuring bar stays on one line; menus that do not fit move into the "⋯" menu. It
+ * must be able to shrink below its content for the measurement to see the limit. */
+.docx-editor .docx-menubar[data-overflow] {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+/* Host children that are not menus: measured as fixed width, never moved into "⋯". */
+.docx-editor .docx-menubar__host {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+.docx-editor .docx-menubar__menu-root[data-toolbar-more] .docx-menubar__trigger-icon {
+  margin-right: 0;
+}
+
+/* The "⋯" menu's panel is never wider than the viewport less its margins. */
+.docx-editor .docx-menubar__menu-root[data-toolbar-more] > .docx-menubar__menu {
+  max-width: calc(100vw - 16px);
 }
 
 .docx-editor .docx-menubar__trigger:hover,

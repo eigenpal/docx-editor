@@ -498,7 +498,11 @@ export type DocxEditorErrorCode =
 | 'InvalidRequestContext'
 /** The runtime was disposed. Every later operation fails this way. */
 | 'RuntimeDisposed'
-/** The document moved under a context that had already read from it; nothing was applied. */
+/**
+* The request was built from an older read, so nothing was applied: another writer moved the
+* document, or a range's text moved since the range was read, including by this context's own
+* earlier sync. Read again before retrying.
+*/
 | 'StaleDocument'
 /** The host is live but holds no document right now — an editor between mounts. */
 | 'DocumentUnavailable'

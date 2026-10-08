@@ -42,7 +42,9 @@ export {
 export {
   NAVIGATION_PANE_GAP,
   NAVIGATION_PANE_INSET,
+  NAVIGATION_PANE_MIN_PAGE_ROOM,
   NAVIGATION_PANE_WIDTH,
+  navigationPaneOverlays,
   navigationPaneReservation,
   navigationShift,
   type NavigationShiftInput,

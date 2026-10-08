@@ -13,6 +13,7 @@ import {
   h,
   provide,
   ref,
+  shallowRef,
   watch,
   type Component,
   type PropType,
@@ -30,8 +31,17 @@ import { useTranslation, type TranslationKey } from '../../i18n';
 import { DocxEditorPageSetupDialog } from '../DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from '../DocxEditorParagraphDialog';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
-import { guardToolbarMousedown } from '../toolbar/ToolbarButton';
-import { MenuContext, type MenuContextValue, type MenuId } from './menu-context';
+import { chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
+import { MORE_PATHS } from '../toolbar/ToolbarOverflow';
+import { FIXED_ATTRIBUTE, useToolbarOverflow } from '../toolbar/useToolbarOverflow';
+import {
+  MENU_OVERFLOW_ID,
+  MenuContext,
+  MenuOverflowContext,
+  MenuOverflowScope,
+  type MenuContextValue,
+  type MenuId,
+} from './menu-context';
 import { download, downloadName } from './download';
 import { barTriggers, restoreExportFocus } from './menu-keyboard';
 import { flattenChildren } from '../../lib/flattenChildren';
@@ -40,7 +50,6 @@ import {
   MenuEntry,
   MenuFile,
   MenuFormat,
-  MenuHelp,
   MenuImageInsert,
   MenuInsert,
   MenuItem,
@@ -53,11 +62,11 @@ import {
   MenuPrint,
   MenuGroup,
   MenuSeparator,
-  MenuReportIssue,
   MenuSubmenu,
   MenuTableGrid,
   type MenuPartComponent,
 } from './parts';
+import { MenuHelp, MenuReportIssue } from './menu-help';
 import { useScopeClassName } from '../scope-context';
 import { MenuReview, MenuReviewers } from './Reviewers';
 
@@ -87,6 +96,21 @@ export interface DocxEditorMenuProps {
   onReportIssue?: () => void;
   reportIssue?: boolean;
   preset?: boolean;
+  /**
+   * What the bar does when its menus do not fit on one line. Default `true`: the bar stays
+   * one line, measures its menus, and moves the ones that do not fit, from the end, into
+   * one "⋯" menu, where each becomes a submenu with the same rows. `false` lets the bar
+   * wrap onto more lines instead.
+   *
+   * The bar must be able to shrink for this to work, so give it a bounded width (for
+   * example `min-width: 0` in a flex row). Host children that are not menus never move.
+   *
+   * @example
+   * ```vue
+   * <DocxEditorMenu :overflow="false" />
+   * ```
+   */
+  overflow?: boolean;
   children?: DocxEditorChildren;
 }
 
@@ -114,6 +138,29 @@ function menuOfChild(child: unknown): ChromeMenuId | null {
   return null;
 }
 
+/**
+ * The id of any menu vnode, registry or host: a pinned part's `docxMenu`, or the generic
+ * `Menu`'s `id` prop. Null for anything that is not a menu, and for a hidden menu unless
+ * `includeHidden` is set.
+ */
+function anyMenuIdOfChild(child: unknown, includeHidden = false): string | null {
+  if (!isVNodeElement(child)) return null;
+  if (child.type === Fragment) {
+    const inner = flattenChildren((child.children ?? []) as VNode[]);
+    const ids = inner
+      .map((node) => anyMenuIdOfChild(node, includeHidden))
+      .filter((id): id is string => id !== null);
+    return ids.length === 1 ? ids[0]! : null;
+  }
+  const props = (child.props ?? {}) as { id?: unknown; hidden?: unknown };
+  if ((props.hidden === true || props.hidden === '') && !includeHidden) return null;
+  const type = child.type as { docxMenu?: unknown };
+  if ((typeof type === 'function' || typeof type === 'object') && typeof type.docxMenu === 'string')
+    return type.docxMenu;
+  if (child.type === Menu && typeof props.id === 'string') return props.id;
+  return null;
+}
+
 const DocxEditorMenuRoot = defineComponent({
   name: 'DocxEditorMenu',
   props: {
@@ -132,6 +179,7 @@ const DocxEditorMenuRoot = defineComponent({
     onReportIssue: { type: Function as PropType<() => void>, default: undefined },
     reportIssue: { type: Boolean, default: undefined },
     preset: { type: Boolean, default: true },
+    overflow: { type: Boolean, default: true },
   },
   setup(props, { slots }) {
     const dialogs = useDialogHost();
@@ -304,8 +352,25 @@ const DocxEditorMenuRoot = defineComponent({
 
     provide(MenuContext, context);
 
+    // Which menus exist depends on the children, which Vue only renders inside `render`. The
+    // render writes the answer here and the measuring hook reads it after the render.
+    const layout = shallowRef<{ ids: readonly string[]; order: readonly string[] }>({
+      ids: [],
+      order: [],
+    });
+    const { attach, overflow } = useToolbarOverflow(
+      () => props.overflow,
+      () => layout.value.ids,
+      () => layout.value.order
+    );
+    provide(
+      MenuOverflowContext,
+      computed(() => ({ measuring: props.overflow, overflow: overflow.value, inMore: false }))
+    );
+
     const setRootRef = (node: HTMLDivElement | null) => {
       rootRef.value = node;
+      attach(node);
       if (node && activeMenu.value === null) {
         const first = barTriggers(node)[0]?.closest('[data-menu]')?.getAttribute('data-menu');
         if (first) activeMenu.value = first;
@@ -330,25 +395,67 @@ const DocxEditorMenuRoot = defineComponent({
 
     return () => {
       let content: VNode[] | undefined;
+      const kids = flattenChildren(slots.default?.() ?? []);
+      // The menus in bar order, which is also what can move into the "⋯" menu.
+      const menuIds: string[] = [];
+      if (props.preset !== false) {
+        const replaced = new Map(kids.map((child) => [menuOfChild(child), child] as const));
+        for (const menu of CHROME_MENUS) {
+          const override = replaced.get(menu.id);
+          if (override === undefined || anyMenuIdOfChild(override) !== null) menuIds.push(menu.id);
+        }
+        for (const child of kids) {
+          if (menuOfChild(child) !== null) continue;
+          const id = anyMenuIdOfChild(child);
+          if (id !== null) menuIds.push(id);
+        }
+      } else {
+        for (const child of kids) {
+          const id = anyMenuIdOfChild(child);
+          if (id !== null) menuIds.push(id);
+        }
+      }
+      // The end of the bar leaves first: Help, then Review, and so on toward File.
+      const order = [...menuIds].reverse();
+      if (layout.value.ids.join('\u0000') !== menuIds.join('\u0000')) {
+        layout.value = { ids: menuIds, order };
+      }
+      // Host children that are not menus stay in the bar at every width. They are wrapped so
+      // the fit counts their width, and they never render a second time inside "⋯".
+      const isMenu = (child: VNode) => anyMenuIdOfChild(child, true) !== null;
+      const hostBlock = (nodes: VNode[], key: string) =>
+        h('div', { key, role: 'none', class: 'docx-menubar__host', [FIXED_ATTRIBUTE]: '' }, nodes);
+      // `menus` is what the "⋯" menu renders: menus only, never host children.
+      let menus: VNode[];
       if (props.preset === false) {
-        content = slots.default ? flattenChildren(slots.default()) : undefined;
+        menus = kids.filter(isMenu);
+        // Wrapped only while the bar measures: a wrapping bar renders the host's markup as is.
+        content = !slots.default
+          ? undefined
+          : props.overflow
+            ? kids.map((child, index) =>
+                isMenu(child) ? child : hostBlock([child], `host-${index}`)
+              )
+            : kids;
       } else {
         const overrides = new Map<ChromeMenuId, VNode>();
         const appended: VNode[] = [];
-        for (const child of flattenChildren(slots.default?.() ?? [])) {
+        for (const child of kids) {
           const id = menuOfChild(child);
           if (id) overrides.set(id, child);
           else appended.push(child);
         }
-        content = [
+        menus = [
           ...CHROME_MENUS.flatMap((menu) => {
             const override = overrides.get(menu.id);
             if (override) return [h(Fragment, { key: menu.id }, [override])];
             const Part = MENU_PARTS[menu.id];
             return [h(Part, { key: menu.id })];
           }),
-          ...appended,
+          ...appended.filter(isMenu),
         ];
+        const hosts = appended.filter((child) => !isMenu(child));
+        content = [...menus, ...(hosts.length > 0 ? [hostBlock(hosts, 'host')] : [])];
       }
 
       return (
@@ -361,6 +468,8 @@ const DocxEditorMenuRoot = defineComponent({
               catalogT('titleBar.menuBarAriaLabel' as TranslationKey)
             }
             data-testid="docx-menubar"
+            // One line when the bar measures itself; the stylesheet reads this.
+            {...(props.overflow ? { 'data-overflow': '' } : {})}
             class={`${scopeClassName}docx-menubar${props.className ? ` ${props.className}` : ''}`}
             onMousedown={guardToolbarMousedown}
             onKeydown={(event: KeyboardEvent) => {
@@ -381,6 +490,19 @@ const DocxEditorMenuRoot = defineComponent({
             }}
           >
             {content}
+            {overflow.value.size > 0 ? (
+              <Menu
+                id={MENU_OVERFLOW_ID}
+                label={
+                  props.t?.('formattingBar.more') ??
+                  catalogT('formattingBar.more' as TranslationKey)
+                }
+                icon={chromeIcon(MORE_PATHS) as VNode}
+                preset={false}
+              >
+                <MenuOverflowScope>{menus}</MenuOverflowScope>
+              </Menu>
+            ) : null}
           </div>
           <DialogPortal
             content={() =>

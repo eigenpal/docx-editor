@@ -27,6 +27,7 @@ import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { createHandleTable } from './handles.ts';
 import { createBatchPlanner, type PlannedOperation } from './plan.ts';
 import { documentReads, type AutomationPackageReads } from './reads.ts';
+import { createReadTexts, stampEndpoints, staleEndpointDetail } from './stale-spans.ts';
 import type { AutomationOperation } from './operations.ts';
 import type {
   AutomationBatchRequest,
@@ -116,6 +117,8 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
   let pendingEvent: AutomationChangeEvent | null = null;
   /** Reads keyed on package IDENTITY: packages are immutable, so an edit replaces the key. */
   let reads: { readonly pkg: OoxmlPackage; readonly value: AutomationPackageReads } | null = null;
+  /** What each answered endpoint's paragraph said, so a later use of it can be checked. */
+  const texts = createReadTexts();
 
   // Only wired when the host claims events. A capability that is false must not fire.
   const unsubscribePort = capabilities.events
@@ -172,9 +175,31 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       );
     }
 
+    // Taken once, before any post-commit read, so the one-entry reads cache ends on the
+    // committed package the next batch starts from.
+    const start = readsOf(pkg);
+    // An endpoint read before its paragraph changed names other text now. Refuse it rather
+    // than edit whatever sits at the old offsets.
+    for (let index = 0; index < operations.length; index += 1) {
+      const detail = staleEndpointDetail(operations[index], revision, texts, handles, start);
+      if (detail)
+        return refuse(
+          operations,
+          index,
+          detail === 'invalid-read-revision'
+            ? automationError('invalid-offset', 'an endpoint carries an invalid readAt', detail)
+            : automationError(
+                'stale-revision',
+                'that range was read before its text changed',
+                detail
+              ),
+          revision
+        );
+    }
+
     const planner = createBatchPlanner({
       handles,
-      reads: readsOf(pkg),
+      reads: start,
       capabilities,
       collaborative: port.collaborative?.() ?? false,
       trackedRangeReplacement: port.trackedRangeReplacement?.() ?? true,
@@ -391,16 +416,24 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
     }
 
     tracking = stagedTracking;
+    const committed = port.revision();
+    // Queries answered from the package the batch started with; commands from the result.
     const results: AutomationOperationResult[] = planned.map((step) => ({
       status: 'ok',
       value:
         step.kind === 'query'
-          ? step.value
-          : step.kind === 'customNodeWrite'
-            ? step.answer(post)
-            : step.answer(post, mintedComment),
+          ? stampEndpoints(step.value, revision, texts, handles, start)
+          : stampEndpoints(
+              step.kind === 'customNodeWrite'
+                ? step.answer(post)
+                : step.answer(post, mintedComment),
+              committed,
+              texts,
+              handles,
+              post
+            ),
     }));
-    return { ok: true, results, revision: port.revision(), changed };
+    return { ok: true, results, revision: committed, changed };
   };
 
   const execute = (request: AutomationBatchRequest): AutomationBatchResponse => {
@@ -456,6 +489,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       unsubscribePort();
       port.dispose();
       reads = null;
+      texts.clear();
     },
   };
 }

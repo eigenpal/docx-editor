@@ -4,15 +4,16 @@ import {
   toolbarOverflowGroups,
   TOOLBAR_OVERFLOW_HYSTERESIS,
   type ToolbarFitInput,
-} from './toolbar-overflow';
+} from '@docx-editor.dev/core/editor';
 import {
   collapsibleGroupCost,
+  controlsOverflow,
   readAvailableWidth,
   readColumnGap,
   readInlineMargins,
   separatorLeadingCost,
   trailingGapCost,
-} from './toolbar-measure';
+} from '@docx-editor.dev/core/editor';
 
 export const GROUP_ATTRIBUTE = 'data-toolbar-group';
 export const FIXED_ATTRIBUTE = 'data-toolbar-fixed';
@@ -22,7 +23,7 @@ const ASSUMED_MORE_WIDTH = 34;
 const NONE: ReadonlySet<string> = new Set<string>();
 
 export interface UseToolbarOverflowResult {
-  readonly attach: (element: HTMLFieldSetElement | null) => void;
+  readonly attach: (element: HTMLElement | null) => void;
   readonly overflow: Ref<ReadonlySet<string>>;
 }
 
@@ -31,7 +32,7 @@ export function useToolbarOverflow(
   groups: Ref<readonly string[]> | (() => readonly string[]),
   order: Ref<readonly string[]> | (() => readonly string[])
 ): UseToolbarOverflowResult {
-  const barRef = shallowRef<HTMLFieldSetElement | null>(null);
+  const barRef = shallowRef<HTMLElement | null>(null);
   const widths = shallowRef(new Map<string, number>());
   const moreWidth = shallowRef(ASSUMED_MORE_WIDTH);
   const overflow = ref<ReadonlySet<string>>(NONE);
@@ -89,13 +90,19 @@ export function useToolbarOverflow(
       previous: overflow.value,
       hysteresis: TOOLBAR_OVERFLOW_HYSTERESIS,
     };
-    const next = toolbarOverflowGroups(input);
+    // The arithmetic charges every group a few px of gap and separator it may not use, so on
+    // a bar sized to its content it can call a bar that fits too narrow. Collapsing one group
+    // then shrinks that bar and the next measurement collapses another, until every group is
+    // in "⋯". So the first collapse waits for a control that really runs past the bar's box.
+    // Without layout to read (null), the arithmetic decides alone.
+    const fits = overflow.value.size === 0 && controlsOverflow(bar, style) === false;
+    const next = fits ? NONE : toolbarOverflowGroups(input);
     if (!sameOverflow(next, overflow.value)) {
       overflow.value = next;
     }
   };
 
-  const attach = (element: HTMLFieldSetElement | null) => {
+  const attach = (element: HTMLElement | null) => {
     barRef.value = element;
   };
 
@@ -116,6 +123,9 @@ export function useToolbarOverflow(
       });
     });
     observer.observe(bar);
+    // The parent too: a bar as wide as its content does not resize when the room around
+    // it grows, so only the parent reports the space a collapsed group can come back into.
+    if (bar.parentElement) observer.observe(bar.parentElement);
     for (const element of bar.querySelectorAll<HTMLElement>(
       `[${GROUP_ATTRIBUTE}], [${FIXED_ATTRIBUTE}]`
     )) {

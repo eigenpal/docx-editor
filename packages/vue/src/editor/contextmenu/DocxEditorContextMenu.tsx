@@ -17,6 +17,7 @@ import type { DocxEditorChildren } from '../../docx-editor-children';
 import { mergeArrangement } from '../merge-arrangement';
 import { flattenChildren } from '../../lib/flattenChildren';
 import { useDocxEditor, useEditorStateTick, useReviewRailRegistry } from '../context';
+import { useAddCommentState } from '../toolbar/add-comment-state';
 import { useTranslation, type TranslationKey } from '../../i18n';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import {
@@ -26,7 +27,15 @@ import {
   type MenuContextValue,
 } from '../menu/menu-context';
 import { focusBy, focusEdge, panelItems } from '../menu/menu-keyboard';
-import { MenuGroup, MenuItem, MenuRow, MenuSeparator, MenuSubmenu } from '../menu/parts';
+import {
+  MenuGroup,
+  MenuItem,
+  MenuRow,
+  MenuSeparator,
+  MenuSubmenu,
+  menuItemSlotIdOfVNode,
+} from '../menu/parts';
+import { warnUnmatchedHiddenRow } from '../menu/menu-warnings';
 import { ContextMenuContext, type ContextMenuAnchor } from './contextmenu-context';
 import {
   ContextMenuCopy,
@@ -72,22 +81,22 @@ type DefaultEntry =
 const ContextMenuAddComment = defineComponent({
   name: 'ContextMenuAddComment',
   setup() {
-    const editorRef = useDocxEditor();
     const rail = useReviewRailRegistry();
     const menu = useMenuContext();
     const label = useMenuLabel();
+    // The same slot as `Toolbar.AddComment`, so enabled state and its reason have one
+    // source: `toolbarCommandState`. The row needs a mounted review rail to open the draft,
+    // so without one it is left out, whatever the engine answers.
+    const { isEnabled, reason } = useAddCommentState(label);
     return () => {
-      const editor = editorRef.value;
-      const gate = editor?.can({ type: 'toggleReviewPane' });
-      const disabled =
-        !gate?.ok || rail.value.mounted === 0 || editor?.getSelectionPlacement() === null;
-      const control = chromeControlForSlot('review.comments');
+      if (rail.value.mounted === 0) return null;
+      const control = chromeControlForSlot('review.addComment');
       return (
         <MenuRow
           icon={chromeIcon(control?.paths) ?? undefined}
-          {...{ rowSlot: 'review.comments' }}
-          disabled={disabled}
-          title={gate && !gate.ok ? gate.reason : undefined}
+          {...{ rowSlot: 'review.addComment' }}
+          disabled={!isEnabled.value}
+          title={reason.value ?? undefined}
           selectHandler={() => {
             if (!rail.value.requestCommentDraft()) return;
             menu.value.setOpenMenu(null);
@@ -144,16 +153,11 @@ const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
   {
     kind: 'row',
     id: 'text.link',
-    render: () => (
-      <MenuItem
-        {...({ slot: 'text.link' } as { slot: 'text.link' })}
-        labelKey="formattingBar.insertLink"
-      />
-    ),
+    render: () => <MenuItem slotId="text.link" labelKey="formattingBar.insertLink" />,
   },
   {
     kind: 'row',
-    id: 'review.comments',
+    id: 'review.addComment',
     render: () => <ContextMenuAddComment />,
   },
 ];
@@ -243,8 +247,8 @@ function rowOfChild(child: unknown): string | null {
   if (typeof type.docxRow === 'string') return type.docxRow;
   if (typeof type.docxSlot === 'string') return type.docxSlot;
   if (type.docxMenuRow === true) {
-    const slot = (child.props as { slot?: unknown }).slot;
-    if (typeof slot === 'string') return slot;
+    const slot = menuItemSlotIdOfVNode(child as VNode);
+    if (slot) return slot;
   }
   return null;
 }
@@ -455,6 +459,11 @@ export const DocxEditorContextMenu = defineComponent({
                 keyOfChild: rowOfChild,
                 renderEntry: (entry) =>
                   entry.kind === 'separator' ? <MenuSeparator /> : entry.render(),
+                onUnmatched: (id, vnode) => {
+                  // An unmatched override is the host's own row, unless it is hidden.
+                  const hidden = vnode.props?.hidden;
+                  if (hidden === true || hidden === '') warnUnmatchedHiddenRow(id);
+                },
               }),
             ];
 

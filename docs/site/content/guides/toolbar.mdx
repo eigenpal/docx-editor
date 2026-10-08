@@ -19,13 +19,16 @@ Hiding a control does not remove its editor API operation. The document state de
 
 Choose an approach for your application:
 
-| Goal                          | API                                      |
-| ----------------------------- | ---------------------------------------- |
-| Keep the default controls     | `DocxEditor.Toolbar`                     |
-| Change a control's appearance | `className`, `icon`, or `asChild`        |
-| Arrange selected controls     | `preset={false}` and named toolbar parts |
-| Use your own buttons          | `useEditorCommand(slotId)`               |
-| Change interface colors       | `--doc-*` CSS properties                 |
+| Goal                                       | API                                      |
+| ------------------------------------------ | ---------------------------------------- |
+| Keep the default controls                  | `DocxEditor.Toolbar`                     |
+| Change a control's appearance              | `className`, `icon`, or `asChild`        |
+| Add your controls and keep them responsive | `Toolbar.Group`                          |
+| Replace one control with your own content  | `Toolbar.Slot`                           |
+| Remove a whole group                       | `Toolbar.Group` with `hidden`            |
+| Arrange selected controls                  | `preset={false}` and named toolbar parts |
+| Use your own buttons                       | `useEditorCommand(slotId)`               |
+| Change interface colors                    | `--doc-*` CSS properties                 |
 
 For toolbar placement and optional components, see [React composition](/docs/2.x/react/composition#arrange-editor-components) or [Vue composition](/docs/2.x/vue/composition#arrange-editor-components).
 
@@ -151,6 +154,172 @@ const t = useChromeTranslate();
 If you use a locale provider, mount this component inside it so `useChromeTranslate()` reads its catalog.
 
 `Root` owns the editor instance. `Viewport` provides scrolling. `Content` displays editable pages. Other parts use the same provider.
+
+## Keep host controls responsive
+
+The preset toolbar stays on one row. When it runs out of width, it moves whole groups into the **More** (`⋯`) panel, and each moved group becomes a labeled section of the panel. Use `Toolbar.Group` to give your own controls the same behavior.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor.Toolbar>
+  {/* A host group: measured, collapsed by priority, and labeled in the panel. */}
+  <DocxEditor.Toolbar.Group id="review-nav" label="Review" priority={15}>
+    <DocxEditor.Toolbar.Action label="Previous change" icon={<UpIcon />} onSelect={previous} />
+    <DocxEditor.Toolbar.Action label="Next change" icon={<DownIcon />} onSelect={next} />
+  </DocxEditor.Toolbar.Group>
+
+  {/* A built-in id adds controls to that group. */}
+  <DocxEditor.Toolbar.Group id="review">
+    <DocxEditor.Toolbar.AddComment />
+  </DocxEditor.Toolbar.Group>
+
+  {/* `hidden` removes a whole built-in group and its separator. */}
+  <DocxEditor.Toolbar.Group id="zoom" hidden />
+</DocxEditor.Toolbar>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditorToolbar>
+  <!-- A host group: measured, collapsed by priority, and labeled in the panel. -->
+  <DocxEditorToolbar.Group id="review-nav" label="Review" :priority="15">
+    <DocxEditorToolbar.Action label="Previous change" @select="previous" />
+    <DocxEditorToolbar.Action label="Next change" @select="next" />
+  </DocxEditorToolbar.Group>
+
+  <!-- A built-in id adds controls to that group. -->
+  <DocxEditorToolbar.Group id="review">
+    <DocxEditorToolbar.AddComment />
+  </DocxEditorToolbar.Group>
+
+  <!-- `hidden` removes a whole built-in group and its separator. -->
+  <DocxEditorToolbar.Group id="zoom" hidden />
+</DocxEditorToolbar>
+```
+
+</Framework>
+</FrameworkTabs>
+
+`Toolbar.Group` takes these props:
+
+| Prop | Description |
+| --- | --- |
+| `id` | The group id. A built-in id changes that group. Any other id creates a host group. |
+| `labelKey` | A catalog key for a host group's panel heading and accessible name, such as `myApp.reviewNav`. It goes through the toolbar's `t` and the locale catalog. |
+| `label` | Literal text for a host group's panel heading and accessible name. It wins over `labelKey`. Without either, the heading is `id`. Built-in groups keep their own label. |
+| `priority` | The collapse priority. A lower number leaves the bar first. |
+| `pinned` | `true` keeps the group in the bar at every width. |
+| `after` | The id of the group that this group follows. Built-in groups keep their place and ignore it. |
+| `hidden` | Removes the group from the bar and the panel. |
+| `overflowContent` | A function that returns the group's panel content. Use it when the panel needs a different form than the bar. On a built-in id, it renders after the group's own rows, even when the group has no children. |
+
+### Placement
+
+Host groups follow the built-in groups in order of appearance. They come before the contextual table controls. Set `after` to place a group after a built-in group or another host group. Several groups with the same `after` keep their order of appearance.
+
+### Collapse order
+
+Built-in groups have these priorities. The review group is pinned and never collapses.
+
+| Group       | Priority |
+| ----------- | -------- |
+| `zoom`      | 10       |
+| `script`    | 20       |
+| `format`    | 30       |
+| `list`      | 40       |
+| `alignment` | 50       |
+| `styles`    | 60       |
+| `font`      | 70       |
+| `text`      | 80       |
+| `history`   | 90       |
+
+A host group without a `priority` collapses before every built-in group. If two groups have the same priority, the group further along the bar collapses first. A `priority` on a built-in id changes that group's priority.
+
+### Content in the panel
+
+In the panel, each `Toolbar.Action` becomes a full-width row with its icon and `label`. A press runs the action and closes the panel. Other content renders as written. Pass `overflowContent` to render a different form, for example a list in place of a popover.
+
+The panel stays inside the viewport with an 8 px margin. It lines up with the end of the **More** button, or with its start when the end does not fit, and it is never wider than the viewport less both margins.
+
+Loose children of `Toolbar`, outside a group, keep their earlier behavior. They render in one block after the groups and never collapse. A group whose children all render nothing is dropped, like a built-in group whose slots are all hidden.
+
+### Toolbar width
+
+The toolbar can fill its container or be as wide as its content, for example a floating bar with `width: max-content; max-width: 100%` centered in a flex row. A content-sized toolbar measures the room it can take, so collapsed groups come back when the container grows again.
+
+A toolbar is content-sized when its `width` is `auto`, `max-content`, `fit-content`, or `min-content`, and it does not grow as a flex item. Its room is the container's content width, less the toolbar's own margins and the siblings on the same line, capped by its `max-width`. This applies in two layouts:
+
+- A block-level toolbar in a `block`, `flow-root`, or flex column container.
+- An item of a single-line flex row. A sibling that grows, such as a `flex: 1` spacer, counts by its flex basis, and `auto` margins count as free space.
+
+In every other case, the toolbar measures its own box and collapses as before. These cases include a grid cell, a table cell, an inline or floated toolbar, an explicit `width`, a `max-width` such as `calc()` or `min()`, a growing sibling with content such as a title or search field, loose text beside the toolbar, and a browser without the CSS Typed Object Model. A toolbar or menu bar starts collapsing only when one of its controls actually runs past its box. The room from the container only brings groups back: while the toolbar's controls overflow its box, it measures its own box. If groups that came back then overflow, the toolbar keeps its width until the container's width changes, so it does not flicker.
+
+### Replace a slot's content
+
+`Toolbar.Slot` replaces one built-in slot with your own content. Name the slot with `slotId`. The content keeps the slot's place and collapses with the slot's group. In the panel, it renders under the slot's label, or as `overflowContent` when you pass it. To remove a control, render its slot override with `hidden`: `<DocxEditor.Toolbar.Slot slotId="text.bold" hidden />`. A named part is shorthand for that override, so `<DocxEditor.Toolbar.Bold hidden />` removes the same control in place. Menus follow the same rule: `<DocxEditor.ContextMenu.Slot slotId="edit.cut" hidden />` and its shorthand `<DocxEditor.ContextMenu.Cut hidden />` both remove the row in place, and `Menu.Item` takes `slotId` and `hidden` the same way.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor.Toolbar>
+  <DocxEditor.Toolbar.Slot slotId="zoom.level" overflowContent={() => <ZoomList />}>
+    <ZoomPicker />
+  </DocxEditor.Toolbar.Slot>
+</DocxEditor.Toolbar>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { h } from 'vue';
+import { DocxEditorToolbar } from '@docx-editor.dev/vue';
+import ZoomList from './ZoomList.vue';
+import ZoomPicker from './ZoomPicker.vue';
+
+const zoomList = () => h(ZoomList);
+</script>
+
+<template>
+  <DocxEditorToolbar>
+    <DocxEditorToolbar.Slot slot-id="zoom.level" :overflow-content="zoomList">
+      <ZoomPicker />
+    </DocxEditorToolbar.Slot>
+  </DocxEditorToolbar>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+### Development warnings
+
+The toolbar renders a misplaced part and prints a development warning that names it. Two checks decide whether a build is a development build, in this order. First, when the bundler provides `import.meta.env.DEV`, as Vite does, its value decides. Otherwise, the build counts as development when a `process` global exists and `process.env.NODE_ENV` is not `production`. A page with neither, such as a browser bundle that replaces neither value, prints no warnings.
+
+- A `Toolbar.Group` whose `after` names no group goes to the end of the bar.
+- A `Toolbar.Group` with a built-in id ignores `label`, `labelKey`, and `after`.
+- A `Toolbar.Group` whose id is `contextual-table` is ignored, because the toolbar uses that id for the table controls.
+- A `Toolbar.Slot` for a slot that the preset arrangement does not draw is appended after the groups. An id that is not a `ChromeSlotId` gets the same treatment.
+
+### Insert tables and add comments
+
+`Toolbar.TableInsert` opens a 6×6 size grid, the same grid as **Insert** > **Table** in the menu bar. Arrow keys move in the grid, a press inserts a table of that size, and `Esc` closes the grid. In the toolbar, the grid stays inside the viewport. In the **More** panel, the grid opens inside the panel, and an insert also closes the panel. When focus leaves the grid, the grid closes.
+
+`Toolbar.AddComment` starts a comment draft on the selection in the review rail. Its slot is `review.addComment`, the same slot as the context menu's **Add a comment** row, and `toolbarCommandState` decides when it is enabled. Without the review module, in viewing mode, or with no selection on the page, it is disabled and its tooltip gives the reason. Without a mounted review rail to open the draft, the control is not rendered. The context menu row follows the same rule. In the **More** panel, a press also closes the panel. `Toolbar.Comments` is a different control: it shows or hides the **Comments & Changes** pane.
+
+### Menu bar overflow
+
+The menu bar also stays on one line. When the menus do not fit, it moves them, from the end, into one `⋯` menu. Each moved menu becomes a submenu with the same rows. The bar keeps its keyboard behavior: the arrow keys move between the menus and the `⋯` menu, and `ArrowRight` opens a submenu.
+
+The `⋯` menu's panel stays inside the viewport, with the same placement as the toolbar's **More** panel. Host children that are not menus, such as a share button, stay in the bar at every width and never appear inside the `⋯` menu.
+
+The bar must be able to shrink for the measurement to work. In a flex row, give it `min-width: 0`. Set `overflow={false}` (`:overflow="false"` in Vue) to let the bar wrap onto more lines instead.
 
 ## Add root-level command buttons
 

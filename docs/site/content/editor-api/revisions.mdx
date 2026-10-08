@@ -52,7 +52,7 @@ The runtime's tracking setting does not change the browser editor UI mode. Read 
 
 Tracked ranges refuse table and wrapper boundaries. Collaborative tracked ranges must remain within one paragraph. Targets that touch foreign pending revisions refuse. Insertions can continue the runtime author's text, paragraph, and formatting proposals.
 
-Appends can follow the author's pending deletion at the paragraph tail. Other deletion boundaries refuse. Structural and move revisions also block continuation.
+Appends can follow the author's pending deletion at the paragraph tail. Within one paragraph, a tracked replacement or deletion can start where the author's own pending inserted text ends, and it stays a separate decision. Other boundaries with the author's pending changes refuse: a deletion beside their deletion, or directly before their insertion, would review as one decision with it. A replacement or deletion that covers the author's pending text, or touches another author's change, also refuses. Structural and move revisions also block continuation.
 
 A pending row insertion or deletion blocks tracked text edits throughout that row, including nested tables. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require permanent edits. Tracked table and cell value replacement refuse in collaboration. See [Tables and cells](/docs/2.x/editor-api/tables#row-suggestions) for row deletion limits.
 

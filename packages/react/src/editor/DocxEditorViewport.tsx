@@ -19,6 +19,7 @@ import { useNavigationLayoutStore, useNavigationShift } from './navigation/navig
 import { useReviewGutter } from './review-gutter';
 import { zoomLevelForShortcut } from './zoom-levels';
 import { ScopedByAncestorContext, useScopeClassName } from './scope-context';
+import { InsideViewportContext } from './viewport-context';
 
 const selectPaneOpen = (snapshot: EditorSnapshot): boolean => snapshot.reviewPaneOpen ?? true;
 /** Fit modes must not animate nav padding: intermediate widths chase the page forever. */
@@ -120,7 +121,9 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
           wrapper above us, or this element, which scoped itself just now. Say
           so, or parts inside repeat the class under `chrome={false}` and in the
           Root + Viewport composition path. */}
-      <ScopedByAncestorContext.Provider value={true}>{children}</ScopedByAncestorContext.Provider>
+      <ScopedByAncestorContext.Provider value={true}>
+        <InsideViewportContext.Provider value={true}>{children}</InsideViewportContext.Provider>
+      </ScopedByAncestorContext.Provider>
     </div>
   );
 }

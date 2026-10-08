@@ -4,26 +4,109 @@ import {
   drawingModelOffsetsInParagraph,
 } from './drawing-atom-walk.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
-import { synthesizeParagraphTopAndBottomZones, type ExclusionZone } from './drawing-exclusion.ts';
+import {
+  pageFramedVertically,
+  synthesizeParagraphTopAndBottomZones,
+  type ExclusionZone,
+} from './drawing-exclusion.ts';
 import type { PendingLine } from './pending-line.ts';
+import { holdsClearingBreak } from './text-wrapping-break-clear.ts';
 
-const topAndBottomAnchorMemo = new WeakMap<OoxmlElement, boolean>();
+// By context first, like `anyAnchorMemo`: whether an atom is anchored, and how it wraps, can
+// depend on `projectionForAtom`.
+const topAndBottomAnchorMemo = new WeakMap<
+  InlineDrawingLayoutContext,
+  WeakMap<OoxmlElement, boolean>
+>();
 
 /**
- * True when the paragraph anchors a `wrapTopAndBottom` drawing. Its own band then depends on
- * the paragraph's spacing before, so the break cache must key that spacing.
+ * True when the paragraph anchors a `wrapTopAndBottom` drawing, or anchors a drawing and holds
+ * a line break that clears floats. Its own band then depends on the paragraph's spacing before,
+ * so the break cache must key that spacing.
  */
-export function anchorsTopAndBottomDrawing(
+export function anchorsSpacingDependentBand(
   paragraph: OoxmlElement,
   context: InlineDrawingLayoutContext | undefined
 ): boolean {
   if (!context) return false;
-  let value = topAndBottomAnchorMemo.get(paragraph);
+  let byParagraph = topAndBottomAnchorMemo.get(context);
+  if (!byParagraph) {
+    byParagraph = new WeakMap();
+    topAndBottomAnchorMemo.set(context, byParagraph);
+  }
+  let value = byParagraph.get(paragraph);
   if (value === undefined) {
-    value = anchoredDrawingAtomsInParagraph(paragraph, context).some(
-      (atom) => atom.projection.wrap === 'topAndBottom'
-    );
-    topAndBottomAnchorMemo.set(paragraph, value);
+    const atoms = anchoredDrawingAtomsInParagraph(paragraph, context);
+    value =
+      atoms.some((atom) => atom.projection.wrap === 'topAndBottom') ||
+      (atoms.length > 0 && holdsClearingBreak(paragraph));
+    byParagraph.set(paragraph, value);
+  }
+  return value;
+}
+
+/** What the break cache keys for a paragraph's own spacing-dependent band. */
+export interface OwnBandKeyInputs {
+  /** The paragraph synthesizes its own band during the break (see above). */
+  readonly anchorsTopAndBottom: boolean;
+  /**
+   * The band sits at a fixed page position (a page- or margin-framed vertical frame), so the
+   * lines around it depend on where the paragraph starts on the page.
+   */
+  readonly ownBandPageFramed: boolean;
+  /**
+   * The band sits at a fixed horizontal page position (a page- or margin-framed horizontal
+   * frame, or `simplePos`), so its place in the content box moves with the page's margins,
+   * which mirrored margins swap between odd and even pages.
+   */
+  readonly ownBandPageFramedHorizontally: boolean;
+}
+
+const NO_OWN_BAND: OwnBandKeyInputs = Object.freeze({
+  anchorsTopAndBottom: false,
+  ownBandPageFramed: false,
+  ownBandPageFramedHorizontally: false,
+});
+/** Horizontal frames that move with the paragraph's column, not with the page. */
+const COLUMN_FRAMES: ReadonlySet<string> = new Set(['column', 'character']);
+// By context first, like `anyAnchorMemo`: whether an atom is anchored, and how it is framed,
+// can depend on `projectionForAtom`.
+const ownBandMemo = new WeakMap<
+  InlineDrawingLayoutContext,
+  WeakMap<OoxmlElement, OwnBandKeyInputs>
+>();
+
+/** The own-band inputs of a paragraph's break key; one frozen answer per paragraph node. */
+export function ownBandKeyInputs(
+  paragraph: OoxmlElement,
+  context: InlineDrawingLayoutContext | undefined
+): OwnBandKeyInputs {
+  if (!context || !anchorsSpacingDependentBand(paragraph, context)) return NO_OWN_BAND;
+  let byParagraph = ownBandMemo.get(context);
+  if (!byParagraph) {
+    byParagraph = new WeakMap();
+    ownBandMemo.set(context, byParagraph);
+  }
+  let value = byParagraph.get(paragraph);
+  if (value === undefined) {
+    const atoms = anchoredDrawingAtomsInParagraph(paragraph, context);
+    // `simplePos` places the drawing in page coordinates, so it is page-framed on both axes.
+    const ownBandPageFramed = atoms.some((atom) => {
+      if (atom.projection.anchor?.simplePos) return true;
+      const vertical = atom.projection.position?.vertical;
+      return !!vertical && pageFramedVertically(vertical.relativeFrom);
+    });
+    const ownBandPageFramedHorizontally = atoms.some((atom) => {
+      if (atom.projection.anchor?.simplePos) return true;
+      const horizontal = atom.projection.position?.horizontal;
+      return !!horizontal && !COLUMN_FRAMES.has(horizontal.relativeFrom);
+    });
+    value = Object.freeze({
+      anchorsTopAndBottom: true,
+      ownBandPageFramed,
+      ownBandPageFramedHorizontally,
+    });
+    byParagraph.set(paragraph, value);
   }
   return value;
 }
@@ -56,7 +139,8 @@ export function anchorLineSkipsExclusion(
   context: InlineDrawingLayoutContext | undefined,
   line: PendingLine
 ): boolean {
-  if (!context) return false;
+  // A break's clearance belongs to the break, not to the paragraph's anchors.
+  if (!context || line.breakClearance) return false;
   const offsets = drawingModelOffsetsInParagraph(paragraph);
   const atoms = anchoredDrawingAtomsInParagraph(paragraph, context);
   const starts = atoms

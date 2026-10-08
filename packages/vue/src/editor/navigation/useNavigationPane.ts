@@ -12,14 +12,16 @@ import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/
 import { ZOOM_MAX, ZOOM_MIN } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../../lib/units';
 import { inject } from 'vue';
-import { ReviewRailContext } from '../context';
+import { ReviewRailContext, useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import {
   NAVIGATION_PANE_WIDTH,
+  navigationPaneOverlays,
   navigationPaneReservation,
   navigationShift,
 } from './navigation-geometry';
 import { useNavigationLayoutStore, useNavigationViewportElement } from './navigation-layout';
+import { trackWidestPage, type WidestPageTracker } from './navigation-widest-page';
 
 /** @public */
 export type NavigationTab = 'headings' | 'find';
@@ -52,6 +54,8 @@ const samePageGeometry = (a: PaneGeometry, b: PaneGeometry) =>
   a.fitting === b.fitting &&
   a.pageSetup?.pageWidthTwips === b.pageSetup?.pageWidthTwips;
 
+const selectPageCount = (snapshot: EditorSnapshot): number => snapshot.page.total;
+
 /** @public */
 export interface UseNavigationPaneOptions {
   defaultOpen?: boolean;
@@ -72,6 +76,12 @@ export interface UseNavigationPaneResult {
   readonly setTab: (tab: NavigationTab) => void;
   readonly paneWidth: ComputedRef<number>;
   readonly shift: ComputedRef<number>;
+  /**
+   * Whether the open pane covers the page instead of moving it. True on a viewport too
+   * narrow to show a readable page beside the pane (see `NAVIGATION_PANE_MIN_PAGE_ROOM`);
+   * `shift` is then 0, and `DocxEditorNavigation` closes after a heading or result is picked.
+   */
+  readonly overlay: ComputedRef<boolean>;
 }
 
 /** @public */
@@ -117,7 +127,10 @@ export function useNavigationPane(
   const viewport = useNavigationViewportElement();
   const rail = inject(ReviewRailContext, shallowRef({ mounted: 0, register: () => () => {} }));
   const geometry = useEditorState(selectPaneGeometry, samePageGeometry);
+  const editor = useDocxEditor();
+  const pageCount = useEditorState(selectPageCount);
   const viewportWidth = ref(0);
+  const widestPage = ref<number | null>(null);
   const inlineEndReservation = ref(0);
   const inlineStartReservation = ref(0);
 
@@ -159,14 +172,47 @@ export function useNavigationPane(
     { immediate: true }
   );
 
+  // The page stack is as wide as its WIDEST page (see `navigation-widest-page.ts`). Tracked
+  // only while the pane is open; page-count steps and caret-section changes nudge a settled
+  // re-read, and the tracker itself listens for document changes.
+  let widestTracker: WidestPageTracker | null = null;
+  scopeDispose(
+    watch(
+      [openVal, editor],
+      ([isOpen, instance], _previous, onCleanup) => {
+        if (!isOpen || !instance) return;
+        const tracker = trackWidestPage(instance, (next) => {
+          widestPage.value = next;
+        });
+        widestTracker = tracker;
+        onCleanup(() => {
+          tracker.dispose();
+          if (widestTracker === tracker) widestTracker = null;
+        });
+      },
+      { immediate: true, flush: 'post' }
+    )
+  );
+  scopeDispose(
+    watch([pageCount, () => geometry.value.pageSetup?.pageWidthTwips], () => widestTracker?.nudge())
+  );
+
+  const reservation = computed(() => navigationPaneReservation(paneWidthVal.value));
+  const overlay = computed(
+    () =>
+      openVal.value &&
+      navigationPaneOverlays(viewportWidth.value - inlineEndReservation.value, reservation.value)
+  );
+
   const shift = computed(() => {
-    if (!openVal.value) return 0;
+    if (!openVal.value || overlay.value) return 0;
     const pageWidthTwips = geometry.value.pageSetup?.pageWidthTwips ?? lastPageWidthTwips.value;
     if (pageWidthTwips === null) return 0;
     return navigationShift({
       viewportWidth: viewportWidth.value,
-      pageWidthPx: twipsToPixels(pageWidthTwips) * geometry.value.zoom,
-      reservation: navigationPaneReservation(paneWidthVal.value),
+      pageWidthPx:
+        Math.max(widestPage.value ?? 0, twipsToPixels(pageWidthTwips)) * geometry.value.zoom,
+      reservation: reservation.value,
       inlineEndReservation: inlineEndReservation.value,
       inlineStartReservation: inlineStartReservation.value,
       docked: geometry.value.fitting,
@@ -187,9 +233,10 @@ export function useNavigationPane(
 
   scopeDispose(
     watch(
-      [() => store, openVal, paneWidthVal],
+      [() => store, openVal, overlay, reservation],
       () => {
-        store?.setReservation(openVal.value ? navigationPaneReservation(paneWidthVal.value) : 0);
+        // An overlaying pane reserves nothing: it covers the page and leaves the gutters alone.
+        store?.setReservation(openVal.value && !overlay.value ? reservation.value : 0);
       },
       { immediate: true, flush: 'post' }
     )
@@ -204,5 +251,6 @@ export function useNavigationPane(
     setTab,
     paneWidth: paneWidthVal,
     shift,
+    overlay,
   };
 }
