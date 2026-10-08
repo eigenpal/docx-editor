@@ -266,6 +266,8 @@ Reuse this logic for each surface that exposes the action.
 
 You can keep packaged rows, remove rows, add registry slots, and add host rows.
 
+To remove a row, render its slot override with `hidden`, such as `<DocxEditorContextMenu.Slot slot-id="edit.cut" hidden />`. A named row part is shorthand for that override: `<DocxEditorContextMenu.Cut hidden />` removes the same row in place. The toolbar and the menu bar follow the same rule.
+
 ```vue
 <DocxEditorContextMenu class-name="my-menu">
   <DocxEditorContextMenu.Cut />

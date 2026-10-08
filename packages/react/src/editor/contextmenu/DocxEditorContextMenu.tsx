@@ -29,7 +29,7 @@ import {
   useState,
 } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
-import { warnRenamedContextRow, warnUnmatchedHiddenRow } from '../menu/menu-warnings';
+import { warnUnmatchedHiddenRow } from '../menu/menu-warnings';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import { ReviewRailContext, useDocxEditor } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
@@ -287,19 +287,9 @@ function rowOfChild(child: ReactNode): string | null {
   if (typeof type.docxSlot === 'string') return type.docxSlot;
   if (type.docxMenuRow === true) {
     const slot = menuItemSlotId(child.props as MenuItemProps);
-    if (slot) return renamedContextRow(slot);
+    if (slot) return slot;
   }
   return null;
-}
-
-/**
- * The row an override names. `review.comments` named the Add Comment row before it got its
- * own slot, so it still names that row in this release, with a development warning.
- */
-function renamedContextRow(id: string): string {
-  if (id !== 'review.comments') return id;
-  warnRenamedContextRow(id, 'review.addComment');
-  return 'review.addComment';
 }
 
 /**

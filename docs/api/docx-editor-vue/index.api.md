@@ -6193,7 +6193,6 @@ export interface ToolbarButtonProps {
     class?: string;
     // (undocumented)
     className?: string;
-    // (undocumented)
     hidden?: boolean;
     // (undocumented)
     icon?: DocxEditorChildren;
@@ -6447,7 +6446,6 @@ export interface ToolbarSlotPartProps {
     class?: string;
     // (undocumented)
     className?: string;
-    // (undocumented)
     hidden?: boolean;
 }
 

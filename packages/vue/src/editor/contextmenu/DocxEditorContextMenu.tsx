@@ -37,7 +37,7 @@ import {
   MenuSubmenu,
   menuItemSlotIdOfVNode,
 } from '../menu/parts';
-import { warnRenamedContextRow, warnUnmatchedHiddenRow } from '../menu/menu-warnings';
+import { warnUnmatchedHiddenRow } from '../menu/menu-warnings';
 import { ContextMenuContext, type ContextMenuAnchor } from './contextmenu-context';
 import {
   ContextMenuCopy,
@@ -256,19 +256,9 @@ function rowOfChild(child: unknown): string | null {
   if (typeof type.docxSlot === 'string') return type.docxSlot;
   if (type.docxMenuRow === true) {
     const slot = menuItemSlotIdOfVNode(child as VNode);
-    if (slot) return renamedContextRow(slot);
+    if (slot) return slot;
   }
   return null;
-}
-
-/**
- * The row an override names. `review.comments` named the Add Comment row before it got its
- * own slot, so it still names that row in this release, with a development warning.
- */
-function renamedContextRow(id: string): string {
-  if (id !== 'review.comments') return id;
-  warnRenamedContextRow(id, 'review.addComment');
-  return 'review.addComment';
 }
 
 function startPlacedChild(child: unknown): boolean {

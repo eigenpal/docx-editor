@@ -78,14 +78,6 @@ test('the row shows only while a review rail is mounted', async () => {
   expect(row(await open(() => [], false), 'review.addComment')).toBeNull();
 });
 
-test('the old review.comments id still removes the row, with a warning', async () => {
-  const { result, messages } = await capturingWarnings(() =>
-    open(() => [h(DocxEditorContextMenu.Slot, { slotId: 'review.comments', hidden: true })])
-  );
-  expect(row(result, 'review.addComment')).toBeNull();
-  expect(messages.some((text) => text.includes('is now "review.addComment"'))).toBe(true);
-});
-
 test('slotId names a row, the old slot prop still does, with a warning', async () => {
   const { result, messages } = await capturingWarnings(() =>
     open(() => [

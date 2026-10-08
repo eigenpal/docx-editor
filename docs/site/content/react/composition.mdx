@@ -272,6 +272,8 @@ Reuse one hook wherever you expose the action. This keeps its enabled-state rule
 
 You can combine packaged rows, custom rows, slots, and submenus. This example also replaces icons and removes a packaged row:
 
+To remove a row, render its slot override with `hidden`, such as `<DocxEditor.ContextMenu.Slot slotId="edit.cut" hidden />`. A named row part is shorthand for that override: `<DocxEditor.ContextMenu.Cut hidden />` removes the same row in place. The toolbar and the menu bar follow the same rule.
+
 ```tsx
 {
   /* Get `editor` from `useDocxEditor()`. */

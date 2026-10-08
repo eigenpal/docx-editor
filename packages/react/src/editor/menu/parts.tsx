@@ -226,7 +226,11 @@ export interface MenuItemProps {
   /** i18n key of the shortcut shown in the right column. */
   shortcutKey?: string;
   className?: string;
-  /** Render nothing — inside a packaged menu this removes the row. */
+  /**
+   * Render nothing: inside a packaged menu this removes the row in place. A named row part
+   * with `hidden`, such as `<ContextMenu.Cut hidden />`, is shorthand for this override
+   * with that row's `slotId`.
+   */
   hidden?: boolean;
 }
 

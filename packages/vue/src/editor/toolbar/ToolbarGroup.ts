@@ -137,7 +137,10 @@ export const ToolbarHostGroup = Object.assign(
 export interface DocxEditorToolbarSlotProps {
   /** The built-in slot this content replaces, for example `'text.bold'`. */
   slotId: ChromeSlotId;
-  /** Render nothing: inside the preset arrangement this removes the slot, as on every part. */
+  /**
+   * Render nothing: inside the preset arrangement this removes the slot in place. A named
+   * part with `hidden`, such as `<Toolbar.Bold hidden />`, is shorthand for this override.
+   */
   hidden?: boolean;
   /**
    * Content for the slot's "⋯" panel row when its group collapses. Without it the panel row
@@ -151,8 +154,9 @@ export interface DocxEditorToolbarSlotProps {
 /**
  * Replaces one built-in slot with arbitrary content. The content takes the slot's place and
  * collapses with the slot's group. A slot the preset arrangement does not draw has no place
- * to take, so the content is appended and a development warning names the slot. `hidden`
- * removes the slot, as it does on every part.
+ * to take, so the content is appended and a development warning names the slot. With
+ * `hidden` it removes the slot in place; a named part with `hidden`, such as
+ * `<Toolbar.Bold hidden />`, is shorthand for `<Toolbar.Slot slotId="text.bold" hidden />`.
  *
  * @example
  * ```ts

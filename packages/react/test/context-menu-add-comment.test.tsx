@@ -1,4 +1,4 @@
-// The context menu's Add comment row: its slot, its old id, slot ids on overrides, and the
+// The context menu's Add comment row: its slot, slot ids on overrides, and the
 // warnings for overrides that do nothing.
 
 // MUST be first: happy-dom registration happens on import.
@@ -92,21 +92,6 @@ test('the row shows only while a review rail is mounted', () => {
   expect(row(mount(<ContextMenu t={t} />).view, 'review.addComment')).not.toBeNull();
   cleanup();
   expect(row(mount(<ContextMenu t={t} />, false).view, 'review.addComment')).toBeNull();
-});
-
-test('the old review.comments id still removes the row, with a warning', () => {
-  const { result, messages } = capturingWarnings(() =>
-    mount(
-      <ContextMenu t={t}>
-        <ContextMenu.Slot slotId="review.comments" hidden />
-      </ContextMenu>
-    )
-  );
-  expect(row(result.view, 'review.addComment')).toBeNull();
-  expect(row(result.view, 'review.comments')).toBeNull();
-  expect(
-    messages.some((text) => text.includes('"review.comments" is now "review.addComment"'))
-  ).toBe(true);
 });
 
 test('slotId names a row, the old slot prop still does, with a warning', () => {

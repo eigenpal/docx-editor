@@ -260,7 +260,7 @@ In every other case, the toolbar measures its own box and collapses as before. T
 
 ### Replace a slot's content
 
-`Toolbar.Slot` replaces one built-in slot with your own content. Name the slot with `slotId`. The content keeps the slot's place and collapses with the slot's group. In the panel, it renders under the slot's label, or as `overflowContent` when you pass it. To remove a slot, render any part for it with `hidden`: its named part, such as `<DocxEditor.Toolbar.Bold hidden />`, or `Toolbar.Slot` with its `slotId`. The context menu works the same way: `ContextMenu.Slot` takes `slotId` and `hidden`.
+`Toolbar.Slot` replaces one built-in slot with your own content. Name the slot with `slotId`. The content keeps the slot's place and collapses with the slot's group. In the panel, it renders under the slot's label, or as `overflowContent` when you pass it. To remove a control, render its slot override with `hidden`: `<DocxEditor.Toolbar.Slot slotId="text.bold" hidden />`. A named part is shorthand for that override, so `<DocxEditor.Toolbar.Bold hidden />` removes the same control in place. Menus follow the same rule: `<DocxEditor.ContextMenu.Slot slotId="edit.cut" hidden />` and its shorthand `<DocxEditor.ContextMenu.Cut hidden />` both remove the row in place, and `Menu.Item` takes `slotId` and `hidden` the same way.
 
 <FrameworkTabs>
 <Framework value="react">

@@ -5,7 +5,7 @@
 // - packaged rows kept as-is (`Paste`, `Delete`, `SelectAll`) — they still ask the engine
 //   whether they may run, and still grey out with its reason;
 // - a packaged row RE-ICONED in place (`Cut`, `Copy`) without losing that wiring;
-// - a packaged row REMOVED (`review.comments`, replaced below by the demo's own version);
+// - a packaged row REMOVED (`review.addComment`, replaced below by the demo's own version);
 // - a chrome slot pulled in as a row (`Slot slotId="format.clear"`);
 // - the demo's OWN rows (`Item`), which the engine knows nothing about;
 // - a submenu of real insert commands.

@@ -1,5 +1,5 @@
 // Development warnings for menu and context-menu compositions whose overrides do nothing
-// or use a deprecated spelling. Each message prints once, and never in a production build.
+// or use a deprecated prop. Each message prints once, and never in a production build.
 
 import { isDevelopment } from '../../lib/is-development';
 
@@ -17,14 +17,6 @@ export function warnDeprecatedSlotProp(slot: string): void {
   menuDevWarning(
     `Menu.Item and ContextMenu.Slot take the slot id as slotId. slot="${slot}" still works ` +
       `in this release; write slotId="${slot}".`
-  );
-}
-
-/** The context-menu row that used to answer to `review.comments`. */
-export function warnRenamedContextRow(from: string, to: string): void {
-  menuDevWarning(
-    `The context-menu row "${from}" is now "${to}". The old id still names it in this ` +
-      `release; use "${to}".`
   );
 }
 
