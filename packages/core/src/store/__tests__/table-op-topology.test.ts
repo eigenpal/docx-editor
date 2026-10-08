@@ -11,6 +11,8 @@ import {
 } from '../package/ooxml-tree.ts';
 import { readOoxmlPackage } from '../package/ooxml-package.ts';
 import { readEditableTableTopology } from '../store/tree-op-table-topology.ts';
+import { cachedUniqueNode, findNode, insertChildren } from '../package/ooxml-edit.ts';
+import { applyTreeOp } from '../store/tree-ops.ts';
 import {
   CT_TBLPR_SEQUENCE,
   CT_TRPR_SEQUENCE,
@@ -103,6 +105,37 @@ const CELL =
   '<w:tc><w:tcPr><w:tcW w:w="2400" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc>';
 
 describe('readEditableTableTopology', () => {
+  test('uses the warm index while bounding the addressed table subtree', () => {
+    const part = load('<w:p/>'.repeat(200) + `<w:tbl><w:tr>${CELL}</w:tr></w:tbl>`);
+    const table = firstTable(part);
+    const tight = { ...limits, maxTraversalNodes: 30 };
+    expect(readEditableTableTopology(part.root, table.id, tight).ok).toBe(false);
+    expect(findNode(part, table.id)).toBe(table);
+    expect(readEditableTableTopology(part.root, table.id, tight).ok).toBe(true);
+    expect(
+      readEditableTableTopology(part.root, table.id, { ...tight, maxTraversalNodes: 2 }).ok
+    ).toBe(false);
+    const paragraph = collectByKind(part.root, 'paragraph')[0]!;
+    const split = applyTreeOp(part, { op: 'splitParagraph', paragraphId: paragraph.id, offset: 0 });
+    expect(split.ok).toBe(true);
+    if (split.ok) {
+      expect(cachedUniqueNode(split.part.root, table.id)).toBe(table);
+      expect(readEditableTableTopology(split.part.root, table.id, tight).ok).toBe(true);
+    }
+  });
+
+  test('a warm index never hides duplicate ids introduced by a deferred edit', () => {
+    const part = load(`<w:tbl><w:tr>${CELL}</w:tr></w:tbl>`);
+    const table = firstTable(part);
+    findNode(part, table.id);
+    const body = part.root.children.find((node) => node.kind === 'body')!;
+    const changed = insertChildren(part, body.id, 1, [table], { deferValidation: true });
+    expect(changed.ok).toBe(true);
+    if (!changed.ok) return;
+    const result = readEditableTableTopology(changed.part.root, table.id);
+    expect(result).toMatchObject({ ok: false, reason: 'duplicate-node-id' });
+  });
+
   test('reads direct rows and cells only', () => {
     const part = load(
       `<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="2400"/></w:tblGrid>` +
