@@ -181,6 +181,74 @@ The controlled prop is the source of truth. Store callback values in that prop t
 
 For independent API and dialog changes, omit the controlled prop. You can instead mount `DocxEditor.RevisionMarkup` inside `DocxEditor.Root` for partial declarative settings. Vue also exports `DocxEditorRevisionMarkup`. Do not combine the declaration with the controlled prop.
 
+## Choose where review items appear
+
+Two preferences control the review layout. Like every other markup preference, they are local view state. They never change the DOCX file or another participant's view.
+
+| Setting          | Values             | Default  |
+| ---------------- | ------------------ | -------- |
+| `revisionsIn`    | `pane`, `balloons` | `pane`   |
+| `commentMarkers` | `avatar`, `icon`   | `avatar` |
+
+With `revisionsIn: 'pane'`, the review pane lists comments and tracked changes as cards. With `revisionsIn: 'balloons'`, the pane lists comments only. A tracked change opens in a balloon at its text when you select it in the page, or when **Next Change**, **Previous Change**, or `setActive` reaches it. Moving the caret into a change does not open the balloon. The balloon shows the author, the date, and the changed words. A deletion followed by an insertion from the same author appears as one replacement. The balloon also lists replies and has a reply field. **Accept** and **Reject** resolve the change and close the balloon. The balloon also closes when you press Escape, type in the document, or select elsewhere in the page.
+
+With `commentMarkers: 'avatar'`, a collapsed comment marker shows the thread author's initials in their color. A small count shows the number of replies, and a check mark replaces the initials when the thread is resolved. With `commentMarkers: 'icon'`, the marker shows the comment icon. A `DocxEditorReview.Markers` part with an `icon` function overrides both values.
+
+`DocxEditorReview` reads both preferences from the editor and updates when they change. Call `setRevisionMarkup()` to switch the layout at runtime:
+
+```ts
+editor.setRevisionMarkup({ revisionsIn: 'balloons' });
+editor.setRevisionMarkup({ commentMarkers: 'icon' });
+```
+
+To set the layout when the editor opens, pass `revisionMarkup`. This example uses a constant, so the prop controls every markup preference. To keep dialog changes, store them as the previous section shows.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { DocxEditorReview, reviewModule } from '@docx-editor.dev/pro/react';
+import { DEFAULT_REVISION_MARKUP } from '@docx-editor.dev/core/editor';
+
+const modules = [reviewModule()];
+const markup = { ...DEFAULT_REVISION_MARKUP, revisionsIn: 'balloons' as const };
+
+export function ReviewEditor({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <DocxEditor document={bytes} modules={modules} revisionMarkup={markup}>
+      <DocxEditorReview />
+    </DocxEditor>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { DocxEditorReview, reviewModule } from '@docx-editor.dev/pro/vue';
+import { DEFAULT_REVISION_MARKUP } from '@docx-editor.dev/core/editor';
+
+defineProps<{ bytes: Uint8Array }>();
+const modules = [reviewModule()];
+const markup = { ...DEFAULT_REVISION_MARKUP, revisionsIn: 'balloons' as const };
+</script>
+
+<template>
+  <DocxEditor :document="bytes" :modules="modules" :revision-markup="markup">
+    <DocxEditorReview />
+  </DocxEditor>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+The **Track changes options** dialog shows both settings in its **Review layout** group. An invalid value throws `TypeError` before any setting changes.
+
 ## Choose marks and colors
 
 | Setting           | Default                        |
@@ -197,6 +265,8 @@ For independent API and dialog changes, omit the controlled prop. You can instea
 | `cells.split`     | `lightOrange`                  |
 | `trackMoves`      | `true`                         |
 | `trackFormatting` | `true`                         |
+| `revisionsIn`     | `pane`                         |
+| `commentMarkers`  | `avatar`                       |
 
 Text styles accept `none`, `colorOnly`, `bold`, `italic`, `underline`, `doubleUnderline`, `strikethrough`, or `doubleStrikethrough`. Deletions and moved-from text also accept `hidden`, `caret`, or `pound`.
 

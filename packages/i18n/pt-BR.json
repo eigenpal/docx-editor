@@ -773,7 +773,9 @@
     "noMarkup": "Sem marcação",
     "original": "Original",
     "protectDocument": "Proteger documento para formulários",
-    "simpleMarkup": "Marcação simples"
+    "simpleMarkup": "Marcação simples",
+    "replyCount": "Respostas: {count}",
+    "trackedChange": "Alteração controlada"
   },
   "imageAltText": {
     "description": "Descrição",
@@ -952,12 +954,19 @@
       "yellow": "Amarelo",
       "gray": "Cinza",
       "lightGreen": "Verde-claro",
-      "lightPurple": "Roxo-claro"
+      "lightPurple": "Roxo-claro",
+      "avatar": "Iniciais do autor",
+      "balloons": "Balões",
+      "icon": "Ícone",
+      "pane": "Painel de revisão"
     },
     "deletionsBackground": "Fundo das exclusões",
     "formattingBackground": "Fundo das alterações de formatação",
     "insertionsBackground": "Fundo das inserções",
     "movedFromBackground": "Fundo da origem das movimentações",
-    "movedToBackground": "Fundo do destino das movimentações"
+    "movedToBackground": "Fundo do destino das movimentações",
+    "commentMarkers": "Marcadores de comentário",
+    "layout": "Layout de revisão",
+    "revisionsIn": "Mostrar alterações controladas em"
   }
 }

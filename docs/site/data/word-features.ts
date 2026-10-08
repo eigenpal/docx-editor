@@ -885,7 +885,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'premium',
     notes:
-      'Review actions require the EigenPal Pro License. Accept or reject one change with acceptReviewItem, rejectReviewItem, or the sidebar. The Review menu also resolves changes shown by active filters. Hidden authors and unsupported changes remain pending. The automation API supports individual decisions and strict or partial batches. Deletion and addition revisions keep independent accept and reject decisions, even when their author, ID, and editing time match. Source revision dates survive save. Opening and saving existing revisions require no review module.',
+      'Review actions require the EigenPal Pro License. Accept or reject one change with acceptReviewItem, rejectReviewItem, or the sidebar. The Review menu also resolves changes shown by active filters. Hidden authors and unsupported changes remain pending. The automation API supports individual decisions and strict or partial batches. Deletion and addition revisions keep independent accept and reject decisions, even when their author, ID, and editing time match. Source revision dates survive save. Opening and saving existing revisions require no review module. The revisionsIn viewer preference lists changes in the review pane or opens each change in a balloon at its text, with replies, a reply field, and accept and reject controls. A balloon opens on a click in the page, Next Change, Previous Change, or setActive, and a caret move alone does not open it. An adjacent deletion and insertion from one author open as one replacement.',
     docsLink: '/docs/2.x/pro/tracked-changes',
   },
   {
@@ -897,7 +897,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'premium',
     notes:
-      'Comment authoring and review controls require the EigenPal Pro License. Opening and saving existing comments require no review module. The review rail shows threads, replies, and resolution controls. React hosts use `@docx-editor.dev/pro/react`; Vue hosts use `@docx-editor.dev/pro/vue` with the same engine commands. Saving normalizes recognized empty comment parts when no markers or retained relationship dependencies remain.',
+      'Comment authoring and review controls require the EigenPal Pro License. Opening and saving existing comments require no review module. The review rail shows threads, replies, and resolution controls. React hosts use `@docx-editor.dev/pro/react`; Vue hosts use `@docx-editor.dev/pro/vue` with the same engine commands. Saving normalizes recognized empty comment parts when no markers or retained relationship dependencies remain. The commentMarkers viewer preference draws collapsed thread markers as author initials badges with a reply count and a resolved check mark, or as comment icons.',
     docsLink: '/docs/2.x/pro/comments',
   },
   {

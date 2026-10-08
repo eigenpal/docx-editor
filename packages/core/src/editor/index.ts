@@ -492,6 +492,8 @@ export type {
   RevisionMarkupMark,
   RevisionDeletionMark,
   RevisionChangedLinesMark,
+  RevisionsIn,
+  CommentMarkers,
   RevisionMarkupStyle,
   RevisionMarkupTextStyle,
 } from '../contracts/revision-markup.ts';

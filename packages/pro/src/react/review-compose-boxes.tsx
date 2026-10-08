@@ -8,10 +8,12 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import type { ReviewAuthorInfo } from '@docx-editor.dev/core/editor';
-import type { ReviewPartProps } from './DocxEditorReview.tsx';
+import type { ReviewPartProps } from './review-types.ts';
 import type { ReviewItemView } from './useReview.ts';
 import { COMPACT_CARD_WIDTH } from './use-rail-geometry.ts';
 import { authorCardStyle } from './review-author-styles.ts';
+import { SEND_ICON, icon } from './review-icons.tsx';
+import { initialsOf } from './review-shared.ts';
 
 interface ComposePartDeps {
   readonly useRail: () => {
@@ -169,30 +171,43 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
   }
   ReviewDraft.docxReviewPart = 'Draft' as const;
 
-  /** The reply box on the active card. @public */
-  function ReviewReply({ className, hidden, children }: ReviewPartProps) {
+  /** Draft state and submission for one reply line, held by whichever part owns it. */
+  function useReplyDraft(entry: ReviewItemView | null) {
     const { review, readOnly } = deps.useRail();
-    const entry = deps.useItem();
-    const t = deps.useLabel();
     const [draft, setDraft] = useState('');
     const [refused, setRefused] = useState(false);
-    const fieldId = useId();
-
     const submit = useCallback(() => {
       if (!entry || readOnly || draft.trim().length === 0) return;
       const landed = review.reply(entry, draft.trim());
       setRefused(!landed);
       if (landed) setDraft('');
     }, [entry, readOnly, draft, review]);
+    return { draft, setDraft, refused, setRefused, submit };
+  }
 
-    if (hidden || !entry || !entry.isActive || (entry.kind === 'comment' && entry.resolved)) {
-      return null;
-    }
-    if (children) return <>{children}</>;
-
+  /**
+   * The compact reply line the open card and the change balloon share: the configured
+   * author's avatar, a borderless field, Cancel only while there is text, and a round send
+   * button. Enter sends too.
+   */
+  function ReplyLine({
+    state,
+    className,
+    onCancel,
+  }: {
+    readonly state: ReturnType<typeof useReplyDraft>;
+    readonly className?: string;
+    readonly onCancel?: () => void;
+  }) {
+    const { readOnly, draftAuthor, draftAuthorInfo, draftAuthorSlot } = deps.useRail();
+    const t = deps.useLabel();
+    const fieldId = useId();
+    const { draft, setDraft, refused, setRefused, submit } = state;
+    const avatarUrl = draftAuthorInfo?.style?.avatarUrl;
     return (
       <form
         className={`docx-review__reply-box${className ? ` ${className}` : ''}`}
+        data-reply-line=""
         onSubmit={(event) => {
           event.preventDefault();
           submit();
@@ -201,6 +216,27 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
         <label className="docx-editor-sr-only" htmlFor={fieldId}>
           {t('comments.replyPlaceholder')}
         </label>
+        {draftAuthor ? (
+          <span
+            className="docx-review__avatar docx-review__reply-avatar"
+            data-testid="review-reply-avatar"
+            aria-hidden="true"
+            style={authorCardStyle(draftAuthor, draftAuthorInfo, draftAuthorSlot)}
+          >
+            {avatarUrl ? (
+              <img
+                className="docx-review__avatar-img"
+                src={avatarUrl}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              initialsOf(draftAuthor)
+            )}
+          </span>
+        ) : null}
         <input
           id={fieldId}
           data-testid="review-reply-input"
@@ -221,7 +257,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
             submit();
           }}
         />
-        <div className="docx-review__reply-actions">
+        {draft.length > 0 ? (
           <button
             type="button"
             data-testid="review-reply-cancel"
@@ -231,21 +267,22 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
               event.stopPropagation();
               setDraft('');
               setRefused(false);
-              review.setActive(null);
+              onCancel?.();
             }}
           >
             {t('common.cancel')}
           </button>
-          <button
-            type="submit"
-            data-testid="review-reply-submit"
-            className="docx-review__submit"
-            disabled={readOnly || draft.trim().length === 0}
-            title={readOnly ? t('editingMode.viewingHint') : undefined}
-          >
-            {t('review.reply')}
-          </button>
-        </div>
+        ) : null}
+        <button
+          type="submit"
+          data-testid="review-reply-submit"
+          className="docx-review__send"
+          aria-label={t('review.reply')}
+          disabled={readOnly || draft.trim().length === 0}
+          title={readOnly ? t('editingMode.viewingHint') : t('review.reply')}
+        >
+          {icon(SEND_ICON)}
+        </button>
         {refused ? (
           <span className="docx-review__refused" role="alert" data-testid="review-reply-refused">
             {t('review.replyRefused')}
@@ -254,7 +291,28 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
       </form>
     );
   }
+
+  /** The reply box on the active card. @public */
+  function ReviewReply({ className, hidden, children }: ReviewPartProps) {
+    const { review } = deps.useRail();
+    const entry = deps.useItem();
+    // Held here, not in the line: the draft survives the card closing and reopening.
+    const state = useReplyDraft(entry);
+    if (hidden || !entry || !entry.isActive || (entry.kind === 'comment' && entry.resolved)) {
+      return null;
+    }
+    if (children) return <>{children}</>;
+    return (
+      <ReplyLine state={state} className={className} onCancel={() => review.setActive(null)} />
+    );
+  }
   ReviewReply.docxReviewPart = 'Reply' as const;
 
-  return { ReviewDraft, ReviewReply };
+  /** The change balloon's reply line. Open whenever the balloon is; not a rail part. */
+  function ReviewBalloonReply({ entry }: { readonly entry: ReviewItemView }) {
+    const state = useReplyDraft(entry);
+    return <ReplyLine state={state} />;
+  }
+
+  return { ReviewDraft, ReviewReply, ReviewBalloonReply };
 }

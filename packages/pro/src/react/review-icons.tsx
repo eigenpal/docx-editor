@@ -33,6 +33,35 @@ export const resolvedCommentIcon = (): ReactNode => (
   </span>
 );
 
+/** A paper plane: the reply line's send button. */
+export const SEND_ICON =
+  'M120-160v-640l760 320-760 320Zm80-120 474-200-474-200v140l240 60-240 60v140Zm0 0v-400 400Z';
+
+/**
+ * A comment thread's badge under `markers: 'initials'`: a speech bubble in the author's
+ * colour with their initials, or a quiet check once the thread is resolved, plus a reply
+ * count. Presentation only; the control around it carries the accessible label.
+ */
+export const reviewBadge = (initials: string, replies: number, resolved: boolean): ReactNode => (
+  <span
+    className="docx-review__badge"
+    data-testid="review-badge"
+    {...(resolved ? { 'data-resolved': '' } : {})}
+    aria-hidden="true"
+  >
+    {resolved ? (
+      icon(ACCEPT_ICON)
+    ) : (
+      <span className="docx-review__badge-initials">{initials || '?'}</span>
+    )}
+    {replies > 0 ? (
+      <span className="docx-review__badge-count" data-testid="review-badge-count">
+        {replies > 9 ? '9+' : replies}
+      </span>
+    ) : null}
+  </span>
+);
+
 export const REOPEN_ICON =
   'M480-160q-134 0-227-93t-93-227q0-134 93-227t227-93q69 0 132 28.5T720-690v-110h80v280H520v-80h168q-32-56-87.5-88T480-720q-100 0-170 70t-70 170q0 100 70 170t170 70q77 0 139-44t87-116h84q-28 106-114 173t-196 67Z';
 export const REJECT_ICON =

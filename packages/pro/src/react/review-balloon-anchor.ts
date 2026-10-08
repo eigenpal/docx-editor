@@ -4,6 +4,7 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 
+import type { RevisionsIn } from '@docx-editor.dev/core/editor';
 import type { ReviewItemView } from './useReview.ts';
 
 type BalloonReviewItem = Extract<ReviewItemView, { readonly kind: 'revision' }>;
@@ -54,18 +55,46 @@ export function anchorFromRevisionElement(
   };
 }
 
-export function balloonServesRevisionKind(revisionKind: string | undefined): boolean {
-  return revisionKind === 'format' || revisionKind === 'structural';
+/**
+ * Whether the page balloon serves this revision kind. Format and structural changes always
+ * have it. With `revisionsIn: 'balloons'` every tracked change does, because the rail lists
+ * comments only.
+ */
+export function balloonServesRevisionKind(
+  revisionKind: string | undefined,
+  revisionsIn: RevisionsIn = 'pane'
+): boolean {
+  if (revisionKind === undefined) return false;
+  return revisionsIn === 'balloons' || revisionKind === 'format' || revisionKind === 'structural';
 }
 
-/** True when the active item's decision belongs in the page balloon, not the rail column. */
+/**
+ * True when the active item's decision belongs in the page balloon, not the rail column.
+ *
+ * With `revisionsIn: 'balloons'`, a content change (inserted, deleted, moved or replaced text) opens
+ * only when it was activated explicitly: by Next/Previous Change or by `setActive`. A caret
+ * that merely lands in the change must not raise a balloon over the text being typed.
+ */
 export function activeItemNeedsBalloon(
   item: ReviewItemView,
   railItems: readonly ReviewItemView[],
-  paneOpen: boolean
+  paneOpen: boolean,
+  revisionsIn: RevisionsIn = 'pane',
+  explicit = false
 ): boolean {
-  if (item.kind !== 'revision' || !balloonServesRevisionKind(item.revisionKind)) return false;
+  if (item.kind !== 'revision' || !balloonServesRevisionKind(item.revisionKind, revisionsIn)) {
+    return false;
+  }
+  if (!balloonServesRevisionKind(item.revisionKind)) return explicit;
   return !(paneOpen && railItems.some((entry) => entry.id === item.id));
+}
+
+/** A painted text site, as opposed to a format span or a table-row marker. */
+export function isContentRevisionSite(element: HTMLElement): boolean {
+  return (
+    element.dataset.revisionKind !== 'format' &&
+    !element.classList.contains('docx-table-row--revision')
+  );
 }
 
 /** Find a painted revision site for an active decision without interpolating file data into selectors. */
@@ -98,6 +127,8 @@ export function findPaintedRevisionElement(
     ) {
       return node;
     }
+    // A content change, or either half of a paired replacement, anchors on its first span.
+    if (!balloonServesRevisionKind(item.revisionKind) && isContentRevisionSite(node)) return node;
   }
   return null;
 }

@@ -773,7 +773,9 @@
     "noMarkup": "无标记",
     "original": "原始状态",
     "protectDocument": "保护文档以填写窗体",
-    "simpleMarkup": "简单标记"
+    "simpleMarkup": "简单标记",
+    "replyCount": "回复：{count}",
+    "trackedChange": "修订"
   },
   "imageAltText": {
     "description": "说明",
@@ -952,12 +954,19 @@
       "yellow": "黄色",
       "gray": "灰色",
       "lightGreen": "浅绿色",
-      "lightPurple": "浅紫色"
+      "lightPurple": "浅紫色",
+      "avatar": "作者姓名缩写",
+      "balloons": "批注框",
+      "icon": "图标",
+      "pane": "审阅窗格"
     },
     "deletionsBackground": "删除背景",
     "formattingBackground": "格式更改背景",
     "insertionsBackground": "插入背景",
     "movedFromBackground": "移出背景",
-    "movedToBackground": "移入背景"
+    "movedToBackground": "移入背景",
+    "commentMarkers": "批注标记",
+    "layout": "审阅布局",
+    "revisionsIn": "修订显示位置"
   }
 }

@@ -773,7 +773,9 @@
     "noMarkup": "ללא סימונים",
     "original": "מקורי",
     "protectDocument": "הגן על המסמך עבור טפסים",
-    "simpleMarkup": "סימון פשוט"
+    "simpleMarkup": "סימון פשוט",
+    "replyCount": "תשובות: {count}",
+    "trackedChange": "שינוי במעקב"
   },
   "imageAltText": {
     "description": "תיאור",
@@ -952,12 +954,19 @@
       "yellow": "צהוב",
       "gray": "אפור",
       "lightGreen": "ירוק בהיר",
-      "lightPurple": "סגול בהיר"
+      "lightPurple": "סגול בהיר",
+      "avatar": "ראשי תיבות של המחבר",
+      "balloons": "בועות",
+      "icon": "סמל",
+      "pane": "חלונית סקירה"
     },
     "deletionsBackground": "רקע מחיקות",
     "formattingBackground": "רקע שינויי עיצוב",
     "insertionsBackground": "רקע הוספות",
     "movedFromBackground": "רקע מקור ההעברה",
-    "movedToBackground": "רקע יעד ההעברה"
+    "movedToBackground": "רקע יעד ההעברה",
+    "commentMarkers": "סמני הערות",
+    "layout": "פריסת סקירה",
+    "revisionsIn": "הצג שינויים במעקב ב"
   }
 }

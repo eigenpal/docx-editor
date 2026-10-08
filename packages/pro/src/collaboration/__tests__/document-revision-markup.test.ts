@@ -146,6 +146,16 @@ test('local markup stays private while tracked edits converge, undo, reconnect, 
   expect(alice.editor.snapshot().revisionMarkup.trackFormatting).toBe(false);
   expect(bob.editor.snapshot().revisionMarkup.trackFormatting).toBe(true);
 
+  // The review layout preferences are view state too: one participant's choice never
+  // reaches the other, and switching it writes nothing into the shared document.
+  const beforeLayout = packageFingerprint(alice.editor.surface!.session.currentPackage());
+  bob.editor.setRevisionMarkup({ revisionsIn: 'balloons', commentMarkers: 'icon' });
+  converge();
+  expect(alice.editor.snapshot().revisionMarkup.revisionsIn).toBe('pane');
+  expect(alice.editor.snapshot().revisionMarkup.commentMarkers).toBe('avatar');
+  expect(packageFingerprint(alice.editor.surface!.session.currentPackage())).toBe(beforeLayout);
+  bob.editor.setRevisionMarkup({ revisionsIn: 'pane', commentMarkers: 'avatar' });
+
   bob.editor.setRevisionMarkup({ trackFormatting: false });
   select(bob.editor, 0, 1);
   bob.editor.surface!.toggleRunProperty('i');

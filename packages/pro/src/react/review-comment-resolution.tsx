@@ -16,8 +16,14 @@ import {
   type ReactNode,
 } from 'react';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
-import { ACCEPT_ICON, REOPEN_ICON, icon, resolvedCommentIcon } from './review-icons.tsx';
-import type { ReviewActionProps } from './DocxEditorReview.tsx';
+import {
+  ACCEPT_ICON,
+  REOPEN_ICON,
+  icon,
+  resolvedCommentIcon,
+  reviewBadge,
+} from './review-icons.tsx';
+import type { ReviewActionProps } from './review-types.ts';
 import type { ReviewItemView, UseReviewReturn } from './useReview.ts';
 import { ReviewActionSlot } from './review-action-slot.tsx';
 
@@ -81,6 +87,8 @@ interface ResolvedCommentCardProps extends ComponentPropsWithoutRef<'details'> {
   readonly label: string;
   readonly statusLabel: string;
   readonly entryKey: string;
+  /** Draw the toggle as the quiet check badge that `markers: 'initials'` uses. */
+  readonly badge?: boolean;
   readonly onActivate: () => void;
   readonly onDeactivate: () => void;
 }
@@ -90,6 +98,7 @@ export function ResolvedCommentCard({
   label,
   statusLabel,
   entryKey,
+  badge = false,
   onActivate,
   onDeactivate,
   children,
@@ -126,7 +135,7 @@ export function ResolvedCommentCard({
     >
       <summary className="docx-review__resolved-toggle" aria-label={label}>
         <span className="docx-review__resolved-status">{statusLabel}</span>
-        {resolvedCommentIcon()}
+        {badge ? reviewBadge('', 0, true) : resolvedCommentIcon()}
       </summary>
       {children}
     </details>

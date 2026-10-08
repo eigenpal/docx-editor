@@ -1,0 +1,137 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+import { describe, expect, test } from 'bun:test';
+import { act, render } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import type { DocxEditorInstance, RevisionMarkupOptions } from '@docx-editor.dev/core/editor';
+import { DocxEditorContent, DocxEditorRoot, DocxEditorViewport } from '@docx-editor.dev/react';
+import { DocxEditorReview } from '../react/index.ts';
+import { reviewModule } from '../index.ts';
+import {
+  BALLOON_SOURCE,
+  checkChangeBalloons,
+  checkCommentMarkers,
+  checkReadOnlyBalloon,
+} from './review-balloons-harness.ts';
+
+function mount(revisionMarkup?: RevisionMarkupOptions, review: ReactNode = <DocxEditorReview />) {
+  let editor: DocxEditorInstance | undefined;
+  const view = render(
+    <DocxEditorRoot
+      document={BALLOON_SOURCE}
+      author="Grace Hopper"
+      modules={[reviewModule()]}
+      {...(revisionMarkup ? { revisionMarkup } : {})}
+      onReady={(instance) => {
+        editor = instance as DocxEditorInstance;
+      }}
+    >
+      <DocxEditorViewport>
+        <DocxEditorContent />
+        {review}
+      </DocxEditorViewport>
+    </DocxEditorRoot>
+  );
+  return { view, editor: () => editor! };
+}
+
+const change = async (run: () => void) => {
+  await act(async () => {
+    run();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+};
+
+describe('React review layout preferences', () => {
+  test('comment markers draw initials badges by default and icons on request', async () => {
+    const { view, editor } = mount();
+    try {
+      await checkCommentMarkers(view.container, editor(), change);
+    } finally {
+      view.unmount();
+    }
+  });
+
+  test('a host Markers icon overrides the badge', async () => {
+    const { view, editor } = mount(
+      undefined,
+      <DocxEditorReview>
+        <DocxEditorReview.Markers icon={() => <span data-testid="host-glyph" />} />
+      </DocxEditorReview>
+    );
+    try {
+      await change(() => editor().exec({ type: 'toggleReviewPane' }));
+      const marker = view.container.querySelector('[data-testid="review-marker"]')!;
+      expect(marker.querySelector('[data-testid="host-glyph"]')).not.toBeNull();
+      expect(marker.querySelector('[data-testid="review-badge"]')).toBeNull();
+      expect(marker.hasAttribute('data-marker')).toBe(false);
+    } finally {
+      view.unmount();
+    }
+  });
+
+  test('balloons hold tracked changes while the rail holds comments', async () => {
+    const { view, editor } = mount({ revisionsIn: 'balloons' });
+    try {
+      await checkChangeBalloons(view.container, editor(), change);
+    } finally {
+      view.unmount();
+    }
+  });
+
+  test('switching revisionsIn live moves changes between the rail and balloons', async () => {
+    const { view, editor } = mount();
+    try {
+      const kinds = () =>
+        [...view.container.querySelectorAll<HTMLElement>('[data-testid="review-card"]')].map(
+          (card) => card.dataset.kind
+        );
+      expect(kinds()).toContain('insert');
+      await change(() => editor().setRevisionMarkup({ revisionsIn: 'balloons' }));
+      expect(kinds().every((kind) => kind === 'comment')).toBe(true);
+      expect(() => editor().setRevisionMarkup({ revisionsIn: 'sidebar' as never })).toThrow(
+        TypeError
+      );
+      await change(() => editor().setRevisionMarkup({ revisionsIn: 'pane' }));
+      expect(kinds()).toContain('insert');
+    } finally {
+      view.unmount();
+    }
+  });
+
+  test('viewing mode keeps balloon decisions unavailable', async () => {
+    const { view, editor } = mount({ revisionsIn: 'balloons' });
+    try {
+      await checkReadOnlyBalloon(view.container, editor(), change);
+    } finally {
+      view.unmount();
+    }
+  });
+
+  test('the card reply line shows Cancel only while there is text', async () => {
+    const { view, editor } = mount();
+    try {
+      const thread = editor()
+        .getReviewItems({ placement: false })
+        .find((item) => item.kind === 'comment' && item.text === 'Check this.')!;
+      await change(() => {
+        editor().setActiveReviewItem(thread.key);
+      });
+      const line = view.container.querySelector<HTMLElement>('[data-reply-line]')!;
+      expect(line).not.toBeNull();
+      expect(line.querySelector('[data-testid="review-reply-avatar"]')?.textContent).toBe('GH');
+      expect(line.querySelector('[data-testid="review-reply-cancel"]')).toBeNull();
+      expect(
+        (line.querySelector('[data-testid="review-reply-submit"]') as HTMLButtonElement).disabled
+      ).toBe(true);
+    } finally {
+      view.unmount();
+    }
+  });
+});

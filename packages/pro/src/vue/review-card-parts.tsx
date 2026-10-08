@@ -20,6 +20,7 @@ import {
   REJECT_ICON,
   icon,
   resolvedCommentIcon,
+  reviewBadge,
 } from './review-icons.tsx';
 import { revisionItemLabel } from './review-labels.ts';
 import { ReviewActionSlot } from './review-action-slot.tsx';
@@ -44,7 +45,7 @@ const { ReviewResolve, ReviewReopen } = createCommentResolutionParts({
   useLabel: useReviewLabel,
 });
 
-export const { ReviewDraft, ReviewReply } = createReviewComposeParts({
+export const { ReviewDraft, ReviewReply, ReviewBalloonReply } = createReviewComposeParts({
   useRail,
   useItem: useReviewItem,
   useLabel: useReviewLabel,
@@ -525,8 +526,14 @@ export const ReviewCard = markPart(
       return () => {
         const entry = entryRef.value;
         if (props.hidden || !entry) return null;
-        const { review, authorSlots, authorInfo, expandedResolvedKey, setExpandedResolvedKey } =
-          rail.value;
+        const {
+          review,
+          authorSlots,
+          authorInfo,
+          expandedResolvedKey,
+          setExpandedResolvedKey,
+          commentMarkers,
+        } = rail.value;
         const slot = authorSlots.get(entry.author) ?? 0;
         const resolvedCollapsible = !props.asChild && entry.kind === 'comment' && entry.resolved;
         const shared = {
@@ -597,7 +604,7 @@ export const ReviewCard = markPart(
                 },
                 [
                   h('span', { class: 'docx-review__resolved-status' }, t('review.resolved')),
-                  resolvedCommentIcon(),
+                  commentMarkers === 'avatar' ? reviewBadge('', 0, true) : resolvedCommentIcon(),
                 ]
               ),
               h(ReviewCardPreset, null, { default: () => slots.default?.() }),

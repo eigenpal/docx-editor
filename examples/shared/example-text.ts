@@ -330,6 +330,9 @@ const messages = {
   'consumerApi.captureHint': 'Capture a snapshot to inspect plain editor state.',
   'consumerApi.events': 'Recent events',
   'consumerApi.noEvents': 'No events are available.',
+  'reviewLayout.label': 'Review layout',
+  'reviewLayout.pane': 'Everything in the sidebar',
+  'reviewLayout.balloons': 'Comments in the sidebar, changes in balloons',
   'toolbar.exportPdfServerUnavailable':
     'PDF export is unavailable. Configure a Node.js server with @docx-editor.dev/docx-to-pdf.',
 } as const;

@@ -2306,6 +2306,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     setEditingMode: (mode) => editor.exec({ type: 'setEditingMode', mode }),
 
     getReviewRevision: () => reviewRevision(),
+    getActivatedReviewKey: () => surface?.activatedReviewKey() ?? null,
 
     setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult {
       // Dismissing is the only thing a key of `null` can mean here. A card the reader closed

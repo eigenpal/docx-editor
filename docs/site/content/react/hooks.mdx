@@ -497,7 +497,7 @@ Call the hook in a child component of the matching dialog. Each returns `values`
 | `usePageSetupDialog()` | `PageSetupDialogFields` | `pageWidth`, `pageHeight`, `orientation`, `marginTop`, `marginBottom`, `marginLeft`, `marginRight`, `scope` |
 | `useParagraphDialog()` | `UseParagraphDialogReturn['values']` | `alignment`, `indentLeft`, `indentRight`, `special`, `specialBy`, `spaceBefore`, `spaceAfter`, `lineRule`, `lineValue`, `contextualSpacing`, `keepNext`, `keepLines`, `widowControl`, `pageBreakBefore`, `tabStops`, `clearedAllTabStops` |
 | `useTextFormFieldDialog()` | `TextFormFieldDialogFields` | `defaultText`, `type`, `maxLength`, `format`, `enabled` |
-| `useRevisionMarkupDialog()` | `ResolvedRevisionMarkup` | `insertions`, `deletions`, `changedLines`, `movedFrom`, `movedTo`, `cells`, `formatting`, `trackMoves`, `trackFormatting` |
+| `useRevisionMarkupDialog()` | `ResolvedRevisionMarkup` | `insertions`, `deletions`, `changedLines`, `movedFrom`, `movedTo`, `cells`, `formatting`, `trackMoves`, `trackFormatting`, `revisionsIn`, `commentMarkers` |
 
 Page dimensions, margins, and paragraph indents use twips: 1,440 per inch. Paragraph spacing uses points. `lineValue` is a multiple for `lineRule: 'multiple'`, and points for `'exact'` or `'atLeast'`. Paragraph also exposes `mixed` selection state.
 

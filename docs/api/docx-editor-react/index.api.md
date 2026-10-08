@@ -24,6 +24,7 @@ import { ClearAnchorHighlightOptions } from '@docx-editor.dev/core/contracts/edi
 import { ClearRefreshHighlightsOptions } from '@docx-editor.dev/core/editor';
 import { ColorValue } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core/editor';
+import { CommentMarkers } from '@docx-editor.dev/core/editor';
 import { ComponentType } from 'react';
 import { composeFontConfiguration } from '@docx-editor.dev/core/editor';
 import { composeFontOrigins } from '@docx-editor.dev/core/editor';
@@ -136,6 +137,7 @@ import { RevisionMarkupDialogSession } from '@docx-editor.dev/core/editor';
 import { RevisionMarkupMark } from '@docx-editor.dev/core/editor';
 import { RevisionMarkupNamedColor } from '@docx-editor.dev/core/editor';
 import { RevisionMarkupOptions } from '@docx-editor.dev/core/editor';
+import { RevisionsIn } from '@docx-editor.dev/core/editor';
 import { RevisionStyles } from '@docx-editor.dev/core/editor';
 import { RulerIndent } from '@docx-editor.dev/core/editor';
 import { rulerPageBox } from '@docx-editor.dev/core/editor';
@@ -202,6 +204,8 @@ export { ClearAnchorHighlightOptions }
 export { ClearRefreshHighlightsOptions }
 
 export { commandForSlot }
+
+export { CommentMarkers }
 
 export { composeFontConfiguration }
 
@@ -2404,6 +2408,8 @@ export { RevisionMarkupMark }
 export { RevisionMarkupNamedColor }
 
 export { RevisionMarkupOptions }
+
+export { RevisionsIn }
 
 export { RevisionStyles }
 

@@ -350,12 +350,6 @@
       }
     },
     {
-      "files": ["packages/pro/src/react/DocxEditorReview.tsx"],
-      "rules": {
-        "max-lines": ["error", { "max": 2100, "skipBlankLines": false, "skipComments": false }]
-      }
-    },
-    {
       "files": ["packages/core/src/editor/docx-editor.ts"],
       "rules": {
         "max-lines": ["error", { "max": 2675, "skipBlankLines": false, "skipComments": false }]

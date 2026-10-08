@@ -20,6 +20,8 @@ export const DocxEditorRevisionMarkup = defineComponent({
     cells: Object as PropType<RevisionMarkupOptions['cells']>,
     trackMoves: { type: Boolean, default: undefined },
     trackFormatting: { type: Boolean, default: undefined },
+    revisionsIn: String as PropType<RevisionMarkupOptions['revisionsIn']>,
+    commentMarkers: String as PropType<RevisionMarkupOptions['commentMarkers']>,
   },
   emits: { revisionMarkupChange: (_settings: ResolvedRevisionMarkup) => true },
   setup(props, { emit }) {

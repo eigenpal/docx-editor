@@ -854,7 +854,9 @@
     "showResolvedComment": "Mostrar comentario resuelto",
     "replaced": "Reemplazado",
     "replacedWith": "por",
-    "commentRefused": "No se pudo añadir el comentario"
+    "commentRefused": "No se pudo añadir el comentario",
+    "replyCount": "Respuestas: {count}",
+    "trackedChange": "Cambio con seguimiento"
   },
   "textFormField": {
     "title": "Opciones del campo de formulario de texto",
@@ -952,12 +954,19 @@
       "yellow": "Amarillo",
       "gray": "Gris",
       "lightGreen": "Verde claro",
-      "lightPurple": "Violeta claro"
+      "lightPurple": "Violeta claro",
+      "avatar": "Iniciales del autor",
+      "balloons": "Globos",
+      "icon": "Icono",
+      "pane": "Panel de revisión"
     },
     "deletionsBackground": "Fondo de eliminaciones",
     "formattingBackground": "Fondo de cambios de formato",
     "insertionsBackground": "Fondo de inserciones",
     "movedFromBackground": "Fondo del origen de movimientos",
-    "movedToBackground": "Fondo del destino de movimientos"
+    "movedToBackground": "Fondo del destino de movimientos",
+    "commentMarkers": "Marcadores de comentarios",
+    "layout": "Diseño de revisión",
+    "revisionsIn": "Mostrar cambios con seguimiento en"
   }
 }

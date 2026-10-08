@@ -1,0 +1,17 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The review rail listed comments and tracked changes as cards, and collapsed comment markers drew the comment icon. Only format and structural changes opened a page balloon.",
+  "after": "Two viewer preferences, revisionsIn and commentMarkers, choose whether tracked changes are rail cards or page balloons and how collapsed comment markers look. getActivatedReviewKey reads whether the active review item was opened explicitly. The comment reply box draws as a compact reply line.",
+  "reason": "Both preferences are local revision markup view state, never written to the document or shared with other participants. getActivatedReviewKey is a read. Accept, reject, and reply from the balloon call the existing acceptReviewItem, rejectReviewItem, and replyToReviewItem paths, which two-participant tests cover for synchronization, undo, redo, rejoin, and concurrent edits.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-revision-markup.test.ts",
+    "packages/pro/src/__tests__/review-balloons.test.tsx",
+    "packages/pro/src/__tests__/review-balloons-vue.test.ts",
+    "packages/pro/src/__tests__/revision-markup-dialog.test.ts",
+    "packages/pro/src/__tests__/review-replacement-pairs.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-replacement-times.test.ts"
+  ],
+  "changeset": "review-balloons-and-initials-markers",
+  "migration": null
+}

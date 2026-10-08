@@ -69,12 +69,27 @@ export interface ResolvedRevisionMarkup {
   };
   readonly trackMoves: boolean;
   readonly trackFormatting: boolean;
+  /**
+   * Where the review surface lists tracked changes. `'pane'` shows them as cards beside the
+   * comments. `'balloons'` keeps the pane for comments and opens a change in a balloon at
+   * its text when it is clicked or reached by Next/Previous Change.
+   */
+  readonly revisionsIn: RevisionsIn;
+  /**
+   * How a comment thread's margin marker looks. `'avatar'` is a badge with the author's
+   * initials, a reply count, and a check mark once resolved. `'icon'` is the comment glyph.
+   */
+  readonly commentMarkers: CommentMarkers;
 }
+/** Where tracked changes are listed. @public */
+export type RevisionsIn = 'pane' | 'balloons';
+/** How comment margin markers look. @public */
+export type CommentMarkers = 'avatar' | 'icon';
 /** Partial viewer preferences. Omitted values keep the previous value. @public */
 export type RevisionMarkupOptions = {
-  readonly [K in keyof ResolvedRevisionMarkup]?: ResolvedRevisionMarkup[K] extends boolean
-    ? boolean
-    : Partial<ResolvedRevisionMarkup[K]>;
+  readonly [K in keyof ResolvedRevisionMarkup]?: ResolvedRevisionMarkup[K] extends object
+    ? Partial<ResolvedRevisionMarkup[K]>
+    : ResolvedRevisionMarkup[K];
 };
 const style = <T extends string>(mark: T, color: RevisionMarkupColor): RevisionMarkupStyle<T> =>
   Object.freeze({ mark, color });
@@ -98,7 +113,13 @@ export const DEFAULT_REVISION_MARKUP: ResolvedRevisionMarkup = Object.freeze({
   }),
   trackMoves: true,
   trackFormatting: true,
+  revisionsIn: 'pane',
+  commentMarkers: 'avatar',
 });
+const choices = {
+  revisionsIn: ['pane', 'balloons'],
+  commentMarkers: ['avatar', 'icon'],
+} as const;
 const marks = [
   'none',
   'colorOnly',
@@ -126,6 +147,13 @@ export function resolveRevisionMarkup(
       if (typeof input[key] !== 'boolean') throw new TypeError(`Invalid ${key}`);
       result[key] = input[key];
     }
+  }
+  for (const key of ['revisionsIn', 'commentMarkers'] as const) {
+    const value = input[key];
+    if (value === undefined) continue;
+    if (!(choices[key] as readonly unknown[]).includes(value))
+      throw new TypeError(`Invalid ${key}`);
+    Object.assign(result, { [key]: value });
   }
   for (const key of [
     'insertions',

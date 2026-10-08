@@ -5337,6 +5337,200 @@ a.docx-hyperlink:focus-visible {
   pointer-events: auto;
 }
 
+/* `markers: 'initials'`: a comment thread's marker is a speech bubble in its author's colour —
+   round, with the bottom-left corner left square as the tail. The button stays the 28px hit
+   target and carries the focus ring; the badge inside carries the look. */
+.docx-review__marker[data-marker='avatar'] {
+  border-radius: 13px 13px 13px 3px;
+  color: inherit;
+  overflow: visible;
+}
+
+.docx-review__marker[data-marker='avatar']:hover {
+  background: transparent;
+}
+
+.docx-review__marker[data-marker='avatar']:focus-visible {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: 1px;
+}
+
+.docx-review__badge {
+  position: relative;
+  display: inline-flex;
+  box-sizing: border-box;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 13px 13px 13px 3px;
+  background: var(--doc-review-author-current, var(--doc-primary));
+  box-shadow: 0 1px 2px var(--doc-shadow);
+  color: var(--doc-on-primary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  transition: transform 140ms var(--doc-motion-ease-out);
+}
+
+/* Resolved: quiet. Surface ground, muted ink, a hairline ring — present, not calling out. */
+.docx-review__badge[data-resolved] {
+  background: var(--doc-surface);
+  box-shadow:
+    0 0 0 1px var(--doc-border),
+    0 1px 2px var(--doc-shadow-subtle);
+  color: var(--doc-text-muted);
+}
+
+.docx-review__badge > svg {
+  width: 14px;
+  height: 14px;
+}
+
+.docx-review__badge-count {
+  position: absolute;
+  top: -5px;
+  right: -6px;
+  display: inline-flex;
+  box-sizing: border-box;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--doc-surface);
+  box-shadow: 0 0 0 1px var(--doc-border);
+  color: var(--doc-text);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .docx-review__marker[data-marker='avatar']:hover .docx-review__badge,
+  .docx-review__resolved-toggle:hover .docx-review__badge {
+    transform: translateY(-1px);
+  }
+}
+
+.docx-review__marker[data-marker='avatar']:active .docx-review__badge,
+.docx-review__resolved-toggle:active .docx-review__badge {
+  transform: scale(0.92);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docx-review__badge {
+    transition: none;
+  }
+
+  .docx-review__marker[data-marker='avatar']:hover .docx-review__badge,
+  .docx-review__marker[data-marker='avatar']:active .docx-review__badge,
+  .docx-review__resolved-toggle:hover .docx-review__badge,
+  .docx-review__resolved-toggle:active .docx-review__badge {
+    transform: none;
+  }
+}
+
+/* The resolved miniature in the open rail wears the same quiet badge as the closed marker. */
+.docx-review__resolved-toggle .docx-review__badge {
+  margin: auto;
+}
+
+/* `changes: 'balloon'`: the change's card, its thread and its reply line in one balloon. */
+.docx-review__balloon[data-variant='change'] {
+  width: 300px;
+}
+
+.docx-review__balloon[data-variant='change'] .docx-review__summary {
+  overflow-wrap: anywhere;
+}
+
+.docx-review__balloon[data-variant='change'] .docx-review__added,
+.docx-review__balloon[data-variant='change'] .docx-review__removed {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-weight: 500;
+  cursor: inherit;
+}
+
+.docx-review__balloon[data-variant='change'] .docx-review__added {
+  color: var(--doc-revision-insertion);
+  text-decoration: underline;
+}
+
+.docx-review__balloon[data-variant='change'] .docx-review__removed {
+  color: var(--doc-revision-deletion);
+  text-decoration: line-through;
+}
+
+/* The reply line, shared by the open card and the change balloon: the writer's avatar, a
+   borderless field, and a round send button. */
+.docx-review__reply-box[data-reply-line] {
+  flex-wrap: nowrap;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--doc-border);
+}
+
+.docx-review__reply-box[data-reply-line] .docx-review__input {
+  padding: 4px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.docx-review__reply-box[data-reply-line] .docx-review__input:focus-visible {
+  outline: none;
+}
+
+.docx-review__reply-box[data-reply-line] .docx-review__refused {
+  flex: 0 1 auto;
+}
+
+.docx-review__reply-box[data-reply-line]:has(.docx-review__refused) {
+  flex-wrap: wrap;
+}
+
+.docx-review__reply-avatar {
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+}
+
+.docx-review__send {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+  cursor: pointer;
+}
+
+.docx-review__send > svg {
+  width: 14px;
+  height: 14px;
+}
+
+.docx-review__send:focus-visible {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: 1px;
+}
+
+.docx-review__send:disabled {
+  background: var(--doc-surface-hover, var(--doc-shadow-subtle));
+  color: var(--doc-text-muted);
+  cursor: default;
+}
+
 /* ============================================================================
  * DOCUMENT NAVIGATION PANE  (`DocxEditor.Navigation`)
  *
@@ -5739,6 +5933,7 @@ a.docx-hyperlink:focus-visible {
    inverting filter and the chrome is not, so only the chrome lifts. */
 .docx-review__card,
 .docx-review__reply,
+.docx-review__reply-avatar,
 .docx-review__marker {
   --doc-review-author-ink: var(--doc-review-author-current, #c0392b);
   --doc-review-author-disc: color-mix(
@@ -5750,6 +5945,7 @@ a.docx-hyperlink:focus-visible {
 
 .docx-editor.dark .docx-review__card,
 .docx-editor.dark .docx-review__reply,
+.docx-editor.dark .docx-review__reply-avatar,
 .docx-editor.dark .docx-review__marker {
   --doc-review-author-ink: color-mix(in srgb, var(--doc-review-author-current, #c0392b) 55%, white);
   --doc-review-author-disc: color-mix(

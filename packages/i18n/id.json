@@ -773,7 +773,9 @@
     "noMarkup": "Tanpa Markup",
     "original": "Asli",
     "protectDocument": "Lindungi Dokumen untuk Formulir",
-    "simpleMarkup": "Markup Sederhana"
+    "simpleMarkup": "Markup Sederhana",
+    "replyCount": "Balasan: {count}",
+    "trackedChange": "Perubahan terlacak"
   },
   "imageAltText": {
     "description": "Deskripsi",
@@ -952,12 +954,19 @@
       "yellow": "Kuning",
       "gray": "Abu-abu",
       "lightGreen": "Hijau muda",
-      "lightPurple": "Ungu muda"
+      "lightPurple": "Ungu muda",
+      "avatar": "Inisial penulis",
+      "balloons": "Balon",
+      "icon": "Ikon",
+      "pane": "Panel tinjauan"
     },
     "deletionsBackground": "Latar belakang penghapusan",
     "formattingBackground": "Latar belakang pemformatan",
     "insertionsBackground": "Latar belakang penyisipan",
     "movedFromBackground": "Latar belakang asal perpindahan",
-    "movedToBackground": "Latar belakang tujuan perpindahan"
+    "movedToBackground": "Latar belakang tujuan perpindahan",
+    "commentMarkers": "Penanda komentar",
+    "layout": "Tata letak tinjauan",
+    "revisionsIn": "Tampilkan perubahan terlacak di"
   }
 }

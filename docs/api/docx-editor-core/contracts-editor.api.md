@@ -507,6 +507,7 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
     }): readonly (readonly TextMatch[])[];
     // (undocumented)
     focus(scope?: EditorScope): InteractionOutcome<void>;
+    getActivatedReviewKey(): string | null;
     // (undocumented)
     getActiveScope(): ViewScope;
     getAvailableFonts(): readonly string[];

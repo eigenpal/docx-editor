@@ -854,7 +854,9 @@
     "showResolvedComment": "Show resolved comment",
     "replaced": "Replaced",
     "replacedWith": "with",
-    "commentRefused": "Could not add the comment"
+    "commentRefused": "Could not add the comment",
+    "replyCount": "Replies: {count}",
+    "trackedChange": "Tracked change"
   },
   "textFormField": {
     "title": "Text Form Field Options",
@@ -919,6 +921,9 @@
     "movedFromColor": "Moved from color",
     "movedToColor": "Moved to color",
     "formattingColor": "Formatting color",
+    "layout": "Review layout",
+    "revisionsIn": "Show tracked changes in",
+    "commentMarkers": "Comment markers",
     "values": {
       "none": "None",
       "colorOnly": "Color only",
@@ -957,7 +962,11 @@
       "lightOrange": "Light orange",
       "lightPurple": "Light purple",
       "lightGreen": "Light green",
-      "gray": "Gray"
+      "gray": "Gray",
+      "pane": "Review pane",
+      "balloons": "Balloons",
+      "avatar": "Author initials",
+      "icon": "Icon"
     }
   }
 }

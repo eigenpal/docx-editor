@@ -34,6 +34,7 @@ import { googleFonts } from '@docx-editor.dev/fonts/google';
 import { BrandLogo } from '../../shared/BrandLogo';
 import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
 import { SourceLink } from '../../shared/SourceLink';
+import { ReviewLayoutSwitch } from './ReviewLayoutSwitch';
 import { ThemeToggle } from './ThemeToggle';
 import { DrawingsE2eBridge } from './DrawingsE2eBridge';
 import { ReviewWritesE2eBridge } from './ReviewWritesE2eBridge';
@@ -492,6 +493,7 @@ function EditorChrome({
 
         <div className="demo-header__right">
           <ThemeToggle value={colorMode} onChange={onColorModeChange} />
+          <ReviewLayoutSwitch />
           <DemoHeaderButton
             variant="primary"
             disabled={!editor || collaborating}

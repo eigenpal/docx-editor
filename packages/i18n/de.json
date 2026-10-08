@@ -773,7 +773,9 @@
     "noMarkup": "Markup: keine",
     "original": "Original",
     "protectDocument": "Dokument für Formulare schützen",
-    "simpleMarkup": "Einfaches Markup"
+    "simpleMarkup": "Einfaches Markup",
+    "replyCount": "Antworten: {count}",
+    "trackedChange": "Nachverfolgte Änderung"
   },
   "imageAltText": {
     "description": "Beschreibung",
@@ -952,12 +954,19 @@
       "yellow": "Gelb",
       "gray": "Grau",
       "lightGreen": "Hellgrün",
-      "lightPurple": "Hellviolett"
+      "lightPurple": "Hellviolett",
+      "avatar": "Initialen des Autors",
+      "balloons": "Sprechblasen",
+      "icon": "Symbol",
+      "pane": "Überarbeitungsbereich"
     },
     "deletionsBackground": "Hintergrund für Löschungen",
     "formattingBackground": "Hintergrund für Formatierungsänderungen",
     "insertionsBackground": "Hintergrund für Einfügungen",
     "movedFromBackground": "Hintergrund für Verschiebungsquellen",
-    "movedToBackground": "Hintergrund für Verschiebungsziele"
+    "movedToBackground": "Hintergrund für Verschiebungsziele",
+    "commentMarkers": "Kommentarmarkierungen",
+    "layout": "Überprüfungslayout",
+    "revisionsIn": "Nachverfolgte Änderungen anzeigen in"
   }
 }
