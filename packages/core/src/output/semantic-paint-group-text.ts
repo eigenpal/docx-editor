@@ -59,6 +59,14 @@ export function paintGroupTextboxStories(
     content.style.width = `${story.contentWidth * scale}px`;
     content.style.height = `${Math.max(0, story.contentHeight) * scale}px`;
     content.style.overflow = 'hidden';
+    const turn = member.rotationDegrees;
+    if (turn !== 0 && Number.isFinite(turn)) {
+      // The member turns about its box center, which sits here in content-box coordinates.
+      const originX = member.box.width / 2 - story.contentOffset.x;
+      const originY = member.box.height / 2 - story.contentOffset.y;
+      content.style.transformOrigin = `${originX * scale}px ${originY * scale}px`;
+      content.style.transform = `rotate(${turn}deg)`;
+    }
     for (const fragment of story.fragments) {
       content.append(ctx.paintStoryFragment(document, fragment));
     }

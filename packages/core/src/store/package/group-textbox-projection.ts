@@ -10,7 +10,7 @@ import {
   MAX_GROUP_SHAPE_CHILDREN,
   isGroupPropertyChild,
   readDrawingGroupFrame,
-  schemaAngleIsZero,
+  schemaFlagIsSet,
   schemaFlagIsUnset,
 } from './drawing-group-frame.ts';
 import type { DrawingProjection } from './drawing-projection.ts';
@@ -24,7 +24,11 @@ import {
   type ShapeStyleMatrixResolver,
   type TextboxStoryProjection,
 } from './drawing-shape-projection.ts';
-import { schemaAttributeValue, WPS_NAMESPACE_URI } from './ooxml-drawing-rules.ts';
+import {
+  collapseSchemaWhitespace,
+  schemaAttributeValue,
+  WPS_NAMESPACE_URI,
+} from './ooxml-drawing-rules.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 
@@ -36,10 +40,23 @@ export interface GroupTextboxProjection {
   readonly frameEmu: Readonly<{ x: number; y: number; cx: number; cy: number }>;
   /** The member's story, projected at the scaled member size. */
   readonly story: TextboxStoryProjection;
+  /**
+   * Clockwise turn of the member's text about the member box center, in degrees [0, 360):
+   * the member's `rot`, plus 180 for `flipV`. `flipH` never mirrors the text.
+   */
+  readonly rotationDegrees: number;
 }
 
-/** A member transform the text layout can honour: no rotation and no flips. */
-function uprightMember(member: OoxmlElement): boolean {
+/** EMU-free angle units of `ST_Angle`: 60000 per degree. */
+const ANGLE_UNITS_PER_DEGREE = 60_000;
+
+/**
+ * The clockwise turn of a member's text, or null when its transform is schema-invalid.
+ *
+ * The text keeps its reading direction under `flipH` and turns upside down under `flipV`, so
+ * a flip adds either nothing or a half turn to the authored rotation.
+ */
+function memberTextRotation(member: OoxmlElement): number | null {
   const spPr = findDirectChild(member.children, {
     namespaceUri: WPS_NAMESPACE_URI,
     localName: 'spPr',
@@ -50,12 +67,23 @@ function uprightMember(member: OoxmlElement): boolean {
         localName: 'xfrm',
       })
     : null;
-  if (!xfrm) return true;
-  return (
-    schemaAngleIsZero(schemaAttributeValue(xfrm.attributes, 'rot')) &&
-    schemaFlagIsUnset(schemaAttributeValue(xfrm.attributes, 'flipH')) &&
-    schemaFlagIsUnset(schemaAttributeValue(xfrm.attributes, 'flipV'))
-  );
+  if (!xfrm) return 0;
+  const flipH = schemaAttributeValue(xfrm.attributes, 'flipH');
+  const flipV = schemaAttributeValue(xfrm.attributes, 'flipV');
+  for (const flag of [flipH, flipV]) {
+    if (!schemaFlagIsUnset(flag) && !schemaFlagIsSet(flag)) return null;
+  }
+  const raw = schemaAttributeValue(xfrm.attributes, 'rot');
+  let degrees = 0;
+  if (raw !== undefined) {
+    const collapsed = collapseSchemaWhitespace(raw);
+    // Bounded digit count: `rot` is an xsd:int and only scales an angle here.
+    if (!/^[+-]?\d{1,12}$/.test(collapsed)) return null;
+    degrees = Number(collapsed) / ANGLE_UNITS_PER_DEGREE;
+  }
+  if (schemaFlagIsSet(flipV)) degrees += 180;
+  const turned = ((degrees % 360) + 360) % 360;
+  return Number.isFinite(turned) ? turned : null;
 }
 
 /** The `w:txbxContent` root of a `wps:wsp`, or null when it holds no story. */
@@ -70,7 +98,7 @@ function storyRootOf(wsp: OoxmlElement): OoxmlElement | null {
 }
 
 /**
- * The story roots of a group's upright text box members, in document order, for read-only
+ * The story roots of a group's text box members, in document order, for read-only
  * derivations such as Find. A bounded read of the group frame and its direct members only.
  */
 export function groupTextboxContents(anchor: OoxmlElement): readonly OoxmlElement[] {
@@ -83,7 +111,7 @@ export function groupTextboxContents(anchor: OoxmlElement): readonly OoxmlElemen
     count += 1;
     if (count > MAX_GROUP_SHAPE_CHILDREN) return [];
     if (child.namespaceUri !== WPS_NAMESPACE_URI || child.localName !== 'wsp') continue;
-    if (!uprightMember(child)) continue;
+    if (memberTextRotation(child) === null) continue;
     const root = storyRootOf(child);
     if (root) roots.push(root);
   }
@@ -96,7 +124,8 @@ export function groupTextboxContents(anchor: OoxmlElement): readonly OoxmlElemen
  * A group paints whole or not at all, so its member text follows the group: `groupPaints`
  * says whether the rest of the group paints. A group whose only members are text boxes
  * without fill or outline has nothing else to paint, and its text alone still renders.
- * Rotated or flipped members keep their text unlaid. Null when no member contributes text.
+ * A rotated or flipped member lays out upright and records the turn its text takes. Null
+ * when no member contributes text.
  */
 export function projectGroupTextboxes(
   anchor: OoxmlElement,
@@ -123,7 +152,8 @@ export function projectGroupTextboxes(
       onlyUnpaintedText = false;
     }
     if (child.namespaceUri !== WPS_NAMESPACE_URI || child.localName !== 'wsp') continue;
-    if (!uprightMember(child)) continue;
+    const rotationDegrees = memberTextRotation(child);
+    if (rotationDegrees === null) continue;
     const transform = childTransform(child);
     if (!transform) continue;
     const cx = Math.round(transform.extent.cx * scaleX);
@@ -145,6 +175,7 @@ export function projectGroupTextboxes(
           cy,
         }),
         story: Object.freeze({ ...story, insetsEmu: Object.freeze({ ...story.insetsEmu }) }),
+        rotationDegrees,
       })
     );
   }

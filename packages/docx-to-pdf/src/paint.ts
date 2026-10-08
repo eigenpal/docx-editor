@@ -36,6 +36,7 @@ import { TextWriter } from './text.ts';
 import { comments, destinations, linkAnnotation } from './annotations.ts';
 import { ImageWriter } from './images.ts';
 import { paintEquation } from './equations.ts';
+import { groupMemberStoryOf, openMemberClip } from './group-text.ts';
 
 /**
  * Span text for the PDF text layer, as drawn: an optional hyphen element extracts `-` only
@@ -467,10 +468,12 @@ export async function paint(
       owners = new Map();
       textboxBuffers.set(visit.page.index, owners);
     }
-    let buffer = owners.get(visit.textboxOwner);
+    // A group member's text keys on its member story, so each member clips on its own.
+    const key = groupMemberStoryOf(visit.textboxOwner, visit.paragraph) ?? visit.textboxOwner;
+    let buffer = owners.get(key);
     if (!buffer) {
       buffer = new Commands(work);
-      owners.set(visit.textboxOwner, buffer);
+      owners.set(key, buffer);
     }
     return buffer;
   };
@@ -632,32 +635,54 @@ export async function paint(
     }
   }
   // A group's text box members: the group's own picture and shapes, then each member's
-  // decorations and the text its spans collected, all clipped to the group's paint bounds.
+  // decorations and text, clipped to that member's content box and turned with the member,
+  // all inside the group's paint bounds — the same boxes the screen painter clips to.
   const paintGroupText = async (visit: SemanticDrawingVisit, page: PDFPage): Promise<string> => {
     const d = visit.drawing;
     const base = d.groupPicture || d.vectorShape ? await images.paint(visit, page) : '';
     const bounds = visit.absolutePaintBounds;
     if (d.accessibility.hidden || bounds.width <= 0 || bounds.height <= 0) return base;
+    const height = pageHeight(page);
+    const buffers = textboxBuffers.get(visit.page.index);
     const body: string[] = [];
     for (const member of d.groupTextboxStories ?? []) {
-      const x = visit.drawingOrigin.x + member.box.x + member.story.contentOffset.x;
-      const y = visit.drawingOrigin.y + member.box.y + member.story.contentOffset.y;
-      body.push(
+      const story = member.story;
+      if (story.fallbackReason === 'textbox-height-clip') {
+        work.report(
+          'textbox-clip',
+          'Textbox content taller than its box is clipped',
+          visit.page.index,
+          'information'
+        );
+      } else if (story.fallbackReason) {
+        work.report(
+          'textbox',
+          `Textbox story not laid out: ${story.fallbackReason}`,
+          visit.page.index
+        );
+        continue;
+      }
+      const x = visit.drawingOrigin.x + member.box.x - visit.page.box.x;
+      const y = visit.drawingOrigin.y + member.box.y - visit.page.box.y;
+      const text = [
         ...decorations(
-          member.story.fragments,
-          x - visit.page.box.x,
-          y - visit.page.box.y,
+          story.fragments,
+          x + story.contentOffset.x,
+          y + story.contentOffset.y,
           page,
           work,
           visit.page.index,
           layout.displayMode === 'all-markup' ? layout.revisionMarkup : undefined,
           authorSlots
-        )
-      );
+        ),
+        ...(buffers?.get(story) ?? []),
+      ];
+      if (text.length > 0) body.push(...openMemberClip(member, x, y, height), ...text, 'Q');
     }
-    body.push(...(textboxBuffers.get(visit.page.index)?.get(d) ?? []));
+    // Ink the walk could not tie to one member stays inside the group's bounds.
+    body.push(...(buffers?.get(d) ?? []));
     if (body.length === 0) return base;
-    const clip = rect(bounds, -visit.page.box.x, -visit.page.box.y, pageHeight(page));
+    const clip = rect(bounds, -visit.page.box.x, -visit.page.box.y, height);
     return [base, `q ${clip} W n`, ...body, 'Q'].filter(Boolean).join('\n');
   };
   const paintDrawing = async (visit: SemanticDrawingVisit): Promise<string> => {

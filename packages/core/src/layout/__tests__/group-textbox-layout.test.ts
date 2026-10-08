@@ -14,6 +14,7 @@ import {
   type SemanticLayout,
 } from '../index.ts';
 import type { InlineDrawingLayoutContext } from '../drawing-layout.ts';
+import type { GroupTextboxStoryRecord } from '../group-textbox-layout.ts';
 import { paragraphFragmentsOfBlocks } from '../semantic-record-queries.ts';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import {
@@ -164,6 +165,12 @@ function memberLines(record: InlineDrawingRecord | AnchoredDrawingRecord, index 
   );
 }
 
+function memberLinesOf(member: GroupTextboxStoryRecord): string[] {
+  return paragraphFragmentsOfBlocks(member.story.fragments, true).flatMap((fragment) =>
+    fragment.lines.map((line) => line.spans.map((span) => span.text).join(''))
+  );
+}
+
 // 'aaaa bbbb cccc dddd' is 19 characters: wider than 85.6pt at the fixed advance.
 const WORDS = 'aaaa bbbb cccc dddd';
 
@@ -240,14 +247,50 @@ describe('group text box members', () => {
     expect(memberLines(drawing).join('')).toBe(WORDS);
   });
 
-  test('a rotated member keeps its text unlaid', () => {
-    const record = anchored(
-      group(
-        picture(0, 0, 100 * PT, 100 * PT) +
-          textbox(100 * PT, 0, 100 * PT, 100 * PT, para(WORDS), { xfrm: ' rot="5400000"' })
-      )
+  test('a rotated or flipped member lays out upright and records the turn of its text', () => {
+    const turnOf = (xfrm: string) =>
+      anchored(
+        group(
+          picture(0, 0, 100 * PT, 100 * PT) +
+            textbox(100 * PT, 0, 100 * PT, 100 * PT, para(WORDS), { xfrm })
+        )
+      ).groupTextboxStories?.[0];
+    const upright = turnOf('')!;
+    for (const [xfrm, turn] of [
+      [' rot="5400000"', 90],
+      [' rot="1800000"', 30],
+      [' rot="-5400000"', 270],
+      // A horizontal flip keeps the reading direction; a vertical one turns the text over.
+      [' flipH="1"', 0],
+      [' flipV="1"', 180],
+      [' rot="5400000" flipV="1"', 270],
+    ] as const) {
+      const member = turnOf(xfrm)!;
+      expect(member.rotationDegrees).toBe(turn);
+      expect(member.box).toEqual(upright.box);
+      expect(memberLinesOf(member)).toEqual(memberLinesOf(upright));
+    }
+    expect(turnOf(' rot="ninety"')).toBeUndefined();
+  });
+
+  test('paint turns a rotated member about its box center', () => {
+    const container = document.createElement('div');
+    paintSemanticLayout(
+      container,
+      layoutBody(
+        group(
+          picture(0, 0, 100 * PT, 100 * PT) +
+            textbox(100 * PT, 0, 100 * PT, 100 * PT, para('ab'), { xfrm: ' rot="5400000"' })
+        )
+      ),
+      { scale: 1 }
     );
-    expect(record.groupTextboxStories).toBeUndefined();
+    const content = container.querySelector<HTMLElement>(
+      '.docx-drawing-group-text .docx-drawing-textbox-content'
+    )!;
+    expect(content.style.transform).toBe('rotate(90deg)');
+    // Center of the 100pt member box, less the 7.2pt and 3.6pt insets.
+    expect(content.style.transformOrigin).toBe('42.8px 46.4px');
   });
 
   test('a group that cannot paint whole lays out no member text', () => {

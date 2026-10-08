@@ -26,6 +26,11 @@ export interface GroupTextboxStoryRecord {
   readonly box: LayoutBox;
   /** The member's story, in content-box coordinates inside {@link box}. */
   readonly story: TextboxStoryLayout;
+  /**
+   * Clockwise turn of the painted member about the center of {@link box}, in degrees. The
+   * story lays out upright; paint and export turn it. Hit testing never maps into it.
+   */
+  readonly rotationDegrees: number;
 }
 
 /**
@@ -70,6 +75,7 @@ export function layoutGroupTextboxStories(
           height: member.frameEmu.cy / EMU_PER_POINT,
         }),
         story,
+        rotationDegrees: member.rotationDegrees,
       })
     );
   }
@@ -102,6 +108,7 @@ export function groupTextboxesLayoutToken(
         String(member.frameEmu.y),
         String(member.frameEmu.cx),
         String(member.frameEmu.cy),
+        String(member.rotationDegrees),
         textboxLayoutToken(member.story),
       ])
     )
