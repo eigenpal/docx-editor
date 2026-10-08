@@ -102,8 +102,7 @@
     "formatPainter": "Biçim boyacısı",
     "formatPainterShortcut": "Biçim boyacısı (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "Paragraf sonlarını göster",
-    "label": "Biçimlendirme denetimleri",
-    "addComment": "Yorum ekle"
+    "label": "Biçimlendirme denetimleri"
   },
   "alignment": {
     "alignLeft": "Sola hizala",

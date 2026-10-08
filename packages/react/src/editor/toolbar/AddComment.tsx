@@ -14,6 +14,7 @@ import { useToolbarLabel } from './toolbar-context';
 import { Slot } from './Slot';
 import { chromeIcon, guardToolbarMousedown } from './ToolbarButton';
 import { ADD_COMMENT_PATHS } from './toolbar-icons';
+import { useToolbarOverflowClose } from './ToolbarOverflow';
 import type { ToolbarPartProps } from './parts';
 
 const selectReadOnly = (snapshot: EditorSnapshot): boolean => snapshot.editingMode === 'viewing';
@@ -46,12 +47,14 @@ export function ToolbarAddComment({
   const rail = useContext(ReviewRailContext);
   const label = useToolbarLabel();
   const readOnly = useEditorState(selectReadOnly);
+  // Inside the "⋯" panel, the press also closes the panel. Outside it this does nothing.
+  const closePanel = useToolbarOverflowClose();
   useEditorState(selectSelection);
   if (hidden) return null;
   const gate = editor?.can({ type: 'toggleReviewPane' });
   const placed = editor ? editor.getSelectionPlacement() !== null : false;
   const enabled = gate?.ok === true && !readOnly && (rail?.mounted ?? 0) > 0 && placed;
-  const text = label('formattingBar.addComment');
+  const text = label('comments.addComment');
   const reason =
     gate && !gate.ok ? gate.reason : readOnly ? label('editingMode.viewingHint') : undefined;
   const shared = {
@@ -65,7 +68,7 @@ export function ToolbarAddComment({
     title: (!enabled ? reason : undefined) ?? text,
     onMouseDown: guardToolbarMousedown,
     onClick: () => {
-      rail?.requestCommentDraft();
+      if (rail?.requestCommentDraft()) closePanel(false);
     },
   };
   if (asChild) return <Slot {...shared}>{children}</Slot>;

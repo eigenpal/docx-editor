@@ -59,7 +59,7 @@ import {
   type MenuId,
   type MenuOverflowValue,
 } from './menu-context';
-import { useToolbarOverflow } from '../toolbar/useToolbarOverflow';
+import { FIXED_ATTRIBUTE, useToolbarOverflow } from '../toolbar/useToolbarOverflow';
 import { MORE_PATHS } from '../toolbar/ToolbarOverflow';
 import { download, downloadName } from './download';
 import { barTriggers, restoreExportFocus } from './menu-keyboard';
@@ -163,17 +163,20 @@ export interface DocxEditorMenuProps {
 
 /**
  * The id of any menu element, registry or host: a pinned part's `docxMenu`, or the generic
- * `Menu`'s `id` prop. Null for a hidden menu and for anything that is not a menu.
+ * `Menu`'s `id` prop. Null for anything that is not a menu, and for a hidden menu unless
+ * `includeHidden` is set.
  */
-function anyMenuIdOfChild(child: ReactNode): string | null {
+function anyMenuIdOfChild(child: ReactNode, includeHidden = false): string | null {
   if (!isValidElement(child)) return null;
   if (child.type === Fragment) {
     const inner = Children.toArray((child.props as { children?: DocxEditorChildren }).children);
-    const ids = inner.map(anyMenuIdOfChild).filter((id): id is string => id !== null);
+    const ids = inner
+      .map((node) => anyMenuIdOfChild(node, includeHidden))
+      .filter((id): id is string => id !== null);
     return ids.length === 1 ? ids[0]! : null;
   }
   const props = child.props as { id?: unknown; hidden?: unknown };
-  if (props.hidden === true) return null;
+  if (props.hidden === true && !includeHidden) return null;
   const type = child.type as { docxMenu?: unknown };
   if ((typeof type === 'function' || typeof type === 'object') && typeof type.docxMenu === 'string')
     return type.docxMenu;
@@ -460,27 +463,45 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
     [overflow]
   );
 
+  // Host children that are not menus stay in the bar at every width. They are wrapped so the
+  // fit counts their width, and they never render a second time inside the "⋯" menu.
+  const isMenu = (child: ReactNode) => anyMenuIdOfChild(child, true) !== null;
+  const hostBlock = (nodes: ReactNode[], key: string) => (
+    <div key={key} role="none" className="docx-menubar__host" {...{ [FIXED_ATTRIBUTE]: '' }}>
+      {nodes}
+    </div>
+  );
+  // `menus` is what the "⋯" menu renders: menus only, never host children.
+  let menus: ReactNode[];
   let content: ReactNode;
   if (!preset) {
-    content = children;
+    menus = kids.filter(isMenu);
+    content = kids.map((child, index) =>
+      isMenu(child) ? child : hostBlock([child], `host-${index}`)
+    );
   } else {
     const overrides = new Map<ChromeMenuId, ReactElement>();
     const appended: ReactNode[] = [];
-    for (const child of Children.toArray(children)) {
+    for (const child of kids) {
       const id = menuOfChild(child);
       // Last override for a menu wins, matching how later props win in a spread.
       if (id) overrides.set(id, child as ReactElement);
       else appended.push(child);
     }
+    menus = [
+      ...CHROME_MENUS.map((menu) => {
+        const override = overrides.get(menu.id);
+        if (override) return <Fragment key={menu.id}>{override}</Fragment>;
+        const Part = MENU_PARTS[menu.id];
+        return <Part key={menu.id} />;
+      }),
+      ...appended.filter(isMenu),
+    ];
+    const hosts = appended.filter((child) => !isMenu(child));
     content = (
       <>
-        {CHROME_MENUS.map((menu) => {
-          const override = overrides.get(menu.id);
-          if (override) return <Fragment key={menu.id}>{override}</Fragment>;
-          const Part = MENU_PARTS[menu.id];
-          return <Part key={menu.id} />;
-        })}
-        {appended}
+        {menus}
+        {hosts.length > 0 ? hostBlock(hosts, 'host') : null}
       </>
     );
   }
@@ -546,9 +567,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
               icon={chromeIcon(MORE_PATHS)}
               preset={false}
             >
-              <MenuOverflowContext.Provider value={moreValue}>
-                {content}
-              </MenuOverflowContext.Provider>
+              <MenuOverflowContext.Provider value={moreValue}>{menus}</MenuOverflowContext.Provider>
             </Menu>
           ) : null}
         </MenuOverflowContext.Provider>

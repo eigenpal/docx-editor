@@ -1,7 +1,8 @@
 // Reads the preset toolbar's children into what the root arranges: slot overrides, group
 // descriptions (`Toolbar.Group`), and loose children, which keep their old fixed block.
 
-import { camelize, isVNode, type VNode } from 'vue';
+import { camelize, Comment, isVNode, type VNode } from 'vue';
+import { flattenChildren } from '../../lib/flattenChildren';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { ToolbarGroupPartProps } from './ToolbarGroup';
 
@@ -55,7 +56,8 @@ function groupSpec(vnode: VNode): ToolbarGroupSpec {
       ? { overflowContent: raw.overflowContent as () => DocxEditorChildren }
       : {}),
     ...(typeof raw.className === 'string' ? { className: raw.className } : {}),
-    children: content === null || content === undefined ? null : ([content].flat() as VNode[]),
+    // `v-if` branches that render nothing leave comment nodes, which are no content.
+    children: flattenChildren(content).filter((node) => node.type !== Comment),
   };
 }
 

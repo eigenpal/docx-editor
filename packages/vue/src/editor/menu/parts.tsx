@@ -19,6 +19,7 @@ import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../tool
 import { MENU_OVERFLOW_ID, useMenuContext, useMenuLabel, useMenuOverflow } from './menu-context';
 import type { MenuContextValue, MenuId } from './menu-context';
 import { GROUP_ATTRIBUTE, MORE_ATTRIBUTE } from '../toolbar/useToolbarOverflow';
+import { useMenuPanelPlacement } from './menu-panel-placement';
 import { usePlatformShortcut } from '../usePlatformShortcut';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
 import { useImageInsertOptional } from '../images/ImageInsert';
@@ -728,6 +729,12 @@ export const Menu = defineComponent({
     const panelRef = ref<HTMLDivElement | null>(null);
     const openedByKey = ref(false);
     const switchedByHover = ref(false);
+    const isMore = () => (props.id as string) === MENU_OVERFLOW_ID;
+    const panelStyle = useMenuPanelPlacement(
+      () => isMore() && menuContext.value.openMenu === props.id,
+      triggerRef,
+      panelRef
+    );
 
     const closeToTrigger = () => {
       menuContext.value.setOpenMenu(null);
@@ -740,8 +747,7 @@ export const Menu = defineComponent({
       const registry = CHROME_MENUS.find((menu) => menu.id === props.id);
       const open = openMenu === props.id;
       const text = props.label ?? label(props.labelKey ?? registry?.labelKey ?? props.id);
-      // A menu that does not fit renders in the "⋯" menu instead of the bar, as a submenu
-      // row with the same panel. Inside that menu, every menu that still fits renders nothing.
+      // A menu that does not fit renders as a submenu row of the "⋯" menu instead of the bar.
       const { measuring, overflow, inMore } = menuOverflow.value;
       const collapsed = overflow.has(props.id);
       if (inMore) {
@@ -765,7 +771,6 @@ export const Menu = defineComponent({
           role="none"
           class={`docx-menubar__menu-root${props.className ? ` ${props.className}` : ''}`}
           data-menu={props.id}
-          // Measured as a unit that can move into the "⋯" menu. The "⋯" menu itself cannot.
           {...(measuring && !iconOnly ? { [GROUP_ATTRIBUTE]: props.id } : {})}
           {...(iconOnly ? { [MORE_ATTRIBUTE]: '' } : {})}
         >
@@ -833,6 +838,7 @@ export const Menu = defineComponent({
               id={panelId}
               role="menu"
               aria-label={text}
+              style={(panelStyle.value ?? undefined) as Record<string, string> | undefined}
               class="docx-toolbar__menu docx-menubar__menu"
               onKeydown={(event) => {
                 const panel = panelRef.value;

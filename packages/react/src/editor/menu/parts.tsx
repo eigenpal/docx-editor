@@ -34,6 +34,7 @@ import {
   type MenuId,
 } from './menu-context';
 import { GROUP_ATTRIBUTE, MORE_ATTRIBUTE } from '../toolbar/useToolbarOverflow';
+import { useMenuPanelPlacement } from './menu-panel-placement';
 import { usePlatformShortcut } from '../usePlatformShortcut';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
 import { useImageInsertOptional } from '../images/ImageInsert';
@@ -852,6 +853,8 @@ export function Menu({
   const switchedByHover = useRef(false);
   const registry = CHROME_MENUS.find((menu) => menu.id === id);
   const open = openMenu === id;
+  // The "⋯" menu's panel is clamped to the viewport like the toolbar's.
+  const panelStyle = useMenuPanelPlacement(open && id === MENU_OVERFLOW_ID, triggerRef, panelRef);
   if (hidden) return null;
   const text = literal ?? label(labelKey ?? registry?.labelKey ?? id);
   // A menu that does not fit renders in the "⋯" menu instead of the bar, as a submenu row
@@ -965,6 +968,7 @@ export function Menu({
           id={panelId}
           role="menu"
           aria-label={text}
+          style={panelStyle}
           className="docx-toolbar__menu docx-menubar__menu"
           onKeyDown={(event) => {
             const panel = panelRef.current;

@@ -133,7 +133,6 @@
     "formatPainter": "Format painter",
     "formatPainterShortcut": "Format painter (Ctrl+Alt+C, Ctrl+Alt+V)",
     "commentsAndChanges": "Comments & Changes",
-    "addComment": "Add comment",
     "more": "More",
     "unavailableInPreview": "Not available in this preview build",
     "paragraphMarks": "Show paragraph breaks"

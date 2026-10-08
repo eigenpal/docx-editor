@@ -142,6 +142,53 @@ describe('menu bar overflow', () => {
     expect(triggers(bar)).toEqual(['file', 'format', 'insert', 'review', 'help']);
   });
 
+  test('host children stay in the bar once, are measured, and the "⋯" panel is clamped', async () => {
+    const view = mount(
+      <DocxEditorMenu t={(key) => (key === 'formattingBar.more' ? 'More' : key)}>
+        <button type="button" data-testid="share">
+          Share
+        </button>
+      </DocxEditorMenu>
+    );
+    const bar = view.getByTestId('docx-menubar');
+    // Measured as fixed width, so the fit counts it.
+    const host = bar.querySelector('[data-testid="share"]')!.parentElement!;
+    expect(host.hasAttribute('data-toolbar-fixed')).toBe(true);
+    expect(host.getAttribute('role')).toBe('none');
+
+    await measure(bar, 220);
+    const more = view.getByLabelText('More');
+    const rect = { left: 300, right: 334, top: 0, bottom: 30, width: 34, height: 30 } as DOMRect;
+    more.getBoundingClientRect = () => rect;
+    more.parentElement!.getBoundingClientRect = () => rect;
+    const innerWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    const offsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.getAttribute('role') === 'menu' ? 240 : 60;
+      },
+    });
+    try {
+      await act(async () => {
+        fireEvent.keyDown(more, { key: 'ArrowDown' });
+      });
+      // The host child renders once: not again inside the "⋯" menu.
+      expect(bar.querySelectorAll('[data-testid="share"]').length).toBe(1);
+      const panel = bar.querySelector<HTMLElement>(
+        '[data-menu="docx-menubar-more"] > [role="menu"]'
+      )!;
+      expect(panel.querySelector('[data-testid="share"]')).toBeNull();
+      // 334 - 240 = 94 fits, so the panel lines up with the trigger's end.
+      expect(panel.style.left).toBe('-206px');
+      expect(panel.style.maxInlineSize).toBe('374px');
+    } finally {
+      if (offsetWidth) Object.defineProperty(HTMLElement.prototype, 'offsetWidth', offsetWidth);
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: innerWidth });
+    }
+  });
+
   test('overflow={false} wraps and does not measure', () => {
     const view = mount(<DocxEditorMenu overflow={false} />);
     const bar = view.getByTestId('docx-menubar');

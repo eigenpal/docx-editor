@@ -102,8 +102,7 @@
     "formatPainter": "Reproduire la mise en forme",
     "formatPainterShortcut": "Reproduire la mise en forme (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "Afficher les marques de paragraphe",
-    "label": "Commandes de mise en forme",
-    "addComment": "Ajouter un commentaire"
+    "label": "Commandes de mise en forme"
   },
   "alignment": {
     "alignLeft": "Aligner à gauche",

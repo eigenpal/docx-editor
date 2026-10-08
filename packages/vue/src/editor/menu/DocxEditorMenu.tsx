@@ -33,7 +33,7 @@ import { DocxEditorParagraphDialog } from '../DocxEditorParagraphDialog';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import { chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { MORE_PATHS } from '../toolbar/ToolbarOverflow';
-import { useToolbarOverflow } from '../toolbar/useToolbarOverflow';
+import { FIXED_ATTRIBUTE, useToolbarOverflow } from '../toolbar/useToolbarOverflow';
 import {
   MENU_OVERFLOW_ID,
   MenuContext,
@@ -141,17 +141,20 @@ function menuOfChild(child: unknown): ChromeMenuId | null {
 
 /**
  * The id of any menu vnode, registry or host: a pinned part's `docxMenu`, or the generic
- * `Menu`'s `id` prop. Null for a hidden menu and for anything that is not a menu.
+ * `Menu`'s `id` prop. Null for anything that is not a menu, and for a hidden menu unless
+ * `includeHidden` is set.
  */
-function anyMenuIdOfChild(child: unknown): string | null {
+function anyMenuIdOfChild(child: unknown, includeHidden = false): string | null {
   if (!isVNodeElement(child)) return null;
   if (child.type === Fragment) {
     const inner = flattenChildren((child.children ?? []) as VNode[]);
-    const ids = inner.map(anyMenuIdOfChild).filter((id): id is string => id !== null);
+    const ids = inner
+      .map((node) => anyMenuIdOfChild(node, includeHidden))
+      .filter((id): id is string => id !== null);
     return ids.length === 1 ? ids[0]! : null;
   }
   const props = (child.props ?? {}) as { id?: unknown; hidden?: unknown };
-  if (props.hidden === true || props.hidden === '') return null;
+  if ((props.hidden === true || props.hidden === '') && !includeHidden) return null;
   const type = child.type as { docxMenu?: unknown };
   if ((typeof type === 'function' || typeof type === 'object') && typeof type.docxMenu === 'string')
     return type.docxMenu;
@@ -418,8 +421,20 @@ const DocxEditorMenuRoot = defineComponent({
       if (layout.value.ids.join('\u0000') !== menuIds.join('\u0000')) {
         layout.value = { ids: menuIds, order };
       }
+      // Host children that are not menus stay in the bar at every width. They are wrapped so
+      // the fit counts their width, and they never render a second time inside "⋯".
+      const isMenu = (child: VNode) => anyMenuIdOfChild(child, true) !== null;
+      const hostBlock = (nodes: VNode[], key: string) =>
+        h('div', { key, role: 'none', class: 'docx-menubar__host', [FIXED_ATTRIBUTE]: '' }, nodes);
+      // `menus` is what the "⋯" menu renders: menus only, never host children.
+      let menus: VNode[];
       if (props.preset === false) {
-        content = slots.default ? kids : undefined;
+        menus = kids.filter(isMenu);
+        content = slots.default
+          ? kids.map((child, index) =>
+              isMenu(child) ? child : hostBlock([child], `host-${index}`)
+            )
+          : undefined;
       } else {
         const overrides = new Map<ChromeMenuId, VNode>();
         const appended: VNode[] = [];
@@ -428,15 +443,17 @@ const DocxEditorMenuRoot = defineComponent({
           if (id) overrides.set(id, child);
           else appended.push(child);
         }
-        content = [
+        menus = [
           ...CHROME_MENUS.flatMap((menu) => {
             const override = overrides.get(menu.id);
             if (override) return [h(Fragment, { key: menu.id }, [override])];
             const Part = MENU_PARTS[menu.id];
             return [h(Part, { key: menu.id })];
           }),
-          ...appended,
+          ...appended.filter(isMenu),
         ];
+        const hosts = appended.filter((child) => !isMenu(child));
+        content = [...menus, ...(hosts.length > 0 ? [hostBlock(hosts, 'host')] : [])];
       }
 
       return (
@@ -481,7 +498,7 @@ const DocxEditorMenuRoot = defineComponent({
                 icon={chromeIcon(MORE_PATHS) as VNode}
                 preset={false}
               >
-                <MenuOverflowScope>{content}</MenuOverflowScope>
+                <MenuOverflowScope>{menus}</MenuOverflowScope>
               </Menu>
             ) : null}
           </div>

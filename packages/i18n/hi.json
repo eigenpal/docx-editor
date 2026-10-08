@@ -102,8 +102,7 @@
     "formatPainter": "फ़ॉर्मेट पेंटर",
     "formatPainterShortcut": "फ़ॉर्मेट पेंटर (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "अनुच्छेद विराम दिखाएँ",
-    "label": "स्वरूपण नियंत्रण",
-    "addComment": "टिप्पणी जोड़ें"
+    "label": "स्वरूपण नियंत्रण"
   },
   "alignment": {
     "alignLeft": "बाएं संरेखित करें",

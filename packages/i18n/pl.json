@@ -102,8 +102,7 @@
     "formatPainter": "Malarz formatów",
     "formatPainterShortcut": "Malarz formatów (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "Pokaż znaki akapitu",
-    "label": "Elementy sterujące formatowaniem",
-    "addComment": "Dodaj komentarz"
+    "label": "Elementy sterujące formatowaniem"
   },
   "alignment": {
     "alignLeft": "Wyrównaj do lewej",

@@ -166,6 +166,28 @@ export function arrangeToolbarGroups(
   return result;
 }
 
+/** A dotted catalog key, such as `formattingBar.groups.font`. */
+const CATALOG_KEY = /^[A-Za-z][\w-]*(?:\.[\w-]+)+$/;
+
+/**
+ * A host group's label as display text.
+ *
+ * Only a dotted catalog key goes through `translate`, and only a string result is used.
+ * Anything else renders as written, so plain text with ICU syntax (`{`) never reaches the
+ * message formatter, and a key that names a branch of the catalog (an object) does not
+ * replace the label.
+ */
+export function toolbarHostLabel(text: string, translate: (key: string) => unknown): string {
+  if (!CATALOG_KEY.test(text)) return text;
+  let resolved: unknown;
+  try {
+    resolved = translate(text);
+  } catch {
+    return text;
+  }
+  return typeof resolved === 'string' && resolved.length > 0 ? resolved : text;
+}
+
 /** The margin the "⋯" panel keeps from each viewport edge, in px. */
 export const TOOLBAR_PANEL_EDGE_MARGIN = 8;
 

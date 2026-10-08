@@ -21,6 +21,8 @@ import {
   collapseOrder,
   toolbarPanelPlacement,
 } from '../src/editor/toolbar/toolbar-overflow.ts';
+import { en } from '@docx-editor.dev/i18n';
+import { barRoomWidth } from '../src/editor/toolbar/toolbar-measure.ts';
 import { testReviewModule } from './review-test-module.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -361,6 +363,71 @@ describe('Toolbar.Slot', () => {
   });
 });
 
+describe('shrink-wrapped toolbar', () => {
+  test('the room comes from the parent, less siblings and margins, capped by max-width', () => {
+    const base = { own: 300, siblings: 0, margins: 0, chrome: 10, maxWidth: null };
+    // A bar that fills its container keeps its own measurement.
+    expect(barRoomWidth({ ...base, own: 990, parentContent: 1000 })).toBe(990);
+    // A shrink-wrapped bar can grow into the parent.
+    expect(barRoomWidth({ ...base, parentContent: 1000 })).toBe(990);
+    expect(barRoomWidth({ ...base, parentContent: 1000, siblings: 200, margins: 20 })).toBe(770);
+    expect(barRoomWidth({ ...base, parentContent: 1000, maxWidth: 600 })).toBe(590);
+    // Never less than the box it has, and unknown room keeps the box.
+    expect(barRoomWidth({ ...base, parentContent: 100 })).toBe(300);
+    expect(barRoomWidth({ ...base, parentContent: 0 })).toBe(300);
+  });
+
+  test('groups come back when the window widens again', async () => {
+    const { view } = mount(<T t={t} />);
+    const toolbar = view.getByTestId('docx-toolbar');
+    const parent = toolbar.parentElement!;
+    parent.style.display = 'flex';
+    parent.style.justifyContent = 'center';
+    toolbar.style.width = 'max-content';
+    toolbar.style.maxWidth = '100%';
+    toolbar.style.boxSizing = 'border-box';
+    let room = 2000;
+    Object.defineProperty(parent, 'clientWidth', { configurable: true, get: () => room });
+    // The bar is exactly as wide as what it shows.
+    const contentWidth = () =>
+      toolbar.querySelectorAll('[data-toolbar-group]').length * 90 +
+      toolbar.querySelectorAll('[data-toolbar-fixed]').length * 90 +
+      (toolbar.querySelector('[data-toolbar-more]') ? 34 : 0);
+    Object.defineProperty(toolbar, 'clientWidth', {
+      configurable: true,
+      get: () => Math.min(contentWidth(), room),
+    });
+    Object.defineProperty(toolbar, 'offsetWidth', {
+      configurable: true,
+      get: () => Math.min(contentWidth(), room),
+    });
+    const flushGroups = async () => {
+      for (const element of toolbar.querySelectorAll(
+        '[data-toolbar-group], [data-toolbar-fixed]'
+      )) {
+        Object.defineProperty(element, 'offsetWidth', { configurable: true, get: () => 90 });
+      }
+      await act(async () => {
+        for (const observer of [...MockResizeObserver.instances]) observer.flush();
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      });
+    };
+    await flushGroups();
+    const all = toolbar.querySelectorAll('[data-toolbar-group]').length;
+    expect(view.queryByLabelText('More')).toBeNull();
+
+    room = 400;
+    await flushGroups();
+    expect(toolbar.querySelectorAll('[data-toolbar-group]').length).toBeLessThan(all);
+    expect(view.getByLabelText('More')).not.toBeNull();
+
+    room = 2000;
+    await flushGroups();
+    expect(toolbar.querySelectorAll('[data-toolbar-group]').length).toBe(all);
+    expect(view.queryByLabelText('More')).toBeNull();
+  });
+});
+
 describe('overflow panel placement', () => {
   test('stays inside a narrow viewport', async () => {
     const { view } = mount(<T t={t} />);
@@ -394,6 +461,125 @@ describe('overflow panel placement', () => {
       if (offsetWidth) Object.defineProperty(HTMLElement.prototype, 'offsetWidth', offsetWidth);
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: innerWidth });
     }
+  });
+});
+
+describe('review fixes', () => {
+  test('a right-to-left panel keeps its clamp', async () => {
+    const { view } = mount(<T t={t} />);
+    const toolbar = view.getByTestId('docx-toolbar');
+    toolbar.setAttribute('dir', 'rtl');
+    await measure(toolbar, 300);
+    const trigger = view.getByLabelText('More');
+    const rect = { left: 178, right: 212, top: 0, bottom: 34, width: 34, height: 34 } as DOMRect;
+    trigger.getBoundingClientRect = () => rect;
+    trigger.parentElement!.getBoundingClientRect = () => rect;
+    await act(async () => {
+      trigger.click();
+    });
+    const panel = view.getByTestId('toolbar-overflow-panel');
+    // `inset-inline-end` maps to `left` in right-to-left text and would cancel the clamp.
+    expect(panel.style.getPropertyValue('inset-inline-end')).toBe('');
+    expect(panel.style.left).not.toBe('');
+    expect(panel.style.right).toBe('auto');
+  });
+
+  test('labels render as written unless they are a catalog key with a string', async () => {
+    const { view } = mount(
+      <T>
+        <T.Group id="a" label="Review {beta}">
+          <T.Action label="A" />
+        </T.Group>
+        <T.Group id="b" label="formattingBar.groups">
+          <T.Action label="B" />
+        </T.Group>
+        <T.Group id="c" label="formattingBar.groups.font">
+          <T.Action label="C" />
+        </T.Group>
+      </T>
+    );
+    const toolbar = view.getByTestId('docx-toolbar');
+    expect(toolbar.querySelector('[data-toolbar-group="a"]')!.getAttribute('aria-label')).toBe(
+      'Review {beta}'
+    );
+    // A key that names a branch of the catalog is not a label.
+    expect(toolbar.querySelector('[data-toolbar-group="b"]')!.getAttribute('aria-label')).toBe(
+      'formattingBar.groups'
+    );
+    // A key with a string in the catalogue resolves.
+    expect(toolbar.querySelector('[data-toolbar-group="c"]')!.getAttribute('aria-label')).toBe(
+      en.formattingBar.groups.font
+    );
+  });
+
+  test('a host group whose children all render nothing is dropped', () => {
+    const { view } = mount(
+      <T>
+        <T.Group id="empty" label="Empty">
+          {false}
+          {null}
+        </T.Group>
+      </T>
+    );
+    expect(
+      view.getByTestId('docx-toolbar').querySelector('[data-toolbar-group="empty"]')
+    ).toBeNull();
+  });
+
+  test('overflowContent on a built-in group renders without children', async () => {
+    const { view } = mount(
+      <T t={t}>
+        <T.Group id="zoom" overflowContent={() => <span data-testid="zoom-extra" />} />
+      </T>
+    );
+    const toolbar = view.getByTestId('docx-toolbar');
+    await measure(toolbar, 760);
+    await act(async () => {
+      view.getByLabelText('More').click();
+    });
+    expect(
+      view.getByTestId('toolbar-overflow-panel').querySelector('[data-testid="zoom-extra"]')
+    ).not.toBeNull();
+  });
+
+  test('the table grid closes the panel after an insert, and Escape closes it after a click', async () => {
+    const { view, editor } = mount(
+      <T t={t}>
+        <T.Group id="ins" label="Insert">
+          <T.TableInsert />
+        </T.Group>
+      </T>
+    );
+    await waitFor(() => expect(editor().surface).not.toBeNull());
+    const toolbar = view.getByTestId('docx-toolbar');
+    await measure(toolbar, 420);
+    const openPanel = async () => {
+      await act(async () => {
+        view.getByLabelText('More').click();
+      });
+      return view.getByTestId('toolbar-overflow-panel');
+    };
+    let panel = await openPanel();
+    let trigger = panel.querySelector<HTMLButtonElement>('[data-slot="table.insert"]')!;
+    await waitFor(() => expect(trigger.disabled).toBe(false));
+    await act(async () => {
+      trigger.click();
+    });
+    // A pointer open leaves focus where it was; Escape on the document still closes the grid.
+    await act(async () => {
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(panel.querySelector('[role="grid"]')).toBeNull();
+
+    panel = view.queryByTestId('toolbar-overflow-panel') ?? (await openPanel());
+    trigger = panel.querySelector<HTMLButtonElement>('[data-slot="table.insert"]')!;
+    await act(async () => {
+      trigger.click();
+    });
+    await act(async () => {
+      fireEvent.click(panel.querySelector('[data-cell="2x2"]')!);
+    });
+    expect(view.queryByTestId('toolbar-overflow-panel')).toBeNull();
   });
 });
 
@@ -444,7 +630,7 @@ describe('AddComment', () => {
     await waitFor(() => expect(editor().surface).not.toBeNull());
     const button = view.container.querySelector<HTMLButtonElement>('[data-part="add-comment"]')!;
     expect(button.disabled).toBe(true);
-    expect(button.title).not.toBe('formattingBar.addComment');
+    expect(button.title).not.toBe('comments.addComment');
   });
 
   test('requests a comment draft from the review rail', async () => {

@@ -167,6 +167,9 @@ export function useToolbarOverflow(
       });
     });
     observer.observe(bar);
+    // The parent too: a bar as wide as its content does not resize when the room around
+    // it grows, so only the parent reports the space a collapsed group can come back into.
+    if (bar.parentElement) observer.observe(bar.parentElement);
     for (const element of bar.querySelectorAll<HTMLElement>(
       `[${GROUP_ATTRIBUTE}], [${FIXED_ATTRIBUTE}]`
     )) {

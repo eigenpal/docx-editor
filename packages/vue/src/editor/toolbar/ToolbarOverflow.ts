@@ -27,6 +27,8 @@ export const MORE_PATHS: readonly string[] = [
 export interface ToolbarOverflowSection {
   readonly id: string;
   readonly labelKey: string;
+  /** Display text that wins over `labelKey`, for a host group. */
+  readonly label?: string;
   readonly children: VNode[];
 }
 
@@ -247,7 +249,6 @@ export const ToolbarOverflow = defineComponent({
                     ? {
                         left: `${placement.value.left}px`,
                         right: 'auto',
-                        insetInlineEnd: 'auto',
                         maxInlineSize: `${placement.value.maxWidth}px`,
                       }
                     : undefined,
@@ -264,13 +265,13 @@ export const ToolbarOverflow = defineComponent({
                       key: section.id,
                       class: 'docx-toolbar__more-section',
                       role: 'group',
-                      'aria-label': label(section.labelKey),
+                      'aria-label': section.label ?? label(section.labelKey),
                     },
                     [
                       h(
                         'span',
                         { class: 'docx-toolbar__more-heading', ariaHidden: 'true' },
-                        label(section.labelKey)
+                        section.label ?? label(section.labelKey)
                       ),
                       ...(section.children ?? []),
                     ]

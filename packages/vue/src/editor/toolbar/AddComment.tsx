@@ -13,6 +13,7 @@ import { useToolbarLabel } from './toolbar-context';
 import { Slot } from './Slot';
 import { chromeIcon, guardToolbarMousedown } from './ToolbarButton';
 import { ADD_COMMENT_PATHS } from './toolbar-icons';
+import { useToolbarOverflowClose } from './ToolbarOverflow';
 
 /**
  * Add Comment (`DocxEditorToolbar.AddComment`): opens a comment draft on the selection in
@@ -41,6 +42,8 @@ export const ToolbarAddComment = defineComponent({
     const stateTick = useEditorStateTick();
     const rail = useReviewRailRegistry();
     const label = useToolbarLabel();
+    // Inside the "⋯" panel, the press also closes the panel. Outside it this does nothing.
+    const closePanel = useToolbarOverflowClose();
     return () => {
       if (props.hidden) return null;
       // Re-renders on every editor state change, so a moved selection updates the state.
@@ -50,7 +53,7 @@ export const ToolbarAddComment = defineComponent({
       const readOnly = editor?.snapshot().editingMode === 'viewing';
       const placed = editor ? editor.getSelectionPlacement() !== null : false;
       const enabled = gate?.ok === true && !readOnly && rail.value.mounted > 0 && placed;
-      const text = label('formattingBar.addComment');
+      const text = label('comments.addComment');
       const reason =
         gate && !gate.ok ? gate.reason : readOnly ? label('editingMode.viewingHint') : undefined;
       const shared = {
@@ -63,7 +66,7 @@ export const ToolbarAddComment = defineComponent({
         title: (!enabled ? reason : undefined) ?? text,
         onMousedown: guardToolbarMousedown,
         onClick: () => {
-          rail.value.requestCommentDraft();
+          if (rail.value.requestCommentDraft()) closePanel(false);
         },
       };
       if (props.asChild) return h(Slot, shared, slots.default);

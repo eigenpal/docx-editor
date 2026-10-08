@@ -13,6 +13,7 @@ import { useToolbarLabel } from './toolbar-context';
 import { Slot } from './Slot';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
 import { TableSizeGrid } from './TableSizeGrid';
+import { useToolbarOverflowClose } from './ToolbarOverflow';
 import type { ToolbarPartComponent } from './parts';
 
 const SLOT: ChromeSlotId = 'table.insert';
@@ -35,6 +36,8 @@ export const ToolbarTableInsert = defineComponent({
     const triggerRef = ref<HTMLButtonElement | null>(null);
     const popupId = useStableDocxId('table-insert');
     let focusGrid = false;
+    // Inside the "⋯" panel, a pick also closes the panel. Outside it this does nothing.
+    const closePanel = useToolbarOverflowClose();
 
     // A press outside closes the popup. Capture, because the painted surface prevents the
     // default on its own pointer handling.
@@ -45,8 +48,18 @@ export const ToolbarTableInsert = defineComponent({
         if (root && event.target instanceof Node && root.contains(event.target)) return;
         open.value = false;
       };
+      // Escape closes the grid wherever focus is. A pointer open leaves focus in the
+      // document, so the popup's own key handler never sees the key.
+      const onKeyDown = (event: KeyboardEvent) => {
+        if (event.key !== 'Escape' || event.defaultPrevented) return;
+        open.value = false;
+      };
       document.addEventListener('mousedown', onMouseDown, true);
-      onCleanup(() => document.removeEventListener('mousedown', onMouseDown, true));
+      document.addEventListener('keydown', onKeyDown);
+      onCleanup(() => {
+        document.removeEventListener('mousedown', onMouseDown, true);
+        document.removeEventListener('keydown', onKeyDown);
+      });
       if (focusGrid) {
         focusGrid = false;
         void nextTick(() =>
@@ -57,6 +70,7 @@ export const ToolbarTableInsert = defineComponent({
 
     const close = () => {
       open.value = false;
+      closePanel(false);
     };
 
     return () => {

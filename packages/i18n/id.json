@@ -102,8 +102,7 @@
     "formatPainter": "Pewarna Format",
     "formatPainterShortcut": "Pewarna Format (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "Tampilkan pemisah paragraf",
-    "label": "Kontrol pemformatan",
-    "addComment": "Tambahkan komentar"
+    "label": "Kontrol pemformatan"
   },
   "alignment": {
     "alignLeft": "Rata Kiri",

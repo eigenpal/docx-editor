@@ -57,11 +57,12 @@ import {
 import {
   arrangeToolbarGroups,
   collapseOrder,
+  toolbarHostLabel,
   TOOLBAR_COLLAPSE_ORDER,
   TOOLBAR_PINNED_GROUPS,
 } from './toolbar-overflow';
 import { readToolbarChildren, type ToolbarChildren } from './toolbar-children';
-import { ToolbarGroup, ToolbarPlacementContext, ToolbarSlot } from './ToolbarGroup';
+import { ToolbarHostGroup, ToolbarPlacementContext, ToolbarSlot } from './ToolbarGroup';
 import { ToolbarAddComment } from './AddComment';
 import { warnSlotOutsideArrangement, warnUnknownGroupAnchor } from './toolbar-warnings';
 import { FIXED_ATTRIBUTE, GROUP_ATTRIBUTE, useToolbarOverflow } from './useToolbarOverflow';
@@ -401,6 +402,7 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
         sections.push({
           id: group.id,
           labelKey: group.labelKey,
+          ...(group.host ? { label: toolbarHostLabel(group.labelKey, label) } : {}),
           children: rows,
         });
         continue;
@@ -413,7 +415,9 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
         <div
           key={group.id}
           className={`docx-toolbar__group${group.className ? ` ${group.className}` : ''}`}
-          {...(group.host ? { role: 'group', 'aria-label': label(group.labelKey) } : {})}
+          {...(group.host
+            ? { role: 'group', 'aria-label': toolbarHostLabel(group.labelKey, label) }
+            : {})}
           // Pinned groups are costed as fixed width rather than offered to the fit.
           {...(group.pinned ? { [FIXED_ATTRIBUTE]: '' } : { [GROUP_ATTRIBUTE]: group.id })}
         >
@@ -554,7 +558,8 @@ function arrangeGroups(
   for (const group of defaultGroups) {
     const spec = specs.get(group.id);
     if (spec?.hidden) continue;
-    const extras = spec?.children != null ? [spec.children] : [];
+    // Children that all render nothing (`false`, `null`) are no content.
+    const extras = Children.toArray(spec?.children);
     const visible = group.entries.some(
       (entry) => !isHiddenOverride(parsed.overrides.get(entry.slot))
     );
@@ -575,12 +580,13 @@ function arrangeGroups(
     (spec) => !builtInIds.has(spec.id) && spec.id !== TABLE_CONTEXTUAL_GROUP_ID
   );
   for (const spec of hosts) {
-    if (spec.hidden || spec.children == null) continue;
+    const extras = Children.toArray(spec.children);
+    if (spec.hidden || extras.length === 0) continue;
     byId.set(spec.id, {
       id: spec.id,
       labelKey: spec.label ?? spec.id,
       entries: [],
-      extras: [spec.children],
+      extras,
       pinned: spec.pinned === true,
       priority: spec.priority,
       overflowContent: spec.overflowContent,
@@ -613,8 +619,10 @@ function arrangeGroups(
 
 /** A collapsed group's host content in the panel, or null when it has none. */
 function hostPanelContent(group: ArrangedGroup): ReactNode {
-  if (group.extras.length === 0) return null;
+  // `overflowContent` renders even without children, so a built-in group can add a panel
+  // row of its own.
   if (group.overflowContent) return group.overflowContent();
+  if (group.extras.length === 0) return null;
   return (
     <ToolbarPlacementContext.Provider value="panel">
       <div className="docx-toolbar__more-host">{group.extras}</div>
@@ -668,7 +676,7 @@ export interface DocxEditorToolbarNamespace {
    * A group of the preset bar: host content that is measured and collapses into the "⋯"
    * panel, or, with a built-in id, controls added to that group or the group hidden.
    */
-  readonly Group: typeof ToolbarGroup;
+  readonly Group: typeof ToolbarHostGroup;
   /** Replaces one built-in slot with arbitrary content, in the slot's place. */
   readonly Slot: typeof ToolbarSlot;
   /** Opens a comment draft on the selection in the review rail. */
@@ -736,7 +744,7 @@ export const DocxEditorToolbar: DocxEditorToolbarNamespace = Object.assign(DocxE
   Button: ToolbarButton,
   Action: ToolbarAction,
   Separator: ToolbarSeparator,
-  Group: ToolbarGroup,
+  Group: ToolbarHostGroup,
   Slot: ToolbarSlot,
   AddComment: ToolbarAddComment,
   Undo: ToolbarUndo,

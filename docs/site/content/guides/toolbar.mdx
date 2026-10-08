@@ -209,12 +209,12 @@ The preset toolbar stays on one row. When it runs out of width, it moves whole g
 | Prop | Description |
 | --- | --- |
 | `id` | The group id. A built-in id changes that group. Any other id creates a host group. |
-| `label` | The panel heading and the group's accessible name. Use plain text or a translation key that the toolbar's `t` resolves. The default is `id`. |
+| `label` | The panel heading and the group's accessible name. The default is `id`. A dotted catalog key, such as `myApp.reviewNav`, goes through the toolbar's `t` and is used when it resolves to a string. Any other text renders as written. |
 | `priority` | The collapse priority. A lower number leaves the bar first. |
 | `pinned` | `true` keeps the group in the bar at every width. |
 | `after` | The id of the group that this group follows. |
 | `hidden` | Removes the group from the bar and the panel. |
-| `overflowContent` | A function that returns the group's panel content. Use it when the panel needs a different form than the bar. |
+| `overflowContent` | A function that returns the group's panel content. Use it when the panel needs a different form than the bar. On a built-in id, it renders after the group's own rows, even when the group has no children. |
 
 ### Placement
 
@@ -244,7 +244,11 @@ In the panel, each `Toolbar.Action` becomes a full-width row with its icon and `
 
 The panel stays inside the viewport with an 8 px margin. It lines up with the end of the **More** button, or with its start when the end does not fit, and it is never wider than the viewport less both margins.
 
-Loose children of `Toolbar`, outside a group, keep their earlier behavior. They render in one block after the groups and never collapse.
+Loose children of `Toolbar`, outside a group, keep their earlier behavior. They render in one block after the groups and never collapse. A group whose children all render nothing is dropped, like a built-in group whose slots are all hidden.
+
+### Toolbar width
+
+The toolbar can fill its container or be as wide as its content, for example a floating bar with `width: max-content; max-width: 100%` centered in a flex row. In both cases it measures the room it can take: the container's content width, less the siblings on the same line and the toolbar's margins, capped by its `max-width`. When the container grows again, the collapsed groups come back.
 
 ### Replace a slot's content
 
@@ -265,11 +269,22 @@ Loose children of `Toolbar`, outside a group, keep their earlier behavior. They 
 <Framework value="vue">
 
 ```vue
-<DocxEditorToolbar>
-  <DocxEditorToolbar.Slot slot="zoom.level" :overflow-content="() => h(ZoomList)">
-    <ZoomPicker />
-  </DocxEditorToolbar.Slot>
-</DocxEditorToolbar>
+<script setup lang="ts">
+import { h } from 'vue';
+import { DocxEditorToolbar } from '@docx-editor.dev/vue';
+import ZoomList from './ZoomList.vue';
+import ZoomPicker from './ZoomPicker.vue';
+
+const zoomList = () => h(ZoomList);
+</script>
+
+<template>
+  <DocxEditorToolbar>
+    <DocxEditorToolbar.Slot slot="zoom.level" :overflow-content="zoomList">
+      <ZoomPicker />
+    </DocxEditorToolbar.Slot>
+  </DocxEditorToolbar>
+</template>
 ```
 
 </Framework>
@@ -284,13 +299,15 @@ The toolbar renders a misplaced part and prints a development warning that names
 
 ### Insert tables and add comments
 
-`Toolbar.TableInsert` opens a 6×6 size grid, the same grid as **Insert** > **Table** in the menu bar. Arrow keys move in the grid, and a press inserts a table of that size.
+`Toolbar.TableInsert` opens a 6×6 size grid, the same grid as **Insert** > **Table** in the menu bar. Arrow keys move in the grid, a press inserts a table of that size, and `Esc` closes the grid. In the **More** panel, the grid opens over the panel, and an insert also closes the panel.
 
-`Toolbar.AddComment` starts a comment draft on the selection in the review rail. It needs the review module and a mounted review rail. It is disabled in viewing mode and when nothing is selected. `Toolbar.Comments` is a different control: it shows or hides the **Comments & Changes** pane.
+`Toolbar.AddComment` starts a comment draft on the selection in the review rail. It needs the review module and a mounted review rail. It is disabled in viewing mode and when nothing is selected. In the **More** panel, a press also closes the panel. `Toolbar.Comments` is a different control: it shows or hides the **Comments & Changes** pane.
 
 ### Menu bar overflow
 
 The menu bar also stays on one line. When the menus do not fit, it moves them, from the end, into one `⋯` menu. Each moved menu becomes a submenu with the same rows. The bar keeps its keyboard behavior: the arrow keys move between the menus and the `⋯` menu, and `ArrowRight` opens a submenu.
+
+The `⋯` menu's panel stays inside the viewport, with the same placement as the toolbar's **More** panel. Host children that are not menus, such as a share button, stay in the bar at every width and never appear inside the `⋯` menu.
 
 The bar must be able to shrink for the measurement to work. In a flex row, give it `min-width: 0`. Set `overflow={false}` (`:overflow="false"` in Vue) to let the bar wrap onto more lines instead.
 

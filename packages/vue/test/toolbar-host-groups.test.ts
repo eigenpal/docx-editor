@@ -5,6 +5,7 @@ import './dom-setup.ts';
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { defineComponent, h, onBeforeUnmount } from 'vue';
 import type { EditorModule } from '@docx-editor.dev/core/editor';
+import { en } from '@docx-editor.dev/i18n';
 import { DocxEditorToolbar as T } from '../src/editor/toolbar';
 import { DocxEditorMenu } from '../src/editor/menu';
 import { useReviewRailRegistry } from '../src/editor/context';
@@ -188,6 +189,59 @@ describe('Vue Toolbar.Slot', () => {
   });
 });
 
+describe('Vue shrink-wrapped toolbar', () => {
+  test('groups come back when the window widens again', async () => {
+    useMockObserver();
+    const view = mountEditorTree(() => h(T, { t }));
+    await flush();
+    const toolbar = toolbarOf(view.container);
+    const parent = toolbar.parentElement!;
+    parent.style.display = 'flex';
+    parent.style.justifyContent = 'center';
+    toolbar.style.width = 'max-content';
+    toolbar.style.maxWidth = '100%';
+    toolbar.style.boxSizing = 'border-box';
+    let room = 2000;
+    Object.defineProperty(parent, 'clientWidth', { configurable: true, get: () => room });
+    const contentWidth = () =>
+      toolbar.querySelectorAll('[data-toolbar-group]').length * 90 +
+      toolbar.querySelectorAll('[data-toolbar-fixed]').length * 90 +
+      (toolbar.querySelector('[data-toolbar-more]') ? 34 : 0);
+    Object.defineProperty(toolbar, 'clientWidth', {
+      configurable: true,
+      get: () => Math.min(contentWidth(), room),
+    });
+    Object.defineProperty(toolbar, 'offsetWidth', {
+      configurable: true,
+      get: () => Math.min(contentWidth(), room),
+    });
+    const flushGroups = async () => {
+      for (const element of toolbar.querySelectorAll(
+        '[data-toolbar-group], [data-toolbar-fixed]'
+      )) {
+        Object.defineProperty(element, 'offsetWidth', { configurable: true, get: () => 90 });
+      }
+      for (const observer of [...MockResizeObserver.instances]) observer.flush();
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await flush();
+    };
+    await flushGroups();
+    const all = toolbar.querySelectorAll('[data-toolbar-group]').length;
+    expect(toolbar.querySelector('[aria-label="More"]')).toBeNull();
+
+    room = 400;
+    await flushGroups();
+    expect(toolbar.querySelectorAll('[data-toolbar-group]').length).toBeLessThan(all);
+    expect(toolbar.querySelector('[aria-label="More"]')).not.toBeNull();
+
+    room = 2000;
+    await flushGroups();
+    expect(toolbar.querySelectorAll('[data-toolbar-group]').length).toBe(all);
+    expect(toolbar.querySelector('[aria-label="More"]')).toBeNull();
+    view.unmount();
+  });
+});
+
 describe('Vue overflow panel placement', () => {
   test('stays inside a narrow viewport', async () => {
     useMockObserver();
@@ -294,6 +348,143 @@ describe('Vue TableInsert and AddComment', () => {
     expect(button.disabled).toBe(false);
     button.click();
     expect(onDraft).toHaveBeenCalledTimes(1);
+    view.unmount();
+  });
+});
+
+describe('Vue review fixes', () => {
+  test('a right-to-left panel keeps its clamp', async () => {
+    useMockObserver();
+    const view = mountEditorTree(() => h(T, { t }));
+    await flush();
+    const toolbar = toolbarOf(view.container);
+    toolbar.setAttribute('dir', 'rtl');
+    await measure(toolbar, 300);
+    const trigger = toolbar.querySelector<HTMLButtonElement>('[aria-label="More"]')!;
+    const rect = { left: 178, right: 212, top: 0, bottom: 34, width: 34, height: 34 } as DOMRect;
+    trigger.getBoundingClientRect = () => rect;
+    trigger.parentElement!.getBoundingClientRect = () => rect;
+    trigger.click();
+    await flush();
+    const panel = view.container.querySelector<HTMLElement>(
+      '[data-testid="toolbar-overflow-panel"]'
+    )!;
+    expect(panel.style.getPropertyValue('inset-inline-end')).toBe('');
+    expect(panel.style.left).not.toBe('');
+    expect(panel.style.right).toBe('auto');
+    view.unmount();
+  });
+
+  test('labels render as written unless they are a catalog key with a string', async () => {
+    const view = mountEditorTree(() =>
+      h(T, null, () => [
+        h(T.Group, { id: 'a', label: 'Review {beta}' }, () => [h(T.Action, { label: 'A' })]),
+        h(T.Group, { id: 'b', label: 'formattingBar.groups' }, () => [h(T.Action, { label: 'B' })]),
+        h(T.Group, { id: 'c', label: 'formattingBar.groups.font' }, () => [
+          h(T.Action, { label: 'C' }),
+        ]),
+      ])
+    );
+    await flush();
+    const toolbar = toolbarOf(view.container);
+    const name = (id: string) =>
+      toolbar.querySelector(`[data-toolbar-group="${id}"]`)!.getAttribute('aria-label');
+    expect(name('a')).toBe('Review {beta}');
+    expect(name('b')).toBe('formattingBar.groups');
+    expect(name('c')).toBe(en.formattingBar.groups.font);
+    view.unmount();
+  });
+
+  test('overflowContent on a built-in group renders without children', async () => {
+    useMockObserver();
+    const view = mountEditorTree(() =>
+      h(T, { t }, () => [
+        h(T.Group, {
+          id: 'zoom',
+          overflowContent: () => h('span', { 'data-testid': 'zoom-extra' }),
+        }),
+      ])
+    );
+    await flush();
+    const toolbar = toolbarOf(view.container);
+    await measure(toolbar, 760);
+    toolbar.querySelector<HTMLButtonElement>('[aria-label="More"]')!.click();
+    await flush();
+    const panel = view.container.querySelector('[data-testid="toolbar-overflow-panel"]')!;
+    expect(panel.querySelector('[data-testid="zoom-extra"]')).not.toBeNull();
+    view.unmount();
+  });
+
+  test('the table grid closes the panel after an insert, and Escape closes it after a click', async () => {
+    useMockObserver();
+    const view = mountEditorTree(() =>
+      h(T, { t }, () => [h(T.Group, { id: 'ins', label: 'Insert' }, () => [h(T.TableInsert)])])
+    );
+    await flush();
+    const toolbar = toolbarOf(view.container);
+    await measure(toolbar, 420);
+    const openPanel = async () => {
+      toolbar.querySelector<HTMLButtonElement>('[aria-label="More"]')!.click();
+      await flush();
+      return view.container.querySelector<HTMLElement>('[data-testid="toolbar-overflow-panel"]')!;
+    };
+    let panel = await openPanel();
+    panel.querySelector<HTMLButtonElement>('[data-slot="table.insert"]')!.click();
+    await flush();
+    expect(panel.querySelector('[role="grid"]')).not.toBeNull();
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await flush();
+    expect(panel.querySelector('[role="grid"]')).toBeNull();
+
+    panel =
+      view.container.querySelector<HTMLElement>('[data-testid="toolbar-overflow-panel"]') ??
+      (await openPanel());
+    panel.querySelector<HTMLButtonElement>('[data-slot="table.insert"]')!.click();
+    await flush();
+    panel.querySelector<HTMLButtonElement>('[data-cell="2x2"]')!.click();
+    await flush();
+    expect(view.container.querySelector('[data-testid="toolbar-overflow-panel"]')).toBeNull();
+    view.unmount();
+  });
+
+  test('menu bar host children stay once, are measured, and the "⋯" panel is clamped', async () => {
+    useMockObserver();
+    const view = mountEditorTree(() =>
+      h(DocxEditorMenu, { t }, () => [
+        h('button', { type: 'button', 'data-testid': 'share' }, 'Share'),
+      ])
+    );
+    await flush();
+    const bar = view.container.querySelector<HTMLElement>('[data-testid="docx-menubar"]')!;
+    const host = bar.querySelector('[data-testid="share"]')!.parentElement!;
+    expect(host.hasAttribute('data-toolbar-fixed')).toBe(true);
+    await measure(bar, 220, 60);
+    const more = bar.querySelector<HTMLElement>('[aria-label="More"]')!;
+    const rect = { left: 300, right: 334, top: 0, bottom: 30, width: 34, height: 30 } as DOMRect;
+    more.getBoundingClientRect = () => rect;
+    more.parentElement!.getBoundingClientRect = () => rect;
+    const innerWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    const offsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.getAttribute('role') === 'menu' ? 240 : 60;
+      },
+    });
+    try {
+      more.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      await flush();
+      expect(bar.querySelectorAll('[data-testid="share"]').length).toBe(1);
+      const panel = bar.querySelector<HTMLElement>(
+        '[data-menu="docx-menubar-more"] > [role="menu"]'
+      )!;
+      expect(panel.style.left).toBe('-206px');
+      expect(panel.style.maxInlineSize).toBe('374px');
+    } finally {
+      if (offsetWidth) Object.defineProperty(HTMLElement.prototype, 'offsetWidth', offsetWidth);
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: innerWidth });
+    }
     view.unmount();
   });
 });

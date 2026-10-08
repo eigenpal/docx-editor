@@ -31,11 +31,12 @@ import {
 import {
   arrangeToolbarGroups,
   collapseOrder,
+  toolbarHostLabel,
   TOOLBAR_COLLAPSE_ORDER,
   TOOLBAR_PINNED_GROUPS,
 } from './toolbar-overflow';
 import { readToolbarChildren, vnodeFlag, type ToolbarChildren } from './toolbar-children';
-import { ToolbarGroup, ToolbarPanelPlacement, ToolbarSlot } from './ToolbarGroup';
+import { ToolbarHostGroup, ToolbarPanelPlacement, ToolbarSlot } from './ToolbarGroup';
 import { ToolbarAddComment } from './AddComment';
 import { warnSlotOutsideArrangement, warnUnknownGroupAnchor } from './toolbar-warnings';
 import { FIXED_ATTRIBUTE, GROUP_ATTRIBUTE, useToolbarOverflow } from './useToolbarOverflow';
@@ -257,7 +258,7 @@ export interface DocxEditorToolbarNamespace {
    * A group of the preset bar: host content that is measured and collapses into the "⋯"
    * panel, or, with a built-in id, controls added to that group or the group hidden.
    */
-  readonly Group: typeof ToolbarGroup;
+  readonly Group: typeof ToolbarHostGroup;
   /** Replaces one built-in slot with arbitrary content, in the slot's place. */
   readonly Slot: typeof ToolbarSlot;
   /** Opens a comment draft on the selection in the review rail. */
@@ -418,7 +419,12 @@ const DocxEditorToolbarRoot = defineComponent({
             const extra = hostPanelContent(group);
             if (extra !== null) rows.push(<Fragment key="host">{extra}</Fragment>);
             if (rows.length === 0) continue;
-            sections.push({ id: group.id, labelKey: group.labelKey, children: rows });
+            sections.push({
+              id: group.id,
+              labelKey: group.labelKey,
+              ...(group.host ? { label: toolbarHostLabel(group.labelKey, label) } : {}),
+              children: rows,
+            });
             continue;
           }
           if (drawn > 0) bar.push(h(ToolbarSeparator, { key: `separator-${group.id}` }));
@@ -429,7 +435,9 @@ const DocxEditorToolbarRoot = defineComponent({
               {
                 key: group.id,
                 class: `docx-toolbar__group${group.className ? ` ${group.className}` : ''}`,
-                ...(group.host ? { role: 'group', 'aria-label': label(group.labelKey) } : {}),
+                ...(group.host
+                  ? { role: 'group', 'aria-label': toolbarHostLabel(group.labelKey, label) }
+                  : {}),
                 ...(group.pinned ? { [FIXED_ATTRIBUTE]: '' } : { [GROUP_ATTRIBUTE]: group.id }),
               },
               [
@@ -613,8 +621,10 @@ function arrangeGroups(
 
 /** A collapsed group's host content in the panel, or null when it has none. */
 function hostPanelContent(group: ArrangedGroup): VNode | null {
-  if (group.extras.length === 0) return null;
+  // `overflowContent` renders even without children, so a built-in group can add a panel
+  // row of its own.
   if (group.overflowContent) return h(Fragment, null, [group.overflowContent() as VNode]);
+  if (group.extras.length === 0) return null;
   return h(ToolbarPanelPlacement, null, { default: () => [...group.extras] });
 }
 
@@ -632,7 +642,7 @@ export const DocxEditorToolbar = Object.assign(DocxEditorToolbarRoot, {
   Button: ToolbarButton,
   Action: ToolbarAction,
   Separator: ToolbarSeparator,
-  Group: ToolbarGroup,
+  Group: ToolbarHostGroup,
   Slot: ToolbarSlot,
   AddComment: ToolbarAddComment,
   Undo: ToolbarUndo,

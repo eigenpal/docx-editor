@@ -26,6 +26,7 @@ import {
 import type { ChromeSlotId } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { useToolbarLabel } from './toolbar-context';
+import { toolbarHostLabel } from './toolbar-overflow';
 
 /** Props for `DocxEditor.Toolbar.Group`. @public */
 export interface ToolbarGroupPartProps {
@@ -35,9 +36,13 @@ export interface ToolbarGroupPartProps {
    */
   id: string;
   /**
-   * Section heading in the "⋯" panel and the group's accessible name. Plain text, or a
-   * translation key that the toolbar's `t` resolves. Defaults to `id`. Built-in groups keep
-   * their own label.
+   * Section heading in the "⋯" panel and the group's accessible name. Defaults to `id`.
+   * Built-in groups keep their own label.
+   *
+   * A dotted catalog key (`'myApp.reviewNav'`) goes through the toolbar's `t` and the
+   * locale catalogue, and is used when it resolves to a string. Anything else, including a
+   * key that resolves to no string, renders as written, so plain text such as
+   * `'Review {beta}'` is safe.
    */
   label?: string;
   /**
@@ -56,8 +61,9 @@ export interface ToolbarGroupPartProps {
   /** Removes the group, built-in or host, from the bar and the "⋯" panel. */
   hidden?: boolean;
   /**
-   * Content for the group's "⋯" panel section. Without it the panel renders the children
-   * in panel rows: actions become labelled rows, other content renders as is.
+   * Content for the group's "⋯" panel section, rendered after a built-in group's own rows.
+   * It renders even when the group has no children, so a built-in id can add a panel-only
+   * row. Without it the panel renders the children in panel rows: actions become labelled rows, other content renders as is.
    */
   overflowContent?: () => DocxEditorChildren;
   className?: string;
@@ -80,9 +86,9 @@ export interface ToolbarGroupPartProps {
  *
  * @public
  */
-export const ToolbarGroup = Object.assign(
+export const ToolbarHostGroup = Object.assign(
   defineComponent({
-    name: 'ToolbarGroup',
+    name: 'ToolbarHostGroup',
     props: {
       id: { type: String, required: true },
       label: { type: String, default: undefined },
@@ -105,7 +111,7 @@ export const ToolbarGroup = Object.assign(
               'div',
               {
                 role: 'group',
-                'aria-label': label(props.label ?? props.id),
+                'aria-label': toolbarHostLabel(props.label ?? props.id, label),
                 class: `docx-toolbar__group${props.className ? ` ${props.className}` : ''}`,
                 'data-toolbar-host-group': props.id,
               },

@@ -3871,6 +3871,12 @@ a.docx-hyperlink:focus-visible {
   left: auto;
 }
 
+/* The size grid is a popover, not panel content: it opens over the panel instead of
+ * making the panel scroll. */
+.docx-toolbar__more-panel:has(.docx-toolbar__table-insert-menu) {
+  overflow-y: visible;
+}
+
 /* Separator: `w-px h-6 bg-border mx-1.5`. */
 .docx-toolbar__separator {
   width: 1px;
@@ -6622,6 +6628,13 @@ a.docx-hyperlink:focus-visible {
 .docx-editor .docx-menubar[data-overflow] {
   flex-wrap: nowrap;
   min-width: 0;
+}
+
+/* Host children that are not menus: measured as fixed width, never moved into "⋯". */
+.docx-editor .docx-menubar__host {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
 }
 
 .docx-editor .docx-menubar__menu-root[data-toolbar-more] .docx-menubar__trigger-icon {

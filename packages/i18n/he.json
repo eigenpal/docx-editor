@@ -102,8 +102,7 @@
     "formatPainter": "מברשת עיצוב",
     "formatPainterShortcut": "מברשת עיצוב (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "הצג מעברי פסקה",
-    "label": "פקדי עיצוב",
-    "addComment": "הוספת הערה"
+    "label": "פקדי עיצוב"
   },
   "alignment": {
     "alignLeft": "יישור לשמאל",

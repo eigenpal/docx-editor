@@ -102,8 +102,7 @@
     "formatPainter": "Pincel de formatação",
     "formatPainterShortcut": "Pincel de formatação (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "Mostrar quebras de parágrafo",
-    "label": "Controles de formatação",
-    "addComment": "Adicionar comentário"
+    "label": "Controles de formatação"
   },
   "alignment": {
     "alignLeft": "Alinhar à esquerda",

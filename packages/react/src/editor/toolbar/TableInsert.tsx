@@ -12,6 +12,7 @@ import { useToolbarLabel } from './toolbar-context';
 import { Slot } from './Slot';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
 import { TableSizeGrid } from './TableSizeGrid';
+import { useToolbarOverflowClose } from './ToolbarOverflow';
 import type { ToolbarPartComponent, ToolbarPartProps } from './parts';
 
 const SLOT: ChromeSlotId = 'table.insert';
@@ -24,6 +25,8 @@ function ToolbarTableInsertImpl({ className, hidden, icon, asChild, children }: 
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const popupId = useId();
   const focusGridRef = useRef(false);
+  // Inside the "⋯" panel, a pick also closes the panel. Outside it this does nothing.
+  const closePanel = useToolbarOverflowClose();
 
   // A press outside closes the popup. Capture, because the painted surface prevents the
   // default on its own pointer handling.
@@ -34,8 +37,18 @@ function ToolbarTableInsertImpl({ className, hidden, icon, asChild, children }: 
       if (root && event.target instanceof Node && root.contains(event.target)) return;
       setOpen(false);
     };
+    // Escape closes the grid wherever focus is. A pointer open leaves focus in the document,
+    // so the popup's own key handler never sees the key.
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      setOpen(false);
+    };
     document.addEventListener('mousedown', onMouseDown, true);
-    return () => document.removeEventListener('mousedown', onMouseDown, true);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown, true);
+      document.removeEventListener('keydown', onKeyDown);
+    };
   }, [open]);
 
   // A keyboard open moves focus into the grid's tab stop.
@@ -45,7 +58,10 @@ function ToolbarTableInsertImpl({ className, hidden, icon, asChild, children }: 
     rootRef.current?.querySelector<HTMLElement>('[role="gridcell"][tabindex="0"]')?.focus();
   }, [open]);
 
-  const close = useCallback(() => setOpen(false), []);
+  const close = useCallback(() => {
+    setOpen(false);
+    closePanel(false);
+  }, [closePanel]);
 
   if (hidden) return null;
   const control = chromeControlForSlot(SLOT);
