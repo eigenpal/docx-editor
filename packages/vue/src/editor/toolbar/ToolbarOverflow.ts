@@ -140,9 +140,15 @@ export const ToolbarOverflow = defineComponent({
       };
       // A click opens the panel with focus left in the pages, where its own Escape handler
       // never hears the key. Bubble phase, and the event goes on to whoever else handles it.
+      // An inner control that already handled the key (a table menu inside the panel) marks
+      // it handled; by the time the key reaches the document, that menu may have re-rendered
+      // away, so its detached target no longer counts as inside and only `defaultPrevented`
+      // says so.
       const onKeyDown = (event: KeyboardEvent) => {
-        if (event.key !== 'Escape' || event.isComposing) return;
-        if (event.target instanceof Node && rootRef.value?.contains(event.target)) return;
+        if (event.key !== 'Escape' || event.isComposing || event.defaultPrevented) return;
+        const target = event.target;
+        if (target instanceof Node && rootRef.value?.contains(target)) return;
+        if (target instanceof Node && panelRef.value?.contains(target)) return;
         open.value = false;
       };
       document.addEventListener('mousedown', onPointerDown, true);
