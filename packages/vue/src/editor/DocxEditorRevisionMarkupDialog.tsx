@@ -206,7 +206,10 @@ const Impl = defineComponent({
           <p id={`${id}-${key}`}>{t(`${key}Note`)}</p>
         </div>
       );
-      const choice = (key: 'revisionsIn' | 'commentMarkers', available: readonly string[]) => (
+      const choice = (
+        key: 'revisionsIn' | 'commentMarkers' | 'paneOverflow',
+        available: readonly string[]
+      ) => (
         <div data-docx-part="field" data-docx-field={key}>
           <label>
             <span class="docx-revision-markup-field-label">{t(key)}</span>
@@ -269,6 +272,7 @@ const Impl = defineComponent({
               <legend>{t('layout')}</legend>
               {choice('revisionsIn', ['pane', 'balloons'])}
               {choice('commentMarkers', ['avatar', 'icon'])}
+              {choice('paneOverflow', ['float', 'scroll'])}
             </fieldset>
             <div data-docx-part="error" role="alert">
               {refused.value ? translate('dialogs.paragraph.refused') : null}

@@ -490,7 +490,7 @@ describe('the review sidebar', () => {
     expect(card().hasAttribute('data-resolved-miniature')).toBe(true);
     act(() => editor.exec({ type: 'toggleReviewPane' }));
     const marker = view.getByTestId('review-marker');
-    // The default `markers: 'initials'` draws a resolved thread as the quiet check badge.
+    // The default `commentMarkers: 'avatar'` draws a resolved thread as the quiet check badge.
     expect(marker.querySelector('[data-testid="review-badge"][data-resolved]')).not.toBeNull();
     act(() => fireEvent.click(marker));
     expect(card().open).toBe(true);

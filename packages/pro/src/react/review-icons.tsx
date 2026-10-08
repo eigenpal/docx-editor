@@ -38,7 +38,7 @@ export const SEND_ICON =
   'M120-160v-640l760 320-760 320Zm80-120 474-200-474-200v140l240 60-240 60v140Zm0 0v-400 400Z';
 
 /**
- * A comment thread's badge under `markers: 'initials'`: a speech bubble in the author's
+ * A comment thread's badge under `commentMarkers: 'avatar'`: a speech bubble in the author's
  * colour with their initials, or a quiet check once the thread is resolved, plus a reply
  * count. Presentation only; the control around it carries the accessible label.
  */

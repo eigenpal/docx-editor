@@ -107,8 +107,15 @@
   white-space: nowrap;
 }
 
+/* Two selects do not fit beside the menu on a narrow window; the header keeps the menu. */
+@media (max-width: 1279px) {
+  .demo-review-layout {
+    display: none;
+  }
+}
+
 .demo-review-layout select {
-  max-width: 220px;
+  max-width: 170px;
   padding: 5px 8px;
   border: 1px solid var(--doc-border);
   border-radius: 6px;

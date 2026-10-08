@@ -4,8 +4,7 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // The rail's positioned parts: the card list, the collapsed markers, the comment
-// affordance, and the page balloon. Split out of `DocxEditorReview.tsx`, which sits at its
-// line cap. The Vue twin is `../vue/review-rail-parts.tsx`.
+// affordance, and the page balloon. The Vue twin is `../vue/review-rail-parts.tsx`.
 
 import {
   isValidElement,
@@ -305,10 +304,10 @@ ReviewAddComment.docxReviewPart = 'AddComment' as const;
  * balloon itself. Click-opened on purpose: a hover-opened card vanished under the pointer
  * travelling toward its own buttons.
  *
- * WHICH KINDS depends on the rail's `changes` option. Under `'rail'` only the kinds whose
- * rail cards are hidden by default: a format or structural change has nothing but its
+ * WHICH KINDS depends on the `revisionsIn` viewer preference. Under `'pane'` only the kinds
+ * whose rail cards are hidden by default: a format or structural change has nothing but its
  * grey/washed marking, so the click on that marking is where its decision lives. Under
- * `'balloon'` every tracked change, because the rail then lists comments only; the balloon
+ * `'balloons'` every tracked change, because the rail then lists comments only; the balloon
  * adds the change's replies and a reply line, and it also closes on Escape and on typing.
  *
  * Matches the pressed element against the UNFILTERED queue, attribution first and POSITION
@@ -321,6 +320,8 @@ ReviewAddComment.docxReviewPart = 'AddComment' as const;
  */
 export function ReviewBalloon({ className, hidden }: ReviewPartProps) {
   const editor = useDocxEditor();
+  const editorRef = useRef(editor);
+  editorRef.current = editor;
   const { review, allItems, authorSlots, authorInfo, revisionsIn } = useRail();
   const t = useReviewLabel();
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -405,9 +406,16 @@ export function ReviewBalloon({ className, hidden }: ReviewPartProps) {
       close();
     };
     // Bubble phase, and only when no other control already handled the key.
+    // Only a key from this editor counts: the page, a dialog, or another editor keeps its own
+    // Escape. A key that ends an IME composition is the input method's, not a dismissal.
     const onKey = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return;
-      if (revisionsInRef.current === 'balloons' && openRef.current) close();
+      if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return;
+      if (revisionsInRef.current !== 'balloons' || !openRef.current) return;
+      if (!(event.target instanceof Node) || !scroller.contains(event.target)) return;
+      // Focus inside the balloon would land on `<body>` once it unmounts.
+      const hadFocus = host.contains(host.ownerDocument.activeElement);
+      close();
+      if (hadFocus) editorRef.current?.focus();
     };
     // BOTH press events, not mousedown alone. The surface cancels `pointerdown` when it
     // places the caret, and a cancelled pointerdown SUPPRESSES the compatibility mousedown

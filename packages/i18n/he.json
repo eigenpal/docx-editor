@@ -958,7 +958,9 @@
       "avatar": "ראשי תיבות של המחבר",
       "balloons": "בועות",
       "icon": "סמל",
-      "pane": "חלונית סקירה"
+      "pane": "חלונית סקירה",
+      "float": "הצג את הכרטיס הפתוח מעל",
+      "scroll": "גלילה לרוחב"
     },
     "deletionsBackground": "רקע מחיקות",
     "formattingBackground": "רקע שינויי עיצוב",
@@ -967,6 +969,7 @@
     "movedToBackground": "רקע יעד ההעברה",
     "commentMarkers": "סמני הערות",
     "layout": "פריסת סקירה",
-    "revisionsIn": "הצג שינויים במעקב ב"
+    "revisionsIn": "הצג שינויים במעקב ב",
+    "paneOverflow": "כאשר חלונית הסקירה אינה נכנסת"
   }
 }

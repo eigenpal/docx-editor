@@ -697,7 +697,10 @@ export interface DocxEditorReviewNamespace {
   readonly AddComment: typeof ReviewAddComment;
   /** The compose box a new comment is written in. */
   readonly Draft: typeof ReviewDraft;
-  /** The decision balloon opened by clicking a format or structural change in the page. */
+  /**
+   * The decision balloon opened by clicking a tracked change in the page: format and
+   * structural changes always, every change under `revisionsIn: 'balloons'`.
+   */
   readonly Balloon: typeof ReviewBalloon;
 }
 

@@ -1226,7 +1226,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      "The default zoom mode is `auto`: it fits the page width between 50% and 100%. A container narrower than a Letter sheet shrinks the document instead of overflowing. Chrome that pads the scroll container, such as the navigation pane or the review rail, recomputes the fit. A fit with `shrinkForReviewPane: true` shrinks the page toward its `minZoom` so the full review card column fits beside it. A host can pin a fixed scale with `zoom` or `zoomMode={{ type: 'fixed' }}`, or ask for uncapped fit-width. The toolbar ladder and the Ctrl+= and Cmd+= shortcuts use the same engine-owned mode.",
+      "The default zoom mode is `auto`: it fits the page width between 50% and 100%. A container narrower than a Letter sheet shrinks the document instead of overflowing. Chrome that pads the scroll container, such as the navigation pane or the review rail, recomputes the fit. A fit with `shrinkForReviewPane: true` shrinks the page toward its `minZoom` so the full review card column fits beside it. A host can pin a fixed scale with `zoom` or `zoomMode={{ type: 'fixed' }}`, or ask for uncapped fit-width. The toolbar ladder and the Ctrl+= and Cmd+= shortcuts use the same engine-owned mode. With the paneOverflow viewer preference set to scroll, a capped fit keeps the page at its size beside an open review column or navigation pane, and the viewport scrolls sideways to reach them.",
   },
   {
     id: 'collab.document-refresh',

@@ -2297,6 +2297,9 @@ export interface PaginatedSurfaceState {
 }
 
 // @public
+export type PaneOverflow = 'float' | 'scroll';
+
+// @public
 export interface ParagraphDialogFields {
     // (undocumented)
     alignment: 'left' | 'center' | 'right' | 'justify';
@@ -2652,6 +2655,7 @@ export interface ResolvedRevisionMarkup {
     readonly movedFrom: RevisionMarkupTextStyle<RevisionDeletionMark>;
     // (undocumented)
     readonly movedTo: RevisionMarkupTextStyle;
+    readonly paneOverflow: PaneOverflow;
     readonly revisionsIn: RevisionsIn;
     // (undocumented)
     readonly trackFormatting: boolean;

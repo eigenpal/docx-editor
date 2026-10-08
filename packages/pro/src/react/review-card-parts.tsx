@@ -3,8 +3,7 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// The card and its parts. Split out of `DocxEditorReview.tsx`, which sits at its line
-// cap. The Vue twin is `../vue/review-card-parts.tsx`.
+// The card and its parts. The Vue twin is `../vue/review-card-parts.tsx`.
 
 import { Fragment, useContext, useId, useMemo } from 'react';
 import type { ReactNode } from 'react';

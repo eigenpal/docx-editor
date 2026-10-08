@@ -958,7 +958,9 @@
       "avatar": "Inicjały autora",
       "balloons": "Dymki",
       "icon": "Ikona",
-      "pane": "Okienko recenzji"
+      "pane": "Okienko recenzji",
+      "float": "Nałóż otwartą kartę",
+      "scroll": "Przewijaj w poziomie"
     },
     "deletionsBackground": "Tło usunięć",
     "formattingBackground": "Tło zmian formatowania",
@@ -967,6 +969,7 @@
     "movedToBackground": "Tło tekstu przeniesionego do",
     "commentMarkers": "Znaczniki komentarzy",
     "layout": "Układ recenzji",
-    "revisionsIn": "Pokaż śledzone zmiany w"
+    "revisionsIn": "Pokaż śledzone zmiany w",
+    "paneOverflow": "Gdy okienko recenzji się nie mieści"
   }
 }

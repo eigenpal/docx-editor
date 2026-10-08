@@ -103,7 +103,7 @@ export function revisionMarkupFields(
       <p id={`${noteId}-${name}`}>{t(`${name}Note`)}</p>
     </div>
   );
-  const choice = <K extends 'revisionsIn' | 'commentMarkers'>(
+  const choice = <K extends 'revisionsIn' | 'commentMarkers' | 'paneOverflow'>(
     name: K,
     available: readonly ResolvedRevisionMarkup[K][]
   ) => (
@@ -170,6 +170,7 @@ export function revisionMarkupFields(
         <legend>{t('layout')}</legend>
         {choice('revisionsIn', ['pane', 'balloons'])}
         {choice('commentMarkers', ['avatar', 'icon'])}
+        {choice('paneOverflow', ['float', 'scroll'])}
       </fieldset>
     </>
   );

@@ -17,6 +17,8 @@ import {
   checkChangeBalloons,
   checkCommentMarkers,
   checkReadOnlyBalloon,
+  checkStructuralCaret,
+  ROW_SOURCE,
 } from './review-balloons-harness.ts';
 
 const change = async (run: () => void) => {
@@ -103,6 +105,78 @@ describe('Vue review layout preferences', () => {
       mounted.unmount();
     }
   });
+
+  test('a caret inside a tracked row opens no balloon', async () => {
+    const mounted = mountReview(
+      ROW_SOURCE,
+      {},
+      { author: 'Grace Hopper', revisionMarkup: { revisionsIn: 'balloons' } }
+    );
+    try {
+      await flush();
+      await waitFor(() => mounted.container.querySelector('[data-paragraph-id]') !== null);
+      await checkStructuralCaret(mounted.container, mounted.editor() as DocxEditorInstance, change);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  test('the card reply line shows Cancel only with text and closes on Escape', async () => {
+    const mounted = mountReview(BALLOON_SOURCE, {}, { author: 'Grace Hopper' });
+    try {
+      await ready(mounted);
+      const editor = mounted.editor() as DocxEditorInstance;
+      const thread = editor
+        .getReviewItems({ placement: false })
+        .find((item) => item.kind === 'comment' && item.text === 'Check this.')!;
+      await change(() => {
+        editor.setActiveReviewItem(thread.key);
+      });
+      const line = mounted.container.querySelector<HTMLElement>('[data-reply-line]')!;
+      expect(line).not.toBeNull();
+      expect(line.querySelector('[data-testid="review-reply-avatar"]')?.textContent).toBe('GH');
+      expect(line.querySelector('[data-testid="review-reply-cancel"]')).toBeNull();
+      const input = line.querySelector('[data-testid="review-reply-input"]')!;
+      await change(() =>
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      );
+      expect(mounted.container.querySelector('[data-reply-line]')).toBeNull();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  test("paneOverflow: 'scroll' keeps the full column on a narrow viewport", async () => {
+    // happy-dom lays nothing out; stand in a 1000px viewport, too narrow for the column.
+    const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get: () => 1000,
+    });
+    const mounted = mountReview(BALLOON_SOURCE, {}, { author: 'Grace Hopper' });
+    try {
+      await ready(mounted);
+      const editor = mounted.editor() as DocxEditorInstance;
+      const scroller = mounted.container.querySelector<HTMLElement>(
+        '.docx-editor__scroll-container'
+      )!;
+      const gutter = () => scroller.style.getPropertyValue('--docx-review-gutter');
+      expect(gutter()).toBe('44px');
+      await change(() => editor.setRevisionMarkup({ paneOverflow: 'scroll' }));
+      expect(gutter()).toBe('316px');
+      expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('24px');
+      // The rail shows its full card column, not the compact strip.
+      expect(
+        mounted.container.querySelector('[data-testid="review-rail"]')?.hasAttribute('data-compact')
+      ).toBe(false);
+      await change(() => editor.setRevisionMarkup({ paneOverflow: 'float' }));
+      expect(gutter()).toBe('44px');
+    } finally {
+      mounted.unmount();
+      if (original) Object.defineProperty(HTMLElement.prototype, 'clientWidth', original);
+      else delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+    }
+  }, 20000);
 
   test('viewing mode keeps balloon decisions unavailable', async () => {
     const mounted = mountReview(

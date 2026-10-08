@@ -597,7 +597,7 @@ describe('DocxEditorReview (Vue)', () => {
         '[data-testid="review-card"]'
       ) as HTMLDetailsElement;
       expect(details.open).toBe(false);
-      // The default `markers: 'initials'` draws the miniature as the quiet check badge.
+      // The default `commentMarkers: 'avatar'` draws the miniature as the quiet check badge.
       expect(details.querySelector('[data-testid="review-badge"][data-resolved]')).not.toBeNull();
 
       (details.querySelector('.docx-review__resolved-toggle') as HTMLElement).dispatchEvent(

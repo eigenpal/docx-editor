@@ -80,11 +80,20 @@ export interface ResolvedRevisionMarkup {
    * initials, a reply count, and a check mark once resolved. `'icon'` is the comment glyph.
    */
   readonly commentMarkers: CommentMarkers;
+  /**
+   * What happens when the review card column does not fit beside the page. `'float'` keeps
+   * the page in view and floats the open card over it. `'scroll'` reserves the full column
+   * and keeps the page at its fit size; the viewport scrolls sideways to reach the cards.
+   * Under `'scroll'`, an open navigation pane does not shrink a capped fit either.
+   */
+  readonly paneOverflow: PaneOverflow;
 }
 /** Where tracked changes are listed. @public */
 export type RevisionsIn = 'pane' | 'balloons';
 /** How comment margin markers look. @public */
 export type CommentMarkers = 'avatar' | 'icon';
+/** What a review pane that does not fit beside the page does. @public */
+export type PaneOverflow = 'float' | 'scroll';
 /** Partial viewer preferences. Omitted values keep the previous value. @public */
 export type RevisionMarkupOptions = {
   readonly [K in keyof ResolvedRevisionMarkup]?: ResolvedRevisionMarkup[K] extends object
@@ -115,10 +124,12 @@ export const DEFAULT_REVISION_MARKUP: ResolvedRevisionMarkup = Object.freeze({
   trackFormatting: true,
   revisionsIn: 'pane',
   commentMarkers: 'avatar',
+  paneOverflow: 'float',
 });
 const choices = {
   revisionsIn: ['pane', 'balloons'],
   commentMarkers: ['avatar', 'icon'],
+  paneOverflow: ['float', 'scroll'],
 } as const;
 const marks = [
   'none',
@@ -148,7 +159,7 @@ export function resolveRevisionMarkup(
       result[key] = input[key];
     }
   }
-  for (const key of ['revisionsIn', 'commentMarkers'] as const) {
+  for (const key of ['revisionsIn', 'commentMarkers', 'paneOverflow'] as const) {
     const value = input[key];
     if (value === undefined) continue;
     if (!(choices[key] as readonly unknown[]).includes(value))

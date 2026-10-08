@@ -700,6 +700,9 @@ export type OpenMarkdownDocumentForExportResult = {
 }>;
 
 // @public
+export type PaneOverflow = 'float' | 'scroll';
+
+// @public
 export type PreservedImageConverter = (bytes: Uint8Array, mime: PreservedImageMime, limits: ImageResourceLimits,
 signal?: AbortSignal) => Promise<Readonly<{
     bytes: Uint8Array;
@@ -728,6 +731,7 @@ export interface ResolvedRevisionMarkup {
     readonly movedFrom: RevisionMarkupTextStyle<RevisionDeletionMark>;
     // (undocumented)
     readonly movedTo: RevisionMarkupTextStyle;
+    readonly paneOverflow: PaneOverflow;
     readonly revisionsIn: RevisionsIn;
     // (undocumented)
     readonly trackFormatting: boolean;

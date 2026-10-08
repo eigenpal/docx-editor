@@ -958,7 +958,9 @@
       "avatar": "Initialen des Autors",
       "balloons": "Sprechblasen",
       "icon": "Symbol",
-      "pane": "Überarbeitungsbereich"
+      "pane": "Überarbeitungsbereich",
+      "float": "Geöffnete Karte überlagern",
+      "scroll": "Seitlich scrollen"
     },
     "deletionsBackground": "Hintergrund für Löschungen",
     "formattingBackground": "Hintergrund für Formatierungsänderungen",
@@ -967,6 +969,7 @@
     "movedToBackground": "Hintergrund für Verschiebungsziele",
     "commentMarkers": "Kommentarmarkierungen",
     "layout": "Überprüfungslayout",
-    "revisionsIn": "Nachverfolgte Änderungen anzeigen in"
+    "revisionsIn": "Nachverfolgte Änderungen anzeigen in",
+    "paneOverflow": "Wenn der Überprüfungsbereich nicht passt"
   }
 }

@@ -83,6 +83,28 @@ export const BALLOON_SOURCE = zipSync({
   ),
 });
 
+/** A paragraph and a table whose second row is a tracked row insertion. */
+export const ROW_SOURCE = zipSync({
+  '[Content_Types].xml': strToU8(
+    `<Types xmlns="${CT}">` +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '</Types>'
+  ),
+  '_rels/.rels': strToU8(
+    `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+  ),
+  'word/document.xml': strToU8(
+    `<w:document xmlns:w="${W}"><w:body>` +
+      '<w:p><w:r><w:t>Intro</w:t></w:r></w:p>' +
+      '<w:tbl><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>' +
+      '<w:tr><w:tc><w:p><w:r><w:t>Kept row</w:t></w:r></w:p></w:tc></w:tr>' +
+      `<w:tr><w:trPr><w:ins w:id="40" w:author="Ada Lovelace" ${DATE}/></w:trPr>` +
+      '<w:tc><w:p><w:r><w:t>Added row</w:t></w:r></w:p></w:tc></w:tr>' +
+      '</w:tbl><w:p/></w:body></w:document>'
+  ),
+});
+
 type Change = (run: () => void) => Promise<void>;
 
 const q = (root: ParentNode, selector: string) => root.querySelector<HTMLElement>(selector);
@@ -168,10 +190,16 @@ export async function checkChangeBalloons(
   expect(q(open, '[data-testid="review-summary"]')?.textContent).toContain('added');
   expect(q(open, '[data-testid="review-summary"] ins')?.textContent).toBe('added');
 
-  // Escape closes it.
-  await change(() =>
-    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-  );
+  // Escape from outside this editor, or one that ends an IME composition, leaves it open.
+  const escape = (init: KeyboardEventInit = {}) =>
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, ...init });
+  await change(() => document.body.dispatchEvent(escape()));
+  expect(balloon(container)).not.toBeNull();
+  const page = q(container, '.docx-paginated-surface')!;
+  await change(() => page.dispatchEvent(escape({ isComposing: true })));
+  expect(balloon(container)).not.toBeNull();
+  // Escape in the page closes it.
+  await change(() => page.dispatchEvent(escape()));
   expect(balloon(container)).toBeNull();
 
   // A reply posts into the change's thread and shows under it.
@@ -269,4 +297,30 @@ export async function checkReadOnlyBalloon(
   expect(open).not.toBeNull();
   expect((q(open, '[data-testid="review-accept"]') as HTMLButtonElement).disabled).toBe(true);
   expect((q(open, '[data-testid="review-reject"]') as HTMLButtonElement).disabled).toBe(true);
+}
+
+/** A caret placed inside a tracked row opens nothing; an explicit activation still does. */
+export async function checkStructuralCaret(
+  container: HTMLElement,
+  editor: DocxEditorInstance,
+  change: Change
+): Promise<void> {
+  const cell = all(container, '[data-paragraph-id]').find((node) =>
+    node.textContent?.includes('Added row')
+  );
+  expect(cell).toBeDefined();
+  const inside = { paragraphId: cell!.dataset.paragraphId!, offset: 2 };
+  await change(() => editor.surface!.setSelection({ anchor: inside, head: inside }));
+  expect(balloon(container)).toBeNull();
+
+  const row = editor
+    .getReviewItems({ placement: false })
+    .find((item) => item.kind === 'revision' && item.revisionKind === 'structural')!;
+  expect(row).toBeDefined();
+  await change(() => {
+    editor.setActiveReviewItem(row.key);
+  });
+  expect(q(balloon(container)!, '[data-testid="review-balloon-card"]')?.dataset.kind).toBe(
+    'structural'
+  );
 }

@@ -108,6 +108,7 @@ import { NavigateToChangeOptions } from '@docx-editor.dev/core/editor';
 import { NavigationCommand } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core/editor';
+import { PaneOverflow } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogFields } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogMixed } from '@docx-editor.dev/core/editor';
 import { ParagraphFlagState } from '@docx-editor.dev/core/editor';
@@ -3805,6 +3806,7 @@ export const DocxEditorRevisionMarkup: vue.DefineComponent<vue.ExtractPropTypes<
     insertions: PropType<RevisionMarkupOptions['insertions']>;
     movedFrom: PropType<RevisionMarkupOptions['movedFrom']>;
     movedTo: PropType<RevisionMarkupOptions['movedTo']>;
+    paneOverflow: PropType<RevisionMarkupOptions['paneOverflow']>;
     revisionsIn: PropType<RevisionMarkupOptions['revisionsIn']>;
     trackFormatting: {
         default: undefined;
@@ -3825,6 +3827,7 @@ export const DocxEditorRevisionMarkup: vue.DefineComponent<vue.ExtractPropTypes<
     insertions: PropType<RevisionMarkupOptions['insertions']>;
     movedFrom: PropType<RevisionMarkupOptions['movedFrom']>;
     movedTo: PropType<RevisionMarkupOptions['movedTo']>;
+    paneOverflow: PropType<RevisionMarkupOptions['paneOverflow']>;
     revisionsIn: PropType<RevisionMarkupOptions['revisionsIn']>;
     trackFormatting: {
         default: undefined;
@@ -5719,6 +5722,8 @@ export interface PaginatedDocxEditorShellProps {
     readonly source: Uint8Array;
 }
 
+export { PaneOverflow }
+
 export { ParagraphFlagState }
 
 export { ParagraphFormatRead }
@@ -5849,6 +5854,7 @@ export interface ReviewGutterInput {
     readonly open: boolean;
     // (undocumented)
     readonly pageWidthPx: number;
+    readonly scroll?: boolean;
     // (undocumented)
     readonly viewportWidth: number;
 }

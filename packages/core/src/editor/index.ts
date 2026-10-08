@@ -494,6 +494,7 @@ export type {
   RevisionChangedLinesMark,
   RevisionsIn,
   CommentMarkers,
+  PaneOverflow,
   RevisionMarkupStyle,
   RevisionMarkupTextStyle,
 } from '../contracts/revision-markup.ts';

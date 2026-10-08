@@ -101,6 +101,7 @@ import { NavigateToChangeOptions } from '@docx-editor.dev/core/editor';
 import { NavigationCommand } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core/editor';
+import { PaneOverflow } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogFields } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogMixed } from '@docx-editor.dev/core/editor';
 import { ParagraphFlagState } from '@docx-editor.dev/core/editor';
@@ -2248,6 +2249,8 @@ export interface PaginatedDocxEditorShellProps {
     readonly source: Uint8Array;
 }
 
+export { PaneOverflow }
+
 export { ParagraphFlagState }
 
 export { ParagraphFormatRead }
@@ -2371,6 +2374,7 @@ export interface ReviewGutterInput {
     readonly inlineStartReservation?: number;
     readonly open: boolean;
     readonly pageWidthPx: number;
+    readonly scroll?: boolean;
     readonly viewportWidth: number;
 }
 

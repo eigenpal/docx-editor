@@ -162,6 +162,40 @@ describe('the viewport’s review gutter', () => {
     ).not.toBeNull();
   });
 
+  test("paneOverflow: 'scroll' keeps the full column on a narrow viewport, switchable live", async () => {
+    scrollerWidth = 1000;
+    let editor: DocxEditorInstance | null = null;
+    const { container } = render(
+      <DocxEditorRoot
+        document={SOURCE}
+        modules={[REVIEW_MODULE]}
+        onReady={(ready) => {
+          editor = ready as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+        <RailStub />
+      </DocxEditorRoot>
+    );
+    await settle();
+    act(() => {
+      editor!.setRevisionMarkup({ paneOverflow: 'scroll' });
+      editor!.exec({ type: 'toggleReviewPane' });
+    });
+    await settle();
+    const scroller = container.querySelector('.docx-editor__scroll-container') as HTMLElement;
+    expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('316px');
+    expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('24px');
+    act(() => {
+      editor!.setRevisionMarkup({ paneOverflow: 'float' });
+    });
+    await settle();
+    expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('44px');
+    expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('44px');
+  });
+
   test('a rail on a wide viewport keeps the full column, with nothing at the start', async () => {
     scrollerWidth = 1728;
     let editor: DocxEditorInstance | null = null;

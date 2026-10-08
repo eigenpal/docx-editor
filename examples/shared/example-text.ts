@@ -333,6 +333,9 @@ const messages = {
   'reviewLayout.label': 'Review layout',
   'reviewLayout.pane': 'Everything in the sidebar',
   'reviewLayout.balloons': 'Comments in the sidebar, changes in balloons',
+  'reviewLayout.overflowLabel': 'When the sidebar does not fit',
+  'reviewLayout.float': 'Float the open card over the page',
+  'reviewLayout.scroll': 'Keep the page size and scroll sideways',
   'toolbar.exportPdfServerUnavailable':
     'PDF export is unavailable. Configure a Node.js server with @docx-editor.dev/docx-to-pdf.',
 } as const;

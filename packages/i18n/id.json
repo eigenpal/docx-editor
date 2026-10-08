@@ -958,7 +958,9 @@
       "avatar": "Inisial penulis",
       "balloons": "Balon",
       "icon": "Ikon",
-      "pane": "Panel tinjauan"
+      "pane": "Panel tinjauan",
+      "float": "Apungkan kartu yang terbuka",
+      "scroll": "Gulir ke samping"
     },
     "deletionsBackground": "Latar belakang penghapusan",
     "formattingBackground": "Latar belakang pemformatan",
@@ -967,6 +969,7 @@
     "movedToBackground": "Latar belakang tujuan perpindahan",
     "commentMarkers": "Penanda komentar",
     "layout": "Tata letak tinjauan",
-    "revisionsIn": "Tampilkan perubahan terlacak di"
+    "revisionsIn": "Tampilkan perubahan terlacak di",
+    "paneOverflow": "Saat panel tinjauan tidak muat"
   }
 }

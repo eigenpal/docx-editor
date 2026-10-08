@@ -18,13 +18,19 @@ import {
   checkChangeBalloons,
   checkCommentMarkers,
   checkReadOnlyBalloon,
+  checkStructuralCaret,
+  ROW_SOURCE,
 } from './review-balloons-harness.ts';
 
-function mount(revisionMarkup?: RevisionMarkupOptions, review: ReactNode = <DocxEditorReview />) {
+function mount(
+  revisionMarkup?: RevisionMarkupOptions,
+  review: ReactNode = <DocxEditorReview />,
+  source: Uint8Array = BALLOON_SOURCE
+) {
   let editor: DocxEditorInstance | undefined;
   const view = render(
     <DocxEditorRoot
-      document={BALLOON_SOURCE}
+      document={source}
       author="Grace Hopper"
       modules={[reviewModule()]}
       {...(revisionMarkup ? { revisionMarkup } : {})}
@@ -105,6 +111,15 @@ describe('React review layout preferences', () => {
     }
   });
 
+  test('a caret inside a tracked row opens no balloon', async () => {
+    const { view, editor } = mount({ revisionsIn: 'balloons' }, <DocxEditorReview />, ROW_SOURCE);
+    try {
+      await checkStructuralCaret(view.container, editor(), change);
+    } finally {
+      view.unmount();
+    }
+  });
+
   test('viewing mode keeps balloon decisions unavailable', async () => {
     const { view, editor } = mount({ revisionsIn: 'balloons' });
     try {
@@ -130,6 +145,12 @@ describe('React review layout preferences', () => {
       expect(
         (line.querySelector('[data-testid="review-reply-submit"]') as HTMLButtonElement).disabled
       ).toBe(true);
+      // Escape on an empty line closes the card: the keyboard path Cancel offers with text.
+      const input = line.querySelector('[data-testid="review-reply-input"]')!;
+      await change(() => {
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      });
+      expect(view.container.querySelector('[data-reply-line]')).toBeNull();
     } finally {
       view.unmount();
     }

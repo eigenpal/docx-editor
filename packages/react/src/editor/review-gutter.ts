@@ -80,6 +80,16 @@ const BALANCED_STRIP: ReviewGutter = {
 /** No rail mounted: nothing reserved anywhere. */
 const NO_GUTTER: ReviewGutter = { inlineStart: 0, inlineEnd: 0 };
 
+/**
+ * `paneOverflow: 'scroll'` when the column does not fit: the full column at the end, and the
+ * page's clearance at the start, so the sheet does not sit flush against the viewport edge
+ * while the viewport scrolls sideways to the cards.
+ */
+const SCROLLING_COLUMN: ReviewGutter = {
+  inlineStart: REVIEW_GUTTER_PAGE_CLEARANCE,
+  inlineEnd: REVIEW_PANE_GUTTER,
+};
+
 export interface ReviewGutterInput {
   /** Whether the pane is showing its cards (`snapshot.reviewPaneOpen`). */
   readonly open: boolean;
@@ -101,6 +111,11 @@ export interface ReviewGutterInput {
    * entitlement to measure the leftover against. The full column stands.
    */
   readonly docked?: boolean;
+  /**
+   * `paneOverflow: 'scroll'`: the full column stands even when it does not fit. The page
+   * keeps its size and the viewport scrolls sideways to reach the cards.
+   */
+  readonly scroll?: boolean;
 }
 
 /**
@@ -118,6 +133,7 @@ export function reviewGutter({
   pageWidthPx,
   inlineStartReservation = 0,
   docked = false,
+  scroll = false,
 }: ReviewGutterInput): ReviewGutter {
   if (!open) return BALANCED_STRIP;
   if (docked) return FULL_COLUMN;
@@ -128,7 +144,8 @@ export function reviewGutter({
       ? inlineStartReservation
       : 0;
   const leftover = viewportWidth - start - pageWidthPx - 2 * REVIEW_GUTTER_PAGE_CLEARANCE;
-  return leftover >= REVIEW_PANE_GUTTER ? FULL_COLUMN : BALANCED_STRIP;
+  if (leftover >= REVIEW_PANE_GUTTER) return FULL_COLUMN;
+  return scroll ? SCROLLING_COLUMN : BALANCED_STRIP;
 }
 
 interface GutterGeometry {
@@ -142,6 +159,8 @@ interface GutterGeometry {
    * uncapped fit, which has no entitlement to measure against.
    */
   readonly entitledZoom: number | null;
+  /** `paneOverflow: 'scroll'` is in force. */
+  readonly scroll: boolean;
 }
 
 const selectGutterGeometry = (snapshot: EditorSnapshot): GutterGeometry => {
@@ -150,11 +169,13 @@ const selectGutterGeometry = (snapshot: EditorSnapshot): GutterGeometry => {
     pageSetup: snapshot.pageSetup ?? null,
     reviewPaneOpen: snapshot.reviewPaneOpen ?? true,
     entitledZoom: reviewPaneEntitledZoom(mode, snapshot.zoom),
+    scroll: snapshot.revisionMarkup?.paneOverflow === 'scroll',
   };
 };
 
 const sameGutterGeometry = (a: GutterGeometry, b: GutterGeometry) =>
   a.reviewPaneOpen === b.reviewPaneOpen &&
+  a.scroll === b.scroll &&
   a.entitledZoom === b.entitledZoom &&
   a.pageSetup?.pageWidthTwips === b.pageSetup?.pageWidthTwips;
 
@@ -200,7 +221,7 @@ export function useReviewGutter(): ReviewGutter {
   // The SNAPSHOT, not the review hook — this needs a boolean and the page's width, not
   // the queue. And no gutter at all unless a rail is mounted to occupy it.
   const rail = useContext(ReviewRailContext);
-  const { pageSetup, reviewPaneOpen, entitledZoom } = useEditorState(
+  const { pageSetup, reviewPaneOpen, entitledZoom, scroll } = useEditorState(
     selectGutterGeometry,
     sameGutterGeometry
   );
@@ -229,9 +250,10 @@ export function useReviewGutter(): ReviewGutter {
             : twipsToPixels(pageWidthTwips) * entitledZoom,
         inlineStartReservation: navigationReservation,
         docked: entitledZoom === null,
+        scroll,
       });
     },
-    [mounted, reviewPaneOpen, pageWidthTwips, entitledZoom, navigationReservation]
+    [mounted, reviewPaneOpen, pageWidthTwips, entitledZoom, navigationReservation, scroll]
   );
 
   const [gutter, setGutter] = useState<ReviewGutter>(() =>

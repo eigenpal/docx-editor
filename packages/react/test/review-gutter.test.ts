@@ -184,3 +184,34 @@ describe('reviewGutter', () => {
     });
   });
 });
+
+describe("reviewGutter with paneOverflow: 'scroll'", () => {
+  const SCROLLING = { inlineStart: REVIEW_GUTTER_PAGE_CLEARANCE, inlineEnd: REVIEW_PANE_GUTTER };
+
+  test('an open pane reserves the full column even when it does not fit', () => {
+    // Far below break-even: the page keeps its size and the viewport scrolls to the cards.
+    expect(
+      reviewGutter({ open: true, viewportWidth: 700, pageWidthPx: PAGE, scroll: true })
+    ).toEqual(SCROLLING);
+    // Where the column fits, the pair centres exactly as without the setting.
+    expect(
+      reviewGutter({ open: true, viewportWidth: 1728, pageWidthPx: PAGE, scroll: true })
+    ).toEqual(FULL);
+    // An open navigation pane does not take the column away either.
+    expect(
+      reviewGutter({
+        open: true,
+        viewportWidth: PAGE + REVIEW_PANE_GUTTER,
+        pageWidthPx: PAGE,
+        inlineStartReservation: 328,
+        scroll: true,
+      })
+    ).toEqual(SCROLLING);
+  });
+
+  test('a closed pane still reserves only the mirrored strip', () => {
+    expect(
+      reviewGutter({ open: false, viewportWidth: 700, pageWidthPx: PAGE, scroll: true })
+    ).toEqual(STRIP);
+  });
+});

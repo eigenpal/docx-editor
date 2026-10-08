@@ -383,6 +383,16 @@ An item hits when the character under the pointer is inside its range. The right
 
 To anchor a balloon to an item without a pointer, call `editor.getReviewItemRects(key)`. It returns the item's bands on painted pages in client coordinates, or an empty array.
 
+To open your own balloon on navigation but not on a caret move, call `editor.getActivatedReviewKey()`. It returns the key that `setActiveReviewItem()`, **Next Change**, or **Previous Change** opened, while the caret it placed is still in place. It returns `null` when only the caret makes an item active. For a paired replacement, it returns the key of the deletion. Listen for `selectionChange` to read it again.
+
+| Host API | Returns |
+| --- | --- |
+| `getReviewItemsAt(clientX, clientY, query?)` | The review items under a point, narrowest first. |
+| `getReviewItemRects(key)` | The item's bands on painted pages, in client coordinates. |
+| `getActivatedReviewKey()` | The explicitly activated item key, or `null`. |
+
+The packaged review rail can draw these balloons for you. See [Choose where review items appear](/docs/2.x/pro/revision-markup#choose-where-review-items-appear).
+
 ## Filter by reviewer
 
 The packaged menu exposes **Review → Markup Options → Reviewers**. The default toolbar omits the shortcut to keep the chrome compact. A host that wants one can compose `DocxEditor.Toolbar.Reviewers` and provide a custom `icon` (or the Vue default slot). Each checked author keeps their tracked markup and review cards visible. Clearing an author shows that author’s revisions as accepted: insertions remain as ordinary text, deletions leave the layout, and formatting stays applied without markup. Comments by that author are hidden.

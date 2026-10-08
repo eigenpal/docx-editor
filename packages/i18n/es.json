@@ -958,7 +958,9 @@
       "avatar": "Iniciales del autor",
       "balloons": "Globos",
       "icon": "Icono",
-      "pane": "Panel de revisión"
+      "pane": "Panel de revisión",
+      "float": "Superponer la tarjeta abierta",
+      "scroll": "Desplazar horizontalmente"
     },
     "deletionsBackground": "Fondo de eliminaciones",
     "formattingBackground": "Fondo de cambios de formato",
@@ -967,6 +969,7 @@
     "movedToBackground": "Fondo del destino de movimientos",
     "commentMarkers": "Marcadores de comentarios",
     "layout": "Diseño de revisión",
-    "revisionsIn": "Mostrar cambios con seguimiento en"
+    "revisionsIn": "Mostrar cambios con seguimiento en",
+    "paneOverflow": "Cuando el panel de revisión no cabe"
   }
 }

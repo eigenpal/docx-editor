@@ -284,6 +284,18 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
           }}
           onClick={(event) => event.stopPropagation()}
           onKeydown={(event) => {
+            // Escape clears the line, then closes the card: the keyboard path that Cancel
+            // offers while there is text. A balloon has no card to close and lets it bubble.
+            if (event.key === 'Escape' && options.onCancel && !event.isComposing) {
+              event.preventDefault();
+              const input = event.currentTarget as HTMLInputElement;
+              if (draft.value.length > 0) {
+                input.value = '';
+                draft.value = '';
+                refused.value = false;
+              } else options.onCancel();
+              return;
+            }
             if (readOnly || event.key !== 'Enter') return;
             event.preventDefault();
             submit(lineOf(event));

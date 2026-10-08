@@ -183,22 +183,26 @@ For independent API and dialog changes, omit the controlled prop. You can instea
 
 ## Choose where review items appear
 
-Two preferences control the review layout. Like every other markup preference, they are local view state. They never change the DOCX file or another participant's view.
+Three preferences control the review layout. Like every other markup preference, they are local view state. They never change the DOCX file or another participant's view.
 
 | Setting          | Values             | Default  |
 | ---------------- | ------------------ | -------- |
 | `revisionsIn`    | `pane`, `balloons` | `pane`   |
 | `commentMarkers` | `avatar`, `icon`   | `avatar` |
+| `paneOverflow`   | `float`, `scroll`  | `float`  |
 
 With `revisionsIn: 'pane'`, the review pane lists comments and tracked changes as cards. With `revisionsIn: 'balloons'`, the pane lists comments only. A tracked change opens in a balloon at its text when you select it in the page, or when **Next Change**, **Previous Change**, or `setActive` reaches it. Moving the caret into a change does not open the balloon. The balloon shows the author, the date, and the changed words. A deletion followed by an insertion from the same author appears as one replacement. The balloon also lists replies and has a reply field. **Accept** and **Reject** resolve the change and close the balloon. The balloon also closes when you press Escape, type in the document, or select elsewhere in the page.
 
 With `commentMarkers: 'avatar'`, a collapsed comment marker shows the thread author's initials in their color. A small count shows the number of replies, and a check mark replaces the initials when the thread is resolved. With `commentMarkers: 'icon'`, the marker shows the comment icon. A `DocxEditorReview.Markers` part with an `icon` function overrides both values.
 
-`DocxEditorReview` reads both preferences from the editor and updates when they change. Call `setRevisionMarkup()` to switch the layout at runtime:
+`paneOverflow` decides what happens when the review card column does not fit beside the page. With `paneOverflow: 'float'`, the pane shows a strip of markers and floats the open card over the page. With `paneOverflow: 'scroll'`, the full card column stays beside the page and the page keeps its size. The viewport scrolls sideways to reach the cards. An open navigation pane does not shrink the page either. A fit zoom with no maximum still fills the box it has, and a fit with `shrinkForReviewPane: true` still shrinks the page.
+
+`DocxEditorReview` reads these preferences from the editor and updates when they change. Call `setRevisionMarkup()` to switch the layout at runtime:
 
 ```ts
 editor.setRevisionMarkup({ revisionsIn: 'balloons' });
 editor.setRevisionMarkup({ commentMarkers: 'icon' });
+editor.setRevisionMarkup({ paneOverflow: 'scroll' });
 ```
 
 To set the layout when the editor opens, pass `revisionMarkup`. This example uses a constant, so the prop controls every markup preference. To keep dialog changes, store them as the previous section shows.
@@ -247,7 +251,9 @@ const markup = { ...DEFAULT_REVISION_MARKUP, revisionsIn: 'balloons' as const };
 </Framework>
 </FrameworkTabs>
 
-The **Track changes options** dialog shows both settings in its **Review layout** group. An invalid value throws `TypeError` before any setting changes.
+Balloons open only in **All Markup**. In the other review displays, `revisionsIn: 'balloons'` shows no review controls for tracked changes. To decide them, switch the display to **All Markup**, or use **Accept all changes shown** or **Reject all changes shown**.
+
+The **Track changes options** dialog shows these settings in its **Review layout** group. An invalid value throws `TypeError` before any setting changes.
 
 ## Choose marks and colors
 
@@ -267,6 +273,7 @@ The **Track changes options** dialog shows both settings in its **Review layout*
 | `trackFormatting` | `true`                         |
 | `revisionsIn`     | `pane`                         |
 | `commentMarkers`  | `avatar`                       |
+| `paneOverflow`    | `float`                        |
 
 Text styles accept `none`, `colorOnly`, `bold`, `italic`, `underline`, `doubleUnderline`, `strikethrough`, or `doubleStrikethrough`. Deletions and moved-from text also accept `hidden`, `caret`, or `pound`.
 

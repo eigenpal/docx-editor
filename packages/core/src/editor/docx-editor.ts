@@ -508,6 +508,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
     changed: (value) => {
       emitSelectionChange();
+      zoomLane.refit();
       events.emitRevisionMarkupChange(value);
     },
   });
@@ -530,6 +531,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     surface: () => surface,
     bump,
     emitSelectionChange,
+    panesScroll: () => revisionMarkupState.current().paneOverflow === 'scroll',
   });
   const scaleOf = (): number => zoomLane.scale();
   const highlights = createTextHighlights({

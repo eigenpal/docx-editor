@@ -2,4 +2,4 @@
 '@docx-editor.dev/pro': minor
 ---
 
-Add the `revisionsIn` and `commentMarkers` revision markup preferences: `revisionsIn: 'balloons'` keeps comments in the review pane and opens each tracked change in a balloon at its text, and the default `commentMarkers: 'avatar'` draws collapsed comment markers as author initials badges with a reply count and a resolved check. Both work through `setRevisionMarkup`, the `revisionMarkup` prop, and the Track changes options dialog, and the comment reply box uses a compact reply line.
+Add the `revisionsIn`, `commentMarkers`, and `paneOverflow` revision markup preferences, which open tracked changes in page balloons, draw collapsed comment markers as author initials badges by default (`commentMarkers: 'icon'` keeps the earlier marker), and let a review pane that does not fit keep the page size and scroll sideways. The comment card reply box now shows a compact reply line with the author avatar and a round send button.

@@ -958,7 +958,9 @@
       "avatar": "Yazarın baş harfleri",
       "balloons": "Balonlar",
       "icon": "Simge",
-      "pane": "İnceleme bölmesi"
+      "pane": "İnceleme bölmesi",
+      "float": "Açık kartı üstte göster",
+      "scroll": "Yatay kaydır"
     },
     "deletionsBackground": "Silmelerin arka planı",
     "formattingBackground": "Biçimlendirme arka planı",
@@ -967,6 +969,7 @@
     "movedToBackground": "Taşıma hedefinin arka planı",
     "commentMarkers": "Yorum işaretçileri",
     "layout": "İnceleme düzeni",
-    "revisionsIn": "İzlenen değişiklikleri göster:"
+    "revisionsIn": "İzlenen değişiklikleri göster:",
+    "paneOverflow": "İnceleme bölmesi sığmadığında"
   }
 }

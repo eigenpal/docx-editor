@@ -13,7 +13,7 @@
 
 import type { ZoomMode } from '../contracts/editor.ts';
 import { surfaceScroller } from './surface-pages.ts';
-import { fitZoom, isFitMode } from './zoom-fit.ts';
+import { fitZoom, isFitMode, reviewPaneEntitledZoom } from './zoom-fit.ts';
 
 /** What the controller needs from the editor it serves. */
 export interface ZoomControllerHost {
@@ -37,6 +37,8 @@ export interface ZoomControllerHost {
   zoom(): number;
   /** Apply a fitted scale. The editor routes this through the same path as `setZoom`. */
   applyZoom(zoom: number): void;
+  /** Whether side panes should scroll beside the page instead of shrinking a capped fit. */
+  panesScroll?(): boolean;
 }
 
 export interface ZoomController {
@@ -57,12 +59,18 @@ export interface ZoomController {
   detach(): void;
 }
 
-/** The scroller's content box, or null when it cannot be measured. */
-function availableWidth(container: HTMLElement): number | null {
+/**
+ * The scroller's content box, or null when it cannot be measured.
+ *
+ * `fullWidth` measures the whole client width instead: side panes then scroll beside the
+ * page rather than shrink it (`paneOverflow: 'scroll'`).
+ */
+function availableWidth(container: HTMLElement, fullWidth = false): number | null {
   const scroller = surfaceScroller(container);
   if (!scroller) return null;
   const width = scroller.clientWidth;
   if (!Number.isFinite(width) || width <= 0) return null;
+  if (fullWidth) return width;
   const style = scroller.ownerDocument.defaultView?.getComputedStyle(scroller);
   if (!style) return width;
   // PHYSICAL, not logical. `clientWidth` is content + padding in physical terms, so these are
@@ -110,7 +118,13 @@ export function createZoomController(host: ZoomControllerHost): ZoomController {
     if (!isFitMode(mode)) return;
     const container = host.container();
     if (!container) return;
-    const width = availableWidth(container);
+    // A capped fit keeps its size under `paneOverflow: 'scroll'`. An uncapped fit still fills
+    // the padded box, and `shrinkForReviewPane` is an explicit request to shrink.
+    const fullWidth =
+      host.panesScroll?.() === true &&
+      mode.shrinkForReviewPane !== true &&
+      reviewPaneEntitledZoom(mode, host.zoom()) !== null;
+    const width = availableWidth(container, fullWidth);
     if (width === null) return;
     const pageWidthPx = host.pageWidthPx();
     if (pageWidthPx === null) return;

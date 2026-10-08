@@ -924,6 +924,7 @@
     "layout": "Review layout",
     "revisionsIn": "Show tracked changes in",
     "commentMarkers": "Comment markers",
+    "paneOverflow": "When the review pane does not fit",
     "values": {
       "none": "None",
       "colorOnly": "Color only",
@@ -966,7 +967,9 @@
       "pane": "Review pane",
       "balloons": "Balloons",
       "avatar": "Author initials",
-      "icon": "Icon"
+      "icon": "Icon",
+      "float": "Float the open card",
+      "scroll": "Scroll sideways"
     }
   }
 }

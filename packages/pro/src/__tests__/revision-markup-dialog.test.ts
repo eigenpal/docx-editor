@@ -77,6 +77,16 @@ test('review layout choices stage and apply like every other preference', () => 
   fireEvent.click(getByRole(host.container, 'button', { name: 'OK' }));
   expect(host.get().revisionsIn).toBe('balloons');
   expect(host.get().commentMarkers).toBe('icon');
+  host.dialog.open();
+  const overflow = getByLabelText(
+    host.container,
+    'When the review pane does not fit'
+  ) as HTMLSelectElement;
+  expect(overflow.value).toBe('float');
+  fireEvent.change(overflow, { target: { value: 'scroll' } });
+  fireEvent.click(getByRole(host.container, 'button', { name: 'OK' }));
+  expect(host.get().paneOverflow).toBe('scroll');
+  expect(() => host.set({ paneOverflow: 'wrap' as never })).toThrow(TypeError);
   expect(() => host.set({ revisionsIn: 'margin' as never })).toThrow(TypeError);
 });
 

@@ -71,9 +71,9 @@ export function balloonServesRevisionKind(
 /**
  * True when the active item's decision belongs in the page balloon, not the rail column.
  *
- * With `revisionsIn: 'balloons'`, a content change (inserted, deleted, moved or replaced text) opens
- * only when it was activated explicitly: by Next/Previous Change or by `setActive`. A caret
- * that merely lands in the change must not raise a balloon over the text being typed.
+ * With `revisionsIn: 'balloons'`, any tracked change opens only when it was activated
+ * explicitly: by Next/Previous Change or by `setActive`. A caret that merely lands in a
+ * change, or in a tracked table row, must not raise a balloon over the text being typed.
  */
 export function activeItemNeedsBalloon(
   item: ReviewItemView,
@@ -85,7 +85,9 @@ export function activeItemNeedsBalloon(
   if (item.kind !== 'revision' || !balloonServesRevisionKind(item.revisionKind, revisionsIn)) {
     return false;
   }
-  if (!balloonServesRevisionKind(item.revisionKind)) return explicit;
+  // The rail lists no change in this mode, so only an explicit activation, of any kind,
+  // opens the balloon. A click on the page opens it through the pointer path instead.
+  if (revisionsIn === 'balloons') return explicit;
   return !(paneOpen && railItems.some((entry) => entry.id === item.id));
 }
 

@@ -134,6 +134,9 @@ export type OpenPdfDocumentForExportOptions = Omit<PdfExportOptions, 'comments' 
 export type OpenPdfDocumentForExportResult = OpenFontBackedDocumentForExportResult;
 
 // @public
+export type PaneOverflow = 'float' | 'scroll';
+
+// @public
 export interface PdfDiagnostic {
     readonly code: string;
     readonly message: string;
@@ -272,6 +275,7 @@ export interface ResolvedRevisionMarkup {
     readonly movedFrom: RevisionMarkupTextStyle<RevisionDeletionMark>;
     // (undocumented)
     readonly movedTo: RevisionMarkupTextStyle;
+    readonly paneOverflow: PaneOverflow;
     readonly revisionsIn: RevisionsIn;
     // (undocumented)
     readonly trackFormatting: boolean;

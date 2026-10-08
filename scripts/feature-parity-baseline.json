@@ -284,6 +284,7 @@
         "movedTo",
         "name",
         "onRevisionMarkupChange",
+        "paneOverflow",
         "props",
         "revisionsIn",
         "trackFormatting",

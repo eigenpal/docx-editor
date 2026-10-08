@@ -207,6 +207,25 @@ describe('tracking the viewport', () => {
     expect(harness.editor.getZoom()).toBeLessThan(wide);
   });
 
+  // `paneOverflow: 'scroll'`: side panes scroll beside the page, so a capped fit keeps its
+  // size whatever the review rail or the navigation pane reserves.
+  test("paneOverflow: 'scroll' keeps a capped fit at its size beside reservations", async () => {
+    const harness = mount({ revisionMarkup: { paneOverflow: 'scroll' } });
+    harness.resize(1100);
+    await harness.settle();
+    const wide = harness.editor.getZoom();
+
+    harness.reserve(316);
+    harness.reserveStart(328);
+    await harness.settle();
+    expect(harness.editor.getZoom()).toBe(wide);
+
+    // Switching back to 'float' refits at once and the reservations shrink the page again.
+    harness.editor.setRevisionMarkup({ paneOverflow: 'float' });
+    await harness.settle();
+    expect(harness.editor.getZoom()).toBeLessThan(wide);
+  });
+
   test('a refit is PUBLISHED, not just readable', async () => {
     const harness = mount();
     const seen: number[] = [];

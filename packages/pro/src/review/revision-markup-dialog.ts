@@ -162,7 +162,7 @@ export function createRevisionMarkupDialog(host: RevisionMarkupDialogHost): Revi
   // Review layout: where tracked changes are listed and how comment markers look.
   const choice = (
     section: HTMLElement,
-    key: 'revisionsIn' | 'commentMarkers',
+    key: 'revisionsIn' | 'commentMarkers' | 'paneOverflow',
     values: readonly string[]
   ) => {
     const label = el('label');
@@ -238,6 +238,7 @@ export function createRevisionMarkupDialog(host: RevisionMarkupDialogHost): Revi
       const layout = section('layout');
       choice(layout, 'revisionsIn', ['pane', 'balloons']);
       choice(layout, 'commentMarkers', ['avatar', 'icon']);
+      choice(layout, 'paneOverflow', ['float', 'scroll']);
       const footer = el('div');
       footer.className = 'docx-revision-markup-actions';
       const button = (key: string, action: () => void) => {

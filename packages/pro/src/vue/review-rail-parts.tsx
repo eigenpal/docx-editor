@@ -433,9 +433,16 @@ export const ReviewBalloon = markPart(
           close();
         };
         // Bubble phase, and only when no other control already handled the key.
+        // Only a key from this editor counts: the page, a dialog, or another editor keeps its
+        // own Escape. A key that ends an IME composition is the input method's.
         const onKey = (event: KeyboardEvent): void => {
-          if (event.key !== 'Escape' || event.defaultPrevented) return;
-          if (rail.value.revisionsIn === 'balloons' && openRef.value) close();
+          if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return;
+          if (rail.value.revisionsIn !== 'balloons' || !openRef.value) return;
+          if (!(event.target instanceof Node) || !scroller.contains(event.target)) return;
+          // Focus inside the balloon would land on `<body>` once it unmounts.
+          const hadFocus = host.contains(host.ownerDocument.activeElement);
+          close();
+          if (hadFocus) editorRef.value?.focus();
         };
 
         scroller.addEventListener('pointerdown', onDown, true);

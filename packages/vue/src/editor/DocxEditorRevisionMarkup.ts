@@ -22,6 +22,7 @@ export const DocxEditorRevisionMarkup = defineComponent({
     trackFormatting: { type: Boolean, default: undefined },
     revisionsIn: String as PropType<RevisionMarkupOptions['revisionsIn']>,
     commentMarkers: String as PropType<RevisionMarkupOptions['commentMarkers']>,
+    paneOverflow: String as PropType<RevisionMarkupOptions['paneOverflow']>,
   },
   emits: { revisionMarkupChange: (_settings: ResolvedRevisionMarkup) => true },
   setup(props, { emit }) {
