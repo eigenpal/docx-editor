@@ -122,7 +122,7 @@ import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
 import { resolveDocTargetSelection } from './doc-target-resolution.ts';
 import { createOpenScheduler } from './docx-editor-open-scheduler.ts';
 import { prepareOpen, takePreparedOpen } from './docx-editor-prepared-open.ts';
-import type { TreeDocxSession } from '@docx-editor.dev/core/binding';
+import type { TreeDocxSessionView } from '../binding/tree-session-contract.ts';
 import {
   customNodeDiagnosticReporter,
   sweepCustomNodePayloadsOnOpen,
@@ -256,7 +256,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let refreshHost: RefreshHost | undefined = undefined;
   let deferredRefreshBytes: Uint8Array | null = null;
   /** The opening document's session between the prepare and mount tasks, for font work. */
-  let preparedFontSession: TreeDocxSession | null = null;
+  let preparedFontSession: TreeDocxSessionView | null = null;
   let fontWork: Promise<void> | null = null;
   let mountedSeq = -1;
   const hostConfig = createDocxEditorHostConfigState(config);
@@ -840,7 +840,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   // the document editable on the fixed measurer.
   async function resolveDocumentFonts(
     seq: number,
-    mounted: { readonly session: Pick<TreeDocxSession, 'embeddedFonts'> },
+    mounted: { readonly session: Pick<TreeDocxSessionView, 'embeddedFonts'> },
     families: readonly string[]
   ): Promise<void> {
     const configured = config.fonts;
