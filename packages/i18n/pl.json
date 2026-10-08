@@ -776,8 +776,8 @@
     "simpleMarkup": "Prosta adiustacja",
     "replyCount": "Odpowiedzi: {count}",
     "trackedChange": "Śledzona zmiana",
-    "changeAnnouncement": null,
-    "replyTargetResolved": null
+    "changeAnnouncement": "{change} – {author}: {text}",
+    "replyTargetResolved": "Zmiana została rozwiązana, więc odpowiedź nie została opublikowana."
   },
   "imageAltText": {
     "description": "Opis",

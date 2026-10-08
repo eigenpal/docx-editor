@@ -776,8 +776,8 @@
     "simpleMarkup": "Marcação simples",
     "replyCount": "Respostas: {count}",
     "trackedChange": "Alteração controlada",
-    "changeAnnouncement": null,
-    "replyTargetResolved": null
+    "changeAnnouncement": "{change} por {author}: {text}",
+    "replyTargetResolved": "A alteração foi resolvida, então a resposta não foi publicada."
   },
   "imageAltText": {
     "description": "Descrição",

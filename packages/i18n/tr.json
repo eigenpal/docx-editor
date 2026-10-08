@@ -776,8 +776,8 @@
     "simpleMarkup": "Basit işaretleme",
     "replyCount": "Yanıtlar: {count}",
     "trackedChange": "İzlenen değişiklik",
-    "changeAnnouncement": null,
-    "replyTargetResolved": null
+    "changeAnnouncement": "{author} tarafından {change}: {text}",
+    "replyTargetResolved": "Değişiklik çözümlendiği için yanıt gönderilmedi."
   },
   "imageAltText": {
     "description": "Açıklama",

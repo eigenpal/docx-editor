@@ -776,8 +776,8 @@
     "simpleMarkup": "Einfaches Markup",
     "replyCount": "Antworten: {count}",
     "trackedChange": "Nachverfolgte Änderung",
-    "changeAnnouncement": null,
-    "replyTargetResolved": null
+    "changeAnnouncement": "{change} von {author}: {text}",
+    "replyTargetResolved": "Die Änderung wurde aufgelöst, daher wurde die Antwort nicht gesendet."
   },
   "imageAltText": {
     "description": "Beschreibung",

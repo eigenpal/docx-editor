@@ -776,8 +776,8 @@
     "simpleMarkup": "Markup Sederhana",
     "replyCount": "Balasan: {count}",
     "trackedChange": "Perubahan terlacak",
-    "changeAnnouncement": null,
-    "replyTargetResolved": null
+    "changeAnnouncement": "{change} oleh {author}: {text}",
+    "replyTargetResolved": "Perubahan sudah diselesaikan, jadi balasan tidak dikirim."
   },
   "imageAltText": {
     "description": "Deskripsi",

@@ -857,8 +857,8 @@
     "commentRefused": "コメントを追加できませんでした",
     "replyCount": "返信: {count}",
     "trackedChange": "変更履歴",
-    "changeAnnouncement": null,
-    "replyTargetResolved": null
+    "changeAnnouncement": "{author} による{change}: {text}",
+    "replyTargetResolved": "変更は解決済みのため、返信は投稿されませんでした。"
   },
   "textFormField": {
     "title": "テキスト フォーム フィールドのオプション",

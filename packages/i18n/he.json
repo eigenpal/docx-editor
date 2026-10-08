@@ -776,8 +776,8 @@
     "simpleMarkup": "סימון פשוט",
     "replyCount": "תשובות: {count}",
     "trackedChange": "שינוי במעקב",
-    "changeAnnouncement": null,
-    "replyTargetResolved": null
+    "changeAnnouncement": "{change} מאת {author}: {text}",
+    "replyTargetResolved": "השינוי נפתר, ולכן התשובה לא פורסמה."
   },
   "imageAltText": {
     "description": "תיאור",

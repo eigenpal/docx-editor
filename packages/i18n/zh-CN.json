@@ -776,8 +776,8 @@
     "simpleMarkup": "简单标记",
     "replyCount": "回复：{count}",
     "trackedChange": "修订",
-    "changeAnnouncement": null,
-    "replyTargetResolved": null
+    "changeAnnouncement": "{author}的{change}：{text}",
+    "replyTargetResolved": "该修订已解决，因此未发布答复。"
   },
   "imageAltText": {
     "description": "说明",

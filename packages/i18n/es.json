@@ -857,8 +857,8 @@
     "commentRefused": "No se pudo añadir el comentario",
     "replyCount": "Respuestas: {count}",
     "trackedChange": "Cambio con seguimiento",
-    "changeAnnouncement": null,
-    "replyTargetResolved": null
+    "changeAnnouncement": "{change} de {author}: {text}",
+    "replyTargetResolved": "El cambio se resolvió, por lo que la respuesta no se publicó."
   },
   "textFormField": {
     "title": "Opciones del campo de formulario de texto",
