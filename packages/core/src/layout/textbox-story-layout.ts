@@ -565,13 +565,16 @@ export function layoutTextboxStory(
 
   // Unwrapped text lays out once at an unbounded measure to find its widest line, then again
   // at that width, so paragraph alignment places each line inside the widest line's column.
+  // An inline box keeps its extent: the host line already reserved that advance, so a box
+  // that grew here would paint and hit-test outside the space its line gave it.
+  const noWrap = story.noWrap === true && projection.wrap !== 'inline';
   let contentWidth = extentContentWidth;
-  let flow = flowAt(story.noWrap ? UNWRAPPED_MEASURE_PT : contentWidth);
-  const unwrappedWidth = story.noWrap ? widestLineWidth(flow.blocks, UNWRAPPED_MEASURE_PT) : 0;
+  let flow = flowAt(noWrap ? UNWRAPPED_MEASURE_PT : contentWidth);
+  const unwrappedWidth = noWrap ? widestLineWidth(flow.blocks) : 0;
   if (unwrappedWidth > 0) {
     contentWidth = unwrappedWidth;
     flow = flowAt(contentWidth);
-  } else if (story.noWrap) {
+  } else if (noWrap) {
     flow = flowAt(contentWidth);
   }
 
@@ -628,27 +631,31 @@ export function layoutTextboxStory(
 }
 
 /**
- * The width unwrapped paragraph lines need: each line's content extent plus the indents its
- * band leaves at `measure`. Zero when no line holds content, so the extent width holds.
- * Tables and other blocks reflow inside the result.
+ * The width unwrapped paragraph lines need: each line's content extent plus its paragraph's
+ * start and end indents, with the first-line offset (hanging wins over firstLine) on the
+ * paragraph's first line only. Indents are direction-free sums, so RTL needs no mirror.
+ * Zero when no line holds content, so the extent width holds. Other blocks reflow inside.
  */
-function widestLineWidth(blocks: readonly BlockFragmentRecord[], measure: number): number {
+function widestLineWidth(blocks: readonly BlockFragmentRecord[]): number {
   let widest = 0;
   for (const block of blocks) {
     if (block.kind !== 'paragraph') continue;
-    for (const line of block.lines) {
+    const { left, right: end, firstLine, hanging } = block.indent;
+    const firstLineOffset = hanging > 0 ? -hanging : firstLine;
+    block.lines.forEach((line, index) => {
       let right = Number.NEGATIVE_INFINITY;
       for (const span of line.spans) right = Math.max(right, span.box.x + span.box.width);
       for (const drawing of line.drawings ?? []) {
         right = Math.max(right, drawing.x + drawing.width);
       }
-      if (!Number.isFinite(right) || right <= line.contentX) continue;
-      const indents = Math.max(0, measure - line.box.width);
-      widest = Math.max(widest, right - line.contentX + indents);
-    }
+      if (!Number.isFinite(right) || right <= line.contentX) return;
+      const opensParagraph = index === 0 && block.fragmentIndex === 0;
+      const start = left + (opensParagraph ? firstLineOffset : 0);
+      widest = Math.max(widest, start + right - line.contentX + end);
+    });
   }
   // A hair of slack so the second pass, at exactly this width, cannot break a line on rounding.
-  return widest > 0 ? Math.min(measure, widest + 0.01) : 0;
+  return widest > 0 ? Math.min(UNWRAPPED_MEASURE_PT, widest + 0.01) : 0;
 }
 
 /**

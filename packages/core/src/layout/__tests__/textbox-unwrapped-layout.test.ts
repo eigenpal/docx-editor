@@ -181,6 +181,62 @@ describe('unwrapped text box text', () => {
     expect(record.x + MARGIN + record.width).toBeCloseTo(PAGE_WIDTH, 1);
   });
 
+  const indented = (pPr: string, text: string) =>
+    `<w:p><w:pPr>${pPr}</w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+  const ZERO_INSETS = '<wps:bodyPr wrap="none" lIns="0" rIns="0"><a:spAutoFit/></wps:bodyPr>';
+
+  test('a first-line indent widens the box by the indent', () => {
+    const record = boxRecord(
+      textbox(indented('<w:ind w:firstLine="720"/>', 'abcdefghij'), { bodyPr: ZERO_INSETS })
+    );
+    expect(storyLines(record).map(lineText)).toEqual(['abcdefghij']);
+    expect(record.width).toBeCloseTo(36 + 10 * CHAR, 1);
+  });
+
+  test('a hanging indent pulls the first line back to the column edge', () => {
+    const record = boxRecord(
+      textbox(indented('<w:ind w:left="720" w:hanging="720"/>', 'abcdefghij'), {
+        bodyPr: ZERO_INSETS,
+      })
+    );
+    expect(storyLines(record).map(lineText)).toEqual(['abcdefghij']);
+    expect(record.width).toBeCloseTo(10 * CHAR, 1);
+  });
+
+  test('indents of a right-to-left paragraph size the box the same way', () => {
+    const record = boxRecord(
+      textbox(
+        indented('<w:bidi/><w:ind w:left="360" w:right="720" w:firstLine="720"/>', 'abcdefghij'),
+        {
+          bodyPr: ZERO_INSETS,
+        }
+      )
+    );
+    expect(storyLines(record).map(lineText)).toEqual(['abcdefghij']);
+    expect(record.width).toBeCloseTo(18 + 36 + 36 + 10 * CHAR, 1);
+  });
+
+  test('an inline box keeps its extent and wraps inside it', () => {
+    const cx = 10 * EMU_PER_PT;
+    const cy = 50 * EMU_PER_PT;
+    const inline =
+      '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+      `<wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>` +
+      `<wp:docPr id="2" name="IB"/><a:graphic><a:graphicData uri="${WPS}"><wps:wsp>` +
+      `<wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>` +
+      '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></wps:spPr>' +
+      `<wps:txbx><w:txbxContent>${para('inline label')}</w:txbxContent></wps:txbx>` +
+      ZERO_INSETS +
+      '</wps:wsp></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
+    const layout = layoutBody(inline);
+    const drawing = paragraphFragmentsOfBlocks(layout.pages[0]!.fragments, true)
+      .flatMap((fragment) => fragment.lines)
+      .flatMap((line) => line.drawings ?? [])[0]!;
+    expect(drawing.width).toBeCloseTo(10, 3);
+    expect(drawing.textboxStory!.extentWidth).toBeUndefined();
+    expect(drawing.textboxStory!.contentWidth).toBeCloseTo(10, 3);
+  });
+
   test('wrapped text keeps breaking at the extent', () => {
     const record = boxRecord(
       textbox(para('label text'), {

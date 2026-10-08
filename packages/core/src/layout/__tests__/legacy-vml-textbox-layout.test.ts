@@ -181,6 +181,20 @@ describe('unwrapped VML text box', () => {
     expect(drawing.width).toBeCloseTo(15 * CHAR + 14.4, 1);
   });
 
+  test('an inline box keeps its extent and wraps inside it', () => {
+    const shape =
+      '<w:r><w:pict><v:shape type="#_x0000_t202" style="width:20pt;height:40pt;' +
+      'mso-position-horizontal-relative:char;mso-position-vertical-relative:line;' +
+      'mso-wrap-style:none" stroked="f">' +
+      `<v:textbox inset="0,0,0,0"><w:txbxContent>${paragraph('Inline label')}</w:txbxContent>` +
+      '</v:textbox><w10:anchorlock/></v:shape></w:pict></w:r>';
+    const drawings = inlineDrawings(layoutBody(documentPart(`<w:p>${shape}</w:p>`)));
+    expect(drawings).toHaveLength(1);
+    expect(drawings[0]!.width).toBe(20);
+    expect(drawings[0]!.textboxStory!.extentWidth).toBeUndefined();
+    expect(drawings[0]!.textboxStory!.contentWidth).toBeCloseTo(20, 3);
+  });
+
   test('square wrapping still breaks at the box', () => {
     const part = documentPart(
       `<w:p>${narrowRect(paragraph('Wrapped label'), 'mso-wrap-style:square')}</w:p>` +
