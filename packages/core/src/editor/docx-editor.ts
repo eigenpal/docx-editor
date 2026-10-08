@@ -544,7 +544,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     surface: () => surface,
     bump,
     emitSelectionChange,
-    panesScroll: () => reviewPane.current().overflow === 'scroll',
+    reviewPaneScrolls: () => reviewPane.current().overflow === 'scroll',
   });
   const scaleOf = (): number => zoomLane.scale();
   const highlights = createTextHighlights({

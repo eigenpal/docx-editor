@@ -29,10 +29,13 @@ export type ReviewPaneOpening = 'auto' | 'manual';
  *   `minZoom` (or 10%) so that the full column fits. The pane changes to the marker strip
  *   only when the column does not fit at that floor either. A fixed zoom behaves as
  *   `'float'`.
- * - `'scroll'`: a capped fit keeps the page at the size it has beside the closed pane's
- *   marker strip. The full column stands beside it, and the viewport scrolls sideways to
- *   reach the cards. This applies to every side pane, not only the review pane: an open
- *   navigation pane also no longer shrinks the page, and the viewport scrolls to it too.
+ * - `'scroll'`: the page keeps the size it has beside the closed pane's marker strip, and
+ *   the full column stands beside it. The document and the column scroll together: the
+ *   viewport scrolls sideways to reach the cards.
+ *
+ * The setting applies to the review pane only. The navigation pane stays docked at its side
+ * in every mode: it never scrolls with the document, and it takes its room beside the page
+ * exactly as it does with no review pane.
  *
  * @public
  */

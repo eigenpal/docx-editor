@@ -42,8 +42,11 @@ export interface ZoomControllerHost {
   zoom(): number;
   /** Apply a fitted scale. The editor routes this through the same path as `setZoom`. */
   applyZoom(zoom: number): void;
-  /** Whether side panes should scroll beside the page instead of shrinking a capped fit. */
-  panesScroll?(): boolean;
+  /**
+   * Whether the review pane scrolls beside the page instead of shrinking a capped fit
+   * (`overflow: 'scroll'`). Scoped to the review pane: the navigation pane still counts.
+   */
+  reviewPaneScrolls?(): boolean;
 }
 
 export interface ZoomController {
@@ -74,22 +77,35 @@ const REVIEW_STRIP_FALLBACK_PX = 2 * REVIEW_MARKERS_GUTTER_PX;
 /**
  * The scroller's content box, or null when it cannot be measured.
  *
- * `panesScroll` (the review pane's `overflow: 'scroll'`) lets the panes that scroll beside the page stop
- * shrinking it. With a review rail mounted, the fit subtracts only the closed pane's marker
- * strip (`--docx-review-strip`), and does so whether the pane is open or closed: the page
- * then has ONE size, and opening or closing the pane never relays it out. Without a rail,
- * only the navigation pane's shift stops counting.
+ * `reviewPaneScrolls` (the review pane's `overflow: 'scroll'`) changes what the REVIEW pane
+ * takes from the fit, and nothing else. With a review rail mounted, the review pane takes
+ * only the closed pane's marker strip (`--docx-review-strip`), whether it is open or closed,
+ * so opening or closing it never relays the page out.
+ *
+ * The navigation pane keeps its docked behavior in every overflow mode: the room it takes
+ * at the start edge still shrinks a fit. That room is the start padding beyond the closed
+ * strip's own half — `--docx-nav-shift` plus `--docx-review-gutter-start`, less half the
+ * strip. Reading the shift alone would size the page differently with the review pane open
+ * and closed, because the shift is solved against the start reservation standing beside it
+ * (the page clearance while open, the strip while closed). The sum is the same in both.
+ *
+ * Without a rail the setting has nothing to act on, and the paddings count as always.
  */
-function availableWidth(container: HTMLElement, panesScroll = false): number | null {
+function availableWidth(container: HTMLElement, reviewPaneScrolls = false): number | null {
   const scroller = surfaceScroller(container);
   if (!scroller) return null;
   const width = scroller.clientWidth;
   if (!Number.isFinite(width) || width <= 0) return null;
   const style = scroller.ownerDocument.defaultView?.getComputedStyle(scroller);
-  if (panesScroll && scroller.hasAttribute('data-review-pane')) {
+  if (reviewPaneScrolls && scroller.hasAttribute('data-review-pane')) {
     const published = Number.parseFloat(style?.getPropertyValue('--docx-review-strip') ?? '');
     const strip = Number.isFinite(published) ? published : REVIEW_STRIP_FALLBACK_PX;
-    return Math.max(width - strip, 0);
+    const half = strip / 2;
+    const shift = Number.parseFloat(style?.getPropertyValue('--docx-nav-shift') ?? '');
+    const start = Number.parseFloat(style?.getPropertyValue('--docx-review-gutter-start') ?? '');
+    const navigation =
+      (Number.isFinite(shift) ? shift : 0) + (Number.isFinite(start) ? start : half) - half;
+    return Math.max(width - strip - Math.max(navigation, 0), 0);
   }
   if (!style) return width;
   // PHYSICAL, not logical. `clientWidth` is content + padding in physical terms, so these are
@@ -102,10 +118,7 @@ function availableWidth(container: HTMLElement, panesScroll = false): number | n
   // would leave the fit permanently stale.
   const left = Number.parseFloat(style.paddingLeft) || 0;
   const right = Number.parseFloat(style.paddingRight) || 0;
-  const navigation = panesScroll
-    ? Number.parseFloat(style.getPropertyValue('--docx-nav-shift')) || 0
-    : 0;
-  return Math.max(width - left - right + navigation, 0);
+  return Math.max(width - left - right, 0);
 }
 
 /**
@@ -140,11 +153,11 @@ export function createZoomController(host: ZoomControllerHost): ZoomController {
     if (!isFitMode(mode)) return;
     const container = host.container();
     if (!container) return;
-    // A capped fit keeps its size under the review pane's `overflow: 'scroll'`. An uncapped
-    // fit still fills the padded box.
-    const panesScroll =
-      host.panesScroll?.() === true && reviewPaneEntitledZoom(mode, host.zoom()) !== null;
-    const width = availableWidth(container, panesScroll);
+    // A capped fit keeps its size beside the review pane under `overflow: 'scroll'`. An
+    // uncapped fit still fills the padded box.
+    const reviewPaneScrolls =
+      host.reviewPaneScrolls?.() === true && reviewPaneEntitledZoom(mode, host.zoom()) !== null;
+    const width = availableWidth(container, reviewPaneScrolls);
     if (width === null) return;
     const pageWidthPx = host.pageWidthPx();
     if (pageWidthPx === null) return;

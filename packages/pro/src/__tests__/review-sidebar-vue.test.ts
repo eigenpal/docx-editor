@@ -32,9 +32,7 @@ import { DocxEditorAuthorStyle } from '../../../vue/src/editor/DocxEditorAuthorS
 import { useReviewRailRegistry } from '../../../vue/src/editor/context.ts';
 import { useReviewOf, type ReviewItemView } from '../vue/useReview.ts';
 
-afterEach(() => {
-  document.body.innerHTML = '';
-});
+afterEach(() => document.body.replaceChildren());
 
 describe('DocxEditorReview (Vue)', () => {
   test('updates Vue cards after a full-data tracked-change predicate changes', async () => {

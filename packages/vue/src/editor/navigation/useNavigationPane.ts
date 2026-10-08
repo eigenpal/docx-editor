@@ -14,6 +14,7 @@ import { twipsToPixels } from '../../lib/units';
 import { inject } from 'vue';
 import { ReviewRailContext } from '../context';
 import { useEditorState } from '../useEditorState';
+import { useReviewGutter } from '../review-gutter';
 import {
   NAVIGATION_PANE_WIDTH,
   navigationPaneReservation,
@@ -120,10 +121,20 @@ export function useNavigationPane(
   const viewportWidth = ref(0);
   const inlineEndReservation = ref(0);
   const inlineStartReservation = ref(0);
+  // The review gutter the viewport pads by. A source of the measurement below: the gutter
+  // settles AFTER the pane state it follows, so a measurement keyed on the pane state alone
+  // read the previous gutter and left the page off its reservation by the difference.
+  const reviewGutter = useReviewGutter();
 
   scopeDispose(
     watch(
-      [viewport, openVal, () => geometry.value.reviewPaneOpen, () => rail.value.mounted],
+      [
+        viewport,
+        openVal,
+        () => geometry.value.reviewPaneOpen,
+        () => rail.value.mounted,
+        reviewGutter,
+      ],
       (_values, _previous, onCleanup) => {
         const el = viewport.value;
         if (!el) {

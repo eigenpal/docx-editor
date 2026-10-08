@@ -135,7 +135,9 @@ With `commentMarkers: 'initials'`, a collapsed comment marker shows the thread a
 
 - `'float'`: the pane changes to a marker strip and floats the active card over the page.
 - `'shrinkPage'`: a fit zoom mode can shrink the page so that the full column fits. For more information, see [Make room for the review pane](/docs/2.x/guides/zoom#make-room-for-the-review-pane).
-- `'scroll'`: the page keeps one size whether the pane is open or closed, the full column stays beside it, and the viewport scrolls sideways to reach the cards. The setting applies to every side pane: an open navigation pane also no longer shrinks the page, and the viewport scrolls to it as well. A fit zoom with a maximum fits the viewport width less the closed pane's marker strip. The fit does not subtract padding that your app adds to the scroll container.
+- `'scroll'`: the page keeps one size whether the pane is open or closed, and the full column stays beside it. The document and the column scroll together, so the viewport scrolls sideways to reach the cards. A fit zoom with a maximum fits the viewport width less the closed pane's marker strip and less the room an open navigation pane takes. The fit does not subtract padding that your app adds to the scroll container.
+
+`overflow` applies to the review pane only. The navigation pane stays docked at its side in every mode. It doesn't scroll sideways with the document, and it takes its room beside the page in the same way as when no review pane is mounted.
 
 Set the starting values on the module:
 

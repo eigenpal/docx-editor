@@ -81,6 +81,8 @@ interface Harness {
   navShift(px: number): void;
   /** Publish the closed pane's strip width, as the viewport's `--docx-review-strip` does. */
   strip(px: number): void;
+  /** Publish the review gutter's start half, as the viewport's `--docx-review-gutter-start` does. */
+  gutterStart(px: number): void;
   /** Deliver the resize callback and let the coalescing frame run. */
   settle(): Promise<void>;
 }
@@ -120,6 +122,9 @@ function mount(options: Parameters<typeof createDocxEditor>[0] = {}): Harness {
     },
     strip(px) {
       scroller.style.setProperty('--docx-review-strip', `${px}px`);
+    },
+    gutterStart(px) {
+      scroller.style.setProperty('--docx-review-gutter-start', `${px}px`);
     },
     async settle() {
       for (const callback of [...observerCallbacks]) callback();
@@ -235,45 +240,79 @@ describe('tracking the viewport', () => {
     expect(harness.editor.getZoom()).toBeLessThan(wide);
   });
 
-  // `overflow: 'scroll'`: side panes scroll beside the page, so a capped fit keeps its
-  // size whatever the review rail or the navigation pane reserves.
-  test("overflow: 'scroll' keeps a capped fit at its size beside an open pane", async () => {
+  // `overflow: 'scroll'` is scoped to the review pane: a capped fit keeps its size beside the
+  // open review column, and the navigation pane still takes its room from the page.
+  test("overflow: 'scroll' keeps a capped fit at its size beside an open review pane", async () => {
     const harness = mount({ modules: [SCROLLING_REVIEW] });
+    harness.strip(88);
+    harness.pane(false);
     harness.resize(1100);
     await harness.settle();
-    const wide = harness.editor.getZoom();
+    const closed = harness.editor.getZoom();
 
     harness.pane(true);
     harness.reserve(316);
-    harness.reserveStart(328);
-    harness.navShift(304);
+    harness.reserveStart(24);
+    harness.gutterStart(24);
     await harness.settle();
-    expect(harness.editor.getZoom()).toBe(wide);
+    expect(harness.editor.getZoom()).toBe(closed);
 
-    // Switching back to 'float' refits at once and the reservations shrink the page again.
+    // Switching back to 'float' refits at once and the full column shrinks the page.
     harness.editor.setReviewPane({ overflow: 'float' });
     await harness.settle();
-    expect(harness.editor.getZoom()).toBeLessThan(wide);
+    expect(harness.editor.getZoom()).toBeLessThan(closed);
   });
 
-  // A closed pane's marker strip still counts: ignoring it overflowed the page sideways
-  // with no pane open. Only the navigation pane's shift scrolls beside the page then.
-  test("overflow: 'scroll' with the pane closed still fits inside the marker strip", async () => {
+  // The navigation pane keeps its docked behavior under 'scroll': its shift shrinks the fit,
+  // exactly as under 'float'.
+  test("overflow: 'scroll' still lets an open navigation pane shrink the page", async () => {
     const harness = mount({ modules: [SCROLLING_REVIEW] });
     harness.pane(false);
     harness.strip(88);
     harness.resize(800);
     harness.reserve(44);
     harness.reserveStart(44);
+    harness.gutterStart(44);
     await harness.settle();
     expect(harness.editor.getZoom() * 816).toBeLessThanOrEqual(800 - 88);
     const fitted = harness.editor.getZoom();
 
-    // An open navigation pane adds its shift to the start padding; it does not shrink the page.
-    harness.reserveStart(44 + 304);
-    harness.navShift(304);
+    harness.reserveStart(44 + 284);
+    harness.navShift(284);
     await harness.settle();
-    expect(harness.editor.getZoom()).toBe(fitted);
+    const beside = harness.editor.getZoom();
+    expect(beside).toBeLessThan(fitted);
+    expect(beside * 816).toBeLessThanOrEqual(800 - 88 - 284);
+
+    // 'float' gives the same page beside the navigation pane: the setting does not touch it.
+    harness.editor.setReviewPane({ overflow: 'float' });
+    await harness.settle();
+    expect(harness.editor.getZoom()).toBe(beside);
+  });
+
+  // With both panes open, the page keeps one size whether the review pane is open or
+  // closed. The shift is solved against the start reservation beside it (the page clearance
+  // while open, the strip while closed), so the fit reads the two together.
+  test("overflow: 'scroll' keeps one page size beside the navigation pane as the review pane toggles", async () => {
+    const harness = mount({ modules: [SCROLLING_REVIEW] });
+    harness.strip(88);
+    harness.resize(900);
+    harness.pane(false);
+    harness.reserve(44);
+    harness.navShift(284);
+    harness.gutterStart(44);
+    harness.reserveStart(284 + 44);
+    await harness.settle();
+    const closed = harness.editor.getZoom();
+    expect(closed * 816).toBeLessThanOrEqual(900 - 88 - 284);
+
+    harness.pane(true);
+    harness.reserve(316);
+    harness.navShift(304);
+    harness.gutterStart(24);
+    harness.reserveStart(304 + 24);
+    await harness.settle();
+    expect(harness.editor.getZoom()).toBe(closed);
   });
 
   // The point of 'scroll': the page has ONE size. Opening the pane swaps the strip for the

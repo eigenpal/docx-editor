@@ -16,6 +16,7 @@ import { ZOOM_MAX, ZOOM_MIN } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../../lib/units';
 import { ReviewRailContext } from '../context';
 import { useEditorState } from '../useEditorState';
+import { useReviewGutter } from '../review-gutter';
 import {
   NAVIGATION_PANE_WIDTH,
   navigationPaneReservation,
@@ -149,6 +150,10 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
   const [viewportWidth, setViewportWidth] = useState(0);
   const [inlineEndReservation, setInlineEndReservation] = useState(0);
   const [inlineStartReservation, setInlineStartReservation] = useState(0);
+  // The review gutter the viewport pads by. A dependency of the measurement below: the
+  // gutter settles AFTER the pane state it follows, so a measurement keyed on the pane state
+  // alone read the previous gutter and left the page off its reservation by the difference.
+  const reviewGutter = useReviewGutter();
 
   // `open` is a dependency as well as `viewport`: a window resized while the pane was
   // closed leaves no observation to react to (a hidden or throttled tab delivers no
@@ -177,7 +182,7 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
     const observer = new ResizeObserver(measure);
     observer.observe(viewport);
     return () => observer.disconnect();
-  }, [viewport, open, reviewPaneOpen, rail?.mounted]);
+  }, [viewport, open, reviewPaneOpen, rail?.mounted, reviewGutter]);
 
   // The snapshot reports `pageSetup` as null on some ticks even with a document loaded,
   // and a shift derived from one of those would collapse to zero and snap the page

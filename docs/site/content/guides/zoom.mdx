@@ -150,7 +150,7 @@ The review pane needs a 316-pixel card column beside the page. A fit with `maxZo
 
 To let the fit make room for the column instead, set the review pane's `overflow` setting to `'shrinkPage'`. While the pane is open, the page can shrink to `minZoom` so that the full column fits. The pane changes to the marker strip only if the column does not fit at `minZoom` either. If you omit `minZoom`, the limit is 10%, so set a `minZoom` that keeps the text readable, such as `0.35`. When the pane closes, the page returns to its usual fit. A fixed zoom ignores this setting.
 
-To keep the page at its size and scroll sideways to the cards instead, set `overflow` to `'scroll'`.
+To keep the page at its size and scroll sideways to the cards instead, set `overflow` to `'scroll'`. The document and the card column then scroll together. The `overflow` setting doesn't change the navigation pane: it stays docked at its side and takes its room beside the page in every mode.
 
 The following example sets the starting value through the review module and the zoom mode through the editor:
 

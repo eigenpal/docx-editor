@@ -34,8 +34,8 @@ export interface ZoomLaneHost {
   /** Move the state tick, so `snapshot()` re-derives. */
   bump(): void;
   emitSelectionChange(): void;
-  /** Whether side panes scroll beside the page instead of shrinking a capped fit. */
-  panesScroll?(): boolean;
+  /** Whether the review pane scrolls beside the page instead of shrinking a capped fit (`overflow: 'scroll'`). */
+  reviewPaneScrolls?(): boolean;
 }
 
 /** The zoom half of `createDocxEditor`. */
@@ -136,7 +136,7 @@ export function createZoomLane(config: ZoomLaneConfig, host: ZoomLaneHost): Zoom
     applyZoom: (next) => {
       applyZoom(next);
     },
-    panesScroll: () => host.panesScroll?.() === true,
+    reviewPaneScrolls: () => host.reviewPaneScrolls?.() === true,
   });
 
   return {
