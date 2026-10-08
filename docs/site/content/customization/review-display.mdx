@@ -207,7 +207,7 @@ Call `setReviewPaneOptions` on the editor instance with only the settings that c
 
 `setReviewPaneOptions` returns an `ExecResult`:
 
-- `{ ok: true, changed: true }` when a setting changed, and `{ ok: true, changed: false }` when every value was already in force.
+- `{ ok: true, changed: false }` when the editor accepts the settings. `changed` answers for the document, and a display setting never changes the document. To detect a settings change, compare the `snapshot().reviewPane` reference, which changes only when a setting changes.
 - `{ ok: false, code: 'invalidArgs' }` for an unknown setting or value.
 - `{ ok: false, code: 'unsupported' }` when no review module is registered.
 
