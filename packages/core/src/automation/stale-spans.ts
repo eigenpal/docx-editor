@@ -17,6 +17,9 @@
 // The history is kept per paragraph, not per revision: a paragraph whose text does not change
 // keeps one record for as long as it stays unchanged, so a long run of writes elsewhere never
 // expires it. Superseded records go first, oldest first, once the total text exceeds a budget.
+// Current records have a budget of their own: past it, the keys read least recently leave
+// first. Those are mostly keys that are never read again, such as deleted paragraphs and the
+// `between` and `next` keys around them, so a long session does not grow without bound.
 
 import type { AutomationHandleTable } from './handles.ts';
 import type { AutomationPackageReads } from './reads.ts';
@@ -24,9 +27,15 @@ import { resolveParagraphHandle } from './spans.ts';
 
 /**
  * UTF-16 code units of SUPERSEDED paragraph text the host keeps for this check. The current
- * record of each paragraph does not count against it and never expires.
+ * record of each key does not count against it.
  */
 export const STALE_SPAN_TEXT_BUDGET = 4_000_000;
+
+/**
+ * UTF-16 code units of CURRENT records (key and text) the host keeps. Past it, the current
+ * records of the keys read least recently leave, and reads at them are no longer checkable.
+ */
+export const STALE_SPAN_CURRENT_TEXT_BUDGET = 16_000_000;
 
 /** Nesting a request or answer may use before the walk stops looking for endpoints. */
 const MAX_DEPTH = 12;
@@ -62,40 +71,67 @@ interface TextRecord {
  *
  * A key gets a new record only when its text changes. A read at a later revision with the same
  * text extends the current record. Superseded records leave in the order they were superseded,
- * once their total length exceeds `budget`; the current record of a key never leaves.
+ * once their total length exceeds `budget`. Current records leave, the key read least recently
+ * first, once their total length exceeds `currentBudget`.
  */
-export function createReadTexts(budget = STALE_SPAN_TEXT_BUDGET) {
+export function createReadTexts(
+  budget = STALE_SPAN_TEXT_BUDGET,
+  currentBudget = STALE_SPAN_CURRENT_TEXT_BUDGET
+) {
+  // Map order is read order: a key moves to the end each time it is recorded.
   const byKey = new Map<string, TextRecord[]>();
   const superseded: { readonly key: string; readonly record: TextRecord }[] = [];
   let supersededLength = 0;
+  let currentLength = 0;
+  const currentCost = (key: string, record: TextRecord) => key.length + record.text.length;
   return {
     record(revision: number, key: string, read: string): void {
       const records = byKey.get(key);
       const current = records?.at(-1);
+      if (records) {
+        byKey.delete(key);
+        byKey.set(key, records);
+      }
       if (current && current.text === read) {
         if (revision > current.to) current.to = revision;
         return;
       }
       const record: TextRecord = { from: revision, to: revision, text: read };
+      currentLength += currentCost(key, record);
       if (!records || !current) {
         byKey.set(key, [record]);
-        return;
+      } else {
+        records.push(record);
+        currentLength -= currentCost(key, current);
+        superseded.push({ key, record: current });
+        supersededLength += current.text.length;
+        while (supersededLength > budget && superseded.length > 0) {
+          const oldest = superseded.shift()!;
+          supersededLength -= oldest.record.text.length;
+          const list = byKey.get(oldest.key);
+          // Records of one key are superseded, and so leave, oldest first.
+          if (list?.[0] === oldest.record) list.shift();
+        }
       }
-      records.push(record);
-      superseded.push({ key, record: current });
-      supersededLength += current.text.length;
-      while (supersededLength > budget && superseded.length > 0) {
-        const oldest = superseded.shift()!;
-        supersededLength -= oldest.record.text.length;
-        const list = byKey.get(oldest.key);
-        // Records of one key are superseded, and so leave, oldest first.
-        if (list?.[0] === oldest.record) list.shift();
+      // The key just recorded is the most recent, so it is the last to leave.
+      while (currentLength > currentBudget && byKey.size > 1) {
+        const [oldestKey, list] = byKey.entries().next().value!;
+        byKey.delete(oldestKey);
+        const last = list.at(-1);
+        if (last) currentLength -= currentCost(oldestKey, last);
+        // Its superseded records stay counted until they leave in order; `list` is gone, so
+        // they are no longer reachable.
       }
     },
     clear(): void {
       byKey.clear();
       superseded.length = 0;
       supersededLength = 0;
+      currentLength = 0;
+    },
+    /** How many keys hold records. */
+    size(): number {
+      return byKey.size;
     },
     /** The text `key` held at `revision`, or undefined when no kept record covers it. */
     at(revision: number, key: string): string | undefined {
@@ -265,7 +301,7 @@ export function staleEndpointDetail(
       return 'invalid-read-revision';
     // A revision the host has not reached yet was never read.
     if (endpoint.readAt > revision)
-      return `read-at ${String(endpoint.readAt)} is no longer checkable`;
+      return `read-at ${String(endpoint.readAt)} was never read: the document is at revision ${String(revision)}`;
     const paragraph = paragraphOf(endpoint, handles, reads);
     if (!paragraph) continue;
     const before = texts.at(endpoint.readAt, paragraph.id);

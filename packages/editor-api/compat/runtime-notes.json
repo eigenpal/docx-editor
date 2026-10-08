@@ -713,6 +713,22 @@
   },
   "Word.Range#expandTo": {
     "status": "unsupported",
-    "notes": "Not implemented. A range that spans paragraphs, such as body.getRange('Whole'), also refuses with StaleDocument when a paragraph between its ends changed, or one was inserted or removed there."
+    "notes": "Not implemented. Word.Body#getRange describes the StaleDocument rule for a range that spans paragraphs."
+  },
+  "Word.Range#search": {
+    "status": "partial",
+    "notes": "Searches within the range's paragraph identity and offsets. A range whose text moved since it was read refuses with StaleDocument. Each result range follows the same rule."
+  },
+  "Word.Range#clear": {
+    "status": "partial",
+    "notes": "Clears the range's content through its paragraph identity and offsets. A range whose text moved since it was read refuses with StaleDocument."
+  },
+  "Word.Body#getRange": {
+    "status": "partial",
+    "notes": "Answers a range through paragraph identities and offsets. A range whose text moved since it was read refuses with StaleDocument. A range that spans paragraphs, such as body.getRange('Whole'), also refuses when its first paragraph changed, when a paragraph between its ends changed, or when a paragraph was inserted or removed there. Get the range again after such an edit."
+  },
+  "Word.Paragraph#getRange": {
+    "status": "partial",
+    "notes": "Answers a range through the paragraph identity and offsets. The range refuses with StaleDocument after an edit before its end in that paragraph. Get the range again after such an edit."
   }
 }

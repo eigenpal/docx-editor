@@ -16,7 +16,6 @@ import { WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import type { OoxmlNode, OoxmlParagraphNode } from '../package/ooxml-tree.ts';
 import { propertyContainer } from './direct-properties.ts';
 import { segmentsOf } from './tree-op-segments.ts';
-import { attributeValueOf } from './tree-op-nodes.ts';
 
 /** A `w:rStyle` naming `styleId`, the first child a `w:rPr` may hold (CT_RPr). */
 export function characterStyleElement(nextId: () => string, styleId: string): OoxmlNode {
@@ -130,9 +129,27 @@ export const NOT_INHERITED: ReadonlySet<string> = new Set([
   'webHidden',
 ]);
 
-const valOf = (node: OoxmlNode) => attributeValueOf(node, 'val', WML_NAMESPACE_URI);
+/**
+ * One element as a canonical key: its namespace and name, every attribute (namespace, name,
+ * value, sorted), and its element children the same way, at every depth. Two properties agree
+ * only when all of it agrees: `w:rFonts` has no `w:val`, and `w:color w:themeColor`,
+ * `w:u w:color`, `w:lang w:eastAsia`, and `w:shd w:fill` differ beside an equal `w:val`.
+ */
+function elementKey(node: OoxmlNode): string {
+  if (node.kind === 'textValue') return '';
+  const attributes = node.attributes
+    .map((attribute) =>
+      JSON.stringify([attribute.namespaceUri, attribute.localName, attribute.value])
+    )
+    .sort();
+  const children = node.children
+    .filter((child) => child.kind !== 'textValue')
+    .map(elementKey)
+    .sort();
+  return JSON.stringify([node.namespaceUri, node.localName, attributes, children]);
+}
 
-/** A run-properties element's inherited children, as `name=value` keys. */
+/** A run-properties element's inherited children, as canonical keys. */
 function inheritedKeys(rPr: OoxmlNode): string[] {
   if (rPr.kind === 'textValue') return [];
   return rPr.children
@@ -142,13 +159,13 @@ function inheritedKeys(rPr: OoxmlNode): string[] {
         child.namespaceUri === WML_NAMESPACE_URI &&
         !NOT_INHERITED.has(child.localName)
     )
-    .map((child) => `${(child as { localName: string }).localName}=${valOf(child) ?? ''}`)
+    .map(elementKey)
     .sort();
 }
 
 /**
  * The last run's `w:rPr`, without what new text never inherits, when it states exactly what
- * the paragraph mark states: the same properties with the same values, nothing more or less.
+ * the paragraph mark states: the same properties with the same attributes, nothing more or less.
  */
 function agreeingEmptyRunProperties(
   paragraph: OoxmlParagraphNode,
@@ -165,7 +182,7 @@ function agreeingEmptyRunProperties(
       child.localName === 'rPr'
   );
   if (!rPr || rPr.kind === 'textValue') return undefined;
-  if (inheritedKeys(rPr).join('|') !== inheritedKeys(mark).join('|')) return undefined;
+  if (JSON.stringify(inheritedKeys(rPr)) !== JSON.stringify(inheritedKeys(mark))) return undefined;
   const kept = rPr.children.filter(
     (child) => child.kind === 'textValue' || !NOT_INHERITED.has(child.localName)
   );

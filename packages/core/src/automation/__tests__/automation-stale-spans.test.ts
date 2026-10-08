@@ -134,7 +134,12 @@ describe('stamped endpoints', () => {
     const { host, first } = fixture();
     const alpha = find(host, first, 'alpha');
     const unknown = { ...alpha, start: { ...alpha.start, readAt: 1e9 } };
-    expect(refusal(replace(host, unknown, 'A'))).toBe('stale-revision');
+    const response = replace(host, unknown, 'A');
+    expect(refusal(response)).toBe('stale-revision');
+    const result = response.results.find((entry) => entry.status === 'error');
+    const detail = result?.status === 'error' ? (result.error.detail ?? '') : '';
+    expect(detail).toContain('never read');
+    expect(detail).not.toContain('no longer checkable');
   });
 });
 
@@ -214,5 +219,29 @@ describe('the per-paragraph history', () => {
     expect(texts.at(1, 'p')).toBe('a');
     expect(texts.at(3, 'p')).toBeUndefined();
     expect(texts.at(5, 'p')).toBe('b');
+  });
+
+  test('current records of keys no longer read leave past their own budget', () => {
+    // Deleted paragraphs, and the keys between and after them, are never read again.
+    const texts = createReadTexts(10, 100);
+    for (let index = 0; index < 1000; index += 1)
+      texts.record(index, `gone-${String(index)}`, 'text of a paragraph');
+    texts.record(1000, 'live', 'read last');
+    expect(texts.size()).toBeLessThanOrEqual(100);
+    // The most recently read keys stay.
+    expect(texts.at(1000, 'live')).toBe('read last');
+    expect(texts.at(999, 'gone-999')).toBe('text of a paragraph');
+    // The oldest current records left, so reads at them are not checkable.
+    expect(texts.at(0, 'gone-0')).toBeUndefined();
+  });
+
+  test('reading a key again keeps it among the most recently read', () => {
+    const texts = createReadTexts(10, 60);
+    texts.record(1, 'kept', 'unchanged');
+    for (let index = 0; index < 100; index += 1) {
+      texts.record(index + 2, `other-${String(index)}`, 'x');
+      texts.record(index + 2, 'kept', 'unchanged');
+    }
+    expect(texts.at(1, 'kept')).toBe('unchanged');
   });
 });

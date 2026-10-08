@@ -180,7 +180,7 @@ export class DocxEditorError extends Error {
   readonly target?: string;
   /**
    * For `StaleDocument`: the revision the context had last read at, when the refused batch
-   * wrote. Absent for a batch that only read.
+   * wrote. Absent for a batch that only read, on every host.
    *
    * When it equals {@link DocxEditorError.actualRevision}, the document is where this context
    * last saw it, and a range it holds is out of date: an edit after the range was read (often
