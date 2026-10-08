@@ -253,6 +253,36 @@ describe('story blocks wrap around a floating table', () => {
     expect(above).toContain(14400);
   });
 
+  test('footer text around a page-framed table always stays on the sheet', () => {
+    // Text moved below the table rises above it instead when it would pass the sheet bottom.
+    for (const storyDistance of [10, 36]) {
+      for (const extra of [0, 1, 2]) {
+        for (let y = 14000; y <= 16000; y += 100) {
+          const tblpPr = `<w:tblpPr w:vertAnchor="page" w:horzAnchor="margin" w:tblpXSpec="center" w:tblpY="${y}"/>`;
+          const lead = Array.from({ length: extra }, () => '<w:p><w:r><w:t>Line</w:t></w:r></w:p>');
+          const { story, table: placed } = header(wide(tblpPr) + lead.join(''), {
+            storyDistance,
+            footer: true,
+            compatibilityMode: 15,
+          });
+          const footerTop = 792 - storyDistance - story.flowHeight;
+          const tableTop = footerTop + placed.box.y;
+          const tableBottom = tableTop + placed.box.height;
+          for (const fragment of story.fragments) {
+            if (fragment.kind !== 'paragraph') continue;
+            for (const line of fragment.lines) {
+              const top = footerTop + line.box.y;
+              const bottom = top + line.box.height;
+              expect(top).toBeGreaterThanOrEqual(0);
+              expect(bottom).toBeLessThanOrEqual(792 + 0.01);
+              expect(bottom <= tableTop + 0.01 || top >= tableBottom - 0.01).toBe(true);
+            }
+          }
+        }
+      }
+    }
+  });
+
   test('compatibility mode 14, or no mode, runs header text under the table', () => {
     for (const compatibilityMode of [14, undefined]) {
       const { story, title } = header(wide(), { storyTop: 36, compatibilityMode });

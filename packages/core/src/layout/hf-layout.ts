@@ -672,23 +672,32 @@ export function layoutHeaderFooterStory(
         );
       let tables = placeTables();
       // A page-framed footer table keeps its page position, so the footer's top edge is fixed
-      // first: at its natural top, or raised so the text ends where a table past the bottom
-      // edge starts. Text the table pushes down then runs past the bottom edge.
+      // first: at its natural top, or raised so the text ends where the table starts. Text
+      // the table pushes down may run past the footer's bottom edge, never past the sheet's.
       const framedFooter = footerBottom !== undefined && tables.pageFramed;
-      if (framedFooter) {
-        const lift = footerLiftAboveTables(tables, anchors.bottom);
-        if (lift > 0) {
-          storyTop -= lift;
-          tables = placeTables();
-        }
-      }
+      const liftAbove = (pageBottom: number) => {
+        const lift = footerLiftAboveTables(tables, anchors.bottom, pageBottom);
+        if (lift <= 0) return false;
+        storyTop -= lift;
+        tables = placeTables();
+        return true;
+      };
+      if (framedFooter) liftAbove(floatingGeometry.pageHeight - storyTop);
       // The placement reads only the unwrapped flow, so one wrapped pass settles it. Placing
       // again after that pass publishes the drawings inside the tables once.
-      if (tables.zones.length) {
+      const wrapTables = () => {
         tableZones = tables.zones;
         flowStory(flowBlocks, 0);
         tables = placeTables();
-      }
+      };
+      if (tables.zones.length) wrapTables();
+      // Wrapped text longer than its natural height can still pass the sheet: rise once more.
+      if (
+        framedFooter &&
+        storyTop + flow.bottom > floatingGeometry.pageHeight + 0.01 &&
+        liftAbove(Number.NEGATIVE_INFINITY)
+      )
+        wrapTables();
       flow = {
         blocks: [...flow.blocks, ...tables.tables],
         bottom: framedFooter ? footerBottom - storyTop : flow.bottom,

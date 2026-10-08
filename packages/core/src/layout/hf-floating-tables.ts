@@ -199,20 +199,24 @@ export function placeFloatingStoryTables(
 
 /**
  * How far a footer story rises above its natural top so that its text clears a page-framed
- * table that spans the story and reaches past the footer's bottom edge. The text then ends
- * where the table starts. A table that ends above that edge lifts nothing: the text after it
- * moves below it instead. `naturalHeight` is the footer's height before any wrapping.
+ * table that spans the story. The text then ends where the table starts. It rises when the
+ * table reaches past the footer's bottom edge, or when the text moved below the table would
+ * end past `pageBottom`, the sheet's bottom edge in story coordinates. Otherwise the text
+ * after the table moves below it. `naturalHeight` is the footer's height before wrapping.
  */
 export function footerLiftAboveTables(
   tables: PlacedFloatingStoryTables,
-  naturalHeight: number
+  naturalHeight: number,
+  pageBottom: number
 ): number {
   let lift = 0;
   for (const zone of tables.pageFramedZones) {
     if (zone.input.mode !== 'topAndBottom') continue;
     const top = zone.verticalBand.y;
     const bottom = top + zone.verticalBand.height;
-    if (top < naturalHeight && bottom > naturalHeight) lift = Math.max(lift, naturalHeight - top);
+    if (top >= naturalHeight || bottom <= 0) continue;
+    if (bottom > naturalHeight || bottom + naturalHeight > pageBottom)
+      lift = Math.max(lift, naturalHeight - top);
   }
   return lift;
 }
