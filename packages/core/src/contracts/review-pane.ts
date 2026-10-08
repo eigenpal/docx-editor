@@ -11,7 +11,9 @@
  * When the review pane opens by itself.
  *
  * - `'auto'`: the pane opens when a document with review items loads, and when a tracked
- *   change is made while it is closed.
+ *   change is made while it is closed, in both cases when the pane has items to list. With
+ *   `revisionsIn: 'balloons'` the pane lists comments only, so tracked changes alone do not
+ *   open it.
  * - `'manual'`: the pane stays closed until the host or the user opens it. Use it when the
  *   host shows review items its own way, such as in balloons or margin markers.
  *

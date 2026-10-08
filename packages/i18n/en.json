@@ -70,13 +70,13 @@
     "exportFailed": "Export failed: {message}",
     "exportMarkdownMissing": "Install @docx-editor.dev/docx-to-markdown and configure menu.exporters.markdown.",
     "exportPdfMissing": "Install @docx-editor.dev/docx-to-pdf on your Node.js server and configure menu.exporters.pdf.",
-    "exportingMarkdown": "Exporting Markdown…",
-    "exportingPdf": "Exporting PDF…",
+    "exportingMarkdown": "Exporting Markdown\u2026",
+    "exportingPdf": "Exporting PDF\u2026",
     "exportMarkdownFailed": "Markdown export failed",
     "exportPdfFailed": "PDF export failed",
     "exportDownloadHint": "Your download starts when the file is ready. You can continue editing while the export runs.",
     "exportContinueEditing": "Continue editing",
-    "printPreparing": "Preparing to print…",
+    "printPreparing": "Preparing to print\u2026",
     "printOpenPdf": "Open PDF",
     "printFailed": "Print failed",
     "printFailedMessage": "Printing failed: {message}",
@@ -166,7 +166,7 @@
     "removeSpaceBefore": "Remove space before paragraph",
     "addSpaceAfter": "Add space after paragraph",
     "removeSpaceAfter": "Remove space after paragraph",
-    "options": "Line spacing options…"
+    "options": "Line spacing options\u2026"
   },
   "styles": {
     "selectAriaLabel": "Select paragraph style",
@@ -281,13 +281,13 @@
       "applyToDocument": "Whole document",
       "applyToSection": "This section",
       "pageSizes": {
-        "letter": "Letter (8.5\" × 11\")",
-        "a4": "A4 (8.27\" × 11.69\")",
-        "legal": "Legal (8.5\" × 14\")",
-        "a3": "A3 (11.69\" × 16.54\")",
-        "a5": "A5 (5.83\" × 8.27\")",
-        "b5": "B5 (6.93\" × 9.84\")",
-        "executive": "Executive (7.25\" × 10.5\")"
+        "letter": "Letter (8.5\" \u00d7 11\")",
+        "a4": "A4 (8.27\" \u00d7 11.69\")",
+        "legal": "Legal (8.5\" \u00d7 14\")",
+        "a3": "A3 (11.69\" \u00d7 16.54\")",
+        "a5": "A5 (5.83\" \u00d7 8.27\")",
+        "b5": "B5 (6.93\" \u00d7 9.84\")",
+        "executive": "Executive (7.25\" \u00d7 10.5\")"
       }
     },
     "footnoteProperties": {
@@ -488,7 +488,7 @@
       "optionsAriaLabel": "Search options",
       "resultsAriaLabel": "Search results",
       "noResults": "No results",
-      "searching": "Searching…",
+      "searching": "Searching\u2026",
       "counter": "Result {current} of {total}",
       "counterTruncated": "Result {current} of {total}+",
       "total": "{total, plural, one {# result} other {# results}}",
@@ -695,7 +695,7 @@
       "lock": "Lock",
       "placeholder": "Placeholder",
       "bound": "Data bound",
-      "empty": "—",
+      "empty": "\u2014",
       "yes": "Yes",
       "no": "No",
       "boundNote": "This control is bound to external data. Editing is refused.",
@@ -866,7 +866,7 @@
     "apply": "OK",
     "cancel": "Cancel",
     "unavailable": "This field cannot be changed.",
-    "edit": "Edit field…",
+    "edit": "Edit field\u2026",
     "type": "Type",
     "regular": "Regular text",
     "number": "Number",
