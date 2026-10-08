@@ -28,10 +28,10 @@ const PICTURE_RUN = PICTURE_XML.slice(
   PICTURE_XML.indexOf('</w:drawing></w:r>') + '</w:drawing></w:r>'.length
 );
 
-const table = (tblpPr: string, cell = '<w:r><w:t>Ref</w:t></w:r>') =>
-  `<w:tbl><w:tblPr>${tblpPr}<w:tblW w:w="2000" w:type="dxa"/></w:tblPr>` +
-  '<w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>' +
-  '<w:tr><w:tc><w:tcPr><w:tcW w:w="2000" w:type="dxa"/></w:tcPr>' +
+const table = (tblpPr: string, cell = '<w:r><w:t>Ref</w:t></w:r>', width = 2000) =>
+  `<w:tbl><w:tblPr>${tblpPr}<w:tblW w:w="${width}" w:type="dxa"/></w:tblPr>` +
+  `<w:tblGrid><w:gridCol w:w="${width}"/></w:tblGrid>` +
+  `<w:tr><w:trPr><w:trHeight w:val="1200" w:hRule="exact"/></w:trPr><w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/></w:tcPr>` +
   `<w:p>${cell}</w:p></w:tc></w:tr></w:tbl>`;
 
 /** A header of `blocks` followed by a `Title` paragraph, laid out on {@link PAGE}. */
@@ -41,6 +41,7 @@ function header(
     readonly storyTop?: number;
     readonly storyDistance?: number;
     readonly footer?: boolean;
+    readonly compatibilityMode?: number;
   } = { storyTop: 36 }
 ) {
   const tag = options.footer ? 'ftr' : 'hdr';
@@ -67,7 +68,11 @@ function header(
     {
       ...PAGE,
       ...(options.storyDistance !== undefined ? { storyDistance: options.storyDistance } : {}),
-    }
+    },
+    undefined,
+    options.compatibilityMode === undefined
+      ? undefined
+      : { compatibilityMode: options.compatibilityMode }
   );
   const tables = story.fragments.filter((f) => f.kind === 'table') as TableFragmentRecord[];
   const title = story.fragments.find((f) => f.kind === 'paragraph') as ParagraphFragmentRecord;
@@ -150,6 +155,66 @@ describe('floating tables in a header', () => {
     const { table: placed, title } = header(table(PAGE_ANCHOR), {});
     expect(placed.box.y).toBe(0);
     expect(title.box.y).toBeGreaterThan(0);
+  });
+});
+
+// Later story blocks wrap around a floating table: beside it when it leaves room, below it
+// when it spans the story. The story's flow height, and so the body top, grows with them.
+describe('story blocks wrap around a floating table', () => {
+  const TEXT_ANCHOR =
+    '<w:tblpPr w:vertAnchor="text" w:horzAnchor="margin" w:tblpXSpec="center" w:tblpY="1"/>';
+  const wide = (tblpPr = TEXT_ANCHOR) => table(tblpPr, undefined, 9360);
+  const MODERN = { storyTop: 36, compatibilityMode: 15 };
+
+  test('a table as wide as the story moves the next paragraph below it', () => {
+    const { story, table: placed, title } = header(wide(), MODERN);
+    expect(placed.box.y).toBeCloseTo(0, 3);
+    expect(placed.box.height).toBeCloseTo(60, 0);
+    const bottom = placed.box.y + placed.box.height;
+    expect(title.lines[0]!.box.y).toBeGreaterThanOrEqual(bottom - 0.01);
+    expect(story.flowHeight).toBeGreaterThanOrEqual(bottom + title.lines[0]!.box.height - 0.01);
+  });
+
+  test('a narrow table leaves the paragraph beside it and the height unchanged', () => {
+    const narrow =
+      '<w:tblpPr w:vertAnchor="text" w:horzAnchor="margin" w:tblpXSpec="right" w:tblpY="1"/>';
+    const { story, title } = header(table(narrow), MODERN);
+    expect(title.lines[0]!.box.y).toBe(0);
+    expect(story.flowHeight).toBeCloseTo(title.box.height, 3);
+  });
+
+  test('a table raised above its anchor does not move the paragraph before it', () => {
+    const raised = TEXT_ANCHOR.replace('w:tblpY="1"', 'w:tblpY="-199"');
+    const lead = '<w:p><w:r><w:t>Lead</w:t></w:r></w:p>';
+    const { story } = header(lead + wide(raised), MODERN);
+    const paragraphs = story.fragments.filter(
+      (fragment): fragment is ParagraphFragmentRecord => fragment.kind === 'paragraph'
+    );
+    const [first, second] = paragraphs.map((paragraph) => paragraph.lines[0]!.box.y);
+    expect(first).toBe(0);
+    const placed = story.fragments.find((fragment) => fragment.kind === 'table')!;
+    expect(placed.box.y).toBeLessThan(paragraphs[1]!.box.y);
+    expect(second).toBeGreaterThanOrEqual(placed.box.y + placed.box.height - 0.01);
+  });
+
+  test('a footer grows upward by the wrapped flow', () => {
+    const {
+      story,
+      table: placed,
+      title,
+    } = header(wide(), { storyDistance: 36, footer: true, compatibilityMode: 15 });
+    expect(title.lines[0]!.box.y).toBeGreaterThanOrEqual(placed.box.y + placed.box.height - 0.01);
+    expect(story.flowHeight).toBeGreaterThan(60);
+    // The table measures its text anchor from the footer's top edge, after the growth.
+    expect(placed.box.y).toBeCloseTo(0, 3);
+  });
+
+  test('compatibility mode 14, or no mode, runs header text under the table', () => {
+    for (const compatibilityMode of [14, undefined]) {
+      const { story, title } = header(wide(), { storyTop: 36, compatibilityMode });
+      expect(title.lines[0]!.box.y).toBe(0);
+      expect(story.flowHeight).toBeCloseTo(title.box.height, 3);
+    }
   });
 });
 

@@ -63,7 +63,12 @@ import type {
 import type { StyleCascadeTable } from './style-cascade.ts';
 import { storyBlocks } from './story-roots.ts';
 import { positionLegacyFooterPageFrame } from './legacy-footer-page-frame.ts';
-import { placeFloatingStoryTables, splitFloatingStoryTables } from './hf-floating-tables.ts';
+import {
+  MAX_FLOATING_TABLE_WRAP_PASSES,
+  placeFloatingStoryTables,
+  splitFloatingStoryTables,
+} from './hf-floating-tables.ts';
+import { withoutFloatingTableZones } from './table-float-overlap.ts';
 import { placeHeaderPageFrame, readHeaderPageFrame } from './header-page-frame.ts';
 
 /**
@@ -452,6 +457,8 @@ export function layoutHeaderFooterStory(
       : undefined;
 
     let exclusionZones: readonly ExclusionZone[] = Object.freeze([]);
+    // The zones of the story's own floating tables, which every flow pass wraps around.
+    let tableZones: readonly ExclusionZone[] = Object.freeze([]);
     let flow!: { readonly blocks: BlockFragmentRecord[]; readonly bottom: number };
     // A floating table needs the page geometry to find its anchor. Without it, it stays in flow.
     const floatingGeometry =
@@ -488,6 +495,7 @@ export function layoutHeaderFooterStory(
       ...(inputs?.projectionTokenForTable
         ? { projectionTokenForTable: inputs.projectionTokenForTable }
         : {}),
+      ...(tableZones.length > 0 ? { pageExclusionZones: () => exclusionZones } : {}),
     });
     // Before mode 15 Word runs header and footer text outside tables under their own logos;
     // the cells read it through `CellAnchorScope.anchorsWrapText`.
@@ -532,20 +540,21 @@ export function layoutHeaderFooterStory(
     });
 
     const flowStory = (source: typeof flowBlocks, firstLine: number): void => {
-      exclusionZones = Object.freeze([]);
+      exclusionZones = tableZones;
       if (inlineDrawingLayout) {
         let converged = false;
         for (let pass = 0; pass < MAX_DRAWING_EXCLUSION_REFLOW_PASSES; pass += 1) {
           pendingAnchoredDrawings.splice(0, pendingAnchoredDrawings.length);
           lineCounter = firstLine;
           flow = flowBlocksInBox(source, 0, Math.max(1, contentWidth), 0, 0, drawingDeps(collect));
-          const nextZones = collectExclusionZonesFromDrawings(
+          const drawingZones = collectExclusionZonesFromDrawings(
             pendingAnchoredDrawings,
             inlineDrawingLayout,
             0,
             contentWidth
           );
-          if (nextZones.length === 0) {
+          const nextZones = tableZones.length ? [...tableZones, ...drawingZones] : drawingZones;
+          if (drawingZones.length === 0) {
             converged = true;
             exclusionZones = nextZones;
             break;
@@ -630,19 +639,24 @@ export function layoutHeaderFooterStory(
     } else flowStory(flowBlocks, 0);
 
     if (floatingGeometry) {
-      // A footer's top edge depends on its own flow height, which the floating tables leave.
-      const storyTop =
-        effectiveCtx?.storyTop ??
-        (part.root.localName === 'ftr'
-          ? floatingGeometry.pageHeight - floatingGeometry.storyDistance! - flow.bottom
-          : floatingGeometry.storyDistance!);
-      const frames = { ...floatingGeometry, contentWidth, storyTop };
-      flow = {
-        blocks: placeFloatingStoryTables(
-          flow.blocks,
-          flow.bottom,
+      const anchors = flow;
+      const placeTables = () =>
+        placeFloatingStoryTables(
+          anchors.blocks,
+          anchors.bottom,
           floatingSplit.floating,
-          frames,
+          {
+            ...floatingGeometry,
+            contentWidth,
+            // A footer's top edge depends on its own flow height, which wrapping can grow.
+            storyTop:
+              effectiveCtx?.storyTop ??
+              (part.root.localName === 'ftr'
+                ? floatingGeometry.pageHeight - floatingGeometry.storyDistance! - flow.bottom
+                : floatingGeometry.storyDistance!),
+          },
+          anchorsWrapText,
+          // A table never wraps around its own zone, or another table's.
           (table, left, top, placed) =>
             flowBlocksInBox(
               [table],
@@ -650,11 +664,20 @@ export function layoutHeaderFooterStory(
               left + Math.max(1, contentWidth),
               top,
               0,
-              inlineDrawingLayout ? drawingDeps(placed ? collect : () => {}) : plainDeps()
+              withoutFloatingTableZones(
+                inlineDrawingLayout ? drawingDeps(placed ? collect : () => {}) : plainDeps()
+              )
             ).blocks
-        ),
-        bottom: flow.bottom,
-      };
+        );
+      let tables = placeTables();
+      // A footer page anchor moves with the footer's height, so wrap until the zones settle.
+      for (let pass = 0; pass < MAX_FLOATING_TABLE_WRAP_PASSES && tables.zones.length; pass++) {
+        if (exclusionLayoutToken(tables.zones) === exclusionLayoutToken(tableZones)) break;
+        tableZones = tables.zones;
+        flowStory(flowBlocks, 0);
+        tables = placeTables();
+      }
+      flow = { blocks: [...flow.blocks, ...tables.tables], bottom: flow.bottom };
     }
     flow = positionLegacyFooterPageFrame(
       part,

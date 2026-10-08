@@ -1,19 +1,26 @@
 // Floating (`w:tblpPr`) tables at the top level of a header or footer story.
 //
 // Such a table sits at its anchor position, outside the story's text flow: the blocks after
-// it start where the table would have started. In a letterhead, a reference table sits at its
-// `w:tblpX`/`w:tblpY` page position beside the address block, and the title paragraph after it
-// stays at the top of the header.
+// it start where the table would have started, and wrap around it as they do around a
+// floating body table. In a letterhead, a reference table sits at its `w:tblpX`/`w:tblpY`
+// page position beside the address block, and the title paragraph after it stays at the top
+// of the header. A table as wide as the story moves the blocks after it below it, so the
+// story, and the body under a header, grows with it.
 //
 // Only the top-level table floats. A table inside a cell keeps its `w:tblpPr` ignored, as in
 // the body (see `readTableStructure`).
 
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
+import type { ExclusionZone } from './drawing-exclusion.ts';
 import type { BlockFragmentRecord, TableFragmentRecord } from './semantic-records.ts';
 import type { TableAnchorFrames } from './semantic-table.ts';
+import { addFloatingTableExclusions } from './table-float-exclusion.ts';
 import { tableFloatOriginY, type TableVerticalAnchorFrames } from './table-float-position.ts';
 import { readTableFloatPosition, type TableFloatPosition } from './table-float-properties.ts';
 import { tableFloatOriginX } from './table-origin.ts';
+
+/** Flow passes that may wrap the story around its floating tables before placement stands. */
+export const MAX_FLOATING_TABLE_WRAP_PASSES = 4;
 
 export interface FloatingStoryTable {
   readonly table: OoxmlElement;
@@ -69,39 +76,92 @@ function fragmentBlockId(fragment: BlockFragmentRecord): string | undefined {
   return undefined;
 }
 
+/** Placed floating tables and the zones that later story blocks wrap around. */
+export interface PlacedFloatingStoryTables {
+  /** The table fragments, out of flow, in story coordinates. */
+  readonly tables: readonly BlockFragmentRecord[];
+  readonly zones: readonly ExclusionZone[];
+}
+
+/**
+ * The exclusion zone of one placed table. Blocks after the table wrap around it: beside it
+ * when it leaves room, below it when it spans the story. A table raised above the block it
+ * anchors to never moves the blocks before it, so the zone starts at that block's top.
+ */
+function storyTableZone(
+  table: TableFragmentRecord,
+  entry: FloatingStoryTable,
+  sourceOrder: number,
+  anchorTop: number,
+  contentWidth: number
+): ExclusionZone | undefined {
+  const anchorId = entry.nextBlockId ?? `table:${table.tableId}`;
+  const zone = addFloatingTableExclusions(
+    [
+      {
+        fragments: [
+          { ...table, floatingWrap: { anchorId, columnIndex: 0, float: entry.float, sourceOrder } },
+        ],
+      },
+    ],
+    new Map(),
+    { columnCount: 1, columnGapPt: 0, contentWidth }
+  ).get(0)?.[0];
+  if (!zone || zone.verticalBand.y >= anchorTop) return zone;
+  const bottom = zone.verticalBand.y + zone.verticalBand.height;
+  const bounds = zone.input.contentBounds;
+  if (bottom <= anchorTop) return undefined;
+  const top = Math.max(bounds.y, anchorTop);
+  return {
+    ...zone,
+    y: Math.max(zone.y, anchorTop),
+    verticalBand: { ...zone.verticalBand, y: anchorTop, height: bottom - anchorTop },
+    input: {
+      ...zone.input,
+      contentBounds: { ...bounds, y: top, height: Math.max(0, bounds.y + bounds.height - top) },
+      wrapDistances: { ...zone.input.wrapDistances, top: 0 },
+    },
+  };
+}
+
 /**
  * Place each floating table at its anchor position. `layoutAlone` lays one table out on its
  * own with its container's left edge at `left` and its top at `top`. The first call measures
- * it; the second, with `placed`, places it and may publish the drawings inside it. The fragments are out of flow, so they add nothing to the story's
- * flow height.
+ * it; the second, with `placed`, places it and may publish the drawings inside it.
+ *
+ * `anchorFragments` and `anchorBottom` are the story flow before any table zone applies: a
+ * `text` anchor measures from where the table stood in that flow, so wrapping later blocks
+ * around the table never moves the table itself. With `wrap`, each table returns a zone.
  */
 export function placeFloatingStoryTables(
-  flowFragments: readonly BlockFragmentRecord[],
-  flowBottom: number,
+  anchorFragments: readonly BlockFragmentRecord[],
+  anchorBottom: number,
   floating: readonly FloatingStoryTable[],
   frames: FloatingStoryTableFrames,
+  wrap: boolean,
   layoutAlone: (
     table: OoxmlElement,
     left: number,
     top: number,
     placed: boolean
   ) => readonly BlockFragmentRecord[]
-): BlockFragmentRecord[] {
-  const placed: BlockFragmentRecord[] = [...flowFragments];
+): PlacedFloatingStoryTables {
+  const tables: BlockFragmentRecord[] = [];
+  const zones: ExclusionZone[] = [];
   const horizontal: TableAnchorFrames = {
     text: { left: 0, width: frames.contentWidth },
     margin: { left: 0, width: frames.contentWidth },
     page: { left: -frames.marginLeft, width: frames.pageWidth },
   };
-  for (const entry of floating) {
+  for (const [index, entry] of floating.entries()) {
     const measured = layoutAlone(entry.table, 0, 0, false).find(
       (candidate): candidate is TableFragmentRecord => candidate.kind === 'table'
     );
     if (!measured) continue;
-    const next = flowFragments.find(
+    const next = anchorFragments.find(
       (candidate) => fragmentBlockId(candidate) === entry.nextBlockId
     );
-    const textTop = next ? next.box.y : flowBottom;
+    const textTop = next ? next.box.y : anchorBottom;
     const vertical: TableVerticalAnchorFrames = {
       text: { top: textTop, height: Math.max(0, frames.pageHeight - frames.storyTop - textTop) },
       margin: {
@@ -113,8 +173,12 @@ export function placeFloatingStoryTables(
     const x = tableFloatOriginX(entry.float, measured.box.width, horizontal);
     const y = tableFloatOriginY(entry.float, measured.box.height, vertical);
     // The alone layout already offset the table by its own indent or alignment.
-    for (const fragment of layoutAlone(entry.table, x - measured.box.x, y, true))
-      placed.push({ ...fragment, outOfFlow: true } as BlockFragmentRecord);
+    for (const fragment of layoutAlone(entry.table, x - measured.box.x, y, true)) {
+      tables.push({ ...fragment, outOfFlow: true } as BlockFragmentRecord);
+      if (!wrap || fragment.kind !== 'table' || fragment.tableId !== entry.table.id) continue;
+      const zone = storyTableZone(fragment, entry, index, textTop, frames.contentWidth);
+      if (zone) zones.push(zone);
+    }
   }
-  return placed;
+  return { tables, zones };
 }
