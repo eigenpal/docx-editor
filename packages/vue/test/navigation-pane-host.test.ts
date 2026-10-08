@@ -6,6 +6,7 @@ import './dom-setup.ts';
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
+import deCatalog from '../../i18n/de.json';
 import { resolve } from 'node:path';
 import { h, nextTick, ref } from 'vue';
 import { zipSync, strToU8 } from 'fflate';
@@ -136,6 +137,15 @@ async function ctrlF(target: Element, init: KeyboardEventInit = { ctrlKey: true 
 }
 
 const q = (root: ParentNode, selector: string) => root.querySelector(selector) as HTMLElement;
+
+/** A resolver over the German catalogue source, as a host passes it to Root. */
+function germanTranslate(key: string): string {
+  let node: unknown = deCatalog;
+  for (const part of key.split('.')) {
+    node = node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : null;
+  }
+  return typeof node === 'string' ? node : key;
+}
 
 describe('the pane in the documented composition', () => {
   test('sits in the scroll container as a sticky strip sized to the viewport', async () => {
@@ -331,6 +341,50 @@ describe('Ctrl/Cmd+F', () => {
   });
 });
 
+describe('the disc', () => {
+  test('on macOS in another language, names Cmd+F, never the translated Ctrl spelling', async () => {
+    Object.defineProperty(navigator, 'platform', { configurable: true, value: 'MacIntel' });
+    try {
+      const view = mountPane({}, { rootProps: { translate: germanTranslate } });
+      await flush();
+      const disc = q(view.container, '.docx-nav__toggle');
+      expect(disc.getAttribute('aria-label')).toBe(germanTranslate('navigation.openAriaLabel'));
+      expect(disc.getAttribute('title')).toBe(`${germanTranslate('navigation.openTitle')} (⌘+F)`);
+      expect(disc.getAttribute('title')).not.toContain('Strg');
+      expect(disc.getAttribute('aria-keyshortcuts')).toBe('Meta+F');
+    } finally {
+      delete (navigator as unknown as { platform?: string }).platform;
+    }
+  });
+
+  test('follows findShortcut and t when they change at runtime', async () => {
+    const findShortcut = ref(true);
+    const prefix = ref('');
+    const view = mountEditorTree(
+      () => [],
+      SOURCE,
+      () => [
+        h(DocxEditorNavigation, {
+          findShortcut: findShortcut.value,
+          ...(prefix.value ? { t: (key: string) => `${prefix.value}${key}` } : {}),
+        }),
+      ]
+    );
+    mounted.push(view);
+    await flush();
+    const disc = () => q(view.container, '.docx-nav__toggle');
+    expect(disc().getAttribute('aria-keyshortcuts')).toBe('Control+F');
+    expect(disc().getAttribute('title')).toBe('Navigation (Ctrl+F)');
+    findShortcut.value = false;
+    await flush();
+    expect(disc().hasAttribute('aria-keyshortcuts')).toBe(false);
+    expect(disc().getAttribute('title')).toBe('Navigation');
+    prefix.value = 'x:';
+    await flush();
+    expect(disc().getAttribute('aria-label')).toBe('x:navigation.openAriaLabel');
+  });
+});
+
 describe('focus', () => {
   test('the disc moves focus into Headings, and the close arrow returns it to the disc', async () => {
     const view = mountPane();
@@ -365,6 +419,36 @@ describe('focus', () => {
 });
 
 describe('focus return without scrolling', () => {
+  test('a host that unmounts the pane on close still gets focus back', async () => {
+    const shown = ref(true);
+    const view = mountEditorTree(
+      () => [],
+      SOURCE,
+      () =>
+        shown.value
+          ? [
+              h(DocxEditorNavigation, {
+                onOpenChange: (next: boolean) => {
+                  if (!next) shown.value = false;
+                },
+              }),
+            ]
+          : []
+    );
+    mounted.push(view);
+    await flush();
+    const button = q(view.container, '.docx-nav__toggle');
+    button.focus();
+    button.click();
+    await flush();
+    q(view.container, '.docx-nav__close').click();
+    await flush();
+    expect(view.container.querySelector('.docx-nav')).toBeNull();
+    // The disc went with the pane: focus returns to the document, not to the body.
+    expect(document.activeElement).not.toBe(document.body);
+    expect(view.container.contains(document.activeElement)).toBe(true);
+  });
+
   test('Ctrl+F from the pages, then Escape, refocuses the pages without scrolling', async () => {
     const view = mountPane();
     await flush();

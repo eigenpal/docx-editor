@@ -20,7 +20,7 @@ import { selectDocumentAbsent } from '../document-presence';
 import { useEditorState } from '../useEditorState';
 import { usePlatformShortcut } from '../usePlatformShortcut';
 import { useNavigationContext } from './navigation-context';
-import { findKeyShortcuts } from './navigation-keys';
+import { findKeyShortcuts, findShortcutTitle } from './navigation-keys';
 // Aliased: this module also EXPORTS a component called `NavigationTab`, and the two
 // declarations would collide in the generated .d.ts.
 import type { NavigationTab as NavigationTabId } from './useNavigationPane';
@@ -470,8 +470,11 @@ export function NavigationToggle({
   const shortcut = usePlatformShortcut();
   // Names the Find shortcut, the one way to open the pane besides this disc, only while it
   // is bound.
-  const keyShortcuts = findShortcut ? findKeyShortcuts(shortcut('Ctrl+F')) : undefined;
-  const title = findShortcut ? shortcut(t('navigation.openTitle')) : t('navigation.title');
+  const label = shortcut('Ctrl+F');
+  const keyShortcuts = findShortcut ? findKeyShortcuts(label) : undefined;
+  const title = findShortcut
+    ? findShortcutTitle(t('navigation.openTitle'), label)
+    : t('navigation.openTitle');
   return (
     <button
       type="button"

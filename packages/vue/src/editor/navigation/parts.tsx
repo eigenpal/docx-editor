@@ -12,8 +12,8 @@ import { MaterialSymbol } from '../../components/ui/Icons';
 import { selectDocumentAbsent } from '../document-presence';
 import { useEditorState } from '../useEditorState';
 import { usePlatformShortcut } from '../usePlatformShortcut';
-import { useNavigationContext } from './navigation-context';
-import { findKeyShortcuts } from './navigation-keys';
+import { useLiveNavigationContext, useNavigationContext } from './navigation-context';
+import { findKeyShortcuts, findShortcutTitle } from './navigation-keys';
 import type { NavigationTab as NavigationTabId } from './useNavigationPane';
 
 import type { DocxEditorChildren } from '../../docx-editor-children';
@@ -453,24 +453,34 @@ export const NavigationToggle = defineComponent({
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props, { slots }) {
-    const { pane, intents, findShortcut, t } = useNavigationContext('Toggle');
+    // Read in render, not destructured here: `t` and `findShortcut` are pane props that a
+    // host can change while the disc stays mounted.
+    const context = useLiveNavigationContext('Toggle');
     const shortcut = usePlatformShortcut();
-    return () => (
-      <button
-        type="button"
-        class={cx('docx-nav__toggle', props.className)}
-        style={props.style}
-        aria-label={t('navigation.openAriaLabel')}
-        aria-expanded={pane.open.value}
-        // Names the Find shortcut, the one way to open the pane besides this disc, only while
-        // it is bound.
-        aria-keyshortcuts={findShortcut ? findKeyShortcuts(shortcut('Ctrl+F')) : undefined}
-        title={findShortcut ? shortcut(t('navigation.openTitle')) : t('navigation.title')}
-        onMousedown={(event) => event.preventDefault()}
-        onClick={intents.toggle}
-      >
-        {slots.default?.() ?? <MaterialSymbol name="toc" size={20} />}
-      </button>
-    );
+    return () => {
+      const { pane, intents, findShortcut, t } = context;
+      const label = shortcut('Ctrl+F');
+      return (
+        <button
+          type="button"
+          class={cx('docx-nav__toggle', props.className)}
+          style={props.style}
+          aria-label={t('navigation.openAriaLabel')}
+          aria-expanded={pane.open.value}
+          // Names the Find shortcut, the one way to open the pane besides this disc, only
+          // while it is bound.
+          aria-keyshortcuts={findShortcut ? findKeyShortcuts(label) : undefined}
+          title={
+            findShortcut
+              ? findShortcutTitle(t('navigation.openTitle'), label)
+              : t('navigation.openTitle')
+          }
+          onMousedown={(event) => event.preventDefault()}
+          onClick={intents.toggle}
+        >
+          {slots.default?.() ?? <MaterialSymbol name="toc" size={20} />}
+        </button>
+      );
+    };
   },
 });

@@ -52,7 +52,7 @@ export function useNavigationFocus(
     opener = null;
     const disc = rootRef.value?.querySelector<HTMLElement>('.docx-nav__toggle') ?? null;
     const instance = editor.value;
-    returnFocus(back, disc, viewport.value, instance ? () => instance.focus() : null);
+    returnFocus(back, disc, instance ? () => instance.focus() : null);
   };
 
   // The flush after a request is the host's answer (see the header).
@@ -126,6 +126,9 @@ export function useNavigationFocus(
   onUnmounted(() => {
     listening?.removeEventListener('keydown', onDocumentKeyDown);
     listening = null;
+    // A host may answer a close by unmounting the pane in `onOpenChange(false)`; the
+    // unmount then answers the pending return of focus.
+    if (restoreRequest) restoreFocus();
   });
 
   // A pane inside the scroll container is sticky and sizes itself from these properties.

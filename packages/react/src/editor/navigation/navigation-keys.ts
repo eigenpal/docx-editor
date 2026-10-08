@@ -33,25 +33,31 @@ export function findKeyShortcuts(resolvedLabel: string): string {
 }
 
 /**
+ * The disc's tooltip: the pane's localized name, then the shortcut label resolved for this
+ * platform. Built here rather than written into the catalogue, because a translated
+ * modifier (German "Strg") is left alone by `platformShortcut` and would name a key that
+ * does not open Find on macOS.
+ */
+export function findShortcutTitle(name: string, resolvedLabel: string): string {
+  return `${name} (${resolvedLabel})`;
+}
+
+/**
  * Give focus back after the pane closes, without scrolling the document.
  *
- * An opener inside the viewport (the pages layer, most often, after Ctrl/Cmd+F from the
- * text) goes back through the editor, which restores the caret without scrolling: the
- * pages layer is the whole document tall, and a plain `focus()` scrolls to its top. Any
- * other opener, and the disc, take focus with `preventScroll`. With neither, the editor.
+ * An opener in the pages layer (after Ctrl/Cmd+F from the text) goes back through the
+ * editor, which restores the caret without scrolling: the pages layer is the whole document
+ * tall, and a plain `focus()` scrolls to its top. Any other opener, and the disc, take focus
+ * with `preventScroll`. With neither, the editor.
  */
 export function returnFocus(
   opener: HTMLElement | null,
   disc: HTMLElement | null,
-  viewport: Element | null,
   focusEditor: (() => void) | null
 ): void {
   if (opener?.isConnected) {
-    if (focusEditor && viewport && opener !== viewport && viewport.contains(opener)) {
-      focusEditor();
-    } else {
-      opener.focus({ preventScroll: true });
-    }
+    if (focusEditor && opener.closest('.docx-pages')) focusEditor();
+    else opener.focus({ preventScroll: true });
     return;
   }
   if (disc) disc.focus({ preventScroll: true });

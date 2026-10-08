@@ -673,7 +673,7 @@
       "noHeadings": "Aucun titre trouvé. Ajoutez des titres à votre document pour les voir ici."
     },
     "openAriaLabel": "Ouvrir la navigation",
-    "openTitle": "Navigation (Ctrl+F)",
+    "openTitle": "Navigation",
     "tabs": {
       "find": "Rechercher",
       "headings": "Titres"

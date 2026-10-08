@@ -69,8 +69,19 @@ export function useNavigationFocus(
     const back = opener.current;
     opener.current = null;
     const disc = rootRef.current?.querySelector<HTMLElement>('.docx-nav__toggle') ?? null;
-    returnFocus(back, disc, viewport, editor ? () => editor.focus() : null);
-  }, [editor, viewport]);
+    returnFocus(back, disc, editor ? () => editor.focus() : null);
+  }, [editor]);
+
+  // A host may answer a close by unmounting the pane in `onOpenChange(false)`. No render
+  // of this component follows, so the unmount answers the pending return of focus instead.
+  const restoreFocusRef = useRef(restoreFocus);
+  restoreFocusRef.current = restoreFocus;
+  useEffect(
+    () => () => {
+      if (restoreRequest.current) restoreFocusRef.current();
+    },
+    []
+  );
 
   const close = useCallback(() => {
     focusRequest.current = false;
