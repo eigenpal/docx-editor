@@ -537,14 +537,18 @@ describe('reviewItemReveal', () => {
     editor.destroy();
   });
 
-  test('setActiveReviewItem announces as the host, unless announce is false', () => {
+  test('setActiveReviewItem announces as the host only with announce: true', () => {
     const editor = mountEditor(ins(1) + ins(2));
     const keys = editor.getReviewItems().map((item) => item.key);
     const events = record(editor);
-    expect(editor.setActiveReviewItem(keys[1]!).ok).toBe(true);
-    expect(editor.setActiveReviewItem(keys[1]!).ok).toBe(true);
+    // The default stays silent, so a host call opens no balloon and no closed pane.
+    expect(editor.setActiveReviewItem(keys[0]!).ok).toBe(true);
     expect(editor.setActiveReviewItem(keys[0]!, { announce: false }).ok).toBe(true);
-    expect(editor.getReviewItems().find((item) => item.isActive)?.key).toBe(keys[0]);
+    expect(events).toEqual([]);
+    expect(editor.setActiveReviewItem(keys[1]!, { announce: true }).ok).toBe(true);
+    expect(editor.setActiveReviewItem(keys[1]!, { announce: true }).ok).toBe(true);
+    expect(editor.getReviewItems().find((item) => item.isActive)?.key).toBe(keys[1]);
+    expect(editor.getActiveReviewItem()).toBe(keys[1]);
     expect(events).toEqual([
       { key: keys[1]!, source: 'host' },
       { key: keys[1]!, source: 'host' },
@@ -563,7 +567,7 @@ describe('reviewItemReveal', () => {
       keys: [first!.key],
     });
     expect(result.ok).toBe(true);
-    expect(editor.getActivatedReviewKey()).not.toBe(first!.key);
+    expect(editor.getActiveReviewItem()).not.toBe(first!.key);
     expect(events).toEqual([]);
     editor.destroy();
   });

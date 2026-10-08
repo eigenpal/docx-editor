@@ -563,9 +563,6 @@ export type {
   RevisionMarkupMark,
   RevisionDeletionMark,
   RevisionChangedLinesMark,
-  RevisionsIn,
-  CommentMarkers,
-  PaneOverflow,
   ReviewDisplayMode,
 } from '@docx-editor.dev/core/editor';
 

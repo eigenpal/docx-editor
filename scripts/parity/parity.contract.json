@@ -132,6 +132,8 @@
         "ReviewPaneOpening",
         "ReviewPaneOptions",
         "ReviewPaneOverflow",
+        "RevisionsIn",
+        "CommentMarkers",
         "ReviewPartProps",
         "ReviewProps",
         "ResolvedReviewPane",

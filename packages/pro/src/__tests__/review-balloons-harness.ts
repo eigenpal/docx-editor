@@ -122,7 +122,7 @@ function press(element: Element): void {
   element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
 }
 
-/** `commentMarkers: 'avatar'` (default), then `'icon'`, both read live from the editor. */
+/** `commentMarkers: 'initials'` (default), then `'icon'`, both read live from the editor. */
 export async function checkCommentMarkers(
   container: HTMLElement,
   editor: DocxEditorInstance,
@@ -132,7 +132,7 @@ export async function checkCommentMarkers(
   const markers = all(container, '[data-testid="review-marker"][data-kind="comment"]');
   expect(markers).toHaveLength(2);
   const [open, closed] = markers as [HTMLElement, HTMLElement];
-  expect(open.dataset.marker).toBe('avatar');
+  expect(open.dataset.marker).toBe('initials');
   expect(q(open, '.docx-review__badge-initials')?.textContent).toBe('AL');
   expect(q(open, '[data-testid="review-badge-count"]')?.textContent).toBe('1');
   expect(open.getAttribute('aria-label')).toContain('Replies: 1');
@@ -146,13 +146,13 @@ export async function checkCommentMarkers(
   expect(insert?.hasAttribute('data-marker')).toBe(false);
   expect(q(insert!, '[data-testid="review-badge"]')).toBeNull();
 
-  await change(() => editor.setRevisionMarkup({ commentMarkers: 'icon' }));
+  await change(() => editor.setReviewPane({ commentMarkers: 'icon' }));
   for (const marker of all(container, '[data-testid="review-marker"]')) {
     expect(marker.hasAttribute('data-marker')).toBe(false);
     expect(q(marker, '[data-testid="review-badge"]')).toBeNull();
   }
-  expect(() => editor.setRevisionMarkup({ commentMarkers: 'bubble' as never })).toThrow(TypeError);
-  await change(() => editor.setRevisionMarkup({ commentMarkers: 'avatar' }));
+  expect(() => editor.setReviewPane({ commentMarkers: 'bubble' as never })).toThrow(TypeError);
+  await change(() => editor.setReviewPane({ commentMarkers: 'initials' }));
   await change(() => editor.exec({ type: 'toggleReviewPane' }));
 }
 
@@ -333,7 +333,7 @@ export async function checkStructuralCaret(
     .find((item) => item.kind === 'revision' && item.revisionKind === 'structural')!;
   expect(row).toBeDefined();
   await change(() => {
-    editor.setActiveReviewItem(row.key);
+    editor.setActiveReviewItem(row.key, { announce: true });
   });
   expect(q(balloon(container)!, '[data-testid="review-balloon-card"]')?.dataset.kind).toBe(
     'structural'
@@ -356,27 +356,37 @@ export async function checkRevealReopensBalloon(
     );
   await change(() => editor.exec({ type: 'navigateReviewChange', direction: 'next' }));
   expect(balloon(container)).not.toBeNull();
-  const key = editor.getActivatedReviewKey();
+  // Keyboard access: the balloon takes the focus, so Tab reaches Accept and Reject, and a
+  // live region reads out what opened.
+  const dialog = q(balloon(container)!, '[role="dialog"]');
+  expect(dialog).not.toBeNull();
+  expect(document.activeElement).toBe(dialog);
+  expect(q(container, '[data-testid="review-balloon-live"]')?.getAttribute('aria-live')).toBe(
+    'polite'
+  );
+  expect(q(container, '[data-testid="review-balloon-live"]')?.textContent).toContain(
+    'Ada Lovelace'
+  );
+  const key = editor.getActiveReviewItem();
   await change(escape);
   expect(balloon(container)).toBeNull();
   await change(() => editor.exec({ type: 'navigateReviewChange', direction: 'next' }));
-  expect(editor.getActivatedReviewKey()).toBe(key);
+  expect(editor.getActiveReviewItem()).toBe(key);
   expect(balloon(container)).not.toBeNull();
 
   const row = editor
     .getReviewItems({ placement: false })
     .find((item) => item.kind === 'revision' && item.revisionKind === 'structural')!;
   await change(escape);
+  // A host call announces nothing by default, so the closed balloon stays closed.
   await change(() => {
     editor.setActiveReviewItem(row.key);
   });
-  expect(balloon(container)).not.toBeNull();
-  // Opting out of the event keeps the closed balloon closed.
-  await change(escape);
-  await change(() => {
-    editor.setActiveReviewItem(row.key, { announce: false });
-  });
   expect(balloon(container)).toBeNull();
+  await change(() => {
+    editor.setActiveReviewItem(row.key, { announce: true });
+  });
+  expect(balloon(container)).not.toBeNull();
 }
 
 /** `revisionsIn: 'pane'`: Next Change opens a closed pane at the card it lands on. */
@@ -390,9 +400,9 @@ export async function checkRevealOpensPane(
   const insert = editor
     .getReviewItems({ placement: false })
     .find((item) => item.kind === 'revision' && item.revisionKind === 'insert')!;
-  // An activation that opts out of the event leaves the pane closed.
+  // A host activation announces nothing by default, so the pane stays closed.
   await change(() => {
-    editor.setActiveReviewItem(insert.key, { announce: false });
+    editor.setActiveReviewItem(insert.key);
   });
   expect(editor.isReviewPaneOpen()).toBe(false);
   // A caret move announces nothing either.
@@ -408,4 +418,79 @@ export async function checkRevealOpensPane(
   expect(
     all(container, '[data-testid="review-card"]').some((card) => card.dataset.kind === kind)
   ).toBe(true);
+
+  // With `opening: 'manual'`, neither Next Change nor an announced activation opens it.
+  await change(() => editor.setReviewPane({ opening: 'manual' }));
+  await change(() => editor.exec({ type: 'toggleReviewPane' }));
+  expect(editor.isReviewPaneOpen()).toBe(false);
+  await change(() => editor.exec({ type: 'navigateReviewChange', direction: 'next' }));
+  expect(editor.isReviewPaneOpen()).toBe(false);
+  await change(() => {
+    editor.setActiveReviewItem(insert.key, { announce: true });
+  });
+  expect(editor.isReviewPaneOpen()).toBe(false);
+  await change(() => editor.setReviewPane({ opening: 'auto' }));
+}
+
+/**
+ * `revisionsIn: 'balloons'`: an open balloon follows its change when a zoom change or an
+ * edit repaints the page, and stays inside the visible width of the scroll container.
+ * Geometry is stated here, because the test DOM does not lay anything out.
+ */
+export async function checkBalloonFollowsLayout(
+  container: HTMLElement,
+  editor: DocxEditorInstance,
+  change: Change
+): Promise<void> {
+  const geometry = { siteLeft: 100, scrollerWidth: 1200 };
+  const original = HTMLElement.prototype.getBoundingClientRect;
+  const box = (left: number, top: number, width: number, height: number) =>
+    ({ left, top, width, height, right: left + width, bottom: top + height }) as DOMRect;
+  HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+    if (this.dataset.revisionId === '1') return box(geometry.siteLeft, 40, 40, 16);
+    if (this.classList.contains('docx-editor__scroll-container')) {
+      return box(0, 0, geometry.scrollerWidth, 600);
+    }
+    return original.call(this);
+  };
+  const settle = async (run: () => void): Promise<void> => {
+    await change(run);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    await change(() => {});
+  };
+  const left = () => Number.parseFloat(balloon(container)!.style.left);
+  const width = () => Number.parseFloat(balloon(container)!.style.width);
+  try {
+    await settle(() => press(q(container, '[data-revision-kind="insert"][data-revision-id="1"]')!));
+    expect(balloon(container)).not.toBeNull();
+    expect(left()).toBe(100);
+    expect(width()).toBe(300);
+
+    // A zoom change repaints the page at a new scale.
+    geometry.siteLeft = 160;
+    await settle(() => editor.setZoom(1.25));
+    expect(left()).toBe(160);
+
+    // An edit before the change moves it along the line.
+    geometry.siteLeft = 220;
+    const paragraphId = editor.surface!.session.paragraphIds()[1]!;
+    await settle(() => {
+      editor.surface!.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 1 },
+      });
+      editor.surface!.type('Z');
+    });
+    expect(balloon(container)).not.toBeNull();
+    expect(left()).toBe(220);
+
+    // A narrow viewport narrows the balloon and keeps it inside the visible width.
+    geometry.scrollerWidth = 260;
+    geometry.siteLeft = 200;
+    await settle(() => editor.setZoom(1));
+    expect(width()).toBe(244);
+    expect(left()).toBe(8);
+  } finally {
+    HTMLElement.prototype.getBoundingClientRect = original;
+  }
 }

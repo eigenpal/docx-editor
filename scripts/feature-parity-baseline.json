@@ -275,7 +275,6 @@
       "propsAddedInVue": [
         "cells",
         "changedLines",
-        "commentMarkers",
         "deletions",
         "emits",
         "formatting",
@@ -284,9 +283,7 @@
         "movedTo",
         "name",
         "onRevisionMarkupChange",
-        "paneOverflow",
         "props",
-        "revisionsIn",
         "trackFormatting",
         "trackMoves"
       ],

@@ -1,6 +1,6 @@
 import { ref, shallowRef, watch, type ShallowRef } from 'vue';
 import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/editor';
-import { reviewPaneEntitledZoom } from '@docx-editor.dev/core/editor';
+import { REVIEW_MARKERS_GUTTER_PX, reviewPaneEntitledZoom } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../lib/units';
 import { useReviewRailRegistry } from './context';
 import { useEditorState } from './useEditorState';
@@ -14,10 +14,10 @@ import { scopeDispose } from './scope-dispose';
 export const REVIEW_PANE_GUTTER = 316;
 
 /** Reservation for markers and the add-comment button. @public */
-export const REVIEW_MARKERS_GUTTER = 44;
+export const REVIEW_MARKERS_GUTTER = REVIEW_MARKERS_GUTTER_PX;
 
-// The column is either fully reserved or not at all. Not affordable, `paneOverflow: 'float'`
-// mirrors the marker strip onto both edges so the page centres; `paneOverflow: 'scroll'`
+// The column is either fully reserved or not at all. Not affordable, `overflow: 'float'`
+// mirrors the marker strip onto both edges so the page centres; `overflow: 'scroll'`
 // keeps the full column and the page's start clearance, the page keeps one size whether
 // the pane is open or closed, and the viewport scrolls sideways.
 // A closed pane reserves the mirrored strip either way. The React twin documents the rule.
@@ -39,7 +39,7 @@ const BALANCED_STRIP: ReviewGutter = {
 const NO_GUTTER: ReviewGutter = { inlineStart: 0, inlineEnd: 0 };
 
 /**
- * `paneOverflow: 'scroll'` when the column does not fit: the full column at the end, and the
+ * `overflow: 'scroll'` when the column does not fit: the full column at the end, and the
  * page's clearance at the start, so the sheet does not sit flush against the viewport edge
  * while the viewport scrolls sideways to the cards.
  */
@@ -55,7 +55,7 @@ export interface ReviewGutterInput {
   readonly pageWidthPx: number;
   readonly inlineStartReservation?: number;
   readonly docked?: boolean;
-  /** `paneOverflow: 'scroll'`: the full column stands even when it does not fit. */
+  /** `overflow: 'scroll'`: the full column stands even when it does not fit. */
   readonly scroll?: boolean;
 }
 

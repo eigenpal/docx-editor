@@ -98,6 +98,13 @@ export interface UseReviewReturn {
   /** The item the caret is in, or null. */
   readonly activeKey: string | null;
   /**
+   * The item that {@link setActive}, Next Change, or Previous Change made active, while the
+   * caret stays in it. `null` when only a caret move made an item active. A paired
+   * replacement reports the key of its deletion. The same value as the editor's
+   * `getActiveReviewItem()`, kept current for you.
+   */
+  readonly explicitActiveKey: string | null;
+  /**
    * Card to document: puts the caret at the start of the item's range and scrolls to it. Nothing is selected; the open item draws its own highlight.
    *
    * Reports whether it landed, on the same terms as {@link accept}. False for an item whose
@@ -110,17 +117,17 @@ export interface UseReviewReturn {
    * for a host whose own list already drives it. Default is centred when it has to travel,
    * still when it is already on screen.
    *
-   * A call that lands fires the editor's `reviewItemReveal` event with `source: 'host'`, also
-   * when the item was already active, so the built-in balloon or card opens. Pass
-   * `{ announce: false }` when your own code must not hear that event, for example when your
-   * list follows the caret. A `null` key closes the card and fires no event.
+   * With `{ announce: true }`, a call that lands fires the editor's `reviewItemReveal` event
+   * with `source: 'host'`, also when the item was already active. The packaged review UI then
+   * opens the item's balloon, or opens a closed pane at its card when the pane's `opening`
+   * setting is `'auto'`. Without it, the call fires no event. A `null` key closes the card.
    *
    * @example
    * ```tsx
    * const { setActive } = useReview();
    * useEditorEvent('reviewItemReveal', ({ key, source }) => openMyCard(key, source));
-   * setActive(key); // fires 'reviewItemReveal'
-   * setActive(key, { announce: false }); // fires nothing
+   * setActive(key); // fires nothing
+   * setActive(key, { announce: true }); // fires 'reviewItemReveal'
    * ```
    */
   readonly setActive: (key: string | null, options?: ReviewActivationOptions) => boolean;
@@ -236,7 +243,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
     // switching to viewing must disable Resolve/Reopen in a host-composed card immediately.
     () =>
       editor
-        ? `${editor.getReviewRevision()}:${editor.getEditingMode()}:${reviewAuthorFilterKey(editor)}`
+        ? `${editor.getReviewRevision()}:${editor.getEditingMode()}:${reviewAuthorFilterKey(editor)}:${editor.getActiveReviewItem?.() ?? ''}`
         : 'none',
     () => 'none'
   );
@@ -258,6 +265,11 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
   );
 
   const activeKey = useMemo(() => items.find((entry) => entry.isActive)?.key ?? null, [items]);
+  const explicitActiveKey = useMemo(
+    () => (editor ? (editor.getActiveReviewItem?.() ?? null) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [editor, version]
+  );
 
   const setActive = useCallback(
     (key: string | null, options?: ReviewActivationOptions): boolean => {
@@ -369,6 +381,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
     () => ({
       items,
       activeKey,
+      explicitActiveKey,
       setActive,
       accept,
       reject,
@@ -394,6 +407,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
     [
       items,
       activeKey,
+      explicitActiveKey,
       setActive,
       accept,
       reject,

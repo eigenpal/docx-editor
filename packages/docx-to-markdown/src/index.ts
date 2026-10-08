@@ -75,9 +75,6 @@ export type {
   RevisionMarkupMark,
   RevisionDeletionMark,
   RevisionChangedLinesMark,
-  RevisionsIn,
-  CommentMarkers,
-  PaneOverflow,
   RevisionMarkupColor,
   RevisionMarkupNamedColor,
 } from '@docx-editor.dev/core/editor';

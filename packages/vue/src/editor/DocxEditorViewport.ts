@@ -102,7 +102,7 @@ export const DocxEditorViewport = defineComponent({
             ? {
                 '--docx-review-gutter': `${reviewGutter.value.inlineEnd}px`,
                 '--docx-review-gutter-start': `${reviewGutter.value.inlineStart}px`,
-                // What a closed pane reserves on both edges. Under `paneOverflow: 'scroll'`
+                // What a closed pane reserves on both edges. Under `overflow: 'scroll'`
                 // the fit subtracts this in both pane states, so the page keeps one size.
                 '--docx-review-strip': `${2 * REVIEW_MARKERS_GUTTER}px`,
               }

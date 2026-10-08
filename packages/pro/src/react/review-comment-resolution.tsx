@@ -87,7 +87,7 @@ interface ResolvedCommentCardProps extends ComponentPropsWithoutRef<'details'> {
   readonly label: string;
   readonly statusLabel: string;
   readonly entryKey: string;
-  /** Draw the toggle as the quiet check badge that `commentMarkers: 'avatar'` uses. */
+  /** Draw the toggle as the quiet check badge that `commentMarkers: 'initials'` uses. */
   readonly badge?: boolean;
   readonly onActivate: () => void;
   readonly onDeactivate: () => void;

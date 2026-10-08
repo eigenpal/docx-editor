@@ -206,27 +206,6 @@ const Impl = defineComponent({
           <p id={`${id}-${key}`}>{t(`${key}Note`)}</p>
         </div>
       );
-      const choice = (
-        key: 'revisionsIn' | 'commentMarkers' | 'paneOverflow',
-        available: readonly string[]
-      ) => (
-        <div data-docx-part="field" data-docx-field={key}>
-          <label>
-            <span class="docx-revision-markup-field-label">{t(key)}</span>
-            <select
-              value={v[key]}
-              disabled={!enabled.value}
-              onChange={(event) => set({ [key]: (event.target as HTMLSelectElement).value })}
-            >
-              {available.map((value) => (
-                <option key={value} value={value} selected={v[key] === value}>
-                  {t(`values.${value}`)}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      );
       const defaults = (
         <Fragment>
           <div data-docx-part="header">
@@ -267,12 +246,6 @@ const Impl = defineComponent({
               <legend>{t('formatting')}</legend>
               {checkbox('trackFormatting')}
               {style('formatting', marks)}
-            </fieldset>
-            <fieldset class="docx-revision-markup-layout">
-              <legend>{t('layout')}</legend>
-              {choice('revisionsIn', ['pane', 'balloons'])}
-              {choice('commentMarkers', ['avatar', 'icon'])}
-              {choice('paneOverflow', ['float', 'scroll'])}
             </fieldset>
             <div data-docx-part="error" role="alert">
               {refused.value ? translate('dialogs.paragraph.refused') : null}

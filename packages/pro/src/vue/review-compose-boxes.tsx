@@ -11,6 +11,7 @@ import {
   onBeforeUnmount,
   onMounted,
   ref,
+  watch,
   type ComputedRef,
   type PropType,
 } from 'vue';
@@ -389,16 +390,44 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
     'Reply'
   );
 
-  /** The change balloon's reply line. Open whenever the balloon is; not a rail part. */
+  /**
+   * The change balloon's reply line. Open whenever the balloon is; not a rail part.
+   *
+   * `orphaned` marks a change that was resolved, for example by another participant, while
+   * the reader was typing. The line keeps the text, posts nothing, and says why, so a draft
+   * is never dropped without notice. `onDraft` reports whether the line holds text.
+   */
   const ReviewBalloonReply = defineComponent({
     name: 'ReviewBalloonReply',
-    props: { entry: { type: Object as PropType<ReviewItemView>, required: true } },
+    props: {
+      entry: { type: Object as PropType<ReviewItemView>, required: true },
+      orphaned: { type: Boolean, default: false },
+      onDraft: { type: Function as PropType<(hasText: boolean) => void>, default: undefined },
+    },
     setup(props) {
       const rail = deps.useRail();
       const t = deps.useLabel();
       const fieldId = useReviewStableId('balloon-reply');
-      const state = useReplyDraft(() => props.entry);
-      return () => renderReplyLine(state, rail, t, fieldId);
+      const state = useReplyDraft(() => (props.orphaned ? null : props.entry));
+      watch(
+        () => state.draft.value.trim().length > 0,
+        (hasText) => props.onDraft?.(hasText),
+        { immediate: true }
+      );
+      return () => [
+        renderReplyLine(state, rail, t, fieldId),
+        props.orphaned
+          ? h(
+              'span',
+              {
+                class: 'docx-review__refused',
+                role: 'alert',
+                'data-testid': 'review-reply-orphaned',
+              },
+              t('review.replyTargetResolved')
+            )
+          : null,
+      ];
     },
   });
 

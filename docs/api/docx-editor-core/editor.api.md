@@ -1019,7 +1019,7 @@ export function commandForSlotValue(slotId: ChromeSlotId, value: unknown): Edito
 export function commandForTableChromeSlotValue(slotId: TableChromeSlotId, value: unknown, draft: TableChromeDraft): EditorCommand | null;
 
 // @public
-export type CommentMarkers = 'avatar' | 'icon';
+export type CommentMarkers = 'initials' | 'icon';
 
 // @public
 export function composeFontConfiguration(base: FontConfigurationBase, ...fragments: readonly FontConfigurationFragment[]): FontConfiguration;
@@ -2311,9 +2311,6 @@ export interface PaginatedSurfaceState {
 }
 
 // @public
-export type PaneOverflow = 'float' | 'scroll';
-
-// @public
 export interface ParagraphDialogFields {
     // (undocumented)
     alignment: 'left' | 'center' | 'right' | 'justify';
@@ -2658,8 +2655,10 @@ export function resolveColorValueToCss(color: ColorValue | undefined | null, the
 
 // @public
 export interface ResolvedReviewPane {
+    readonly commentMarkers: CommentMarkers;
     readonly opening: ReviewPaneOpening;
     readonly overflow: ReviewPaneOverflow;
+    readonly revisionsIn: RevisionsIn;
 }
 
 // @public
@@ -2673,7 +2672,6 @@ export interface ResolvedRevisionMarkup {
     };
     // (undocumented)
     readonly changedLines: RevisionMarkupStyle<RevisionChangedLinesMark>;
-    readonly commentMarkers: CommentMarkers;
     // (undocumented)
     readonly deletions: RevisionMarkupTextStyle<RevisionDeletionMark>;
     // (undocumented)
@@ -2684,8 +2682,6 @@ export interface ResolvedRevisionMarkup {
     readonly movedFrom: RevisionMarkupTextStyle<RevisionDeletionMark>;
     // (undocumented)
     readonly movedTo: RevisionMarkupTextStyle;
-    readonly paneOverflow: PaneOverflow;
-    readonly revisionsIn: RevisionsIn;
     // (undocumented)
     readonly trackFormatting: boolean;
     // (undocumented)
@@ -2720,6 +2716,9 @@ export function resolveThemeColorHex(color: Extract<ColorValue, {
 
 // @public
 export function resolveZoomMode(mode: ZoomMode | 'auto'): ZoomMode | null;
+
+// @internal
+export const REVIEW_MARKERS_GUTTER_PX = 44;
 
 // @public
 export interface ReviewAuthorInfo {
@@ -2771,12 +2770,14 @@ export type ReviewPaneOpening = 'auto' | 'manual';
 
 // @public
 export interface ReviewPaneOptions {
+    readonly commentMarkers?: CommentMarkers;
     readonly opening?: ReviewPaneOpening;
     readonly overflow?: ReviewPaneOverflow;
+    readonly revisionsIn?: RevisionsIn;
 }
 
 // @public
-export type ReviewPaneOverflow = 'float' | 'shrinkPage';
+export type ReviewPaneOverflow = 'float' | 'shrinkPage' | 'scroll';
 
 // @public
 export type ReviewWriteIntent = 'revision-resolve' | 'revision-attribution' | 'comment-add' | 'comment-reply' | 'comment-resolve' | 'comment-delete' | 'package-scoped';
@@ -2852,7 +2853,7 @@ export type RevisionMarkupNamedColor = (typeof REVISION_MARKUP_COLORS)[number];
 
 // @public
 export type RevisionMarkupOptions = {
-    readonly [K in keyof ResolvedRevisionMarkup]?: ResolvedRevisionMarkup[K] extends object ? Partial<ResolvedRevisionMarkup[K]> : ResolvedRevisionMarkup[K];
+    readonly [K in keyof ResolvedRevisionMarkup]?: ResolvedRevisionMarkup[K] extends boolean ? boolean : Partial<ResolvedRevisionMarkup[K]>;
 };
 
 // @public (undocumented)

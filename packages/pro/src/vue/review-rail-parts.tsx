@@ -28,7 +28,13 @@ import {
   isThreadedReply,
   markPart,
 } from './review-shared.ts';
-import { ReviewItemScope, ReviewReplyScope, useRail, useReviewLabel } from './review-context.ts';
+import {
+  ReviewItemScope,
+  ReviewReplyScope,
+  useRail,
+  useReviewLabel,
+  type ReviewLabelParams,
+} from './review-context.ts';
 import type { ReviewItemView } from './useReview.ts';
 import {
   ReviewAccept,
@@ -55,6 +61,8 @@ import { authorAccent, authorCardStyle, authorSlot } from './review-author-style
 import {
   activeItemNeedsBalloon,
   anchorFromRevisionElement,
+  balloonBox,
+  remeasureBalloonAnchor,
   balloonServesRevisionKind,
   findPaintedRevisionElement,
   matchBalloonReviewItem,
@@ -194,7 +202,7 @@ export const ReviewMarkers = markPart(
               }
               const custom = typeof props.icon === 'function' ? props.icon(entry) : props.icon;
               const badge =
-                custom == null && commentMarkers === 'avatar' && entry.kind === 'comment';
+                custom == null && commentMarkers === 'initials' && entry.kind === 'comment';
               return (
                 <button
                   key={entry.key}
@@ -202,7 +210,7 @@ export const ReviewMarkers = markPart(
                   class="docx-review__marker"
                   data-testid="review-marker"
                   data-kind={entry.kind === 'revision' ? entry.revisionKind : entry.kind}
-                  {...(badge ? { 'data-marker': 'avatar' } : {})}
+                  {...(badge ? { 'data-marker': 'initials' } : {})}
                   {...(entry.author
                     ? {
                         'data-review-author': entry.author,
@@ -255,13 +263,16 @@ export const ReviewMarkers = markPart(
 );
 
 /** A marker's accessible name: what opening it shows, whose it is, and its thread state. */
-function markerLabel(entry: ReviewItemView, t: (key: TranslationKey) => string): string {
+function markerLabel(
+  entry: ReviewItemView,
+  t: (key: TranslationKey, params?: ReviewLabelParams) => string
+): string {
   const parts = [
     `${t('review.showPane')}: ${entry.author ? `${entry.author}. ` : ''}${entry.text}`,
   ];
   if (entry.kind === 'comment' && entry.resolved) parts.push(t('review.resolved'));
   if (entry.kind === 'comment' && entry.replyIds.length > 0) {
-    parts.push(t('review.replyCount').replace('{count}', String(entry.replyIds.length)));
+    parts.push(t('review.replyCount', { count: entry.replyIds.length }));
   }
   return parts.join('. ');
 }
@@ -378,9 +389,6 @@ export const ReviewBalloon = markPart(
       const anchor = ref<BalloonAnchor | null>(null);
       const navigationAnchorKey = ref<string | null>(null);
       const displayMode = useEditorState((snapshot) => snapshot.reviewDisplayMode ?? 'all-markup');
-      // Whether the active item was opened on purpose (Next/Previous Change, `setActive`)
-      // rather than by a caret that happened to land in it.
-      const activatedKey = useEditorState(() => editorRef.value?.getActivatedReviewKey() ?? null);
       watch(displayMode, () => {
         navigationAnchorKey.value = null;
         anchor.value = null;
@@ -389,7 +397,12 @@ export const ReviewBalloon = markPart(
       // landing, the active item included, so a balloon the reader closed opens again even
       // though the active key did not move. A caret move fires none.
       const revealCount = ref(0);
+      // A change balloon that Next/Previous Change (or an announced `setActive`) opens takes
+      // the focus, so a keyboard reader reaches Accept and Reject with Tab; Escape gives it back.
+      let focusPending = false;
+      const dialogEl = ref<HTMLElement | null>(null);
       useEditorEvent('reviewItemReveal', () => {
+        focusPending = rail.value.revisionsIn === 'balloons';
         revealCount.value += 1;
       });
       const openRef = ref(false);
@@ -417,6 +430,8 @@ export const ReviewBalloon = markPart(
           const target = event.target;
           if (!(target instanceof Element)) return;
           if (host.contains(target)) return;
+          // A press keeps the focus where the reader put it.
+          focusPending = false;
           const element = target.closest('[data-revision-id]');
           if (element instanceof HTMLElement && scroller.contains(element)) {
             const structuralSite = element.classList.contains('docx-table-row--revision');
@@ -486,7 +501,8 @@ export const ReviewBalloon = markPart(
             rail.value.review.items,
             rail.value.review.paneOpen,
             rail.value.revisionsIn,
-            activatedKey.value !== null
+            // Opened on purpose (Next/Previous Change, `setActive`), not by a caret landing.
+            rail.value.review.explicitActiveKey !== null
           )
       );
       watch(
@@ -537,17 +553,91 @@ export const ReviewBalloon = markPart(
         { flush: 'post' }
       );
 
+      // The balloon stands on painted geometry: measure it again after a repaint, a zoom
+      // change, or a resize of the scroll container, or it drifts away from its text.
+      const zoom = useEditorState((snapshot) => snapshot.zoom);
+      const layoutTick = ref(0);
+      useEditorEvent('change', () => {
+        layoutTick.value += 1;
+      });
+      watch(
+        [() => anchor.value !== null, zoom, layoutTick],
+        ([open], _previous, onCleanup) => {
+          if (!open) return;
+          const host = instance?.proxy?.$el as HTMLElement | undefined;
+          const railEl = host?.closest('.docx-review') as HTMLElement | null;
+          const scroller = (railEl?.closest('.docx-editor__scroll-container') ??
+            railEl?.offsetParent) as HTMLElement | null;
+          if (!railEl || !scroller) return;
+          const remeasure = (): void => {
+            const current = anchor.value;
+            if (!current) return;
+            const next = remeasureBalloonAnchor(current, scroller, railEl, served.value);
+            if (next === current) return;
+            anchor.value = next;
+            instance?.proxy?.$forceUpdate();
+          };
+          let frame = requestAnimationFrame(remeasure);
+          const observer =
+            typeof ResizeObserver === 'undefined'
+              ? null
+              : new ResizeObserver(() => {
+                  cancelAnimationFrame(frame);
+                  frame = requestAnimationFrame(remeasure);
+                });
+          observer?.observe(scroller);
+          onCleanup(() => {
+            cancelAnimationFrame(frame);
+            observer?.disconnect();
+          });
+        },
+        { flush: 'post' }
+      );
+
+      watch(
+        [
+          () =>
+            anchor.value !== null && rail.value.revisionsIn === 'balloons'
+              ? served.value?.key
+              : undefined,
+          revealCount,
+        ],
+        ([key]) => {
+          if (key === undefined || !focusPending) return;
+          focusPending = false;
+          dialogEl.value?.focus({ preventScroll: true });
+        },
+        { flush: 'post' }
+      );
+
       // Resolving the decision removes it from the queue; the balloon it was resolved from
-      // must not linger over the text the accept just changed.
+      // must not linger over the text the accept just changed. A reply the reader is typing
+      // is the exception: the balloon stays on the resolved change and keeps the text, and
+      // the reply line says why it cannot be posted.
+      let lastServed: BalloonEntry | null = null;
+      let replyDraft = false;
+      const onReplyDraft = (hasText: boolean): void => {
+        replyDraft = hasText;
+      };
+      const orphan = ref<BalloonEntry | null>(null);
       watch(served, (next) => {
         if (next) {
           hadEntry.value = true;
+          lastServed = next;
+          orphan.value = null;
           return;
         }
         if (hadEntry.value) {
           hadEntry.value = false;
+          if (replyDraft && lastServed && rail.value.revisionsIn === 'balloons') {
+            orphan.value = lastServed;
+            return;
+          }
           anchor.value = null;
         }
+      });
+      watch(anchor, (next) => {
+        if (next === null) orphan.value = null;
       });
 
       return () => {
@@ -556,17 +646,31 @@ export const ReviewBalloon = markPart(
         const current = anchor.value;
         const fallbackKind =
           current?.kind === 'format' ? ('format' as const) : ('structural' as const);
-        const matched = served.value;
+        const matched = served.value ?? orphan.value;
+        const orphaned = served.value === null && orphan.value !== null;
         // An unmatched TEXT change has nothing honest to show: its label would claim a structure.
         const unmatchedContent =
           current !== null && !matched && current.kind !== 'format' && !current.structuralSite;
         const changeBalloon = revisionsIn === 'balloons' && matched !== null;
+        const box = current ? balloonBox(current, changeBalloon ? 300 : 280) : null;
 
-        const balloonBody =
+        const shown = !(
           current === null ||
           displayMode.value !== 'all-markup' ||
           unmatchedContent ||
           (matched && review.items.some((item) => item.id === matched.id) && review.paneOpen)
+        );
+        // Read out what opened, also when focus stays in the page (a click on the change).
+        const announcement =
+          shown && changeBalloon && !orphaned && matched && matched.item.kind === 'revision'
+            ? t('review.changeAnnouncement', {
+                change: revisionItemLabel(matched.item, t),
+                author: matched.author || t('comments.unknown'),
+                text: matched.text,
+              })
+            : '';
+        const balloonBody =
+          !shown || current === null
             ? null
             : h(
                 'div',
@@ -575,7 +679,8 @@ export const ReviewBalloon = markPart(
                   'data-testid': 'review-balloon',
                   ...(changeBalloon ? { 'data-variant': 'change' } : {}),
                   style: {
-                    left: `${current.left}px`,
+                    left: `${box!.left}px`,
+                    width: `${box!.width}px`,
                     top: `${current.above ? current.top - 6 : current.bottom + 6}px`,
                     transform: current.above ? 'translateY(-100%)' : undefined,
                   },
@@ -599,7 +704,12 @@ export const ReviewBalloon = markPart(
                               }
                             : {}),
                           ...(changeBalloon
-                            ? { role: 'dialog', 'aria-label': t('review.trackedChange') }
+                            ? {
+                                ref: dialogEl,
+                                role: 'dialog',
+                                tabindex: -1,
+                                'aria-label': t('review.trackedChange'),
+                              }
                             : {}),
                           style: authorCardStyle(
                             matched.author,
@@ -608,7 +718,7 @@ export const ReviewBalloon = markPart(
                           ),
                           // A change balloon is already open on its change; activating it again
                           // would move the caret out from under the reply line being typed into.
-                          ...(changeBalloon
+                          ...(changeBalloon || orphaned
                             ? {}
                             : { onClick: () => review.setActive(matched.key) }),
                         },
@@ -619,7 +729,7 @@ export const ReviewBalloon = markPart(
                               h(ReviewAuthor),
                               h(ReviewTime),
                             ]),
-                            matched.kind === 'revision' && !matched.readOnly
+                            matched.kind === 'revision' && !matched.readOnly && !orphaned
                               ? h('div', { class: 'docx-review__actions' }, [
                                   h(ReviewAccept),
                                   h(ReviewReject),
@@ -632,7 +742,12 @@ export const ReviewBalloon = markPart(
                           ...(changeBalloon
                             ? [
                                 h(ReviewReplies),
-                                h(ReviewBalloonReply, { key: matched.key, entry: matched }),
+                                h(ReviewBalloonReply, {
+                                  key: matched.key,
+                                  entry: matched,
+                                  orphaned,
+                                  onDraft: onReplyDraft,
+                                }),
                               ]
                             : []),
                         ]
@@ -691,7 +806,18 @@ export const ReviewBalloon = markPart(
           {
             class: `docx-review__balloon-root${props.className ? ` ${props.className}` : ''}`,
           },
-          balloonBody === null ? undefined : [balloonBody]
+          [
+            h(
+              'span',
+              {
+                class: 'docx-editor-sr-only',
+                'aria-live': 'polite',
+                'data-testid': 'review-balloon-live',
+              },
+              announcement
+            ),
+            ...(balloonBody === null ? [] : [balloonBody]),
+          ]
         );
       };
     },

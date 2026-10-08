@@ -775,7 +775,9 @@
     "protectDocument": "Belgeyi formlar için koru",
     "simpleMarkup": "Basit işaretleme",
     "replyCount": "Yanıtlar: {count}",
-    "trackedChange": "İzlenen değişiklik"
+    "trackedChange": "İzlenen değişiklik",
+    "changeAnnouncement": null,
+    "replyTargetResolved": null
   },
   "imageAltText": {
     "description": "Açıklama",
@@ -954,22 +956,12 @@
       "yellow": "Sarı",
       "gray": "Gri",
       "lightGreen": "Açık yeşil",
-      "lightPurple": "Açık mor",
-      "avatar": "Yazarın baş harfleri",
-      "balloons": "Balonlar",
-      "icon": "Simge",
-      "pane": "İnceleme bölmesi",
-      "float": "Açık kartı üstte göster",
-      "scroll": "Yatay kaydır"
+      "lightPurple": "Açık mor"
     },
     "deletionsBackground": "Silmelerin arka planı",
     "formattingBackground": "Biçimlendirme arka planı",
     "insertionsBackground": "Eklemelerin arka planı",
     "movedFromBackground": "Taşıma kaynağının arka planı",
-    "movedToBackground": "Taşıma hedefinin arka planı",
-    "commentMarkers": "Yorum işaretçileri",
-    "layout": "İnceleme düzeni",
-    "revisionsIn": "İzlenen değişiklikleri göster:",
-    "paneOverflow": "İnceleme bölmesi sığmadığında"
+    "movedToBackground": "Taşıma hedefinin arka planı"
   }
 }

@@ -37,14 +37,11 @@ import {
   anchorLineY,
   commentBodyText,
   commentInitials,
-  documentOrder,
   firstReviewRange,
-  paragraphFragmentsOfBlocks,
   reviewItemGeometry,
   reviewItemKey,
   type ReviewItem,
   type ReviewParagraphAnchor,
-  type SemanticLayout,
   type SemanticPosition,
   type SemanticSelection,
 } from '../layout/index.ts';
@@ -66,7 +63,7 @@ import type {
   ReviewRevisionKind,
 } from '../contracts/editor.ts';
 import { resolveEditorModules, type ReviewDisplayMode } from '../contracts/modules.ts';
-import { resolveReviewPane } from '../contracts/review-pane.ts';
+import { createReviewPaneState } from './review-pane-state.ts';
 import {
   NO_TRACKING_SETTINGS,
   type DocumentTrackingSettings,
@@ -102,7 +99,7 @@ import {
   searchStoriesForSurface,
   selectDocumentSearchMatch,
 } from './docx-editor-story-navigation.ts';
-import { fragmentParagraphs } from '../layout/line-segments.ts';
+import { noteScopeIndexOf, paragraphOrderOf } from './layout-paragraph-indexes.ts';
 import {
   classifyCommand,
   deepFreezeValue,
@@ -269,7 +266,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const reportDiagnostic = customNodeDiagnosticReporter(modules);
   const reviewEnabled = modules.review !== null;
   // Review pane view settings: seeded by the review module, changed by `setReviewPane`.
-  let reviewPane = resolveReviewPane(modules.review?.pane);
+  const reviewPane = createReviewPaneState(modules.review?.pane, {
+    changed: () => {
+      bump();
+      emitSelectionChange();
+      zoomLane.refit();
+    },
+  });
   /** Document bytes waiting for a container — set when constructed or loaded detached. */
   let pendingBytes: Uint8Array | null = null;
   /** Pending input belongs to these exact remount bytes, including a deferred mount. */
@@ -510,7 +513,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
     changed: (value) => {
       emitSelectionChange();
-      zoomLane.refit();
       events.emitRevisionMarkupChange(value);
     },
   });
@@ -533,7 +535,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     surface: () => surface,
     bump,
     emitSelectionChange,
-    panesScroll: () => revisionMarkupState.current().paneOverflow === 'scroll',
+    panesScroll: () => reviewPane.current().overflow === 'scroll',
   });
   const scaleOf = (): number => zoomLane.scale();
   const highlights = createTextHighlights({
@@ -626,7 +628,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       onRequestHyperlink: () => hyperlinkChrome.current().onRequest?.(),
       onEquationPopover: (activation) => equationChrome.current().onPopover?.(activation),
       onTrackedChange: () => {
-        if (reviewPaneOpen || reviewPane.opening === 'manual') return;
+        if (reviewPaneOpen || !reviewPane.opensOnTrackedChange()) return;
         reviewPaneOpen = true;
         bump();
         emitSelectionChange();
@@ -674,8 +676,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // firing in between would decide a second time and clear what the first one published.
     protection.prime();
     // Once the review model exists, show the pane when it found content and the module allows.
-    reviewPaneOpen =
-      reviewEnabled && reviewPane.opening === 'auto' && surface.session.reviewItems().length > 0;
+    reviewPaneOpen = reviewEnabled && reviewPane.opensOnLoad(surface.session.reviewItems());
     publishSignal.adopt(surface);
     if (pendingHostModeFallback !== null) applyHostModeDecision(pendingHostModeFallback, false);
     else adoptDocumentTracking();
@@ -1170,7 +1171,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       canRedo: state?.canRedo ?? false,
       pageSetup: pageSetupOf(surface),
       reviewPaneOpen,
-      reviewPane,
+      reviewPane: reviewPane.current(),
       showParagraphMarks: paragraphMarks.get(),
       documentProtection: protection.state(),
       revisionMarkup: revisionMarkupState.current(),
@@ -1304,38 +1305,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const anchorIndexOf = createAnchorIndex();
 
   /**
-   * Paragraph id → note scope id, built once per LAYOUT from the painted note stories.
-   *
-   * The layout already states which note each paragraph belongs to (`NoteStoryRecord`
-   * carries `scopeId`), so this is a lookup rather than a search. The first version walked
-   * the notes part per item — O(items x notes x subtree), which measured 91 ms per
-   * `getTrackedChanges()` call on a document with 600 note revisions.
-   */
-  const noteScopeIndexCache = new WeakMap<SemanticLayout, Map<string, string>>();
-  function noteScopeIndexOf(layout: SemanticLayout): Map<string, string> {
-    const cached = noteScopeIndexCache.get(layout);
-    if (cached) return cached;
-    const index = new Map<string, string>();
-    for (const page of layout.pages) {
-      for (const area of [page.footnotes, page.endnotes]) {
-        if (!area) continue;
-        for (const note of area.notes) {
-          for (const fragment of paragraphFragmentsOfBlocks(note.fragments)) {
-            // Every paragraph the fragment DRAWS. A note whose paragraphs a resolved view
-            // merges publishes one fragment, and an absorbed member with no scope made its
-            // card look like a body card: no note to accept it in, no note to scroll to.
-            for (const paragraphId of fragmentParagraphs(fragment)) {
-              if (!index.has(paragraphId)) index.set(paragraphId, note.scopeId);
-            }
-          }
-        }
-      }
-    }
-    noteScopeIndexCache.set(layout, index);
-    return index;
-  }
-
-  /**
    * Which story a review item lives in, from the part name its ranges carry.
    *
    * `null` rId means the part is not a header/footer this document's sections resolve —
@@ -1405,17 +1374,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
   /** Word writes `@w:date` to the second; milliseconds group with nothing. */
   const secondsPrecisionNow = (): string => `${new Date().toISOString().slice(0, 19)}Z`;
-
-  /** Paragraph id to document position, memoized per layout. */
-  const paragraphOrderCache = new WeakMap<SemanticLayout, Map<string, number>>();
-  function paragraphOrderOf(layout: SemanticLayout): Map<string, number> {
-    const cached = paragraphOrderCache.get(layout);
-    if (cached) return cached;
-    const index = new Map<string, number>();
-    for (const [position, id] of documentOrder(layout).entries()) index.set(id, position);
-    paragraphOrderCache.set(layout, index);
-    return index;
-  }
 
   function commentTargetRange(): { from: SemanticPosition; to: SemanticPosition } | null {
     return commentTargetRangeOf({
@@ -2300,13 +2258,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // Tolerated detached: the host waits here and applies on the next mount.
       surface?.setRemoteCaretLabelHost(host);
     },
-    setReviewPane(options) {
-      const next = resolveReviewPane(options, reviewPane);
-      if (next === reviewPane) return;
-      reviewPane = next;
-      bump();
-      emitSelectionChange();
-    },
+    setReviewPane: reviewPane.set,
     setRevisionMarkup: revisionMarkupState.set,
     setRevisionMarkupChrome: revisionMarkupState.register,
     setRevisionStyles(colors) {
@@ -2320,7 +2272,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     setEditingMode: (mode) => editor.exec({ type: 'setEditingMode', mode }),
 
     getReviewRevision: () => reviewRevision(),
-    getActivatedReviewKey: () => surface?.activatedReviewKey() ?? null,
+    getActiveReviewItem: () => surface?.activatedReviewKey() ?? null,
 
     setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult {
       // Dismissing is the only thing a key of `null` can mean here. A card the reader closed
@@ -2450,7 +2402,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // not respond to any number of further clicks.
       bump();
       emitSelectionChange();
-      if (options?.announce !== false) events.emitReviewItemReveal({ key, source: 'host' });
+      if (options?.announce === true) events.emitReviewItemReveal({ key, source: 'host' });
       // `changed: false` — activation moves the caret and the open card, and neither is
       // document state. A host must not mark its document dirty for opening a card.
       return { ok: true, changed: false };

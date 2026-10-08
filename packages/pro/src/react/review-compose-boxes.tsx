@@ -324,10 +324,36 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
   }
   ReviewReply.docxReviewPart = 'Reply' as const;
 
-  /** The change balloon's reply line. Open whenever the balloon is; not a rail part. */
-  function ReviewBalloonReply({ entry }: { readonly entry: ReviewItemView }) {
-    const state = useReplyDraft(entry);
-    return <ReplyLine state={state} />;
+  /**
+   * The change balloon's reply line. Open whenever the balloon is; not a rail part.
+   *
+   * `orphaned` marks a change that was resolved, for example by another participant, while
+   * the reader was typing. The line keeps the text, posts nothing, and says why, so a draft
+   * is never dropped without notice. `onDraft` reports whether the line holds text.
+   */
+  function ReviewBalloonReply({
+    entry,
+    orphaned = false,
+    onDraft,
+  }: {
+    readonly entry: ReviewItemView;
+    readonly orphaned?: boolean;
+    readonly onDraft?: (hasText: boolean) => void;
+  }) {
+    const t = deps.useLabel();
+    const state = useReplyDraft(orphaned ? null : entry);
+    const hasText = state.draft.trim().length > 0;
+    useEffect(() => onDraft?.(hasText), [hasText, onDraft]);
+    return (
+      <>
+        <ReplyLine state={state} />
+        {orphaned ? (
+          <span className="docx-review__refused" role="alert" data-testid="review-reply-orphaned">
+            {t('review.replyTargetResolved')}
+          </span>
+        ) : null}
+      </>
+    );
   }
 
   return { ReviewDraft, ReviewReply, ReviewBalloonReply };

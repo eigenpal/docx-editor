@@ -9,7 +9,7 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 import { describe, expect, test } from 'bun:test';
 import { act, render } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import type { DocxEditorInstance, RevisionMarkupOptions } from '@docx-editor.dev/core/editor';
+import type { DocxEditorInstance, ReviewPaneOptions } from '@docx-editor.dev/core/editor';
 import {
   DocxEditorContent,
   DocxEditorRoot,
@@ -23,6 +23,7 @@ import {
   checkChangeBalloons,
   checkCommentMarkers,
   checkReadOnlyBalloon,
+  checkBalloonFollowsLayout,
   checkRevealOpensPane,
   checkRevealReopensBalloon,
   checkStructuralCaret,
@@ -30,7 +31,7 @@ import {
 } from './review-balloons-harness.ts';
 
 function mount(
-  revisionMarkup?: RevisionMarkupOptions,
+  pane?: ReviewPaneOptions,
   review: ReactNode = <DocxEditorReview />,
   source: Uint8Array = BALLOON_SOURCE
 ) {
@@ -39,8 +40,7 @@ function mount(
     <DocxEditorRoot
       document={source}
       author="Grace Hopper"
-      modules={[reviewModule()]}
-      {...(revisionMarkup ? { revisionMarkup } : {})}
+      modules={[reviewModule(pane ? { pane } : {})]}
       onReady={(instance) => {
         editor = instance as DocxEditorInstance;
       }}
@@ -98,6 +98,15 @@ describe('React review layout preferences', () => {
     }
   });
 
+  test('an open balloon follows its change and stays inside the viewport', async () => {
+    const { view, editor } = mount({ revisionsIn: 'balloons' });
+    try {
+      await checkBalloonFollowsLayout(view.container, editor(), change);
+    } finally {
+      view.unmount();
+    }
+  });
+
   test('switching revisionsIn live moves changes between the rail and balloons', async () => {
     const { view, editor } = mount();
     try {
@@ -106,12 +115,10 @@ describe('React review layout preferences', () => {
           (card) => card.dataset.kind
         );
       expect(kinds()).toContain('insert');
-      await change(() => editor().setRevisionMarkup({ revisionsIn: 'balloons' }));
+      await change(() => editor().setReviewPane({ revisionsIn: 'balloons' }));
       expect(kinds().every((kind) => kind === 'comment')).toBe(true);
-      expect(() => editor().setRevisionMarkup({ revisionsIn: 'sidebar' as never })).toThrow(
-        TypeError
-      );
-      await change(() => editor().setRevisionMarkup({ revisionsIn: 'pane' }));
+      expect(() => editor().setReviewPane({ revisionsIn: 'sidebar' as never })).toThrow(TypeError);
+      await change(() => editor().setReviewPane({ revisionsIn: 'pane' }));
       expect(kinds()).toContain('insert');
     } finally {
       view.unmount();
@@ -136,9 +143,9 @@ describe('React review layout preferences', () => {
     }
   });
 
-  for (const paneOverflow of ['float', 'scroll'] as const) {
-    test(`Next Change opens a closed pane at its card (paneOverflow: '${paneOverflow}')`, async () => {
-      const { view, editor } = mount({ paneOverflow });
+  for (const overflow of ['float', 'scroll'] as const) {
+    test(`Next Change opens a closed pane at its card (overflow: '${overflow}')`, async () => {
+      const { view, editor } = mount({ overflow });
       try {
         await checkRevealOpensPane(view.container, editor(), change);
       } finally {

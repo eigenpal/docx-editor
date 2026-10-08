@@ -12,6 +12,16 @@
 import type { ZoomMode } from '../contracts/editor.ts';
 import type { ReviewPaneOverflow } from '../contracts/review-pane.ts';
 
+/**
+ * The review pane's marker strip on one page edge, in CSS px: the markers and the
+ * add-comment button. The adapters' review gutters and the zoom fit share this value.
+ *
+ * Shared adapter glue, not for hosts.
+ *
+ * @internal
+ */
+export const REVIEW_MARKERS_GUTTER_PX = 44;
+
 /** The narrowest scale the editor contract accepts. One definition, every user. */
 export const ZOOM_MIN = 0.1;
 /** The widest scale the editor contract accepts. */

@@ -222,10 +222,11 @@ describe('tracking the viewport', () => {
     expect(harness.editor.getZoom()).toBeLessThan(wide);
   });
 
-  // `paneOverflow: 'scroll'`: side panes scroll beside the page, so a capped fit keeps its
+  // `overflow: 'scroll'`: side panes scroll beside the page, so a capped fit keeps its
   // size whatever the review rail or the navigation pane reserves.
-  test("paneOverflow: 'scroll' keeps a capped fit at its size beside an open pane", async () => {
-    const harness = mount({ revisionMarkup: { paneOverflow: 'scroll' } });
+  test("overflow: 'scroll' keeps a capped fit at its size beside an open pane", async () => {
+    const harness = mount();
+    harness.editor.setReviewPane({ overflow: 'scroll' });
     harness.resize(1100);
     await harness.settle();
     const wide = harness.editor.getZoom();
@@ -238,15 +239,16 @@ describe('tracking the viewport', () => {
     expect(harness.editor.getZoom()).toBe(wide);
 
     // Switching back to 'float' refits at once and the reservations shrink the page again.
-    harness.editor.setRevisionMarkup({ paneOverflow: 'float' });
+    harness.editor.setReviewPane({ overflow: 'float' });
     await harness.settle();
     expect(harness.editor.getZoom()).toBeLessThan(wide);
   });
 
   // A closed pane's marker strip still counts: ignoring it overflowed the page sideways
   // with no pane open. Only the navigation pane's shift scrolls beside the page then.
-  test("paneOverflow: 'scroll' with the pane closed still fits inside the marker strip", async () => {
-    const harness = mount({ revisionMarkup: { paneOverflow: 'scroll' } });
+  test("overflow: 'scroll' with the pane closed still fits inside the marker strip", async () => {
+    const harness = mount();
+    harness.editor.setReviewPane({ overflow: 'scroll' });
     harness.pane(false);
     harness.strip(88);
     harness.resize(800);
@@ -265,8 +267,9 @@ describe('tracking the viewport', () => {
 
   // The point of 'scroll': the page has ONE size. Opening the pane swaps the strip for the
   // full column and the start clearance, and the fit must not relay out the document for it.
-  test("paneOverflow: 'scroll' keeps one page size whether the pane is open or closed", async () => {
-    const harness = mount({ revisionMarkup: { paneOverflow: 'scroll' } });
+  test("overflow: 'scroll' keeps one page size whether the pane is open or closed", async () => {
+    const harness = mount();
+    harness.editor.setReviewPane({ overflow: 'scroll' });
     harness.strip(88);
     harness.resize(800);
     harness.pane(false);
@@ -290,8 +293,9 @@ describe('tracking the viewport', () => {
   });
 
   // A host that marks the pane but has not published the strip yet still fits beside it.
-  test("paneOverflow: 'scroll' falls back to the 88px strip when none is published", async () => {
-    const harness = mount({ revisionMarkup: { paneOverflow: 'scroll' } });
+  test("overflow: 'scroll' falls back to the 88px strip when none is published", async () => {
+    const harness = mount();
+    harness.editor.setReviewPane({ overflow: 'scroll' });
     harness.pane(false);
     harness.resize(800);
     await harness.settle();

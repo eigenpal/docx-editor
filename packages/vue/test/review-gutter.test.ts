@@ -154,7 +154,7 @@ describe('reviewGutter (Vue)', () => {
   });
 });
 
-describe("reviewGutter with paneOverflow: 'scroll'", () => {
+describe("reviewGutter with overflow: 'scroll'", () => {
   const SCROLLING = { inlineStart: REVIEW_GUTTER_PAGE_CLEARANCE, inlineEnd: REVIEW_PANE_GUTTER };
 
   test('an open pane reserves the full column even when it does not fit', () => {

@@ -207,6 +207,9 @@ export interface CollaborationStatusSnapshot {
 }
 
 // @public
+export type CommentMarkers = 'initials' | 'icon';
+
+// @public
 export interface CreateDocumentCollaborationOptions {
     // (undocumented)
     readonly awareness: Awareness;
@@ -984,6 +987,14 @@ export interface ResolvedCustomNodeActivation {
     readonly node: ActivatedCustomNode;
 }
 
+// @public
+export interface ResolvedReviewPane {
+    readonly commentMarkers: CommentMarkers;
+    readonly opening: ReviewPaneOpening;
+    readonly overflow: ReviewPaneOverflow;
+    readonly revisionsIn: RevisionsIn;
+}
+
 // @public (undocumented)
 export interface ReviewActionProps extends ReviewPartProps {
     // (undocumented)
@@ -993,7 +1004,7 @@ export interface ReviewActionProps extends ReviewPartProps {
 // @public
 export interface ReviewActivationOptions {
     readonly announce?: boolean;
-    readonly reveal?: 'start' | 'center' | 'centerIfNeeded' | 'nearest' | false;
+    readonly reveal?: ScrollPlacement | false;
 }
 
 // @public
@@ -1034,8 +1045,22 @@ export function reviewModule(options?: ReviewModuleOptions): EditorModule;
 
 // @public
 export interface ReviewModuleOptions extends ProLicenseOptions {
-    readonly paneOpening?: 'automatic' | 'manual';
+    readonly pane?: ReviewPaneOptions;
 }
+
+// @public
+export type ReviewPaneOpening = 'auto' | 'manual';
+
+// @public
+export interface ReviewPaneOptions {
+    readonly commentMarkers?: CommentMarkers;
+    readonly opening?: ReviewPaneOpening;
+    readonly overflow?: ReviewPaneOverflow;
+    readonly revisionsIn?: RevisionsIn;
+}
+
+// @public
+export type ReviewPaneOverflow = 'float' | 'shrinkPage' | 'scroll';
 
 // @public (undocumented)
 export interface ReviewPartProps {
@@ -1075,6 +1100,12 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children' | 'hidden'
     // (undocumented)
     t?: (key: string, params?: Record<string, string | number>) => string;
 }
+
+// @public
+export type RevisionsIn = 'pane' | 'balloons';
+
+// @public
+export type ScrollPlacement = 'start' | 'center' | 'centerIfNeeded' | 'nearest';
 
 // @public
 export function useCollaborationParticipants(session?: MaybeRefOrGetter<CollaborationSession | null>): UseCollaborationParticipantsReturn;
@@ -1163,6 +1194,7 @@ export interface UseReviewReturn {
     readonly comment: (text: string, author?: string) => boolean;
     // (undocumented)
     readonly commentResolutionDisabledReason: ComputedRef<string | null>;
+    readonly explicitActiveKey: ComputedRef<string | null>;
     // (undocumented)
     readonly items: ComputedRef<readonly ReviewItemView[]>;
     // (undocumented)

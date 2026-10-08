@@ -69,36 +69,12 @@ export interface ResolvedRevisionMarkup {
   };
   readonly trackMoves: boolean;
   readonly trackFormatting: boolean;
-  /**
-   * Where the review surface lists tracked changes. `'pane'` shows them as cards beside the
-   * comments. `'balloons'` keeps the pane for comments and opens a change in a balloon at
-   * its text when it is clicked or reached by Next/Previous Change.
-   */
-  readonly revisionsIn: RevisionsIn;
-  /**
-   * How a comment thread's margin marker looks. `'avatar'` is a badge with the author's
-   * initials, a reply count, and a check mark once resolved. `'icon'` is the comment glyph.
-   */
-  readonly commentMarkers: CommentMarkers;
-  /**
-   * What happens when the review card column does not fit beside the page. `'float'` keeps
-   * the page in view and floats the open card over it. `'scroll'` fits the page beside the
-   * closed pane's marker strip and keeps that size when the pane opens; the full column
-   * stands and the viewport scrolls sideways. An open navigation pane does not shrink it.
-   */
-  readonly paneOverflow: PaneOverflow;
 }
-/** Where tracked changes are listed. @public */
-export type RevisionsIn = 'pane' | 'balloons';
-/** How comment margin markers look. @public */
-export type CommentMarkers = 'avatar' | 'icon';
-/** What a review pane that does not fit beside the page does. @public */
-export type PaneOverflow = 'float' | 'scroll';
 /** Partial viewer preferences. Omitted values keep the previous value. @public */
 export type RevisionMarkupOptions = {
-  readonly [K in keyof ResolvedRevisionMarkup]?: ResolvedRevisionMarkup[K] extends object
-    ? Partial<ResolvedRevisionMarkup[K]>
-    : ResolvedRevisionMarkup[K];
+  readonly [K in keyof ResolvedRevisionMarkup]?: ResolvedRevisionMarkup[K] extends boolean
+    ? boolean
+    : Partial<ResolvedRevisionMarkup[K]>;
 };
 const style = <T extends string>(mark: T, color: RevisionMarkupColor): RevisionMarkupStyle<T> =>
   Object.freeze({ mark, color });
@@ -122,15 +98,7 @@ export const DEFAULT_REVISION_MARKUP: ResolvedRevisionMarkup = Object.freeze({
   }),
   trackMoves: true,
   trackFormatting: true,
-  revisionsIn: 'pane',
-  commentMarkers: 'avatar',
-  paneOverflow: 'float',
 });
-const choices = {
-  revisionsIn: ['pane', 'balloons'],
-  commentMarkers: ['avatar', 'icon'],
-  paneOverflow: ['float', 'scroll'],
-} as const;
 const marks = [
   'none',
   'colorOnly',
@@ -158,13 +126,6 @@ export function resolveRevisionMarkup(
       if (typeof input[key] !== 'boolean') throw new TypeError(`Invalid ${key}`);
       result[key] = input[key];
     }
-  }
-  for (const key of ['revisionsIn', 'commentMarkers', 'paneOverflow'] as const) {
-    const value = input[key];
-    if (value === undefined) continue;
-    if (!(choices[key] as readonly unknown[]).includes(value))
-      throw new TypeError(`Invalid ${key}`);
-    Object.assign(result, { [key]: value });
   }
   for (const key of [
     'insertions',

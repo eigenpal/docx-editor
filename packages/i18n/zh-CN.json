@@ -775,7 +775,9 @@
     "protectDocument": "保护文档以填写窗体",
     "simpleMarkup": "简单标记",
     "replyCount": "回复：{count}",
-    "trackedChange": "修订"
+    "trackedChange": "修订",
+    "changeAnnouncement": null,
+    "replyTargetResolved": null
   },
   "imageAltText": {
     "description": "说明",
@@ -954,22 +956,12 @@
       "yellow": "黄色",
       "gray": "灰色",
       "lightGreen": "浅绿色",
-      "lightPurple": "浅紫色",
-      "avatar": "作者姓名缩写",
-      "balloons": "批注框",
-      "icon": "图标",
-      "pane": "审阅窗格",
-      "float": "浮动显示打开的卡片",
-      "scroll": "横向滚动"
+      "lightPurple": "浅紫色"
     },
     "deletionsBackground": "删除背景",
     "formattingBackground": "格式更改背景",
     "insertionsBackground": "插入背景",
     "movedFromBackground": "移出背景",
-    "movedToBackground": "移入背景",
-    "commentMarkers": "批注标记",
-    "layout": "审阅布局",
-    "revisionsIn": "修订显示位置",
-    "paneOverflow": "审阅窗格放不下时"
+    "movedToBackground": "移入背景"
   }
 }

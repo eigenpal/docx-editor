@@ -103,28 +103,6 @@ export function revisionMarkupFields(
       <p id={`${noteId}-${name}`}>{t(`${name}Note`)}</p>
     </div>
   );
-  const choice = <K extends 'revisionsIn' | 'commentMarkers' | 'paneOverflow'>(
-    name: K,
-    available: readonly ResolvedRevisionMarkup[K][]
-  ) => (
-    <div data-docx-part="field" data-docx-field={name}>
-      <label>
-        <span className="docx-revision-markup-field-label">{t(name)}</span>
-        <select
-          value={values[name]}
-          onChange={(event) =>
-            state.setValue(name, event.target.value as ResolvedRevisionMarkup[K])
-          }
-        >
-          {available.map((value) => (
-            <option key={value} value={value}>
-              {t(`values.${value}`)}
-            </option>
-          ))}
-        </select>
-      </label>
-    </div>
-  );
   return (
     <>
       <fieldset>
@@ -165,12 +143,6 @@ export function revisionMarkupFields(
         <legend>{t('formatting')}</legend>
         {checkbox('trackFormatting')}
         {row('formatting')}
-      </fieldset>
-      <fieldset>
-        <legend>{t('layout')}</legend>
-        {choice('revisionsIn', ['pane', 'balloons'])}
-        {choice('commentMarkers', ['avatar', 'icon'])}
-        {choice('paneOverflow', ['float', 'scroll'])}
       </fieldset>
     </>
   );

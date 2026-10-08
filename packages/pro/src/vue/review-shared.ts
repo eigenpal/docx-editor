@@ -10,12 +10,15 @@ import type { ReviewItemView } from './useReview.ts';
 
 export const selectDocumentAbsent = (snapshot: EditorSnapshot) =>
   snapshot.isLoading || snapshot.parseError !== null || snapshot.pageSetup == null;
-/** The `revisionsIn` viewer preference; `'pane'` before a document's settings exist. */
+/** The `opening` review pane setting; `'auto'` before the editor reports one. */
+export const selectPaneOpening = (snapshot: EditorSnapshot) =>
+  snapshot.reviewPane?.opening ?? 'auto';
+/** The `revisionsIn` review pane setting; `'pane'` before the editor reports one. */
 export const selectRevisionsIn = (snapshot: EditorSnapshot) =>
-  snapshot.revisionMarkup?.revisionsIn ?? 'pane';
-/** The `commentMarkers` viewer preference; `'avatar'` before a document's settings exist. */
+  snapshot.reviewPane?.revisionsIn ?? 'pane';
+/** The `commentMarkers` review pane setting; `'initials'` before the editor reports one. */
 export const selectCommentMarkers = (snapshot: EditorSnapshot) =>
-  snapshot.revisionMarkup?.commentMarkers ?? 'avatar';
+  snapshot.reviewPane?.commentMarkers ?? 'initials';
 export const selectDocumentReadOnly = (snapshot: EditorSnapshot) =>
   snapshot.editingMode === 'viewing';
 

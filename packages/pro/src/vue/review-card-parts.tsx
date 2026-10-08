@@ -604,7 +604,7 @@ export const ReviewCard = markPart(
                 },
                 [
                   h('span', { class: 'docx-review__resolved-status' }, t('review.resolved')),
-                  commentMarkers === 'avatar' ? reviewBadge('', 0, true) : resolvedCommentIcon(),
+                  commentMarkers === 'initials' ? reviewBadge('', 0, true) : resolvedCommentIcon(),
                 ]
               ),
               h(ReviewCardPreset, null, { default: () => slots.default?.() }),

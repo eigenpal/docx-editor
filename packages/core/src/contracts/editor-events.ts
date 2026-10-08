@@ -22,11 +22,11 @@ export interface EditorEvents {
    * An explicit request landed on a review item, and its card or balloon should open.
    *
    * Fires each time Next Change or Previous Change lands (`source: 'navigate'`), and each time
-   * `setActiveReviewItem(key)` succeeds (`source: 'host'`). It fires again when the item was
-   * already active, so a card the reader closed can open again.
+   * `setActiveReviewItem(key, { announce: true })` succeeds (`source: 'host'`). It fires again
+   * when the item was already active, so a card the reader closed can open again.
    *
    * It does not fire for a caret move, a click in the page, a dismissal (`key` of `null`), a
-   * refused activation, or `setActiveReviewItem(key, { announce: false })`. A remote edit in a
+   * refused activation, or `setActiveReviewItem(key)` without `announce: true`. A remote edit in a
    * collaboration session never fires it: it is a local view event.
    *
    * @example
@@ -53,7 +53,7 @@ export interface ReviewItemRevealEvent {
   /**
    * What asked for the item. `'navigate'` is Next Change or Previous Change, from the menu,
    * the toolbar, a shortcut, or `exec({ type: 'navigateReviewChange' })`. `'host'` is a call
-   * to `setActiveReviewItem` (and so `useReview().setActive`).
+   * to `setActiveReviewItem` (and so `useReview().setActive`) with `announce: true`.
    */
   readonly source: ReviewItemRevealSource;
 }

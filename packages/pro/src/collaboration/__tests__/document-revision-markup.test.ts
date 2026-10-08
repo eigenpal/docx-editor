@@ -146,24 +146,19 @@ test('local markup stays private while tracked edits converge, undo, reconnect, 
   expect(alice.editor.snapshot().revisionMarkup.trackFormatting).toBe(false);
   expect(bob.editor.snapshot().revisionMarkup.trackFormatting).toBe(true);
 
-  // The review layout preferences are view state too: one participant's choice never
-  // reaches the other, and switching it writes nothing into the shared document.
+  // The review pane settings are view state too: one participant's choice never reaches
+  // the other, and switching them writes nothing into the shared document.
   const beforeLayout = packageFingerprint(alice.editor.surface!.session.currentPackage());
-  bob.editor.setRevisionMarkup({
-    revisionsIn: 'balloons',
-    commentMarkers: 'icon',
-    paneOverflow: 'scroll',
-  });
+  bob.editor.setReviewPane({ revisionsIn: 'balloons', commentMarkers: 'icon', overflow: 'scroll' });
   converge();
-  expect(alice.editor.snapshot().revisionMarkup.revisionsIn).toBe('pane');
-  expect(alice.editor.snapshot().revisionMarkup.commentMarkers).toBe('avatar');
-  expect(alice.editor.snapshot().revisionMarkup.paneOverflow).toBe('float');
-  expect(packageFingerprint(alice.editor.surface!.session.currentPackage())).toBe(beforeLayout);
-  bob.editor.setRevisionMarkup({
+  expect(alice.editor.snapshot().reviewPane).toEqual({
+    opening: 'auto',
+    overflow: 'float',
     revisionsIn: 'pane',
-    commentMarkers: 'avatar',
-    paneOverflow: 'float',
+    commentMarkers: 'initials',
   });
+  expect(packageFingerprint(alice.editor.surface!.session.currentPackage())).toBe(beforeLayout);
+  bob.editor.setReviewPane({ revisionsIn: 'pane', commentMarkers: 'initials', overflow: 'float' });
 
   bob.editor.setRevisionMarkup({ trackFormatting: false });
   select(bob.editor, 0, 1);

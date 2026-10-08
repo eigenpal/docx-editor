@@ -24,15 +24,15 @@ export interface ReviewActivationOptions {
    */
   readonly reveal?: ScrollPlacement | false;
   /**
-   * Whether a successful activation fires the `reviewItemReveal` event. Default `true`.
+   * Whether a successful activation fires the `reviewItemReveal` event. Default `false`.
    *
-   * Pass `false` when your own `reviewItemReveal` handlers must not hear this call, for
-   * example when your list follows the caret and the reveal handler would scroll it again.
-   * The item still becomes active.
+   * Pass `true` to open the item the way Next Change does: the packaged review UI opens its
+   * balloon, or opens a closed review pane at its card when the pane's `opening` setting is
+   * `'auto'`. The item becomes active either way.
    *
    * @example
    * ```ts
-   * editor.setActiveReviewItem(key, { announce: false });
+   * editor.setActiveReviewItem(key, { announce: true });
    * ```
    */
   readonly announce?: boolean;

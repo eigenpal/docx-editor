@@ -111,7 +111,7 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
             ? {
                 ['--docx-review-gutter' as string]: `${reviewGutter.inlineEnd}px`,
                 ['--docx-review-gutter-start' as string]: `${reviewGutter.inlineStart}px`,
-                // What a closed pane reserves on both edges. Under `paneOverflow: 'scroll'`
+                // What a closed pane reserves on both edges. Under `overflow: 'scroll'`
                 // the fit subtracts this in both pane states, so the page keeps one size.
                 ['--docx-review-strip' as string]: `${2 * REVIEW_MARKERS_GUTTER}px`,
               }

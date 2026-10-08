@@ -24,7 +24,6 @@ import { ClearAnchorHighlightOptions } from '@docx-editor.dev/core/contracts/edi
 import { ClearRefreshHighlightsOptions } from '@docx-editor.dev/core/editor';
 import { ColorValue } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core/editor';
-import { CommentMarkers } from '@docx-editor.dev/core/editor';
 import { ComponentType } from 'react';
 import { composeFontConfiguration } from '@docx-editor.dev/core/editor';
 import { composeFontOrigins } from '@docx-editor.dev/core/editor';
@@ -101,7 +100,6 @@ import { NavigateToChangeOptions } from '@docx-editor.dev/core/editor';
 import { NavigationCommand } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core/editor';
-import { PaneOverflow } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogFields } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogMixed } from '@docx-editor.dev/core/editor';
 import { ParagraphFlagState } from '@docx-editor.dev/core/editor';
@@ -138,7 +136,6 @@ import { RevisionMarkupDialogSession } from '@docx-editor.dev/core/editor';
 import { RevisionMarkupMark } from '@docx-editor.dev/core/editor';
 import { RevisionMarkupNamedColor } from '@docx-editor.dev/core/editor';
 import { RevisionMarkupOptions } from '@docx-editor.dev/core/editor';
-import { RevisionsIn } from '@docx-editor.dev/core/editor';
 import { RevisionStyles } from '@docx-editor.dev/core/editor';
 import { RulerIndent } from '@docx-editor.dev/core/editor';
 import { rulerPageBox } from '@docx-editor.dev/core/editor';
@@ -205,8 +202,6 @@ export { ClearAnchorHighlightOptions }
 export { ClearRefreshHighlightsOptions }
 
 export { commandForSlot }
-
-export { CommentMarkers }
 
 export { composeFontConfiguration }
 
@@ -2249,8 +2244,6 @@ export interface PaginatedDocxEditorShellProps {
     readonly source: Uint8Array;
 }
 
-export { PaneOverflow }
-
 export { ParagraphFlagState }
 
 export { ParagraphFormatRead }
@@ -2412,8 +2405,6 @@ export { RevisionMarkupMark }
 export { RevisionMarkupNamedColor }
 
 export { RevisionMarkupOptions }
-
-export { RevisionsIn }
 
 export { RevisionStyles }
 

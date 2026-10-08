@@ -20,11 +20,21 @@ export interface BalloonAnchor {
   readonly paragraphId?: string;
   readonly start?: number;
   readonly end?: number;
+  /** The site's box, relative to the rail. */
   readonly left: number;
+  readonly right: number;
   readonly top: number;
   readonly bottom: number;
   readonly above: boolean;
+  /** Whether the site's text runs right to left, so the balloon starts at its right edge. */
+  readonly rtl: boolean;
+  /** The scroll container's visible box, relative to the rail. */
+  readonly visibleLeft: number;
+  readonly visibleRight: number;
 }
+
+/** Room the balloon keeps from the visible edge of the scroll container, in CSS px. */
+export const BALLOON_EDGE_PX = 8;
 
 export function anchorFromRevisionElement(
   element: HTMLElement,
@@ -33,6 +43,12 @@ export function anchorFromRevisionElement(
 ): BalloonAnchor {
   const railRect = rail.getBoundingClientRect();
   const rect = element.getBoundingClientRect();
+  const scroller = element.closest('.docx-editor__scroll-container');
+  const scrollerRect = scroller?.getBoundingClientRect();
+  const visibleLeft = (scrollerRect?.left ?? railRect.left) - railRect.left;
+  // `clientWidth` leaves out a vertical scrollbar; a box with no layout reports zero.
+  const visibleWidth =
+    scroller && scroller.clientWidth > 0 ? scroller.clientWidth : (scrollerRect?.width ?? 0);
   const viewportBottom = element.ownerDocument.defaultView?.innerHeight ?? Infinity;
   const start = Number(element.dataset.reviewStart ?? element.dataset.start);
   const end = Number(element.dataset.reviewEnd ?? element.dataset.end);
@@ -49,10 +65,82 @@ export function anchorFromRevisionElement(
     ...(Number.isFinite(start) ? { start } : {}),
     ...(Number.isFinite(end) ? { end } : {}),
     left: rect.left - railRect.left,
+    right: rect.right - railRect.left,
     top: rect.top - railRect.top,
     bottom: rect.bottom - railRect.top,
     above: rect.bottom + 220 > viewportBottom,
+    rtl: element.ownerDocument.defaultView?.getComputedStyle(element).direction === 'rtl',
+    visibleLeft,
+    visibleRight: visibleWidth > 0 ? visibleLeft + visibleWidth : Number.POSITIVE_INFINITY,
   };
+}
+
+/**
+ * The balloon's left edge and width, relative to the rail. The balloon starts at the site's
+ * inline start (its left edge, or its right edge in right-to-left text), and stays inside
+ * the scroll container's visible width: it narrows on a narrow viewport and moves inward
+ * near the edge.
+ */
+export function balloonBox(
+  anchor: BalloonAnchor,
+  preferredWidth: number
+): { readonly left: number; readonly width: number } {
+  const room = anchor.visibleRight - anchor.visibleLeft - 2 * BALLOON_EDGE_PX;
+  const width = Number.isFinite(room) && room > 0 ? Math.min(preferredWidth, room) : preferredWidth;
+  const start = anchor.rtl ? anchor.right - width : anchor.left;
+  const min = anchor.visibleLeft + BALLOON_EDGE_PX;
+  const max = anchor.visibleRight - BALLOON_EDGE_PX - width;
+  return { left: Math.min(Math.max(start, min), Math.max(max, min)), width };
+}
+
+/**
+ * The painted site an open balloon stands on, found again after a repaint replaced the
+ * element: the same change, author, kind, and text offset first, else the change's first site.
+ */
+function findAnchorElement(
+  scroller: HTMLElement,
+  anchor: BalloonAnchor,
+  served: ReviewItemView | null
+): HTMLElement | null {
+  let first: HTMLElement | null = null;
+  for (const node of scroller.querySelectorAll('[data-revision-id]')) {
+    if (!(node instanceof HTMLElement) || node.dataset.revisionId !== anchor.revisionId) continue;
+    if ((node.dataset.reviewAuthor ?? '') !== anchor.author) continue;
+    if (node.dataset.formattingKind !== anchor.formattingKind) continue;
+    if (node.classList.contains('docx-table-row--revision') !== anchor.structuralSite) continue;
+    const start = Number(node.dataset.reviewStart ?? node.dataset.start);
+    if (node.dataset.paragraphId === anchor.paragraphId && start === anchor.start) return node;
+    first ??= node;
+  }
+  return first ?? (served ? findPaintedRevisionElement(scroller, served) : null);
+}
+
+const GEOMETRY = [
+  'left',
+  'right',
+  'top',
+  'bottom',
+  'above',
+  'rtl',
+  'visibleLeft',
+  'visibleRight',
+] as const;
+
+/**
+ * Measure an open balloon's site again, after a repaint, a zoom change, or a resize of the
+ * scroll container. Returns the same object when nothing moved, so a caller that stores it
+ * does not render again, and the previous anchor when the site is not painted.
+ */
+export function remeasureBalloonAnchor(
+  anchor: BalloonAnchor,
+  scroller: HTMLElement,
+  rail: HTMLElement,
+  served: ReviewItemView | null
+): BalloonAnchor {
+  const element = findAnchorElement(scroller, anchor, served);
+  if (!element) return anchor;
+  const next = anchorFromRevisionElement(element, rail, anchor.structuralSite);
+  return GEOMETRY.every((key) => next[key] === anchor[key]) ? anchor : { ...anchor, ...next };
 }
 
 /**

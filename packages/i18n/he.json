@@ -775,7 +775,9 @@
     "protectDocument": "הגן על המסמך עבור טפסים",
     "simpleMarkup": "סימון פשוט",
     "replyCount": "תשובות: {count}",
-    "trackedChange": "שינוי במעקב"
+    "trackedChange": "שינוי במעקב",
+    "changeAnnouncement": null,
+    "replyTargetResolved": null
   },
   "imageAltText": {
     "description": "תיאור",
@@ -954,22 +956,12 @@
       "yellow": "צהוב",
       "gray": "אפור",
       "lightGreen": "ירוק בהיר",
-      "lightPurple": "סגול בהיר",
-      "avatar": "ראשי תיבות של המחבר",
-      "balloons": "בועות",
-      "icon": "סמל",
-      "pane": "חלונית סקירה",
-      "float": "הצג את הכרטיס הפתוח מעל",
-      "scroll": "גלילה לרוחב"
+      "lightPurple": "סגול בהיר"
     },
     "deletionsBackground": "רקע מחיקות",
     "formattingBackground": "רקע שינויי עיצוב",
     "insertionsBackground": "רקע הוספות",
     "movedFromBackground": "רקע מקור ההעברה",
-    "movedToBackground": "רקע יעד ההעברה",
-    "commentMarkers": "סמני הערות",
-    "layout": "פריסת סקירה",
-    "revisionsIn": "הצג שינויים במעקב ב",
-    "paneOverflow": "כאשר חלונית הסקירה אינה נכנסת"
+    "movedToBackground": "רקע יעד ההעברה"
   }
 }

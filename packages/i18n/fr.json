@@ -775,7 +775,9 @@
     "protectDocument": "Protéger le document pour les formulaires",
     "simpleMarkup": "Marques simples",
     "replyCount": "Réponses : {count}",
-    "trackedChange": "Modification suivie"
+    "trackedChange": "Modification suivie",
+    "changeAnnouncement": null,
+    "replyTargetResolved": null
   },
   "imageAltText": {
     "description": "Description",
@@ -954,22 +956,12 @@
       "yellow": "Jaune",
       "gray": "Gris",
       "lightGreen": "Vert clair",
-      "lightPurple": "Violet clair",
-      "avatar": "Initiales de l'auteur",
-      "balloons": "Bulles",
-      "icon": "Icône",
-      "pane": "Volet de révision",
-      "float": "Superposer la carte ouverte",
-      "scroll": "Défiler horizontalement"
+      "lightPurple": "Violet clair"
     },
     "deletionsBackground": "Arrière-plan des suppressions",
     "formattingBackground": "Arrière-plan des modifications de mise en forme",
     "insertionsBackground": "Arrière-plan des insertions",
     "movedFromBackground": "Arrière-plan du texte déplacé depuis",
-    "movedToBackground": "Arrière-plan du texte déplacé vers",
-    "commentMarkers": "Marqueurs de commentaires",
-    "layout": "Disposition de la révision",
-    "revisionsIn": "Afficher les modifications suivies dans",
-    "paneOverflow": "Quand le volet de révision ne tient pas"
+    "movedToBackground": "Arrière-plan du texte déplacé vers"
   }
 }

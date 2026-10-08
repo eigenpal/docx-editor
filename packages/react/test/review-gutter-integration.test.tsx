@@ -162,7 +162,7 @@ describe('the viewport’s review gutter', () => {
     ).not.toBeNull();
   });
 
-  test("paneOverflow: 'scroll' keeps the full column on a narrow viewport, switchable live", async () => {
+  test("overflow: 'scroll' keeps the full column on a narrow viewport, switchable live", async () => {
     scrollerWidth = 1000;
     let editor: DocxEditorInstance | null = null;
     const { container } = render(
@@ -181,7 +181,7 @@ describe('the viewport’s review gutter', () => {
     );
     await settle();
     act(() => {
-      editor!.setRevisionMarkup({ paneOverflow: 'scroll' });
+      editor!.setReviewPane({ overflow: 'scroll' });
       editor!.exec({ type: 'toggleReviewPane' });
     });
     await settle();
@@ -189,14 +189,14 @@ describe('the viewport’s review gutter', () => {
     expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('316px');
     expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('24px');
     act(() => {
-      editor!.setRevisionMarkup({ paneOverflow: 'float' });
+      editor!.setReviewPane({ overflow: 'float' });
     });
     await settle();
     expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('44px');
     expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('44px');
   });
 
-  test("paneOverflow: 'scroll' fits inside the marker strip and keeps one size when toggled", async () => {
+  test("overflow: 'scroll' fits inside the marker strip and keeps one size when toggled", async () => {
     // The stylesheet's padding rule, which the fit measures; this file loads no CSS.
     const style = document.createElement('style');
     style.textContent =
@@ -222,7 +222,7 @@ describe('the viewport’s review gutter', () => {
       );
       await settle();
       act(() => {
-        editor!.setRevisionMarkup({ paneOverflow: 'scroll' });
+        editor!.setReviewPane({ overflow: 'scroll' });
         if (editor!.snapshot().reviewPaneOpen) editor!.exec({ type: 'toggleReviewPane' });
       });
       await settle();
@@ -330,7 +330,7 @@ describe('the viewport’s review gutter', () => {
       editor!.setReviewPane({ overflow: 'float' });
     });
     await settle();
-    expect(editor!.snapshot().reviewPane).toEqual({ opening: 'auto', overflow: 'float' });
+    expect(editor!.snapshot().reviewPane).toMatchObject({ opening: 'auto', overflow: 'float' });
     expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('44px');
     expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('44px');
   });

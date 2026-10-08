@@ -29,10 +29,36 @@ export type ReviewPaneOpening = 'auto' | 'manual';
  *   `minZoom` (or 10%) so that the full column fits. The pane changes to the marker strip
  *   only when the column does not fit at that floor either. A fixed zoom behaves as
  *   `'float'`.
+ * - `'scroll'`: a capped fit keeps the page at the size it has beside the closed pane's
+ *   marker strip. The full column stands beside it, and the viewport scrolls sideways to
+ *   reach the cards. An open navigation pane does not shrink the page either.
  *
  * @public
  */
-export type ReviewPaneOverflow = 'float' | 'shrinkPage';
+export type ReviewPaneOverflow = 'float' | 'shrinkPage' | 'scroll';
+
+/**
+ * Where tracked changes open.
+ *
+ * - `'pane'`: the review pane lists tracked changes as cards beside the comments.
+ * - `'balloons'`: the pane lists comments only. A tracked change opens in a balloon at its
+ *   text when the reader clicks it, or when Next Change, Previous Change, or
+ *   `setActiveReviewItem(key, { announce: true })` reaches it.
+ *
+ * @public
+ */
+export type RevisionsIn = 'pane' | 'balloons';
+
+/**
+ * How a collapsed comment marker looks.
+ *
+ * - `'initials'`: a badge with the thread author's initials in the author's color, a reply
+ *   count, and a check mark when the thread is resolved.
+ * - `'icon'`: the comment icon.
+ *
+ * @public
+ */
+export type CommentMarkers = 'initials' | 'icon';
 
 /**
  * Review pane settings to change. Every field is optional, and an omitted field keeps its
@@ -45,6 +71,10 @@ export interface ReviewPaneOptions {
   readonly opening?: ReviewPaneOpening;
   /** Default `'float'`. */
   readonly overflow?: ReviewPaneOverflow;
+  /** Default `'pane'`. */
+  readonly revisionsIn?: RevisionsIn;
+  /** Default `'initials'`. */
+  readonly commentMarkers?: CommentMarkers;
 }
 
 /**
@@ -57,17 +87,25 @@ export interface ResolvedReviewPane {
   readonly opening: ReviewPaneOpening;
   /** What the open pane does when its card column does not fit beside the page. */
   readonly overflow: ReviewPaneOverflow;
+  /** Where tracked changes open. */
+  readonly revisionsIn: RevisionsIn;
+  /** How a collapsed comment marker looks. */
+  readonly commentMarkers: CommentMarkers;
 }
 
 /** The settings an editor starts with when nothing sets them. @public */
 export const DEFAULT_REVIEW_PANE: ResolvedReviewPane = Object.freeze({
   opening: 'auto',
   overflow: 'float',
+  revisionsIn: 'pane',
+  commentMarkers: 'initials',
 });
 
 const ALLOWED: { readonly [K in keyof ResolvedReviewPane]: readonly string[] } = {
   opening: ['auto', 'manual'],
-  overflow: ['float', 'shrinkPage'],
+  overflow: ['float', 'shrinkPage', 'scroll'],
+  revisionsIn: ['pane', 'balloons'],
+  commentMarkers: ['initials', 'icon'],
 };
 
 /**

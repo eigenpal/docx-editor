@@ -58,8 +58,7 @@ export function createRevisionMarkupDialog(host: RevisionMarkupDialogHost): Revi
       const [key, field] = path.split('.');
       const value = draft[key as keyof ResolvedRevisionMarkup];
       if (control.tagName === 'INPUT') (control as HTMLInputElement).checked = value as boolean;
-      else if (field === undefined) control.value = value as string;
-      else control.value = (value as unknown as Record<string, string>)[field];
+      else control.value = (value as unknown as Record<string, string>)[field!];
       control.disabled = (key === 'movedFrom' || key === 'movedTo') && !draft.trackMoves;
     }
     for (const [path, picker] of colors) {
@@ -159,27 +158,6 @@ export function createRevisionMarkupDialog(host: RevisionMarkupDialogHost): Revi
     section.append(label, note);
     controls.set(key, control);
   };
-  // Review layout: where tracked changes are listed and how comment markers look.
-  const choice = (
-    section: HTMLElement,
-    key: 'revisionsIn' | 'commentMarkers' | 'paneOverflow',
-    values: readonly string[]
-  ) => {
-    const label = el('label');
-    const fieldLabel = el('span', t(key));
-    fieldLabel.className = 'docx-revision-markup-field-label';
-    const control = el('select');
-    for (const id of values) {
-      const option = el('option', t(`values.${id}`));
-      option.value = id;
-      control.append(option);
-    }
-    control.value = draft[key];
-    control.addEventListener('change', () => update({ [key]: control.value }));
-    label.append(fieldLabel, control);
-    section.append(label);
-    controls.set(key, control);
-  };
   return {
     open() {
       if (host.signal.aborted) return;
@@ -235,10 +213,6 @@ export function createRevisionMarkupDialog(host: RevisionMarkupDialogHost): Revi
       const formatting = section('formatting');
       checkbox(formatting, 'trackFormatting');
       style(formatting, 'formatting', marks);
-      const layout = section('layout');
-      choice(layout, 'revisionsIn', ['pane', 'balloons']);
-      choice(layout, 'commentMarkers', ['avatar', 'icon']);
-      choice(layout, 'paneOverflow', ['float', 'scroll']);
       const footer = el('div');
       footer.className = 'docx-revision-markup-actions';
       const button = (key: string, action: () => void) => {

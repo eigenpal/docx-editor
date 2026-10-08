@@ -119,7 +119,7 @@ export function ReviewCard({ className, asChild, hidden, children }: ReviewPartP
         label={t('review.showResolvedComment')}
         statusLabel={t('review.resolved')}
         entryKey={entry.key}
-        badge={commentMarkers === 'avatar'}
+        badge={commentMarkers === 'initials'}
         onActivate={() => review.setActive(entry.key)}
         onDeactivate={() => review.setActive(null)}
       >

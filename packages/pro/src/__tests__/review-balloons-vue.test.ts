@@ -18,6 +18,7 @@ import {
   checkChangeBalloons,
   checkCommentMarkers,
   checkReadOnlyBalloon,
+  checkBalloonFollowsLayout,
   checkRevealOpensPane,
   checkRevealReopensBalloon,
   checkStructuralCaret,
@@ -81,7 +82,8 @@ describe('Vue review layout preferences', () => {
     const mounted = mountReview(
       BALLOON_SOURCE,
       {},
-      { author: 'Grace Hopper', revisionMarkup: { revisionsIn: 'balloons' } }
+      { author: 'Grace Hopper' },
+      { revisionsIn: 'balloons' }
     );
     try {
       await ready(mounted);
@@ -100,9 +102,9 @@ describe('Vue review layout preferences', () => {
           (card) => card.dataset.kind
         );
       expect(kinds()).toContain('insert');
-      await change(() => mounted.editor().setRevisionMarkup({ revisionsIn: 'balloons' }));
+      await change(() => mounted.editor().setReviewPane({ revisionsIn: 'balloons' }));
       expect(kinds().every((kind) => kind === 'comment')).toBe(true);
-      await change(() => mounted.editor().setRevisionMarkup({ revisionsIn: 'pane' }));
+      await change(() => mounted.editor().setReviewPane({ revisionsIn: 'pane' }));
       expect(kinds()).toContain('insert');
     } finally {
       mounted.unmount();
@@ -113,7 +115,8 @@ describe('Vue review layout preferences', () => {
     const mounted = mountReview(
       ROW_SOURCE,
       {},
-      { author: 'Grace Hopper', revisionMarkup: { revisionsIn: 'balloons' } }
+      { author: 'Grace Hopper' },
+      { revisionsIn: 'balloons' }
     );
     try {
       await flush();
@@ -149,7 +152,7 @@ describe('Vue review layout preferences', () => {
     }
   });
 
-  test("paneOverflow: 'scroll' keeps the full column on a narrow viewport", async () => {
+  test("overflow: 'scroll' keeps the full column on a narrow viewport", async () => {
     // happy-dom lays nothing out; stand in a 1000px viewport, too narrow for the column.
     const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
     Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
@@ -165,14 +168,14 @@ describe('Vue review layout preferences', () => {
       )!;
       const gutter = () => scroller.style.getPropertyValue('--docx-review-gutter');
       expect(gutter()).toBe('44px');
-      await change(() => editor.setRevisionMarkup({ paneOverflow: 'scroll' }));
+      await change(() => editor.setReviewPane({ overflow: 'scroll' }));
       expect(gutter()).toBe('316px');
       expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('24px');
       // The rail shows its full card column, not the compact strip.
       expect(
         mounted.container.querySelector('[data-testid="review-rail"]')?.hasAttribute('data-compact')
       ).toBe(false);
-      await change(() => editor.setRevisionMarkup({ paneOverflow: 'float' }));
+      await change(() => editor.setReviewPane({ overflow: 'float' }));
       expect(gutter()).toBe('44px');
     } finally {
       mounted.unmount();
@@ -181,7 +184,7 @@ describe('Vue review layout preferences', () => {
     }
   }, 20000);
 
-  test("paneOverflow: 'scroll' fits inside the marker strip and keeps one size when toggled", async () => {
+  test("overflow: 'scroll' fits inside the marker strip and keeps one size when toggled", async () => {
     // The stylesheet's padding rule, which the fit measures; this file loads no CSS.
     const style = document.createElement('style');
     style.textContent =
@@ -198,7 +201,7 @@ describe('Vue review layout preferences', () => {
       await ready(mounted);
       const editor = mounted.editor() as DocxEditorInstance;
       await change(() => {
-        editor.setRevisionMarkup({ paneOverflow: 'scroll' });
+        editor.setReviewPane({ overflow: 'scroll' });
         if (editor.snapshot().reviewPaneOpen) editor.exec({ type: 'toggleReviewPane' });
       });
       // Leave the fit and come back, so it measures the settled paddings now.
@@ -230,11 +233,31 @@ describe('Vue review layout preferences', () => {
     }
   }, 20000);
 
+  test('an open balloon follows its change and stays inside the viewport', async () => {
+    const mounted = mountReview(
+      BALLOON_SOURCE,
+      {},
+      { author: 'Grace Hopper' },
+      { revisionsIn: 'balloons' }
+    );
+    try {
+      await ready(mounted);
+      await checkBalloonFollowsLayout(
+        mounted.container,
+        mounted.editor() as DocxEditorInstance,
+        change
+      );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   test('Next Change reopens a closed balloon on the change it lands on again', async () => {
     const mounted = mountReview(
       ROW_SOURCE,
       {},
-      { author: 'Grace Hopper', revisionMarkup: { revisionsIn: 'balloons' } }
+      { author: 'Grace Hopper' },
+      { revisionsIn: 'balloons' }
     );
     try {
       await flush();
@@ -249,13 +272,9 @@ describe('Vue review layout preferences', () => {
     }
   });
 
-  for (const paneOverflow of ['float', 'scroll'] as const) {
-    test(`Next Change opens a closed pane at its card (paneOverflow: '${paneOverflow}')`, async () => {
-      const mounted = mountReview(
-        BALLOON_SOURCE,
-        {},
-        { author: 'Grace Hopper', revisionMarkup: { paneOverflow } }
-      );
+  for (const overflow of ['float', 'scroll'] as const) {
+    test(`Next Change opens a closed pane at its card (overflow: '${overflow}')`, async () => {
+      const mounted = mountReview(BALLOON_SOURCE, {}, { author: 'Grace Hopper' }, { overflow });
       try {
         await ready(mounted);
         await checkRevealOpensPane(
@@ -298,7 +317,8 @@ describe('Vue review layout preferences', () => {
     const mounted = mountReview(
       BALLOON_SOURCE,
       {},
-      { author: 'Grace Hopper', revisionMarkup: { revisionsIn: 'balloons' } }
+      { author: 'Grace Hopper' },
+      { revisionsIn: 'balloons' }
     );
     try {
       await ready(mounted);

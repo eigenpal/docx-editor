@@ -25,7 +25,6 @@ import { ClearAnchorHighlightOptions } from '@docx-editor.dev/core/contracts/edi
 import { ClearRefreshHighlightsOptions } from '@docx-editor.dev/core/editor';
 import { ColorValue } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core/editor';
-import { CommentMarkers } from '@docx-editor.dev/core/editor';
 import { Component } from 'vue';
 import { ComponentCustomProps } from 'vue';
 import { composeFontConfiguration } from '@docx-editor.dev/core/editor';
@@ -108,7 +107,6 @@ import { NavigateToChangeOptions } from '@docx-editor.dev/core/editor';
 import { NavigationCommand } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core/editor';
-import { PaneOverflow } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogFields } from '@docx-editor.dev/core/editor';
 import { ParagraphDialogMixed } from '@docx-editor.dev/core/editor';
 import { ParagraphFlagState } from '@docx-editor.dev/core/editor';
@@ -141,7 +139,6 @@ import { RevisionMarkupDialogSession } from '@docx-editor.dev/core/editor';
 import { RevisionMarkupMark } from '@docx-editor.dev/core/editor';
 import { RevisionMarkupNamedColor } from '@docx-editor.dev/core/editor';
 import { RevisionMarkupOptions } from '@docx-editor.dev/core/editor';
-import { RevisionsIn } from '@docx-editor.dev/core/editor';
 import { RevisionStyles } from '@docx-editor.dev/core/editor';
 import { RulerIndent } from '@docx-editor.dev/core/editor';
 import { rulerPageBox } from '@docx-editor.dev/core/editor';
@@ -214,8 +211,6 @@ export { ClearAnchorHighlightOptions }
 export { ClearRefreshHighlightsOptions }
 
 export { commandForSlot }
-
-export { CommentMarkers }
 
 export { composeFontConfiguration }
 
@@ -3800,14 +3795,11 @@ export interface DocxEditorRef {
 export const DocxEditorRevisionMarkup: vue.DefineComponent<vue.ExtractPropTypes<{
     cells: PropType<RevisionMarkupOptions['cells']>;
     changedLines: PropType<RevisionMarkupOptions['changedLines']>;
-    commentMarkers: PropType<RevisionMarkupOptions['commentMarkers']>;
     deletions: PropType<RevisionMarkupOptions['deletions']>;
     formatting: PropType<RevisionMarkupOptions['formatting']>;
     insertions: PropType<RevisionMarkupOptions['insertions']>;
     movedFrom: PropType<RevisionMarkupOptions['movedFrom']>;
     movedTo: PropType<RevisionMarkupOptions['movedTo']>;
-    paneOverflow: PropType<RevisionMarkupOptions['paneOverflow']>;
-    revisionsIn: PropType<RevisionMarkupOptions['revisionsIn']>;
     trackFormatting: {
         default: undefined;
         type: BooleanConstructor;
@@ -3821,14 +3813,11 @@ export const DocxEditorRevisionMarkup: vue.DefineComponent<vue.ExtractPropTypes<
 }, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     cells: PropType<RevisionMarkupOptions['cells']>;
     changedLines: PropType<RevisionMarkupOptions['changedLines']>;
-    commentMarkers: PropType<RevisionMarkupOptions['commentMarkers']>;
     deletions: PropType<RevisionMarkupOptions['deletions']>;
     formatting: PropType<RevisionMarkupOptions['formatting']>;
     insertions: PropType<RevisionMarkupOptions['insertions']>;
     movedFrom: PropType<RevisionMarkupOptions['movedFrom']>;
     movedTo: PropType<RevisionMarkupOptions['movedTo']>;
-    paneOverflow: PropType<RevisionMarkupOptions['paneOverflow']>;
-    revisionsIn: PropType<RevisionMarkupOptions['revisionsIn']>;
     trackFormatting: {
         default: undefined;
         type: BooleanConstructor;
@@ -5722,8 +5711,6 @@ export interface PaginatedDocxEditorShellProps {
     readonly source: Uint8Array;
 }
 
-export { PaneOverflow }
-
 export { ParagraphFlagState }
 
 export { ParagraphFormatRead }
@@ -5893,8 +5880,6 @@ export { RevisionMarkupMark }
 export { RevisionMarkupNamedColor }
 
 export { RevisionMarkupOptions }
-
-export { RevisionsIn }
 
 export { RevisionStyles }
 

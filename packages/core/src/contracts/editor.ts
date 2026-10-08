@@ -644,14 +644,30 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    * the story it lives in will not open — and a host walking a queue with next/previous
    * controls has no other way to learn that a step did nothing. Consult {@link ReviewItemPlacement.activatable} to avoid asking.
    *
-   * A call that lands fires `reviewItemReveal` with `source: 'host'`, also when the item was
-   * already active, unless `options.announce` is `false`. A `null` key fires nothing.
+   * With `options.announce: true`, a call that lands fires `reviewItemReveal` with
+   * `source: 'host'`, also when the item was already active, so the packaged review UI opens
+   * the item's balloon or card. By default it fires nothing. A `null` key fires nothing.
    */
   setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult;
 
-  /** Key {@link setActiveReviewItem} or Next/Previous Change opened, while its caret stands;
-   * null when only the caret made an item active. A pair reports its deletion's key. */
-  getActivatedReviewKey(): string | null;
+  /**
+   * The key of the review item that {@link setActiveReviewItem}, Next Change, or Previous
+   * Change made active, while the caret stays in that item.
+   *
+   * Returns `null` when no item is active, and when only a caret move made an item active.
+   * To find the item the caret is in, read `isActive` on the placements that
+   * {@link getReviewItems} returns. A paired replacement reports the key of its deletion.
+   * The value changes with the selection, so read it again on `selectionChange`.
+   *
+   * @example
+   * ```ts
+   * editor.on('selectionChange', () => {
+   *   const opened = editor.getActiveReviewItem();
+   *   if (opened !== null) showMyCard(opened);
+   * });
+   * ```
+   */
+  getActiveReviewItem(): string | null;
 
   /**
    * Revision kinds the caret must never activate, or null for none.

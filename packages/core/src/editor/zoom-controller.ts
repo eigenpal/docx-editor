@@ -13,7 +13,12 @@
 
 import type { ZoomMode } from '../contracts/editor.ts';
 import { surfaceScroller } from './surface-pages.ts';
-import { fitZoom, isFitMode, reviewPaneEntitledZoom } from './zoom-fit.ts';
+import {
+  REVIEW_MARKERS_GUTTER_PX,
+  fitZoom,
+  isFitMode,
+  reviewPaneEntitledZoom,
+} from './zoom-fit.ts';
 
 /** What the controller needs from the editor it serves. */
 export interface ZoomControllerHost {
@@ -60,16 +65,16 @@ export interface ZoomController {
 }
 
 /**
- * The closed review pane's marker strip on both edges, in CSS px: the adapters'
- * `2 * REVIEW_MARKERS_GUTTER`. The fallback for a host that marks the pane but has not
- * published `--docx-review-strip`, so an unmeasured first frame fits as a measured one does.
+ * The closed review pane's marker strip on both edges, in CSS px. The fallback for a host
+ * that marks the pane but has not published `--docx-review-strip`, so an unmeasured first
+ * frame fits as a measured one does.
  */
-const REVIEW_STRIP_FALLBACK_PX = 88;
+const REVIEW_STRIP_FALLBACK_PX = 2 * REVIEW_MARKERS_GUTTER_PX;
 
 /**
  * The scroller's content box, or null when it cannot be measured.
  *
- * `panesScroll` (`paneOverflow: 'scroll'`) lets the panes that scroll beside the page stop
+ * `panesScroll` (the review pane's `overflow: 'scroll'`) lets the panes that scroll beside the page stop
  * shrinking it. With a review rail mounted, the fit subtracts only the closed pane's marker
  * strip (`--docx-review-strip`), and does so whether the pane is open or closed: the page
  * then has ONE size, and opening or closing the pane never relays it out. Without a rail,
@@ -135,12 +140,10 @@ export function createZoomController(host: ZoomControllerHost): ZoomController {
     if (!isFitMode(mode)) return;
     const container = host.container();
     if (!container) return;
-    // A capped fit keeps its size under `paneOverflow: 'scroll'`. An uncapped fit still fills
-    // the padded box, and `shrinkForReviewPane` is an explicit request to shrink.
+    // A capped fit keeps its size under the review pane's `overflow: 'scroll'`. An uncapped
+    // fit still fills the padded box.
     const panesScroll =
-      host.panesScroll?.() === true &&
-      mode.shrinkForReviewPane !== true &&
-      reviewPaneEntitledZoom(mode, host.zoom()) !== null;
+      host.panesScroll?.() === true && reviewPaneEntitledZoom(mode, host.zoom()) !== null;
     const width = availableWidth(container, panesScroll);
     if (width === null) return;
     const pageWidthPx = host.pageWidthPx();
@@ -155,7 +158,7 @@ export function createZoomController(host: ZoomControllerHost): ZoomController {
     });
     if (next === null || next === host.zoom()) return;
     // A rescale keeps the viewport centre in place, which scrolls sideways once the page is
-    // wider than the box (`paneOverflow: 'scroll'`). A reader at the start edge stays there.
+    // wider than the box (`overflow: 'scroll'`). A reader at the start edge stays there.
     const scroller = surfaceScroller(container);
     const atStart = scroller !== null && scroller.scrollLeft === 0;
     host.applyZoom(next);

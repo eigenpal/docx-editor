@@ -62,34 +62,6 @@ test('stages settings, applies once, and reflects API changes in an open dialog'
   expect(host.container.querySelector('dialog')).toBeNull();
 });
 
-test('review layout choices stage and apply like every other preference', () => {
-  const host = setup();
-  const revisionsIn = getByLabelText(
-    host.container,
-    'Show tracked changes in'
-  ) as HTMLSelectElement;
-  const markers = getByLabelText(host.container, 'Comment markers') as HTMLSelectElement;
-  expect(revisionsIn.value).toBe('pane');
-  expect(markers.value).toBe('avatar');
-  fireEvent.change(revisionsIn, { target: { value: 'balloons' } });
-  fireEvent.change(markers, { target: { value: 'icon' } });
-  expect(host.get().revisionsIn).toBe('pane');
-  fireEvent.click(getByRole(host.container, 'button', { name: 'OK' }));
-  expect(host.get().revisionsIn).toBe('balloons');
-  expect(host.get().commentMarkers).toBe('icon');
-  host.dialog.open();
-  const overflow = getByLabelText(
-    host.container,
-    'When the review pane does not fit'
-  ) as HTMLSelectElement;
-  expect(overflow.value).toBe('float');
-  fireEvent.change(overflow, { target: { value: 'scroll' } });
-  fireEvent.click(getByRole(host.container, 'button', { name: 'OK' }));
-  expect(host.get().paneOverflow).toBe('scroll');
-  expect(() => host.set({ paneOverflow: 'wrap' as never })).toThrow(TypeError);
-  expect(() => host.set({ revisionsIn: 'margin' as never })).toThrow(TypeError);
-});
-
 test('Cancel discards draft settings; Reset only changes the draft', () => {
   const host = setup();
   host.set({ insertions: { mark: 'bold' } });

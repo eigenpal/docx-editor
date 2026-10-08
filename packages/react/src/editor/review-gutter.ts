@@ -1,7 +1,7 @@
 // The gutter the review rail reserves beside the page, and no more.
 //
 // THE RULE: the column is either fully reserved or not reserved at all, and, under the
-// default `paneOverflow: 'float'`, a column that cannot be afforded becomes SYMMETRIC.
+// default `overflow: 'float'`, a column that cannot be afforded becomes SYMMETRIC.
 // The page stack centres itself in the scroller's padding box, so padding one edge by P
 // shifts the sheet left by P/2 — pleasant on a wide window, where the sheet and its card
 // column read as one centred pair, and wrong on a narrow one, where any one-sided
@@ -12,11 +12,11 @@
 //
 //   - Affordable (the viewport holds the page at its entitled width, the full column,
 //     and a little clearance): the column stands and the pair centres, as it always has.
-//   - Not affordable, `paneOverflow: 'float'`: the SAME marker strip is reserved on BOTH
+//   - Not affordable, `overflow: 'float'`: the SAME marker strip is reserved on BOTH
 //     edges, so the sheet sits dead-centre and the strip still guarantees room for the
 //     markers and the add-comment affordance beside the page. The open card floats over
 //     the page.
-//   - Not affordable, `paneOverflow: 'scroll'`: the full column stays at the end and the
+//   - Not affordable, `overflow: 'scroll'`: the full column stays at the end and the
 //     page's clearance is reserved at the start. The fit measures the viewport less the
 //     closed pane's strip in both states, so the page keeps ONE size whether the pane is
 //     open or closed, and the viewport scrolls sideways to reach the cards.
@@ -42,7 +42,7 @@
 
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/editor';
-import { reviewPaneEntitledZoom } from '@docx-editor.dev/core/editor';
+import { REVIEW_MARKERS_GUTTER_PX, reviewPaneEntitledZoom } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../lib/units';
 import { ReviewRailContext } from './context';
 import { useEditorState } from './useEditorState';
@@ -55,7 +55,7 @@ import {
 export const REVIEW_PANE_GUTTER = 316;
 
 /** The marker strip: anchors and the add-comment button, no cards. */
-export const REVIEW_MARKERS_GUTTER = 44;
+export const REVIEW_MARKERS_GUTTER = REVIEW_MARKERS_GUTTER_PX;
 
 /**
  * Breathing room the page keeps on EACH side for the full column to count as affordable.
@@ -87,7 +87,7 @@ const BALANCED_STRIP: ReviewGutter = {
 const NO_GUTTER: ReviewGutter = { inlineStart: 0, inlineEnd: 0 };
 
 /**
- * `paneOverflow: 'scroll'` when the column does not fit: the full column at the end, and the
+ * `overflow: 'scroll'` when the column does not fit: the full column at the end, and the
  * page's clearance at the start, so the sheet does not sit flush against the viewport edge
  * while the viewport scrolls sideways to the cards.
  */
@@ -118,7 +118,7 @@ export interface ReviewGutterInput {
    */
   readonly docked?: boolean;
   /**
-   * `paneOverflow: 'scroll'`: the full column stands even when it does not fit. The page
+   * `overflow: 'scroll'`: the full column stands even when it does not fit. The page
    * keeps the one size it has with the pane closed, and the viewport scrolls sideways to
    * reach the cards.
    */
@@ -166,7 +166,7 @@ interface GutterGeometry {
    * uncapped fit, which has no entitlement to measure against.
    */
   readonly entitledZoom: number | null;
-  /** `paneOverflow: 'scroll'` is in force. */
+  /** `overflow: 'scroll'` is in force. */
   readonly scroll: boolean;
 }
 

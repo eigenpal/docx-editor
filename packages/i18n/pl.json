@@ -775,7 +775,9 @@
     "protectDocument": "Chroń dokument dla formularzy",
     "simpleMarkup": "Prosta adiustacja",
     "replyCount": "Odpowiedzi: {count}",
-    "trackedChange": "Śledzona zmiana"
+    "trackedChange": "Śledzona zmiana",
+    "changeAnnouncement": null,
+    "replyTargetResolved": null
   },
   "imageAltText": {
     "description": "Opis",
@@ -954,22 +956,12 @@
       "yellow": "Żółty",
       "gray": "Szary",
       "lightGreen": "Jasnozielony",
-      "lightPurple": "Jasnofioletowy",
-      "avatar": "Inicjały autora",
-      "balloons": "Dymki",
-      "icon": "Ikona",
-      "pane": "Okienko recenzji",
-      "float": "Nałóż otwartą kartę",
-      "scroll": "Przewijaj w poziomie"
+      "lightPurple": "Jasnofioletowy"
     },
     "deletionsBackground": "Tło usunięć",
     "formattingBackground": "Tło zmian formatowania",
     "insertionsBackground": "Tło wstawień",
     "movedFromBackground": "Tło tekstu przeniesionego z",
-    "movedToBackground": "Tło tekstu przeniesionego do",
-    "commentMarkers": "Znaczniki komentarzy",
-    "layout": "Układ recenzji",
-    "revisionsIn": "Pokaż śledzone zmiany w",
-    "paneOverflow": "Gdy okienko recenzji się nie mieści"
+    "movedToBackground": "Tło tekstu przeniesionego do"
   }
 }

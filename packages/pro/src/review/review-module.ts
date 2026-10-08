@@ -23,10 +23,12 @@ import { collectReviewItems, revisionItemsOfParagraph } from './review-model.ts'
 import { rememberLicenseKey, type ProLicenseOptions } from '../license.ts';
 
 export type {
+  CommentMarkers,
   ResolvedReviewPane,
   ReviewPaneOpening,
   ReviewPaneOptions,
   ReviewPaneOverflow,
+  RevisionsIn,
 } from '@docx-editor.dev/core/editor';
 
 /**

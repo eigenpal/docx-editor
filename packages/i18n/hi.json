@@ -775,7 +775,9 @@
     "protectDocument": "फ़ॉर्म भरने के लिए दस्तावेज़ सुरक्षित करें",
     "simpleMarkup": "सरल मार्कअप",
     "replyCount": "उत्तर: {count}",
-    "trackedChange": "ट्रैक किया गया परिवर्तन"
+    "trackedChange": "ट्रैक किया गया परिवर्तन",
+    "changeAnnouncement": null,
+    "replyTargetResolved": null
   },
   "imageAltText": {
     "description": "विवरण",
@@ -954,22 +956,12 @@
       "yellow": "पीला",
       "gray": "धूसर",
       "lightGreen": "हल्का हरा",
-      "lightPurple": "हल्का बैंगनी",
-      "avatar": "लेखक के आद्याक्षर",
-      "balloons": "बैलून",
-      "icon": "आइकन",
-      "pane": "समीक्षा फलक",
-      "float": "खुला कार्ड ऊपर दिखाएँ",
-      "scroll": "बगल में स्क्रॉल करें"
+      "lightPurple": "हल्का बैंगनी"
     },
     "deletionsBackground": "विलोपन की पृष्ठभूमि",
     "formattingBackground": "स्वरूपण की पृष्ठभूमि",
     "insertionsBackground": "सम्मिलन की पृष्ठभूमि",
     "movedFromBackground": "स्थानांतरण स्रोत की पृष्ठभूमि",
-    "movedToBackground": "स्थानांतरण गंतव्य की पृष्ठभूमि",
-    "commentMarkers": "टिप्पणी चिह्न",
-    "layout": "समीक्षा लेआउट",
-    "revisionsIn": "ट्रैक किए गए परिवर्तन यहाँ दिखाएँ",
-    "paneOverflow": "जब समीक्षा फलक फिट न हो"
+    "movedToBackground": "स्थानांतरण गंतव्य की पृष्ठभूमि"
   }
 }

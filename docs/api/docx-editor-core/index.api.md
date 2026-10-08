@@ -1334,6 +1334,7 @@ export interface DocxEditorInstance extends Editor {
     setMode(mode: 'edit' | 'view' | 'suggesting' | undefined): void;
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setReviewAuthorVisible(author: string, visible: boolean): void;
+    setReviewPane(options: ReviewPaneOptions): void;
     setRevisionMarkup(options: RevisionMarkupOptions): void;
     setRevisionMarkupChrome(handlers: RevisionMarkupChromeHandlers | null, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setRevisionStyles(styles: RevisionStyles): void;
@@ -1407,7 +1408,7 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
     }): readonly (readonly TextMatch[])[];
     // (undocumented)
     focus(scope?: EditorScope): InteractionOutcome<void>;
-    getActivatedReviewKey(): string | null;
+    getActiveReviewItem(): string | null;
     // (undocumented)
     getActiveScope(): ViewScope;
     getAvailableFonts(): readonly string[];
@@ -1528,9 +1529,7 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
     reportCustomNodeDiagnostic(diagnostic: unknown): void;
     retainSelection(): SelectionPin | null;
     save(): Promise<ArrayBuffer>;
-    scrollToBlock(blockId: string, options?: {
-        readonly block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest';
-    }): boolean;
+    scrollToBlock(blockId: string, options?: ScrollToAnchorOptions): boolean;
     scrollToPage(pageNumber: number): boolean;
     selectMatch(match: TextMatch): ExecResult;
     setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult;
@@ -2080,6 +2079,7 @@ export interface EditorSnapshot {
     // (undocumented)
     readonly parseError: string | null;
     readonly reviewDisplayMode?: ReviewDisplayMode;
+    readonly reviewPane?: ResolvedReviewPane;
     readonly reviewPaneOpen?: boolean;
     readonly revisionMarkup: ResolvedRevisionMarkup;
     // (undocumented)
@@ -2774,7 +2774,7 @@ export interface ResolveReviewChangesOptions {
 // @public
 export interface ReviewActivationOptions {
     readonly announce?: boolean;
-    readonly reveal?: 'start' | 'center' | 'centerIfNeeded' | 'nearest' | false;
+    readonly reveal?: ScrollPlacement | false;
 }
 
 // @public
@@ -2875,7 +2875,6 @@ export interface ReviewItemPlacementBase {
 
 // @public
 export interface ReviewItemQuery {
-    // (undocumented)
     readonly excludeRevisionKinds?: readonly ReviewRevisionKind[];
     readonly pairReplacements?: boolean;
     readonly placement?: boolean;
@@ -2911,7 +2910,7 @@ export interface ReviewModuleContribution {
     readonly collectReviewItems: CollectReviewItems;
     readonly createRevisionMarkupDialog?: (host: RevisionMarkupDialogHost) => RevisionMarkupDialog;
     readonly displayModes: readonly ReviewDisplayMode[];
-    readonly paneOpening?: 'automatic' | 'manual';
+    readonly pane?: ReviewPaneOptions;
     readonly revisionItemsOfParagraph: (part: OoxmlPart, paragraphId: string) => readonly ReviewRevisionItem[];
 }
 
@@ -3114,9 +3113,12 @@ export function runToolbarCommand(editor: Editor | null, id: TableChromeSlotId, 
 export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId, value: undefined, options: EditorExecOptions): ExecResult;
 
 // @public
+export type ScrollPlacement = 'start' | 'center' | 'centerIfNeeded' | 'nearest';
+
+// @public
 export interface ScrollToAnchorOptions {
     readonly behavior?: 'instant' | 'smooth';
-    readonly block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest';
+    readonly block?: ScrollPlacement;
     readonly offsetPx?: number;
 }
 
@@ -3487,7 +3489,6 @@ export type ZoomMode = {
     readonly fit: ZoomFitTarget;
     readonly maxZoom?: number;
     readonly minZoom?: number;
-    readonly shrinkForReviewPane?: boolean;
     readonly type: 'fit';
 };
 

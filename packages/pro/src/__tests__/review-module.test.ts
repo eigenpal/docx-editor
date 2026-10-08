@@ -153,6 +153,34 @@ describe('review pane opening', () => {
     expect(() => reviewModule(oldValue)).toThrow(TypeError);
   });
 
+  test('under balloons, tracked changes alone never open the pane', () => {
+    // The pane lists comments only in this mode, so it would open empty.
+    const loaded = createDocxEditor({
+      container: document.createElement('div'),
+      document: docx(TRACKED),
+      author: 'Grace Hopper',
+      modules: [reviewModule({ pane: { revisionsIn: 'balloons' } })],
+    });
+    expect(loaded.getReviewItems().length).toBeGreaterThan(0);
+    expect(loaded.isReviewPaneOpen()).toBe(false);
+    loaded.destroy();
+
+    const edited = createDocxEditor({
+      container: document.createElement('div'),
+      document: docx(PLAIN),
+      author: 'Grace Hopper',
+      modules: [reviewModule({ pane: { revisionsIn: 'balloons' } })],
+    });
+    typeTracked(edited);
+    expect(edited.getReviewItems().length).toBeGreaterThan(0);
+    expect(edited.isReviewPaneOpen()).toBe(false);
+    // Back to the pane: the next load with tracked changes opens it again.
+    edited.setReviewPane({ revisionsIn: 'pane' });
+    edited.load(docx(TRACKED));
+    expect(edited.isReviewPaneOpen()).toBe(true);
+    edited.destroy();
+  });
+
   test('manual stays in force across a second load', () => {
     const editor = open(PLAIN, 'manual');
     expect(editor.snapshot().reviewPane?.opening).toBe('manual');
@@ -167,9 +195,14 @@ describe('review pane opening', () => {
   test('setReviewPane changes the opening at runtime, and invalid settings change nothing', () => {
     const editor = open(PLAIN);
     const before = editor.snapshot().reviewPane;
-    expect(before).toEqual({ opening: 'auto', overflow: 'float' });
+    expect(before).toEqual({
+      opening: 'auto',
+      overflow: 'float',
+      revisionsIn: 'pane',
+      commentMarkers: 'initials',
+    });
     editor.setReviewPane({ opening: 'manual' });
-    expect(editor.snapshot().reviewPane).toEqual({ opening: 'manual', overflow: 'float' });
+    expect(editor.snapshot().reviewPane).toMatchObject({ opening: 'manual', overflow: 'float' });
     typeTracked(editor);
     expect(editor.isReviewPaneOpen()).toBe(false);
     // An unchanged value keeps the snapshot's reference.

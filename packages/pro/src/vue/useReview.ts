@@ -35,7 +35,7 @@ function reviewRevisionKey(editor: Editor): string {
   ).snapshot?.();
   return `${editor.getReviewRevision()}:${editor.getEditingMode()}:${JSON.stringify(
     snapshot?.hiddenReviewAuthors ?? []
-  )}`;
+  )}:${editor.getActiveReviewItem?.() ?? ''}`;
 }
 
 /** @public */
@@ -55,20 +55,27 @@ export interface UseReviewReturn {
   readonly items: ComputedRef<readonly ReviewItemView[]>;
   readonly activeKey: ComputedRef<string | null>;
   /**
+   * The item that `setActive`, Next Change, or Previous Change made active, while the caret
+   * stays in it. `null` when only a caret move made an item active. A paired replacement
+   * reports the key of its deletion. The same value as the editor's `getActiveReviewItem()`,
+   * kept current for you.
+   */
+  readonly explicitActiveKey: ComputedRef<string | null>;
+  /**
    * Card to document: puts the caret at the start of the item and scrolls to it. Reports
    * whether it landed.
    *
-   * A call that lands fires the editor's `reviewItemReveal` event with `source: 'host'`, also
-   * when the item was already active, so the built-in balloon or card opens. Pass
-   * `{ announce: false }` when your own code must not hear that event, for example when your
-   * list follows the caret. A `null` key closes the card and fires no event.
+   * With `{ announce: true }`, a call that lands fires the editor's `reviewItemReveal` event
+   * with `source: 'host'`, also when the item was already active. The packaged review UI then
+   * opens the item's balloon, or opens a closed pane at its card when the pane's `opening`
+   * setting is `'auto'`. Without it, the call fires no event. A `null` key closes the card.
    *
    * @example
    * ```ts
    * const { setActive } = useReview();
    * useEditorEvent('reviewItemReveal', ({ key, source }) => openMyCard(key, source));
-   * setActive(key); // fires 'reviewItemReveal'
-   * setActive(key, { announce: false }); // fires nothing
+   * setActive(key); // fires nothing
+   * setActive(key, { announce: true }); // fires 'reviewItemReveal'
    * ```
    */
   readonly setActive: (key: string | null, options?: ReviewActivationOptions) => boolean;
@@ -130,10 +137,18 @@ function useReviewOfInternal(
     void (renderRevision ?? ownedRevision)?.value;
   };
 
+  // The explicitly activated key is read on every selection change, not on the deferred
+  // review tick: a balloon decides in the same flush whether the item was opened on purpose.
+  const explicitKey = shallowRef<string | null>(null);
+  const readExplicitKey = (editor: Editor | null): void => {
+    explicitKey.value = editor?.getActiveReviewItem?.() ?? null;
+  };
+
   if (!renderRevision) {
     watch(
       () => editorRef.value,
       (editor, _prev, onCleanup) => {
+        readExplicitKey(editor);
         if (!editor) {
           ownedRevision!.value = 'none';
           return;
@@ -143,6 +158,7 @@ function useReviewOfInternal(
         let disposed = false;
         let scheduled: ReturnType<typeof setTimeout> | null = null;
         const notify = () => {
+          if (!disposed) readExplicitKey(editor);
           if (disposed || scheduled !== null) return;
           scheduled = setTimeout(() => {
             scheduled = null;
@@ -168,6 +184,24 @@ function useReviewOfInternal(
     );
   }
 
+  if (renderRevision) {
+    watch(
+      () => editorRef.value,
+      (editor, _previous, onCleanup) => {
+        readExplicitKey(editor);
+        if (!editor) return;
+        const read = (): void => readExplicitKey(editor);
+        const offSelection = editor.on('selectionChange', read);
+        const offChange = editor.on('change', read);
+        onCleanup(() => {
+          offSelection();
+          offChange();
+        });
+      },
+      { immediate: true, flush: 'sync' }
+    );
+  }
+
   const items = computed((): readonly ReviewItemView[] => {
     touch();
     const editor = editorRef.value;
@@ -179,6 +213,7 @@ function useReviewOfInternal(
   });
 
   const activeKey = computed(() => items.value.find((entry) => entry.isActive)?.key ?? null);
+  const explicitActiveKey = computed(() => explicitKey.value);
 
   const setActive = (key: string | null, options?: ReviewActivationOptions): boolean => {
     const editor = editorRef.value;
@@ -271,6 +306,7 @@ function useReviewOfInternal(
   return {
     items,
     activeKey,
+    explicitActiveKey,
     setActive,
     accept,
     reject,

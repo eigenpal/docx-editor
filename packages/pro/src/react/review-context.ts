@@ -100,9 +100,9 @@ export interface ReviewRailValue {
   readonly beginDraft: () => void;
   /** Close it, committed or not, and unpin the range. */
   readonly endDraft: () => void;
-  /** The `commentMarkers` viewer preference: how a comment thread's margin marker looks. */
+  /** The `commentMarkers` review pane setting: how a comment thread's margin marker looks. */
   readonly commentMarkers: CommentMarkers;
-  /** The `revisionsIn` viewer preference: tracked changes as rail cards or page balloons. */
+  /** The `revisionsIn` review pane setting: tracked changes as rail cards or page balloons. */
   readonly revisionsIn: RevisionsIn;
 }
 
@@ -120,10 +120,27 @@ export function useRail(): ReviewRailValue {
  * The fallback is the packaged English, not the raw key — unlike the toolbar and menu bar,
  * whose labels are registry keys a host is expected to resolve, every string here ships one.
  */
-export function useReviewLabel(): (key: TranslationKey) => string {
+/** Placeholder values for a review label, such as `{ count: 3 }` for `{count}`. */
+export type ReviewLabelParams = Readonly<Record<string, string | number>>;
+
+/** Fill `{name}` placeholders in a host-translated label, the way the catalogue's `t()` does. */
+function withParams(text: string, params: ReviewLabelParams | undefined): string {
+  if (!params) return text;
+  return text.replace(/\{(\w+)\}/g, (whole, name: string) =>
+    Object.hasOwn(params, name) ? String(params[name]) : whole
+  );
+}
+
+export function useReviewLabel(): (key: TranslationKey, params?: ReviewLabelParams) => string {
   const { t: hostT } = useContext(ReviewContext) ?? {};
   const { t } = useTranslation();
-  return useCallback((key: TranslationKey) => hostT?.(key) ?? t(key), [hostT, t]);
+  return useCallback(
+    (key: TranslationKey, params?: ReviewLabelParams) => {
+      const host = hostT?.(key);
+      return host !== undefined ? withParams(host, params) : t(key, params);
+    },
+    [hostT, t]
+  );
 }
 
 export const INERT_RAIL: ReviewRailValue = {
@@ -144,6 +161,7 @@ export const INERT_RAIL: ReviewRailValue = {
     reply: () => false,
     selectionAnchorY: null,
     comment: () => false,
+    explicitActiveKey: null,
     paneOpen: true,
     setPaneOpen: () => {},
     ready: false,
@@ -158,6 +176,6 @@ export const INERT_RAIL: ReviewRailValue = {
   measure: () => {},
   beginDraft: () => {},
   endDraft: () => {},
-  commentMarkers: 'avatar',
+  commentMarkers: 'initials',
   revisionsIn: 'pane',
 };

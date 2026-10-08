@@ -775,7 +775,9 @@
     "protectDocument": "Dokument für Formulare schützen",
     "simpleMarkup": "Einfaches Markup",
     "replyCount": "Antworten: {count}",
-    "trackedChange": "Nachverfolgte Änderung"
+    "trackedChange": "Nachverfolgte Änderung",
+    "changeAnnouncement": null,
+    "replyTargetResolved": null
   },
   "imageAltText": {
     "description": "Beschreibung",
@@ -954,22 +956,12 @@
       "yellow": "Gelb",
       "gray": "Grau",
       "lightGreen": "Hellgrün",
-      "lightPurple": "Hellviolett",
-      "avatar": "Initialen des Autors",
-      "balloons": "Sprechblasen",
-      "icon": "Symbol",
-      "pane": "Überarbeitungsbereich",
-      "float": "Geöffnete Karte überlagern",
-      "scroll": "Seitlich scrollen"
+      "lightPurple": "Hellviolett"
     },
     "deletionsBackground": "Hintergrund für Löschungen",
     "formattingBackground": "Hintergrund für Formatierungsänderungen",
     "insertionsBackground": "Hintergrund für Einfügungen",
     "movedFromBackground": "Hintergrund für Verschiebungsquellen",
-    "movedToBackground": "Hintergrund für Verschiebungsziele",
-    "commentMarkers": "Kommentarmarkierungen",
-    "layout": "Überprüfungslayout",
-    "revisionsIn": "Nachverfolgte Änderungen anzeigen in",
-    "paneOverflow": "Wenn der Überprüfungsbereich nicht passt"
+    "movedToBackground": "Hintergrund für Verschiebungsziele"
   }
 }

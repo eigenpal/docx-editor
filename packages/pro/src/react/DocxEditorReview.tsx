@@ -83,6 +83,7 @@ import {
   selectCommentMarkers,
   selectDocumentAbsent,
   selectDocumentReadOnly,
+  selectPaneOpening,
   selectRevisionsIn,
   servedByChangeBalloon,
 } from './review-shared.ts';
@@ -210,12 +211,17 @@ function ReviewRoot({
         (!filter || filter(entry))
     );
   }, [review.items, filter, formatting, revisionsIn]);
-  // A revealed card opens a closed pane, as a click on its marker does. A change that the
-  // balloon serves is not in `items`, so the balloon opens it instead.
+  // A revealed card opens a closed pane, as a click on its marker does, unless the pane's
+  // `opening` setting leaves that to the host. A change that the balloon serves is not in
+  // `items`, so the balloon opens it instead.
   const itemsRef = useRef(items);
   itemsRef.current = items;
+  const paneOpening = useEditorState(selectPaneOpening);
+  const paneOpeningRef = useRef(paneOpening);
+  paneOpeningRef.current = paneOpening;
   useEditorEvent('reviewItemReveal', ({ key }) => {
-    if (!hidden && itemsRef.current.some((entry) => entry.key === key)) setReviewPaneOpen(true);
+    if (hidden || paneOpeningRef.current === 'manual') return;
+    if (itemsRef.current.some((entry) => entry.key === key)) setReviewPaneOpen(true);
   });
   const configuredAuthor = useSyncExternalStore(
     useCallback((notify) => editor?.on('selectionChange', notify) ?? (() => {}), [editor]),

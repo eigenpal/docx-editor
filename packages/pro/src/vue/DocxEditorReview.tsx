@@ -66,6 +66,7 @@ import {
   selectCommentMarkers,
   selectDocumentAbsent,
   selectDocumentReadOnly,
+  selectPaneOpening,
   selectRevisionsIn,
   servedByChangeBalloon,
   type RailMetrics,
@@ -124,6 +125,7 @@ function buildReviewActions(hook: UseReviewReturn, list: readonly ReviewItemView
   return {
     items: list,
     activeKey: hook.activeKey.value,
+    explicitActiveKey: hook.explicitActiveKey.value,
     setActive: hook.setActive,
     accept: hook.accept,
     reject: hook.reject,
@@ -253,11 +255,13 @@ const ReviewRoot = defineComponent({
           (!props.filter || props.filter(entry))
       )
     );
-    // A revealed card opens a closed pane, as a click on its marker does. A change that the
-    // balloon serves is not in `items`, so the balloon opens it instead.
+    // A revealed card opens a closed pane, as a click on its marker does, unless the pane's
+    // `opening` setting leaves that to the host. A change that the balloon serves is not in
+    // `items`, so the balloon opens it instead.
+    const paneOpening = useEditorState(selectPaneOpening);
     useEditorEvent('reviewItemReveal', ({ key }) => {
-      if (!props.hidden && items.value.some((entry) => entry.key === key))
-        reviewHook.setPaneOpen(true);
+      if (props.hidden || paneOpening.value === 'manual') return;
+      if (items.value.some((entry) => entry.key === key)) reviewHook.setPaneOpen(true);
     });
     const expandedResolvedKey = ref<string | null>(null);
     watch(

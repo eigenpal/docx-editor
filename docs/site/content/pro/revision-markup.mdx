@@ -183,86 +183,7 @@ For independent API and dialog changes, omit the controlled prop. You can instea
 
 ## Choose where review items appear
 
-Three preferences control the review layout. Like every other markup preference, they are local view state. They never change the DOCX file or another participant's view.
-
-| Setting          | Values             | Default  |
-| ---------------- | ------------------ | -------- |
-| `revisionsIn`    | `pane`, `balloons` | `pane`   |
-| `commentMarkers` | `avatar`, `icon`   | `avatar` |
-| `paneOverflow`   | `float`, `scroll`  | `float`  |
-
-With `revisionsIn: 'pane'`, the review pane lists comments and tracked changes as cards. With `revisionsIn: 'balloons'`, the pane lists comments only. A tracked change opens in a balloon at its text when you select it in the page, or when **Next Change**, **Previous Change**, or `setActive` reaches it. This also reopens a closed balloon on the change that is already active. Moving the caret into a change does not open the balloon. With `revisionsIn: 'pane'`, **Next Change** and **Previous Change** open a closed pane at the card they reach. The balloon shows the author, the date, and the changed words. A deletion followed by an insertion from the same author appears as one replacement. The balloon also lists replies and has a reply field. **Accept** and **Reject** resolve the change and close the balloon. The balloon also closes when you press Escape, type in the document, or select elsewhere in the page.
-
-With `commentMarkers: 'avatar'`, a collapsed comment marker shows the thread author's initials in their color. A small count shows the number of replies, and a check mark replaces the initials when the thread is resolved. With `commentMarkers: 'icon'`, the marker shows the comment icon. A `DocxEditorReview.Markers` part with an `icon` function overrides both values.
-
-`paneOverflow` decides what happens when the review card column does not fit beside the page. With `paneOverflow: 'float'`, the pane shows a strip of markers and floats the open card over the page. With `paneOverflow: 'scroll'`, the full card column stays beside the page, and the viewport scrolls sideways to reach the cards.
-
-Under `'scroll'`, the page keeps one size whether the review pane is open or closed. Opening the pane or the navigation pane does not reduce it:
-
-- With a fixed zoom, the page keeps that zoom.
-- With a fit zoom that has a maximum, such as the default `'auto'`, the page fits the viewport width less the closed pane's marker strip, up to the maximum. Opening the pane keeps that size.
-- With a fit zoom that has no maximum, the page fills the box that remains beside the panes.
-- With `shrinkForReviewPane: true`, the page shrinks toward the fit's minimum to make room for the column. If the column still does not fit at the minimum, the full column stays and the viewport scrolls sideways.
-
-Under `'scroll'`, the fit measures the scroll container's width less the closed pane's marker strip. It does not subtract padding that your host adds to the scroll container. If your host pads the scroll container, the page can be wider than the remaining box.
-
-`DocxEditorReview` reads these preferences from the editor and updates when they change. Call `setRevisionMarkup()` to switch the layout at runtime:
-
-```ts
-editor.setRevisionMarkup({ revisionsIn: 'balloons' });
-editor.setRevisionMarkup({ commentMarkers: 'icon' });
-editor.setRevisionMarkup({ paneOverflow: 'scroll' });
-```
-
-To set the layout when the editor opens, pass `revisionMarkup`. This example uses a constant, so the prop controls every markup preference. To keep dialog changes, store them as the previous section shows.
-
-<FrameworkTabs>
-<Framework value="react">
-
-```tsx
-import { DocxEditor } from '@docx-editor.dev/react';
-import { DocxEditorReview, reviewModule } from '@docx-editor.dev/pro/react';
-import { DEFAULT_REVISION_MARKUP } from '@docx-editor.dev/core/editor';
-
-const modules = [reviewModule()];
-const markup = { ...DEFAULT_REVISION_MARKUP, revisionsIn: 'balloons' as const };
-
-export function ReviewEditor({ bytes }: { bytes: Uint8Array }) {
-  return (
-    <DocxEditor document={bytes} modules={modules} revisionMarkup={markup}>
-      <DocxEditorReview />
-    </DocxEditor>
-  );
-}
-```
-
-</Framework>
-<Framework value="vue">
-
-```vue
-<script setup lang="ts">
-import { DocxEditor } from '@docx-editor.dev/vue';
-import { DocxEditorReview, reviewModule } from '@docx-editor.dev/pro/vue';
-import { DEFAULT_REVISION_MARKUP } from '@docx-editor.dev/core/editor';
-
-defineProps<{ bytes: Uint8Array }>();
-const modules = [reviewModule()];
-const markup = { ...DEFAULT_REVISION_MARKUP, revisionsIn: 'balloons' as const };
-</script>
-
-<template>
-  <DocxEditor :document="bytes" :modules="modules" :revision-markup="markup">
-    <DocxEditorReview />
-  </DocxEditor>
-</template>
-```
-
-</Framework>
-</FrameworkTabs>
-
-Balloons open only in **All Markup**. In the other review displays, `revisionsIn: 'balloons'` shows no review controls for tracked changes. To decide them, switch the display to **All Markup**, or use **Accept all changes shown** or **Reject all changes shown**.
-
-The **Track changes options** dialog shows these settings in its **Review layout** group. An invalid value throws `TypeError` before any setting changes.
+Where tracked changes open, how comment markers look, and what the review pane does on a narrow viewport are review pane settings, not markup preferences. For more information, see [Control the review pane](/docs/2.x/pro#control-the-review-pane).
 
 ## Choose marks and colors
 
@@ -280,9 +201,6 @@ The **Track changes options** dialog shows these settings in its **Review layout
 | `cells.split`     | `lightOrange`                  |
 | `trackMoves`      | `true`                         |
 | `trackFormatting` | `true`                         |
-| `revisionsIn`     | `pane`                         |
-| `commentMarkers`  | `avatar`                       |
-| `paneOverflow`    | `float`                        |
 
 Text styles accept `none`, `colorOnly`, `bold`, `italic`, `underline`, `doubleUnderline`, `strikethrough`, or `doubleStrikethrough`. Deletions and moved-from text also accept `hidden`, `caret`, or `pound`.
 

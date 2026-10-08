@@ -856,7 +856,9 @@
     "replacedWith": "→",
     "commentRefused": "コメントを追加できませんでした",
     "replyCount": "返信: {count}",
-    "trackedChange": "変更履歴"
+    "trackedChange": "変更履歴",
+    "changeAnnouncement": null,
+    "replyTargetResolved": null
   },
   "textFormField": {
     "title": "テキスト フォーム フィールドのオプション",
@@ -954,22 +956,12 @@
       "lightOrange": "薄いオレンジ",
       "gray": "灰色",
       "lightGreen": "薄い緑",
-      "lightPurple": "薄い紫",
-      "avatar": "作成者のイニシャル",
-      "balloons": "吹き出し",
-      "icon": "アイコン",
-      "pane": "校閲ウィンドウ",
-      "float": "開いたカードを重ねて表示",
-      "scroll": "横にスクロール"
+      "lightPurple": "薄い紫"
     },
     "deletionsBackground": "削除の背景",
     "formattingBackground": "書式変更の背景",
     "insertionsBackground": "挿入の背景",
     "movedFromBackground": "移動元の背景",
-    "movedToBackground": "移動先の背景",
-    "commentMarkers": "コメントのマーカー",
-    "layout": "校閲のレイアウト",
-    "revisionsIn": "変更履歴の表示先",
-    "paneOverflow": "校閲ウィンドウが収まらない場合"
+    "movedToBackground": "移動先の背景"
   }
 }

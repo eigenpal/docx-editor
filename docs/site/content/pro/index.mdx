@@ -116,31 +116,42 @@ Register the module to show review content and provide review actions.
 
 ### Control the review pane
 
-The review pane has two settings. They apply to one editor instance, and the editor never saves them into the document.
+The review pane settings decide when the pane opens and where review items appear. They apply to one editor instance. The editor never saves them into the document or shares them with other participants.
 
-| Setting | Values | Default | Effect |
-| --- | --- | --- | --- |
-| `opening` | `auto`, `manual` | `auto` | Whether the pane opens by itself. |
-| `overflow` | `float`, `shrinkPage` | `float` | What the open pane does when its card column does not fit beside the page. |
+| Setting          | Values                          | Default    |
+| ---------------- | ------------------------------- | ---------- |
+| `opening`        | `auto`, `manual`                | `auto`     |
+| `revisionsIn`    | `pane`, `balloons`              | `pane`     |
+| `commentMarkers` | `initials`, `icon`              | `initials` |
+| `overflow`       | `float`, `shrinkPage`, `scroll` | `float`    |
 
-With `opening: 'auto'`, the editor opens the pane when a document with review items loads. It also opens the pane when you make a tracked change while the pane is closed. With `opening: 'manual'`, the pane stays closed until your app or the user opens it. Use `'manual'` if your app shows review items in its own way, such as in balloons or margin markers.
+With `opening: 'auto'`, the editor opens the pane when a document loads with items that the pane lists. It also opens the pane when you make a tracked change while the pane is closed, and when **Next Change** or **Previous Change** reaches a card. With `opening: 'manual'`, the pane stays closed until your app or the user opens it. Use `'manual'` if your app shows review items in its own way, such as in balloons or margin markers.
 
-With `overflow: 'float'`, the pane changes to a marker strip and floats the active card over the page. With `overflow: 'shrinkPage'`, a fit zoom mode can shrink the page so that the full column fits. For more information, see [Make room for the review pane](/docs/2.x/guides/zoom#make-room-for-the-review-pane).
+With `revisionsIn: 'pane'`, the pane lists comments and tracked changes as cards. With `revisionsIn: 'balloons'`, the pane lists comments only, and a tracked change opens in a balloon at its text. The balloon opens when you click the change, or when **Next Change** or **Previous Change** reaches it. Moving the caret into a change does not open it. The balloon shows the author, the date, and the changed words, lists replies, and has a reply field. A deletion followed by an insertion from the same author appears as one replacement. **Accept** and **Reject** resolve the change and close the balloon. Escape, typing in the document, or a click elsewhere in the page also closes it. A balloon that **Next Change** opens takes the keyboard focus, so you can press Tab to reach **Accept** and **Reject**. A screen reader announces each balloon that opens. If another participant resolves the change while you type a reply, the balloon keeps your text and tells you that the reply was not posted. Balloons open only in **All Markup**. With `revisionsIn: 'balloons'`, a document with tracked changes and no comments does not open the pane.
+
+With `commentMarkers: 'initials'`, a collapsed comment marker shows the thread author's initials in their color. A small count shows the number of replies, and a check mark replaces the initials when the thread is resolved. With `commentMarkers: 'icon'`, the marker shows the comment icon. A `DocxEditorReview.Markers` part with an `icon` function overrides both values.
+
+`overflow` decides what the open pane does when its card column does not fit beside the page:
+
+- `'float'`: the pane changes to a marker strip and floats the active card over the page.
+- `'shrinkPage'`: a fit zoom mode can shrink the page so that the full column fits. For more information, see [Make room for the review pane](/docs/2.x/guides/zoom#make-room-for-the-review-pane).
+- `'scroll'`: the page keeps one size whether the pane is open or closed, the full column stays beside it, and the viewport scrolls sideways to reach the cards. A fit zoom with a maximum fits the viewport width less the closed pane's marker strip. The fit does not subtract padding that your app adds to the scroll container.
 
 Set the starting values on the module:
 
 ```ts
-const MODULES = [reviewModule({ pane: { opening: 'manual' } })];
+const MODULES = [reviewModule({ pane: { revisionsIn: 'balloons', opening: 'manual' } })];
 ```
 
-Change them at runtime with `setReviewPane`, and read them from `snapshot().reviewPane`:
+To change a setting at runtime, call `setReviewPane` with only the settings that change. Read the values in force from `snapshot().reviewPane`:
 
 ```ts
-editor.setReviewPane({ opening: 'auto', overflow: 'shrinkPage' });
-const opening = editor.snapshot().reviewPane?.opening;
+editor.setReviewPane({ revisionsIn: 'balloons' });
+editor.setReviewPane({ commentMarkers: 'icon', overflow: 'scroll' });
+const revisionsIn = editor.snapshot().reviewPane?.revisionsIn;
 ```
 
-The settings stay in force when you load another document. An unknown field or value throws a `TypeError` and changes nothing.
+`DocxEditorReview` reads the settings from the editor and updates when they change. The settings stay in force when you load another document. An unknown field or value throws a `TypeError` and changes nothing.
 
 To open or close the pane, call `setPaneOpen` from `useReview()`, or run the `toggleReviewPane` command.
 

@@ -7,9 +7,6 @@
 /// <reference lib="dom" />
 
 // @public
-export type CommentMarkers = 'avatar' | 'icon';
-
-// @public
 export function createFontSource(bytes: Uint8Array, request: FontFaceRequest & {
     readonly faceIndex?: number;
 }, options?: {
@@ -132,9 +129,6 @@ export type OpenPdfDocumentForExportOptions = Omit<PdfExportOptions, 'comments' 
 
 // @public
 export type OpenPdfDocumentForExportResult = OpenFontBackedDocumentForExportResult;
-
-// @public
-export type PaneOverflow = 'float' | 'scroll';
 
 // @public
 export interface PdfDiagnostic {
@@ -264,7 +258,6 @@ export interface ResolvedRevisionMarkup {
     };
     // (undocumented)
     readonly changedLines: RevisionMarkupStyle<RevisionChangedLinesMark>;
-    readonly commentMarkers: CommentMarkers;
     // (undocumented)
     readonly deletions: RevisionMarkupTextStyle<RevisionDeletionMark>;
     // (undocumented)
@@ -275,8 +268,6 @@ export interface ResolvedRevisionMarkup {
     readonly movedFrom: RevisionMarkupTextStyle<RevisionDeletionMark>;
     // (undocumented)
     readonly movedTo: RevisionMarkupTextStyle;
-    readonly paneOverflow: PaneOverflow;
-    readonly revisionsIn: RevisionsIn;
     // (undocumented)
     readonly trackFormatting: boolean;
     // (undocumented)
@@ -309,7 +300,7 @@ export type RevisionMarkupNamedColor = (typeof REVISION_MARKUP_COLORS)[number];
 
 // @public
 export type RevisionMarkupOptions = {
-    readonly [K in keyof ResolvedRevisionMarkup]?: ResolvedRevisionMarkup[K] extends object ? Partial<ResolvedRevisionMarkup[K]> : ResolvedRevisionMarkup[K];
+    readonly [K in keyof ResolvedRevisionMarkup]?: ResolvedRevisionMarkup[K] extends boolean ? boolean : Partial<ResolvedRevisionMarkup[K]>;
 };
 
 // @public (undocumented)
@@ -324,9 +315,6 @@ export interface RevisionMarkupStyle<Mark extends string = RevisionMarkupMark> {
 export interface RevisionMarkupTextStyle<Mark extends string = RevisionMarkupMark> extends RevisionMarkupStyle<Mark> {
     readonly background: RevisionMarkupNamedColor | 'byAuthor' | 'none';
 }
-
-// @public
-export type RevisionsIn = 'pane' | 'balloons';
 
 // (No @packageDocumentation comment for this package)
 
