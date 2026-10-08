@@ -13,6 +13,8 @@ export interface NavigationContextValue {
    * focus into the pane and closing returns it to whatever opened the pane.
    */
   readonly intents: NavigationIntents;
+  /** Whether Ctrl/Cmd+F opens this pane, so the disc names the shortcut only when it works. */
+  readonly findShortcut: boolean;
 }
 
 /** What the packaged parts ask of the pane, beyond its plain state. */

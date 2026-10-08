@@ -3,17 +3,19 @@
 // Both adapters carry an identical copy of this file. It is plain DOM, so the two panes
 // answer every key and focus question the same way.
 
+import { isApplePlatform } from '@docx-editor.dev/i18n';
 import { editorScopeFor } from '../editor-scope';
 import type { NavigationTab } from './useNavigationPane';
 
 /**
- * Ctrl+F, or Cmd+F on macOS. Both modifiers are accepted, as the engine's keymap accepts
- * them for every accelerator, so a Mac keyboard on another platform still reaches Find.
+ * Cmd+F on Apple platforms, Ctrl+F elsewhere (`isApplePlatform`, the detector the shortcut
+ * labels use). Only the platform's own modifier counts: on macOS Ctrl+F moves the caret
+ * forward one character in text, and elsewhere the Meta key belongs to the system.
  * Alt and Shift chords are left alone: Ctrl/Cmd+Alt+F inserts a footnote.
  */
-export function isFindShortcut(event: KeyboardEvent): boolean {
-  if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return false;
-  if (event.isComposing) return false;
+export function isFindShortcut(event: KeyboardEvent, apple = isApplePlatform()): boolean {
+  if (event.altKey || event.shiftKey || event.isComposing) return false;
+  if (apple ? !event.metaKey || event.ctrlKey : !event.ctrlKey || event.metaKey) return false;
   const key = event.key.toLowerCase();
   if (key === 'f') return true;
   // A non-Latin layout reports its own letter in `key`; the physical F key still means Find.
@@ -21,8 +23,40 @@ export function isFindShortcut(event: KeyboardEvent): boolean {
   return !/^[a-z]$/.test(key) && event.code === 'KeyF';
 }
 
-/** The `aria-keyshortcuts` value for the chord {@link isFindShortcut} accepts. */
-export const FIND_KEYSHORTCUTS = 'Control+F Meta+F';
+/**
+ * The `aria-keyshortcuts` value for the chord {@link isFindShortcut} accepts, from the
+ * resolved shortcut label (`platformShortcut('Ctrl+F')`), so a server render and the
+ * hydrating client agree on the first pass.
+ */
+export function findKeyShortcuts(resolvedLabel: string): string {
+  return resolvedLabel.startsWith('Ctrl') ? 'Control+F' : 'Meta+F';
+}
+
+/**
+ * Give focus back after the pane closes, without scrolling the document.
+ *
+ * An opener inside the viewport (the pages layer, most often, after Ctrl/Cmd+F from the
+ * text) goes back through the editor, which restores the caret without scrolling: the
+ * pages layer is the whole document tall, and a plain `focus()` scrolls to its top. Any
+ * other opener, and the disc, take focus with `preventScroll`. With neither, the editor.
+ */
+export function returnFocus(
+  opener: HTMLElement | null,
+  disc: HTMLElement | null,
+  viewport: Element | null,
+  focusEditor: (() => void) | null
+): void {
+  if (opener?.isConnected) {
+    if (focusEditor && viewport && opener !== viewport && viewport.contains(opener)) {
+      focusEditor();
+    } else {
+      opener.focus({ preventScroll: true });
+    }
+    return;
+  }
+  if (disc) disc.focus({ preventScroll: true });
+  else focusEditor?.();
+}
 
 /**
  * Whether a key event that reached `target` belongs to THIS editor, so its Find shortcut

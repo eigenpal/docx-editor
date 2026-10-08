@@ -419,13 +419,13 @@ Viewing mode permits body search navigation and programmatic selection. It keeps
 
 ### Open Find with Ctrl+F
 
-`DocxEditor.Navigation` handles <kbd>Ctrl</kbd>+<kbd>F</kbd>, or <kbd>Cmd</kbd>+<kbd>F</kbd> on macOS. The shortcut opens the pane on the **Find** tab and focuses the query field. If the pane is already open, the shortcut focuses the query field again.
+`DocxEditor.Navigation` handles <kbd>Cmd</kbd>+<kbd>F</kbd> on macOS and <kbd>Ctrl</kbd>+<kbd>F</kbd> on other platforms. Only the platform's own key counts: on macOS, <kbd>Ctrl</kbd>+<kbd>F</kbd> keeps its text meaning and moves the cursor forward one character. The shortcut opens the pane on the **Find** tab and focuses the query field. If the pane is already open, the shortcut focuses the query field again. The pane button names the shortcut in its tooltip.
 
 The pane handles the shortcut only while focus is in the same editor: the pages, the pane, or chrome inside the editor's container. Elsewhere on the page, and in another editor on the same page, the browser's search opens. A toolbar or menu bar that you mount outside a shared container counts only while one editor is on the page.
 
-A controlled pane receives `onTabChange('find')` and `onOpenChange(true)`. Focus moves into the pane when your state opens it.
+A controlled pane receives `onTabChange('find')` and `onOpenChange(true)`. Focus moves into the pane if your state opens it in the same update. If your state doesn't open it, the request lapses, and a later open leaves focus where it is.
 
-To leave the shortcut to the browser everywhere, set `findShortcut` to `false`:
+To leave the shortcut to the browser everywhere, set `findShortcut` to `false`. The pane button then doesn't name the shortcut:
 
 ```tsx
 <DocxEditor.Navigation findShortcut={false} />
@@ -436,7 +436,8 @@ To leave the shortcut to the browser everywhere, set `findShortcut` to `false`:
 When the pane opens from its button or from the shortcut, focus moves into the pane. On **Find**, the query field receives focus. On **Headings**, the current heading receives focus. If no heading is current, the first heading or the filter field receives focus.
 
 <kbd>Esc</kbd> and the close button close the pane. Focus returns to the element that had focus when
-the shortcut opened the pane. Otherwise, focus returns to the pane button.
+the shortcut opened the pane, without scrolling the document. If that element was in the document,
+the caret returns to its place. Otherwise, focus returns to the pane button.
 
 ## Highlight text ranges
 

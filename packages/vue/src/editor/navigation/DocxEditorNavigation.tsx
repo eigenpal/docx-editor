@@ -110,6 +110,7 @@ const DocxEditorNavigationImpl = defineComponent({
       search,
       t: props.t ?? rootT,
       intents: focus.intents,
+      findShortcut: props.findShortcut,
     }));
     provide(NavigationContext, value as unknown as NavigationContextValue);
     const width = computed(() => pane.paneWidth.value);

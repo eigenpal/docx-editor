@@ -23,6 +23,7 @@ import {
   navigationShift,
 } from './navigation-geometry';
 import { useNavigationLayoutStore, useNavigationViewportElement } from './navigation-layout';
+import { trackWidestPage, type WidestPageTracker } from './navigation-widest-page';
 
 /** The pane's tabs. Word's Replace tab is a later slice; nothing here pretends it exists. */
 export type NavigationTab = 'headings' | 'find';
@@ -68,13 +69,6 @@ const samePageGeometry = (a: PaneGeometry, b: PaneGeometry) =>
   a.pageSetup?.pageWidthTwips === b.pageSetup?.pageWidthTwips;
 
 const selectPageCount = (snapshot: EditorSnapshot): number => snapshot.page.total;
-
-/** The widest laid-out page, in content px at 100%, or null before the first layout. */
-function widestPagePx(pages: readonly { readonly box: { readonly width: number } }[]) {
-  let widest = 0;
-  for (const page of pages) widest = Math.max(widest, page.box.width);
-  return widest > 0 ? widest : null;
-}
 
 /** How `useNavigationPane` is configured. @public */
 export interface UseNavigationPaneOptions {
@@ -206,14 +200,20 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
   if (pageSetup) lastPageWidthTwips.current = pageSetup.pageWidthTwips;
   const pageWidthTwips = pageSetup?.pageWidthTwips ?? lastPageWidthTwips.current;
 
-  // The page stack is as wide as its WIDEST page, and every page starts at the stack's left
-  // edge. `pageSetup` describes only the section at the caret, so a portrait caret in a
-  // document with a landscape section measured the stack too narrow and let the pane cover
-  // the wider pages. Read from the layout after commit, and only while the pane is open.
+  // The page stack is as wide as its WIDEST page (see `navigation-widest-page.ts`). Tracked
+  // only while the pane is open; page-count steps and caret-section changes nudge a settled
+  // re-read, and the tracker itself listens for document changes.
+  const widestTracker = useRef<WidestPageTracker | null>(null);
   useEffect(() => {
-    if (!open || !editor) return;
-    setWidestPage(widestPagePx(editor.getPageGeometry()));
-  }, [open, editor, pageCount, pageWidthTwips]);
+    if (!open || !editor) return undefined;
+    const tracker = trackWidestPage(editor, setWidestPage);
+    widestTracker.current = tracker;
+    return () => {
+      tracker.dispose();
+      if (widestTracker.current === tracker) widestTracker.current = null;
+    };
+  }, [open, editor]);
+  useEffect(() => widestTracker.current?.nudge(), [pageCount, pageWidthTwips]);
 
   const reservation = navigationPaneReservation(paneWidth);
   const overlay = open && navigationPaneOverlays(viewportWidth, reservation);

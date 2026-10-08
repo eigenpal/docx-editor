@@ -127,8 +127,8 @@ export function DocxEditorNavigation(props: DocxEditorNavigationProps): ReactEle
 
   const focus = useNavigationFocus(pane, findShortcut);
   const value = useMemo(
-    () => ({ pane, outline, search, t, intents: focus.intents }),
-    [pane, outline, search, t, focus.intents]
+    () => ({ pane, outline, search, t, intents: focus.intents, findShortcut }),
+    [pane, outline, search, t, focus.intents, findShortcut]
   );
 
   const width = props.paneWidth ?? NAVIGATION_PANE_WIDTH;

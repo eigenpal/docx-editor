@@ -1,11 +1,11 @@
 // Focus in and out of the navigation pane, Escape, and the Ctrl/Cmd+F shortcut.
 //
-// Focus requests are plain variables consumed by watchers on the pane's state, because the
-// pane may be controlled: a request is made before the host has opened the pane (or switched
-// its tab) and is honoured on the render where the host does. A host that declines leaves it
-// pending, harmlessly. A request the pane already satisfies is honoured at once.
+// Focus requests are plain variables answered after the next flush. The pane may be
+// controlled, so a request is made before the host has opened (or closed) the pane, and the
+// flush that follows is the host's answer: a request the pane now satisfies is honoured, and
+// one the host declined is dropped there, so it cannot fire on some unrelated later open.
 
-import { onMounted, onUnmounted, shallowRef, watch, type ShallowRef } from 'vue';
+import { nextTick, onMounted, onUnmounted, shallowRef, watch, type ShallowRef } from 'vue';
 import { useDocxEditor } from '../context';
 import { scopeDispose } from '../scope-dispose';
 import type { NavigationIntents } from './navigation-context';
@@ -16,8 +16,9 @@ import {
   ownsShortcutTarget,
   paneEntryTarget,
   publishViewportSize,
+  returnFocus,
 } from './navigation-keys';
-import type { NavigationTab, UseNavigationPaneResult } from './useNavigationPane';
+import type { UseNavigationPaneResult } from './useNavigationPane';
 
 /** @internal */
 export interface NavigationFocus {
@@ -36,32 +37,43 @@ export function useNavigationFocus(
   const rootRef = shallowRef<HTMLElement | null>(null);
   // Who opened the pane: an element to return focus to, or null for the disc.
   let opener: HTMLElement | null = null;
-  let focusRequest: { tab?: NavigationTab } | null = null;
+  let focusRequest = false;
   let restoreRequest = false;
 
   const focusEntry = () => {
-    if (!focusRequest || !pane.open.value) return;
-    if (focusRequest.tab && pane.tab.value !== focusRequest.tab) return;
-    focusRequest = null;
+    focusRequest = false;
     const target = paneEntryTarget(rootRef.value, pane.tab.value);
     if (target) focusPaneEntry(target);
   };
 
   const restoreFocus = () => {
-    if (!restoreRequest || pane.open.value) return;
     restoreRequest = false;
     const back = opener;
     opener = null;
-    const disc = rootRef.value?.querySelector<HTMLElement>('.docx-nav__toggle');
-    if (back?.isConnected) back.focus();
-    else if (disc) disc.focus();
-    else editor.value?.focus();
+    const disc = rootRef.value?.querySelector<HTMLElement>('.docx-nav__toggle') ?? null;
+    const instance = editor.value;
+    returnFocus(back, disc, viewport.value, instance ? () => instance.focus() : null);
+  };
+
+  // The flush after a request is the host's answer (see the header).
+  const answerRequests = () => {
+    void nextTick(() => {
+      if (focusRequest) {
+        if (pane.open.value) focusEntry();
+        else focusRequest = false;
+      }
+      if (restoreRequest) {
+        if (!pane.open.value) restoreFocus();
+        else restoreRequest = false;
+      }
+    });
   };
 
   const close = () => {
-    focusRequest = null;
+    focusRequest = false;
     restoreRequest = true;
     pane.setOpen(false);
+    answerRequests();
   };
 
   const intents: NavigationIntents = {
@@ -71,8 +83,10 @@ export function useNavigationFocus(
         return;
       }
       opener = null;
-      focusRequest = {};
+      restoreRequest = false;
+      focusRequest = true;
       pane.setOpen(true);
+      answerRequests();
     },
     close,
     picked: () => {
@@ -93,11 +107,16 @@ export function useNavigationFocus(
     event.preventDefault();
     const active = rootRef.value?.ownerDocument.activeElement;
     if (active instanceof HTMLElement && !rootRef.value?.contains(active)) opener = active;
-    focusRequest = { tab: 'find' };
+    restoreRequest = false;
+    // Already open on Find: nothing re-renders, so focus the query now.
+    if (pane.open.value && pane.tab.value === 'find') {
+      focusEntry();
+      return;
+    }
+    focusRequest = true;
     if (pane.tab.value !== 'find') pane.setTab('find');
     if (!pane.open.value) pane.setOpen(true);
-    // Already open on Find: nothing re-renders, so honour the request now.
-    focusEntry();
+    answerRequests();
   };
   let listening: Document | null = null;
   onMounted(() => {
@@ -108,9 +127,6 @@ export function useNavigationFocus(
     listening?.removeEventListener('keydown', onDocumentKeyDown);
     listening = null;
   });
-
-  scopeDispose(watch([pane.open, pane.tab], focusEntry, { flush: 'post' }));
-  scopeDispose(watch(pane.open, restoreFocus, { flush: 'post' }));
 
   // A pane inside the scroll container is sticky and sizes itself from these properties.
   scopeDispose(

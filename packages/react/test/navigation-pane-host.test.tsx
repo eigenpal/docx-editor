@@ -155,6 +155,16 @@ function Host({
 
 const q = (root: ParentNode, selector: string) => root.querySelector(selector) as HTMLElement;
 
+/** Run `body` while the browser reports an Apple platform. */
+function onApplePlatform(body: () => void) {
+  Object.defineProperty(navigator, 'platform', { configurable: true, value: 'MacIntel' });
+  try {
+    body();
+  } finally {
+    delete (navigator as unknown as { platform?: string }).platform;
+  }
+}
+
 describe('the pane in the documented composition', () => {
   test('sits in the scroll container as a sticky strip sized to the viewport', async () => {
     const { container } = render(<Host />);
@@ -196,15 +206,31 @@ describe('Ctrl/Cmd+F', () => {
     );
   });
 
-  test('accepts Cmd as the modifier and refocuses the query of a pane already open', async () => {
+  test('refocuses the query of a pane already open on Find', async () => {
     const { container } = render(<Host navigation={{ defaultOpen: true, defaultTab: 'find' }} />);
     await settle();
     const input = q(container, '#docx-nav-panel-find .docx-nav__search-input');
     const scroller = q(container, '.docx-editor__scroll-container');
     scroller.focus();
     expect(document.activeElement).toBe(scroller);
-    ctrlF(scroller, { metaKey: true });
+    ctrlF(scroller);
     expect(document.activeElement).toBe(input);
+  });
+
+  test('takes only the platform modifier: Cmd on macOS, Ctrl elsewhere', async () => {
+    const { container } = render(<Host />);
+    await settle();
+    const scroller = q(container, '.docx-editor__scroll-container');
+    const nav = q(container, '.docx-nav');
+    // Not an Apple platform (the test environment): Meta is the system key.
+    expect(ctrlF(scroller, { metaKey: true }).defaultPrevented).toBe(false);
+    onApplePlatform(() => {
+      // On macOS Ctrl+F moves the caret forward one character; the text keeps it.
+      expect(ctrlF(scroller, { ctrlKey: true }).defaultPrevented).toBe(false);
+      expect(nav.getAttribute('data-open')).toBe('false');
+      expect(ctrlF(scroller, { metaKey: true }).defaultPrevented).toBe(true);
+    });
+    expect(nav.getAttribute('data-open')).toBe('true');
   });
 
   test('drives a controlled pane through its callbacks and focuses once the host opens it', async () => {
@@ -236,6 +262,34 @@ describe('Ctrl/Cmd+F', () => {
     expect(document.activeElement).toBe(
       q(container, '#docx-nav-panel-find .docx-nav__search-input')
     );
+  });
+
+  test('drops a request the controlled host declined, so a later open does not steal focus', async () => {
+    let setOpen: (next: boolean) => void = () => {};
+    function Declining() {
+      const [open, set] = useState(false);
+      setOpen = set;
+      // The host ignores the pane's request to open.
+      return <Host navigation={{ open, onOpenChange: () => {} }} />;
+    }
+    const { container } = render(<Declining />);
+    await settle();
+    act(() => {
+      q(container, '.docx-nav__toggle').click();
+    });
+    await settle();
+    expect(q(container, '.docx-nav').getAttribute('data-open')).toBe('false');
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    try {
+      outside.focus();
+      // The host opens the pane later, for its own reasons: focus stays where it was.
+      act(() => setOpen(true));
+      expect(q(container, '.docx-nav').getAttribute('data-open')).toBe('true');
+      expect(document.activeElement).toBe(outside);
+    } finally {
+      outside.remove();
+    }
   });
 
   test('leaves the chord alone outside this editor and in another editor', async () => {
@@ -283,12 +337,15 @@ describe('Ctrl/Cmd+F', () => {
     expect(nav.getAttribute('data-open')).toBe('true');
   });
 
-  test('findShortcut={false} leaves the chord to the browser', async () => {
+  test('findShortcut={false} leaves the chord to the browser and the disc does not name it', async () => {
     const { container } = render(<Host navigation={{ findShortcut: false }} />);
     await settle();
     const scroller = q(container, '.docx-editor__scroll-container');
     expect(ctrlF(scroller).defaultPrevented).toBe(false);
     expect(q(container, '.docx-nav').getAttribute('data-open')).toBe('false');
+    const disc = q(container, '.docx-nav__toggle');
+    expect(disc.hasAttribute('aria-keyshortcuts')).toBe(false);
+    expect(disc.getAttribute('title')).toBe('Navigation');
   });
 
   test('is named on the disc', async () => {
@@ -296,7 +353,7 @@ describe('Ctrl/Cmd+F', () => {
     await settle();
     const disc = q(container, '.docx-nav__toggle');
     expect(disc.getAttribute('title')).toBe('Navigation (Ctrl+F)');
-    expect(disc.getAttribute('aria-keyshortcuts')).toBe('Control+F Meta+F');
+    expect(disc.getAttribute('aria-keyshortcuts')).toBe('Control+F');
   });
 });
 
@@ -330,6 +387,41 @@ describe('focus', () => {
     });
     expect(q(container, '.docx-nav').getAttribute('data-open')).toBe('false');
     expect(document.activeElement).toBe(scroller);
+  });
+});
+
+describe('focus return without scrolling', () => {
+  test('Ctrl+F from the pages, then Escape, refocuses the pages without scrolling', async () => {
+    const { container } = render(<Host />);
+    await settle();
+    const pages = q(container, '.docx-pages');
+    expect(pages).not.toBeNull();
+    pages.focus({ preventScroll: true });
+    expect(document.activeElement).toBe(pages);
+    ctrlF(pages);
+    const input = q(container, '#docx-nav-panel-find .docx-nav__search-input');
+    expect(document.activeElement).toBe(input);
+
+    // Every focus call from here on, with its options. The pages layer is the whole
+    // document tall: a plain focus() on it scrolls the document to page 1.
+    const calls: Array<{ element: Element; options?: FocusOptions }> = [];
+    const original = HTMLElement.prototype.focus;
+    HTMLElement.prototype.focus = function (this: HTMLElement, options?: FocusOptions) {
+      calls.push({ element: this, ...(options ? { options } : {}) });
+      return original.call(this, options);
+    };
+    try {
+      act(() => {
+        fireEvent.keyDown(input, { key: 'Escape' });
+      });
+    } finally {
+      HTMLElement.prototype.focus = original;
+    }
+    expect(q(container, '.docx-nav').getAttribute('data-open')).toBe('false');
+    expect(document.activeElement).toBe(pages);
+    const onPages = calls.filter((call) => call.element === pages);
+    expect(onPages.length).toBeGreaterThan(0);
+    for (const call of onPages) expect(call.options?.preventScroll).toBe(true);
   });
 });
 

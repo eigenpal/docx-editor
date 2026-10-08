@@ -1,9 +1,11 @@
 // Focus in and out of the navigation pane, Escape, and the Ctrl/Cmd+F shortcut.
 //
-// Focus requests are REFS consumed in effects keyed on the pane's state, because the pane
-// may be controlled: a request is made before the host has opened the pane (or switched its
-// tab) and is honoured on the render where the host does. A host that declines leaves it
-// pending, harmlessly. A request the pane already satisfies is honoured at once.
+// Focus requests are REFS answered by the next render. The pane may be controlled, so a
+// request is made before the host has opened (or closed) the pane, and the render that
+// follows is the host's answer: a request the pane now satisfies is honoured, and one the
+// host declined is dropped there, so it cannot fire on some unrelated later open. A host
+// that declines without rendering at all gets the same answer from a zero-delay timer,
+// which runs after React has flushed the event's updates.
 //
 // Refs rather than state also keep a click on the disc of a controlled, declining pane from
 // re-rendering anything.
@@ -19,8 +21,9 @@ import {
   ownsShortcutTarget,
   paneEntryTarget,
   publishViewportSize,
+  returnFocus,
 } from './navigation-keys';
-import type { NavigationTab, UseNavigationPaneResult } from './useNavigationPane';
+import type { UseNavigationPaneResult } from './useNavigationPane';
 
 /** @internal */
 export interface NavigationFocus {
@@ -39,38 +42,42 @@ export function useNavigationFocus(
   const rootRef = useRef<HTMLDivElement>(null);
   // Who opened the pane: an element to return focus to, or null for the disc.
   const opener = useRef<HTMLElement | null>(null);
-  const focusRequest = useRef<{ tab?: NavigationTab } | null>(null);
+  const focusRequest = useRef(false);
   const restoreRequest = useRef(false);
+  const requestToken = useRef(0);
+  // Drop whatever is still pending once the event's updates have flushed.
+  const expireRequests = useCallback(() => {
+    const token = ++requestToken.current;
+    setTimeout(() => {
+      if (requestToken.current !== token) return;
+      focusRequest.current = false;
+      restoreRequest.current = false;
+    }, 0);
+  }, []);
 
   const paneRef = useRef(pane);
   paneRef.current = pane;
 
   const focusEntry = useCallback(() => {
-    const request = focusRequest.current;
-    const current = paneRef.current;
-    if (!request || !current.open) return;
-    if (request.tab && current.tab !== request.tab) return;
-    focusRequest.current = null;
-    const target = paneEntryTarget(rootRef.current, current.tab);
+    focusRequest.current = false;
+    const target = paneEntryTarget(rootRef.current, paneRef.current.tab);
     if (target) focusPaneEntry(target);
   }, []);
 
   const restoreFocus = useCallback(() => {
-    if (!restoreRequest.current || paneRef.current.open) return;
     restoreRequest.current = false;
     const back = opener.current;
     opener.current = null;
-    const disc = rootRef.current?.querySelector<HTMLElement>('.docx-nav__toggle');
-    if (back?.isConnected) back.focus();
-    else if (disc) disc.focus();
-    else editor?.focus();
-  }, [editor]);
+    const disc = rootRef.current?.querySelector<HTMLElement>('.docx-nav__toggle') ?? null;
+    returnFocus(back, disc, viewport, editor ? () => editor.focus() : null);
+  }, [editor, viewport]);
 
   const close = useCallback(() => {
-    focusRequest.current = null;
+    focusRequest.current = false;
     restoreRequest.current = true;
     paneRef.current.setOpen(false);
-  }, []);
+    expireRequests();
+  }, [expireRequests]);
 
   const intents = useMemo<NavigationIntents>(
     () => ({
@@ -80,8 +87,10 @@ export function useNavigationFocus(
           return;
         }
         opener.current = null;
-        focusRequest.current = {};
+        restoreRequest.current = false;
+        focusRequest.current = true;
         paneRef.current.setOpen(true);
+        expireRequests();
       },
       close,
       picked: () => {
@@ -93,7 +102,7 @@ export function useNavigationFocus(
         if (active && rootRef.current?.contains(active)) editor?.focus();
       },
     }),
-    [close, editor]
+    [close, editor, expireRequests]
   );
 
   // Ctrl/Cmd+F, on the document so it reaches the toolbar and the pane as well as the pages.
@@ -110,19 +119,33 @@ export function useNavigationFocus(
       if (active instanceof HTMLElement && !rootRef.current?.contains(active)) {
         opener.current = active;
       }
-      focusRequest.current = { tab: 'find' };
+      restoreRequest.current = false;
       const current = paneRef.current;
+      // Already open on Find: nothing re-renders, so focus the query now.
+      if (current.open && current.tab === 'find') {
+        focusEntry();
+        return;
+      }
+      focusRequest.current = true;
       if (current.tab !== 'find') current.setTab('find');
       if (!current.open) current.setOpen(true);
-      // Already open on Find: nothing re-renders, so honour the request now.
-      focusEntry();
+      expireRequests();
     };
     doc.addEventListener('keydown', onKeyDown);
     return () => doc.removeEventListener('keydown', onKeyDown);
-  }, [viewport, focusEntry, findShortcut]);
+  }, [viewport, focusEntry, findShortcut, expireRequests]);
 
-  useEffect(focusEntry, [focusEntry, pane.open, pane.tab]);
-  useEffect(restoreFocus, [restoreFocus, pane.open]);
+  // Every render answers the requests made before it (see the header).
+  useEffect(() => {
+    if (focusRequest.current) {
+      if (paneRef.current.open) focusEntry();
+      else focusRequest.current = false;
+    }
+    if (restoreRequest.current) {
+      if (!paneRef.current.open) restoreFocus();
+      else restoreRequest.current = false;
+    }
+  });
 
   // A pane inside the scroll container is sticky and sizes itself from these properties.
   useEffect(() => {

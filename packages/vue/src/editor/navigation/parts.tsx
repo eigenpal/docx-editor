@@ -13,7 +13,7 @@ import { selectDocumentAbsent } from '../document-presence';
 import { useEditorState } from '../useEditorState';
 import { usePlatformShortcut } from '../usePlatformShortcut';
 import { useNavigationContext } from './navigation-context';
-import { FIND_KEYSHORTCUTS } from './navigation-keys';
+import { findKeyShortcuts } from './navigation-keys';
 import type { NavigationTab as NavigationTabId } from './useNavigationPane';
 
 import type { DocxEditorChildren } from '../../docx-editor-children';
@@ -453,7 +453,7 @@ export const NavigationToggle = defineComponent({
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props, { slots }) {
-    const { pane, intents, t } = useNavigationContext('Toggle');
+    const { pane, intents, findShortcut, t } = useNavigationContext('Toggle');
     const shortcut = usePlatformShortcut();
     return () => (
       <button
@@ -462,9 +462,10 @@ export const NavigationToggle = defineComponent({
         style={props.style}
         aria-label={t('navigation.openAriaLabel')}
         aria-expanded={pane.open.value}
-        aria-keyshortcuts={FIND_KEYSHORTCUTS}
-        // Names the Find shortcut, the one way to open the pane besides this disc.
-        title={shortcut(t('navigation.openTitle'))}
+        // Names the Find shortcut, the one way to open the pane besides this disc, only while
+        // it is bound.
+        aria-keyshortcuts={findShortcut ? findKeyShortcuts(shortcut('Ctrl+F')) : undefined}
+        title={findShortcut ? shortcut(t('navigation.openTitle')) : t('navigation.title')}
         onMousedown={(event) => event.preventDefault()}
         onClick={intents.toggle}
       >

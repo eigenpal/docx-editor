@@ -20,7 +20,7 @@ import { selectDocumentAbsent } from '../document-presence';
 import { useEditorState } from '../useEditorState';
 import { usePlatformShortcut } from '../usePlatformShortcut';
 import { useNavigationContext } from './navigation-context';
-import { FIND_KEYSHORTCUTS } from './navigation-keys';
+import { findKeyShortcuts } from './navigation-keys';
 // Aliased: this module also EXPORTS a component called `NavigationTab`, and the two
 // declarations would collide in the generated .d.ts.
 import type { NavigationTab as NavigationTabId } from './useNavigationPane';
@@ -466,8 +466,12 @@ export function NavigationToggle({
   style,
   children,
 }: NavigationPartProps): ReactElement {
-  const { pane, intents, t } = useNavigationContext('Toggle');
+  const { pane, intents, findShortcut, t } = useNavigationContext('Toggle');
   const shortcut = usePlatformShortcut();
+  // Names the Find shortcut, the one way to open the pane besides this disc, only while it
+  // is bound.
+  const keyShortcuts = findShortcut ? findKeyShortcuts(shortcut('Ctrl+F')) : undefined;
+  const title = findShortcut ? shortcut(t('navigation.openTitle')) : t('navigation.title');
   return (
     <button
       type="button"
@@ -475,9 +479,8 @@ export function NavigationToggle({
       style={style}
       aria-label={t('navigation.openAriaLabel')}
       aria-expanded={pane.open}
-      aria-keyshortcuts={FIND_KEYSHORTCUTS}
-      // Names the Find shortcut, the one way to open the pane besides this disc.
-      title={shortcut(t('navigation.openTitle'))}
+      aria-keyshortcuts={keyShortcuts}
+      title={title}
       // A mousedown that reaches the document surface moves the caret; the pane opening
       // must leave the user's place in the text alone.
       onMouseDown={(event) => event.preventDefault()}
