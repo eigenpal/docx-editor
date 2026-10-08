@@ -7,7 +7,7 @@
 // gets it, and a first-page or even-page variant without the table gets none.
 
 import { findNode } from '../store/package/ooxml-edit.ts';
-import type { OoxmlElement, OoxmlPart } from '../store/package/ooxml-tree.ts';
+import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
 import type { ExclusionZone } from './drawing-exclusion.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
 import type {
@@ -32,9 +32,7 @@ function floatOf(part: OoxmlPart, tableId: string): TableFloatPosition | null {
   const table = findNode(part, tableId);
   let float: TableFloatPosition | null = null;
   if (table && table.kind === 'table') {
-    const properties = table.children.find(
-      (child): child is OoxmlElement => child.kind !== 'textValue' && child.localName === 'tblPr'
-    );
+    const properties = table.children.find((child) => child.localName === 'tblPr');
     float = readTableFloatPosition(properties) ?? null;
   }
   byId.set(tableId, float);
