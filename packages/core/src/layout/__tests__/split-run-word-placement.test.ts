@@ -254,13 +254,21 @@ describe('a word of pieces that cannot be chopped', () => {
   });
 
   // 27 fields fill the near passage; the 28th moves the word to the far one, which holds it.
-  test.each([28, 60])('%i fields still move to the far passage beside a float', (count) => {
+  // A word wider than both passages moves below the float, where the whole column is clear.
+  test.each([
+    [28, 250],
+    [60, 0],
+  ])('%i fields move to the first place that holds them beside a float', (count, x) => {
     const { result } = measured({ prefix: earlierFloat, text: '' }, count);
     const p = result.pages[0]!.fragments[1]!;
     if (p.kind !== 'paragraph') throw new Error('Expected paragraph');
-    const spans = p.lines[0]!.spans;
+    const line = p.lines[0]!;
+    const spans = line.spans;
     expect(spans).toHaveLength(count);
-    expect(round(spans[0]!.box.x)).toBe(250);
+    expect(round(spans[0]!.box.x)).toBe(x);
+    // The float spans 1.1pt to 41.1pt from the top of the earlier paragraph.
+    if (x === 0) expect(line.box.y).toBeGreaterThanOrEqual(41.1);
+    else expect(line.box.y).toBeLessThan(41.1);
     for (let index = 1; index < spans.length; index++) {
       const before = spans[index - 1]!.box;
       expect(round(spans[index]!.box.x)).toBe(round(before.x + before.width));

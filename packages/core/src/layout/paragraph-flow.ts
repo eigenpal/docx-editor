@@ -492,6 +492,7 @@ export function breakParagraph(
     applyTopAndBottomSkipIfNeeded,
     applyNarrowWrapSkipIfNeeded,
     applyInlineObjectSkipIfNeeded,
+    applyOpeningSegmentSkipIfNeeded,
     finalizeTopAndBottomClearance,
     clearEmptyParagraph,
   } = createLineExclusionClearance({
@@ -692,6 +693,8 @@ export function breakParagraph(
         closeLine();
         return ensurePlacementWidth(width, depth + 1);
       }
+      if (applyOpeningSegmentSkipIfNeeded(width, exclusionProbe.height()))
+        return ensurePlacementWidth(width, depth + 1);
       return true;
     }
     if (width <= remainingLineWidth() + 0.001) return true;
@@ -705,7 +708,11 @@ export function breakParagraph(
     // this the word was chopped at the character to fill that sliver, one letter per line,
     // while the usable column to its right stayed empty.
     if (tryAdvanceToNextPassage()) return ensurePlacementWidth(width, depth + 1);
-    // Nowhere wider left on this line — place anyway (overflow) rather than stacking blanks.
+    // No passage at this height holds the segment: the line moves down to the first height
+    // where one does. Each move clears at least one band, so the recursion makes progress.
+    if (applyOpeningSegmentSkipIfNeeded(width, exclusionProbe.height()))
+      return ensurePlacementWidth(width, depth + 1);
+    // Only a segment wider than the clear column remains; it overflows and is broken here.
     return true;
   };
 
@@ -1432,7 +1439,9 @@ export function breakParagraph(
           clippedWordEnd = clipWordEndAtPen();
           width = clippedWordEnd?.width ?? naturalWidth;
         }
-      } else if (!holdsContent() && fitWidth > lineAvailable() + 0.001) {
+      } else if (!holdsContent() && fitWidth > remainingLineWidth() + 0.001) {
+        // The pen of an empty line may already stand in a later passage: the test above is
+        // the room ahead of it, not the line's capacity from its origin.
         if (!ensurePlacementWidth(fitWidth)) continue;
       } else if (borrowsSpace && endsParagraph(pieceIndex, boundary)) {
         // Only this admission may compress the paragraph's last line when it is aligned.

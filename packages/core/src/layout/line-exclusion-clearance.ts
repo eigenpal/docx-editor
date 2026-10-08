@@ -118,6 +118,18 @@ export function createLineExclusionClearance(context: {
       line.exclusionSkipBefore = skip;
     }
   };
+  /**
+   * Push a text line below the floats that block it. The paragraph's first line takes its
+   * spacing above again below the float, once, as it does below a full-width band.
+   */
+  const pushTextLineDown = (line: PendingLine, skip: number): void => {
+    const prior = line.exclusionSkipBefore ?? 0;
+    const spaceAbove = prior > 0.001 ? 0 : Math.max(0, context.spaceAbove?.() ?? 0);
+    line.exclusionSkipBefore = prior + skip + spaceAbove;
+    line.width = 0;
+    appliedLine = line;
+    estimatedLine = undefined;
+  };
   const applyNarrowWrapSkipIfNeeded = (text: string, style: ResolvedRunStyle): void => {
     const line = context.line();
     if (context.holdsContent()) return;
@@ -138,12 +150,7 @@ export function createLineExclusionClearance(context: {
       context.right,
       context.measurer.measure(displayText(glyph, style), style)
     );
-    if (skip > 0.001) {
-      line.exclusionSkipBefore = (line.exclusionSkipBefore ?? 0) + skip;
-      line.width = 0;
-      appliedLine = line;
-      estimatedLine = undefined;
-    }
+    if (skip > 0.001) pushTextLineDown(line, skip);
   };
   const applyInlineObjectSkipIfNeeded = (width: number, height: number): void => {
     const line = context.line();
@@ -167,6 +174,32 @@ export function createLineExclusionClearance(context: {
       appliedLine = line;
       estimatedLine = undefined;
     }
+  };
+  /**
+   * Move an empty line down when no passage beside the floats holds its opening segment.
+   *
+   * The segment is the line's first unbreakable piece: a word, an inline object, or the
+   * first piece of a word too long for the column. It needs a passage at least as wide as
+   * itself, capped at the column, so only a segment wider than the whole column is broken
+   * by character, and only where the full column is clear. Returns whether the line moved.
+   */
+  const applyOpeningSegmentSkipIfNeeded = (width: number, height: number): boolean => {
+    const line = context.line();
+    if (context.holdsContent()) return false;
+    const zones = context.zones();
+    if (zones.length === 0) return false;
+    const left = context.left();
+    const skip = narrowRectangularWrapSkip(
+      context.top() + (line.exclusionSkipBefore ?? 0),
+      height,
+      zones,
+      left,
+      context.right,
+      Math.min(width, Math.max(0, context.right - left))
+    );
+    if (!(skip > 0.001)) return false;
+    pushTextLineDown(line, skip);
+    return true;
   };
   const finalizeTopAndBottomClearance = (): void => {
     const line = context.line();
@@ -245,6 +278,7 @@ export function createLineExclusionClearance(context: {
     applyTopAndBottomSkipIfNeeded,
     applyNarrowWrapSkipIfNeeded,
     applyInlineObjectSkipIfNeeded,
+    applyOpeningSegmentSkipIfNeeded,
     finalizeTopAndBottomClearance,
   };
 }
@@ -276,6 +310,8 @@ export function createLineExclusionProbe(context: {
     setWidth: (width: number) => {
       candidateWidth = width;
     },
+    /** The spaced height the line would take with the candidate placed on it. */
+    height,
     intervals: (zones: readonly ExclusionZone[]) =>
       mergeAvailableIntervalsAtY(y(), zones, context.left, context.right, height()),
     relocate: (zones: readonly ExclusionZone[]) =>
