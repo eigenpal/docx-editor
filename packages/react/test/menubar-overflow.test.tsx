@@ -91,6 +91,36 @@ const triggers = (bar: HTMLElement) =>
     (trigger) => trigger.closest('[data-menu]')!.getAttribute('data-menu')
   );
 
+describe('overflow settles', () => {
+  test('a content-sized bar whose controls fit never starts collapsing', async () => {
+    const view = mount(<DocxEditorMenu t={t} />);
+    const bar = view.getByTestId('docx-menubar');
+    // Sized to its content: the arithmetic's per-menu gap allowance says it is too narrow.
+    const menus = () => [...bar.querySelectorAll<HTMLElement>('[data-toolbar-group]')];
+    Object.defineProperty(bar, 'clientWidth', {
+      configurable: true,
+      get: () => menus().length * 60,
+    });
+    bar.getBoundingClientRect = () =>
+      ({ left: 0, right: menus().length * 60, width: menus().length * 60 }) as DOMRect;
+    menus().forEach((menu, index) => {
+      Object.defineProperty(menu, 'offsetWidth', { configurable: true, get: () => 60 });
+      menu.getBoundingClientRect = () =>
+        ({ left: index * 60, right: index * 60 + 60, width: 60 }) as DOMRect;
+    });
+    for (let round = 0; round < 5; round += 1) {
+      await act(async () => {
+        for (const observer of [...MockResizeObserver.instances]) observer.flush();
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      });
+      expect(view.queryByLabelText('More')).toBeNull();
+      expect(menus().length).toBe(5);
+    }
+  });
+});
+
+const t = (key: string) => (key === 'formattingBar.more' ? 'More' : key);
+
 describe('menu bar overflow', () => {
   test('menus that do not fit move into one "⋯" menu, from the end', async () => {
     const view = mount(

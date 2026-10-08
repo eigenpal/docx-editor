@@ -793,6 +793,35 @@ describe('Vue review fixes', () => {
   });
 });
 
+describe('Vue overflow settles', () => {
+  test('a content-sized bar whose controls fit never starts collapsing', async () => {
+    useMockObserver();
+    const view = mountEditorTree(() => h(DocxEditorMenu, { t }));
+    await flush();
+    const bar = view.container.querySelector<HTMLElement>('[data-testid="docx-menubar"]')!;
+    const menus = () => [...bar.querySelectorAll<HTMLElement>('[data-toolbar-group]')];
+    Object.defineProperty(bar, 'clientWidth', {
+      configurable: true,
+      get: () => menus().length * 60,
+    });
+    bar.getBoundingClientRect = () =>
+      ({ left: 0, right: menus().length * 60, width: menus().length * 60 }) as DOMRect;
+    menus().forEach((menu, index) => {
+      Object.defineProperty(menu, 'offsetWidth', { configurable: true, get: () => 60 });
+      menu.getBoundingClientRect = () =>
+        ({ left: index * 60, right: index * 60 + 60, width: 60 }) as DOMRect;
+    });
+    for (let round = 0; round < 5; round += 1) {
+      for (const observer of [...MockResizeObserver.instances]) observer.flush();
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await flush();
+      expect(bar.querySelector('[aria-label="More"]')).toBeNull();
+      expect(menus().length).toBe(5);
+    }
+    view.unmount();
+  });
+});
+
 describe('Vue menu bar overflow', () => {
   test('menus that do not fit move into one "⋯" menu, from the end', async () => {
     useMockObserver();

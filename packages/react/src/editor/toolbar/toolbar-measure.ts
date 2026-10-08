@@ -227,12 +227,14 @@ function readMaxWidth(
 const CONTROLS = '[data-toolbar-group], [data-toolbar-fixed], [data-toolbar-more]';
 
 /**
- * True when one of the bar's controls runs past its content box. Measured from the controls,
- * not `scrollWidth`, so an open popup (the More panel, the table grid) that reaches past the
- * bar's edge is not mistaken for an overflow.
+ * True when one of the bar's controls runs past its content box, false when they all fit,
+ * and null when the bar has no layout to read (a zero-width box, as in a DOM without
+ * layout). Measured from the controls, not `scrollWidth`, so an open popup (the More panel,
+ * the table grid) that reaches past the bar's edge is not mistaken for an overflow.
  */
-function controlsOverflow(bar: HTMLElement, style: CSSStyleDeclaration): boolean {
+export function controlsOverflow(bar: HTMLElement, style: CSSStyleDeclaration): boolean | null {
   const box = bar.getBoundingClientRect();
+  if (!(box.width > 0)) return null;
   const start = box.left + bar.clientLeft + px(style.paddingLeft);
   const end = box.left + bar.clientLeft + bar.clientWidth - px(style.paddingRight);
   for (const control of bar.querySelectorAll(CONTROLS)) {
@@ -271,8 +273,11 @@ function readRoom(
   if (width === null || !CONTENT_WIDTHS.has(width)) return null;
   const parentStyle = getComputedStyle(parent);
   const flexItem = isFlexRow(parentStyle);
+  // A flex column lays its items out one per line, like a block container.
+  const column =
+    parentStyle.display.includes('flex') && parentStyle.flexDirection.startsWith('column');
   const blockChild =
-    (parentStyle.display === 'block' || parentStyle.display === 'flow-root') &&
+    (parentStyle.display === 'block' || parentStyle.display === 'flow-root' || column) &&
     !style.display.startsWith('inline');
   if (!flexItem && !blockChild) return null;
   if (flexItem && Number.parseFloat(style.flexGrow) > 0) return null;
@@ -321,7 +326,7 @@ export function readAvailableWidth(bar: HTMLElement, style: CSSStyleDeclaration)
   }
   const previous = roomCaps.get(bar);
   if (previous && previous.parentContent !== measured.parentContent) roomCaps.delete(bar);
-  if (controlsOverflow(bar, style)) {
+  if (controlsOverflow(bar, style) === true) {
     if (grewFromRoom.get(bar))
       roomCaps.set(bar, { parentContent: measured.parentContent, cap: own });
     grewFromRoom.set(bar, false);

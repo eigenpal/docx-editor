@@ -20,6 +20,7 @@ import {
 } from './toolbar-overflow';
 import {
   collapsibleGroupCost,
+  controlsOverflow,
   readAvailableWidth,
   readColumnGap,
   readInlineMargins,
@@ -124,7 +125,13 @@ export function useToolbarOverflow(
       previous: overflowRef.current,
       hysteresis: TOOLBAR_OVERFLOW_HYSTERESIS,
     };
-    const next = toolbarOverflowGroups(input);
+    // The arithmetic charges every group a few px of gap and separator it may not use, so on
+    // a bar sized to its content it can call a bar that fits too narrow. Collapsing one group
+    // then shrinks that bar and the next measurement collapses another, until every group is
+    // in "⋯". So the first collapse waits for a control that really runs past the bar's box.
+    // Without layout to read (null), the arithmetic decides alone.
+    const fits = overflowRef.current.size === 0 && controlsOverflow(bar, style) === false;
+    const next = fits ? NONE : toolbarOverflowGroups(input);
     if (!sameOverflow(next, overflowRef.current)) {
       overflowRef.current = next;
       setOverflow(next);
