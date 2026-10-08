@@ -1,6 +1,7 @@
 import { objectPreviewFrameReader } from './legacy-object-context.ts';
 import { stylesPartOf } from './ooxml-indexes.ts';
 import { projectLegacyVml, type LegacyGraphicProjection } from './legacy-vml-projection.ts';
+import { paintableMcFallback } from './mc-fallback-projection.ts';
 // Bounded semantic projection for typed `w:drawing` nodes and run-level MC wrappers (task 3).
 //
 // Reads the canonical tree without mutating it. `mc:AlternateContent` branch selection is
@@ -1602,22 +1603,24 @@ export function projectRunLevelMcDrawing(
     context.supportedMcRequires,
     context.limits
   );
-  if (atom.drawing === null) return null;
+  if (atom.drawing === null) return paintableMcFallback(wrapper, context.ownerPartName);
   const projection = projectDrawing(atom.drawing, {
     ...context,
     namespaceScope: context.namespaceScope,
   });
   if (!projection) return null;
-  // An MC-wrapped payload the engine cannot actually draw (charts, diagrams, unsupported
-  // groups) stays invisible like its VML fallback always was — a labelled placeholder card over
-  // letterhead furniture would be noisier than what either branch renders today. Text boxes
-  // carry a renderable story and pass through. Layout still reserves the anchor's wrap area.
+  // An MC-wrapped payload the engine cannot draw (charts, diagrams, unsupported groups) shows
+  // its VML fallback when that paints. Otherwise it stays invisible: a placeholder card over
+  // letterhead furniture would be noisier than either branch. Text boxes carry a renderable
+  // story and pass through. Layout still reserves the extent or the anchor's wrap area.
   if (
     projection.picture === null &&
     projection.vectorShape === null &&
     projection.groupPicture === null &&
     !hostsTextboxStory(projection)
   ) {
+    const fallback = paintableMcFallback(wrapper, context.ownerPartName);
+    if (fallback) return fallback;
     return context.retainWrapFootprint ? wrapFootprintProjection(projection) : null;
   }
   // Layout applies the same rule to a group picture whose resource fails.
