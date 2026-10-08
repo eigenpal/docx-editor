@@ -113,6 +113,7 @@ export interface TransactionRevisionIds {
  */
 interface PartIndex {
   readonly nodes: Map<string, OoxmlNode>;
+  uniqueIds: boolean;
   /**
    * Child id to PARENT ID — the id, not the object. A rebuilt ancestor keeps its id, so
    * the thousands of untouched siblings under it keep valid parent entries with no work
@@ -167,19 +168,20 @@ function nodeIndexFor(root: OoxmlElement): PartIndex {
   nodeIndexCompleteBuilds += 1;
   const nodes = new Map<string, OoxmlNode>();
   const parents = new Map<string, string>();
+  let uniqueIds = true;
   const walk = (node: OoxmlNode, parentId: string | null): void => {
     nodeIndexCompleteVisits += 1;
     if (!nodes.has(node.id)) {
       nodes.set(node.id, node);
       if (parentId !== null) parents.set(node.id, parentId);
-    }
+    } else uniqueIds = false;
     if (node.kind === 'textValue') return;
     for (const child of node.children) walk(child, node.id);
   };
   walk(root, null);
   const mintState = mintStates.get(root) ?? { frontier: 0 };
   mintStates.set(root, mintState);
-  const index: PartIndex = { nodes, parents, mintState };
+  const index: PartIndex = { nodes, parents, mintState, uniqueIds };
   partIndexes.set(root, index);
   return index;
 }
@@ -254,6 +256,12 @@ export function hasNode(part: OoxmlPart, nodeId: string): boolean {
 /** Read a node back out of a part by id. */
 export function findNode(part: OoxmlPart, nodeId: string): OoxmlNode | null {
   return nodeIndexFor(part.root).nodes.get(nodeId) ?? null;
+}
+
+/** Use an existing unique-id index without allocating one for untrusted input. */
+export function cachedUniqueNode(root: OoxmlElement, nodeId: string): OoxmlNode | null | undefined {
+  const index = partIndexes.get(root);
+  return index?.uniqueIds ? (index.nodes.get(nodeId) ?? null) : undefined;
 }
 
 /** The element that holds a node, or null for the root and for unknown ids. */
@@ -338,6 +346,7 @@ function removeIndexedSubtree(index: PartIndex, node: OoxmlNode): void {
 }
 
 function addIndexedSubtree(index: PartIndex, node: OoxmlNode, parentId: string): void {
+  if (index.nodes.has(node.id)) index.uniqueIds = false;
   index.nodes.set(node.id, node);
   index.parents.set(node.id, parentId);
   if (node.kind === 'textValue') return;
@@ -396,7 +405,11 @@ function diffPatch(
     if (!oldById.has(child.id)) oldById.set(child.id, child);
   }
   const kept = new Set<string>();
-  for (let at = first; at < newPast; at += 1) kept.add(newChildren[at]!.id);
+  for (let at = first; at < newPast; at += 1) {
+    const id = newChildren[at]!.id;
+    if (kept.has(id)) index.uniqueIds = false;
+    kept.add(id);
+  }
   // REMOVALS FIRST: a node moved between siblings appears in both a removed child's old
   // position and a new child's subtree, and deleting after adding would strip it.
   for (const [id, child] of oldById) if (!kept.has(id)) removeIndexedSubtree(index, child);

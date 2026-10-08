@@ -69,7 +69,7 @@ import { collapseHorizontalSelection as collapseSelection } from './surface-sele
 import { createParagraphMarkVisibility } from './surface-paragraph-mark-visibility.ts';
 import { saveSurfaceDocument } from './docx-editor-save.ts';
 import { applyTextFormOperation, applyTextFormSave } from './surface-text-form-apply.ts';
-import { beginSurfaceCommit } from './surface-commit-state.ts';
+import { beginSurfaceCommit, withSplitSelection } from './surface-commit-state.ts';
 import { createSurfaceDateLocale } from './surface-date-locale.ts';
 import {
   buildContentControlCalendar,
@@ -4643,7 +4643,6 @@ export function mountPaginatedSurface(
       // strike and the proposed break read as one decision instead of two.
       const plan = deleteSelectionPlan();
       const position = plan.replaceAt ?? plan.collapseTo;
-      const before = new Set(editingParagraphIds());
       // Enter carries the caret run's direct formatting even when no toolbar command is
       // armed (select text, resize it, then place the caret after it). An empty tail has
       // no run to inherit from. Capture authored properties only, so a heading's inherited
@@ -4732,29 +4731,32 @@ export function mountPaginatedSurface(
           ]
         : [];
       const insertionOps = separator ? [separator, ...markOps, ...separatorMarkOps] : [splitOp];
-      commit(
-        () =>
-          withoutPendingOnRejection(
-            [...plan.ops, ...markOps, ...insertionOps],
-            [...plan.ops, ...(separator ? [separator, ...separatorMarkOps] : [splitOp])],
-            selectionMark(),
-            undefined,
-            separator && !existingSeparatorStyle
-              ? [
-                  ensureSeparatorStyle(
-                    styleCascade()?.defaultParagraphStyleId ?? null,
-                    separatorStyleId
-                  ),
-                ]
-              : undefined
-          ),
-        () => {
-          // The tail is the id the store minted that was not there before.
-          const created = editingParagraphIds().filter((id) => !before.has(id));
-          const tail = separator ? created.at(-1) : created[0];
-          return tail ? collapsedAt({ paragraphId: tail, offset: 0 }) : null;
-        },
-        { rearmPending: armed }
+      const before = separator ? new Set(editingParagraphIds()) : null;
+      withSplitSelection(session, position.paragraphId, (splitSelection) =>
+        commit(
+          () =>
+            withoutPendingOnRejection(
+              [...plan.ops, ...markOps, ...insertionOps],
+              [...plan.ops, ...(separator ? [separator, ...separatorMarkOps] : [splitOp])],
+              selectionMark(),
+              undefined,
+              separator && !existingSeparatorStyle
+                ? [
+                    ensureSeparatorStyle(
+                      styleCascade()?.defaultParagraphStyleId ?? null,
+                      separatorStyleId
+                    ),
+                  ]
+                : undefined
+            ),
+          () => {
+            if (!before) return splitSelection();
+            const created = editingParagraphIds().filter((id) => !before.has(id));
+            const tail = separator ? created.at(-1) : created[0];
+            return tail ? collapsedAt({ paragraphId: tail, offset: 0 }) : null;
+          },
+          { rearmPending: armed }
+        )
       );
     },
 

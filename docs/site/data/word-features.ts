@@ -460,7 +460,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Hover controls insert a row or column. Drag a divider or the outer right edge to resize. The context menu adds seven structural actions. Both adapters ship the same table chrome. The automation object model adds rows at table edges or before and after an ordinary row. Unrelated merged headers survive row insertion. Automation row insertion refuses merged source rows and boundaries that cross vertical merges. New rows and columns copy the paragraph formatting of the cells they come from, and written values take that formatting too.',
+      'Hover controls insert a row or column. Drag a divider or the outer right edge to resize. Column resizing supports horizontal grid spans in left-to-right tables, including merged headers. Vertical merges, legacy horizontal merges, row offsets, and merged right-to-left tables remain unsupported for column resizing. The context menu adds seven structural actions. Both adapters ship the same table chrome. The automation object model adds rows at table edges or before and after an ordinary row. Unrelated merged headers survive row insertion. Automation row insertion refuses merged source rows and boundaries that cross vertical merges. New rows and columns copy the paragraph formatting of the cells they come from, and written values take that formatting too.',
   },
   {
     id: 'tables.borders-shading',

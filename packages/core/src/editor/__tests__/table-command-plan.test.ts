@@ -799,7 +799,7 @@ describe('occurrence targets and provenance', () => {
 describe('merge and resource refusals at editor seam', () => {
   const mergeReason = 'this table has merged cells';
 
-  test('gridSpan insertColumn and resize share merge reason', () => {
+  test('column insertion refuses merges and resizing refuses an overflowing span', () => {
     const merged =
       '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="3600"/></w:tblGrid>' +
       `<w:tr><w:tc>${p('A1')}</w:tc><w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr>${p('span')}</w:tc></w:tr>` +
@@ -829,7 +829,10 @@ describe('merge and resource refusals at editor seam', () => {
       leftWidthTwips: 2400,
       rightWidthTwips: 3600,
     });
-    expect(resizeCan).toEqual(insertCan);
+    expect(resizeCan).toMatchObject({
+      ok: false,
+      reason: 'the table operation was refused (tree-invariant)',
+    });
   });
 
   test('hMerge and vMerge column ops refuse with merge reason', () => {

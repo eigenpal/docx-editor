@@ -6,6 +6,7 @@
 import type { ExecResult } from '../contracts/editor.ts';
 import type { SemanticLayout, SemanticSelection } from '@docx-editor.dev/core/layout';
 import { readTwipsMeasure, type OoxmlElement } from '@docx-editor.dev/core/store';
+import { validateTableResizeGrid } from '../store/store/table-resize-grid.ts';
 import { readEditableTableTopology } from '../store/store/tree-op-table-topology.ts';
 import { wmlAttributeValue } from '../store/store/tree-op-table-shared.ts';
 import { MIN_TABLE_COLUMN_WIDTH_TWIPS } from '../store/store/table-constraints.ts';
@@ -511,7 +512,11 @@ export function createSurfaceTableInteraction(
       partOfTableIn(host.session(), target.tableId).root,
       target.tableId
     );
-    if (!topo.ok || (target.kind !== 'rowDivider' && topo.topology.hasMerge)) return;
+    if (
+      !topo.ok ||
+      (target.kind !== 'rowDivider' && validateTableResizeGrid(topo.topology) !== null)
+    )
+      return;
 
     let leftTwips = 0;
     let rightTwips = 0;
