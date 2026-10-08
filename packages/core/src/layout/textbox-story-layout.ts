@@ -651,7 +651,10 @@ function widestLineWidth(blocks: readonly BlockFragmentRecord[]): number {
       if (!Number.isFinite(right) || right <= line.contentX) return;
       const opensParagraph = index === 0 && block.fragmentIndex === 0;
       const start = left + (opensParagraph ? firstLineOffset : 0);
-      widest = Math.max(widest, start + right - line.contentX + end);
+      // A list marker is furniture, not a span, but it opens the line at the hanging slot.
+      const markerX = opensParagraph ? block.marker?.box.x : undefined;
+      const origin = markerX === undefined ? line.contentX : Math.min(line.contentX, markerX);
+      widest = Math.max(widest, start + right - origin + end);
     });
   }
   // A hair of slack so the second pass, at exactly this width, cannot break a line on rounding.

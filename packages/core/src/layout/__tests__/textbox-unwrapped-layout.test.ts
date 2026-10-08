@@ -13,6 +13,7 @@ import {
 } from '../index.ts';
 import type { InlineDrawingLayoutContext } from '../drawing-layout.ts';
 import { paragraphFragmentsOfBlocks } from '../semantic-record-queries.ts';
+import { buildNumberingIndex } from '../numbering-index.ts';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import {
   DEFAULT_DRAWING_PROJECTION_LIMITS,
@@ -201,6 +202,34 @@ describe('unwrapped text box text', () => {
     );
     expect(storyLines(record).map(lineText)).toEqual(['abcdefghij']);
     expect(record.width).toBeCloseTo(10 * CHAR, 1);
+  });
+
+  test('a list marker in the hanging slot keeps the numbered line whole', () => {
+    const numbering = readOoxmlPart(
+      `<w:numbering xmlns:w="${W}"><w:abstractNum w:abstractNumId="7">` +
+        '<w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/>' +
+        '<w:lvlText w:val="%1."/><w:lvlJc w:val="left"/>' +
+        '<w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum>' +
+        '<w:num w:numId="7"><w:abstractNumId w:val="7"/></w:num></w:numbering>',
+      { name: '/word/numbering.xml', contentType: 'app/xml' }
+    );
+    if (!numbering.ok) throw new Error(numbering.reason);
+    const part = documentPart(
+      textbox(
+        indented('<w:numPr><w:ilvl w:val="0"/><w:numId w:val="7"/></w:numPr>', 'abcdefghij'),
+        { bodyPr: ZERO_INSETS }
+      )
+    );
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer,
+      producer: 'test',
+      inlineDrawingLayout: drawingLayoutFor(part),
+      numberingIndex: buildNumberingIndex(numbering.part.root),
+    });
+    const record = layout.pages[0]!.anchoredDrawings![0]!;
+    expect(storyLines(record).map(lineText)).toEqual(['abcdefghij']);
+    // The marker opens the line at 18pt; the text starts at the 36pt indent.
+    expect(record.width).toBeCloseTo(36 + 10 * CHAR, 1);
   });
 
   test('indents of a right-to-left paragraph size the box the same way', () => {
