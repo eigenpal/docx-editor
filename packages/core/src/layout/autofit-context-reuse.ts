@@ -20,13 +20,7 @@ export function carryAutofitScope(
   fieldToken: string
 ): boolean {
   const known = previous ? scopes.get(previous) : undefined;
-  const reusable = !!(
-    inputsEqual &&
-    known &&
-    known.measurer === context.measurer &&
-    known.passToken === context.passToken &&
-    known.fieldToken === fieldToken
-  );
+  const reusable = autofitContextMatches(previous, inputsEqual, context, fieldToken);
   const scope = reusable ? known!.scope : {};
   scopes.set(next, { measurer: context.measurer, passToken: context.passToken, fieldToken, scope });
   contextScopes.set(context, scope);
@@ -34,4 +28,21 @@ export function carryAutofitScope(
 }
 export function autofitReuseScope(context: TableAutofitContext): object | undefined {
   return contextScopes.get(context);
+}
+
+/** Compare dynamic width inputs without sharing the paragraph measurement scope. */
+export function autofitContextMatches(
+  previous: object | null | undefined,
+  inputsEqual: boolean,
+  context: TableAutofitContext,
+  fieldToken: string
+): boolean {
+  const known = previous ? scopes.get(previous) : undefined;
+  return !!(
+    inputsEqual &&
+    known &&
+    known.measurer === context.measurer &&
+    known.passToken === context.passToken &&
+    known.fieldToken === fieldToken
+  );
 }

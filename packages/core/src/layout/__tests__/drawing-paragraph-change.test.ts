@@ -54,3 +54,20 @@ test('rejects changed ancestor metadata and added drawing content', () => {
   const after = { ...part.root, children: [{ ...body, children: [...body.children, object] }] };
   expect(drawingInputsUnchangedByParagraphEdit(part.root, after)).toBe(false);
 });
+
+test('numbered paragraph splits retain drawing data without changing table reuse admission', async () => {
+  const { ordinaryTableParagraph, ordinaryDrawingParagraph } =
+    await import('../table-ordinary-paragraph.ts');
+  const numbered =
+    '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>Numbered text</w:t></w:r></w:p>';
+  const part = load(numbered + '<w:p><w:r><w:object/></w:r></w:p>');
+  const p = part.root.children[0]!.children[0]!;
+  expect(ordinaryTableParagraph(p)).toBe(false);
+  expect(ordinaryDrawingParagraph(p)).toBe(true);
+  const split = applyTreeOp(part, { op: 'splitParagraph', paragraphId: p.id, offset: 3 });
+  if (!split.ok) throw Error(split.reason);
+  expect(drawingInputsUnchangedByParagraphEdit(part.root, split.part.root)).toBe(true);
+  expect(drawingInputsUnchangedByParagraphEdit(split.part.root, part.root)).toBe(true);
+  const unsafe = load(numbered.replace('<w:numPr>', '<w:numPr><w:object/>'));
+  expect(ordinaryDrawingParagraph(unsafe.root.children[0]!.children[0]!)).toBe(false);
+});

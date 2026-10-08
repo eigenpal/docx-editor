@@ -1,7 +1,7 @@
 import { WML_NAMESPACE_URI, type OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { MAX_PART_SCAN_ELEMENTS } from '../store/package/drawing-projection.ts';
 import { MAX_XML_DEPTH } from '../store/package/xml-reader.ts';
-import { ordinaryTableParagraph } from './table-ordinary-paragraph.ts';
+import { ordinaryDrawingParagraph } from './table-ordinary-paragraph.ts';
 
 /** Prove that paragraph edits preserve drawing atoms, their order, and their ancestors. */
 export function drawingInputsUnchangedByParagraphEdit(
@@ -10,7 +10,7 @@ export function drawingInputsUnchangedByParagraphEdit(
 ): boolean {
   let visited = 0;
   const ordinary = (node: OoxmlNode): boolean =>
-    node.kind === 'paragraph' && ordinaryTableParagraph(node);
+    node.kind === 'paragraph' && ordinaryDrawingParagraph(node);
   const visit = (previous: OoxmlNode, next: OoxmlNode, depth: number): boolean => {
     if (++visited > MAX_PART_SCAN_ELEMENTS || depth > MAX_XML_DEPTH) return false;
     if (previous === next) return true;

@@ -1,3 +1,4 @@
+import { sectionPrepassInputsMatch } from './section-prepass-inputs.ts';
 import { drawingInputsUnchangedByTextEdit } from './drawing-text-only-change.ts';
 import { tryUpdateTableSession, reuseUnchangedLayout } from './table-text-session.ts';
 import { carryLayoutReadCaches } from './layout-read-caches.ts';
@@ -1117,20 +1118,18 @@ function layoutBlocksPass(
     sectionPrep.framePolicy(columns.count, options.disabledParagraphFrameIds) +
     `|${options.paragraphLineUnitPt ?? '-'}`;
   const prepassMemo = session?.prepass as SectionPrepass | null | undefined;
-  const prepassInputsValid =
-    prepassMemo != null &&
-    prepassMemo.framePolicy === framePolicy &&
-    drawingEpoch !== null &&
-    projectionEpoch !== null &&
-    prepassMemo.drawingEpoch === drawingEpoch &&
-    prepassMemo.projectionEpoch === projectionEpoch &&
-    prepassMemo.producer === producer &&
-    prepassMemo.contentWidth === contentWidth &&
-    prepassMemo.styleCascade === styleCascade &&
-    prepassMemo.listItems === listItems &&
-    prepassMemo.numberingIndex === options.numberingIndex &&
-    prepassMemo.tocToken === tocToken &&
-    prepassMemo.refToken === (refFields?.valuesToken ?? '');
+  const prepassNonListInputsValid = sectionPrepassInputsMatch(prepassMemo, {
+    framePolicy,
+    drawingEpoch,
+    projectionEpoch,
+    producer,
+    contentWidth,
+    styleCascade,
+    numberingIndex: options.numberingIndex,
+    tocToken,
+    refToken: refFields?.valuesToken ?? '',
+  });
+  const prepassInputsValid = prepassNonListInputsValid && prepassMemo.listItems === listItems;
   const prepassValid =
     prepassInputsValid &&
     prepassMemo.bodies.length === bodies.length &&
@@ -1626,6 +1625,7 @@ function layoutBlocksPass(
     previous: prepassMemo,
     prepass,
     inputsEqual: prepassInputsValid,
+    rowInputsEqual: prepassNonListInputsValid,
     eligible: resumable && !furnitureHasWrap && !options.drawingExclusionZonesByPage?.size,
     firstChanged,
     commonSuffix,
