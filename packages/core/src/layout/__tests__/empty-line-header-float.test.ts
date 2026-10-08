@@ -1,7 +1,6 @@
 // An empty body paragraph beside a wrapping picture in the HEADER moves below the picture
-// when the picture leaves no passage beside it, as it does beside a body picture. Only a
-// floating table, which places itself from the empty paragraph it anchors to, keeps empty
-// paragraphs beside it in place.
+// when the picture leaves no passage beside it, as it does beside a body picture. A floating
+// table keeps empty paragraphs beside it in place, whether it sits in the body or in a header.
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
@@ -66,11 +65,54 @@ function wrappingHeader(topPt: number, heightPt: number) {
   );
 }
 
+/**
+ * A header floating table at page y `topPt`, `heightPt` tall. It leaves a 3pt passage at the
+ * right of the content box, too narrow for a paragraph mark.
+ */
+function tableHeader(topPt: number, heightPt: number) {
+  // `w:tblpX`/`w:tblpY` twips carry a one-twip storage bias.
+  const tblpPr =
+    '<w:tblpPr w:vertAnchor="page" w:horzAnchor="page" ' +
+    `w:tblpX="${72 * 20 + 1}" w:tblpY="${topPt * 20 + 1}"/>`;
+  const width = 465 * 20;
+  const table =
+    `<w:tbl><w:tblPr>${tblpPr}<w:tblW w:w="${width}" w:type="dxa"/></w:tblPr>` +
+    `<w:tblGrid><w:gridCol w:w="${width}"/></w:tblGrid>` +
+    `<w:tr><w:trPr><w:trHeight w:val="${heightPt * 20}" w:hRule="exact"/></w:trPr>` +
+    `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/></w:tcPr>` +
+    '<w:p><w:r><w:t>Ref</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+  const part = loadDrawingPart(`<w:hdr xmlns:w="${W}">${table}<w:p/></w:hdr>`, NAME);
+  return layoutHeaderFooterStory(
+    part,
+    468,
+    measurer,
+    NAME,
+    undefined,
+    undefined,
+    { pageNumber: 1, pageCount: 1, storyTop: 36 },
+    128,
+    undefined,
+    undefined,
+    layoutContext(part, NAME),
+    undefined,
+    undefined,
+    {
+      pageNumber: 1,
+      pageWidth: 612,
+      pageHeight: 792,
+      marginLeft: 72,
+      marginRight: 72,
+      marginTop: 72,
+      marginBottom: 72,
+    }
+  );
+}
+
 const p = (text: string) =>
   `<w:p><w:pPr><w:spacing w:after="0"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
 const empty = '<w:p><w:pPr><w:spacing w:after="0"/></w:pPr></w:p>';
 
-function lay(): SemanticLayout {
+function lay(story = wrappingHeader(150, 100)): SemanticLayout {
   const body =
     p('Lead') +
     empty.repeat(8) +
@@ -85,7 +127,7 @@ function lay(): SemanticLayout {
   const furniture: PageFurniture = {
     titlePage: false,
     evenAndOddHeaders: false,
-    headers: new Map([['default', wrappingHeader(150, 100)]]) as PageFurniture['headers'],
+    headers: new Map([['default', story]]) as PageFurniture['headers'],
     footers: new Map(),
   };
   return layoutSemanticDocument(part.part, 1, { measurer, sectionFurniture: [furniture] });
@@ -103,5 +145,24 @@ describe('an empty body paragraph beside a header picture', () => {
       const overlaps = box.y + box.height > 78 + 0.01 && box.y < 178 - 0.01;
       expect(overlaps).toBe(false);
     }
+  });
+});
+
+describe('an empty body paragraph beside a header floating table', () => {
+  test('keeps its place beside the table', () => {
+    const page = lay(tableHeader(150, 100)).pages[0]!;
+    // Page y 150 to 250 is content y 78 to 178. The empty lines stay where they are with the
+    // table far below; the text line after them, which has no passage, moves below the table.
+    const lines = page.fragments.flatMap((fragment) =>
+      fragment.kind === 'paragraph' ? fragment.lines.map((line) => line.box) : []
+    );
+    const control = lay(tableHeader(600, 100)).pages[0]!;
+    const controlLines = control.fragments.flatMap((fragment) =>
+      fragment.kind === 'paragraph' ? fragment.lines.map((line) => line.box) : []
+    );
+    expect(lines.some((box) => box.y + box.height > 78 + 0.01 && box.y < 178 - 0.01)).toBe(true);
+    const emptyLines = (boxes: typeof lines) => boxes.slice(1, 9).map((box) => box.y);
+    expect(emptyLines(lines)).toEqual(emptyLines(controlLines));
+    expect(lines[9]!.y).toBeGreaterThanOrEqual(178 - 0.01);
   });
 });

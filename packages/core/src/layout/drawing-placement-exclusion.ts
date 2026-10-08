@@ -12,7 +12,12 @@ import {
 import type { PendingLine } from './pending-line.ts';
 import { holdsClearingBreak } from './text-wrapping-break-clear.ts';
 
-const topAndBottomAnchorMemo = new WeakMap<OoxmlElement, boolean>();
+// By context first, like `anyAnchorMemo`: whether an atom is anchored, and how it wraps, can
+// depend on `projectionForAtom`.
+const topAndBottomAnchorMemo = new WeakMap<
+  InlineDrawingLayoutContext,
+  WeakMap<OoxmlElement, boolean>
+>();
 
 /**
  * True when the paragraph anchors a `wrapTopAndBottom` drawing, or anchors a drawing and holds
@@ -24,13 +29,18 @@ export function anchorsSpacingDependentBand(
   context: InlineDrawingLayoutContext | undefined
 ): boolean {
   if (!context) return false;
-  let value = topAndBottomAnchorMemo.get(paragraph);
+  let byParagraph = topAndBottomAnchorMemo.get(context);
+  if (!byParagraph) {
+    byParagraph = new WeakMap();
+    topAndBottomAnchorMemo.set(context, byParagraph);
+  }
+  let value = byParagraph.get(paragraph);
   if (value === undefined) {
     const atoms = anchoredDrawingAtomsInParagraph(paragraph, context);
     value =
       atoms.some((atom) => atom.projection.wrap === 'topAndBottom') ||
       (atoms.length > 0 && holdsClearingBreak(paragraph));
-    topAndBottomAnchorMemo.set(paragraph, value);
+    byParagraph.set(paragraph, value);
   }
   return value;
 }

@@ -347,9 +347,12 @@ export function createLineExclusionClearance(context: {
   const clearBlockedEmptyLine = (): void => {
     const line = context.line();
     if (context.holdsContent()) return;
-    // Only floating drawings. A floating table places itself from the empty paragraph it
-    // anchors to, and empty paragraphs beside one keep their place.
-    const zones = context.zones().filter((zone) => zone.sourceKind !== 'table');
+    // Only floating drawings, from the body or from a header or footer. Empty paragraphs beside
+    // a floating table keep their place, whether the table is in the body or in a header or
+    // footer.
+    const zones = context
+      .zones()
+      .filter((zone) => zone.sourceKind !== 'table' && zone.furnitureSource?.kind !== 'table');
     if (zones.length === 0) return;
     const top = context.top() + (line.exclusionSkipBefore ?? 0);
     const width = context.measurer.measure('¶', context.emptyStyle);
