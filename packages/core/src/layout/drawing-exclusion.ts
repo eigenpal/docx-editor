@@ -452,6 +452,33 @@ export function filterExclusionZonesForParagraphOrder(
   );
 }
 
+/**
+ * Placed projections per layouter. Break synthesizes a paragraph's zones once per line, and
+ * one layouter serves one layout pass, so the unwrapped story lays out once per drawing.
+ */
+const placedByLayouter = new WeakMap<
+  TextboxStoryLayouter,
+  WeakMap<DrawingProjection, DrawingProjection>
+>();
+
+function placedTextboxProjection(
+  projection: DrawingProjection,
+  layoutTextboxStory: TextboxStoryLayouter | undefined
+): DrawingProjection {
+  if (!projection.textboxStory?.noWrap || !layoutTextboxStory) return projection;
+  let placed = placedByLayouter.get(layoutTextboxStory);
+  if (!placed) {
+    placed = new WeakMap();
+    placedByLayouter.set(layoutTextboxStory, placed);
+  }
+  let result = placed.get(projection);
+  if (!result) {
+    result = textboxPlacementProjection(projection, layoutTextboxStory(projection));
+    placed.set(projection, result);
+  }
+  return result;
+}
+
 /** Paragraph-local square/tight/through zones synthesized during break. */
 export function synthesizeParagraphWrapExclusionZones(options: {
   readonly frameBase?: ReturnType<typeof import('./body-flow-helpers.ts').bodyAnchorFrameBase>;
@@ -500,10 +527,7 @@ export function synthesizeParagraphWrapExclusionZones(options: {
       height: 14,
     });
     const layoutInCell = options.anchorCellBox != null;
-    const projection =
-      atom.projection.textboxStory?.noWrap && options.layoutTextboxStory
-        ? textboxPlacementProjection(atom.projection, options.layoutTextboxStory(atom.projection))
-        : atom.projection;
+    const projection = placedTextboxProjection(atom.projection, options.layoutTextboxStory);
     const resolved = resolveAnchoredDrawingPosition(projection, {
       pageNumber: 1,
       pageWidth: options.contentRight + options.contentLeft + contentWidth,
