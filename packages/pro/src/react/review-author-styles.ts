@@ -60,6 +60,30 @@ export function authorSlot(info: ReviewAuthorInfo | undefined, fallbackSlot: num
 }
 
 /**
+ * The author hooks and accent for one element: `data-review-author`,
+ * `data-review-author-slot`, and the `--doc-review-author-current` style. Gated on an
+ * author, so an anonymous item never carries `data-review-author=""` and never matches a
+ * host's `[data-review-author]` selector.
+ */
+export function authorHooks(
+  author: string | undefined,
+  info: ReviewAuthorInfo | undefined,
+  fallbackSlot: number
+): {
+  readonly 'data-review-author'?: string;
+  readonly 'data-review-author-slot'?: number;
+  readonly style: CSSProperties;
+} {
+  const style = authorCardStyle(author, info, fallbackSlot);
+  if (!author) return { style };
+  return {
+    'data-review-author': author,
+    'data-review-author-slot': authorSlot(info, fallbackSlot),
+    style,
+  };
+}
+
+/**
  * The rail's author lookup: the engine's roster, plus an entry for anyone it does not carry.
  *
  * The roster covers comment authors as well as revision authors, so the second half is a

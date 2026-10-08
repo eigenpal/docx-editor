@@ -66,6 +66,7 @@ import type {
   ReviewRevisionKind,
 } from '../contracts/editor.ts';
 import { resolveEditorModules, type ReviewDisplayMode } from '../contracts/modules.ts';
+import { resolveReviewPane } from '../contracts/review-pane.ts';
 import {
   NO_TRACKING_SETTINGS,
   type DocumentTrackingSettings,
@@ -267,7 +268,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const modules = resolveEditorModules(config.modules);
   const reportDiagnostic = customNodeDiagnosticReporter(modules);
   const reviewEnabled = modules.review !== null;
-  const autoOpenPane = modules.review?.paneOpening !== 'manual';
+  // Review pane view settings: seeded by the review module, changed by `setReviewPane`.
+  let reviewPane = resolveReviewPane(modules.review?.pane);
   /** Document bytes waiting for a container — set when constructed or loaded detached. */
   let pendingBytes: Uint8Array | null = null;
   /** Pending input belongs to these exact remount bytes, including a deferred mount. */
@@ -624,7 +626,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       onRequestHyperlink: () => hyperlinkChrome.current().onRequest?.(),
       onEquationPopover: (activation) => equationChrome.current().onPopover?.(activation),
       onTrackedChange: () => {
-        if (reviewPaneOpen || !autoOpenPane) return;
+        if (reviewPaneOpen || reviewPane.opening === 'manual') return;
         reviewPaneOpen = true;
         bump();
         emitSelectionChange();
@@ -672,7 +674,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // firing in between would decide a second time and clear what the first one published.
     protection.prime();
     // Once the review model exists, show the pane when it found content and the module allows.
-    reviewPaneOpen = reviewEnabled && autoOpenPane && surface.session.reviewItems().length > 0;
+    reviewPaneOpen =
+      reviewEnabled && reviewPane.opening === 'auto' && surface.session.reviewItems().length > 0;
     publishSignal.adopt(surface);
     if (pendingHostModeFallback !== null) applyHostModeDecision(pendingHostModeFallback, false);
     else adoptDocumentTracking();
@@ -1167,6 +1170,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       canRedo: state?.canRedo ?? false,
       pageSetup: pageSetupOf(surface),
       reviewPaneOpen,
+      reviewPane,
       showParagraphMarks: paragraphMarks.get(),
       documentProtection: protection.state(),
       revisionMarkup: revisionMarkupState.current(),
@@ -2296,6 +2300,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // Tolerated detached: the host waits here and applies on the next mount.
       surface?.setRemoteCaretLabelHost(host);
     },
+    setReviewPane(options) {
+      const next = resolveReviewPane(options, reviewPane);
+      if (next === reviewPane) return;
+      reviewPane = next;
+      bump();
+      emitSelectionChange();
+    },
     setRevisionMarkup: revisionMarkupState.set,
     setRevisionMarkupChrome: revisionMarkupState.register,
     setRevisionStyles(colors) {
@@ -2585,7 +2596,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     ...createEditorScrolling(
       () => surface,
-      () => openScheduler.flush()
+      () => openScheduler.flush(),
+      () => container
     ),
     ...createAnchorNavigation(
       () => editor,

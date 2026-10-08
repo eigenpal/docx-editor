@@ -1,5 +1,7 @@
 // The options of `Editor.setActiveReviewItem`.
 
+import type { ScrollPlacement } from './editor-anchor.ts';
+
 /**
  * How activating a review item places it in the viewport, and whether it announces the
  * reveal.
@@ -20,7 +22,7 @@ export interface ReviewActivationOptions {
    * that story, and opening one always brings its band into view — a story the reader cannot
    * see is one they cannot read the change in, which is the whole point of activating it.
    */
-  readonly reveal?: 'start' | 'center' | 'centerIfNeeded' | 'nearest' | false;
+  readonly reveal?: ScrollPlacement | false;
   /**
    * Whether a successful activation fires the `reviewItemReveal` event. Default `true`.
    *

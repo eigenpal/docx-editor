@@ -14,9 +14,20 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 
 import { createRevisionMarkupDialog } from './revision-markup-dialog';
-import type { EditorModule } from '@docx-editor.dev/core/editor';
+import {
+  resolveReviewPane,
+  type EditorModule,
+  type ReviewPaneOptions,
+} from '@docx-editor.dev/core/editor';
 import { collectReviewItems, revisionItemsOfParagraph } from './review-model.ts';
 import { rememberLicenseKey, type ProLicenseOptions } from '../license.ts';
+
+export type {
+  ResolvedReviewPane,
+  ReviewPaneOpening,
+  ReviewPaneOptions,
+  ReviewPaneOverflow,
+} from '@docx-editor.dev/core/editor';
 
 /**
  * How {@link reviewModule} is configured. Every field is optional, so `reviewModule()`
@@ -26,21 +37,19 @@ import { rememberLicenseKey, type ProLicenseOptions } from '../license.ts';
  */
 export interface ReviewModuleOptions extends ProLicenseOptions {
   /**
-   * Whether the editor opens the review pane by itself. Default `'automatic'`: the pane
-   * opens when a document with review items loads, and when a tracked change is made while
-   * the pane is closed. Pass `'manual'` when the host shows review items its own way, for
-   * example in balloons or margin markers, and opens the pane only on demand. Any other
+   * The review pane settings the editor starts with. Change them later with
+   * `editor.setReviewPane()`, and read them from `snapshot.reviewPane`. Pass
+   * `{ opening: 'manual' }` when the host shows review items its own way, for example in
+   * balloons or margin markers, and opens the pane only on demand. An unknown field or
    * value throws a `TypeError`.
    */
-  readonly paneOpening?: 'automatic' | 'manual';
+  readonly pane?: ReviewPaneOptions;
 }
 
 /** Build the review module. Construction never validates the key and never touches the network. */
 export function reviewModule(options: ReviewModuleOptions = {}): EditorModule {
-  const { paneOpening } = options;
-  if (paneOpening !== undefined && paneOpening !== 'automatic' && paneOpening !== 'manual') {
-    throw new TypeError(`reviewModule: paneOpening must be 'automatic' or 'manual'`);
-  }
+  // Validate now, so a misspelled setting fails where the host wrote it.
+  const pane = options.pane === undefined ? undefined : { ...resolveReviewPane(options.pane) };
   rememberLicenseKey(options.licenseKey);
   return {
     id: 'review',
@@ -49,7 +58,7 @@ export function reviewModule(options: ReviewModuleOptions = {}): EditorModule {
       displayModes: ['all-markup', 'simple-markup', 'proposed', 'original'],
       collectReviewItems,
       revisionItemsOfParagraph,
-      ...(paneOpening ? { paneOpening } : {}),
+      ...(pane ? { pane } : {}),
     },
   };
 }

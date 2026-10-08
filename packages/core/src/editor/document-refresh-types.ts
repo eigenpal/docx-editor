@@ -2,6 +2,7 @@ import type {
   AnchorHighlightAnimation,
   AnchorHighlightOptions,
   ClearAnchorHighlightOptions,
+  ScrollPlacement,
   ScrollToAnchorOptions,
 } from '../contracts/editor.ts';
 
@@ -143,7 +144,7 @@ export interface NavigateToChangeOptions extends ScrollToAnchorOptions {
   /** Move the caret and focus to the changed range start. Default: false. */
   readonly focus?: boolean;
   /** Target alignment. Default: center. centerIfNeeded preserves scroll for an already visible target. */
-  readonly block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest';
+  readonly block?: ScrollPlacement;
 }
 
 /** External file transport stays in your application. Reload resets selection and undo history. @public */

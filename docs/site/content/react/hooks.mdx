@@ -488,6 +488,8 @@ Use `useContentControlInstance()` outside the owning content-control part. Use `
 
 [`@docx-editor.dev/pro/react`](/docs/2.x/pro) provides `useReview`, `useReviewOf`, `useReviewItem`, and `useReviewAuthor`. [`@docx-editor.dev/pro/vue`](/docs/2.x/pro) provides the Vue equivalents.
 
+`useReviewAuthor(author)` returns the resolved author style, inside or outside the review rail. Use it to color your own review markers or balloons with the same author colors as the rail.
+
 ## Dialog draft contexts
 
 Call the hook in a child component of the matching dialog. Each returns `values`, `setValue(name, value)`, `errors`, `isEnabled`, `apply()`, and `cancel()`.

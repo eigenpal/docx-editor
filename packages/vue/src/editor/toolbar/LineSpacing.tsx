@@ -1,4 +1,4 @@
-import { defineComponent, ref } from 'vue';
+import { defineComponent, ref, watch } from 'vue';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlotValue } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
@@ -7,7 +7,6 @@ import { useEditorCommand } from '../useEditorCommand';
 import { useParagraphDialog } from '../paragraph-dialog-host';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
-import { useDropdownClose } from './table-chrome-shared';
 import type { ToolbarSlotPartComponent } from './parts';
 
 const LINE_SPACING_PRESETS: readonly number[] = [1, 1.15, 1.5, 2, 2.5, 3];
@@ -50,7 +49,16 @@ export const ToolbarLineSpacing = defineComponent({
     const open = ref(false);
     const rootRef = ref<HTMLSpanElement | null>(null);
 
-    useDropdownClose(open, (next) => (open.value = next), rootRef);
+    watch(open, (isOpen, _, onCleanup) => {
+      if (!isOpen) return;
+      const onMouseDown = (event: MouseEvent) => {
+        const root = rootRef.value;
+        if (root && event.target instanceof Node && root.contains(event.target)) return;
+        open.value = false;
+      };
+      document.addEventListener('mousedown', onMouseDown);
+      onCleanup(() => document.removeEventListener('mousedown', onMouseDown));
+    });
 
     const applyLines = (lines: number) => {
       open.value = false;

@@ -5,7 +5,9 @@ import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
 import { DocxEditorToolbar } from '../src/editor/toolbar';
+import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { PICKER_SOURCE } from '../../vue/test/helpers/picker-document';
+import { POPUP_ESCAPE_SOURCE } from '../../vue/test/helpers/popup-escape-document';
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 async function update(action: () => unknown = () => {}) {
   await act(async () => {
@@ -13,17 +15,21 @@ async function update(action: () => unknown = () => {}) {
     await new Promise((resolve) => setTimeout(resolve, 20));
   });
 }
-async function mount() {
+async function mount(source: Uint8Array = PICKER_SOURCE) {
+  let instance: DocxEditorInstance | null = null;
   const view = render(
-    <DocxEditorRoot document={PICKER_SOURCE}>
+    <DocxEditorRoot
+      document={source}
+      onReady={(editor) => {
+        instance = editor as DocxEditorInstance;
+      }}
+    >
       <DocxEditorToolbar preset={false} overflow={false}>
         <DocxEditorToolbar.FontFamily />
         <DocxEditorToolbar.StylePicker />
         <DocxEditorToolbar.Zoom />
         <DocxEditorToolbar.FontSize />
         <DocxEditorToolbar.FontColor />
-        <DocxEditorToolbar.Alignment />
-        <DocxEditorToolbar.LineSpacing />
         <DocxEditorToolbar.Highlight />
       </DocxEditorToolbar>
       <DocxEditorViewport>
@@ -32,7 +38,7 @@ async function mount() {
     </DocxEditorRoot>
   );
   await update();
-  return view;
+  return { ...view, editor: () => instance! };
 }
 
 afterEach(() => {
@@ -139,6 +145,8 @@ test('Escape closes a picker opened by a click while focus stays in the pages', 
     const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
     await update(() => pages.dispatchEvent(escape));
     expect(root.querySelector('[role="listbox"]')).toBeNull();
+    // The key came from this editor, so the surface does not also act on it.
+    expect(escape.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(pages);
   }
   // Escape in another field, such as a dialog or the find bar, still reaches that field.
@@ -151,42 +159,54 @@ test('Escape closes a picker opened by a click while focus stays in the pages', 
   const root = view.container.querySelector<HTMLElement>('[data-slot="font.family"]')!;
   await update(() => root.querySelector<HTMLButtonElement>('[aria-haspopup="listbox"]')!.click());
   expect(root.querySelector('[role="listbox"]')).not.toBeNull();
+  const fieldEscape = new KeyboardEvent('keydown', {
+    key: 'Escape',
+    bubbles: true,
+    cancelable: true,
+  });
   await update(() => {
     field.focus();
-    field.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
-    );
+    field.dispatchEvent(fieldEscape);
   });
   expect(fieldSawEscape).toBe(true);
+  // A key from outside the editor is left alone: the picker closes, the key goes on.
+  expect(fieldEscape.defaultPrevented).toBe(false);
   expect(root.querySelector('[role="listbox"]')).toBeNull();
   field.remove();
 });
 
-test('Escape closes the alignment and line spacing popups, from the pages or inside', async () => {
-  const view = await mount();
+test('Escape closes a picker before the header scope or the format painter', async () => {
+  const view = await mount(POPUP_ESCAPE_SOURCE);
   unmount = view.unmount;
+  const editor = view.editor;
   const pages = view.container.querySelector<HTMLElement>('.docx-pages')!;
-  for (const slot of ['alignment', 'list.lineSpacing']) {
-    const root = view.container.querySelector<HTMLElement>(`[data-slot="${slot}"]`)!;
-    const trigger = root.querySelector<HTMLButtonElement>('[aria-haspopup]')!;
-    await update(() => {
-      pages.focus();
-      trigger.click();
-    });
-    expect(trigger.getAttribute('aria-expanded')).toBe('true');
-    await update(() =>
-      pages.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-    );
-    expect(trigger.getAttribute('aria-expanded')).toBe('false');
-    expect(document.activeElement).toBe(pages);
+  const root = view.container.querySelector<HTMLElement>('[data-slot="font.family"]')!;
+  const trigger = root.querySelector<HTMLButtonElement>('[aria-haspopup="listbox"]')!;
+  const escape = async (): Promise<KeyboardEvent> => {
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    await update(() => pages.dispatchEvent(event));
+    return event;
+  };
 
-    await update(() => trigger.click());
-    const option = root.querySelector<HTMLButtonElement>('.docx-toolbar__menu button')!;
-    await update(() => {
-      option.focus();
-      option.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    });
-    expect(trigger.getAttribute('aria-expanded')).toBe('false');
-    expect(document.activeElement).toBe(trigger);
-  }
+  expect(editor().exec({ type: 'editHeaderFooter', position: 'header' }).ok).toBe(true);
+  await update(() => {
+    pages.focus();
+    trigger.click();
+  });
+  expect(root.querySelector('[role="listbox"]')).not.toBeNull();
+  expect((await escape()).defaultPrevented).toBe(true);
+  expect(root.querySelector('[role="listbox"]')).toBeNull();
+  expect(editor().surface!.activeScope().kind).toBe('headerFooter');
+  // With no picker open, the next Escape reaches the surface and leaves the header.
+  await escape();
+  expect(editor().surface!.activeScope().kind).toBe('body');
+
+  expect(editor().surface!.formatPainter.press()).toBe(true);
+  await update(() => trigger.click());
+  expect(root.querySelector('[role="listbox"]')).not.toBeNull();
+  await escape();
+  expect(root.querySelector('[role="listbox"]')).toBeNull();
+  expect(editor().surface!.formatPainter.state().mode).not.toBe('off');
+  await escape();
+  expect(editor().surface!.formatPainter.state().mode).toBe('off');
 });

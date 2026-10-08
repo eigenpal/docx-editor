@@ -137,22 +137,6 @@ describe('a mode re-sent by value', () => {
     expect(lane.mode()).toBe(before);
   });
 
-  test('a non-boolean shrinkForReviewPane is refused, and the reason names it', () => {
-    const { lane, bumps } = harness();
-    const result = lane.setZoomMode({
-      type: 'fit',
-      fit: 'pageWidth',
-      shrinkForReviewPane: 'yes',
-    } as never);
-
-    expect(result).toEqual({
-      ok: false,
-      code: 'invalidArgs',
-      reason: 'shrinkForReviewPane must be true or false',
-    });
-    expect(bumps()).toBe(0);
-  });
-
   test('a genuinely different bound IS a change', () => {
     const { lane, bumps } = harness();
 

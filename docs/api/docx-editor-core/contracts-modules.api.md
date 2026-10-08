@@ -126,7 +126,7 @@ export interface ReviewModuleContribution {
     readonly collectReviewItems: CollectReviewItems;
     readonly createRevisionMarkupDialog?: (host: RevisionMarkupDialogHost) => RevisionMarkupDialog;
     readonly displayModes: readonly ReviewDisplayMode[];
-    readonly paneOpening?: 'automatic' | 'manual';
+    readonly pane?: ReviewPaneOptions;
     readonly revisionItemsOfParagraph: (part: OoxmlPart, paragraphId: string) => readonly ReviewRevisionItem[];
 }
 

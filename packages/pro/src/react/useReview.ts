@@ -21,6 +21,7 @@ import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import type {
   Editor,
   ReviewActivationOptions,
+  ScrollPlacement,
   ReviewItemPlacement,
   ReviewItemQuery,
   ReviewItemRevealEvent,
@@ -73,7 +74,7 @@ export type ReviewItemView = ReviewItemPlacement;
  * Re-exported here so a host taking this hook can name what it passes without reaching past
  * the adapter into the engine's contract module.
  */
-export type { ReviewActivationOptions };
+export type { ReviewActivationOptions, ScrollPlacement };
 /** The payload of the editor's `reviewItemReveal` event. The engine's own type, unchanged. */
 export type { ReviewItemRevealEvent, ReviewItemRevealSource };
 

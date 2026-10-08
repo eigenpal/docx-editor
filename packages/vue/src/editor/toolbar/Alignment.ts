@@ -1,9 +1,8 @@
-import { defineComponent, h, ref } from 'vue';
+import { defineComponent, h, ref, watch } from 'vue';
 import { type ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { useEditorCommand, type EditorCommandState } from '../useEditorCommand';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
-import { useDropdownClose } from './table-chrome-shared';
 
 const ALIGNMENT_SLOTS = [
   'alignment.left',
@@ -33,7 +32,17 @@ export const ToolbarAlignment = defineComponent({
     const open = ref(false);
     const rootRef = ref<HTMLDivElement | null>(null);
 
-    useDropdownClose(open, (next) => (open.value = next), rootRef);
+    const onDocMouseDown = (event: MouseEvent) => {
+      const root = rootRef.value;
+      if (root && event.target instanceof Node && root.contains(event.target)) return;
+      open.value = false;
+    };
+
+    watch(open, (isOpen, _, onCleanup) => {
+      if (!isOpen) return;
+      document.addEventListener('mousedown', onDocMouseDown);
+      onCleanup(() => document.removeEventListener('mousedown', onDocMouseDown));
+    });
 
     return () => {
       if (props.hidden) return null;

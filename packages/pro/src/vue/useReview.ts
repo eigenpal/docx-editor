@@ -10,6 +10,7 @@ import type {
   Editor,
   ReviewActivationOptions,
   ReviewItemPlacement,
+  ScrollPlacement,
   ReviewItemQuery,
   ReviewItemRevealEvent,
   ReviewItemRevealSource,
@@ -46,6 +47,7 @@ export type {
   ReviewAdoptOptions,
   ReviewItemRevealEvent,
   ReviewItemRevealSource,
+  ScrollPlacement,
 };
 
 /** @public */

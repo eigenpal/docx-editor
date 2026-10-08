@@ -247,6 +247,12 @@ export {
   sameZoomMode,
 } from './zoom-fit.ts';
 export {
+  editorInstanceScope,
+  hasOpenNestedPopup,
+  listenForPopupEscape,
+  type PopupEscapeOptions,
+} from './popup-escape.ts';
+export {
   computeImageResizeResult,
   createImageOverlayScrollPort,
   cssPixelsToLayoutPoints,
@@ -464,6 +470,7 @@ export type {
   HighlightRect,
   HighlightResult,
   ReviewItemHit,
+  ScrollPlacement,
   ScrollToAnchorOptions,
 } from '../contracts/editor.ts';
 
@@ -477,6 +484,13 @@ export type {
 export { runChromePrint, ChromePrintError, isChromePrintShortcut } from './chrome-print.ts';
 export type { ChromePrintErrorCode, ChromePrintJob, ChromePrintOptions } from './chrome-print.ts';
 
+export { DEFAULT_REVIEW_PANE, resolveReviewPane } from '../contracts/review-pane.ts';
+export type {
+  ResolvedReviewPane,
+  ReviewPaneOpening,
+  ReviewPaneOptions,
+  ReviewPaneOverflow,
+} from '../contracts/review-pane.ts';
 export {
   DEFAULT_REVISION_MARKUP,
   REVISION_MARKUP_COLORS,

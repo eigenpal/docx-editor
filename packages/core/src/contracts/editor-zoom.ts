@@ -29,15 +29,4 @@ export type ZoomMode =
       readonly minZoom?: number;
       /** Never grow past this. `1` is the "shrink only" rule. Defaults to the ceiling, 5. */
       readonly maxZoom?: number;
-      /**
-       * Lets the fit shrink the page to make room for the open review pane.
-       *
-       * By default a capped fit keeps its `maxZoom` and the review pane switches to its
-       * compact form when the page at that cap leaves no room for the full card column.
-       * With `true`, the page may shrink down to `minZoom` (or the contract floor, 0.1)
-       * so that the full column stands beside it. The pane goes compact only when the
-       * column does not fit even at that floor. An uncapped fit uses the same floor
-       * rule. Any value other than `true`, `false`, or `undefined` is refused.
-       */
-      readonly shrinkForReviewPane?: boolean;
     };

@@ -203,3 +203,48 @@ describe('getReviewItemRects', () => {
     expect(editor.getReviewItemRects('')).toEqual([]);
   });
 });
+
+describe('after a document change', () => {
+  /**
+   * Split the paragraph at its start and paint, then undo straight on the session. The
+   * painted frame still shows the text one line lower; the model has it back on line one.
+   */
+  function changeWithoutRepaint(editor: DocxEditorInstance, paragraphId: string): void {
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 0 },
+      head: { paragraphId, offset: 0 },
+    });
+    editor.surface!.splitParagraph();
+    expect(editor.getReviewItemRects(placementOf(editor, 'insert').key)).toHaveLength(1);
+    editor.surface!.session.undo();
+    expect(editor.surface!.publishedLayout().revision).not.toBe(
+      editor.surface!.session.packageRevision()
+    );
+  }
+
+  function insertion(editor: DocxEditorInstance): { key: string; paragraphId: string } {
+    const placement = placementOf(editor, 'insert');
+    const range = placement.item.kind === 'revision' ? placement.item.ranges[0]! : null;
+    return { key: placement.key, paragraphId: range!.start.paragraphId };
+  }
+
+  test('rects describe the current text, not the last painted frame', () => {
+    const editor = mount();
+    const { key, paragraphId } = insertion(editor);
+    const [band] = probe(editor, paragraphId, 5, 5);
+    changeWithoutRepaint(editor, paragraphId);
+    const rects = editor.getReviewItemRects(key);
+    expect(rects).toHaveLength(1);
+    expectRect(rects[0]!, band!);
+  });
+
+  test('a hit test reads the current text, not the last painted frame', () => {
+    const editor = mount();
+    const { key, paragraphId } = insertion(editor);
+    const [band] = probe(editor, paragraphId, 5, 5);
+    changeWithoutRepaint(editor, paragraphId);
+    const hits = editor.getReviewItemsAt(band!.left + band!.width / 2, band!.top + 1);
+    expect(hits.map((hit) => hit.placement.key)).toContain(key);
+    expectRect(hits[0]!.rect, band!);
+  });
+});

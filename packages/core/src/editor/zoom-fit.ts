@@ -10,6 +10,7 @@
 // the width the page will actually paint at.
 
 import type { ZoomMode } from '../contracts/editor.ts';
+import type { ReviewPaneOverflow } from '../contracts/review-pane.ts';
 
 /** The narrowest scale the editor contract accepts. One definition, every user. */
 export const ZOOM_MIN = 0.1;
@@ -78,10 +79,6 @@ export function resolveZoomMode(mode: ZoomMode | 'auto'): ZoomMode | null {
   if (!mode || typeof mode !== 'object') return null;
   if (mode.type === 'fixed') return FIXED_ZOOM_MODE;
   if (mode.type === 'fit' && mode.fit === 'pageWidth') {
-    // Refused, not ignored: a misspelled or mistyped opt-in that the engine dropped would
-    // leave the host believing the page makes room for the review pane when it does not.
-    const shrink = (mode as { readonly shrinkForReviewPane?: unknown }).shrinkForReviewPane;
-    if (shrink !== undefined && typeof shrink !== 'boolean') return null;
     // The canonical fit gets the shared object back, so a host writing the long form of
     // `'auto'` is reference-equal to `'auto'`.
     return sameZoomMode(mode, AUTO_ZOOM_MODE) ? AUTO_ZOOM_MODE : mode;
@@ -107,12 +104,7 @@ export function sameZoomMode(a: ZoomMode, b: ZoomMode): boolean {
   // nothing in `cap` — is not equal to itself under `===`, so an unchanged prop reported as a
   // change on every render and took the observer, the refit and every consumer's re-render
   // with it. `fitZoom` treats a non-finite bound as absent, so the two really are one mode.
-  return (
-    a.fit === b.fit &&
-    Object.is(a.minZoom, b.minZoom) &&
-    Object.is(a.maxZoom, b.maxZoom) &&
-    (a.shrinkForReviewPane ?? false) === (b.shrinkForReviewPane ?? false)
-  );
+  return a.fit === b.fit && Object.is(a.minZoom, b.minZoom) && Object.is(a.maxZoom, b.maxZoom);
 }
 
 /**
@@ -125,16 +117,24 @@ export function sameZoomMode(a: ZoomMode, b: ZoomMode): boolean {
  * rail settles in one pass.
  *
  * - A fixed mode is entitled to the scale in force.
- * - A fit with `shrinkForReviewPane` is entitled to its lower bound: the column stands
+ * - A fit with the review pane's `overflow: 'shrinkPage'` is entitled to its lower bound: the column stands
  *   whenever ANY scale the fit may take leaves room for it, and the fit then paints at
  *   the largest of those inside the padded box.
  * - A capped fit is entitled to its cap.
  * - An uncapped fit returns `null`: it fills whatever box it is given, so the full column
  *   always stands.
+ *
+ * Shared adapter glue for the review gutter, not for hosts.
+ *
+ * @internal
  */
-export function reviewPaneEntitledZoom(mode: ZoomMode | undefined, zoom: number): number | null {
+export function reviewPaneEntitledZoom(
+  mode: ZoomMode | undefined,
+  zoom: number,
+  overflow: ReviewPaneOverflow = 'float'
+): number | null {
   if (mode?.type !== 'fit') return zoom;
-  if (mode.shrinkForReviewPane === true) {
+  if (overflow === 'shrinkPage') {
     // The fit's lower bound. `fitZoom` lets that bound win when it exceeds the cap, so the
     // entitlement is the lower bound in every case.
     return mode.minZoom !== undefined && Number.isFinite(mode.minZoom)

@@ -8,6 +8,12 @@ import type { ReviewRevisionKind } from './editor.ts';
  * `pairReplacements` lists a typed-over selection as one decision.
  */
 export interface ReviewItemQuery {
+  /**
+   * Revision kinds to leave out of the returned items, for example structural kinds that the
+   * host has no card for. Default: none. Comments and custom items are never removed. This
+   * filters only the returned data; to stop the caret from activating the same kinds, call
+   * `setReviewActivationExclusions`.
+   */
   readonly excludeRevisionKinds?: readonly ReviewRevisionKind[];
   /** When false, skip layout geometry; metadata is unchanged and anchors are null. Default true. */
   readonly placement?: boolean;

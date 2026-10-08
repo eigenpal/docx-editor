@@ -290,22 +290,21 @@ describe('the viewport’s review gutter', () => {
     ).not.toBeNull();
   });
 
-  test('a fit that shrinks for the review pane keeps the full column on a narrow viewport', async () => {
-    // The same 1000px scroller that mirrors the strip under the default capped fit. With
-    // the opt-in, the page may shrink to its 35% floor, so the full column stands.
+  test("overflow 'shrinkPage' keeps the full column on a narrow viewport, and switches live", async () => {
+    // The same 1000px scroller that mirrors the strip under a capped fit. With the setting,
+    // the page may shrink to its 35% floor, so the full column stands.
     scrollerWidth = 1000;
     let editor: DocxEditorInstance | null = null;
     const { container } = render(
       <DocxEditorRoot
         document={SOURCE}
-        modules={[REVIEW_MODULE]}
-        zoomMode={{
-          type: 'fit',
-          fit: 'pageWidth',
-          minZoom: 0.35,
-          maxZoom: 1,
-          shrinkForReviewPane: true,
-        }}
+        modules={[
+          {
+            ...REVIEW_MODULE,
+            review: { ...REVIEW_MODULE.review!, pane: { overflow: 'shrinkPage' } },
+          },
+        ]}
+        zoomMode={{ type: 'fit', fit: 'pageWidth', minZoom: 0.35, maxZoom: 1 }}
         onReady={(ready) => {
           editor = ready as DocxEditorInstance;
         }}
@@ -326,5 +325,13 @@ describe('the viewport’s review gutter', () => {
     expect(scroller.getAttribute('data-review-pane')).toBe('open');
     expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('316px');
     expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('0px');
+    // Back to 'float' at runtime: the page keeps its cap and the strip mirrors.
+    act(() => {
+      editor!.setReviewPane({ overflow: 'float' });
+    });
+    await settle();
+    expect(editor!.snapshot().reviewPane).toEqual({ opening: 'auto', overflow: 'float' });
+    expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('44px');
+    expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('44px');
   });
 });

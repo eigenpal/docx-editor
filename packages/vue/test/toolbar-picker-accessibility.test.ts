@@ -4,11 +4,12 @@ import { h } from 'vue';
 import { DocxEditorToolbar } from '../src/editor/toolbar';
 import { flush, mountEditorTree } from './helpers/mount';
 import { PICKER_SOURCE } from './helpers/picker-document';
+import { POPUP_ESCAPE_SOURCE } from './helpers/popup-escape-document';
 async function update(action: () => unknown = () => {}) {
   action();
   await flush();
 }
-async function mount() {
+async function mount(source: Uint8Array = PICKER_SOURCE) {
   const view = mountEditorTree(
     () =>
       h(
@@ -21,13 +22,11 @@ async function mount() {
             h(DocxEditorToolbar.Zoom),
             h(DocxEditorToolbar.FontSize),
             h(DocxEditorToolbar.FontColor),
-            h(DocxEditorToolbar.Alignment),
-            h(DocxEditorToolbar.LineSpacing),
             h(DocxEditorToolbar.Highlight),
           ],
         }
       ),
-    PICKER_SOURCE
+    source
   );
   await flush();
   return view;
@@ -137,6 +136,8 @@ test('Escape closes a picker opened by a click while focus stays in the pages', 
     const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
     await update(() => pages.dispatchEvent(escape));
     expect(root.querySelector('[role="listbox"]')).toBeNull();
+    // The key came from this editor, so the surface does not also act on it.
+    expect(escape.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(pages);
   }
   // Escape in another field, such as a dialog or the find bar, still reaches that field.
@@ -149,42 +150,54 @@ test('Escape closes a picker opened by a click while focus stays in the pages', 
   const root = view.container.querySelector<HTMLElement>('[data-slot="font.family"]')!;
   await update(() => root.querySelector<HTMLButtonElement>('[aria-haspopup="listbox"]')!.click());
   expect(root.querySelector('[role="listbox"]')).not.toBeNull();
+  const fieldEscape = new KeyboardEvent('keydown', {
+    key: 'Escape',
+    bubbles: true,
+    cancelable: true,
+  });
   await update(() => {
     field.focus();
-    field.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
-    );
+    field.dispatchEvent(fieldEscape);
   });
   expect(fieldSawEscape).toBe(true);
+  // A key from outside the editor is left alone: the picker closes, the key goes on.
+  expect(fieldEscape.defaultPrevented).toBe(false);
   expect(root.querySelector('[role="listbox"]')).toBeNull();
   field.remove();
 });
 
-test('Escape closes the alignment and line spacing popups, from the pages or inside', async () => {
-  const view = await mount();
+test('Escape closes a picker before the header scope or the format painter', async () => {
+  const view = await mount(POPUP_ESCAPE_SOURCE);
   unmount = view.unmount;
+  const editor = view.editor;
   const pages = view.container.querySelector<HTMLElement>('.docx-pages')!;
-  for (const slot of ['alignment', 'list.lineSpacing']) {
-    const root = view.container.querySelector<HTMLElement>(`[data-slot="${slot}"]`)!;
-    const trigger = root.querySelector<HTMLButtonElement>('[aria-haspopup]')!;
-    await update(() => {
-      pages.focus();
-      trigger.click();
-    });
-    expect(trigger.getAttribute('aria-expanded')).toBe('true');
-    await update(() =>
-      pages.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-    );
-    expect(trigger.getAttribute('aria-expanded')).toBe('false');
-    expect(document.activeElement).toBe(pages);
+  const root = view.container.querySelector<HTMLElement>('[data-slot="font.family"]')!;
+  const trigger = root.querySelector<HTMLButtonElement>('[aria-haspopup="listbox"]')!;
+  const escape = async (): Promise<KeyboardEvent> => {
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    await update(() => pages.dispatchEvent(event));
+    return event;
+  };
 
-    await update(() => trigger.click());
-    const option = root.querySelector<HTMLButtonElement>('.docx-toolbar__menu button')!;
-    await update(() => {
-      option.focus();
-      option.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    });
-    expect(trigger.getAttribute('aria-expanded')).toBe('false');
-    expect(document.activeElement).toBe(trigger);
-  }
+  expect(editor().exec({ type: 'editHeaderFooter', position: 'header' }).ok).toBe(true);
+  await update(() => {
+    pages.focus();
+    trigger.click();
+  });
+  expect(root.querySelector('[role="listbox"]')).not.toBeNull();
+  expect((await escape()).defaultPrevented).toBe(true);
+  expect(root.querySelector('[role="listbox"]')).toBeNull();
+  expect(editor().surface!.activeScope().kind).toBe('headerFooter');
+  // With no picker open, the next Escape reaches the surface and leaves the header.
+  await escape();
+  expect(editor().surface!.activeScope().kind).toBe('body');
+
+  expect(editor().surface!.formatPainter.press()).toBe(true);
+  await update(() => trigger.click());
+  expect(root.querySelector('[role="listbox"]')).not.toBeNull();
+  await escape();
+  expect(root.querySelector('[role="listbox"]')).toBeNull();
+  expect(editor().surface!.formatPainter.state().mode).not.toBe('off');
+  await escape();
+  expect(editor().surface!.formatPainter.state().mode).toBe('off');
 });

@@ -33,7 +33,14 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * @public
  */
 
-export { reviewModule, type ReviewModuleOptions } from '../review/review-module.ts';
+export {
+  reviewModule,
+  type ResolvedReviewPane,
+  type ReviewModuleOptions,
+  type ReviewPaneOpening,
+  type ReviewPaneOptions,
+  type ReviewPaneOverflow,
+} from '../review/review-module.ts';
 export {
   collaborationModule,
   type CollaborationModuleOptions,
@@ -74,6 +81,7 @@ export {
   useReviewOf,
   useStackedReviewPositions,
   type ReviewActivationOptions,
+  type ScrollPlacement,
   type ReviewAdoptOptions,
   type ReviewItemRevealEvent,
   type ReviewItemRevealSource,
