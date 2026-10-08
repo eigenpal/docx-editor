@@ -32,6 +32,7 @@ import { registerParagraphCacheDiagnostics } from './paragraph-cache-diagnostics
 import { sha256FontBytes } from '../store/package/sha256.ts';
 import { keepsSubtreeMemo } from '../store/package/subtree-memo-policy.ts';
 import { framedTokenJoin } from './framed-token.ts';
+import { tableCellBreakKeyChunksOf } from './table-cell-break-keys.ts';
 
 export { framedTokenJoin } from './framed-token.ts';
 export {
@@ -492,28 +493,12 @@ export interface ParagraphLayoutCacheOptions {
   readonly retainAcrossPasses?: boolean;
 }
 
-/**
- * The break-cache keys a table's cell paragraphs were last cached under, per (immutable)
- * table node.
- *
- * A pass can enumerate its top-level block keys without laying anything out, but a table's
- * CELL keys only exist while table layout runs — and a resumed pass never lays out the
- * unchanged prefix. Recording them per node lets `retain` name every live key: the node is
- * immutable, so the recorded keys stay right until an edit replaces the node, whose new
- * layout re-records them.
- */
-const tableCellBreakKeys = new WeakMap<object, readonly ParagraphLayoutKey[]>();
-
-export function registerTableCellBreakKeys(
-  table: object,
-  keys: readonly ParagraphLayoutKey[]
-): void {
-  tableCellBreakKeys.set(table, keys);
-}
-
-export function tableCellBreakKeysOf(table: object): readonly ParagraphLayoutKey[] | undefined {
-  return tableCellBreakKeys.get(table);
-}
+// Per table node, the cell keys a pass recorded (`table-cell-break-keys.ts`).
+export {
+  createTableCellBreakKeyCollector,
+  registerTableCellBreakKeys,
+  tableCellBreakKeysOf,
+} from './table-cell-break-keys.ts';
 
 /**
  * Retain a pass's live keys: its block keys plus the recorded cell keys of its tables.
@@ -531,10 +516,9 @@ export function retainLiveBreakKeys<T>(
   if (!cache) return;
   const retained = collector ?? new Set<string>();
   for (const key of blockKeys) retained.add(key);
-  for (const table of tables) {
-    const cellKeys = tableCellBreakKeys.get(table);
-    if (cellKeys) for (const key of cellKeys) retained.add(key);
-  }
+  for (const table of tables)
+    for (const chunk of tableCellBreakKeyChunksOf(table) ?? [])
+      for (const key of chunk) retained.add(key);
   if (!collector) cache.retain(retained);
 }
 

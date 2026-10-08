@@ -56,6 +56,7 @@ import {
   listTokenForTableBlock,
   paragraphLayoutKey,
   registerTableCellBreakKeys,
+  createTableCellBreakKeyCollector,
   retainLiveBreakKeys,
   withDrawingContext,
 } from './layout-cache.ts';
@@ -767,8 +768,7 @@ function layoutBlocksPass(
   const startPageParity = pageIndexStart & 1;
   /** Set when this pass places an anchored drawing whose geometry reads page parity. */
   let usedPageParity = false;
-  /** Cell break keys of the table currently laying out, for the retention registry. */
-  let collectingCellBreakKeys: string[] | null = null;
+  const collectingCellBreakKeys = createTableCellBreakKeyCollector();
   const markPageParityRead = (): void => {
     usedPageParity = true;
   };
@@ -1557,7 +1557,7 @@ function layoutBlocksPass(
     producer,
     // Recorded per table node, so retention can name cell entries of tables a later
     // resumed pass never places.
-    onCellBreakKey: (key) => void collectingCellBreakKeys?.push(key),
+    onCellBreakKey: collectingCellBreakKeys.add,
     nextLineId: (paragraphId, start, lineIndex, occurrence) => {
       lineCounter += 1;
       return bodyLineId(paragraphId, start, lineIndex, occurrence);
@@ -1951,7 +1951,7 @@ function layoutBlocksPass(
         const savedFlowColumn = flowColumnIndex;
         columnIndex = anchorColumn;
         flowColumnIndex = anchorColumn;
-        collectingCellBreakKeys = [];
+        collectingCellBreakKeys.begin();
         try {
           const start = tableWrap.positionedTableStart(
             table,
@@ -1964,9 +1964,9 @@ function layoutBlocksPass(
             contentHeight()
           );
           layoutTableInFlow(table, start.anchorY, true, undefined, start.dx);
-          registerTableCellBreakKeys(table, collectingCellBreakKeys);
+          registerTableCellBreakKeys(table, collectingCellBreakKeys.keys());
         } finally {
-          collectingCellBreakKeys = null;
+          collectingCellBreakKeys.end();
           columnIndex = savedColumn;
           flowColumnIndex = savedFlowColumn;
         }
@@ -2147,13 +2147,13 @@ function layoutBlocksPass(
         positionedFlow.add(pendingFloatIds, entry.table.id);
         continue;
       }
-      collectingCellBreakKeys = [];
+      collectingCellBreakKeys.begin();
       try {
         const outOfFlow = layoutTableInFlow(entry.table, cursorY, false, index + 1);
         if (!outOfFlow) previousSpaceAfter = 0;
-        registerTableCellBreakKeys(entry.table, collectingCellBreakKeys);
+        registerTableCellBreakKeys(entry.table, collectingCellBreakKeys.keys());
       } finally {
-        collectingCellBreakKeys = null;
+        collectingCellBreakKeys.end();
       }
       continue;
     }

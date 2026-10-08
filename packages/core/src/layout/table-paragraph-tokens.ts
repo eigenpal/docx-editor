@@ -46,6 +46,62 @@ export interface TableRowTokenReuse {
   readonly epoch: string;
 }
 
+/**
+ * The latest aggregate of one kind for a table, found through the table's first row.
+ *
+ * Typing in any other row gives the table a new node but keeps the first row's node. The new
+ * aggregate then compares its pieces with these, in order and by value, and returns this very
+ * string when every piece is equal, instead of joining an equal copy. The joined string is a
+ * function of its pieces alone, so the answer is exact whatever the scope, epoch or anchor
+ * were. Every table node's memo (one per undo revision) then shares one string.
+ *
+ * One entry per first-row node, replaced on each join: it holds strings only, and the row is
+ * a weak key, so no tree, projector or history state is kept alive through it.
+ */
+interface LatestAggregate {
+  readonly pieces: readonly string[];
+  readonly token: string;
+}
+const latestByStore = new WeakMap<object, WeakMap<OoxmlNode, LatestAggregate>>();
+
+function latestStoreOf(rows: object): WeakMap<OoxmlNode, LatestAggregate> {
+  let latest = latestByStore.get(rows);
+  if (!latest) latestByStore.set(rows, (latest = new WeakMap()));
+  return latest;
+}
+
+function samePieces(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index += 1) if (a[index] !== b[index]) return false;
+  return true;
+}
+
+let aggregateObserver: { joined: number; reused: number } | null = null;
+
+/**
+ * @internal Counts row-reuse aggregates joined anew and answered with the latest equal
+ * string, for tests that must see the sharing (string identity is not observable).
+ */
+export function tableAggregateReuseTestRecorder(): {
+  readonly joined: number;
+  readonly reused: number;
+  dispose(): void;
+} {
+  const counts = { joined: 0, reused: 0 };
+  aggregateObserver = counts;
+  return {
+    get joined() {
+      return counts.joined;
+    },
+    get reused() {
+      return counts.reused;
+    },
+    dispose() {
+      if (aggregateObserver === counts) aggregateObserver = null;
+    },
+  };
+}
+
 /** A fresh row-segment store for one aggregate kind. */
 export function createTableRowTokenStore(): WeakMap<OoxmlNode, RowTokenSegment> {
   return new WeakMap();
@@ -60,7 +116,9 @@ export function createTableRowTokenStore(): WeakMap<OoxmlNode, RowTokenSegment> 
  *
  * With `reuse`, each row answers its framed segment from the row store when the row node,
  * scope and epoch are unchanged. `framedTokenJoin` frames each part independently and
- * concatenates the frames, so the joined row segments equal the flat join.
+ * concatenates the frames, so the joined row segments equal the flat join. When every piece
+ * equals the latest aggregate found through the first row, that string is returned instead
+ * of an equal new join (`LatestAggregate`).
  */
 export function aggregateParagraphTokensForTableBlock(
   table: OoxmlNode,
@@ -80,10 +138,12 @@ export function aggregateParagraphTokensForTableBlock(
   // The same document-order walk as `tableParagraphsInOrder`, stopping at rows.
   const pieces: string[] = [];
   let any = false;
+  let anchor: OoxmlNode | undefined;
   const stack: OoxmlNode[] = [table];
   while (stack.length > 0) {
     const node = stack.pop()!;
     if (node !== table && node.kind === 'tableRow') {
+      anchor ??= node;
       const segment = rowSegment(node, tokenForParagraph, reuse);
       if (segment.any) any = true;
       pieces.push(segment.framed);
@@ -101,7 +161,17 @@ export function aggregateParagraphTokensForTableBlock(
       }
     }
   }
-  return any ? pieces.join('') : '';
+  if (!any) return '';
+  const latest = anchor && latestStoreOf(reuse.rows).get(anchor);
+  if (latest && samePieces(latest.pieces, pieces)) {
+    if (aggregateObserver) aggregateObserver.reused += 1;
+    return latest.token;
+  }
+  const token = pieces.join('');
+  if (aggregateObserver) aggregateObserver.joined += 1;
+  if (anchor && token.length <= MAX_MEMOIZED_TOKEN_LENGTH)
+    latestStoreOf(reuse.rows).set(anchor, { pieces, token });
+  return token;
 }
 
 function rowSegment(
