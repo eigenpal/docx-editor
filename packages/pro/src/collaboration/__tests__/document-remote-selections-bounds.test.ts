@@ -100,4 +100,26 @@ describe('remote selection cost a peer controls', () => {
     resolver.resolve(awareness, port, find);
     expect(lookups).toBe(first * 2);
   });
+
+  test('one resolve looks up a bounded number of published characters', () => {
+    const { port, awareness, setText, publish } = room();
+    setText('a'.repeat(1000));
+    for (let client = 1; client <= 255; client += 1) {
+      publish(client, PARAGRAPH, client, { item: `${client}:1`, after: true });
+    }
+    let lookups = 0;
+    const find = () => {
+      lookups += 1;
+      return null;
+    };
+    const resolver = new RemoteSelectionResolver();
+    resolver.resolve(awareness, port, find);
+    for (let change = 0; change < 3; change += 1) {
+      lookups = 0;
+      // A local keystroke changes the paragraph, so no endpoint keeps its last answer.
+      setText(`${'a'.repeat(1000)}${'b'.repeat(change + 1)}`);
+      expect(resolver.resolve(awareness, port, find)).toHaveLength(255);
+      expect(lookups).toBeLessThanOrEqual(32);
+    }
+  });
 });

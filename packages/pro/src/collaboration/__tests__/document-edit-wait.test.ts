@@ -42,6 +42,27 @@ describe('edits that wait for the room', () => {
     expect(published).toEqual([true, false]);
   });
 
+  test('ids in lists and nested records wait too, and whole-story edits wait', () => {
+    const { doc, release } = heldBack();
+    const wait = new EditWait({
+      ydoc: doc,
+      viewWaiting: () => false,
+      nodeWaits: (id) => id === 'held-run',
+      publish: () => {},
+    });
+    const refused = (op: Record<string, unknown>): boolean =>
+      wait.refuses([op as unknown as TreeDocOp]);
+    expect(refused({ op: 'acceptRevision', siteNodeIds: ['other', 'held-run'] })).toBe(true);
+    expect(refused({ op: 'setRevisionAttribution', sites: [{ nodeId: 'held-run' }] })).toBe(true);
+    expect(refused({ op: 'setRunProperties', targetRunIds: ['held-run'] })).toBe(true);
+    expect(refused({ op: 'acceptAllRevisions' })).toBe(true);
+    expect(refused({ op: 'replaceStoryBlocks', storyRootId: 'body' })).toBe(true);
+    expect(refused({ op: 'acceptRevision', siteNodeIds: ['other'] })).toBe(false);
+    release();
+    wait.refresh();
+    expect(refused({ op: 'acceptAllRevisions' })).toBe(false);
+  });
+
   test('without a held-back update, nothing asks which nodes an edit addresses', () => {
     let asked = 0;
     const wait = new EditWait({

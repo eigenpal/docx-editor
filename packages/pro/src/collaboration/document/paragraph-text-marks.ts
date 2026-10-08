@@ -158,6 +158,8 @@ export class TextMarks implements MarkLookup {
   private readonly dependents = new Map<number, Set<Span>>();
 
   private readonly listeners = new Set<(texts: ReadonlySet<Y.Text> | 'all') => void>();
+  /** The texts that hold any insert of each client, as of that client's state clock. */
+  private readonly textsOfClients = new Map<number, { state: number; texts: Set<Y.Text> }>();
 
   constructor(
     private readonly doc: Y.Doc,
@@ -228,23 +230,33 @@ export class TextMarks implements MarkLookup {
   }
 
   /**
-   * The texts whose identities read through the clocks of `ranges`, along chains of marks, or
-   * `'all'` when the walk would visit more ranges than `MAX_READING_RANGES`.
+   * The texts whose identities read through the clocks of `ranges`, along chains of marks.
+   *
+   * A walk that would visit more than `MAX_READING_RANGES` ranges or items stops, and answers
+   * with every text that holds an insert of a client it reached. Answering with every text of
+   * the document let one small write by a peer that had made many inserts cost a read of the
+   * whole document each time.
    */
   textsReading(ranges: readonly ClockRange[]): Set<Y.Text> | 'all' {
     const texts = new Set<Y.Text>();
     const visited = new Set<string>();
+    const clients = new Set<number>();
+    const byClient = (): Set<Y.Text> => {
+      for (const client of clients) for (const text of this.textsOfClient(client)) texts.add(text);
+      return texts;
+    };
     let level = ranges;
     for (let depth = 0; depth <= MAX_MARK_CHAIN && level.length > 0; depth += 1) {
       const next: ClockRange[] = [];
+      for (const range of level) clients.add(range.client);
       for (const range of level) {
         const key = `${range.client}:${range.from}:${range.to}`;
         if (visited.has(key)) continue;
-        if (visited.size >= MAX_READING_RANGES) return 'all';
+        if (visited.size >= MAX_READING_RANGES) return this.withDependents(clients, byClient);
         visited.add(key);
         // Every item the range covers: one client's consecutive clocks can sit in several texts.
         for (let clock = range.from, items = 0; clock < range.to; items += 1) {
-          if (items >= MAX_READING_RANGES) return 'all';
+          if (items >= MAX_READING_RANGES) return this.withDependents(clients, byClient);
           const item = structAt(this.doc, { client: range.client, clock });
           if (!item) break;
           if (item.parent instanceof Y.Text) texts.add(item.parent);
@@ -257,6 +269,40 @@ export class TextMarks implements MarkLookup {
       }
       level = next;
     }
+    return texts;
+  }
+
+  /**
+   * Every client whose marks a chain from `clients` can reach, added to `clients`, and then
+   * the texts of all of them. A walk that stops early has not followed every chain, and the
+   * texts it did not reach read through these clients.
+   */
+  private withDependents(clients: Set<number>, texts: () => Set<Y.Text>): Set<Y.Text> {
+    const queue = [...clients];
+    while (queue.length > 0) {
+      const client = queue.pop()!;
+      for (const span of this.dependents.get(client) ?? []) {
+        // A span reads the client it names; its own client's texts read through it.
+        if (!clients.has(span.client)) {
+          clients.add(span.client);
+          queue.push(span.client);
+        }
+      }
+    }
+    return texts();
+  }
+
+  /** The texts that hold any insert of `client`, read again only after the client wrote. */
+  private textsOfClient(client: number): Set<Y.Text> {
+    const state = Y.getState(this.doc.store, client);
+    const cached = this.textsOfClients.get(client);
+    if (cached?.state === state) return cached.texts;
+    const texts = new Set<Y.Text>();
+    for (const struct of this.doc.store.clients.get(client) ?? []) {
+      const parent = struct instanceof Y.Item ? struct.parent : null;
+      if (parent instanceof Y.Text) texts.add(parent);
+    }
+    this.textsOfClients.set(client, { state, texts });
     return texts;
   }
 

@@ -9,7 +9,16 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { afterEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createApp, defineComponent, effectScope, h, nextTick, shallowRef } from 'vue';
+import {
+  createApp,
+  createSSRApp,
+  defineComponent,
+  effectScope,
+  h,
+  nextTick,
+  shallowRef,
+} from 'vue';
+import { renderToString } from 'vue/server-renderer';
 import type * as Y from 'yjs';
 import type { HocuspocusProvider } from '@hocuspocus/provider';
 import type { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
@@ -166,7 +175,30 @@ describe('useHocuspocusCollaboration (Vue)', () => {
     expect(rooms.filter((room) => !room.destroyed)).toHaveLength(2);
     expect(tenants[0]!.session.value?.documentId).toBe('bbbbbbbbbbbbbbbbbbbbbbbbbb');
     expect(tenants[1]!.session.value?.documentId).toBe('cccccccccccccccccccccccccc');
+    // Stopping the store's scope closes its rooms.
     scope.stop();
+    await flushPromises();
+    expect(rooms.every((room) => room.destroyed)).toBe(true);
+  });
+
+  test('a server render opens no room', async () => {
+    let created = 0;
+    const createRoom = async (options: UseHocuspocusCollaborationConnectOptions) => {
+      created += 1;
+      return fakeRoom(options.roomId);
+    };
+    const Probe = defineComponent({
+      setup() {
+        const options = { room: CONNECT, [HOCUSPOCUS_CREATE_ROOM_FOR_TESTS]: createRoom };
+        useHocuspocusCollaboration(options);
+        return () => h('div');
+      },
+    });
+    for (let render = 0; render < 3; render += 1) {
+      await renderToString(createSSRApp(Probe));
+    }
+    await flushPromises();
+    expect(created).toBe(0);
   });
 
   test('a room the host opened with connect does not follow later room changes', async () => {

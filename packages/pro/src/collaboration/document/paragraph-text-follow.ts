@@ -217,8 +217,18 @@ export class TextFollow {
   private readonly ownChanges = new Set<LogicalId>();
   /** Sources whose placement read what other sources hold (`movedAfter`). */
   private readonly readsOtherSources = new Set<LogicalId>();
-  /** `typedSources` as of the current relocation, or null before it is read. */
-  private typedAnchored: Map<Identity, TypedOriginal[]> | null = null;
+  /**
+   * `typedSources`, kept per source: a source's entries change only with its own text, so a
+   * change reads that source again and nothing else. Every keystroke in a document with a
+   * source that reads others places that source again, and building the map from every
+   * source each time cost the whole document per keystroke.
+   */
+  private readonly typedAnchored = new Map<Identity, TypedOriginal[]>();
+  /** The identities each source has entries for in `typedAnchored`. */
+  private readonly typedOf = new Map<LogicalId, Identity[]>();
+  /** Sources whose entries are out of date; every source until the first read. */
+  private readonly typedStale = new Set<LogicalId>();
+  private typedBuilt = false;
   /**
    * Identities as the last read left them. A read happens when a paragraph changes, and a
    * writer that changes a text inside a transaction drops its entry (`invalidate`).
@@ -250,6 +260,7 @@ export class TextFollow {
     const text = this.textOf(paragraphId);
     const deleted = this.isDeleted(paragraphId);
     this.identities.delete(paragraphId);
+    this.typedStale.add(paragraphId);
     const identities = text ? this.identitiesOf(paragraphId, text) : null;
     const { affected, changed } = this.index.update(
       paragraphId,
@@ -331,10 +342,18 @@ export class TextFollow {
         const moves = others('move');
         const restores = others('restore');
         if (moves.length > 0 || restores.length > 0 || isCopy) {
+          const from = clocks[start]!;
+          const move = this.coverage(moves, from, end - start, paragraphId);
+          const restore = this.coverage(restores, from, end - start, paragraphId);
           for (let position = start; position < end; position += 1) {
-            if (this.hides(identities, position, paragraphId, moves, restores, seen, duplicates)) {
-              hidden.add(position);
-            }
+            const at = position - start;
+            const held = {
+              move: move.any[at]! > 0,
+              laterMove: move.later[at]! > 0,
+              restore: restore.any[at]! > 0,
+              laterRestore: restore.later[at]! > 0,
+            };
+            if (this.hides(identities, position, held, seen, duplicates)) hidden.add(position);
           }
         }
         if (!isCopy && ownCopies.size > 0) {
@@ -404,37 +423,60 @@ export class TextFollow {
   private hides(
     identities: TextIdentities,
     position: number,
-    paragraphId: LogicalId,
-    moves: readonly {
-      readonly run: { start: number; end: number };
-      readonly paragraph: LogicalId;
-    }[],
-    restores: readonly {
-      readonly run: { start: number; end: number };
-      readonly paragraph: LogicalId;
-    }[],
+    /** Whether other paragraphs hold the character as a move or a restore, and one later. */
+    held: {
+      readonly move: boolean;
+      readonly laterMove: boolean;
+      readonly restore: boolean;
+      readonly laterRestore: boolean;
+    },
     seen: Set<Identity>,
     duplicates: Set<number>
   ): boolean {
-    const clock = identities.clocks[position]!;
-    const holding = (entries: typeof moves): LogicalId[] =>
-      entries
-        .filter((entry) => entry.run.start <= clock && clock < entry.run.end)
-        .map((entry) => entry.paragraph);
-    // Another holder shows the character when one comes after this paragraph.
-    const later = (holders: readonly LogicalId[]): boolean =>
-      holders.some((holder) => this.order(holder, paragraphId) > 0);
     const id = identities.ids[position]!;
     let hide = false;
     if (isCopyAt(identities, position) && seen.has(id)) {
       duplicates.add(position);
     }
-    if (identities.moved[position]) hide = seen.has(id) || later(holding(moves));
+    // Another holder shows the character when one comes after this paragraph.
+    if (identities.moved[position]) hide = seen.has(id) || held.laterMove;
     else if (identities.restored[position]) {
-      hide = seen.has(id) || holding(moves).length > 0 || later(holding(restores));
-    } else hide = holding(moves).length > 0 || holding(restores).length > 0;
+      hide = seen.has(id) || held.move || held.laterRestore;
+    } else hide = held.move || held.restore;
     if (isCopyAt(identities, position)) seen.add(id);
     return hide;
+  }
+
+  /**
+   * For each of `length` consecutive clocks from `from`, how many of `entries` hold it, and
+   * how many of those come after `paragraphId`. Each holder's order is read once, and a sweep
+   * counts the rest: a peer that copies one run into many paragraphs made a scan of every
+   * holder for every character cost the copies squared times the run.
+   */
+  private coverage(
+    entries: readonly { readonly run: IdentityRun; readonly paragraph: LogicalId }[],
+    from: number,
+    length: number,
+    paragraphId: LogicalId
+  ): { readonly any: Int32Array; readonly later: Int32Array } {
+    const any = new Int32Array(length + 1);
+    const later = new Int32Array(length + 1);
+    for (const entry of entries) {
+      const first = Math.max(entry.run.start, from) - from;
+      const last = Math.min(entry.run.end, from + length) - from;
+      if (first >= last) continue;
+      any[first]! += 1;
+      any[last]! -= 1;
+      if (this.order(entry.paragraph, paragraphId) > 0) {
+        later[first]! += 1;
+        later[last]! -= 1;
+      }
+    }
+    for (let at = 1; at <= length; at += 1) {
+      any[at]! += any[at - 1]!;
+      later[at]! += later[at - 1]!;
+    }
+    return { any, later };
   }
 
   /** Every paragraph that holds one character, moved or in its first place. */
@@ -493,6 +535,7 @@ export class TextFollow {
   /** Forget a text's identities: a writer changed it inside a transaction. */
   invalidate(paragraphId: LogicalId): void {
     this.identities.delete(paragraphId);
+    this.typedStale.add(paragraphId);
   }
 
   private identitiesOf(paragraphId: LogicalId, text: Y.Text): TextIdentities {
@@ -513,11 +556,14 @@ export class TextFollow {
     this.dependencies.clear();
     this.pending.clear();
     this.ownChanges.clear();
+    this.typedAnchored.clear();
+    this.typedOf.clear();
+    this.typedStale.clear();
+    this.typedBuilt = false;
   }
 
   /** Place the following text of `sources` again. Returns the targets whose view changed. */
   private relocate(sources: readonly LogicalId[]): Set<LogicalId> {
-    this.typedAnchored = null;
     const touched = new Set<LogicalId>();
     for (const source of sources)
       for (const target of this.targetsOf.get(source) ?? []) touched.add(target);
@@ -657,27 +703,40 @@ export class TextFollow {
 
   /**
    * For each identity typed with anchors in a source, the sources that hold it so: such text
-   * follows by its own anchors. Built once per relocation.
+   * follows by its own anchors. Sources whose text changed are read again first.
    */
   private typedSources(): ReadonlyMap<Identity, readonly TypedOriginal[]> {
-    if (this.typedAnchored) return this.typedAnchored;
-    const typed = new Map<Identity, TypedOriginal[]>();
-    for (const source of this.sources) {
-      const text = this.textOf(source);
-      if (!text) continue;
-      const identities = this.identitiesOf(source, text);
-      let anchors: readonly FollowAnchor[] | null = null;
-      identities.ids.forEach((id, position) => {
-        if (identities.starts[position]) anchors = identities.anchors[position] ?? null;
-        const isCopy = isCopyAt(identities, position);
-        if (!id || isCopy || !anchors) return;
-        const holders = typed.get(id) ?? [];
-        holders.push({ source, anchors });
-        typed.set(id, holders);
-      });
+    if (!this.typedBuilt) {
+      this.typedBuilt = true;
+      for (const source of this.sources) this.typedStale.add(source);
     }
-    this.typedAnchored = typed;
-    return typed;
+    for (const source of this.typedStale) this.readTyped(source);
+    this.typedStale.clear();
+    return this.typedAnchored;
+  }
+
+  /** Replace one source's entries in `typedAnchored` with what its text holds now. */
+  private readTyped(source: LogicalId): void {
+    for (const id of this.typedOf.get(source) ?? []) {
+      const kept = (this.typedAnchored.get(id) ?? []).filter((entry) => entry.source !== source);
+      if (kept.length > 0) this.typedAnchored.set(id, kept);
+      else this.typedAnchored.delete(id);
+    }
+    this.typedOf.delete(source);
+    const text = this.sources.has(source) ? this.textOf(source) : null;
+    if (!text) return;
+    const identities = this.identitiesOf(source, text);
+    const ids = new Set<Identity>();
+    let anchors: readonly FollowAnchor[] | null = null;
+    identities.ids.forEach((id, position) => {
+      if (identities.starts[position]) anchors = identities.anchors[position] ?? null;
+      if (!id || isCopyAt(identities, position) || !anchors) return;
+      const holders = this.typedAnchored.get(id) ?? [];
+      holders.push({ source, anchors });
+      this.typedAnchored.set(id, holders);
+      ids.add(id);
+    });
+    if (ids.size > 0) this.typedOf.set(source, [...ids]);
   }
 
   /** Whether an original typed in `source` follows by one of its anchors, as `followingOf` reads them. */

@@ -295,6 +295,26 @@ describe('useHocuspocusCollaboration', () => {
     expect(latest?.pending).toBe(false);
   });
 
+  test('StrictMode starts one connect, so a creating replica seeds the room once', async () => {
+    // Two connects in flight both join an empty room, and with a `create` bootstrap both
+    // seed it: the room fails with `concurrent-seed`.
+    let started = 0;
+    const createRoom = async () => {
+      started += 1;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return fakeRoom(`room-${started}`);
+    };
+    await act(async () => {
+      render(
+        <StrictMode>
+          <Probe createRoom={createRoom} onState={() => {}} />
+        </StrictMode>
+      );
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+    expect(started).toBe(1);
+  });
+
   test('leave destroys the room and clears the session', async () => {
     const created: StubRoom[] = [];
     const createRoom = async () => {

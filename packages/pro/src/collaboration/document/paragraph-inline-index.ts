@@ -53,10 +53,60 @@ function paragraphTag(paragraphId: string): string {
 
 const TAG = /^\d{10}$/;
 
+/**
+ * The paragraphs whose text names one ID, with the first of them by ID at hand. A peer can
+ * name one ID in any number of texts, and every view of each asks for the first, so it is
+ * kept in a heap rather than found by a scan. Removed holders leave the heap lazily.
+ */
+class Holders extends Set<LogicalId> {
+  private readonly heap: LogicalId[] = [];
+
+  override add(id: LogicalId): this {
+    if (!this.has(id)) {
+      super.add(id);
+      // Built by `Set`'s constructor before the heap exists; it adds nothing then.
+      if (this.heap) this.push(id);
+    }
+    return this;
+  }
+
+  first(): LogicalId {
+    const heap = this.heap;
+    while (heap.length > 0 && !this.has(heap[0]!)) this.pop();
+    return heap[0]!;
+  }
+
+  private push(id: LogicalId): void {
+    const heap = this.heap;
+    heap.push(id);
+    for (let at = heap.length - 1; at > 0; ) {
+      const parent = (at - 1) >> 1;
+      if (heap[parent]! <= heap[at]!) break;
+      [heap[parent], heap[at]] = [heap[at]!, heap[parent]!];
+      at = parent;
+    }
+  }
+
+  private pop(): void {
+    const heap = this.heap;
+    const last = heap.pop()!;
+    if (heap.length === 0) return;
+    heap[0] = last;
+    for (let at = 0; ; ) {
+      const left = 2 * at + 1;
+      const right = left + 1;
+      let least = at;
+      if (left < heap.length && heap[left]! < heap[least]!) least = left;
+      if (right < heap.length && heap[right]! < heap[least]!) least = right;
+      if (least === at) break;
+      [heap[least], heap[at]] = [heap[at]!, heap[least]!];
+      at = least;
+    }
+  }
+}
+
 function firstHolder(holders: ReadonlySet<LogicalId>): LogicalId {
-  let first: LogicalId | null = null;
-  for (const id of holders) if (first === null || id < first) first = id;
-  return first!;
+  return (holders as Holders).first();
 }
 
 /** The node IDs one stretch of text names in its attributes. */
@@ -76,7 +126,7 @@ function idsOfAttributes(attributes: ReturnType<typeof decodeAttributes>): strin
 
 export class InlineIndex {
   /** The paragraphs whose shared text names each ID. */
-  private readonly holders = new Map<string, Set<LogicalId>>();
+  private readonly holders = new Map<string, Holders>();
   private readonly idsOf = new Map<LogicalId, Set<string>>();
   private readonly embeds = new Set<string>();
   /** Paragraphs whose shown IDs changed because another paragraph's text changed. */
@@ -350,7 +400,7 @@ export class InlineIndex {
   private hold(id: string, paragraphId: LogicalId): void {
     let holders = this.holders.get(id);
     if (!holders) {
-      holders = new Set();
+      holders = new Holders();
       this.holders.set(id, holders);
     }
     // The paragraph that showed the ID bare shows it tagged once an earlier one holds it.
@@ -358,14 +408,15 @@ export class InlineIndex {
       const first = firstHolder(holders);
       if (paragraphId < first) this.affected.add(first);
     }
+    const alone = holders.size < 2;
     holders.add(paragraphId);
-    this.holdersChanged(holders);
+    if (alone) this.holdersChanged(holders);
   }
 
   private release(id: string, paragraphId: LogicalId): void {
     const holders = this.holders.get(id);
     if (!holders) return;
-    this.holdersChanged(holders);
+    if (holders.size <= 2) this.holdersChanged(holders);
     const wasFirst = firstHolder(holders) === paragraphId;
     holders.delete(paragraphId);
     if (holders.size === 0) {
@@ -381,6 +432,10 @@ export class InlineIndex {
    * The holders of one ID changed. A paragraph that shows a holder's text where it follows a
    * move shows that ID by the holders too: tagged or bare, and an embed only while no other
    * text holds it. Its own text and its following text can stay the same, so it reads again.
+   *
+   * Such a paragraph holds none of it, so it reads only whether one text holds the ID or
+   * several: the callers ask only when that changes, which keeps a peer that names one ID
+   * in many texts from making every hold walk every holder.
    */
   private holdersChanged(holders: ReadonlySet<LogicalId>): void {
     for (const holder of holders) {

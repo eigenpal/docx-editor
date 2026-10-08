@@ -14,8 +14,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * cancels that destroy, so StrictMode and hot reload cannot hand a destroyed
  * room back to the next render.
  *
- * Owners are stored by `useId()` / Vue instance uid so a remount that resets
- * hook state still finds the live room.
+ * Owners are stored by their hook instance's key so a remount still finds the live room.
+ * An owner enters the store only when its component mounts (`reclaimOwner`): a server render,
+ * or a render that never commits, leaves nothing behind.
  */
 
 export interface DestroyableRoom {
@@ -45,7 +46,8 @@ export function webrtcRoomOwnerCountForTests(): number {
 
 export function createWebrtcRoomOwner<T extends DestroyableRoom>(
   schedule: (task: () => void) => void = queueMicrotask,
-  onDisposed: () => void = () => {}
+  onDisposed: () => void = () => {},
+  onClaimed: () => void = () => {}
 ): WebrtcRoomOwner<T> {
   let held: T | null = null;
   let generation = 0;
@@ -68,6 +70,7 @@ export function createWebrtcRoomOwner<T extends DestroyableRoom>(
     },
     reclaimOwner() {
       cancelPending();
+      onClaimed();
     },
     disposeOwner() {
       const token = ++generation;
@@ -87,9 +90,14 @@ export function webrtcRoomOwnerFor<T extends DestroyableRoom>(id: string): Webrt
   if (existing) return existing as WebrtcRoomOwner<T>;
   // A remount within the dispose window reclaims this owner; past it, the owner is gone for
   // good, so its entry goes too. Without this every unmounted hook stayed in the map.
-  const created: WebrtcRoomOwner<T> = createWebrtcRoomOwner<T>(queueMicrotask, () => {
-    if (owners.get(id) === (created as WebrtcRoomOwner<DestroyableRoom>)) owners.delete(id);
-  });
-  owners.set(id, created as WebrtcRoomOwner<DestroyableRoom>);
+  const created: WebrtcRoomOwner<T> = createWebrtcRoomOwner<T>(
+    queueMicrotask,
+    () => {
+      if (owners.get(id) === (created as WebrtcRoomOwner<DestroyableRoom>)) owners.delete(id);
+    },
+    () => {
+      if (!owners.has(id)) owners.set(id, created as WebrtcRoomOwner<DestroyableRoom>);
+    }
+  );
   return created;
 }

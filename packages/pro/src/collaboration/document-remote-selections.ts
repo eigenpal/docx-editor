@@ -63,6 +63,13 @@ interface Baseline {
  */
 const MAX_ALIGNED_PAIRS = 16;
 
+/**
+ * Published characters one resolve looks up at most. Each lookup lays out the paragraphs
+ * that hold the character, and a peer can publish one for every client it reports. Past the
+ * bound, an endpoint resolves by its offset.
+ */
+const MAX_CHARACTER_LOOKUPS = 32;
+
 type ResolvedAddress = CollaborationRemoteSelection['anchor'];
 
 /** Where a published character shows here, in this editor's node ids, or null. */
@@ -83,6 +90,7 @@ export class RemoteSelectionResolver {
     const selections: CollaborationRemoteSelection[] = [];
     const present = new Set<number>();
     const aligned = new Set<string>();
+    let lookups = 0;
     let revision: number | undefined;
     for (const [clientId, state] of states) {
       if (clientId === awareness.clientID) continue;
@@ -101,10 +109,15 @@ export class RemoteSelectionResolver {
       const { texts, resolved, missing } = baseline;
       const resolve = (address: EncodedSelectionAddress): ResolvedAddress | null => {
         // Beside the published character, wherever it shows here, and that paragraph's text.
+        let overBudget = false;
         const beside = (): { address: ResolvedAddress; text: string } | null => {
-          const found = address.character
-            ? findCharacter?.(address.paragraphId, address.character)
-            : null;
+          if (!address.character || !findCharacter) return null;
+          if (lookups >= MAX_CHARACTER_LOOKUPS) {
+            overBudget = true;
+            return null;
+          }
+          lookups += 1;
+          const found = findCharacter(address.paragraphId, address.character);
           const shown = found ? port.paragraphByNodeId(found.nodeId) : null;
           if (!found || !shown) return null;
           const at = { paragraphId: shown.paragraphId, nodeId: shown.nodeId, offset: found.offset };
@@ -118,7 +131,8 @@ export class RemoteSelectionResolver {
           const looked = missing.get(key);
           if (looked?.revision === revision) return looked.address;
           const found = beside()?.address ?? null;
-          missing.set(key, { revision, address: found });
+          // An answer the lookup bound cut short is no answer: the next resolve looks again.
+          if (!overBudget) missing.set(key, { revision, address: found });
           return found;
         }
         const cached = resolved.get(address.paragraphId + ':' + address.offset);

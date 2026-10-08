@@ -128,7 +128,9 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
   // StrictMode's double render and effect replay, as `useId` does, so a remount still finds
   // its room.
   const [instance] = useState(() => (ownerInstances += 1));
-  const owner = webrtcRoomOwnerFor<THandle>(`${config.ownerKey}#${instance}`);
+  // The registry holds an owner from its mount on, so a render before the mount, or one that
+  // never commits, keeps its owner here.
+  const [owner] = useState(() => webrtcRoomOwnerFor<THandle>(`${config.ownerKey}#${instance}`));
   const configRef = useRef(config);
   configRef.current = config;
   assertHostModulesHaveNoCollaboration(config.hookName, config.hostModules);
@@ -301,10 +303,20 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
     if (!next) return;
     if (owner.current()) return;
     owner.autoKey = autoKey;
-    // `connect` rejects so that an awaiting caller can branch on the failure. This path has
-    // no caller, and the failure already reaches the host through `error`, so swallow it
-    // rather than raise an unhandled rejection for a room the host already renders as failed.
-    void connectRoom(next).catch(() => {});
+    // Started a microtask later, so StrictMode's replayed effect cancels the first start
+    // before it runs. Two starts would both join an empty room, and with a `create`
+    // bootstrap both would seed it.
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled || owner.current()) return;
+      // `connect` rejects so that an awaiting caller can branch on the failure. This path
+      // has no caller, and the failure already reaches the host through `error`, so swallow
+      // it rather than raise an unhandled rejection for a room the host renders as failed.
+      void connectRoom(next).catch(() => {});
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [autoKey, connectRoom, owner, publish]);
 
   const hostModules = config.hostModules;

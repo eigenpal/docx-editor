@@ -125,16 +125,16 @@ describe('text marks', () => {
     expect(marks.origin('move', 7, 0)).toBeNull();
   });
 
-  test('marks that branch at every step cost a bounded walk, then every text reads again', () => {
+  test('marks that branch at every step cost a bounded walk, then their clients read again', () => {
     // Long marks of one client, each naming the client itself at another shift: every step of
-    // the walk branches, and an unbounded walk took seconds per update on every replica.
+    // the walk branches, and an unbounded walk took seconds per update on every replica. The
+    // walk stops, and the texts that hold that client's inserts read again, not every text.
     const author = docWithText(7);
     const reader = docWithText(9);
-    let everything = false;
-    textMarksOf(reader.doc).subscribe((texts) => {
-      if (texts === 'all') everything = true;
-    });
+    const heard: (ReadonlySet<Y.Text> | 'all')[] = [];
+    textMarksOf(reader.doc).subscribe((texts) => heard.push(texts));
     const marks = textMarksOf(author.doc);
+    author.text.insert(0, 'typed');
     author.doc.transact(() => {
       for (let shift = 1; shift <= 12; shift += 1) {
         marks.markCopy('move', 7, shift * 1000, 900_000, `7:${shift * 7}`);
@@ -143,7 +143,10 @@ describe('text marks', () => {
     const started = performance.now();
     Y.applyUpdate(reader.doc, Y.encodeStateAsUpdate(author.doc));
     expect(performance.now() - started).toBeLessThan(1000);
-    expect(everything).toBe(true);
+    expect(heard.includes('all')).toBe(false);
+    // The one text that holds the client's inserts reads again.
+    const read = new Set(heard.flatMap((texts) => (texts === 'all' ? [] : [...texts])));
+    expect([...read]).toEqual([reader.doc.getText('t')]);
   });
 
   test('keys and values a peer writes wrong are ignored', () => {
@@ -166,5 +169,27 @@ describe('text marks', () => {
       expect(marks.follow(7, clock)).toBeNull();
     }
     expect(({} as { polluted?: unknown }).polluted).toBeUndefined();
+  });
+
+  test('a mark over many inserts reads the texts that hold them, not every text', () => {
+    const doc = new Y.Doc();
+    doc.clientID = 77;
+    const marks = textMarksOf(doc);
+    const map = doc.getMap<string>(TEXT_MARKS_KEY);
+    // Other texts of the document, written by another client.
+    doc.clientID = 5;
+    for (let at = 0; at < 50; at += 1) doc.getText(`other-${at}`).insert(0, 'text');
+    // More separate inserts of one client than one walk reads, all in one text.
+    doc.clientID = 77;
+    const own = doc.getText('own');
+    doc.transact(() => {
+      for (let at = 0; at < 5000; at += 1) own.insert(0, 'z');
+    });
+    const heard: (ReadonlySet<Y.Text> | 'all')[] = [];
+    marks.subscribe((texts) => heard.push(texts));
+    map.set('o77:0', `1:0:${MAX_MARK_LENGTH}`);
+    expect(heard).toHaveLength(1);
+    expect(heard[0]).not.toBe('all');
+    expect([...(heard[0] as ReadonlySet<Y.Text>)]).toEqual([own]);
   });
 });

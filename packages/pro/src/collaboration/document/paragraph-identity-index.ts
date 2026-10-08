@@ -55,58 +55,35 @@ export function identityRuns(identities: TextIdentities): IdentityRun[] {
   return runs;
 }
 
-/** Sorted runs of one client, with the longest run's length to bound a backward scan. */
-class ClientRuns {
+/** Runs sorted by start whose lengths are all below `bound`, which bounds a backward scan. */
+class RunsBelow {
   readonly entries: Entry[] = [];
-  private longest = 0;
-  /**
-   * How many runs have each length. The longest bounds a lookup's backward scan, so when the
-   * last run of that length goes, the bound drops to the next length: one long paste does not
-   * make every later lookup scan back over all runs.
-   */
-  private readonly lengths = new Map<number, number>();
+
+  constructor(private readonly bound: number) {}
 
   add(entry: Entry): void {
-    const length = entry.run.end - entry.run.start;
-    this.lengths.set(length, (this.lengths.get(length) ?? 0) + 1);
-    this.longest = Math.max(this.longest, length);
     this.entries.splice(this.firstAtOrAfter(entry.run.start), 0, entry);
   }
 
-  private forgetLength(length: number): void {
-    const count = (this.lengths.get(length) ?? 1) - 1;
-    if (count > 0) {
-      this.lengths.set(length, count);
-      return;
-    }
-    this.lengths.delete(length);
-    if (length !== this.longest) return;
-    this.longest = 0;
-    for (const other of this.lengths.keys()) this.longest = Math.max(this.longest, other);
-  }
-
-  remove(entry: Entry): void {
+  /** Removes the entry; returns whether it was here. */
+  remove(entry: Entry): boolean {
     for (let at = this.firstAtOrAfter(entry.run.start); at < this.entries.length; at += 1) {
       const candidate = this.entries[at]!;
       if (candidate.run.start !== entry.run.start) break;
       if (candidate.paragraph === entry.paragraph && candidate.run.end === entry.run.end) {
         this.entries.splice(at, 1);
-        this.forgetLength(entry.run.end - entry.run.start);
-        return;
+        return true;
       }
     }
+    return false;
   }
 
-  /** Every entry whose run overlaps `[start, end)`. */
-  overlapping(start: number, end: number): Entry[] {
-    const out: Entry[] = [];
-    const last = this.firstAtOrAfter(end);
-    for (let at = last - 1; at >= 0; at -= 1) {
+  collect(start: number, end: number, out: Entry[]): void {
+    for (let at = this.firstAtOrAfter(end) - 1; at >= 0; at -= 1) {
       const entry = this.entries[at]!;
-      if (entry.run.start + this.longest <= start) break;
+      if (entry.run.start + this.bound <= start) break;
       if (entry.run.end > start) out.push(entry);
     }
-    return out;
   }
 
   private firstAtOrAfter(clock: number): number {
@@ -119,6 +96,39 @@ class ClientRuns {
     }
     return low;
   }
+}
+
+/**
+ * The runs of one client, kept by length class: lengths from 2^k up to 2^(k+1). A lookup scans
+ * back in each class only as far as that class's longest length could reach. With one bound
+ * for all runs, one long run made every lookup scan back over every short run before it.
+ */
+class ClientRuns {
+  private readonly classes = new Map<number, RunsBelow>();
+
+  add(entry: Entry): void {
+    const level = lengthClass(entry.run.end - entry.run.start);
+    let runs = this.classes.get(level);
+    if (!runs) this.classes.set(level, (runs = new RunsBelow(2 ** (level + 1))));
+    runs.add(entry);
+  }
+
+  remove(entry: Entry): void {
+    const level = lengthClass(entry.run.end - entry.run.start);
+    const runs = this.classes.get(level);
+    if (runs?.remove(entry) && runs.entries.length === 0) this.classes.delete(level);
+  }
+
+  /** Every entry whose run overlaps `[start, end)`. */
+  overlapping(start: number, end: number): Entry[] {
+    const out: Entry[] = [];
+    for (const runs of this.classes.values()) runs.collect(start, end, out);
+    return out;
+  }
+}
+
+function lengthClass(length: number): number {
+  return length <= 1 ? 0 : 31 - Math.clz32(length);
 }
 
 export class IdentityIndex {

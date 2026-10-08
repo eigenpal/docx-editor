@@ -43,7 +43,11 @@ export class EditWait {
   refuses(ops: readonly TreeDocOp[]): boolean {
     if (this.deps.viewWaiting()) return this.set(true);
     if (!awaitingUpdates(this.deps.ydoc)) return this.set(false);
-    return this.set(ops.some((op) => addressedIds(op).some((id) => this.deps.nodeWaits(id))));
+    return this.set(
+      ops.some(
+        (op) => WHOLE_SCOPE.has(op.op) || addressedIds(op).some((id) => this.deps.nodeWaits(id))
+      )
+    );
   }
 
   /** Shared state changed: edits may no longer wait. */
@@ -63,11 +67,41 @@ export class EditWait {
   }
 }
 
-/** The node ids an operation addresses: every string field named like an id. */
+/**
+ * Operations that act on a whole story or document, wherever the waiting text is. Each
+ * may reach it, so each waits while any update is held back.
+ */
+const WHOLE_SCOPE: ReadonlySet<string> = new Set([
+  'acceptAllRevisions',
+  'rejectAllRevisions',
+  'replaceStoryBlocks',
+  'convertAllNotes',
+]);
+
+/**
+ * The node ids an operation addresses: every string named like an id (`paragraphId`),
+ * every string in a list named like ids (`siteNodeIds`, `cellIds`), and the same inside the
+ * objects a list holds (`sites[].nodeId`).
+ */
 function addressedIds(op: TreeDocOp): string[] {
   const ids: string[] = [];
-  for (const [key, value] of Object.entries(op)) {
-    if (typeof value === 'string' && key.endsWith('Id')) ids.push(value);
-  }
+  const read = (record: object, depth: number): void => {
+    for (const [key, value] of Object.entries(record)) {
+      if (typeof value === 'string') {
+        if (key.endsWith('Id')) ids.push(value);
+      } else if (Array.isArray(value)) {
+        for (const entry of value) {
+          if (typeof entry === 'string') {
+            if (key.endsWith('Ids')) ids.push(entry);
+          } else if (entry !== null && typeof entry === 'object' && depth < 3) {
+            read(entry, depth + 1);
+          }
+        }
+      } else if (value !== null && typeof value === 'object' && depth < 3) {
+        read(value, depth + 1);
+      }
+    }
+  };
+  read(op, 0);
   return ids;
 }
