@@ -719,21 +719,16 @@ export function breakParagraph(
     }
   };
 
-  const closeForTopAndBottomAfterAnchor = (modelStart: number): void => {
+  // A top-and-bottom anchor does not end its line: the text before and after it shares one
+  // line, which moves below the band as a whole when the band crosses it.
+  const clearTopAndBottomAfterAnchor = (modelStart: number): void => {
     const zones = activeExclusionZones().filter(
       (zone) =>
         zone.input.mode === 'topAndBottom' &&
         zone.anchorParagraphId === paragraphId &&
         modelStart >= zone.anchorModelStart
     );
-    if (zones.length === 0) return;
-    // The band ends the line it is anchored ON, once. A piece that already sits on the line
-    // the anchor opened is ordinary content, so closing again gave every later run in the
-    // paragraph a line of its own: a paragraph-final whitespace run became a phantom blank
-    // line, and an ordinary second run broke mid-sentence at the run seam.
-    const opensAfterAnchor = zones.some((zone) => line.start < zone.anchorModelStart);
-    if (opensAfterAnchor && holdsContent()) closeLine();
-    applyTopAndBottomSkipIfNeeded();
+    if (zones.length > 0) applyTopAndBottomSkipIfNeeded(holdsContent());
   };
 
   const ensurePlacementWidth = (width: number, depth = 0): boolean => {
@@ -1206,7 +1201,7 @@ export function breakParagraph(
       continue;
     }
     trailingLineBreak = false;
-    closeForTopAndBottomAfterAnchor(piece.start);
+    clearTopAndBottomAfterAnchor(piece.start);
     if (
       sameParagraphAnchorStarts.length > 0 &&
       piece.start >= Math.min(...sameParagraphAnchorStarts)

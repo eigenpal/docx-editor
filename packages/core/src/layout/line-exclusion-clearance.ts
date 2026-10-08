@@ -105,9 +105,13 @@ export function createLineExclusionClearance(context: {
   let appliedLine: PendingLine | undefined;
   /** The line whose only skip is the estimate taken before it had content. */
   let estimatedLine: PendingLine | undefined;
-  const applyTopAndBottomSkipIfNeeded = (): void => {
+  /**
+   * Move the line below the top-and-bottom bands it crosses. Normally only an empty line moves;
+   * `withContent` also moves one that holds content, for a band its own anchor just raised.
+   */
+  const applyTopAndBottomSkipIfNeeded = (withContent = false): void => {
     const line = context.line();
-    if (appliedLine === line || context.holdsContent()) return;
+    if (!withContent && (appliedLine === line || context.holdsContent())) return;
     const zones = context.zones();
     if (zones.length === 0) return;
     const metrics = context.measurer.lineMetrics(context.emptyStyle);
@@ -117,7 +121,7 @@ export function createLineExclusionClearance(context: {
       zones,
       context.spaceAbove?.() ?? 0
     );
-    if (skip > 0.001) {
+    if (skip > (withContent ? (line.exclusionSkipBefore ?? 0) : 0) + 0.001) {
       appliedLine = line;
       estimatedLine = line;
       line.exclusionSkipBefore = skip;
