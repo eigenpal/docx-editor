@@ -125,6 +125,13 @@ export class TypedTokens {
     // text, so the undo shows in the view, not in the shared text.
     const viewBefore = shown ? this.shownIn(shown.before, () => true) : new Set<string>();
     const viewAfter = shown ? this.shownIn(shown.after, () => true) : new Set<string>();
+    // Typing a peer moved is undone by recording its characters deleted, which hides their
+    // copies: the copies stay in the shared text, and only the view shows the undo.
+    for (const token of viewBefore) {
+      if (!viewAfter.has(token) && this.typed.get(token)?.replica === replica) {
+        this.excused.add(token);
+      }
+    }
     for (const [token, deleter] of this.deletedBy) {
       if (deleter !== replica) continue;
       const back =
