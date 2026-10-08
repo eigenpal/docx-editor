@@ -203,11 +203,11 @@ const modules = [reviewModule({ pane: { commentMarkers: 'icon' } })];
 
 ## Change the display at runtime
 
-Call `setReviewPane` on the editor instance with only the settings that change. The other settings keep their values. Read the settings in force from `snapshot().reviewPane`. `DocxEditorReview` reads the same settings, so the pane, the markers, and the balloons update at once.
+Call `setReviewPaneOptions` on the editor instance with only the settings that change. The other settings keep their values. This method sets how the pane behaves. To open or close the pane itself, use `setPaneOpen` from `useReview()`. Read the settings in force from `snapshot().reviewPane`. `DocxEditorReview` reads the same settings, so the pane, the markers, and the balloons update at once.
 
-`setReviewPane` returns an `ExecResult`:
+`setReviewPaneOptions` returns an `ExecResult`:
 
-- `{ ok: true, changed: false }` when the editor accepts the settings. `changed` reports document changes, and a display setting never changes the document.
+- `{ ok: true, changed: true }` when a setting changed, and `{ ok: true, changed: false }` when every value was already in force.
 - `{ ok: false, code: 'invalidArgs' }` for an unknown setting or value.
 - `{ ok: false, code: 'unsupported' }` when no review module is registered.
 
@@ -227,16 +227,16 @@ const keepCaret = (event: MouseEvent) => event.preventDefault();
 
 export function ReviewDisplaySwitch() {
   const editor = useDocxEditor();
-  const revisionsIn = useEditorState((snapshot) => snapshot.reviewPane?.revisionsIn ?? 'pane');
-  const markers = useEditorState((snapshot) => snapshot.reviewPane?.commentMarkers ?? 'initials');
+  const revisionsIn = useEditorState((snapshot) => snapshot.reviewPane.revisionsIn);
+  const markers = useEditorState((snapshot) => snapshot.reviewPane.commentMarkers);
 
   function showChangesIn(next: RevisionDisplay) {
-    const result = editor?.setReviewPane({ revisionsIn: next });
+    const result = editor?.setReviewPaneOptions({ revisionsIn: next });
     if (result && !result.ok) console.warn('Review display refused:', result.code);
   }
 
   function showMarkers(next: CommentMarkerStyle) {
-    editor?.setReviewPane({ commentMarkers: next });
+    editor?.setReviewPaneOptions({ commentMarkers: next });
   }
 
   return (
@@ -279,16 +279,16 @@ import { useDocxEditor, useEditorState } from '@docx-editor.dev/vue';
 import type { CommentMarkerStyle, RevisionDisplay } from '@docx-editor.dev/pro/vue';
 
 const editor = useDocxEditor();
-const revisionsIn = useEditorState((snapshot) => snapshot.reviewPane?.revisionsIn ?? 'pane');
-const markers = useEditorState((snapshot) => snapshot.reviewPane?.commentMarkers ?? 'initials');
+const revisionsIn = useEditorState((snapshot) => snapshot.reviewPane.revisionsIn);
+const markers = useEditorState((snapshot) => snapshot.reviewPane.commentMarkers);
 
 function showChangesIn(next: RevisionDisplay) {
-  const result = editor.value?.setReviewPane({ revisionsIn: next });
+  const result = editor.value?.setReviewPaneOptions({ revisionsIn: next });
   if (result && !result.ok) console.warn('Review display refused:', result.code);
 }
 
 function showMarkers(next: CommentMarkerStyle) {
-  editor.value?.setReviewPane({ commentMarkers: next });
+  editor.value?.setReviewPaneOptions({ commentMarkers: next });
 }
 </script>
 

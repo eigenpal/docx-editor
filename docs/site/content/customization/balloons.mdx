@@ -54,7 +54,7 @@ const modules = [reviewModule({ pane: { revisionsIn: 'balloons' } })];
 
 To switch between the pane and balloons at runtime, and to combine balloons with other display settings, see [Customize your review display](/docs/2.x/customization/review-display).
 
-To add a class to the built-in balloon, pass `className` to `DocxEditorReview.Balloon`:
+To add a class to the built-in balloon, pass `className` to `DocxEditorReview.Balloon`. The part takes `ReviewBalloonProps`: `className`, and `hidden` to remove the built-in balloon.
 
 <FrameworkTabs>
 <Framework value="react">
