@@ -2149,6 +2149,7 @@ function layoutBlocksPass(
       try {
         const outOfFlow = layoutTableInFlow(entry.table, cursorY, false, index + 1);
         if (!outOfFlow) previousSpaceAfter = 0;
+        firstParagraphOfSection = false;
         registerTableCellBreakKeys(entry.table, collectingCellBreakKeys);
       } finally {
         collectingCellBreakKeys = null;

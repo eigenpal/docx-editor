@@ -16,9 +16,10 @@ interface BreakingParagraph {
  *
  * `breaksBeforeAt` is the authored break, except on an empty section mark after its section's
  * content. `keepsBeforeAtPageStart` says whether a paragraph keeps its space before when it
- * opens a page. The first paragraph of a section does, also when its own page break before
- * opens the page from a continuous section. Any other paragraph with a page break before does
- * only in legacy compatibility modes. Ordinary pagination drops it.
+ * opens a page. A section's first block does, also when its own page break before opens the
+ * page from a continuous section; a paragraph after a leading table is not one. Any other
+ * paragraph with a page break before does only in legacy compatibility modes. Ordinary
+ * pagination drops it. `opensSection` must turn false once any in-flow block is placed.
  */
 export function pageBreakBeforeRules(
   sectionBlockCount: number,

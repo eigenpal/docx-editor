@@ -112,7 +112,7 @@ export const MODE_RULES = {
     'ECMA-376 Part 1 §17.4.57 tblpPr'
   ),
   pageBreakBeforeKeepsSpace: legacy(
-    'A paragraph with a page break before keeps its space before at the top of the new page',
+    'A paragraph with a page break before keeps its space before at the top of the new page. In modern modes only the first block of a section keeps it',
     'ECMA-376 Part 1 §17.3.1.23 pageBreakBefore'
   ),
   pageBreakLinesStretch: legacy(

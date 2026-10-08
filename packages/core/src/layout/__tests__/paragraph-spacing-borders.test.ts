@@ -418,6 +418,32 @@ describe('Word 2013+ top-of-page space-before suppression', () => {
     });
   }
 
+  const leadingTable =
+    '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc>' +
+    paragraph('cell') +
+    '</w:tc></w:tr></w:tbl>';
+  for (const [label, body] of [
+    ['opens the document', leadingTable],
+    [
+      'opens a section on a new page',
+      `${paragraph('first')}<w:p><w:pPr><w:sectPr/></w:pPr></w:p>${leadingTable}`,
+    ],
+  ] as const) {
+    test(`in mode 15, pageBreakBefore after a table that ${label} drops before`, () => {
+      const part = load(
+        body + paragraph('second', '<w:pageBreakBefore/><w:spacing w:before="200"/>')
+      );
+      const layout = layoutSemanticDocument(part, 1, {
+        measurer,
+        styleCascade: elevenPointDefaults(),
+        compatibilityMode: 15,
+      });
+      const second = firstParagraphOnPage(layout, layout.pages.length - 1);
+      expect(second.lines[0]!.spans.map((span) => span.text).join('')).toBe('second');
+      expect(second.spacing.before).toBe(0);
+    });
+  }
+
   test('natural pagination suppresses before when a paragraph moves to the next page', () => {
     // Content height 80pt; first paragraph's after pushes the second onto page 2.
     const layout = lay(
