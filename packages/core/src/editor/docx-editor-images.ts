@@ -241,6 +241,10 @@ function wrapOf(record: SelectedDrawingRecord): ImageWrapTarget {
   return record.wrap;
 }
 
+/** Image commands reach pictures and text boxes; the overlay offers handles on the same gate. */
+const imageCommandsReach = (record: SelectedDrawingRecord): boolean =>
+  record.placeholderGraphicKind === null || !!record.textboxStory;
+
 /**
  * The selected image and what may be done to it, or null when nothing image-like is selected.
  *
@@ -249,7 +253,7 @@ function wrapOf(record: SelectedDrawingRecord): ImageWrapTarget {
 export function selectedImageStateOf(surface: PaginatedSurface | null): SelectedImageState | null {
   const record = resolveSelectedDrawingRecord(surface);
   if (!record) return null;
-  if (record.placeholderGraphicKind !== null && !record.textboxStory) return null;
+  if (!imageCommandsReach(record)) return null;
   const projection = surface ? projectDrawingForRecord(surface, record) : null;
   if (!projection) return null;
   if (projection.hidden || projection.locks.select) return null;
@@ -1116,10 +1120,10 @@ export interface SelectedDrawingOverlayTarget {
 }
 
 function overlayCapabilityFlags(
-  _record: SelectedDrawingRecord,
+  record: SelectedDrawingRecord,
   projection: DrawingProjection | null
 ): Pick<SelectedDrawingOverlayTarget, 'canResize' | 'canMove' | 'aspectLocked'> {
-  if (!projection || projection.hidden || projection.locks.select) {
+  if (!projection || projection.hidden || projection.locks.select || !imageCommandsReach(record)) {
     return Object.freeze({ canResize: false, canMove: false, aspectLocked: true });
   }
   const caps = capabilityFlags(projection);

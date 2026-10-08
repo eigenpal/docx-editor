@@ -17,6 +17,7 @@ import {
   mountWithImages,
 } from './image-decode-harness.ts';
 import { createDocxEditor } from '../docx-editor.ts';
+import { selectedDrawingOverlayTargetOf, selectedImageStateOf } from '../docx-editor-images.ts';
 import { paragraphTextOf } from '../../store/store/tree-ops.ts';
 import type { InlineDrawingRecord } from '../../layout/drawing-layout.ts';
 import type { PaginatedSurface } from '../paginated-surface.ts';
@@ -183,6 +184,37 @@ describe('an inline group with a picture and a text box member', () => {
         expect(laidOut(surface).drawing).toMatchObject({ width: 400, height: 100 });
       });
     }
+  });
+
+  test('a selected group offers no resize or move handles that its commands would refuse', async () => {
+    for (const members of [TEXTBOX_MEMBER, PICTURE_MEMBER + TEXTBOX_MEMBER]) {
+      await withMounted(docx(members), (surface) => {
+        const drawing = laidOut(surface).drawing!;
+        expect(surface.selectDrawing(drawing.drawingNodeId, drawing.paragraphId)).toBe(true);
+        const target = selectedDrawingOverlayTargetOf(surface);
+        expect(target).toMatchObject({ canResize: false, canMove: false });
+        expect(selectedImageStateOf(surface)).toBeNull();
+      });
+    }
+  });
+
+  test('copy treats a text-only group like a group with a picture', () => {
+    const results = [TEXTBOX_MEMBER, PICTURE_MEMBER + TEXTBOX_MEMBER].map((members) => {
+      const editor = createDocxEditor({
+        container: document.createElement('div'),
+        document: docx(members),
+      });
+      try {
+        editor.exec({ type: 'selectAll' });
+        return editor.exec({ type: 'copy' });
+      } finally {
+        editor.destroy();
+      }
+    });
+    expect(results).toEqual([
+      { ok: true, changed: false },
+      { ok: true, changed: false },
+    ]);
   });
 
   test('find reaches the text around the group', () => {
