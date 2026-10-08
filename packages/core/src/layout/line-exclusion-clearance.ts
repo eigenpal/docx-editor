@@ -349,7 +349,7 @@ export function createLineExclusionClearance(context: {
     if (context.holdsContent()) return;
     // Only floating drawings. A floating table places itself from the empty paragraph it
     // anchors to, and empty paragraphs beside one keep their place.
-    const zones = context.zones().filter((zone) => zone.sourceKind === undefined);
+    const zones = context.zones().filter((zone) => zone.sourceKind !== 'table');
     if (zones.length === 0) return;
     const top = context.top() + (line.exclusionSkipBefore ?? 0);
     const width = context.measurer.measure('¶', context.emptyStyle);

@@ -103,8 +103,8 @@ function characterAt(
   return undefined;
 }
 
-/** Zero-width format characters and combining marks: they take no room in a passage. */
-const ZERO_WIDTH_OPENER = /^[\u200b-\u200f\u2060\ufeff\p{Mn}]$/u;
+/** Zero-width format characters: they take no room in a passage. */
+const ZERO_WIDTH_OPENER = /^[\u200b-\u200f\u2060\ufeff]$/u;
 
 /**
  * Whether a line that opens at `offset` has already been admitted to the passage it stands
@@ -113,20 +113,19 @@ const ZERO_WIDTH_OPENER = /^[\u200b-\u200f\u2060\ufeff\p{Mn}]$/u;
  *
  * Two cases, both observed in reference renders: the line opens with a zero-width character,
  * which fits any passage and so admits it; or the line continues a segment that the line
- * before broke by character (the character before `offset` is neither a space nor a
- * hyphen). In both, an oversized glyph overflows beside the float on the next line instead
- * of opening below it.
+ * before cut by character because it did not fit. The line breaker reports that cut as
+ * `continuesCutSegment`; the text alone cannot tell it, since a line also ends legally after
+ * a CJK character, a slash, or a dash. In both cases, an oversized glyph overflows beside the
+ * float on the next line instead of opening below it.
  */
 export function admittedToNarrowPassage(
   pieces: readonly { readonly start: number; readonly text: string }[],
   offset: number,
-  continuesLine: boolean
+  continuesCutSegment: boolean
 ): boolean {
   const opening = characterAt(pieces, offset);
   if (opening !== undefined && ZERO_WIDTH_OPENER.test(opening)) return true;
-  if (!continuesLine) return false;
-  const previous = characterAt(pieces, offset - 1);
-  return previous !== undefined && !/[\s\-\u00ad\u2010\u2011]/u.test(previous);
+  return continuesCutSegment;
 }
 
 /** Whether page breaks, and nothing else, precede `offset` among a paragraph's pieces. */

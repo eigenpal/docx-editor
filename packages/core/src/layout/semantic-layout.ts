@@ -1730,6 +1730,8 @@ function layoutBlocksPass(
             regionBottomY: contentHeight(),
             columnIndex: flowColumnIndex,
             startOffset,
+            frameMarginLeft: geometry.margin.left,
+            pageNumber: pageIndexStart + pages.length + 1,
           })
         : null;
     if (cacheKey !== null) rememberBreakKey(paragraphId, cacheKey);

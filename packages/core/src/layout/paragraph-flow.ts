@@ -325,6 +325,7 @@ export function breakParagraph(
   const rtlLeadingIndent = Math.max(0, (flow?.marginExtent?.right ?? rightEdge) - rightEdge);
   const wrapRight = Math.min(contentRight, contentOriginX + rightEdge);
   const lines: PendingLine[] = [];
+  let previousLineCut = false; // The last line closed inside a word the oversized cut split.
   let alignedTabRight = 0;
   let line: PendingLine = {
     spans: [],
@@ -749,7 +750,7 @@ export function breakParagraph(
 
   // A line admitted to its passage breaks an oversized segment there instead of moving it.
   const movesOpeningSegment = (width: number): boolean =>
-    !admittedToNarrowPassage(pieces, line.start, lines.length > 0) &&
+    !admittedToNarrowPassage(pieces, line.start, previousLineCut) &&
     applyOpeningSegmentSkipIfNeeded(width, exclusionProbe.height());
 
   const ensurePlacementWidth = (width: number, depth = 0): boolean => {
@@ -855,6 +856,7 @@ export function breakParagraph(
   };
 
   const closeLine = (options?: { readonly includeParagraphMark?: boolean }): void => {
+    previousLineCut = false; // Only the oversized-word cut sets it again.
     placeLeadingIgnoredBreaks(line, pageBreaksIgnored);
     const empty =
       line.drawings.length === 0 && line.spans.every((span) => isHeightlessWhitespace(span.text));
@@ -1608,6 +1610,11 @@ export function breakParagraph(
             opening = null;
           },
           closeLine,
+          // A line the cut closes ends inside the word, so the next line continues it.
+          closeCutLine: () => {
+            closeLine();
+            previousLineCut = true;
+          },
           overflowTolerancePt: OVERFLOW_TOLERANCE_PT,
           keepWithPrevious: openDecision === 'forbidden',
           // Kinsoku vetoes measured cuts: 天。地。人。 must not chop onto a leading 。.

@@ -44,13 +44,27 @@ export interface OwnBandKeyInputs {
    * lines around it depend on where the paragraph starts on the page.
    */
   readonly ownBandPageFramed: boolean;
+  /**
+   * The band sits at a fixed horizontal page position (a page- or margin-framed horizontal
+   * frame, or `simplePos`), so its place in the content box moves with the page's margins,
+   * which mirrored margins swap between odd and even pages.
+   */
+  readonly ownBandPageFramedHorizontally: boolean;
 }
 
 const NO_OWN_BAND: OwnBandKeyInputs = Object.freeze({
   anchorsTopAndBottom: false,
   ownBandPageFramed: false,
+  ownBandPageFramedHorizontally: false,
 });
-const ownBandMemo = new WeakMap<OoxmlElement, OwnBandKeyInputs>();
+/** Horizontal frames that move with the paragraph's column, not with the page. */
+const COLUMN_FRAMES: ReadonlySet<string> = new Set(['column', 'character']);
+// By context first, like `anyAnchorMemo`: whether an atom is anchored, and how it is framed,
+// can depend on `projectionForAtom`.
+const ownBandMemo = new WeakMap<
+  InlineDrawingLayoutContext,
+  WeakMap<OoxmlElement, OwnBandKeyInputs>
+>();
 
 /** The own-band inputs of a paragraph's break key; one frozen answer per paragraph node. */
 export function ownBandKeyInputs(
@@ -58,18 +72,31 @@ export function ownBandKeyInputs(
   context: InlineDrawingLayoutContext | undefined
 ): OwnBandKeyInputs {
   if (!context || !anchorsSpacingDependentBand(paragraph, context)) return NO_OWN_BAND;
-  let value = ownBandMemo.get(paragraph);
+  let byParagraph = ownBandMemo.get(context);
+  if (!byParagraph) {
+    byParagraph = new WeakMap();
+    ownBandMemo.set(context, byParagraph);
+  }
+  let value = byParagraph.get(paragraph);
   if (value === undefined) {
-    const ownBandPageFramed = anchoredDrawingAtomsInParagraph(paragraph, context).some((atom) => {
+    const atoms = anchoredDrawingAtomsInParagraph(paragraph, context);
+    // `simplePos` places the drawing in page coordinates, so it is page-framed on both axes.
+    const ownBandPageFramed = atoms.some((atom) => {
+      if (atom.projection.anchor?.simplePos) return true;
       const vertical = atom.projection.position?.vertical;
-      return (
-        !!vertical &&
-        !atom.projection.anchor?.simplePos &&
-        pageFramedVertically(vertical.relativeFrom)
-      );
+      return !!vertical && pageFramedVertically(vertical.relativeFrom);
     });
-    value = Object.freeze({ anchorsTopAndBottom: true, ownBandPageFramed });
-    ownBandMemo.set(paragraph, value);
+    const ownBandPageFramedHorizontally = atoms.some((atom) => {
+      if (atom.projection.anchor?.simplePos) return true;
+      const horizontal = atom.projection.position?.horizontal;
+      return !!horizontal && !COLUMN_FRAMES.has(horizontal.relativeFrom);
+    });
+    value = Object.freeze({
+      anchorsTopAndBottom: true,
+      ownBandPageFramed,
+      ownBandPageFramedHorizontally,
+    });
+    byParagraph.set(paragraph, value);
   }
   return value;
 }

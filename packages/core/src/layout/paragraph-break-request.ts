@@ -114,6 +114,15 @@ export function bodyParagraphBreakKey(
     /** That band sits at a fixed page position, so the paragraph's start Y moves its lines. */
     readonly ownBandPageFramed?: boolean;
     /**
+     * That band sits at a fixed horizontal page position, so the page's left margin and its
+     * parity (mirrored margins) move it within the content box.
+     */
+    readonly ownBandPageFramedHorizontally?: boolean;
+    /** The page's left margin, for a horizontally page-framed band. */
+    readonly frameMarginLeft?: number;
+    /** The one-based page number, whose parity mirrored margins and inside frames read. */
+    readonly pageNumber?: number;
+    /**
      * The region bottom. An opening line that would clear its own band past it keeps to the
      * passages beside the band, so a paragraph with its own band keys the room below it.
      */
@@ -136,6 +145,8 @@ export function bodyParagraphBreakKey(
   if (placement.anchorsTopAndBottom && placement.regionBottomY !== undefined)
     key += `\0region:${(placement.regionBottomY - placement.paragraphStartY).toFixed(3)}`;
   if (placement.ownBandPageFramed) key += `\0at:${placement.paragraphStartY.toFixed(3)}`;
+  if (placement.ownBandPageFramedHorizontally)
+    key += `\0x:${(placement.frameMarginLeft ?? 0).toFixed(3)}|${(placement.pageNumber ?? 1) % 2}`;
   if (
     placement.anchorParagraphStartY !== undefined &&
     placement.anchorParagraphStartY !== placement.paragraphStartY

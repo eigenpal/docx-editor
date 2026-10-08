@@ -79,6 +79,9 @@ export function bodyParagraphCacheKey(
     readonly regionBottomY: number;
     readonly columnIndex: number;
     readonly startOffset: number;
+    /** The page's left margin and number, for a band framed horizontally to the page. */
+    readonly frameMarginLeft?: number;
+    readonly pageNumber?: number;
   }
 ): string {
   return bodyParagraphBreakKey(entry.key, {
