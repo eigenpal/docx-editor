@@ -522,6 +522,8 @@ export interface PaginatedSurface {
   setEditingMode(mode: SurfaceEditingMode): void;
   /** Set the ambient author after buffered text commits under the previous author. */
   setAuthor(author: string | undefined): void;
+  /** The ambient author tracked edits and review writes record, or undefined. */
+  author(): string | undefined;
   /** Replace localized drawing labels and repaint materialized pages. */
   setDrawingStrings(
     strings: import('../output/semantic-paint-drawings.ts').DrawingPaintStrings

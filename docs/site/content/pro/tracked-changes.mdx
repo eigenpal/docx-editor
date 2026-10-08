@@ -281,6 +281,7 @@ React returns plain values from `useReview()`. Vue returns computed refs for `it
 | `items`                           | Pending decisions in reading order       |
 | `activeKey`, `setActive`          | Read or open an item                     |
 | `accept`, `reject`                | Resolve a revision                       |
+| `adopt`                           | Make revisions the reviewer's own        |
 | `resolve`, `reopen`               | Change comment thread state              |
 | `reply`                           | Add a reply                              |
 | `remove`                          | Delete a thread or discard a suggestion  |
@@ -382,6 +383,68 @@ pages.addEventListener('click', (event) => {
 An item hits when the character under the pointer is inside its range. The right half of the last character still hits. Hits list the narrowest range first. Replies share their thread's range, so they hit too. The test covers the body, tables, headers, footers, footnotes, and endnotes on painted pages. Ranges that cover no characters never hit.
 
 To anchor a balloon to an item without a pointer, call `editor.getReviewItemRects(key)`. It returns the item's bands on painted pages in client coordinates, or an empty array.
+
+## Adopt suggestions as your own
+
+A reviewer can take over changes that someone else proposed, such as an agent's suggestions. The changes stay pending, but they record the reviewer as their author. Call `adopt(items)` from `useReview()`. It accepts one item or a list, ignores comment items, and changes every revision in one undo step. It records the editor's `author`.
+
+In React:
+
+```tsx
+import { useEditorState } from '@docx-editor.dev/react';
+import { useReview } from '@docx-editor.dev/pro/react';
+
+function AdoptSuggestions({ from }: { from: string }) {
+  const { items, adopt } = useReview();
+  const viewing = useEditorState((state) => state.editingMode === 'viewing');
+  const suggested = items.filter((item) => item.kind === 'revision' && item.author === from);
+
+  return (
+    <button
+      disabled={viewing || suggested.length === 0}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={() => adopt(suggested)}
+    >
+      Adopt {suggested.length} suggestions
+    </button>
+  );
+}
+```
+
+In Vue:
+
+```vue
+<script setup lang="ts">
+import { computed } from 'vue';
+import { useEditorState } from '@docx-editor.dev/vue';
+import { useReview } from '@docx-editor.dev/pro/vue';
+
+const props = defineProps<{ from: string }>();
+const { items, adopt } = useReview();
+const viewing = useEditorState((state) => state.editingMode === 'viewing');
+const suggested = computed(() =>
+  items.value.filter((item) => item.kind === 'revision' && item.author === props.from)
+);
+</script>
+
+<template>
+  <button
+    :disabled="viewing || suggested.length === 0"
+    @mousedown.prevent
+    @click="adopt(suggested)"
+  >
+    Adopt {{ suggested.length }} suggestions
+  </button>
+</template>
+```
+
+To adopt one change from a card, pass the item: `adopt(item)`. Pass options to record someone else or a new date:
+
+```ts
+adopt(item, { author: 'Ada Lovelace', date: new Date() });
+```
+
+`adopt` returns `false` and changes nothing when the list holds no revision, when no author is known, or when the editor refuses the write. Viewing mode and document protection refuse it. Review keys include the author, so each change gets a new `key`, and `items` updates on its own. For an author filter or the full result, run the `setReviewChangesAuthor` editor command. See [Change authors in the editor](/docs/2.x/editor-api/revisions#change-authors-in-the-editor).
 
 ## Filter by reviewer
 

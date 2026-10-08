@@ -24,6 +24,7 @@ import { isValidXmlText } from '../package/sinks.ts';
 import { isDangerousKey } from '../package/safe-record.ts';
 import { isAuthorableDataBinding } from '../package/custom-node-payloads.ts';
 import { validateDeleteBlock } from './tree-op-blocks.ts';
+import { validateSetRevisionAttribution } from './revision-author-change.ts';
 import {
   CONTENT_CONTROL_LOCKS,
   validateInsertContentControl,
@@ -604,6 +605,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     // are checked there rather than duplicated into a second traversal that could disagree.
     return null;
   }
+  if (op.op === 'setRevisionAttribution') return validateSetRevisionAttribution(op);
 
   const paragraph = findNode(part, op.paragraphId);
   if (!paragraph) return 'unknown-paragraph';

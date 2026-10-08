@@ -34,10 +34,15 @@ import type { ReviewItemQuery } from './editor-review-query.ts';
 export type { ReviewItemQuery } from './editor-review-query.ts';
 export type { EditorReviewHits, ReviewItemHit } from './editor-review-hits.ts';
 export type { DocumentChange, EditorEvents } from './editor-events.ts';
-import type { DocumentEditingMode, ResolveReviewChangesOptions } from './editor-review.ts';
+import type {
+  DocumentEditingMode,
+  ResolveReviewChangesOptions,
+  SetReviewChangesAuthorOptions,
+} from './editor-review.ts';
 import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
-export type { DocumentEditingMode, ResolveReviewChangesOptions } from './editor-review.ts';
+export type * from './editor-review.ts';
 export type { RevisionBatchResult } from '../store/store/revision-batch.ts';
+export type { RevisionAuthorResult } from '../store/store/revision-author-change.ts';
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from './document.ts';
 import type { EditorExecOptions, EditorScope, HistoryGroup, ViewScope } from './editor-scope.ts';
 export type {
@@ -1022,6 +1027,8 @@ export interface EditorCommands
   navigateReviewChange: { direction: 'next' | 'previous' };
   /** Resolve eligible changes shown by the active filters, or an explicit scope, in one undo step. */
   resolveAllReviewChanges: ResolveReviewChangesOptions;
+  /** Attribute eligible changes to another author, keeping them pending, in one undo step. */
+  setReviewChangesAuthor: SetReviewChangesAuthorOptions;
   /** Change the review projection without accepting or rejecting document revisions. */
   setReviewDisplayMode: { mode: ReviewDisplayMode };
   toggleMark: { mark: string };

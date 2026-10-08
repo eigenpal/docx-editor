@@ -84,6 +84,7 @@ export function supportsTrackedAutomationOperation(operation: AutomationOperatio
     'acceptRevision',
     'rejectRevision',
     'resolveRevisionBatch',
+    'setRevisionAuthorBatch',
     'acceptAllRevisions',
     'rejectAllRevisions',
     'selectSpan',

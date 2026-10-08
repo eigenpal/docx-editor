@@ -56,6 +56,7 @@ import {
 import { wmlFreshNamespaceContextAt } from '../package/wml-namespace.ts';
 import { contentControlLevelOf } from '../package/content-control-nodes.ts';
 import { resolveRevisionOperation } from './tree-op-revisions.ts';
+import { applySetRevisionAttribution } from './revision-author-change.ts';
 import { applyInsertCommentMarker } from './tree-op-comments.ts';
 import { applyDeleteTracked } from './tree-op-tracked-delete.ts';
 import {
@@ -368,6 +369,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     }
     return { ok: true, part: resolved.part, effect: resolved.effect };
   }
+  if (op.op === 'setRevisionAttribution') return applySetRevisionAttribution(part, op, options);
   if (op.op === 'removeContentControl')
     return applyRemoveContentControl(part, op.controlId, options);
   if (op.op === 'setContentControlValue') {

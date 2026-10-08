@@ -161,6 +161,8 @@ Accept keeps a proposed content control. Reject restores the original formatted 
 
 Established list definitions and page setup refuse tracked writes. Comments and revision decisions remain available. Never silently fall back to `Off` when an edit cannot be tracked.
 
+When a person adopts an agent's suggestions, attribute them to that person with `revisions.setAuthor(author, revisions)` or `revisions.setAuthor(author, { authors })`. This is a DocxEditor addition; Office.js has no author write. The changes stay pending. Never reject and reinsert suggestions to change their author.
+
 Standard `insertText('', 'Replace')` means deletion, and an empty insertion is a no-op. Agent tools should require nonempty insertion/replacement text and expose deletion as an explicit model decision. The shipped worker does this. The [compatibility manifest](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/compat/manifest.json) records measured members and behavioral differences.
 
 ## Insert table rows
@@ -169,13 +171,7 @@ Standard `insertText('', 'Replace')` means deletion, and an empty insertion is a
 
 ## Pictures and page fields
 
-Insert a manual line break with `range.insertBreak('Line', 'After')` or `\v` in inserted text.
-Call `await context.sync()` after queuing the write.
-Manual line breaks support `TrackMineOnly` and text edits in the same sync.
-Single-line content controls refuse manual line breaks.
-Reads report manual line breaks as `\v`, column breaks as U+000E, and paragraph separators as `\r`.
-Text writes refuse U+000E and paragraph separators.
-Do not flatten these characters before sending read text back to the document.
+Insert a manual line break with `range.insertBreak('Line', 'After')` or `\v` in inserted text. Call `await context.sync()` after queuing the write. Manual line breaks support `TrackMineOnly` and text edits in the same sync. Single-line content controls refuse manual line breaks. Reads report manual line breaks as `\v`, column breaks as U+000E, and paragraph separators as `\r`. Text writes refuse U+000E and paragraph separators. Do not flatten these characters before sending read text back to the document.
 
 Insert PNG or JPEG images with `range.insertInlinePictureFromBase64(data, 'After')`. Sync before setting properties on the returned picture. Width and height use points. New pictures lock the aspect ratio. Set `lockAspectRatio = false` before setting independent dimensions. Set `altTextDescription` to describe the image. Deletion preserves shared media relationships.
 

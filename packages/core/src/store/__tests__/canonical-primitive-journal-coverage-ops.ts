@@ -1,5 +1,6 @@
 // Journal coverage fixtures for every authorable TreeDocOp kind (task 3.8).
 
+import { planRevisionAuthorChange } from '../store/revision-author-change.ts';
 import { contentControlsIn } from '../package/content-control-nodes.ts';
 import { storyRootsOf } from '../package/story-blocks.ts';
 import { detectBodyTocs } from '../package/toc-detect.ts';
@@ -281,6 +282,11 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
     })),
     story('acceptAllRevisions', zipDoc({ body: INS_P }), () => ({ op: 'acceptAllRevisions' })),
     story('rejectAllRevisions', zipDoc({ body: INS_P }), () => ({ op: 'rejectAllRevisions' })),
+    story(
+      'setRevisionAttribution',
+      zipDoc({ body: INS_P }),
+      (store) => planRevisionAuthorChange(store.bodyStore().part, { author: 'Ada' }).ops[0]!
+    ),
     story('insertTab', plainDoc(), (store) => ({
       op: 'insertTab',
       paragraphId: firstParagraphId(store),

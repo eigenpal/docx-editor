@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Changing the author of a pending tracked change required rejecting it and proposing it again.",
+  "after": "An author change rewrites w:author, and optionally w:date and w:id, on the existing revision elements in one canonical transaction. The changes stay pending.",
+  "reason": "The change replicates as ordinary attribute replacements in the existing canonical primitive journal. The stored document and replication formats are unchanged; released peers replay the resulting edits.",
+  "tests": [
+    "packages/core/src/store/__tests__/revision-author-change.test.ts",
+    "packages/core/src/editor/__tests__/review-change-author.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-revision-author.test.ts"
+  ],
+  "changeset": "reauthor-tracked-changes",
+  "migration": null
+}

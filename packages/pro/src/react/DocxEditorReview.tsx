@@ -274,6 +274,7 @@ const INERT_RAIL: ReviewRailValue = {
     setActive: () => false,
     accept: () => false,
     reject: () => false,
+    adopt: () => false,
     resolve: () => false,
     reopen: () => false,
     commentResolutionDisabledReason: null,

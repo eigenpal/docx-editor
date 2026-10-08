@@ -115,3 +115,8 @@ export type {
   RevisionBatchEntry,
   RevisionBatchSkipReason,
 } from '../store/store/revision-batch.ts';
+export type {
+  RevisionAuthorEntry,
+  RevisionAuthorResult,
+  RevisionAuthorSkipReason,
+} from '../store/store/revision-author-change.ts';

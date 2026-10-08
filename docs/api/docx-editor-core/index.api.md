@@ -1742,6 +1742,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         afterPt?: number | null;
         beforePt?: number | null;
     };
+    setReviewChangesAuthor: SetReviewChangesAuthorOptions;
     setReviewDisplayMode: {
         mode: ReviewDisplayMode;
     };
@@ -2103,11 +2104,13 @@ export type ExecResult = {
     changed: boolean;
     history?: HistoryGroupOutcome;
     ok: true;
+    revisionAuthors?: RevisionAuthorResult;
     revisions?: RevisionBatchResult;
 } | {
     code: ExecErrorCode;
     ok: false;
     reason: string;
+    revisionAuthors?: RevisionAuthorResult;
     revisions?: RevisionBatchResult;
     target?: DocTarget;
 };
@@ -2772,6 +2775,13 @@ export interface ReviewActivationOptions {
 }
 
 // @public
+export interface ReviewChangesAttribution {
+    author?: string;
+    date?: string;
+    unsupported?: 'skip' | 'fail';
+}
+
+// @public
 export interface ReviewCommentItem {
     // (undocumented)
     readonly comment: CommentRecord;
@@ -2825,6 +2835,9 @@ export interface ReviewCustomPlacement extends ReviewItemPlacementBase {
     // (undocumented)
     readonly kind: 'custom';
 }
+
+// @public
+export type ReviewDisplayMode = RevisionDisplayMode | 'simple-markup';
 
 // @public
 export type ReviewItem = ReviewRevisionItem | ReviewCommentItem | ReviewCustomItem;
@@ -2981,6 +2994,16 @@ export interface RevisionAddress {
     readonly date?: string;
     // (undocumented)
     readonly id: string;
+}
+
+// @public
+export interface RevisionAuthorResult {
+    readonly skipped: readonly {
+        readonly key: string;
+        readonly reason: RevisionAuthorSkipReason;
+        readonly revision?: RevisionBatchEntry;
+    }[];
+    readonly updated: readonly RevisionAuthorEntry[];
 }
 
 // @public
@@ -3199,6 +3222,17 @@ export type SemanticTarget = {
     readonly objectId: string;
     readonly scope: ViewScope;
 };
+
+// @public
+export type SetReviewChangesAuthorOptions = ReviewChangesAttribution & ({
+    authors?: never;
+    keys: readonly string[];
+    scope?: never;
+} | {
+    authors?: readonly string[];
+    keys?: never;
+    scope?: 'visible' | 'document';
+});
 
 // @public
 export interface StyleDefinition {

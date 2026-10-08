@@ -995,6 +995,12 @@ export interface ReviewActivationOptions {
     readonly reveal?: 'start' | 'center' | 'centerIfNeeded' | 'nearest' | false;
 }
 
+// @public
+export interface ReviewAdoptOptions {
+    readonly author?: string;
+    readonly date?: Date;
+}
+
 // @public (undocumented)
 export type ReviewItemView = ReviewItemPlacement;
 
@@ -1142,6 +1148,7 @@ export interface UseReviewReturn {
     readonly accept: (item: ReviewItemView) => boolean;
     // (undocumented)
     readonly activeKey: ComputedRef<string | null>;
+    readonly adopt: (items: ReviewItemView | readonly ReviewItemView[], options?: ReviewAdoptOptions) => boolean;
     // (undocumented)
     readonly comment: (text: string, author?: string) => boolean;
     // (undocumented)

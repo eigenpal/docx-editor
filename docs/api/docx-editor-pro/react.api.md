@@ -332,6 +332,12 @@ export interface ReviewActivationOptions {
 }
 
 // @public
+export interface ReviewAdoptOptions {
+    readonly author?: string;
+    readonly date?: Date;
+}
+
+// @public
 export type ReviewItemView = ReviewItemPlacement;
 
 // @public
@@ -454,6 +460,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
 export interface UseReviewReturn {
     readonly accept: (item: ReviewItemView) => boolean;
     readonly activeKey: string | null;
+    readonly adopt: (items: ReviewItemView | readonly ReviewItemView[], options?: ReviewAdoptOptions) => boolean;
     readonly comment: (text: string, author?: string) => boolean;
     readonly commentResolutionDisabledReason: string | null;
     readonly items: readonly ReviewItemView[];

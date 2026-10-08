@@ -5,6 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 
 import { computed, shallowRef, watch, type ComputedRef, type Ref } from 'vue';
+import { adoptReviewItems, type ReviewAdoptOptions } from '../review/review-item-author.ts';
 import type {
   Editor,
   ReviewActivationOptions,
@@ -38,7 +39,7 @@ function reviewRevisionKey(editor: Editor): string {
 export type ReviewItemView = ReviewItemPlacement;
 
 /** @public */
-export type { ReviewActivationOptions };
+export type { ReviewActivationOptions, ReviewAdoptOptions };
 
 /** @public */
 export interface UseReviewReturn {
@@ -47,6 +48,16 @@ export interface UseReviewReturn {
   readonly setActive: (key: string | null, options?: ReviewActivationOptions) => boolean;
   readonly accept: (item: ReviewItemView) => boolean;
   readonly reject: (item: ReviewItemView) => boolean;
+  /**
+   * Adopt tracked changes as the reviewer's own; they stay pending. Takes one item or a list,
+   * and ignores comment items. The default author is `DocxEditorConfig.author`. One undo
+   * step. Reports whether it landed: false when no revision was passed, when no author is
+   * known, or when the editor refuses the write.
+   */
+  readonly adopt: (
+    items: ReviewItemView | readonly ReviewItemView[],
+    options?: ReviewAdoptOptions
+  ) => boolean;
   readonly resolve: (item: ReviewItemView) => boolean;
   readonly reopen: (item: ReviewItemView) => boolean;
   readonly commentResolutionDisabledReason: ComputedRef<string | null>;
@@ -161,6 +172,11 @@ function useReviewOfInternal(
     return editor.rejectReviewItem(item.key).ok;
   };
 
+  const adopt = (
+    items: ReviewItemView | readonly ReviewItemView[],
+    options?: ReviewAdoptOptions
+  ): boolean => adoptReviewItems(editorRef.value, items, options);
+
   const resolve = (item: ReviewItemView): boolean => {
     const editor = editorRef.value;
     if (!editor || item.kind !== 'comment') return false;
@@ -232,6 +248,7 @@ function useReviewOfInternal(
     setActive,
     accept,
     reject,
+    adopt,
     resolve,
     reopen,
     commentResolutionDisabledReason,
