@@ -7,9 +7,11 @@
 // (fragment-first insets, the terminal row's own bottom edge, header merge plans).
 //
 // The result is accepted only when every row, cell, paragraph, line and border stroke has
-// the same vertical geometry as before. Anything else (a row that wraps differently, a
-// split row, a merge outside the header group, floats, drawings, RTL or nested tables)
-// returns null and the caller runs the full table layout instead.
+// the same vertical geometry as before. A row split across pages is placed on each page as
+// the paginator places it (`table-width-split-rows.ts`). Anything else (a row that wraps
+// differently, a split row that shape does not cover, a merge outside the header group,
+// floats, drawings, RTL or nested tables) returns null and the caller runs the full table
+// layout instead.
 
 import { ordinaryTableParagraph } from './table-ordinary-paragraph.ts';
 import { noteRowFactRead, rowFacts } from './table-row-facts.ts';
@@ -23,7 +25,7 @@ import {
 import { layoutRowFragment, type TableFlowDeps } from './semantic-table-layout.ts';
 import { finalizeTableRows } from './table-fragment-finalize.ts';
 import { hasTableMerge } from './table-border-probe.ts';
-import { planHeaderGroup, type HeaderGroupPlan } from './table-header-vmerge.ts';
+import { planFixedHeaderGroup, type HeaderGroupPlan } from './table-header-vmerge.ts';
 import { createRowProbeReuse } from './table-row-probe-reuse.ts';
 import { withoutAnchorSinks } from './table-probe-deps.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
@@ -31,6 +33,10 @@ import { registerTableCellBreakKeys } from './layout-cache.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
 import { finalizedWithHeadroom, withBudgetProof } from './table-budget-proof.ts';
 import { moveRowToWidths } from './table-row-geometry-reuse.ts';
+import { createRepeatedHeaderPlacements } from './table-header-repeat-reuse.ts';
+import { shareTableFragmentFacts } from './table-fragment-facts.ts';
+import { markHorizontalTableFragment } from './table-cell-text-direction.ts';
+import { createSplitRowPlacements } from './table-width-split-rows.ts';
 import {
   closeGrownRow,
   growthBandOf,
@@ -445,6 +451,10 @@ export function updateTableWidths(
   const rowHeightOf = (row: SemanticTableRow, top: number, rowDeps: TableFlowDeps): number =>
     rowProbes.measure(row, left, top, rowDeps);
   const headerPlans = new Map<number, HeaderGroupPlan>();
+  // A pure function of the structure, its first header row and `base`, so every fragment
+  // shares one object; repeated header placements are reused only under the same deps.
+  const headerDeps = headers.length > 0 ? firstRowContentDeps(structure, headers[0]!, base) : base;
+  const headerRepeats = createRepeatedHeaderPlacements();
 
   const fragments: TableFragment[] = [];
   const pageIndexOf = new Map<TableFragment, number>();
@@ -469,6 +479,19 @@ export function updateTableWidths(
     fragments.push(...own);
   }
   if (fragments.length === 0) return null;
+  // A row split across pages is placed again on all its pages together (table-width-split-rows.ts).
+  const splitRow = createSplitRowPlacements({
+    fragments,
+    pageIndexOf,
+    pages,
+    pageBand,
+    structure,
+    sources,
+    ordinals,
+    headerCount: headers.length,
+    left,
+    base,
+  });
   let lineDelta = 0;
 
   /**
@@ -504,25 +527,41 @@ export function updateTableWidths(
     const place = (index: number, rowDeps: TableFlowDeps): RowPlacement | null => {
       const old = rows[index]!;
       const source = sources.get(old.id);
-      if (!source || old.isContinuation || old.hasContinuation) return null;
+      if (!source) return null;
+      if (old.isContinuation || old.hasContinuation) {
+        if (index < headerCount) return null;
+        return splitRow(old);
+      }
       const header = index < headerCount;
       // Most rows only move: same lines, same heights, new x. See table-row-geometry-reuse.ts.
       const moved = header ? null : moveRowToWidths(source, old, columnWidthsPt, left, rowDeps);
       if (moved) return { record: moved, insets: rowDeps.cellContentInsets, moved: true };
       let placementDeps = rowDeps;
+      let occurrence: string | undefined;
       if (old.isHeaderRepeat) {
-        const occurrence = headerOccurrence(old);
-        if (occurrence === undefined) return null;
-        placementDeps = { ...rowDeps, pageOccurrenceKey: () => occurrence };
+        const stamp = headerOccurrence(old);
+        if (stamp === undefined) return null;
+        occurrence = stamp;
+        placementDeps = { ...rowDeps, pageOccurrenceKey: () => stamp };
       }
       if (header && headerMerges && index === 0) {
         // Continuation pages open the group at the same top; its plan is the same.
         plan = headerPlans.get(old.box.y);
         if (!plan) {
-          plan = planHeaderGroup(structure, headers, () => left, old.box.y, base, rowHeightOf);
+          plan = planFixedHeaderGroup(structure, headers, left, old.box.y, base, rowHeightOf);
           headerPlans.set(old.box.y, plan);
         }
       }
+      // Read for every page: a plan read can withdraw a merge, which later reads observe.
+      const options = header ? plan?.optionsAt(index, old.box.y) : undefined;
+      // A repeated header row places as on every other page but for its occurrence stamp.
+      const repeat =
+        header && occurrence !== undefined
+          ? { index, source, top: old.box.y, deps: rowDeps, options, occurrence }
+          : undefined;
+      const reused = repeat && headerRepeats.take(repeat);
+      if (reused) return { record: reused, insets: rowDeps.cellContentInsets };
+      const reported = keys.length;
       const result = layoutRowFragment(
         source,
         columnWidthsPt,
@@ -532,13 +571,12 @@ export function updateTableWidths(
         0,
         placementDeps,
         0,
-        header ? plan?.optionsAt(index, old.box.y) : undefined
+        options
       );
       if (result.remainder !== null) return null;
+      if (repeat) headerRepeats.remember(repeat, result.record, keys.slice(reported));
       return { record: result.record, insets: rowDeps.cellContentInsets };
     };
-    const headerDeps =
-      headers.length > 0 ? firstRowContentDeps(structure, headers[0]!, base) : base;
     let grown = false;
     for (let index = 0; index < rows.length; index += 1) {
       const old = rows[index]!;
@@ -553,7 +591,13 @@ export function updateTableWidths(
       const result = place(index, rowDeps);
       if (!result) return null;
       placed.push(result);
-      if (index === rows.length - 1 && terminalRows) {
+      // The paginator gives a split row's occurrences no terminal edge of their own.
+      if (
+        index === rows.length - 1 &&
+        terminalRows &&
+        !old.isContinuation &&
+        !old.hasContinuation
+      ) {
         const ownEdge = lastRowContentDeps(structure, source, rowDeps);
         if (ownEdge !== rowDeps) {
           terminal = place(index, ownEdge) ?? undefined;
@@ -611,8 +655,12 @@ export function updateTableWidths(
         candidate.rows.every((row, index) =>
           sameRowHeights(rows[index]!, row, movedOf(chosen[index]!))
         )
-      )
+      ) {
+        // Row for row: same ids, header repeats, cells, paragraph ids and line counts, and
+        // paragraphs only. So the fragment holds what it held.
+        shareTableFragmentFacts(fragment, candidate);
         return candidate;
+      }
     }
     return null;
   };
@@ -727,6 +775,9 @@ export function updateTableWidths(
   for (const fragment of order) {
     const replacement = replaceFragment(fragment);
     if (!replacement) return null;
+    // Both structures passed `eligibleStructure`: every cell, header rows included, is
+    // horizontal and holds paragraphs only, so no row of the replacement reads bottom to top.
+    markHorizontalTableFragment(replacement);
     replacements.set(fragment, withBudgetProof(replacement, true));
   }
   registerTableCellBreakKeys(after, keys);

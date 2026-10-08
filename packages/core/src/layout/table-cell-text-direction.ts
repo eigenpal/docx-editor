@@ -5,6 +5,7 @@ import type {
   PageRecord,
   SemanticLayout,
   TableCellFragmentRecord,
+  TableFragmentRecord,
 } from './semantic-records.ts';
 import type { CaretGeometry } from './semantic-interaction.ts';
 import type { CellPlaceCursor } from './semantic-table-layout.ts';
@@ -216,21 +217,75 @@ const locationsByPage = new WeakMap<
   }[]
 >();
 
+/**
+ * Table fragments with no `btLr` cell in any row, repeated header rows and nested tables
+ * included. Such a fragment adds no location, so the scan below skips its rows. Records are
+ * never changed after placement, so the answer holds for the object; the set holds nothing.
+ */
+const horizontalTables = new WeakSet<TableFragmentRecord>();
+
+/**
+ * Record that `fragment` has no `btLr` cell at any depth. Only for a caller that proved it:
+ * the table width update, whose structures admit horizontal cells holding paragraphs only.
+ */
+export function markHorizontalTableFragment(fragment: TableFragmentRecord): void {
+  horizontalTables.add(fragment);
+}
+
+let scanObserver: { walked: number; skipped: number; skipOff: boolean } | null = null;
+
+/**
+ * @internal Counts table fragments whose rows the location scan walked or skipped.
+ * `skipOff` walks every fragment, so tests can compare against the full scan.
+ */
+export function bottomToTopScanTestRecorder(options: { readonly skipOff?: boolean } = {}): {
+  readonly walked: number;
+  readonly skipped: number;
+  dispose(): void;
+} {
+  const counts = { walked: 0, skipped: 0, skipOff: options.skipOff === true };
+  scanObserver = counts;
+  return {
+    get walked() {
+      return counts.walked;
+    },
+    get skipped() {
+      return counts.skipped;
+    },
+    dispose() {
+      if (scanObserver === counts) scanObserver = null;
+    },
+  };
+}
+
 function pageBottomToTopLocations(page: PageRecord) {
   const cached = locationsByPage.get(page);
   if (cached) return cached;
   const found: { paragraphId: string; cell: TableCellFragmentRecord }[] = [];
-  const visit = (blocks: readonly BlockFragmentRecord[]): void => {
+  /** Adds the locations in `blocks`; true when some table in them has a `btLr` cell. */
+  const visit = (blocks: readonly BlockFragmentRecord[]): boolean => {
+    let vertical = false;
     for (const block of blocks) {
       if (block.kind !== 'table') continue;
+      if (horizontalTables.has(block) && !scanObserver?.skipOff) {
+        if (scanObserver) scanObserver.skipped += 1;
+        continue;
+      }
+      if (scanObserver) scanObserver.walked += 1;
+      let blockVertical = false;
       for (const row of block.rows)
         for (const cell of row.cells) {
           if (cell.textDirection === 'btLr') {
+            blockVertical = true;
             for (const paragraph of paragraphFragmentsOfBlocks(cell.blocks))
               found.push({ paragraphId: paragraph.paragraphId, cell });
-          } else visit(cell.blocks);
+          } else if (visit(cell.blocks)) blockVertical = true;
         }
+      // Every row and cell was read, nested tables included: the walk itself is the proof.
+      if (blockVertical) vertical = true;
+      else horizontalTables.add(block);
     }
+    return vertical;
   };
   visit(page.fragments);
   if (page.header) visit(page.header.fragments);

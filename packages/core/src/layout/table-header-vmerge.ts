@@ -30,6 +30,7 @@ import type { SemanticTableRow, SemanticTableStructure } from './semantic-table.
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { measuringFlowDeps } from './table-probe-deps.ts';
 import type { RowVMergeLayoutOptions } from './table-vmerge-heights.ts';
+import { createRepeatedPlanReads } from './table-header-plan-reads.ts';
 
 /** One occurrence of the header group, planned at the top it is about to be placed at. */
 export interface HeaderGroupPlan {
@@ -61,6 +62,38 @@ export function planHeaderGroup(
   top: number,
   deps: TableFlowDeps,
   rowHeightOf: (row: SemanticTableRow, top: number, deps: TableFlowDeps) => number
+): HeaderGroupPlan {
+  return planGroup(structure, headerRows, left, top, deps, rowHeightOf, false);
+}
+
+/**
+ * {@link planHeaderGroup} for a caller that places every copy of the group at one fixed table
+ * edge with these exact `deps`, and reads it again for each copy: the table width update.
+ *
+ * A read that changes nothing is served again for the same row and top until the plan
+ * changes (`table-header-plan-reads.ts`). `left` is a number, so the edge cannot move between
+ * reads. Deps with wrap zones keep every read computed, because zones can differ per page.
+ */
+export function planFixedHeaderGroup(
+  structure: SemanticTableStructure,
+  headerRows: readonly SemanticTableRow[],
+  left: number,
+  top: number,
+  deps: TableFlowDeps,
+  rowHeightOf: (row: SemanticTableRow, top: number, deps: TableFlowDeps) => number
+): HeaderGroupPlan {
+  const repeatable = deps.pageExclusionZones === undefined;
+  return planGroup(structure, headerRows, () => left, top, deps, rowHeightOf, repeatable);
+}
+
+function planGroup(
+  structure: SemanticTableStructure,
+  headerRows: readonly SemanticTableRow[],
+  left: () => number,
+  top: number,
+  deps: TableFlowDeps,
+  rowHeightOf: (row: SemanticTableRow, top: number, deps: TableFlowDeps) => number,
+  repeatable: boolean
 ): HeaderGroupPlan {
   const count = headerRows.length;
   const first = headerRows[0];
@@ -94,55 +127,84 @@ export function planHeaderGroup(
 
   // Placement lays every header row out with the group's first-row insets; so does the probe.
   const placeDeps = firstRowContentDeps(structure, first!, deps);
+  /** `heard`, when given, receives every break key the probe reports, in order. */
   const probe = (
     index: number,
     y: number,
-    options: RowVMergeLayoutOptions
-  ): LayoutRowBoundedResult =>
-    layoutRowFragment(
+    options: RowVMergeLayoutOptions,
+    heard?: string[]
+  ): LayoutRowBoundedResult => {
+    const probeDeps = measuringFlowDeps(placeDeps, true);
+    return layoutRowFragment(
       headerRows[index]!,
       structure.columnWidthsPt,
       left(),
       y,
       false,
       0,
-      measuringFlowDeps(placeDeps, true),
+      heard
+        ? {
+            ...probeDeps,
+            onCellBreakKey: (key) => {
+              heard.push(key);
+              probeDeps.onCellBreakKey?.(key);
+            },
+          }
+        : probeDeps,
       structure.cellSpacingPt,
       options
     );
+  };
+  // Every `accept` and `withdrawAt` on the plan. A kept read is served only at the count it
+  // was taken at, so every call that changes the plan must count here; the plan is private.
+  let changes = 0;
   /** The row's options at `y`, withdrawn when a detached head would not finish inside its span. */
   const settle = (
     index: number,
     y: number,
-    options: RowVMergeLayoutOptions | undefined
+    options: RowVMergeLayoutOptions | undefined,
+    heard?: string[]
   ): { readonly options: RowVMergeLayoutOptions | undefined; readonly heightPt?: number } => {
     if (options === undefined) return { options };
-    const placed = probe(index, y, options);
+    const placed = probe(index, y, options, heard);
     if (placed.remainder === null) return { options, heightPt: placed.record.box.height };
+    changes += 1;
     plan.withdrawAt(index);
     const rolledBack = plan.rowOptions(index);
     return rolledBack === undefined
       ? { options: undefined }
-      : { options: rolledBack, heightPt: probe(index, y, rolledBack).record.box.height };
+      : { options: rolledBack, heightPt: probe(index, y, rolledBack, heard).record.box.height };
   };
 
   let heightPt = 0;
   for (let index = 0; index < count; index += 1) {
     const y = top + heightPt;
     for (const span of plan.spansAt(index)) {
-      if (insideGroup(span)) plan.accept(span, y);
+      if (!insideGroup(span)) continue;
+      changes += 1;
+      plan.accept(span, y);
     }
     const settled = settle(index, y, plan.rowOptions(index));
     heightPt += settled.heightPt ?? unplannedHeightOf(index, y);
   }
+  // Read from the plan, not from the walk: a withdrawal at commit changes the rows below it.
+  const read = (index: number, rowTopPt: number, heard?: string[]) => {
+    const options = plan.rowOptions(index);
+    if (options?.detachedSpanHeightPtByCellId === undefined) return options;
+    return settle(index, rowTopPt, options, heard).options;
+  };
+  const reads = repeatable ? createRepeatedPlanReads(placeDeps) : null;
   return {
     heightPt,
     planned: true,
-    // Read from the plan, not from the walk: a withdrawal at commit changes the rows below it.
-    optionsAt: (index, rowTopPt) => {
-      const options = plan.rowOptions(index);
-      if (options?.detachedSpanHeightPtByCellId === undefined) return options;
-      return settle(index, rowTopPt, options).options;
-    },
+    optionsAt: reads
+      ? (index, rowTopPt) =>
+          reads.read(
+            index,
+            rowTopPt,
+            () => changes,
+            (heard) => read(index, rowTopPt, heard)
+          )
+      : (index, rowTopPt) => read(index, rowTopPt),
   };
 }

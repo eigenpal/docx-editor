@@ -15,7 +15,7 @@ import {
 import { finalizeTableRows } from './table-fragment-finalize.ts';
 import { updateTableWidths, type TablePageBand } from './table-width-update.ts';
 import { finalizedWithHeadroom, withBudgetProof } from './table-budget-proof.ts';
-import { tableCellBreakKeysOf, registerTableCellBreakKeys } from './layout-cache.ts';
+import { registerEditedTableCellBreakKeys } from './table-cell-break-keys.ts';
 import type { BlockFragmentRecord, PageRecord } from './semantic-records.ts';
 
 /** Re-place an ordinary complete row only when its flow extent stays unchanged. */
@@ -202,10 +202,8 @@ export function updateTableText(
     };
     replacements.set(fragment, withBudgetProof(replacement, true));
   }
-  registerTableCellBreakKeys(after, [
-    ...(tableCellBreakKeysOf(before) ?? []).filter((key) => !oldKeys.has(key)),
-    ...newKeys,
-  ]);
+  // `before`'s keys without the old row's, then the new row's, sharing untouched chunks.
+  registerEditedTableCellBreakKeys(after, before, oldKeys, newKeys);
   return {
     lineDelta,
     pages: pages.map((p) =>

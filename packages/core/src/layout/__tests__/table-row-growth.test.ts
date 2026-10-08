@@ -168,6 +168,18 @@ function typeBurst(
       grew += 1;
       if (direct) accepted += 1;
       expect(unbounded).toBeNull();
+    } else if (!unbounded && direct) {
+      // Split-row width reuse needs the paginator band even when no row grows.
+      // The direct result already equals the cold layout above.
+      expect(
+        previous.pages.some((page) =>
+          page.fragments.some(
+            (fragment) =>
+              fragment.kind === 'table' &&
+              fragment.rows.some((row) => row.isContinuation || row.hasContinuation)
+          )
+        )
+      ).toBe(true);
     } else {
       expect(unbounded?.pages ?? null).toEqual(direct?.pages ?? null);
     }

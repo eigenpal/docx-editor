@@ -15,6 +15,7 @@ import type {
 import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../store/package/ooxml-shared.ts';
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
 import { paragraphContentBounds } from './paragraph-content-bounds.ts';
+import { linesOfUnneededTable } from './table-fragment-facts.ts';
 import { blockStoryContainerChildren, storyRootsOf } from '../store/package/story-blocks.ts';
 import {
   MAX_CONTENT_CONTROL_NESTING as MAX_SDT_NESTING,
@@ -477,6 +478,13 @@ function pageContribution(
     if (index.neededBlockIds.has(fragment.tableId)) {
       work && (work.geometryEntries += 1);
       blocks.push({ pageIndex, blockId: fragment.tableId, box: shift(fragment.box) });
+    }
+    // Nothing inside is needed: count its lines as the walk below would, one clamp per line.
+    const lines = linesOfUnneededTable(fragment, index.neededBlockIds, index.neededParagraphIds);
+    if (lines !== null) {
+      const cap = page.index * PAGE_LINE_ORDINAL_SPAN + PAGE_LINE_ORDINAL_SPAN - 1;
+      lineOrdinal = Math.min(lineOrdinal + lines, cap);
+      return;
     }
     for (const row of fragment.rows) {
       if (row.isHeaderRepeat) continue;
