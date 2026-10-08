@@ -19,9 +19,11 @@ import {
 } from './drawing-group-frame.ts';
 import { isElement } from './drawing-projection-walk.ts';
 import { findDirectChild, parseCropPercent, parseEmu } from './drawing-shape-readers.ts';
-import type {
-  ShapeStyleMatrixResolver,
-  VectorShapeProjection,
+import {
+  isUnpaintedGroupTextbox,
+  type ShapeSchemeColorResolver,
+  type ShapeStyleMatrixResolver,
+  type VectorShapeProjection,
 } from './drawing-shape-projection.ts';
 import { schemaAttributeValue } from './ooxml-drawing-rules.ts';
 import {
@@ -101,7 +103,7 @@ export function groupVectorMembersAreBounded(
 
 export interface GroupPictureRead {
   readonly picture: GroupPictureProjection;
-  /** Whether the group has members other than the picture. */
+  /** Whether the group has members other than the picture that paint. */
   readonly hasOtherMembers: boolean;
 }
 
@@ -132,12 +134,14 @@ function drawingMl(parent: OoxmlElement, localName: string): OoxmlElement | null
  * rotated or flipped. It has a rectangle geometry, a fill that is not tiled, and no blip
  * effects. Its frame has a visible part inside the group extent and stays within the
  * bounds of {@link memberFrameIsBounded}. Anything else returns null, and the group keeps
- * its earlier unpainted result.
+ * its earlier unpainted result. A text box member without fill or outline paints nothing, so
+ * it neither counts as another member nor orders the picture.
  */
 export function readGroupPicture(
   anchor: OoxmlElement,
   extent: Readonly<{ cx: number; cy: number }>,
-  resolveStyleMatrixReference?: ShapeStyleMatrixResolver
+  resolveStyleMatrixReference?: ShapeStyleMatrixResolver,
+  resolveSchemeColor?: ShapeSchemeColorResolver
 ): GroupPictureRead | null {
   if (extent.cx <= 0 || extent.cy <= 0) return null;
   const frame = readDrawingGroupFrame(anchor);
@@ -150,6 +154,7 @@ export function readGroupPicture(
     if (!isElement(child) || isGroupPropertyChild(child)) continue;
     members += 1;
     if (members > MAX_GROUP_SHAPE_CHILDREN) return null;
+    if (isUnpaintedGroupTextbox(child, resolveSchemeColor, resolveStyleMatrixReference)) continue;
     if (child.namespaceUri === PIC_NAMESPACE_URI && child.localName === 'pic') {
       if (picture !== null || hasOtherMembers) return null;
       picture = child;

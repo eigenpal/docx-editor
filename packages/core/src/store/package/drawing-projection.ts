@@ -1,6 +1,7 @@
 import { objectPreviewFrameReader } from './legacy-object-context.ts';
 import { stylesPartOf } from './ooxml-indexes.ts';
 import { projectLegacyVml, type LegacyGraphicProjection } from './legacy-vml-projection.ts';
+import { paintableMcFallback } from './mc-fallback-projection.ts';
 // Bounded semantic projection for typed `w:drawing` nodes and run-level MC wrappers (task 3).
 //
 // Reads the canonical tree without mutating it. `mc:AlternateContent` branch selection is
@@ -11,6 +12,8 @@ import { readDistances } from './drawing-distances.ts';
 import { readBlipEffects, type DrawingImageEffects } from './drawing-image-effects.ts';
 import { freezeVectorShapeComponent } from './drawing-vector-freeze.ts';
 import { wrapFootprintProjection } from './drawing-wrap-footprint.ts';
+import { groupTextboxesField, hostsTextboxStory } from './group-textbox-projection.ts';
+import type { GroupTextboxProjection } from './group-textbox-projection.ts';
 import { HYPERLINK_RELATIONSHIP_TYPE, type RelationshipTargetResolver } from './hyperlink.ts';
 import { resolveRelationship } from './relationships.ts';
 import {
@@ -230,6 +233,8 @@ export interface DrawingProjection {
   /** The picture member of a `wpg:wgp` group; `picture` stays null for a group. */
   readonly groupPicture: GroupPictureProjection | null;
   readonly textboxStory: TextboxStoryProjection | null;
+  /** Text box members of a `wpg:wgp` group, laid out read-only; absent when none has text. */
+  readonly groupTextboxes?: readonly GroupTextboxProjection[];
   /** Read-only preview of the supported native VML subset; the canonical XML is untouched. */
   readonly legacyGraphic?: LegacyGraphicProjection;
   readonly locks: DrawingLocks;
@@ -1518,7 +1523,7 @@ export function projectDrawingWithState(
       : null;
   const groupRead = pictureResult.picture
     ? null
-    : readGroupPicture(anchor, extent, ctx.resolveStyleMatrixReference);
+    : readGroupPicture(anchor, extent, ctx.resolveStyleMatrixReference, ctx.resolveSchemeColor);
   const vectorMembers = pictureResult.picture
     ? null
     : projectVectorShape(
@@ -1538,6 +1543,7 @@ export function projectDrawingWithState(
       : !groupRead.hasOtherMembers);
   const groupPicture = groupAdmitted ? groupRead.picture : null;
   const vectorShape = groupRead && !groupAdmitted ? null : vectorMembers;
+  const painted = { groupPicture, vectorShape };
   const textboxStory = pictureResult.picture
     ? null
     : projectTextboxStory(anchor, extent, ctx.resolveSchemeColor, ctx.resolveStyleMatrixReference);
@@ -1567,6 +1573,7 @@ export function projectDrawingWithState(
       vectorShape,
       groupPicture,
       textboxStory,
+      ...groupTextboxesField(anchor, extent, { picture: pictureResult.picture, ...painted }, ctx),
       locks,
       effects: pictureResult.effects,
       compatibilityBranchNodeId: state.compatibilityBranchNodeId,
@@ -1602,16 +1609,18 @@ export function projectRunLevelMcDrawing(
     namespaceScope: context.namespaceScope,
   });
   if (!projection) return null;
-  // An MC-wrapped payload the engine cannot actually draw (charts, diagrams, unsupported
-  // groups) stays invisible like its VML fallback always was — a labelled placeholder card over
-  // letterhead furniture would be noisier than what either branch renders today. Text boxes
-  // carry a renderable story and pass through. Layout still reserves the anchor's wrap area.
+  // An MC-wrapped payload the engine cannot draw (charts, diagrams, unsupported groups) shows
+  // its VML fallback when that paints. Otherwise it stays invisible: a placeholder card over
+  // letterhead furniture would be noisier than either branch. Text boxes carry a renderable
+  // story and pass through. Layout still reserves the extent or the anchor's wrap area.
   if (
     projection.picture === null &&
     projection.vectorShape === null &&
     projection.groupPicture === null &&
-    projection.textboxStory === null
+    !hostsTextboxStory(projection)
   ) {
+    const fallback = paintableMcFallback(wrapper, context.ownerPartName);
+    if (fallback) return fallback;
     return context.retainWrapFootprint ? wrapFootprintProjection(projection) : null;
   }
   // Layout applies the same rule to a group picture whose resource fails.
@@ -1721,7 +1730,7 @@ function collectDrawingsInPartBounded(
         out.push(projected);
         atomIndex?.set(frame.node.id, projected);
       }
-      if (projected?.textboxStory) descendIntoTextboxStory(frame.node, frame, scope);
+      if (hostsTextboxStory(projected)) descendIntoTextboxStory(frame.node, frame, scope);
       continue;
     }
 
@@ -1740,7 +1749,7 @@ function collectDrawingsInPartBounded(
         if (!projected.footprintOnly) out.push(projected);
         atomIndex?.set(frame.node.id, projected);
       }
-      if (projected?.textboxStory) {
+      if (hostsTextboxStory(projected)) {
         const chosen = resolveRunLevelMcAtom(
           frame.node,
           scope,

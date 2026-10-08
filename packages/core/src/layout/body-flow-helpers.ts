@@ -12,7 +12,8 @@ import { marginInset } from './page-body-margins.ts';
 import type { ParagraphBorders } from './paragraph-style.ts';
 import type { LayoutBox } from './semantic-records.ts';
 
-type BodyAnchorFrameBase = Omit<
+/** The page and column facts an anchored drawing or table resolves its frame against. */
+export type BodyAnchorFrameBase = Omit<
   DrawingAnchorFrameContext,
   'paragraphBox' | 'anchorLineBox' | 'anchorCharacterX' | 'columnBox' | 'cellBox' | 'layoutInCell'
 >;

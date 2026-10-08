@@ -74,7 +74,10 @@ function placeOpeningWord(
   wordWidth: number,
   first: StyleSpanRecord | undefined
 ): void {
-  if (wordWidth > context.lineAvailable() + 0.001) context.ensurePlacementWidth(wordWidth);
+  // `lineAvailable` is a capacity measured from the line origin, and reading it snaps the
+  // pen into the first passage. The word needs the room ahead of that pen.
+  const capacity = context.lineAvailable();
+  if (wordWidth > capacity - context.line().width + 0.001) context.ensurePlacementWidth(wordWidth);
   settlePen(context, first);
 }
 

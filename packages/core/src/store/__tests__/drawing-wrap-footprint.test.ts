@@ -1,5 +1,5 @@
 // An anchored `mc:AlternateContent` payload the engine cannot draw (here a shape group with a
-// picture and a text box member) stays invisible. Its anchor still states where text must not
+// picture and a shadowed text box member) stays invisible. Its anchor still states where text must not
 // flow, so the layout index keeps a footprint: the authored extent, position and wrap, with
 // every paint payload removed. These tests pin which anchors get a footprint, what it keeps,
 // and that the public projection outputs do not change.
@@ -44,7 +44,7 @@ const PICTURE_MEMBER =
 const TEXTBOX_MEMBER =
   '<wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm><a:off x="889000" y="0"/>' +
   '<a:ext cx="2540000" cy="762000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
-  '</wps:spPr><wps:txbx><w:txbxContent><w:p><w:r><w:t>Label</w:t></w:r></w:p></w:txbxContent>' +
+  '<a:effectLst><a:outerShdw dist="38100"/></a:effectLst></wps:spPr><wps:txbx><w:txbxContent><w:p><w:r><w:t>Label</w:t></w:r></w:p></w:txbxContent>' +
   '</wps:txbx><wps:bodyPr/></wps:wsp>';
 
 interface AnchorOptions {
@@ -161,15 +161,29 @@ describe('the wrap footprint of an MC payload that cannot paint', () => {
     expect([...behind().values()].map((projection) => projection.wrap)).toEqual(['topAndBottom']);
   });
 
-  test('a hidden anchor and an inline payload reserve nothing', () => {
+  test('a hidden anchor reserves nothing, and an inline payload keeps its extent', () => {
     const hidden = groupAnchor({ docPr: '<wp:docPr id="1" name="Group 1" hidden="1"/>' });
     expect(indexInlineDrawingProjectionsInPart(partWith(mcWrapped(hidden))).size).toBe(0);
-    const inline =
+    const inline = (docPr: string) =>
       '<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
-      '<wp:extent cx="914400" cy="457200"/><wp:docPr id="3" name="Group 3"/>' +
+      `<wp:extent cx="914400" cy="457200"/>${docPr}` +
       `<a:graphic><a:graphicData uri="${WPG}"><wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr/>` +
       `${PICTURE_MEMBER}${TEXTBOX_MEMBER}</wpg:wgp></a:graphicData></a:graphic></wp:inline></w:drawing>`;
-    expect(indexInlineDrawingProjectionsInPart(partWith(mcWrapped(inline))).size).toBe(0);
+    const part = partWith(mcWrapped(inline('<wp:docPr id="3" name="Group 3"/>')));
+    const [footprint] = [...indexInlineDrawingProjectionsInPart(part).values()];
+    expect(footprint).toMatchObject({
+      kind: 'inline',
+      wrap: 'inline',
+      footprintOnly: true,
+      extentEmu: { cx: 914400, cy: 457200 },
+      groupPicture: null,
+      vectorShape: null,
+      textboxStory: null,
+    });
+    expect(drawingAccessibility(footprint!).hidden).toBe(true);
+    expect(projectDrawingsInPart(part)).toHaveLength(0);
+    const hiddenInline = inline('<wp:docPr id="3" name="Group 3" hidden="1"/>');
+    expect(indexInlineDrawingProjectionsInPart(partWith(mcWrapped(hiddenInline))).size).toBe(0);
   });
 
   test('drops a drawing hyperlink, so the hidden area opens nothing', () => {

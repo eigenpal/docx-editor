@@ -113,6 +113,12 @@ export interface PaintContext {
   /** Generated paragraphs that paint as non-editable navigation surfaces. */
   readonly readOnlyParagraphIds?: ReadonlySet<string>;
   /**
+   * Paint without selection and editing bindings (`data-paragraph-id`, `data-start`, the
+   * drawing position and node attributes): a story no caret, selection or drawing command may
+   * reach, such as the text of a group's text box member.
+   */
+  readonly unbound?: boolean;
+  /**
    * Empty-TOC begin paragraphs that paint subtle identifiable furniture. Paint-only — never
    * serialised into the document.
    */
@@ -360,13 +366,17 @@ function resolvedDrawingPaint(ctx: ResolvedPaintContext): DrawingPaintContext {
     ...(ctx.inertLinks ? { inertLinks: true } : {}),
     ...(ctx.paintInstance ? { paintInstance: ctx.paintInstance } : {}),
     ...(ctx.revisionStyles ? { revisionStyles: ctx.revisionStyles } : {}),
+    ...(ctx.unbound ? { unbound: true } : {}),
     paintStoryFragment: (
       document: Document,
-      fragment: ParagraphFragmentRecord | TableFragmentRecord
-    ) =>
-      fragment.kind === 'table'
-        ? paintTableFragment(document, fragment, storyCtx)
-        : paintFragment(document, fragment, storyCtx),
+      fragment: ParagraphFragmentRecord | TableFragmentRecord,
+      options?: { readonly readOnly?: boolean }
+    ) => {
+      const paintCtx = options?.readOnly ? { ...storyCtx, unbound: true } : storyCtx;
+      return fragment.kind === 'table'
+        ? paintTableFragment(document, fragment, paintCtx)
+        : paintFragment(document, fragment, paintCtx);
+    },
   });
 }
 
@@ -791,9 +801,11 @@ function paintSpan(
   // run's full resolution for every consumer that reads formatting rather than glyphs.
   const faceStyle = styleForFontSlot(span.style, span.fontSlot);
   if (span.equation) {
-    element.dataset.paragraphId = span.range.paragraphId;
-    element.dataset.start = String(span.range.start);
-    element.dataset.end = String(span.range.end);
+    if (!ctx.unbound) {
+      element.dataset.paragraphId = span.range.paragraphId;
+      element.dataset.start = String(span.range.start);
+      element.dataset.end = String(span.range.end);
+    }
     applyRunFaceStyle(element, faceStyle, ctx);
     mountEquationGeometry(document, element, span.equation, ctx.scale);
     applyRevisionPresentation(element, span, ctx);
@@ -830,9 +842,11 @@ function paintSpan(
   // advance and its leader are still drawn, and the mapper resolves through the real text
   // either side. An ordinary `w:tab` keeps its address; it does occupy an offset.
   if (span.range.end > span.range.start) {
-    element.dataset.paragraphId = span.range.paragraphId;
-    element.dataset.start = String(span.range.start);
-    element.dataset.end = String(span.range.end);
+    if (!ctx.unbound) {
+      element.dataset.paragraphId = span.range.paragraphId;
+      element.dataset.start = String(span.range.start);
+      element.dataset.end = String(span.range.end);
+    }
   } else {
     element.setAttribute('aria-hidden', 'true');
     element.contentEditable = 'false';
@@ -1001,7 +1015,7 @@ function paintLine(
   const element = document.createElement('div');
   element.className = 'docx-line layout-line';
   element.dataset.lineId = line.id;
-  element.dataset.paragraphId = line.range.paragraphId;
+  if (!ctx.unbound) element.dataset.paragraphId = line.range.paragraphId;
   element.style.position = 'absolute';
   element.style.top = `${line.box.y * scale}px`;
   // Alignment is baked into the geometry, not re-derived here: `contentX` IS the line's left
@@ -1102,8 +1116,10 @@ function paintLine(
       spacer.className = 'docx-inline-drawing-advance';
       spacer.dataset.docxMarker = '';
       // The picture's model position: a lone picture paints no text to hold a caret after it.
-      spacer.dataset.drawingParagraphId = drawing.paragraphId;
-      spacer.dataset.drawingStart = String(drawing.start);
+      if (!ctx.unbound) {
+        spacer.dataset.drawingParagraphId = drawing.paragraphId;
+        spacer.dataset.drawingStart = String(drawing.start);
+      }
       spacer.setAttribute('contenteditable', 'false');
       spacer.setAttribute('aria-hidden', 'true');
       spacer.style.display = 'inline-block';
@@ -1340,9 +1356,9 @@ function paintFragment(
   const element = positioned(document, 'div', fragment.box, scale);
   element.className = 'docx-paragraph-fragment layout-paragraph';
   if (fragment.clipToBox) element.style.overflow = 'hidden';
-  element.dataset.paragraphId = fragment.paragraphId;
+  if (!ctx.unbound) element.dataset.paragraphId = fragment.paragraphId;
   element.dataset.fragmentIndex = String(fragment.fragmentIndex);
-  applyParagraphFormatAnchor(element, fragment);
+  if (!ctx.unbound) applyParagraphFormatAnchor(element, fragment);
   if (ctx.readOnlyParagraphIds?.has(fragment.paragraphId)) {
     element.classList.add('docx-generated-region');
     element.dataset.docxReadOnly = '';

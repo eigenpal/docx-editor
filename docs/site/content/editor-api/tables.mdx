@@ -71,7 +71,7 @@ await runtime.run(async (context) => {
 
 Value matrices must match the affected row and column dimensions. Do not assume ragged matrices or implicit resizing work. Deleting all rows or all columns removes the table. `Table.deleteRows()` works on merged tables. If a vertical merge starts in a deleted row, the next row starts the merge. If no later row continues the merge, the next row is no longer merged. If the row above the deleted row has a merged cell over the same grid columns, the next row joins that merge instead. Row deletion also works on tables whose rows have different cell counts. The deleted row's content is removed. In `TrackMineOnly` mode, merges change only when the deletion is accepted. If a cell or row cannot be placed in the table grid, the deletion refuses with `InvalidArgument`. `Table.delete()` can remove an existing merged table. Deletion can still fail if the table is protected or its surrounding structure is unsupported. Sync structural changes before addressing newly added cells or relying on changed indexes.
 
-Row insertion preserves unrelated merged headers when the source row has ordinary cells covering the table grid. `addRows()` uses the first or last row as its source. `insertRows()` uses the addressed row. Merged source rows, row offsets, hidden source cells, and boundaries crossing vertical merges refuse with `InvalidArgument`. Tables with merges require an explicit grid. Other table mutations retain their documented restrictions.
+Row insertion preserves unrelated merged headers when the source row has ordinary cells covering the table grid. Each new cell, in a row or a column, copies its source cell's paragraph formatting. Values written into it take the source paragraph mark's formatting. The source cell's text runs do not set it, so a bold label at the start of a source cell does not make new values bold. `addRows()` uses the first or last row as its source. `insertRows()` uses the addressed row. Merged source rows, row offsets, hidden source cells, and boundaries crossing vertical merges refuse with `InvalidArgument`. Tables with merges require an explicit grid. Other table mutations retain their documented restrictions.
 
 For example, insert before the first ordinary row after a merged header:
 
@@ -117,7 +117,7 @@ Each row or column addition or deletion must run alone in its sync, even across 
 
 Set `document.changeTrackingMode = 'TrackMineOnly'` before `Table.addRows()`, `TableRow.insertRows()`, or `Table.deleteRows()`. Added rows can include initial cell values. The runtime saves native `w:trPr/w:ins` and `w:trPr/w:del` revisions.
 
-Save and reopen preserve the suggestions. Use `body.revisions.acceptAll()` or `body.revisions.rejectAll()` to resolve complete tracked rows. The revision collection omits row revisions from `items`.
+Save and reopen preserve the suggestions. Formatting inside the author's own proposed row records no separate revision, because rejecting the row removes its formatting too. Use `body.revisions.acceptAll()` or `body.revisions.rejectAll()` to resolve complete tracked rows. The revision collection omits row revisions from `items`.
 
 Delete fewer than all rows when you suggest a deletion. Deleting every row refuses in tracking mode. Changing columns and table properties requires an eligible complete proposed table. Row insertion retains the source-row and vertical-merge limits described earlier. The runtime never changes tracking mode to complete an unsupported edit.
 

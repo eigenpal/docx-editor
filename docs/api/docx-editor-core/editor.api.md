@@ -45,8 +45,24 @@ export function applyThemeShade(hex: string, keep: number): string;
 // @public
 export function applyThemeTint(hex: string, keep: number): string;
 
+// @internal
+export function arrangeToolbarGroups(builtIn: readonly string[], hosts: readonly ToolbarHostGroupPlacement[]): readonly string[];
+
 // @public
 export const AUTO_ZOOM_MODE: ZoomMode;
+
+// @internal
+export interface BarRoomInput {
+    readonly chrome: number;
+    readonly margins: number;
+    readonly maxWidth: number | null;
+    readonly own: number;
+    readonly parentContent: number;
+    readonly siblings: number;
+}
+
+// @internal
+export function barRoomWidth(input: BarRoomInput): number;
 
 // @public
 export function bindHistoryGroup(editor: Editor, element: HTMLElement, config: HistoryGroupBindingOptions): HistoryGroupBinding;
@@ -117,6 +133,9 @@ export function captureImageMutationPreconditions(editor: Pick<DocxEditorInstanc
 export function changedFields(seed: ParagraphDialogFields, current: ParagraphDialogFields,
 seedMixed?: ParagraphDialogMixed,
 currentMixed?: ParagraphDialogMixed): ParagraphFormatUpdate | null;
+
+// @internal
+export function chordLetter(event: KeyboardEvent): string;
 
 // @public
 export const CHROME_GROUPS: readonly [{
@@ -473,6 +492,15 @@ export const CHROME_GROUPS: readonly [{
     }, {
         readonly id: 'comments';
         readonly labelKey: 'formattingBar.commentsAndChanges';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: 'addComment';
+        readonly labelKey: 'formattingBar.addComment';
         readonly paths: readonly string[];
         readonly shape: 'icon';
         readonly state: {
@@ -966,7 +994,7 @@ export interface ChromePrintOptions {
 export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null;
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
 
 // @public
 export function chromeSlotId(group: {
@@ -996,6 +1024,12 @@ export function clipboardPasteLandsContent(transfer: DataTransfer | null | undef
 export interface CollaborationModuleContribution {
     readonly session: EditorCollaborationSession;
 }
+
+// @internal
+export function collapseOrder(groups: readonly string[], order?: readonly string[], priorities?: ReadonlyMap<string, number>): readonly string[];
+
+// @internal
+export function collapsibleGroupCost(groupWidth: number, separatorLeading: number): number;
 
 // @public
 export type CollectReviewItems = (input: ReviewModelInput) => readonly ReviewItem[];
@@ -1109,6 +1143,9 @@ export interface ContentControlWidgetSession {
     // (undocumented)
     readonly value: string;
 }
+
+// @internal
+export function controlsOverflow(bar: HTMLElement, style: CSSStyleDeclaration): boolean | null;
 
 // @public
 export function createBrowserAutomationHost(editor: DocxEditorInstance): AutomationHost;
@@ -2548,6 +2585,18 @@ export const PX_PER_CM: number;
 // @public
 export const PX_PER_INCH = 96;
 
+// @internal
+export function readAvailableWidth(bar: HTMLElement, style: CSSStyleDeclaration): number;
+
+// @internal
+export function readColumnGap(style: CSSStyleDeclaration): number;
+
+// @internal
+export function readInlineMargins(style: CSSStyleDeclaration): {
+    readonly end: number;
+    readonly start: number;
+};
+
 // @public
 export interface RefreshChange {
     readonly description?: string;
@@ -2966,6 +3015,9 @@ export function runToolbarCommand(editor: Editor | null, id: TableChromeSlotId, 
 // @public (undocumented)
 export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId, value: undefined, options: EditorExecOptions): ExecResult;
 
+// @internal
+export const sameOverflow: typeof sameIds;
+
 // @public
 export function sameTabStops(a: readonly ParagraphTabStop[], b: readonly ParagraphTabStop[]): boolean;
 
@@ -3150,6 +3202,9 @@ export interface SemanticSelection {
     // (undocumented)
     readonly head: SemanticPosition;
 }
+
+// @internal
+export function separatorLeadingCost(separatorWidth: number, marginInlineStart: number, marginInlineEnd: number, gap: number): number;
 
 // @public
 export function shiftMonth(year: number, month: number, delta: 1 | -1): {
@@ -3473,6 +3528,18 @@ export interface TextMeasurer {
 // @public (undocumented)
 export function toEditorFontError(error: unknown): EditorFontError;
 
+// @internal
+export const TOOLBAR_COLLAPSE_ORDER: readonly string[];
+
+// @internal
+export const TOOLBAR_OVERFLOW_HYSTERESIS = 24;
+
+// @internal
+export const TOOLBAR_PANEL_EDGE_MARGIN = 8;
+
+// @internal
+export const TOOLBAR_PINNED_GROUPS: ReadonlySet<string>;
+
 // @public
 export interface ToolbarCommandState {
     readonly active: boolean;
@@ -3489,6 +3556,56 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
 
 // @public
 export function toolbarCommandStates(editor: Editor | null, ids: readonly ChromeSlotId[]): readonly ToolbarCommandState[];
+
+// @internal
+export interface ToolbarFitInput {
+    readonly available: number;
+    readonly fixed: number;
+    readonly groups: readonly string[];
+    // (undocumented)
+    readonly hysteresis?: number;
+    readonly more: number;
+    readonly order: readonly string[];
+    readonly previous?: ReadonlySet<string> | undefined;
+    readonly widths: ReadonlyMap<string, number>;
+}
+
+// @internal
+export function toolbarGroupPriority(id: string, order?: readonly string[]): number | undefined;
+
+// @internal
+export interface ToolbarHostGroupPlacement {
+    readonly after?: string | undefined;
+    // (undocumented)
+    readonly id: string;
+}
+
+// @internal
+export function toolbarOverflowGroups(input: ToolbarFitInput): ReadonlySet<string>;
+
+// @internal
+export interface ToolbarPanelPlacement {
+    readonly anchor: 'start' | 'end' | 'clamped';
+    readonly left: number;
+    readonly maxWidth: number;
+}
+
+// @internal
+export function toolbarPanelPlacement(input: {
+    readonly margin?: number;
+    readonly panelWidth: number;
+    readonly triggerLeft: number;
+    readonly triggerRight: number;
+    readonly viewportWidth: number;
+}): ToolbarPanelPlacement;
+
+// @internal
+export function toolbarPopupLeft(input: {
+    readonly anchorLeft: number;
+    readonly margin?: number;
+    readonly popupWidth: number;
+    readonly viewportWidth: number;
+}): number;
 
 // @public (undocumented)
 export type ToolbarSlotValue<K extends ToolbarValueSlot> = K extends keyof ToolbarValueMap ? ToolbarValueMap[K] : unknown;
@@ -3523,6 +3640,9 @@ export type TrackedChangeFilterMode = 'accept' | 'reject';
 
 // @public
 export type TrackedChangePredicate = (revision: ReviewRevisionItem) => boolean;
+
+// @internal
+export function trailingGapCost(width: number, gap: number): number;
 
 // @public
 export function trapTabWithin(panel: HTMLElement, event: KeyboardEvent): boolean;

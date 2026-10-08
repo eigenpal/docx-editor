@@ -44,6 +44,9 @@ const GRANDFATHERED_TYPE_EDGES: readonly { readonly file: string; readonly to: L
   // the selected-image read model names drawing, crop and image-resource types the store
   // lane owns. Compile-time only, and one fewer line in a file at its cap.
   { file: 'contracts/editor-image-state.ts', to: 'store' },
+  // Also split out of `contracts/editor.ts`: review card placements name the review item
+  // shapes the store lane derives. Compile-time only, like the edge above.
+  { file: 'contracts/editor-review-placement.ts', to: 'store' },
   { file: 'contracts/modules.ts', to: 'layout' },
   { file: 'contracts/modules.ts', to: 'store' },
   { file: 'contracts/modules.ts', to: 'collaboration' },

@@ -14,15 +14,17 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'r
 import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { ZOOM_MAX, ZOOM_MIN } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../../lib/units';
-import { ReviewRailContext } from '../context';
+import { ReviewRailContext, useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useReviewGutter } from '../review-gutter';
 import {
   NAVIGATION_PANE_WIDTH,
+  navigationPaneOverlays,
   navigationPaneReservation,
   navigationShift,
 } from './navigation-geometry';
 import { useNavigationLayoutStore, useNavigationViewportElement } from './navigation-layout';
+import { trackWidestPage, type WidestPageTracker } from './navigation-widest-page';
 
 /** The pane's tabs. Word's Replace tab is a later slice; nothing here pretends it exists. */
 export type NavigationTab = 'headings' | 'find';
@@ -67,6 +69,8 @@ const samePageGeometry = (a: PaneGeometry, b: PaneGeometry) =>
   a.fitting === b.fitting &&
   a.pageSetup?.pageWidthTwips === b.pageSetup?.pageWidthTwips;
 
+const selectPageCount = (snapshot: EditorSnapshot): number => snapshot.page.total;
+
 /** How `useNavigationPane` is configured. @public */
 export interface UseNavigationPaneOptions {
   /** Open state for the first render when the pane is uncontrolled. Defaults to closed. */
@@ -96,6 +100,12 @@ export interface UseNavigationPaneResult {
    * the left gutter was already wide enough to hold it — which is the point.
    */
   readonly shift: number;
+  /**
+   * Whether the open pane covers the page instead of moving it. True on a viewport too
+   * narrow to show a readable page beside the pane (see `NAVIGATION_PANE_MIN_PAGE_ROOM`);
+   * `shift` is then 0, and `DocxEditor.Navigation` closes after a heading or result is picked.
+   */
+  readonly overlay: boolean;
 }
 
 /**
@@ -147,7 +157,10 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
     selectPaneGeometry,
     samePageGeometry
   );
+  const editor = useDocxEditor();
+  const pageCount = useEditorState(selectPageCount);
   const [viewportWidth, setViewportWidth] = useState(0);
+  const [widestPage, setWidestPage] = useState<number | null>(null);
   const [inlineEndReservation, setInlineEndReservation] = useState(0);
   const [inlineStartReservation, setInlineStartReservation] = useState(0);
   // The review gutter the viewport pads by. A dependency of the measurement below: the
@@ -192,23 +205,45 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
   if (pageSetup) lastPageWidthTwips.current = pageSetup.pageWidthTwips;
   const pageWidthTwips = pageSetup?.pageWidthTwips ?? lastPageWidthTwips.current;
 
+  // The page stack is as wide as its WIDEST page (see `navigation-widest-page.ts`). Tracked
+  // only while the pane is open; page-count steps and caret-section changes nudge a settled
+  // re-read, and the tracker itself listens for document changes.
+  const widestTracker = useRef<WidestPageTracker | null>(null);
+  useEffect(() => {
+    if (!open || !editor) return undefined;
+    const tracker = trackWidestPage(editor, setWidestPage);
+    widestTracker.current = tracker;
+    return () => {
+      tracker.dispose();
+      if (widestTracker.current === tracker) widestTracker.current = null;
+    };
+  }, [open, editor]);
+  useEffect(() => widestTracker.current?.nudge(), [pageCount, pageWidthTwips]);
+
+  const reservation = navigationPaneReservation(paneWidth);
+  // The review rail takes the inline-end padding, so the room beside the pane is the width
+  // left after it.
+  const overlay = open && navigationPaneOverlays(viewportWidth - inlineEndReservation, reservation);
+
   const shift = useMemo(() => {
-    if (!open) return 0;
+    if (!open || overlay) return 0;
     if (pageWidthTwips === null) return 0;
     return navigationShift({
       viewportWidth,
-      pageWidthPx: twipsToPixels(pageWidthTwips) * zoom,
-      reservation: navigationPaneReservation(paneWidth),
+      pageWidthPx: Math.max(widestPage ?? 0, twipsToPixels(pageWidthTwips)) * zoom,
+      reservation,
       inlineEndReservation,
       inlineStartReservation,
       docked: fitting,
     });
   }, [
     open,
+    overlay,
     pageWidthTwips,
+    widestPage,
     zoom,
     viewportWidth,
-    paneWidth,
+    reservation,
     inlineEndReservation,
     inlineStartReservation,
     fitting,
@@ -223,12 +258,13 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
 
   // What an OPEN pane is asking for, published for the review gutter's affordability
   // check. The STATIC reservation, never the measured shift — the shift depends on the
-  // gutter, and publishing it here would close a cycle (see the store's own comment).
+  // gutter, and publishing it here would close a cycle (see the store's own comment). An
+  // overlaying pane reserves nothing: it covers the page and leaves the gutters alone.
   useEffect(() => {
     if (!store) return undefined;
-    store.setReservation(open ? navigationPaneReservation(paneWidth) : 0);
+    store.setReservation(open && !overlay ? reservation : 0);
     return () => store.setReservation(0);
-  }, [store, open, paneWidth]);
+  }, [store, open, overlay, reservation]);
 
-  return { open, setOpen, toggle, tab, setTab, paneWidth, shift };
+  return { open, setOpen, toggle, tab, setTab, paneWidth, shift, overlay };
 }

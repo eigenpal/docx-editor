@@ -5,7 +5,13 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { collectPageChangeBars } from '@docx-editor.dev/core/output';
 import { DEFAULT_REVISION_MARKUP, type ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
-import { markupBackground, markupColor, spanMarkup } from './revision-markup.ts';
+import {
+  indexRowRevisions,
+  markupBackground,
+  markupColor,
+  spanMarkup,
+  type RowRevision,
+} from './revision-markup.ts';
 import { PDFDocument, type PDFPage } from 'pdf-lib';
 import type {
   ExportSemanticLayout,
@@ -36,6 +42,7 @@ import { TextWriter } from './text.ts';
 import { comments, destinations, linkAnnotation } from './annotations.ts';
 import { ImageWriter } from './images.ts';
 import { paintEquation } from './equations.ts';
+import { groupMemberStoryOf, openMemberClip } from './group-text.ts';
 
 /**
  * Span text for the PDF text layer, as drawn: an optional hyphen element extracts `-` only
@@ -239,6 +246,12 @@ export async function paint(
         'replace',
         ...(layout.revisionMarkup ? ['moveFrom', 'moveTo', 'format'] : []),
       ].includes(artifact.change) &&
+      // Tracked rows are painted in every All Markup export: their text takes the row's mark.
+      !(
+        artifact.change === 'structural' &&
+        artifact.structuralChanges?.length &&
+        artifact.structuralChanges.every((kind) => kind === 'rowInsert' || kind === 'rowDelete')
+      ) &&
       !(
         layout.revisionMarkup &&
         artifact.change === 'structural' &&
@@ -256,10 +269,21 @@ export async function paint(
   const addAuthor = (author: string) => {
     if (author !== '' && !authorSlots.has(author)) authorSlots.set(author, nextAuthorSlot++);
   };
+  // Runs in a tracked row carry no revision of their own; the row's applies to all of them.
+  // Only All Markup shows revision marks; the resolved views have no tracked rows to mark.
+  const rowRevisions = new Map<BlockFragmentRecord, RowRevision>();
+  if (layout.displayMode === 'all-markup')
+    forEachSemanticStory(layout, (root) =>
+      indexRowRevisions(root.host.fragments, rowRevisions, () => work.tick())
+    );
   // Match the visible document order before adding authors from resolved-away revisions.
   forEachSemanticSpan(layout, (visit) => {
     for (const revision of visit.span.revisions ?? []) addAuthor(revision.author);
-    const markup = spanMarkup(visit, layout.revisionMarkup ?? DEFAULT_REVISION_MARKUP);
+    const markup = spanMarkup(
+      visit,
+      layout.revisionMarkup ?? DEFAULT_REVISION_MARKUP,
+      rowRevisions.get(visit.paragraph)
+    );
     if (markup) addAuthor(markup.author);
   });
   const addCellAuthors = (blocks: readonly BlockFragmentRecord[]): void => {
@@ -282,7 +306,8 @@ export async function paint(
     work,
     layout.displayMode === 'all-markup',
     layout.revisionMarkup,
-    authorSlots
+    authorSlots,
+    rowRevisions
   );
   const images = new ImageWriter(doc, session, work);
   const names = destinations(doc, pages, layout);
@@ -422,6 +447,11 @@ export async function paint(
     }
   };
   forEachSemanticStory(layout, (root) => markRotated(root.host.fragments));
+  // Text-box stories hold turned cells too: a box's own story and each group member's.
+  forEachSemanticDrawing(layout, ({ drawing }) => {
+    if (drawing.textboxStory) markRotated(drawing.textboxStory.fragments);
+    for (const member of drawing.groupTextboxStories ?? []) markRotated(member.story.fragments);
+  });
   const rotatedBuffers = new Map<
     string,
     {
@@ -434,8 +464,26 @@ export async function paint(
       commands: Commands;
       /** Behind-text drawings of the cell, turned with it but painted under the page's text. */
       behind: Commands;
+      /**
+       * The text box or group member buffer the turned cell joins, so that box's own turn
+       * and clips apply over the cell's. Absent for a cell outside a text box story.
+       */
+      member?: Commands;
     }
   >();
+  const textboxBuffer = (page: number, key: object): Commands => {
+    let owners = textboxBuffers.get(page);
+    if (!owners) {
+      owners = new Map();
+      textboxBuffers.set(page, owners);
+    }
+    let buffer = owners.get(key);
+    if (!buffer) {
+      buffer = new Commands(work);
+      owners.set(key, buffer);
+    }
+    return buffer;
+  };
   const outFor = (
     visit: Pick<SemanticSpanVisit, 'story' | 'rootStory' | 'textboxOwner' | 'page'> & {
       readonly paragraph?: SemanticSpanVisit['paragraph'] | null;
@@ -456,23 +504,21 @@ export async function paint(
           commands: new Commands(work),
           behind: new Commands(work),
         };
+        // A cell inside a text box turns inside that box's (or group member's) clip.
+        if (visit.story === 'textbox' && visit.textboxOwner) {
+          const owner = visit.textboxOwner;
+          const key = groupMemberStoryOf(owner, visit.paragraph) ?? owner;
+          entry.member = textboxBuffer(visit.page.index, key);
+        }
         rotatedBuffers.set(key, entry);
       }
       return entry.commands;
     }
     if (visit.story !== 'textbox' || !visit.textboxOwner)
       return textStream(visit.rootStory, visit.page.index);
-    let owners = textboxBuffers.get(visit.page.index);
-    if (!owners) {
-      owners = new Map();
-      textboxBuffers.set(visit.page.index, owners);
-    }
-    let buffer = owners.get(visit.textboxOwner);
-    if (!buffer) {
-      buffer = new Commands(work);
-      owners.set(visit.textboxOwner, buffer);
-    }
-    return buffer;
+    // A group member's text keys on its member story, so each member clips on its own.
+    const key = groupMemberStoryOf(visit.textboxOwner, visit.paragraph) ?? visit.textboxOwner;
+    return textboxBuffer(visit.page.index, key);
   };
   // PDF extractors expect glyphs in visual order within each physical line.
   // Retain logical Unicode separately in one ActualText region for the complete line.
@@ -577,13 +623,14 @@ export async function paint(
                   y: piece.box.y + visit.storyOrigin.y,
                 },
               },
-              page
+              page,
+              true
             )
           );
     }
     const markup =
       layout.displayMode === 'all-markup' && layout.revisionMarkup
-        ? spanMarkup(visit, layout.revisionMarkup)
+        ? spanMarkup(visit, layout.revisionMarkup, rowRevisions.get(visit.paragraph))
         : null;
     const fill =
       markup && markup.background !== 'none'
@@ -631,9 +678,61 @@ export async function paint(
       if (visit.paragraph.clipToBox) out.push('Q');
     }
   }
+  // A group's text box members: the group's own picture and shapes, then each member's
+  // decorations and text, clipped to that member's content box and turned with the member,
+  // all inside the group's paint bounds — the same boxes the screen painter clips to.
+  const paintGroupText = async (visit: SemanticDrawingVisit, page: PDFPage): Promise<string> => {
+    const d = visit.drawing;
+    const base = d.groupPicture || d.vectorShape ? await images.paint(visit, page) : '';
+    const bounds = visit.absolutePaintBounds;
+    if (d.accessibility.hidden || bounds.width <= 0 || bounds.height <= 0) return base;
+    const height = pageHeight(page);
+    const buffers = textboxBuffers.get(visit.page.index);
+    const body: string[] = [];
+    for (const member of d.groupTextboxStories ?? []) {
+      const story = member.story;
+      if (story.fallbackReason === 'textbox-height-clip') {
+        work.report(
+          'textbox-clip',
+          'Textbox content taller than its box is clipped',
+          visit.page.index,
+          'information'
+        );
+      } else if (story.fallbackReason) {
+        work.report(
+          'textbox',
+          `Textbox story not laid out: ${story.fallbackReason}`,
+          visit.page.index
+        );
+        continue;
+      }
+      const x = visit.drawingOrigin.x + member.box.x - visit.page.box.x;
+      const y = visit.drawingOrigin.y + member.box.y - visit.page.box.y;
+      const text = [
+        ...decorations(
+          story.fragments,
+          x + story.contentOffset.x,
+          y + story.contentOffset.y,
+          page,
+          work,
+          visit.page.index,
+          layout.displayMode === 'all-markup' ? layout.revisionMarkup : undefined,
+          authorSlots
+        ),
+        ...(buffers?.get(story) ?? []),
+      ];
+      if (text.length > 0) body.push(...openMemberClip(member, x, y, height), ...text, 'Q');
+    }
+    // Ink the walk could not tie to one member stays inside the group's bounds.
+    body.push(...(buffers?.get(d) ?? []));
+    if (body.length === 0) return base;
+    const clip = rect(bounds, -visit.page.box.x, -visit.page.box.y, height);
+    return [base, `q ${clip} W n`, ...body, 'Q'].filter(Boolean).join('\n');
+  };
   const paintDrawing = async (visit: SemanticDrawingVisit): Promise<string> => {
     const page = pages[visit.page.index]!;
     const d = visit.drawing;
+    if (d.groupTextboxStories) return paintGroupText(visit, page);
     if (!d.textboxStory) return images.paint(visit, page);
     const story = d.textboxStory;
     const origin = {
@@ -666,6 +765,20 @@ export async function paint(
     const buffer = outFor(visit);
     if (visit.paintLayer === 'behind-text') buffer.unshift(commands);
     else buffer.push(commands);
+  }
+  // A turned cell inside a text box story joins its box's buffer before the box paints, so
+  // the box's (or group member's) turn and clips enclose the cell's own turn.
+  for (const [key, entry] of rotatedBuffers) {
+    if (!entry.member) continue;
+    const matrix = rotatedCellMatrix(
+      entry.cell.box,
+      entry.x,
+      entry.y,
+      pageHeight(pages[entry.page]!)
+    );
+    if (entry.behind.length) entry.member.unshift('q', matrix, ...entry.behind, 'Q');
+    if (entry.commands.length) entry.member.push('q', matrix, ...entry.commands, 'Q');
+    rotatedBuffers.delete(key);
   }
   // Behind-text drawings belong below the owner's text and decoration. A drawing laid out
   // inside a `btLr` cell sits in that cell's upright plane, so it joins the cell's buffer

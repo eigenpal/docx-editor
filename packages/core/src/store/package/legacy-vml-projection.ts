@@ -1,7 +1,7 @@
 import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from './ooxml-tree.ts';
 import { isStandardVmlTemplate } from './legacy-vml-templates.ts';
 import { shapeLineGeometry } from './legacy-vml-shape-line.ts';
-import { embeddedObjectPreview } from './legacy-vml-object.ts';
+import { embeddedObjectPreview, pictureObjectPreview } from './legacy-vml-object.ts';
 import type {
   DrawingProjection,
   DrawingHorizontalReferenceFrame,
@@ -288,13 +288,19 @@ function lineGeometry(root: OoxmlElement, floating: boolean): LineGeometry | nul
 }
 
 /**
- * `preview` is the validated cached-preview shape of a `w:object`. Its projection is a static
- * read-only graphic: no picture member, so picture edits never reach the embedded object.
+ * `preview` is the validated cached-preview shape of a `w:object`. A `w:pict` picture beside an
+ * `o:OLEObject` is the same kind of preview. Either projection is a static read-only graphic: no
+ * picture member, so picture edits never reach the embedded object. A preview may float as an
+ * ordinary picture does.
  */
 function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProjection | null {
-  const roots = preview ? [preview] : children(node).filter((c) => !named(c, VML, 'shapetype'));
+  const shapes = preview ? [preview] : children(node).filter((c) => !named(c, VML, 'shapetype'));
+  const objectPreview = preview ? undefined : pictureObjectPreview(shapes);
+  if (objectPreview === null) return null;
+  const roots = objectPreview ? [objectPreview] : shapes;
   if (roots.length !== 1) return null;
   const root = roots[0]!;
+  const readOnly = !!(preview ?? objectPreview);
   if (
     root.namespaceUri !== VML ||
     !['shape', 'rect', 'roundrect', 'oval', 'line', 'group'].includes(root.localName)
@@ -303,7 +309,7 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
   // The text box story is ordinary WML content, bounded by story layout rather than here.
   // Everything else is bounded before the text box is read.
   if (!boundedVml(preview ?? node, preview ? undefined : storyCandidate(root))) return null;
-  const textbox = preview ? undefined : legacyTextbox(root);
+  const textbox = readOnly ? undefined : legacyTextbox(root);
   if (textbox === null) return null;
   // Built-in templates are metadata, not a second drawing. Unknown custom
   // templates may redefine geometry and are outside this bounded subset.
@@ -327,7 +333,7 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
   // A picture outline widens the drawing by its full weight on every side; the picture keeps
   // its authored size inside it.
   const border = root.localName === 'shape' && !textbox ? legacyPictureBorder(root) : undefined;
-  if (border === null || (preview && border)) return null;
+  if (border === null || (readOnly && border)) return null;
   // A line is a vector shape, which paints in every output and whose outline reaches past its
   // box as a modern line's does. The other shapes are a graphic preview, which grows by the
   // outline's reach on every side to keep the outline inside its image.
@@ -357,7 +363,7 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
       line?.ends
     );
     if (fragment === null) return null;
-    if ((border || preview) && (typeof fragment === 'string' || !fragment.nativeCrop)) return null;
+    if ((border || readOnly) && (typeof fragment === 'string' || !fragment.nativeCrop)) return null;
     // A vector shape is validated by the same reading and painted from its own projection.
     if (!vector) fragments.push(fragment);
   }
@@ -370,7 +376,7 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
   const anchorY = wrapNode ? a(wrapNode, 'anchory') : undefined;
   if (anchorX && !['page', 'margin', 'text', 'char'].includes(anchorX)) return null;
   if (anchorY && !['page', 'margin', 'text', 'line'].includes(anchorY)) return null;
-  if ((border || preview) && floating) return null;
+  if (border && floating) return null;
   const horizontal = new Map<string, DrawingHorizontalReferenceFrame>([
     ['text', 'column'],
     ['char', 'character'],
@@ -437,7 +443,7 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
     distances[side] = Math.round(value * 12700);
   }
   const photo =
-    !preview &&
+    !readOnly &&
     root.localName !== 'group' &&
     fragments.length === 1 &&
     typeof fragments[0] !== 'string' &&

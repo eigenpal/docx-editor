@@ -549,15 +549,15 @@
     },
     {
       "uid": "Word.Table#addRows",
-      "note": "Start/End insert ordinary rows using the first or last row as the source. Optional values cover every new cell. Unrelated merged headers survive. Merged source rows, row offsets, hidden source cells, and crossing vertical merges refuse with InvalidArgument. Tables with merges require an explicit grid. Returns inserted rows; sync before dependent edits. This structural mutation must be alone in its sync. TrackMineOnly writes native row insertion revisions. Direct and tracked insertion support collaboration, undo/redo, reconnect, and save/reopen."
+      "note": "Start/End insert ordinary rows using the first or last row as the source. Optional values cover every new cell. New cells copy the source cell's paragraph formatting; written values take only the source paragraph mark's formatting, never a source text run's. Unrelated merged headers survive. Merged source rows, row offsets, hidden source cells, and crossing vertical merges refuse with InvalidArgument. Tables with merges require an explicit grid. Returns inserted rows; sync before dependent edits. This structural mutation must be alone in its sync. TrackMineOnly writes native row insertion revisions. Direct and tracked insertion support collaboration, undo/redo, reconnect, and save/reopen."
     },
     {
       "uid": "Word.TableRow#insertRows",
-      "note": "Before/After insert ordinary rows relative to the addressed row. Optional values cover every new cell. Returns TableRowCollection; sync before dependent edits. Unrelated merged headers survive. Merged source rows, row offsets, hidden source cells, and crossing vertical merges refuse with InvalidArgument. Tables with merges require an explicit grid. This structural mutation must be alone in its sync. TrackMineOnly writes native row insertion revisions. Direct and tracked insertion support collaboration, undo/redo, reconnect, and save/reopen."
+      "note": "Before/After insert ordinary rows relative to the addressed row. Optional values cover every new cell. New cells copy the source cell's paragraph formatting; written values take only the source paragraph mark's formatting, never a source text run's. Returns TableRowCollection; sync before dependent edits. Unrelated merged headers survive. Merged source rows, row offsets, hidden source cells, and crossing vertical merges refuse with InvalidArgument. Tables with merges require an explicit grid. This structural mutation must be alone in its sync. TrackMineOnly writes native row insertion revisions. Direct and tracked insertion support collaboration, undo/redo, reconnect, and save/reopen."
     },
     {
       "uid": "Word.Table#addColumns",
-      "note": "Start/End insert columns across all rows. Optional values are row-major with one entry per added column. This structural mutation must be alone in its sync. Merged topology refuses."
+      "note": "Start/End insert columns across all rows. Optional values are row-major with one entry per added column. New cells copy the source cell's paragraph formatting; written values take only the source paragraph mark's formatting, never a source text run's. This structural mutation must be alone in its sync. Merged topology refuses."
     },
     {
       "uid": "Word.Table#deleteRows",

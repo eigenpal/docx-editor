@@ -236,6 +236,7 @@ export type {
   InlineDrawingRecord,
 } from './drawing-layout.ts';
 export type { TextboxStoryLayout } from './textbox-story-layout.ts';
+export type { GroupTextboxStoryRecord } from './group-textbox-layout.ts';
 export type { TextboxStoryFallbackReason } from './textbox-story-layout.ts';
 export type {
   DrawingClipFallback,

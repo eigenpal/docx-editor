@@ -141,7 +141,7 @@ describe('the review sidebar', () => {
       fireEvent.contextMenu(surface, { clientX: 100, clientY: 100, button: 2 });
     });
     const row = view.container.querySelector(
-      '[data-slot="review.comments"]'
+      '[data-slot="review.addComment"]'
     ) as HTMLButtonElement | null;
     expect(row).not.toBeNull();
     expect(row?.getAttribute('aria-disabled')).not.toBe('true');
@@ -185,7 +185,7 @@ describe('the review sidebar', () => {
       fireEvent.contextMenu(surface, { clientX: 100, clientY: 100, button: 2 });
     });
     const row = view.container.querySelector(
-      '[data-slot="review.comments"]'
+      '[data-slot="review.addComment"]'
     ) as HTMLButtonElement | null;
     expect(row).not.toBeNull();
     expect(row?.getAttribute('aria-disabled')).toBe('true');
@@ -195,7 +195,7 @@ describe('the review sidebar', () => {
       editor.exec({ type: 'setEditingMode', mode: 'editing' });
     });
     expect(
-      view.container.querySelector('[data-slot="review.comments"]')?.getAttribute('aria-disabled')
+      view.container.querySelector('[data-slot="review.addComment"]')?.getAttribute('aria-disabled')
     ).not.toBe('true');
   });
 

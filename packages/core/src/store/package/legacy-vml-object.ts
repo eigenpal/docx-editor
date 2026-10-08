@@ -66,31 +66,63 @@ export function embeddedObjectPreview(node: OoxmlElement): OoxmlElement | null {
   )
     return null;
   const shape = shapes[0]!;
-  if (a(shape, 'type') !== '#_x0000_t75') return null;
-  const images = children(shape).filter((n) => named(n, VML, 'imagedata'));
-  if (images.length !== 1) return null;
-  const imageId = a(images[0]!, 'id', RELATIONSHIPS_NAMESPACE_URI);
-  const ole = objects[0];
-  if (ole) {
-    const oleId = a(ole, 'id', RELATIONSHIPS_NAMESPACE_URI);
-    const shapeId = a(ole, 'ShapeID');
-    if (
-      ole.attributes.some(
-        (attr) =>
-          attr.value.length > 256 ||
-          !(attr.namespaceUri === RELATIONSHIPS_NAMESPACE_URI
-            ? attr.localName === 'id'
-            : !attr.namespaceUri && OLE_ATTRIBUTES.includes(attr.localName))
-      ) ||
-      a(ole, 'Type') !== 'Embed' ||
-      !['Content', 'Icon', undefined].includes(a(ole, 'DrawAspect')) ||
-      (shapeId !== undefined && shapeId !== a(shape, 'id')) ||
-      // The preview must be its own picture, never the embedded object's payload.
-      (oleId !== undefined && oleId === imageId) ||
-      ole.children.length > 1 ||
-      !ole.children.every((child) => element(child) && inertFieldCodes(child))
-    )
-      return null;
-  }
-  return shape;
+  return previewPicture(shape) && (!objects[0] || inertOleObject(objects[0], shape, false))
+    ? shape
+    : null;
+}
+
+/** A standard picture frame (`#_x0000_t75`) that shows exactly one picture. */
+function previewPicture(shape: OoxmlElement): boolean {
+  return (
+    a(shape, 'type') === '#_x0000_t75' &&
+    children(shape).filter((n) => named(n, VML, 'imagedata')).length === 1
+  );
+}
+
+/**
+ * Whether `ole` is an inert `o:OLEObject` for the preview `shape`: an embedded, never linked,
+ * object with known attributes and at most inert field codes. Only its attributes are read; its
+ * relationship is never resolved. `requireShapeId` demands a `ShapeID` that names the shape.
+ */
+function inertOleObject(ole: OoxmlElement, shape: OoxmlElement, requireShapeId: boolean): boolean {
+  const image = children(shape).find((n) => named(n, VML, 'imagedata'));
+  const imageId = image ? a(image, 'id', RELATIONSHIPS_NAMESPACE_URI) : undefined;
+  const oleId = a(ole, 'id', RELATIONSHIPS_NAMESPACE_URI);
+  const shapeId = a(ole, 'ShapeID');
+  return !(
+    ole.attributes.some(
+      (attr) =>
+        attr.value.length > 256 ||
+        !(attr.namespaceUri === RELATIONSHIPS_NAMESPACE_URI
+          ? attr.localName === 'id'
+          : !attr.namespaceUri && OLE_ATTRIBUTES.includes(attr.localName))
+    ) ||
+    a(ole, 'Type') !== 'Embed' ||
+    !['Content', 'Icon', undefined].includes(a(ole, 'DrawAspect')) ||
+    (requireShapeId && shapeId === undefined) ||
+    (shapeId !== undefined && shapeId !== a(shape, 'id')) ||
+    // The preview must be its own picture, never the embedded object's payload.
+    (oleId !== undefined && oleId === imageId) ||
+    ole.children.length > 1 ||
+    !ole.children.every((child) => element(child) && inertFieldCodes(child))
+  );
+}
+
+/**
+ * The cached preview of a `w:pict` that also holds an `o:OLEObject`. `roots` are the `w:pict`
+ * children other than templates.
+ *
+ * Undefined when there is no `o:OLEObject`: the `w:pict` is an ordinary drawing. Otherwise the
+ * preview shape, which must be one standard picture frame named by the object's `ShapeID`, or
+ * null when unsupported. The embedded part is never resolved, loaded, or run.
+ */
+export function pictureObjectPreview(
+  roots: readonly OoxmlElement[]
+): OoxmlElement | null | undefined {
+  const objects = roots.filter((n) => named(n, OFFICE, 'OLEObject'));
+  if (!objects.length) return undefined;
+  const shapes = roots.filter((n) => named(n, VML, 'shape'));
+  if (objects.length !== 1 || shapes.length !== 1 || roots.length !== 2) return null;
+  const shape = shapes[0]!;
+  return previewPicture(shape) && inertOleObject(objects[0]!, shape, true) ? shape : null;
 }

@@ -39,7 +39,7 @@ import type {
   TreeOpEffect,
   TreeOpResult,
 } from './tree-op-types.ts';
-import { ownProposedMark, withPropertyChangeRecord } from './tree-op-tracked-properties.ts';
+import { ownProposedParagraph, withPropertyChangeRecord } from './tree-op-tracked-properties.ts';
 import { readTwipsMeasure } from '../units.ts';
 import { build } from './tree-op-tracked.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
@@ -869,7 +869,7 @@ export function applySetParagraphMarkProperties(
   // Skipped on a mark THIS author proposed adding, the run rule one level up: rejecting that
   // `w:ins` runs the paragraph into the next one and takes the mark's properties with it, so
   // a record of what they used to be decides nothing. The mark never existed for anyone else.
-  if (revision && !ownProposedMark(prior, revision.author)) {
+  if (revision && !ownProposedParagraph(part, paragraph.id, prior, revision.author)) {
     children = withPropertyChangeRecord({
       container: 'runProperties',
       prior,
@@ -919,7 +919,15 @@ function trackListProperties(
 ): TreeOpResult {
   if (!revision || !result.ok) return result;
   const prior = paragraphPropertiesNodeOf(paragraph);
-  if (ownProposedMark(namedChild(prior, 'rPr')?.children ?? [], revision.author)) return result;
+  if (
+    ownProposedParagraph(
+      part,
+      paragraph.id,
+      namedChild(prior, 'rPr')?.children ?? [],
+      revision.author
+    )
+  )
+    return result;
   const changed = findNode(result.part, paragraph.id);
   if (!changed || changed.kind !== 'paragraph') return result;
   const current = paragraphPropertiesNodeOf(changed);

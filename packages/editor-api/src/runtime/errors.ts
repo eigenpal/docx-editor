@@ -69,7 +69,11 @@ export type DocxEditorErrorCode =
   | 'InvalidRequestContext'
   /** The runtime was disposed. Every later operation fails this way. */
   | 'RuntimeDisposed'
-  /** The document moved under a context that had already read from it; nothing was applied. */
+  /**
+   * The request was built from an older read, so nothing was applied: another writer moved the
+   * document, or a range's text moved since the range was read, including by this context's own
+   * earlier sync. Read again before retrying.
+   */
   | 'StaleDocument'
   /** The host is live but holds no document right now — an editor between mounts. */
   | 'DocumentUnavailable'
@@ -104,7 +108,9 @@ const MESSAGES: Readonly<Record<DocxEditorErrorCode, string>> = Object.freeze({
     'context.sync() calls.',
   InvalidRequestContext: 'the request context has finished. Start another run to continue.',
   RuntimeDisposed: 'the runtime has been disposed.',
-  StaleDocument: 'the document changed after this context read it, so nothing was applied.',
+  StaleDocument:
+    'the document or a range changed after this context read it, so nothing was applied. ' +
+    'The change can come from another writer or from an earlier sync of this context.',
   DocumentUnavailable: 'the document is not available right now.',
   GeneralException: 'the document could not complete the request.',
 });
@@ -172,7 +178,16 @@ export class DocxEditorError extends Error {
   readonly limit?: DocxEditorErrorInit['limit'];
   /** Consumer-facing path of the object or property involved, when there is one to name. */
   readonly target?: string;
-  /** For `StaleDocument`: the revision the context had read at. */
+  /**
+   * For `StaleDocument`: the revision the context had last read at, when the refused batch
+   * wrote. Absent for a batch that only read, on every host.
+   *
+   * When it equals {@link DocxEditorError.actualRevision}, the document is where this context
+   * last saw it, and a range it holds is out of date: an edit after the range was read (often
+   * this context's own earlier sync) moved its text. Search for the text again. When the two
+   * differ, another writer changed the document after this context's last read. Read again
+   * before you decide.
+   */
   readonly expectedRevision?: number;
   /** For `StaleDocument`: the revision the document was actually at. */
   readonly actualRevision?: number;

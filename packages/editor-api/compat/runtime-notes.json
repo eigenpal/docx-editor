@@ -21,7 +21,7 @@
   },
   "Word.Range#select": {
     "status": "partial",
-    "notes": "Selection requires an attached browser editor. Check runtime.capabilities.selection; server runtimes refuse with NotSupported."
+    "notes": "Selection requires an attached browser editor. Check runtime.capabilities.selection; server runtimes refuse with NotSupported. A range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.ContentControl#id": {
     "status": "different",
@@ -29,27 +29,27 @@
   },
   "Word.Font#bold": {
     "status": "different",
-    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a boolean. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties."
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a boolean. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties. A write through a range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.Font#italic": {
     "status": "different",
-    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a boolean. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties."
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a boolean. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties. A write through a range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.Font#color": {
     "status": "different",
-    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a string. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties."
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a string. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties. A write through a range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.Font#name": {
     "status": "different",
-    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a string. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties."
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a string. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties. A write through a range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.Font#size": {
     "status": "different",
-    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a number. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties."
+    "notes": "Reads return null for mixed, unspecified, or inherited values. Writes require a number. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties. A write through a range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.Range#insertComment": {
     "status": "partial",
-    "notes": "Writes require an explicit author. Browser writes also require the Pro review module and an editable document. A range in a text box refuses with InvalidArgument, because a comment there is not kept when the file opens."
+    "notes": "Writes require an explicit author. Browser writes also require the Pro review module and an editable document. A range in a text box refuses with InvalidArgument, because a comment there is not kept when the file opens. A range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.Section#getHeader": {
     "status": "partial",
@@ -101,27 +101,27 @@
   },
   "Word.Font#underline": {
     "status": "partial",
-    "notes": "Writes 18 OOXML underline styles, including None and Single. Mixed, Hidden, and DotLine refuse with InvalidArgument. Underline color survives style changes. Reads return the agreed direct formatting value or null, not resolved style formatting. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties."
+    "notes": "Writes 18 OOXML underline styles, including None and Single. Mixed, Hidden, and DotLine refuse with InvalidArgument. Underline color survives style changes. Reads return the agreed direct formatting value or null, not resolved style formatting. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties. A write through a range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.Font#highlightColor": {
     "status": "partial",
-    "notes": "Writes exact Word palette colors by Office name or #RRGGBB; accepts null to clear with w:highlight=none. Other colors refuse with InvalidArgument instead of approximating. Reads return #RRGGBB or null for mixed, absent, or cleared direct highlighting. Run shading is preserved and is not treated as highlighting. The public setter keeps the pinned string signature. Runtime null clearing follows Microsoft documentation and needs a type escape under that upstream declaration. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties."
+    "notes": "Writes exact Word palette colors by Office name or #RRGGBB; accepts null to clear with w:highlight=none. Other colors refuse with InvalidArgument instead of approximating. Reads return #RRGGBB or null for mixed, absent, or cleared direct highlighting. Run shading is preserved and is not treated as highlighting. The public setter keeps the pinned string signature. Runtime null clearing follows Microsoft documentation and needs a type escape under that upstream declaration. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties. A write through a range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.Font#strikeThrough": {
     "status": "partial",
-    "notes": "Writes explicit on/off single strikethrough and preserves other run properties. Reads return agreed direct formatting or null; inherited style formatting is not resolved. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties."
+    "notes": "Writes explicit on/off single strikethrough and preserves other run properties. Reads return agreed direct formatting or null; inherited style formatting is not resolved. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties. A write through a range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.Font#subscript": {
     "status": "partial",
-    "notes": "Writes mutually exclusive vertical alignment. True clears superscript; false preserves superscript if subscript was not active. Repeated assignments on one Font proxy respect assignment order. Reads report agreed direct formatting or null. Aliased proxies retain the existing conflicting-write refusal. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties."
+    "notes": "Writes mutually exclusive vertical alignment. True clears superscript; false preserves superscript if subscript was not active. Repeated assignments on one Font proxy respect assignment order. Reads report agreed direct formatting or null. Aliased proxies retain the existing conflicting-write refusal. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties. A write through a range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.Font#superscript": {
     "status": "partial",
-    "notes": "Writes mutually exclusive vertical alignment. True clears subscript; false preserves subscript if superscript was not active. Repeated assignments on one Font proxy respect assignment order. Reads report agreed direct formatting or null. Aliased proxies retain the existing conflicting-write refusal. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties."
+    "notes": "Writes mutually exclusive vertical alignment. True clears subscript; false preserves subscript if superscript was not active. Repeated assignments on one Font proxy respect assignment order. Reads report agreed direct formatting or null. Aliased proxies retain the existing conflicting-write refusal. TrackMineOnly records property revisions; accept retains formatting and reject restores previous properties. A write through a range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.Range#insertInlinePictureFromBase64": {
     "status": "partial",
-    "notes": "Supports canonical padded base64 for PNG/JPEG only, up to 20 MiB and 40 million pixels. Validates bounded raster headers and container structure without invoking a pixel decoder. Sizes use header DPI when present, otherwise 96 DPI. Before/Start and After/End use range endpoints; Replace supports one paragraph. Insertion must be the only mutation in its sync; sync before configuring the returned proxy. New pictures lock aspect ratio by default. Tracking and protected content refuse."
+    "notes": "Supports canonical padded base64 for PNG/JPEG only, up to 20 MiB and 40 million pixels. Validates bounded raster headers and container structure without invoking a pixel decoder. Sizes use header DPI when present, otherwise 96 DPI. Before/Start and After/End use range endpoints; Replace supports one paragraph. Insertion must be the only mutation in its sync; sync before configuring the returned proxy. New pictures lock aspect ratio by default. Tracking and protected content refuse. A range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.InlinePicture#width": {
     "status": "partial",
@@ -145,7 +145,7 @@
   },
   "Word.Range#insertTable": {
     "status": "partial",
-    "notes": "Creates a rectangular table with optional row-major string values. Before/After use range endpoints. Insertion may split a paragraph; adjacent tables retain a paragraph separator. Nested table authoring refuses. Initial values commit atomically. Table insertion is the only mutation in its sync; sync before using its returned proxy. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration."
+    "notes": "Creates a rectangular table with optional row-major string values. Before/After use range endpoints. Insertion may split a paragraph; adjacent tables retain a paragraph separator. Nested table authoring refuses. Initial values commit atomically. Table insertion is the only mutation in its sync; sync before using its returned proxy. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration. A range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.Table#values": {
     "status": "partial",
@@ -153,15 +153,15 @@
   },
   "Word.Table#addRows": {
     "status": "partial",
-    "notes": "Start/End insert ordinary rows using the first or last row as the source. Optional values cover every new cell. Unrelated merged headers survive. Merged source rows, row offsets, hidden source cells, and crossing vertical merges refuse with InvalidArgument. Tables with merges require an explicit grid. Returns inserted rows; sync before dependent edits. This structural mutation must be alone in its sync. TrackMineOnly writes native row insertion revisions. Direct and tracked insertion support collaboration, undo/redo, reconnect, and save/reopen."
+    "notes": "Start/End insert ordinary rows using the first or last row as the source. Optional values cover every new cell. New cells copy the source cell's paragraph formatting; written values take only the source paragraph mark's formatting, never a source text run's. Unrelated merged headers survive. Merged source rows, row offsets, hidden source cells, and crossing vertical merges refuse with InvalidArgument. Tables with merges require an explicit grid. Returns inserted rows; sync before dependent edits. This structural mutation must be alone in its sync. TrackMineOnly writes native row insertion revisions. Direct and tracked insertion support collaboration, undo/redo, reconnect, and save/reopen."
   },
   "Word.TableRow#insertRows": {
     "status": "partial",
-    "notes": "Before/After insert ordinary rows relative to the addressed row. Optional values cover every new cell. Returns TableRowCollection; sync before dependent edits. Unrelated merged headers survive. Merged source rows, row offsets, hidden source cells, and crossing vertical merges refuse with InvalidArgument. Tables with merges require an explicit grid. This structural mutation must be alone in its sync. TrackMineOnly writes native row insertion revisions. Direct and tracked insertion support collaboration, undo/redo, reconnect, and save/reopen."
+    "notes": "Before/After insert ordinary rows relative to the addressed row. Optional values cover every new cell. New cells copy the source cell's paragraph formatting; written values take only the source paragraph mark's formatting, never a source text run's. Returns TableRowCollection; sync before dependent edits. Unrelated merged headers survive. Merged source rows, row offsets, hidden source cells, and crossing vertical merges refuse with InvalidArgument. Tables with merges require an explicit grid. This structural mutation must be alone in its sync. TrackMineOnly writes native row insertion revisions. Direct and tracked insertion support collaboration, undo/redo, reconnect, and save/reopen."
   },
   "Word.Table#addColumns": {
     "status": "partial",
-    "notes": "Start/End insert columns across all rows. Optional values are row-major with one entry per added column. This structural mutation must be alone in its sync. Merged topology refuses. Tables without an explicit grid refuse with InvalidArgument."
+    "notes": "Start/End insert columns across all rows. Optional values are row-major with one entry per added column. New cells copy the source cell's paragraph formatting; written values take only the source paragraph mark's formatting, never a source text run's. This structural mutation must be alone in its sync. Merged topology refuses. Tables without an explicit grid refuse with InvalidArgument."
   },
   "Word.Table#deleteRows": {
     "status": "partial",
@@ -229,7 +229,7 @@
   },
   "Word.Range#insertField": {
     "status": "partial",
-    "notes": "Supports Page and NumPages with no switches, or Empty/default with text PAGE or NUMPAGES. Other field types, unsupported switches, and removeFormatting=true refuse. Inserts a simple field with an empty cached result; call updateResult to compute supported page fields. Before/Start and After/End use range endpoints; Replace requires one paragraph. Sync before configuring the returned field proxy. Also accepts TOC with optional \\o \"1-3\", \\h, \\z, and \\u switches. The outline range accepts ascending levels 1 through 9. TOC creation saves an empty cached result; TOC evaluation and code writes remain unsupported. Tracked field creation refuses."
+    "notes": "Supports Page and NumPages with no switches, or Empty/default with text PAGE or NUMPAGES. Other field types, unsupported switches, and removeFormatting=true refuse. Inserts a simple field with an empty cached result; call updateResult to compute supported page fields. Before/Start and After/End use range endpoints; Replace requires one paragraph. Sync before configuring the returned field proxy. Also accepts TOC with optional \\o \"1-3\", \\h, \\z, and \\u switches. The outline range accepts ascending levels 1 through 9. TOC creation saves an empty cached result; TOC evaluation and code writes remain unsupported. Tracked field creation refuses. A range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.Field#code": {
     "status": "partial",
@@ -505,11 +505,11 @@
   },
   "Word.Range#insertParagraph": {
     "status": "partial",
-    "notes": "Inserts a canonical paragraph at the supported endpoint (Body Start/End; Range Before/After). The returned proxy requires a sync before configuration. Newline-containing text and unsupported structural boundaries refuse; adjacent content is preserved. TrackMineOnly records inserted text and paragraph marks. Reject restores the original paragraph boundaries. Text may contain \\v, which inserts a manual line break (w:br); text reads report the break as \\v, so read text can be written back. Other paragraph-mark characters refuse."
+    "notes": "Inserts a canonical paragraph at the supported endpoint (Body Start/End; Range Before/After). The returned proxy requires a sync before configuration. Newline-containing text and unsupported structural boundaries refuse; adjacent content is preserved. TrackMineOnly records inserted text and paragraph marks. Reject restores the original paragraph boundaries. Text may contain \\v, which inserts a manual line break (w:br); text reads report the break as \\v, so read text can be written back. Other paragraph-mark characters refuse. A range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.Body#insertText": {
     "status": "partial",
-    "notes": "Authors plain text at the specified location. Range replacement targets its exact span; protected or unsupported structures refuse. Read-derived ranges may be edited in one sync; a range returned by this write needs sync before reuse. TrackMineOnly supports inline range edits; whole-body replacement is not tracked. In an empty paragraph, the inserted text takes the character style that the paragraph mark names, but not the mark's direct run properties. Text may contain U+001E and U+001F, which insert a non-breaking hyphen and an optional hyphen, up to 4096 per call; text reads report those hyphens with the same characters. A symbol (w:sym) reads as \"(\" and counts as one character; writing \"(\" inserts a parenthesis, not a symbol. Text may contain \\v, which inserts a manual line break (w:br); text reads report the break as \\v, so read text can be written back. Other paragraph-mark characters refuse."
+    "notes": "Authors plain text at the specified location. Range replacement targets its exact span; protected or unsupported structures refuse. Read-derived ranges may be edited in one sync; a range returned by this write needs sync before reuse. TrackMineOnly supports inline range edits; whole-body replacement is not tracked. In an empty paragraph, the inserted text takes the character style that the paragraph mark names, but not the mark's direct run properties. When the paragraph's empty run already carries that style and its direction flags, the text takes that run's formatting instead, without hidden or revision properties. Text may contain U+001E and U+001F, which insert a non-breaking hyphen and an optional hyphen, up to 4096 per call; text reads report those hyphens with the same characters. A symbol (w:sym) reads as \"(\" and counts as one character; writing \"(\" inserts a parenthesis, not a symbol. Text may contain \\v, which inserts a manual line break (w:br); text reads report the break as \\v, so read text can be written back. Other paragraph-mark characters refuse."
   },
   "Word.Paragraph#insertText": {
     "status": "partial",
@@ -517,11 +517,11 @@
   },
   "Word.Range#insertText": {
     "status": "partial",
-    "notes": "Authors plain text at the specified location. Range replacement targets its exact span; protected or unsupported structures refuse. Read-derived ranges may be edited in one sync; a range returned by this write needs sync before reuse. TrackMineOnly supports inline edits and replacements across adjacent sibling paragraphs. Body.insertText with Replace remains unsupported while tracking. Disjoint ordinary text edits in one paragraph use batch-snapshot coordinates and return correctly rebased result ranges. Overlap or same-paragraph mixing with formatting, links, or structural edits refuses. Existing ranges remain snapshots across later batches; re-search or use the returned result range. For untracked edits, full placeholder prompts can be replaced; replacement that would consume untargeted prompt text or insertion away from the prompt start refuses with NotSupported. Insertion at the prompt start consumes the prompt. In an empty paragraph, the inserted text takes the character style that the paragraph mark names, but not the mark's direct run properties. Tracked range replacement supports adjacent sibling paragraphs. Table and wrapper boundaries and foreign revisions refuse. Ranges across paragraphs refuse in collaboration. Same-author insertion can extend pending insertions. Appends at the paragraph tail can follow the author's pending deletions; insertion at other deletion boundaries refuses. Text may contain U+001E and U+001F, which insert a non-breaking hyphen and an optional hyphen, up to 4096 per call; text reads report those hyphens with the same characters. A symbol (w:sym) reads as \"(\" and counts as one character; writing \"(\" inserts a parenthesis, not a symbol. Text may contain \\v, which inserts a manual line break (w:br); text reads report the break as \\v, so read text can be written back. Other paragraph-mark characters refuse."
+    "notes": "Authors plain text at the specified location. Range replacement targets its exact span; protected or unsupported structures refuse. Read-derived ranges may be edited in one sync; a range returned by this write needs sync before reuse. TrackMineOnly supports inline edits and replacements across adjacent sibling paragraphs. Body.insertText with Replace remains unsupported while tracking. Disjoint ordinary text edits in one paragraph use batch-snapshot coordinates and return correctly rebased result ranges. Overlap or same-paragraph mixing with formatting, links, or structural edits refuses. An existing range refuses with StaleDocument when a later batch changed text before its end in its paragraph; edits after it and formatting changes keep it valid. Re-search or use the returned result range. For untracked edits, full placeholder prompts can be replaced; replacement that would consume untargeted prompt text or insertion away from the prompt start refuses with NotSupported. Insertion at the prompt start consumes the prompt. In an empty paragraph, the inserted text takes the character style that the paragraph mark names, but not the mark's direct run properties. When the paragraph's empty run already carries that style and its direction flags, the text takes that run's formatting instead, without hidden or revision properties. Tracked range replacement supports adjacent sibling paragraphs. Table and wrapper boundaries and foreign revisions refuse. Ranges across paragraphs refuse in collaboration. Same-author insertion can extend pending insertions. Appends at the paragraph tail can follow the author's pending deletions; insertion at other deletion boundaries refuses. Within one paragraph, tracked replacements and deletions can start where the author's own pending inserted text ends; other boundaries with the author's pending changes, covering their pending text, or touching another author's change refuse. Text may contain U+001E and U+001F, which insert a non-breaking hyphen and an optional hyphen, up to 4096 per call; text reads report those hyphens with the same characters. A symbol (w:sym) reads as \"(\" and counts as one character; writing \"(\" inserts a parenthesis, not a symbol. Text may contain \\v, which inserts a manual line break (w:br); text reads report the break as \\v, so read text can be written back. Other paragraph-mark characters refuse."
   },
   "Word.Range#delete": {
     "status": "partial",
-    "notes": "Deletes the addressed range contents. TrackMineOnly proposes inline text deletion. Cross-structure, protected, and unsupported revision targets refuse instead of flattening preserved content. Tracked range replacement supports adjacent sibling paragraphs. Table and wrapper boundaries and foreign revisions refuse. Ranges across paragraphs refuse in collaboration."
+    "notes": "Deletes the addressed range contents. TrackMineOnly proposes inline text deletion. Cross-structure, protected, and unsupported revision targets refuse instead of flattening preserved content. Tracked range replacement supports adjacent sibling paragraphs. Table and wrapper boundaries and foreign revisions refuse. Ranges across paragraphs refuse in collaboration. Within one paragraph, a tracked deletion can start where the author's own pending inserted text ends; other boundaries with the author's pending changes, or covering their pending text, refuse. A range refuses with StaleDocument when a later batch changed text before its end in its paragraph."
   },
   "Word.Paragraph#delete": {
     "status": "partial",
@@ -529,7 +529,7 @@
   },
   "Word.Range#hyperlink": {
     "status": "partial",
-    "notes": "Writes a hyperlink on supported text spans using a package relationship. Supported URL policy and content boundaries are validated; unsupported targets refuse. Relationship resources are preserved on undo to keep surviving links valid. Partial retargeting and unlinking split ordinary text-run links directly inside a paragraph and preserve unaffected targets, wrapper metadata, and formatting. Partial complex/nested wrappers and collapsed positions within links refuse with NotSupported."
+    "notes": "Writes a hyperlink on supported text spans using a package relationship. Supported URL policy and content boundaries are validated; unsupported targets refuse. Relationship resources are preserved on undo to keep surviving links valid. Partial retargeting and unlinking split ordinary text-run links directly inside a paragraph and preserve unaffected targets, wrapper metadata, and formatting. Partial complex/nested wrappers and collapsed positions within links refuse with NotSupported. A range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.Paragraph#style": {
     "status": "partial",
@@ -597,7 +597,7 @@
   },
   "Word.Range#insertBreak": {
     "status": "partial",
-    "notes": "Authors Line, Page, and SectionNext at Before/After. Line writes a manual line break (w:br) in any story, as a text insertion: it shares its sync with other edits, including text edits in the same paragraph, and TrackMineOnly records it as a tracked insertion. A single-line content control (plain text without multiLine, a list, or a date) refuses a line break. SectionNext requires a body paragraph outside a table. Page and SectionNext commit alone in their sync and refuse while tracking. Other break types refuse."
+    "notes": "Authors Line, Page, and SectionNext at Before/After. Line writes a manual line break (w:br) in any story, as a text insertion: it shares its sync with other edits, including text edits in the same paragraph, and TrackMineOnly records it as a tracked insertion. A single-line content control (plain text without multiLine, a list, or a date) refuses a line break. SectionNext requires a body paragraph outside a table. Page and SectionNext commit alone in their sync and refuse while tracking. Other break types refuse. A range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.PageSetup#orientation": {
     "status": "partial",
@@ -629,7 +629,7 @@
   },
   "Word.Range#insertContentControl": {
     "status": "partial",
-    "notes": "Creates RichText, PlainText, and DatePicker controls around an eligible single-paragraph range. Other types refuse. Sync before configuring the returned proxy. DatePicker creates a real date SDT; typed date configuration accessors remain unavailable. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control\u2019s tag and title. Empty ranges, existing review markup, and other control structure changes refuse."
+    "notes": "Creates RichText, PlainText, and DatePicker controls around an eligible single-paragraph range. Other types refuse. Sync before configuring the returned proxy. DatePicker creates a real date SDT; typed date configuration accessors remain unavailable. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control\u2019s tag and title. Empty ranges, existing review markup, and other control structure changes refuse. A range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.ContentControl#tag": {
     "status": "partial",
@@ -698,5 +698,37 @@
   "Word.Document#removeDocumentInformation": {
     "status": "partial",
     "notes": "Only DocumentProperties removes standard core, extended, and custom property parts and their package relationships. Other modes, TrackMineOnly, and collaboration refuse with NotSupported. Run as the only write in its sync. Malformed or ambiguous part topology refuses before mutation. Content, comments, revisions, and media remain unchanged; this operation does not anonymize document content."
+  },
+  "Word.Range#text": {
+    "status": "partial",
+    "notes": "Reads the range's text through its paragraph identity and offsets. A range whose text moved since it was read refuses with StaleDocument. Search again after an edit before the range's end in its paragraph."
+  },
+  "Word.Range#font": {
+    "status": "partial",
+    "notes": "Reads and writes formatting through the range's paragraph identity and offsets. A range whose text moved since it was read refuses with StaleDocument."
+  },
+  "Word.Range#getTextRanges": {
+    "status": "unsupported",
+    "notes": "Not implemented. Search within the range instead; a search result follows the same StaleDocument rule as every range."
+  },
+  "Word.Range#expandTo": {
+    "status": "unsupported",
+    "notes": "Not implemented. Word.Body#getRange describes the StaleDocument rule for a range that spans paragraphs."
+  },
+  "Word.Range#search": {
+    "status": "partial",
+    "notes": "Searches within the range's paragraph identity and offsets. A range whose text moved since it was read refuses with StaleDocument. Each result range follows the same rule."
+  },
+  "Word.Range#clear": {
+    "status": "partial",
+    "notes": "Clears the range's content through its paragraph identity and offsets. A range whose text moved since it was read refuses with StaleDocument."
+  },
+  "Word.Body#getRange": {
+    "status": "partial",
+    "notes": "Answers a range through paragraph identities and offsets. A range whose text moved since it was read refuses with StaleDocument. A range that spans paragraphs, such as body.getRange('Whole'), also refuses when its first paragraph changed, when a paragraph between its ends changed, or when a paragraph was inserted or removed there. Get the range again after such an edit. In a very long session, a range read long ago can also refuse with StaleDocument when its history record was dropped; then expectedRevision can equal actualRevision although the range did not move. Read the range again."
+  },
+  "Word.Paragraph#getRange": {
+    "status": "partial",
+    "notes": "Answers a range through the paragraph identity and offsets. The range refuses with StaleDocument after an edit before its end in that paragraph. Get the range again after such an edit."
   }
 }

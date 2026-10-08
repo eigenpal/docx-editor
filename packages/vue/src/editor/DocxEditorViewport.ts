@@ -14,6 +14,7 @@ import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor, useReviewRailRegistry } from './context';
 import { useEditorState } from './useEditorState';
 import { ScopedByAncestorContext, useScopeClassName } from './scope-context';
+import { InsideViewportContext } from './viewport-context';
 import { zoomLevelForShortcut } from './zoom-levels';
 import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';
 import { REVIEW_MARKERS_GUTTER, useReviewGutter } from './review-gutter';
@@ -42,6 +43,7 @@ export const DocxEditorViewport = defineComponent({
   setup(props, { slots }) {
     const translation = useTranslation();
     provide(ScopedByAncestorContext, true);
+    provide(InsideViewportContext, true);
     const scopeClassName = useScopeClassName();
     const editorRef = useDocxEditor();
     const paneOpen = useEditorState(selectPaneOpen);

@@ -13,6 +13,8 @@ import {
   MAX_PART_SCAN_ELEMENTS,
 } from './drawing-projection.ts';
 import { findDirectChild } from './drawing-shape-projection.ts';
+import { WPG_NAMESPACE_URI } from './drawing-group-frame.ts';
+import { groupTextboxContents } from './group-textbox-projection.ts';
 import { findDirectKind, isElement } from './drawing-projection-walk.ts';
 import { isLegacyVmlAtom, projectLegacyVml } from './legacy-vml-projection.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
@@ -55,7 +57,7 @@ function compatibleDirectChild(
  * Anchored and inline boxes both qualify: layout lays out a story for each, and the editor
  * reveals a match through either drawing record.
  */
-function textboxContentOf(drawing: OoxmlDrawingNode, hiddenRun: boolean): OoxmlElement | null {
+function textboxContentsOf(drawing: OoxmlDrawingNode, hiddenRun: boolean): readonly OoxmlElement[] {
   let anchor: OoxmlElement | null = null;
   for (const child of drawing.children) {
     if (!isElement(child)) continue;
@@ -69,26 +71,30 @@ function textboxContentOf(drawing: OoxmlDrawingNode, hiddenRun: boolean): OoxmlE
       break;
     }
   }
-  if (!anchor) return null;
+  if (!anchor) return [];
   // A hidden run lays out no inline drawing, so its story has nothing to reveal.
-  if (hiddenRun && (anchor.kind === 'inlineDrawing' || anchor.localName === 'inline')) return null;
+  if (hiddenRun && (anchor.kind === 'inlineDrawing' || anchor.localName === 'inline')) return [];
   // Selection is the point of this list, so a drawing layout never paints has no story to
   // offer: the match would be reported and then refuse to select.
-  if (anchorHidesDrawing(anchor, true)) return null;
+  if (anchorHidesDrawing(anchor, true)) return [];
   const graphic = compatibleDirectChild(
     anchor,
     'drawingGraphic',
     DRAWINGML_MAIN_NAMESPACE_URI,
     'graphic'
   );
-  if (!graphic) return null;
+  if (!graphic) return [];
   const data = compatibleDirectChild(
     graphic,
     'drawingGraphicData',
     DRAWINGML_MAIN_NAMESPACE_URI,
     'graphicData'
   );
-  if (!data || schemaAttributeValue(data.attributes, 'uri') !== WPS_GRAPHIC_DATA_URI) return null;
+  // A group's text box members reveal through the group drawing, as read-only text.
+  if (data && schemaAttributeValue(data.attributes, 'uri') === WPG_NAMESPACE_URI) {
+    return groupTextboxContents(anchor);
+  }
+  if (!data || schemaAttributeValue(data.attributes, 'uri') !== WPS_GRAPHIC_DATA_URI) return [];
   const wsp = findDirectChild(data.children, {
     namespaceUri: WPS_NAMESPACE_URI,
     localName: 'wsp',
@@ -96,12 +102,13 @@ function textboxContentOf(drawing: OoxmlDrawingNode, hiddenRun: boolean): OoxmlE
   const txbx = wsp
     ? findDirectChild(wsp.children, { namespaceUri: WPS_NAMESPACE_URI, localName: 'txbx' })
     : null;
-  return txbx
+  const content = txbx
     ? findDirectChild(txbx.children, {
         namespaceUri: WML_NAMESPACE_URI,
         localName: 'txbxContent',
       })
     : null;
+  return content ? [content] : [];
 }
 
 interface WalkFrame {
@@ -143,9 +150,9 @@ function appendTextboxStory(
   hiddenRun: boolean
 ): void {
   if (!hostParagraphId) return;
-  const root = textboxContentOf(drawing, hiddenRun);
-  if (!root) return;
-  stories.push(Object.freeze({ root, drawingNodeId, hostParagraphId }));
+  for (const root of textboxContentsOf(drawing, hiddenRun)) {
+    stories.push(Object.freeze({ root, drawingNodeId, hostParagraphId }));
+  }
 }
 
 /**

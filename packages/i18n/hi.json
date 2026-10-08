@@ -102,7 +102,8 @@
     "formatPainter": "फ़ॉर्मेट पेंटर",
     "formatPainterShortcut": "फ़ॉर्मेट पेंटर (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "अनुच्छेद विराम दिखाएँ",
-    "label": "स्वरूपण नियंत्रण"
+    "label": "स्वरूपण नियंत्रण",
+    "addComment": "टिप्पणी जोड़ें"
   },
   "alignment": {
     "alignLeft": "बाएं संरेखित करें",
@@ -674,6 +675,7 @@
     },
     "openAriaLabel": "नेविगेशन खोलें",
     "openTitle": "नेविगेशन",
+    "openShortcutTitle": "नेविगेशन ({shortcut})",
     "tabs": {
       "find": "ढूँढें",
       "headings": "शीर्षक"

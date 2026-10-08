@@ -107,7 +107,7 @@ For orientation, use `PageSetup['orientation']` in the same way after loading an
 
 ## Give each sync a purpose
 
-A sync either supplies data for the next decision or commits a complete edit. Batch independent reads and writes. For progressive agent review, one completed suggestion per sync is intentional: peers see each suggestion as it is ready. For independent edits in different paragraphs, multiple edits can share one sync and one transaction. Edits that claim the same paragraph can conflict; reconsider their anchors between commits.
+A sync either supplies data for the next decision or commits a complete edit. Batch independent reads and writes. For progressive agent review, one completed suggestion per sync is intentional: peers see each suggestion as it is ready. For independent edits in different paragraphs, multiple edits can share one sync and one transaction. Edits that claim the same paragraph can conflict; reconsider their anchors between commits. A range read before an earlier sync changed text before its end fails with `StaleDocument`, so search again in that paragraph before the next suggestion.
 
 Always await sync. Do not replace sequential syncs with `Promise.all()` or `forEach(async ...)`. Use an explicit final sync when writes remain queued. Do not add an empty sync after a completed read-only batch. These conventions follow Microsoft's [application-specific API model](https://learn.microsoft.com/en-us/office/dev/add-ins/develop/application-specific-api-model).
 
@@ -125,11 +125,54 @@ Use `isDocxEditorError(error)` and branch on `error.code`. `error.target` identi
 | --- | --- |
 | `PropertyNotLoaded` | Load the named property and await sync before reading it. |
 | `InvalidObjectPath` | Sync before using a newly returned proxy, or acquire a fresh proxy in a new run. |
-| `StaleDocument` | Re-read, re-anchor, and reconsider the model proposal. |
+| `StaleDocument` | Search again, reconsider the model proposal, then write. |
 | `ConflictingChanges` | Separate edits that claim the same paragraph and reconsider anchors between commits. |
 | `NotSupported` | Check the host, tracking mode, author, and operation against the [tracking subset](#tracking-subset). |
 | `NotImplemented` | Check the documented subset, including pending-revision boundaries. Reconsider the target; do not disable tracking. |
 | `InvalidArgument` | Validate the argument and consult the member's JSDoc. |
+
+### Recover from a stale range
+
+A range addresses text by paragraph identity and offsets. When text before its end changes, including through an earlier sync of the same run, using the range fails with `StaleDocument` and nothing is applied. When `error.expectedRevision` equals `error.actualRevision`, the range moved; when they differ, another writer changed the document. In both cases, search again and reconsider the proposal before writing. Never replay the failed write unchanged.
+
+```ts
+import { isDocxEditorError } from '@docx-editor.dev/editor-api';
+
+// `proposals` holds { find, replace } pairs from your model.
+// `stillApplies` is your own check of a proposal against the current text.
+await runtime.run(async (context) => {
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  // Read every target in one sync.
+  const searches = proposals.map((proposal) => {
+    const matches = context.document.body.search(proposal.find, { matchCase: true });
+    matches.load('items');
+    return matches;
+  });
+  await context.sync();
+
+  for (const [index, proposal] of proposals.entries()) {
+    const range = searches[index]!.items[0];
+    if (!range) continue;
+    range.insertText(proposal.replace, 'Replace');
+    try {
+      // One reviewable suggestion per sync, so peers see each one as it lands.
+      await context.sync();
+    } catch (error) {
+      if (!isDocxEditorError(error) || error.code !== 'StaleDocument') throw error;
+      // Equal revisions: the range moved, often through an earlier sync of this run.
+      // Different revisions: another writer changed the document.
+      // Either way, search again and reconsider before you write.
+      const fresh = context.document.body.search(proposal.find, { matchCase: true });
+      fresh.load('items');
+      await context.sync();
+      const current = fresh.items[0];
+      if (!current || !stillApplies(proposal)) continue;
+      current.insertText(proposal.replace, 'Replace');
+      await context.sync();
+    }
+  }
+});
+```
 
 ## Tracking subset
 

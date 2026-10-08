@@ -9,9 +9,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // and the offsets they were found at, so it stays meaningful across edits ELSEWHERE in the document
 // and becomes an explicit refusal — `InvalidObjectPath` — once one of its paragraphs is gone. What
 // it deliberately does not do is follow edits INSIDE itself: a range over "alpha" whose paragraph
-// then gains a word at offset 0 still names offsets 0..5. Word's own ranges do move, by keeping a
-// live region in the document; this API does not have one, and pretending otherwise would answer
-// text from a place the caller was not looking at.
+// then gains a word at offset 0 no longer names "alpha", so using it fails with `StaleDocument`
+// instead of reading or editing the text now at offsets 0..5. Word's own ranges do move, by
+// keeping a live region in the document; this API does not have one, and pretending otherwise
+// would answer text from a place the caller was not looking at.
 //
 // That is also why `Range#start`/`Range#end` are not here, and why they are not merely unimplemented
 // either: they are document-wide character positions, a different addressing scheme from the one this
@@ -61,10 +62,12 @@ import { searchOptions, type SearchOptions } from './search-options.ts';
  * A range is a SNAPSHOT, not a tracked region. Its endpoints name the paragraphs they were found
  * in and the offsets they were found at, so it stays meaningful across edits ELSEWHERE in the
  * document and becomes an explicit `InvalidObjectPath` refusal once one of its paragraphs is
- * gone. What it deliberately does not do is follow edits INSIDE itself: a range over `"alpha"`
- * whose paragraph then gains a word at offset 0 still names offsets 0..5. Word's own ranges do
- * move, by keeping a live region in the document; this API has none, and pretending otherwise
- * would answer text from a place the caller was not looking at.
+ * gone. What it deliberately does not do is follow edits INSIDE itself: once its paragraph
+ * gains a word at offset 0, a range over `"alpha"` fails with `StaleDocument` when used, rather
+ * than reading or editing whatever now sits at offsets 0..5. Edits after the range, and formatting
+ * changes, keep it valid. Word's own ranges do move, by keeping a live region in the document;
+ * this API has none, and pretending otherwise would answer text from a place the caller was not
+ * looking at.
  *
  * That is also why `start` and `end` are absent rather than unimplemented — they are
  * document-wide character positions, a different addressing scheme from this API's paragraph

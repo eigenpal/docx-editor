@@ -1,7 +1,7 @@
-// A `wp:wrapTopAndBottom` band ends the line it is anchored ON, and only that line. The
-// close used to run for every piece after the anchor, so each later run opened a line of
-// its own: a paragraph-final whitespace run became a phantom blank line a full line height
-// tall, and every line below it moved down the page.
+// A `wp:wrapTopAndBottom` anchor does not end its line. The text before and after it shares
+// one line, which moves below the band when the band crosses it. A close that ran for every
+// piece after the anchor once gave each later run a line of its own: a paragraph-final
+// whitespace run became a phantom blank line, and every line below it moved down the page.
 
 import { describe, expect, test } from 'bun:test';
 import { WML_NAMESPACE_URI } from '../../store/package/ooxml-tree.ts';
@@ -49,7 +49,7 @@ function linesOf(xml: string, fragmentIndex = 0): readonly LineRecord[] {
 const textOf = (lines: readonly LineRecord[]): readonly string[] =>
   lines.map((line) => line.spans.map((span) => span.text).join(''));
 
-describe('a topAndBottom band closes only the line it is anchored on', () => {
+describe('a topAndBottom anchor keeps the runs around it on one line', () => {
   test('a paragraph-final whitespace-only run stays on the line it follows', () => {
     const lines = linesOf(
       document(
@@ -70,11 +70,13 @@ describe('a topAndBottom band closes only the line it is anchored on', () => {
     expect(textOf(lines)).toEqual(['banded text']);
   });
 
-  test('text authored before the anchor still breaks at it', () => {
+  test('text authored before the anchor shares its line, which moves below the band', () => {
     const lines = linesOf(
       document(`<w:p><w:r><w:t>before</w:t></w:r>${BAND}<w:r><w:t>after</w:t></w:r></w:p>`)
     );
-    expect(textOf(lines)).toEqual(['before', 'after']);
+    expect(textOf(lines)).toEqual(['beforeafter']);
+    // The band starts at the paragraph top and is 72 pt tall.
+    expect(lines[0]!.box.y).toBeCloseTo(72, 6);
   });
 
   test('the trailing space keeps its model range, so the caret reaches past it', () => {
