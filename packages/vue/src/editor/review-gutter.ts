@@ -16,6 +16,11 @@ export const REVIEW_PANE_GUTTER = 316;
 /** Reservation for markers and the add-comment button. @public */
 export const REVIEW_MARKERS_GUTTER = 44;
 
+// The column is either fully reserved or not at all. Not affordable, `paneOverflow: 'float'`
+// mirrors the marker strip onto both edges so the page centres; `paneOverflow: 'scroll'`
+// keeps the full column and the page's start clearance, and the viewport scrolls sideways.
+// A closed pane reserves the mirrored strip either way. The React twin documents the rule.
+
 /** Page-edge clearance required before the full column stands. @public */
 export const REVIEW_GUTTER_PAGE_CLEARANCE = 24;
 

@@ -62,6 +62,10 @@ interface Harness {
   reserve(px: number): void;
   /** Reserve room at the inline start, as the docked navigation pane's padding does. */
   reserveStart(px: number): void;
+  /** Mark the review pane open or closed, as the viewport's `data-review-pane` does. */
+  pane(open: boolean): void;
+  /** Publish the navigation pane's shift, as the viewport's `--docx-nav-shift` does. */
+  navShift(px: number): void;
   /** Deliver the resize callback and let the coalescing frame run. */
   settle(): Promise<void>;
 }
@@ -92,6 +96,12 @@ function mount(options: Parameters<typeof createDocxEditor>[0] = {}): Harness {
     },
     reserveStart(px) {
       scroller.style.paddingLeft = `${px}px`;
+    },
+    pane(open) {
+      scroller.setAttribute('data-review-pane', open ? 'open' : 'closed');
+    },
+    navShift(px) {
+      scroller.style.setProperty('--docx-nav-shift', `${px}px`);
     },
     async settle() {
       for (const callback of [...observerCallbacks]) callback();
@@ -209,14 +219,16 @@ describe('tracking the viewport', () => {
 
   // `paneOverflow: 'scroll'`: side panes scroll beside the page, so a capped fit keeps its
   // size whatever the review rail or the navigation pane reserves.
-  test("paneOverflow: 'scroll' keeps a capped fit at its size beside reservations", async () => {
+  test("paneOverflow: 'scroll' keeps a capped fit at its size beside an open pane", async () => {
     const harness = mount({ revisionMarkup: { paneOverflow: 'scroll' } });
     harness.resize(1100);
     await harness.settle();
     const wide = harness.editor.getZoom();
 
+    harness.pane(true);
     harness.reserve(316);
     harness.reserveStart(328);
+    harness.navShift(304);
     await harness.settle();
     expect(harness.editor.getZoom()).toBe(wide);
 
@@ -224,6 +236,25 @@ describe('tracking the viewport', () => {
     harness.editor.setRevisionMarkup({ paneOverflow: 'float' });
     await harness.settle();
     expect(harness.editor.getZoom()).toBeLessThan(wide);
+  });
+
+  // A closed pane's marker strip still counts: ignoring it overflowed the page sideways
+  // with no pane open. Only the navigation pane's shift scrolls beside the page then.
+  test("paneOverflow: 'scroll' with the pane closed still fits inside the marker strip", async () => {
+    const harness = mount({ revisionMarkup: { paneOverflow: 'scroll' } });
+    harness.pane(false);
+    harness.resize(800);
+    harness.reserve(44);
+    harness.reserveStart(44);
+    await harness.settle();
+    expect(harness.editor.getZoom() * 816).toBeLessThanOrEqual(800 - 88);
+    const fitted = harness.editor.getZoom();
+
+    // An open navigation pane adds its shift to the start padding; it does not shrink the page.
+    harness.reserveStart(44 + 304);
+    harness.navShift(304);
+    await harness.settle();
+    expect(harness.editor.getZoom()).toBe(fitted);
   });
 
   test('a refit is PUBLISHED, not just readable', async () => {

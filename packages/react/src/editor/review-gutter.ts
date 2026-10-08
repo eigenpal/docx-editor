@@ -1,6 +1,7 @@
 // The gutter the review rail reserves beside the page, and no more.
 //
-// THE RULE: the reservation is BINARY and, when the column cannot be afforded, SYMMETRIC.
+// THE RULE: the column is either fully reserved or not reserved at all, and, under the
+// default `paneOverflow: 'float'`, a column that cannot be afforded becomes SYMMETRIC.
 // The page stack centres itself in the scroller's padding box, so padding one edge by P
 // shifts the sheet left by P/2 — pleasant on a wide window, where the sheet and its card
 // column read as one centred pair, and wrong on a narrow one, where any one-sided
@@ -11,10 +12,14 @@
 //
 //   - Affordable (the viewport holds the page at its entitled width, the full column,
 //     and a little clearance): the column stands and the pair centres, as it always has.
-//   - Not affordable: the SAME marker strip is reserved on BOTH edges, so the sheet sits
-//     dead-centre and the strip still guarantees room for the markers and the
-//     add-comment affordance beside the page. Cards then overlay the right gap and the
-//     ordinary horizontal scroll reaches whatever sticks out.
+//   - Not affordable, `paneOverflow: 'float'`: the SAME marker strip is reserved on BOTH
+//     edges, so the sheet sits dead-centre and the strip still guarantees room for the
+//     markers and the add-comment affordance beside the page. The open card floats over
+//     the page.
+//   - Not affordable, `paneOverflow: 'scroll'`: the full column stays at the end and the
+//     page's clearance is reserved at the start. The page keeps its fit size, and the
+//     viewport scrolls sideways to reach the cards.
+//   - Closed: the marker strip on both edges, whichever overflow is set.
 //
 // THE PAGE'S WIDTH IN THAT ARITHMETIC IS ITS ENTITLEMENT, NOT ITS PAINT. Under a fit the
 // painted width follows the padded box, so a threshold computed from it chases itself:
@@ -210,7 +215,7 @@ export function useViewportClientWidth(): number | null {
  * measured `reviewGutter` pair otherwise. The one source for the scroll container's
  * paddings and both rulers.
  *
- * The result is reference-stable — the pure function answers with one of three shared
+ * The result is reference-stable — the pure function answers with one of four shared
  * constants — and the hook stores THAT, never the raw width: a resize sweeps through
  * hundreds of widths that all resolve to the same constant, and holding the width as
  * state re-rendered every consumer (the review rail among them) once per pixel. Storing

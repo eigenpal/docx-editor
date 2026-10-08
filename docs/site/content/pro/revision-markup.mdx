@@ -195,7 +195,16 @@ With `revisionsIn: 'pane'`, the review pane lists comments and tracked changes a
 
 With `commentMarkers: 'avatar'`, a collapsed comment marker shows the thread author's initials in their color. A small count shows the number of replies, and a check mark replaces the initials when the thread is resolved. With `commentMarkers: 'icon'`, the marker shows the comment icon. A `DocxEditorReview.Markers` part with an `icon` function overrides both values.
 
-`paneOverflow` decides what happens when the review card column does not fit beside the page. With `paneOverflow: 'float'`, the pane shows a strip of markers and floats the open card over the page. With `paneOverflow: 'scroll'`, the full card column stays beside the page and the page keeps its size. The viewport scrolls sideways to reach the cards. An open navigation pane does not shrink the page either. A fit zoom with no maximum still fills the box it has, and a fit with `shrinkForReviewPane: true` still shrinks the page.
+`paneOverflow` decides what happens when the review card column does not fit beside the page. With `paneOverflow: 'float'`, the pane shows a strip of markers and floats the open card over the page. With `paneOverflow: 'scroll'`, the full card column stays beside the page, and the viewport scrolls sideways to reach the cards.
+
+Under `'scroll'`, an open review pane or navigation pane does not reduce the page size:
+
+- With a fixed zoom, the page keeps that zoom.
+- With a fit zoom that has a maximum, such as the default `'auto'`, the page fits the full viewport width, up to the maximum.
+- With a fit zoom that has no maximum, the page fills the box that remains beside the panes.
+- With `shrinkForReviewPane: true`, the page shrinks toward the fit's minimum to make room for the column. If the column still does not fit at the minimum, the full column stays and the viewport scrolls sideways.
+
+While the review pane is closed, its marker strip still reduces the page size in both modes.
 
 `DocxEditorReview` reads these preferences from the editor and updates when they change. Call `setRevisionMarkup()` to switch the layout at runtime:
 

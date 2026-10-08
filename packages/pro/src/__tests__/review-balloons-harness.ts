@@ -192,7 +192,7 @@ export async function checkChangeBalloons(
 
   // Escape from outside this editor, or one that ends an IME composition, leaves it open.
   const escape = (init: KeyboardEventInit = {}) =>
-    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, ...init });
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true, ...init });
   await change(() => document.body.dispatchEvent(escape()));
   expect(balloon(container)).not.toBeNull();
   const page = q(container, '.docx-paginated-surface')!;
@@ -227,6 +227,21 @@ export async function checkChangeBalloons(
       card.textContent?.includes('Looks right')
     )
   ).toBe(false);
+
+  // The first Escape in the reply line clears a draft and keeps the balloon; the next one
+  // closes it and hands focus back to the document, not to `<body>`.
+  const line = () =>
+    q(balloon(container)!, '[data-testid="review-reply-input"]') as HTMLInputElement;
+  line().focus();
+  await change(() => typeInto(line(), 'Second thought'));
+  await change(() => line().dispatchEvent(escape()));
+  expect(balloon(container)).not.toBeNull();
+  expect(line().value).toBe('');
+  line().focus();
+  await change(() => line().dispatchEvent(escape()));
+  expect(balloon(container)).toBeNull();
+  expect(document.activeElement?.closest('.docx-paginated-surface')).not.toBeNull();
+  await change(() => press(q(container, '[data-revision-kind="insert"][data-revision-id="1"]')!));
 
   // Accept resolves the insertion and closes the balloon.
   await change(() => q(balloon(container)!, '[data-testid="review-accept"]')!.click());

@@ -208,6 +208,11 @@
   --doc-review-author-5: #c2185b;
   --doc-review-author-6: #2e4053;
   --doc-review-author-7: #2e7d32;
+  /* Ink for initials on a filled author disc or badge. Every ramp slot above reaches at least
+     5.1:1 against it, which clears the 4.5:1 text minimum. A disc softened toward white does
+     not: at 82% the light disc fails in six slots, and the 62% dark disc fails in all eight.
+     The chrome is not inverted in dark mode, so one ink serves both themes. */
+  --doc-review-avatar-ink: #ffffff;
   /* The change bar: the rule in the left margin beside every line a tracked change touches.
      Word's All Markup paints it neutral grey whatever the change was (its red bar belongs to
      Simple Markup), and the ink here is Word's own on-screen grey. The width is a one-pixel
@@ -5204,9 +5209,11 @@ a.docx-hyperlink:focus-visible {
  * The reservation is a MEASUREMENT, not a constant: `DocxEditor.Viewport` publishes
  * `--docx-review-gutter` (this edge) and `--docx-review-gutter-start` (mirrored onto the
  * inline start, composed into the navigation rule below) from the viewport's width and the
- * page's entitled width. A viewport with room for both keeps the full column; one without
- * gets the marker strip on BOTH edges, so the sheet sits centred instead of parked beside
- * a mostly-empty band. The fallbacks — the full column while open, the strip while
+ * page's entitled width. A viewport with room for both keeps the full column. One without
+ * gets the marker strip on BOTH edges under `paneOverflow: 'float'`, so the sheet sits
+ * centred instead of parked beside a mostly-empty band; under `paneOverflow: 'scroll'` it
+ * keeps the full column with the page's clearance at the start, and the viewport scrolls
+ * sideways to the cards. The fallbacks — the full column while open, the strip while
  * closed — are what stood before the measurement existed, so an unmeasured host paints as
  * it always did. */
 .docx-editor__scroll-container[data-review-pane='open'] {
@@ -5239,7 +5246,8 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* Compact rail (`data-compact`: the pane is open but the viewport reserved only the
- * mirrored marker strip). The strip shows the markers, and the ONE active card floats at
+ * mirrored marker strip, which `paneOverflow: 'scroll'` never does). The strip shows the
+ * markers, and the ONE active card floats at
  * column width, pinned inside the viewport's right edge — over the page, where a shadow
  * has to separate it from the ink underneath. Its slot is positioned inline by the rail. */
 .docx-review__slot--compact .docx-review__card {
@@ -5365,10 +5373,10 @@ a.docx-hyperlink:focus-visible {
   justify-content: center;
   flex: 0 0 auto;
   border-radius: 13px 13px 13px 3px;
-  /* The avatar's softened author disc and white ink, which keep contrast in both themes. */
-  background: var(--doc-review-author-disc, var(--doc-primary));
+  /* The full author colour, not the softened disc: see `--doc-review-avatar-ink`. */
+  background: var(--doc-review-author-current, var(--doc-review-author-0));
   box-shadow: 0 1px 2px var(--doc-shadow);
-  color: #fff;
+  color: var(--doc-review-avatar-ink);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -5563,8 +5571,9 @@ a.docx-hyperlink:focus-visible {
 .docx-editor .docx-editor__scroll-container,
 .docx-editor.docx-editor__scroll-container {
   /* Two reservations compose on this edge: the navigation pane's displacement, and the
-   * review gutter's mirrored strip (`--docx-review-gutter-start`, 0 whenever the full
-   * column stands on the right). One declaration, because `padding-inline-start` and
+   * review gutter's start reservation (`--docx-review-gutter-start`: the mirrored strip,
+   * the page clearance under `paneOverflow: 'scroll'`, or 0 whenever the full column fits).
+   * One declaration, because `padding-inline-start` and
    * `padding-left` are the same slot in LTR and a second rule would just lose the
    * specificity fight. */
   padding-inline-start: calc(var(--docx-nav-shift, 0px) + var(--docx-review-gutter-start, 0px));
@@ -6140,10 +6149,10 @@ a.docx-hyperlink:focus-visible {
   height: 30px;
   flex: 0 0 auto;
   border-radius: 50%;
-  /* Softened against white: the ramp is chosen to stay legible as TEXT on the page, and the
-     same values as a 30px filled disc read as eight warning lights down the margin. */
-  background: var(--doc-review-author-disc, #c0392b);
-  color: #fff;
+  /* The full author colour, not the softened disc: white initials on the softened disc fell
+     below the 4.5:1 text minimum in most slots. See `--doc-review-avatar-ink`. */
+  background: var(--doc-review-author-current, var(--doc-review-author-0));
+  color: var(--doc-review-avatar-ink);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;

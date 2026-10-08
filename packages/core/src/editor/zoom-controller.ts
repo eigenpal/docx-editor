@@ -62,15 +62,17 @@ export interface ZoomController {
 /**
  * The scroller's content box, or null when it cannot be measured.
  *
- * `fullWidth` measures the whole client width instead: side panes then scroll beside the
- * page rather than shrink it (`paneOverflow: 'scroll'`).
+ * `panesScroll` (`paneOverflow: 'scroll'`) lets the panes that scroll beside the page stop
+ * shrinking it: an OPEN review column (its whole reservation) and the navigation pane's
+ * shift. A closed review pane's marker strip still counts. It is narrow, it is always
+ * there, and ignoring it made the page overflow sideways with no pane open at all.
  */
-function availableWidth(container: HTMLElement, fullWidth = false): number | null {
+function availableWidth(container: HTMLElement, panesScroll = false): number | null {
   const scroller = surfaceScroller(container);
   if (!scroller) return null;
   const width = scroller.clientWidth;
   if (!Number.isFinite(width) || width <= 0) return null;
-  if (fullWidth) return width;
+  if (panesScroll && scroller.getAttribute('data-review-pane') === 'open') return width;
   const style = scroller.ownerDocument.defaultView?.getComputedStyle(scroller);
   if (!style) return width;
   // PHYSICAL, not logical. `clientWidth` is content + padding in physical terms, so these are
@@ -83,7 +85,10 @@ function availableWidth(container: HTMLElement, fullWidth = false): number | nul
   // would leave the fit permanently stale.
   const left = Number.parseFloat(style.paddingLeft) || 0;
   const right = Number.parseFloat(style.paddingRight) || 0;
-  return Math.max(width - left - right, 0);
+  const navigation = panesScroll
+    ? Number.parseFloat(style.getPropertyValue('--docx-nav-shift')) || 0
+    : 0;
+  return Math.max(width - left - right + navigation, 0);
 }
 
 /**
@@ -120,11 +125,11 @@ export function createZoomController(host: ZoomControllerHost): ZoomController {
     if (!container) return;
     // A capped fit keeps its size under `paneOverflow: 'scroll'`. An uncapped fit still fills
     // the padded box, and `shrinkForReviewPane` is an explicit request to shrink.
-    const fullWidth =
+    const panesScroll =
       host.panesScroll?.() === true &&
       mode.shrinkForReviewPane !== true &&
       reviewPaneEntitledZoom(mode, host.zoom()) !== null;
-    const width = availableWidth(container, fullWidth);
+    const width = availableWidth(container, panesScroll);
     if (width === null) return;
     const pageWidthPx = host.pageWidthPx();
     if (pageWidthPx === null) return;
@@ -137,7 +142,12 @@ export function createZoomController(host: ZoomControllerHost): ZoomController {
       ...(mode.maxZoom !== undefined ? { maxZoom: mode.maxZoom } : {}),
     });
     if (next === null || next === host.zoom()) return;
+    // A rescale keeps the viewport centre in place, which scrolls sideways once the page is
+    // wider than the box (`paneOverflow: 'scroll'`). A reader at the start edge stays there.
+    const scroller = surfaceScroller(container);
+    const atStart = scroller !== null && scroller.scrollLeft === 0;
     host.applyZoom(next);
+    if (atStart && scroller && scroller.scrollLeft !== 0) scroller.scrollLeft = 0;
   }
 
   function schedule(): void {

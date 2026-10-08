@@ -196,6 +196,51 @@ describe('the viewport’s review gutter', () => {
     expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('44px');
   });
 
+  test("paneOverflow: 'scroll' with the pane closed fits the page inside the marker strip", async () => {
+    // The stylesheet's padding rule, which the fit measures; this file loads no CSS.
+    const style = document.createElement('style');
+    style.textContent =
+      '.docx-editor__scroll-container { padding-right: var(--docx-review-gutter); ' +
+      'padding-left: var(--docx-review-gutter-start); }';
+    document.head.append(style);
+    scrollerWidth = 800;
+    let editor: DocxEditorInstance | null = null;
+    try {
+      render(
+        <DocxEditorRoot
+          document={SOURCE}
+          modules={[REVIEW_MODULE]}
+          onReady={(ready) => {
+            editor = ready as DocxEditorInstance;
+          }}
+        >
+          <DocxEditorViewport>
+            <DocxEditorContent />
+          </DocxEditorViewport>
+          <RailStub />
+        </DocxEditorRoot>
+      );
+      await settle();
+      act(() => {
+        editor!.setRevisionMarkup({ paneOverflow: 'scroll' });
+        if (editor!.snapshot().reviewPaneOpen) editor!.exec({ type: 'toggleReviewPane' });
+      });
+      await settle();
+      // Leave the fit and come back, so it measures the settled paddings now.
+      act(() => {
+        editor!.setZoomMode({ type: 'fixed' });
+      });
+      act(() => {
+        editor!.setZoomMode('auto');
+      });
+      await settle();
+      expect(editor!.snapshot().reviewPaneOpen).toBe(false);
+      expect(editor!.getZoom() * 816).toBeLessThanOrEqual(800 - 88);
+    } finally {
+      style.remove();
+    }
+  });
+
   test('a rail on a wide viewport keeps the full column, with nothing at the start', async () => {
     scrollerWidth = 1728;
     let editor: DocxEditorInstance | null = null;

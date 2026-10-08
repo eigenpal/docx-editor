@@ -252,15 +252,21 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
           }}
           onClick={(event) => event.stopPropagation()}
           onKeyDown={(event) => {
-            // Escape clears the line, then closes the card: the keyboard path that Cancel
-            // offers while there is text. A balloon has no card to close and lets it bubble.
-            if (event.key === 'Escape' && onCancel && !event.nativeEvent.isComposing) {
-              event.preventDefault();
+            // The first Escape clears a draft, so a stray key never loses it with the card or
+            // balloon. On an empty line it closes the card; in a balloon it bubbles to the
+            // balloon, which closes itself.
+            if (event.key === 'Escape' && !event.nativeEvent.isComposing) {
               if (draft.length > 0) {
+                event.preventDefault();
                 setDraft('');
                 setRefused(false);
-              } else onCancel();
-              return;
+                return;
+              }
+              if (onCancel) {
+                event.preventDefault();
+                onCancel();
+                return;
+              }
             }
             if (readOnly || event.key !== 'Enter') return;
             event.preventDefault();

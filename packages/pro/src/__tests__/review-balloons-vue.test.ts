@@ -178,6 +178,43 @@ describe('Vue review layout preferences', () => {
     }
   }, 20000);
 
+  test("paneOverflow: 'scroll' with the pane closed fits the page inside the marker strip", async () => {
+    // The stylesheet's padding rule, which the fit measures; this file loads no CSS.
+    const style = document.createElement('style');
+    style.textContent =
+      '.docx-editor__scroll-container { padding-right: var(--docx-review-gutter); ' +
+      'padding-left: var(--docx-review-gutter-start); }';
+    document.head.append(style);
+    const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get: () => 800,
+    });
+    const mounted = mountReview(BALLOON_SOURCE, {}, { author: 'Grace Hopper' });
+    try {
+      await ready(mounted);
+      const editor = mounted.editor() as DocxEditorInstance;
+      await change(() => {
+        editor.setRevisionMarkup({ paneOverflow: 'scroll' });
+        if (editor.snapshot().reviewPaneOpen) editor.exec({ type: 'toggleReviewPane' });
+      });
+      // Leave the fit and come back, so it measures the settled paddings now.
+      await change(() => {
+        editor.setZoomMode({ type: 'fixed' });
+      });
+      await change(() => {
+        editor.setZoomMode('auto');
+      });
+      expect(editor.snapshot().reviewPaneOpen).toBe(false);
+      expect(editor.getZoom() * 816).toBeLessThanOrEqual(800 - 88);
+    } finally {
+      mounted.unmount();
+      style.remove();
+      if (original) Object.defineProperty(HTMLElement.prototype, 'clientWidth', original);
+      else delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+    }
+  }, 20000);
+
   test('viewing mode keeps balloon decisions unavailable', async () => {
     const mounted = mountReview(
       BALLOON_SOURCE,
