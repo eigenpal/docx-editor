@@ -467,7 +467,7 @@
     "ariaLabel": "Navegación del documento",
     "title": "Navegación",
     "openAriaLabel": "Abrir navegación",
-    "openTitle": "Navegación",
+    "openTitle": "Navegación (Ctrl+F)",
     "closeAriaLabel": "Cerrar navegación",
     "closeTitle": "Cerrar navegación",
     "tabs": {

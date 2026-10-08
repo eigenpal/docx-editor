@@ -467,7 +467,7 @@
     "ariaLabel": "文書のナビゲーション",
     "title": "ナビゲーション",
     "openAriaLabel": "ナビゲーションを開く",
-    "openTitle": "ナビゲーション",
+    "openTitle": "ナビゲーション (Ctrl+F)",
     "closeAriaLabel": "ナビゲーションを閉じる",
     "closeTitle": "ナビゲーションを閉じる",
     "tabs": {

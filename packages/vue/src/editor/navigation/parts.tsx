@@ -11,7 +11,9 @@ import type { TextMatch } from '@docx-editor.dev/core/contracts/editor';
 import { MaterialSymbol } from '../../components/ui/Icons';
 import { selectDocumentAbsent } from '../document-presence';
 import { useEditorState } from '../useEditorState';
+import { usePlatformShortcut } from '../usePlatformShortcut';
 import { useNavigationContext } from './navigation-context';
+import { FIND_KEYSHORTCUTS } from './navigation-keys';
 import type { NavigationTab as NavigationTabId } from './useNavigationPane';
 
 import type { DocxEditorChildren } from '../../docx-editor-children';
@@ -61,7 +63,7 @@ export const NavigationClose = defineComponent({
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props, { slots }) {
-    const { pane, t } = useNavigationContext('Close');
+    const { intents, t } = useNavigationContext('Close');
     return () => (
       <button
         type="button"
@@ -69,7 +71,7 @@ export const NavigationClose = defineComponent({
         style={props.style}
         aria-label={t('navigation.closeAriaLabel')}
         title={t('navigation.closeTitle')}
-        onClick={() => pane.setOpen(false)}
+        onClick={intents.close}
       >
         {slots.default?.() ?? <MaterialSymbol name="arrow_back" size={20} />}
       </button>
@@ -219,7 +221,7 @@ export const NavigationHeadings = defineComponent({
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props) {
-    const { pane, outline, t } = useNavigationContext('Headings');
+    const { pane, outline, intents, t } = useNavigationContext('Headings');
     const filter = ref('');
     const documentAbsent = useEditorState(selectDocumentAbsent);
     const items = computed(() => {
@@ -267,7 +269,10 @@ export const NavigationHeadings = defineComponent({
                     )}
                     style={{ paddingInlineStart: `${8 + item.depth * 14}px` }}
                     title={item.heading.text}
-                    onClick={() => outline.goTo(item.heading.blockId)}
+                    onClick={() => {
+                      outline.goTo(item.heading.blockId);
+                      intents.picked();
+                    }}
                   >
                     {item.heading.text}
                   </button>
@@ -316,7 +321,7 @@ export const NavigationFind = defineComponent({
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props) {
-    const { pane, search, t } = useNavigationContext('Find');
+    const { pane, search, intents, t } = useNavigationContext('Find');
     return () => {
       const hidden = pane.tab.value !== 'find';
       const autoFocus = pane.open.value && !hidden;
@@ -426,7 +431,10 @@ export const NavigationFind = defineComponent({
                   key={`${match.blockId}-${match.start}-${index}`}
                   match={match}
                   active={index === search.activeIndex.value}
-                  onSelect={() => search.goTo(index)}
+                  onSelect={() => {
+                    search.goTo(index);
+                    intents.picked();
+                  }}
                 />
               ))}
             </ul>
@@ -445,7 +453,8 @@ export const NavigationToggle = defineComponent({
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props, { slots }) {
-    const { pane, t } = useNavigationContext('Toggle');
+    const { pane, intents, t } = useNavigationContext('Toggle');
+    const shortcut = usePlatformShortcut();
     return () => (
       <button
         type="button"
@@ -453,9 +462,11 @@ export const NavigationToggle = defineComponent({
         style={props.style}
         aria-label={t('navigation.openAriaLabel')}
         aria-expanded={pane.open.value}
-        title={t('navigation.openTitle')}
+        aria-keyshortcuts={FIND_KEYSHORTCUTS}
+        // Names the Find shortcut, the one way to open the pane besides this disc.
+        title={shortcut(t('navigation.openTitle'))}
         onMousedown={(event) => event.preventDefault()}
-        onClick={pane.toggle}
+        onClick={intents.toggle}
       >
         {slots.default?.() ?? <MaterialSymbol name="toc" size={20} />}
       </button>

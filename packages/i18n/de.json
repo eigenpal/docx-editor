@@ -673,7 +673,7 @@
       "noHeadings": "Keine Überschriften gefunden. Fügen Sie dem Dokument Überschriften hinzu, um sie hier zu sehen."
     },
     "openAriaLabel": "Navigation öffnen",
-    "openTitle": "Navigation",
+    "openTitle": "Navigation (Strg+F)",
     "tabs": {
       "find": "Suchen",
       "headings": "Überschriften"

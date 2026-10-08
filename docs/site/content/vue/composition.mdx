@@ -323,6 +323,14 @@ Each navigation part accepts its own class.
 
 The headings list uses the document outline from the editor.
 
+### Place the navigation pane
+
+Place `DocxEditorNavigation` as a direct child of `DocxEditorViewport`, or beside the viewport in a positioned container. Inside the viewport, the pane stays in place while the pages scroll. In both positions, the pane moves the page only when the left margin area cannot hold it.
+
+If the viewport leaves less than `NAVIGATION_PANE_MIN_PAGE_ROOM` (320 pixels) beside the pane, the pane covers the page instead. It then spans the viewport width less its inset on each side, and the page doesn't move. The pane closes after you choose a heading or a result. `useNavigationPane().overlay` reports this mode.
+
+The pane takes its labels from its `t` prop. Without `t`, it uses the `translate` function of `DocxEditorRoot`, then the active locale catalog.
+
 ## Custom loading screen
 
 `DocxEditorLoading` covers the time before bytes arrive and the time while a document opens.

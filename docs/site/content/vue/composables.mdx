@@ -322,7 +322,7 @@ function onEnter(event: KeyboardEvent) {
 
 `setQuery()` waits 150 milliseconds without query changes. `find()` searches immediately. `truncated` means the count is a minimum. The example displays `+` when the search reaches 2,000 matches.
 
-The editor leaves Ctrl+F and Cmd+F to browser search. For shortcut handling, see [Open Find with Ctrl+F](/docs/2.x/guides/navigation#open-find-with-ctrlf). For shared requests and result updates, see [Search from code](/docs/2.x/guides/navigation#search-from-code).
+`DocxEditor.Navigation` opens **Find** on Ctrl+F or Cmd+F while focus is in the editor. For details, see [Open Find with Ctrl+F](/docs/2.x/guides/navigation#open-find-with-ctrlf). For shared requests and result updates, see [Search from code](/docs/2.x/guides/navigation#search-from-code).
 
 ## `useHighlights`
 
@@ -346,7 +346,7 @@ For options, see [Highlight text ranges](/docs/2.x/guides/navigation#highlight-t
 
 ## `useNavigationPane`
 
-Returns the navigation pane state, width, active tab, and setters.
+Returns the navigation pane state, width, active tab, and setters. `overlay` is `true` when the open pane covers the page on a narrow viewport.
 
 ## `useNavigationShift`
 

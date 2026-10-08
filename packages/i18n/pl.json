@@ -673,7 +673,7 @@
       "noHeadings": "Nie znaleziono nagłówków. Dodaj nagłówki do dokumentu, aby zobaczyć je tutaj."
     },
     "openAriaLabel": "Otwórz nawigację",
-    "openTitle": "Nawigacja",
+    "openTitle": "Nawigacja (Ctrl+F)",
     "tabs": {
       "find": "Znajdź",
       "headings": "Nagłówki"

@@ -673,7 +673,7 @@
       "noHeadings": "未找到标题。在文档中添加标题即可在此处查看。"
     },
     "openAriaLabel": "打开导航",
-    "openTitle": "导航",
+    "openTitle": "导航(Ctrl+F)",
     "tabs": {
       "find": "查找",
       "headings": "标题"

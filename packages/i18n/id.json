@@ -673,7 +673,7 @@
       "noHeadings": "Tidak ada judul yang ditemukan. Tambahkan judul ke dokumen untuk melihatnya di sini."
     },
     "openAriaLabel": "Buka navigasi",
-    "openTitle": "Navigasi",
+    "openTitle": "Navigasi (Ctrl+F)",
     "tabs": {
       "find": "Temukan",
       "headings": "Judul"

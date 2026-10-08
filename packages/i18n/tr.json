@@ -673,7 +673,7 @@
       "noHeadings": "Başlık bulunamadı. Burada görmek için belgenize başlık ekleyin."
     },
     "openAriaLabel": "Gezintiyi aç",
-    "openTitle": "Gezinti",
+    "openTitle": "Gezinti (Ctrl+F)",
     "tabs": {
       "find": "Bul",
       "headings": "Başlıklar"

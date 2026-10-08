@@ -18,7 +18,9 @@ import type { TextMatch } from '@docx-editor.dev/core/contracts/editor';
 import { MaterialSymbol } from '../../components/ui/Icons';
 import { selectDocumentAbsent } from '../document-presence';
 import { useEditorState } from '../useEditorState';
+import { usePlatformShortcut } from '../usePlatformShortcut';
 import { useNavigationContext } from './navigation-context';
+import { FIND_KEYSHORTCUTS } from './navigation-keys';
 // Aliased: this module also EXPORTS a component called `NavigationTab`, and the two
 // declarations would collide in the generated .d.ts.
 import type { NavigationTab as NavigationTabId } from './useNavigationPane';
@@ -62,7 +64,7 @@ export function NavigationHeader({
 
 /** The back arrow that closes the pane. @public */
 export function NavigationClose({ className, style, children }: NavigationPartProps): ReactElement {
-  const { pane, t } = useNavigationContext('Close');
+  const { intents, t } = useNavigationContext('Close');
   return (
     <button
       type="button"
@@ -70,7 +72,7 @@ export function NavigationClose({ className, style, children }: NavigationPartPr
       style={style}
       aria-label={t('navigation.closeAriaLabel')}
       title={t('navigation.closeTitle')}
-      onClick={() => pane.setOpen(false)}
+      onClick={intents.close}
     >
       {children ?? <MaterialSymbol name="arrow_back" size={20} />}
     </button>
@@ -231,7 +233,7 @@ function SearchBox({
  * @public
  */
 export function NavigationHeadings({ className, style }: NavigationPartProps): ReactElement {
-  const { pane, outline, t } = useNavigationContext('Headings');
+  const { pane, outline, intents, t } = useNavigationContext('Headings');
   const [filter, setFilter] = useState('');
   // "This document has no headings" is a claim about the document; while there is none
   // (loading, parse failure, detached) the panel shows neither the claim nor the list.
@@ -280,7 +282,10 @@ export function NavigationHeadings({ className, style }: NavigationPartProps): R
                 // computed inline value, and CSS reads it for the indent.
                 style={{ paddingInlineStart: `${8 + item.depth * 14}px` }}
                 title={item.heading.text}
-                onClick={() => outline.goTo(item.heading.blockId)}
+                onClick={() => {
+                  outline.goTo(item.heading.blockId);
+                  intents.picked();
+                }}
               >
                 {item.heading.text}
               </button>
@@ -330,7 +335,7 @@ function ResultRow({
  * @public
  */
 export function NavigationFind({ className, style }: NavigationPartProps): ReactElement {
-  const { pane, search, t } = useNavigationContext('Find');
+  const { pane, search, intents, t } = useNavigationContext('Find');
   const hidden = pane.tab !== 'find';
   const hasQuery = search.query.trim().length > 0;
   const autoFocus = pane.open && !hidden;
@@ -436,7 +441,10 @@ export function NavigationFind({ className, style }: NavigationPartProps): React
               key={`${match.blockId}-${match.start}-${index}`}
               match={match}
               active={index === search.activeIndex}
-              onSelect={() => search.goTo(index)}
+              onSelect={() => {
+                search.goTo(index);
+                intents.picked();
+              }}
             />
           ))}
         </ul>
@@ -458,7 +466,8 @@ export function NavigationToggle({
   style,
   children,
 }: NavigationPartProps): ReactElement {
-  const { pane, t } = useNavigationContext('Toggle');
+  const { pane, intents, t } = useNavigationContext('Toggle');
+  const shortcut = usePlatformShortcut();
   return (
     <button
       type="button"
@@ -466,11 +475,13 @@ export function NavigationToggle({
       style={style}
       aria-label={t('navigation.openAriaLabel')}
       aria-expanded={pane.open}
-      title={t('navigation.openTitle')}
+      aria-keyshortcuts={FIND_KEYSHORTCUTS}
+      // Names the Find shortcut, the one way to open the pane besides this disc.
+      title={shortcut(t('navigation.openTitle'))}
       // A mousedown that reaches the document surface moves the caret; the pane opening
       // must leave the user's place in the text alone.
       onMouseDown={(event) => event.preventDefault()}
-      onClick={pane.toggle}
+      onClick={intents.toggle}
     >
       {children ?? <MaterialSymbol name="toc" size={20} />}
     </button>

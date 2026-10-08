@@ -14,6 +14,21 @@ export interface NavigationContextValue {
   readonly outline: UseDocumentOutlineResult;
   readonly search: UseDocumentSearchResult;
   readonly t: (key: string, params?: Record<string, string | number>) => string;
+  /**
+   * Focus-aware intents the packaged parts use instead of `pane.setOpen`, so opening moves
+   * focus into the pane and closing returns it to whatever opened the pane.
+   */
+  readonly intents: NavigationIntents;
+}
+
+/** What the packaged parts ask of the pane, beyond its plain state. */
+export interface NavigationIntents {
+  /** The disc: open the pane and focus its entry, or close it if it is open. */
+  readonly toggle: () => void;
+  /** The close arrow and Escape: close the pane and return focus to its opener. */
+  readonly close: () => void;
+  /** A heading or result was chosen. Closes an overlaying pane; a docked one stays open. */
+  readonly picked: () => void;
 }
 
 export const NavigationContext = createContext<NavigationContextValue | null>(null);
