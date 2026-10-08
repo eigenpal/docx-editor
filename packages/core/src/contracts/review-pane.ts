@@ -4,7 +4,7 @@
 // into the document, never shared with other participants, and never read by an exporter.
 // That is why they live here and not in `RevisionMarkupOptions` (which the exporters read)
 // or in `ZoomMode` (which knows nothing about review). The review module supplies the
-// initial values, `setReviewPane` changes them at runtime, and `snapshot.reviewPane` reads
+// initial values, `setReviewPaneOptions` changes them at runtime, and `snapshot.reviewPane` reads
 // them, so a toggle in host chrome re-renders like any other control.
 
 /**

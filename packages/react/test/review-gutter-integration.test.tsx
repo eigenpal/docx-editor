@@ -232,7 +232,7 @@ describe('the viewport’s review gutter', () => {
     expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('0px');
     // Back to 'float' at runtime: the page keeps its cap and the strip mirrors.
     act(() => {
-      editor!.setReviewPane({ overflow: 'float' });
+      editor!.setReviewPaneOptions({ overflow: 'float' });
     });
     await settle();
     expect(editor!.snapshot().reviewPane).toEqual({ opening: 'auto', overflow: 'float' });

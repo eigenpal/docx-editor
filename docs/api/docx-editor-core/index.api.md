@@ -1334,7 +1334,7 @@ export interface DocxEditorInstance extends Editor {
     setMode(mode: 'edit' | 'view' | 'suggesting' | undefined): void;
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setReviewAuthorVisible(author: string, visible: boolean): void;
-    setReviewPane(options: ReviewPaneOptions): ExecResult;
+    setReviewPaneOptions(options: ReviewPaneOptions): ExecResult;
     setRevisionMarkup(options: RevisionMarkupOptions): void;
     setRevisionMarkupChrome(handlers: RevisionMarkupChromeHandlers | null, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setRevisionStyles(styles: RevisionStyles): void;
@@ -2077,7 +2077,7 @@ export interface EditorSnapshot {
     // (undocumented)
     readonly parseError: string | null;
     readonly reviewDisplayMode?: ReviewDisplayMode;
-    readonly reviewPane?: ResolvedReviewPane;
+    readonly reviewPane: ResolvedReviewPane;
     readonly reviewPaneOpen?: boolean;
     readonly revisionMarkup: ResolvedRevisionMarkup;
     // (undocumented)

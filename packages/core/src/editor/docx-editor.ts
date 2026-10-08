@@ -268,7 +268,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const modules = resolveEditorModules(config.modules);
   const reportDiagnostic = customNodeDiagnosticReporter(modules);
   const reviewEnabled = modules.review !== null;
-  // Review pane view settings: seeded by the review module, changed by `setReviewPane`.
+  // Review pane view settings: seeded by the review module, changed by `setReviewPaneOptions`.
   const reviewPane = createReviewPaneState(modules.review?.pane, {
     enabled: reviewEnabled,
     changed: () => {
@@ -2302,7 +2302,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // Tolerated detached: the host waits here and applies on the next mount.
       surface?.setRemoteCaretLabelHost(host);
     },
-    setReviewPane: reviewPane.set,
+    setReviewPaneOptions: reviewPane.set,
     setRevisionMarkup: revisionMarkupState.set,
     setRevisionMarkupChrome: revisionMarkupState.register,
     setRevisionStyles(colors) {

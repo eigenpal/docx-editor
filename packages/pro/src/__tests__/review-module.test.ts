@@ -153,13 +153,15 @@ describe('review pane opening', () => {
     expect(() => reviewModule(oldValue)).toThrow(TypeError);
   });
 
-  test('without a review module, setReviewPane is refused and changes nothing', () => {
+  test('without a review module, setReviewPaneOptions is refused and changes nothing', () => {
     const editor = createDocxEditor({
       container: document.createElement('div'),
       document: docx(PLAIN),
     });
     const before = editor.snapshot().reviewPane;
-    expect(editor.setReviewPane({ opening: 'manual' })).toMatchObject({
+    // Always set, even with no review module: the defaults.
+    expect(before).toEqual({ opening: 'auto', overflow: 'float' });
+    expect(editor.setReviewPaneOptions({ opening: 'manual' })).toMatchObject({
       ok: false,
       code: 'unsupported',
     });
@@ -169,7 +171,7 @@ describe('review pane opening', () => {
 
   test('manual stays in force across a second load', () => {
     const editor = open(PLAIN, 'manual');
-    expect(editor.snapshot().reviewPane?.opening).toBe('manual');
+    expect(editor.snapshot().reviewPane.opening).toBe('manual');
     editor.load(docx(TRACKED));
     expect(editor.getReviewItems().length).toBeGreaterThan(0);
     expect(editor.isReviewPaneOpen()).toBe(false);
@@ -178,22 +180,25 @@ describe('review pane opening', () => {
     editor.destroy();
   });
 
-  test('setReviewPane changes the opening at runtime, and invalid settings change nothing', () => {
+  test('setReviewPaneOptions changes the opening at runtime, and invalid settings change nothing', () => {
     const editor = open(PLAIN);
     const before = editor.snapshot().reviewPane;
     expect(before).toEqual({ opening: 'auto', overflow: 'float' });
-    editor.setReviewPane({ opening: 'manual' });
+    expect(editor.setReviewPaneOptions({ opening: 'manual' })).toEqual({ ok: true, changed: true });
     expect(editor.snapshot().reviewPane).toEqual({ opening: 'manual', overflow: 'float' });
     typeTracked(editor);
     expect(editor.isReviewPaneOpen()).toBe(false);
     // An unchanged value keeps the snapshot's reference.
     const same = editor.snapshot().reviewPane;
-    editor.setReviewPane({ opening: 'manual' });
+    expect(editor.setReviewPaneOptions({ opening: 'manual' })).toEqual({
+      ok: true,
+      changed: false,
+    });
     expect(editor.snapshot().reviewPane).toBe(same);
     const bad = { overflow: 'scrollPage' } as unknown as { overflow: 'float' };
-    expect(editor.setReviewPane(bad)).toMatchObject({ ok: false, code: 'invalidArgs' });
+    expect(editor.setReviewPaneOptions(bad)).toMatchObject({ ok: false, code: 'invalidArgs' });
     expect(editor.snapshot().reviewPane).toBe(same);
-    editor.setReviewPane({ opening: 'auto' });
+    editor.setReviewPaneOptions({ opening: 'auto' });
     editor.load(docx(TRACKED));
     expect(editor.isReviewPaneOpen()).toBe(true);
     editor.destroy();

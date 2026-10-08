@@ -91,7 +91,7 @@ export interface ReviewModuleContribution {
    */
   readonly displayModes: readonly ReviewDisplayMode[];
   /**
-   * The review pane settings the editor starts with. `setReviewPane` changes them later.
+   * The review pane settings the editor starts with. `setReviewPaneOptions` changes them later.
    */
   readonly pane?: ReviewPaneOptions;
   /** The review queue derivation. */
