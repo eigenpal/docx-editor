@@ -1,3 +1,4 @@
+import { listItemToken } from './list-marker-reuse.ts';
 import { cachedAutofitCellWidths, widenedCellInsets } from './table-autofit-cell-cache.ts';
 import { rowForWidenedMeasurement } from './legacy-table-side-rules.ts';
 import { autofitReuseScope, carryAutofitScope } from './autofit-context-reuse.ts';
@@ -162,7 +163,7 @@ export function autofitContextOf(deps: AutofitFlowDeps): TableAutofitContext {
         deps.projectionTokenForParagraph?.(paragraph) ?? '',
         deps.drawingTokenForParagraph?.(paragraph) ?? '',
         deps.refFields?.tokenForParagraph(paragraph.id) ?? '',
-        deps.listItems?.get(paragraph.id)?.cacheToken ?? '',
+        listItemToken(deps.listItems?.get(paragraph.id)),
       ].join('\0'),
   };
   flowContexts.set(deps, context);

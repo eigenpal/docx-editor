@@ -5,6 +5,8 @@
 // other row by identity, so the aggregate reuses each unchanged row's framed segment. The
 // result is the same string the flat paragraph walk produces.
 
+import { listLayoutToken } from './list-marker-reuse.ts';
+import type { ResolvedListItem } from './list-resolve.ts';
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import { framedTokenJoin } from './framed-token.ts';
 
@@ -243,7 +245,7 @@ const tableListTokens = new WeakMap<object, WeakMap<object, string>>();
 const rowListTokens = createTableRowTokenStore();
 export function listTokenForTableBlock(
   table: OoxmlNode,
-  listItems: ReadonlyMap<string, { readonly cacheToken: string }> | undefined
+  listItems: ReadonlyMap<string, ResolvedListItem> | undefined
 ): string {
   if (!listItems || listItems.size === 0) return '';
   // Nested weak keying: neither the table nor the list map is retained by the memo, and two
@@ -253,7 +255,10 @@ export function listTokenForTableBlock(
   if (cached !== undefined) return cached;
   const token = aggregateParagraphTokensForTableBlock(
     table,
-    (paragraph) => listItems.get(paragraph.id)?.cacheToken ?? '',
+    (paragraph) => {
+      const item = listItems.get(paragraph.id);
+      return item ? listLayoutToken(item) : '';
+    },
     { rows: rowListTokens, scope: listItems, epoch: '' }
   );
   if (token.length <= MAX_MEMOIZED_TOKEN_LENGTH) {

@@ -1,3 +1,4 @@
+import { registerListGeometry, rememberListItemShape } from './list-marker-reuse.ts';
 import { walkStoryParagraphs } from './story-paragraph-walk.ts';
 import { readTwipsMeasure } from '@docx-editor.dev/core/store';
 import { styleSeparatorMembersOf } from './style-separator-group.ts';
@@ -568,33 +569,32 @@ export function resolveStoryListItems(
     // Length-framed: `numFmt`, `lvlText`, and the marker are verbatim file text that can
     // carry any printable separator, so a separator join lets two different level
     // geometries serialize to one token and share a break-cache entry.
-    const cacheToken = framedTokenJoin(
-      [
-        advanced.numId,
-        advanced.ilvl,
-        advanced.level.numFmt,
-        advanced.level.lvlText,
-        indent.left,
-        indent.right,
-        indent.hanging,
-        indent.firstLine,
-        advanced.level.lvlJc,
-        advanced.level.suff,
-        advanced.level.vanish ? 1 : 0,
-        numberingParagraphToken(advanced.level),
-        // The MARKER ITSELF, not its length. The first line starts where the marker ends
-        // whenever the marker overflows its hanging slot, so `9.` and `10.` break differently —
-        // and so do `ii.` and `vi.`, which the length cannot tell apart. A warm cache then
-        // served the previous marker's width to the new one, and the line wrapped a word late.
-        markerText,
-        // The FACE, not just the glyphs. `listFirstLineOffset` measures with `markerStyle`,
-        // so a level `w:sz` or font change moves the wrap while the text and indent stay put.
-        markerMeasureToken(markerStyle),
-        // The picture marker's identity and DRAWN extent. It replaces the marker glyph, so
-        // it decides both the first line's start and the first line's height.
-        picBullet ? `${picBullet.relationshipId}:${picBullet.width}:${picBullet.height}` : '',
-      ].map(String)
-    );
+    const tokenParts = [
+      advanced.numId,
+      advanced.ilvl,
+      advanced.level.numFmt,
+      advanced.level.lvlText,
+      indent.left,
+      indent.right,
+      indent.hanging,
+      indent.firstLine,
+      advanced.level.lvlJc,
+      advanced.level.suff,
+      advanced.level.vanish ? 1 : 0,
+      numberingParagraphToken(advanced.level),
+      // The MARKER ITSELF, not its length. The first line starts where the marker ends
+      // whenever the marker overflows its hanging slot, so `9.` and `10.` break differently —
+      // and so do `ii.` and `vi.`, which the length cannot tell apart. A warm cache then
+      // served the previous marker's width to the new one, and the line wrapped a word late.
+      markerText,
+      // The FACE, not just the glyphs. `listFirstLineOffset` measures with `markerStyle`,
+      // so a level `w:sz` or font change moves the wrap while the text and indent stay put.
+      markerMeasureToken(markerStyle),
+      // The picture marker's identity and DRAWN extent. It replaces the marker glyph, so
+      // it decides both the first line's start and the first line's height.
+      picBullet ? `${picBullet.relationshipId}:${picBullet.width}:${picBullet.height}` : '',
+    ].map(String);
+    const cacheToken = framedTokenJoin(tokenParts);
 
     const item: ResolvedListItem = {
       numId: advanced.numId,
@@ -613,6 +613,11 @@ export function resolveStoryListItems(
       cacheToken,
     };
     withNumberingParagraphProperties(item, numberingParagraphProperties(advanced.level));
+    // Everything but the marker text (part 12), for keys that read its geometry instead.
+    rememberListItemShape(
+      item,
+      framedTokenJoin([...tokenParts.slice(0, 12), ...tokenParts.slice(13)])
+    );
     listItemNumberSources.set(item, {
       index: linked,
       numId: advanced.numId,
@@ -797,7 +802,9 @@ export function withResolvedListItemsForSession<T extends WithResolvedListItemsO
   readonly numberingIndex: NumberingIndex;
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
 } {
-  return withResolvedListItemsInternal(options, blocks, session);
+  const resolved = withResolvedListItemsInternal(options, blocks, session);
+  registerListGeometry(resolved.listItems, options.measurer);
+  return resolved;
 }
 
 /** Numbered paragraphs of one top-level block, memoized per (immutable block, cascade). */

@@ -1,4 +1,5 @@
 import { withStoryLineGrid } from './line-grid.ts';
+import { listLayoutToken } from './list-marker-reuse.ts';
 import { reuseSingleLineAtWidth } from './paragraph-cache-width-reuse.ts';
 import { cellParagraphInputs, cellParagraphBreakInputs } from './cell-paragraph-inputs.ts';
 import { adjustedBreakIndex, paragraphKeeps } from './pagination-keeps.ts';
@@ -435,7 +436,7 @@ function placeCellParagraph(
     layoutInputs,
     deps.defaultTabStopPt,
     {
-      listToken: listItem?.cacheToken,
+      listToken: listItem && listLayoutToken(listItem),
       hostedListToken: deps.hostedStory?.hostedListTokenForParagraph?.(paragraph) ?? '',
       refToken: deps.refFields?.tokenForParagraph(paragraphId) ?? '',
     }
