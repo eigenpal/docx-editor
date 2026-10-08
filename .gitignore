@@ -18,6 +18,8 @@ Thumbs.db
 
 # Local workspace instructions and notes
 /local/
+# Generated documents and exports, which can hold private content
+/output/
 
 # IDE
 .idea/
