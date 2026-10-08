@@ -75,15 +75,25 @@ interface MoveContext {
   readonly left: number;
 }
 
-let movedRowsObserver: { moved: number } | null = null;
+let movedRowsObserver: { moved: number; fieldScans: number } | null = null;
 
-/** @internal Counts rows moved without placement, for tests that must see the reuse. */
-export function movedRowsTestRecorder(): { readonly moved: number; dispose(): void } {
-  const observer = { moved: 0 };
+/**
+ * @internal Counts rows moved without placement, and placed blocks a move had to scan for
+ * unmovable fields, for tests that must see the reuse.
+ */
+export function movedRowsTestRecorder(): {
+  readonly moved: number;
+  readonly fieldScans: number;
+  dispose(): void;
+} {
+  const observer = { moved: 0, fieldScans: 0 };
   movedRowsObserver = observer;
   return {
     get moved() {
       return observer.moved;
+    },
+    get fieldScans() {
+      return observer.fieldScans;
     },
     dispose() {
       if (movedRowsObserver === observer) movedRowsObserver = null;
@@ -158,6 +168,8 @@ export function rememberCellLine(
   if (key === undefined || !deps.cache || lines.length !== 1 || !pending || !line) return;
   if (fragment.lines.length !== 1 || !placedFrom(line, pending)) return;
   if (!onlyMovableFields(fragment)) return;
+  // The first move after a full layout reads this very fragment; its keys never change.
+  movableBlocks.add(fragment);
   cellLines.set(fragment.range, {
     key,
     paragraph,
@@ -218,13 +230,30 @@ function sameInputsExceptWidth(a: ParagraphLayoutInputs, b: ParagraphLayoutInput
 }
 
 function onlyMovableFields(block: ParagraphFragmentRecord): boolean {
-  if (movedBlocks.has(block)) return true;
+  if (movableBlocks.has(block)) return true;
   for (const field in block) if (!MOVABLE_FIELDS.has(field)) return false;
   return true;
 }
 
-/** Blocks a move built: the same keys as a block that passed `onlyMovableFields`. */
-const movedBlocks = new WeakSet<ParagraphFragmentRecord>();
+/**
+ * Blocks known to hold only movable fields: fragments `rememberCellLine` checked, and blocks
+ * built from one with the same keys (`withLines`, a move). Records are never mutated, so the
+ * answer holds for the object; any other copy, such as a vertical shift, is checked again.
+ */
+const movableBlocks = new WeakSet<ParagraphFragmentRecord>();
+
+/**
+ * `block` with new `lines`, keeping what is known about its fields. Every paragraph fragment
+ * owns `lines`, so the copy has exactly the keys of `block`.
+ */
+export function withLines(
+  block: ParagraphFragmentRecord,
+  lines: ParagraphFragmentRecord['lines']
+): ParagraphFragmentRecord {
+  const copy = { ...block, lines };
+  if (movableBlocks.has(block)) movableBlocks.add(copy);
+  return copy;
+}
 
 interface ColumnGeometry {
   readonly lefts: readonly number[];
@@ -268,6 +297,7 @@ function moveCell(
     deps.listItems?.has(paragraph.id)
   )
     return null;
+  if (movedRowsObserver && !movableBlocks.has(block)) movedRowsObserver.fieldScans += 1;
   if (!onlyMovableFields(block)) return null;
   const known = cellLines.get(block.range);
   if (
@@ -391,7 +421,7 @@ function moveCell(
     lines: [line],
     box: { ...block.box, x: flowLeft + indent.left, width: available },
   };
-  movedBlocks.add(moved);
+  movableBlocks.add(moved);
   deps.onCellBreakKey?.(known.key);
   // Row finalize resolves `borders` again in the same key position.
   return { ...placed, blocks: [moved], box: { ...placed.box, x, width } };

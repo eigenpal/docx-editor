@@ -74,12 +74,49 @@ export function buildColumnOwnershipIndexes(
   return indexes;
 }
 
+/** Ordered, disjoint claims need no sweep events or active-owner map. */
+function orderedClaims(row: readonly BorderGridCell[], cols: number): boolean {
+  let previousEnd = 0;
+  for (const cell of row) {
+    const start = Math.max(0, cell.gridColumn | 0);
+    const end = Math.min(cols, start + Math.max(0, cell.gridSpan | 0));
+    if (start >= end) continue;
+    if (start < previousEnd) return false;
+    previousEnd = end;
+  }
+  return true;
+}
+
+function orderedOwnership(
+  row: readonly BorderGridCell[],
+  cols: number,
+  work: TableBorderGridResolveWork | undefined,
+  budget: TableBorderOwnershipBudget | undefined
+): OwnershipInterval[] {
+  const out: OwnershipInterval[] = [];
+  for (
+    let cellIndex = 0;
+    cellIndex < row.length && (!budget || budget.intervalsRemaining > 0);
+    cellIndex += 1
+  ) {
+    const cell = row[cellIndex]!;
+    const start = Math.max(0, cell.gridColumn | 0);
+    const end = Math.min(cols, start + Math.max(0, cell.gridSpan | 0));
+    if (start >= end) continue;
+    out.push({ start, end, cell, cellIndex });
+    if (work) work.ownershipSlotsWritten += 1;
+    if (budget) budget.intervalsRemaining -= 1;
+  }
+  return out;
+}
+
 function buildRowOwnership(
   row: readonly BorderGridCell[],
   cols: number,
   work: TableBorderGridResolveWork | undefined,
   budget: TableBorderOwnershipBudget | undefined
 ): OwnershipInterval[] {
+  if (orderedClaims(row, cols)) return orderedOwnership(row, cols, work, budget);
   // Sweep events: resolve overlaps so earlier cellIndex wins on shared columns.
   type Event = {
     readonly x: number;
