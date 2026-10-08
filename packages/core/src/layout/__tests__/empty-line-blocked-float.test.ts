@@ -78,6 +78,28 @@ describe('an empty paragraph beside a square float', () => {
     expect(empty!.lines[0]!.box.y).toBeCloseTo(text!.lines[0]!.box.y, 3);
   });
 
+  test('the empty paragraphs a floating table anchors to keep their place', () => {
+    const table =
+      '<w:tbl><w:tblPr><w:tblpPr w:leftFromText="180" w:rightFromText="180" w:vertAnchor="text" ' +
+      'w:horzAnchor="margin" w:tblpX="-90" w:tblpY="86"/>' +
+      '<w:tblW w:w="9200" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="9200"/></w:tblGrid>' +
+      '<w:tr><w:trPr><w:trHeight w:val="2000" w:hRule="exact"/></w:trPr><w:tc><w:tcPr>' +
+      '<w:tcW w:w="9200" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+    const part = load(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}"><w:body><w:p><w:r><w:t>Lead</w:t></w:r></w:p>` +
+        `${table}<w:p/><w:p/>` +
+        '<w:p><w:r><w:t>Next</w:t></w:r></w:p></w:body></w:document>'
+    );
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+    });
+    const [lead, first, second] = (layout.pages[0]!.fragments as ParagraphFragmentRecord[]).filter(
+      (fragment) => fragment.kind === 'paragraph'
+    );
+    expect(first!.box.y).toBeCloseTo(lead!.box.height, 3);
+    expect(second!.box.y).toBeCloseTo(first!.box.y + first!.box.height, 3);
+  });
+
   test('keeps its place beside a float that leaves a passage', () => {
     const [anchor, first, second] = after(200);
     const pitch = anchor!.lines[0]!.box.height;
