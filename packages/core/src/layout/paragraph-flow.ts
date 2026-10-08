@@ -982,7 +982,17 @@ export function breakParagraph(
     startOffset > 0
       ? allPieces.find((p) => p.end === startOffset && p.breakClear)?.breakClear
       : undefined;
-  if (restartClear) applyBreakClearance(breakClearOnLine(restartClear));
+  if (restartClear) {
+    // A remainder clears only floats its region's page publishes, and floats of other
+    // paragraphs. A zone of its own rebuilt from the remainder's top (in a table cell) is not
+    // where a float anchored earlier is; one anchored on this line moves with it, so clearing
+    // it again on every region would leave the line no region to fit.
+    const select = breakClearOnLine(restartClear);
+    const placed = new Set(flow?.pageExclusionZones ?? []);
+    applyBreakClearance((zones) =>
+      select(zones).filter((zone) => zone.anchorParagraphId !== paragraphId || placed.has(zone))
+    );
+  }
   const shrinkTail = spaceShrinkWordTail(pieces, measurer);
   for (let pieceIndex = 0; pieceIndex < pieces.length; pieceIndex += 1) {
     const piece = pieces[pieceIndex]!;

@@ -271,4 +271,46 @@ describe('a clearing break across a region boundary', () => {
     expect(caption.pageIndex).toBe(0);
     expect(picture.x).toBeGreaterThan(200);
   });
+
+  const table = (cell: string, trPr = '') =>
+    '<w:tbl><w:tblPr><w:tblW w:w="8000" w:type="dxa"/><w:tblLayout w:type="fixed"/></w:tblPr>' +
+    '<w:tblGrid><w:gridCol w:w="8000"/></w:tblGrid>' +
+    `<w:tr>${trPr}<w:tc><w:tcPr><w:tcW w:w="8000" w:type="dxa"/></w:tcPr>${cell}</w:tc></w:tr></w:tbl>`;
+  const tall = (height: number) => ({ x: 0, y: 0, width: 100, height });
+
+  test('a cell row continued on the next page does not clear the float it left behind', () => {
+    // 25 fill lines put the cell at 300 pt; its 500 pt float stays on the first page.
+    const result = layout(
+      fill(25) +
+        table(paragraph(run('Before') + float(tall(500)) + br('all') + run('After'))) +
+        paragraph(run('Next'))
+    );
+    expect(lineAt(result, 'After')).toMatchObject({ pageIndex: 1, y: 0 });
+  });
+
+  for (const [label, body] of [
+    [
+      'a float that fills the page',
+      table(paragraph(run('Before') + float(tall(640)) + br('all') + run('After'))),
+    ],
+    [
+      'a float taller than the page in a row that cannot split',
+      fill(10) +
+        table(
+          paragraph(run('Before') + float(tall(2000)) + br('all') + run('After')),
+          '<w:trPr><w:cantSplit/></w:trPr>'
+        ),
+    ],
+    [
+      'a float taller than the page anchored after the break',
+      table(paragraph(run('Before') + br('all') + float(tall(2000)) + run('After'))),
+    ],
+  ] as const) {
+    test(`a cleared cell line always finds a page: ${label}`, () => {
+      const result = layout(body + paragraph(run('Next')));
+      const after = lineAt(result, 'After');
+      expect(after.pageIndex).toBeGreaterThan(lineAt(result, 'Before').pageIndex);
+      expect(after.y).toBe(0);
+    });
+  }
 });
