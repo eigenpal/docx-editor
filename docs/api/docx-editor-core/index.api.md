@@ -1824,6 +1824,7 @@ export interface EditorEvents {
     error: (error: EditorError) => void;
     // (undocumented)
     historyDiagnostic: (diagnostic: HistoryDiagnostic) => void;
+    reviewItemReveal: (event: ReviewItemRevealEvent) => void;
     revisionMarkupChange: (settings: ResolvedRevisionMarkup) => void;
     selectionChange: (snapshot: EditorSnapshot) => void;
 }
@@ -2772,6 +2773,7 @@ export interface ResolveReviewChangesOptions {
 
 // @public
 export interface ReviewActivationOptions {
+    readonly announce?: boolean;
     readonly reveal?: 'start' | 'center' | 'centerIfNeeded' | 'nearest' | false;
 }
 
@@ -2878,6 +2880,15 @@ export interface ReviewItemQuery {
     readonly pairReplacements?: boolean;
     readonly placement?: boolean;
 }
+
+// @public
+export interface ReviewItemRevealEvent {
+    readonly key: string;
+    readonly source: ReviewItemRevealSource;
+}
+
+// @public
+export type ReviewItemRevealSource = 'navigate' | 'host';
 
 // @public
 export interface ReviewModelInput {

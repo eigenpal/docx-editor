@@ -992,6 +992,7 @@ export interface ReviewActionProps extends ReviewPartProps {
 
 // @public
 export interface ReviewActivationOptions {
+    readonly announce?: boolean;
     readonly reveal?: 'start' | 'center' | 'centerIfNeeded' | 'nearest' | false;
 }
 
@@ -1000,6 +1001,15 @@ export interface ReviewAdoptOptions {
     readonly author?: string;
     readonly date?: Date;
 }
+
+// @public
+export interface ReviewItemRevealEvent {
+    readonly key: string;
+    readonly source: ReviewItemRevealSource;
+}
+
+// @public
+export type ReviewItemRevealSource = 'navigate' | 'host';
 
 // @public (undocumented)
 export type ReviewItemView = ReviewItemPlacement;
@@ -1171,7 +1181,6 @@ export interface UseReviewReturn {
     readonly resolve: (item: ReviewItemView) => boolean;
     // (undocumented)
     readonly selectionAnchorY: ComputedRef<number | null>;
-    // (undocumented)
     readonly setActive: (key: string | null, options?: ReviewActivationOptions) => boolean;
     // (undocumented)
     readonly setPaneOpen: (open: boolean) => void;

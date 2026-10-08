@@ -328,6 +328,7 @@ export interface ReviewActionProps extends ReviewPartProps {
 
 // @public
 export interface ReviewActivationOptions {
+    readonly announce?: boolean;
     readonly reveal?: 'start' | 'center' | 'centerIfNeeded' | 'nearest' | false;
 }
 
@@ -336,6 +337,15 @@ export interface ReviewAdoptOptions {
     readonly author?: string;
     readonly date?: Date;
 }
+
+// @public
+export interface ReviewItemRevealEvent {
+    readonly key: string;
+    readonly source: ReviewItemRevealSource;
+}
+
+// @public
+export type ReviewItemRevealSource = 'navigate' | 'host';
 
 // @public
 export type ReviewItemView = ReviewItemPlacement;

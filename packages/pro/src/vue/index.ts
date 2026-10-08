@@ -38,6 +38,7 @@ export {
   type ReviewActivationOptions,
   type ReviewAdoptOptions,
   type ReviewItemRevealEvent,
+  type ReviewItemRevealSource,
   type ReviewItemView,
   type UseReviewReturn,
 } from './useReview.ts';

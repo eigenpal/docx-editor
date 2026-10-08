@@ -24,6 +24,7 @@ import type {
   ReviewItemPlacement,
   ReviewItemQuery,
   ReviewItemRevealEvent,
+  ReviewItemRevealSource,
 } from '@docx-editor.dev/core/contracts/editor';
 import { notificationYieldsToTask, useDocxEditor } from '@docx-editor.dev/react';
 import { adoptReviewItems, type ReviewAdoptOptions } from '../review/review-item-author.ts';
@@ -74,7 +75,7 @@ export type ReviewItemView = ReviewItemPlacement;
  */
 export type { ReviewActivationOptions };
 /** The payload of the editor's `reviewItemReveal` event. The engine's own type, unchanged. */
-export type { ReviewItemRevealEvent };
+export type { ReviewItemRevealEvent, ReviewItemRevealSource };
 
 function reviewAuthorFilterKey(editor: Editor): string {
   const snapshot = (

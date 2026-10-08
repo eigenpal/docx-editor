@@ -12,6 +12,7 @@ import type {
   ReviewItemPlacement,
   ReviewItemQuery,
   ReviewItemRevealEvent,
+  ReviewItemRevealSource,
 } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor, type MaybeRefOrGetter } from '@docx-editor.dev/vue';
 import { useEditorRenderRevision, type EditorRenderRevision } from './useEditorRenderRevision.ts';
@@ -40,7 +41,12 @@ function reviewRevisionKey(editor: Editor): string {
 export type ReviewItemView = ReviewItemPlacement;
 
 /** @public */
-export type { ReviewActivationOptions, ReviewAdoptOptions, ReviewItemRevealEvent };
+export type {
+  ReviewActivationOptions,
+  ReviewAdoptOptions,
+  ReviewItemRevealEvent,
+  ReviewItemRevealSource,
+};
 
 /** @public */
 export interface UseReviewReturn {
