@@ -1,8 +1,21 @@
 import type { SemanticTableCell, SemanticTableRow, TableAlignment } from './semantic-table.ts';
 import type { PreferredWidthType } from './table-widths.ts';
+import type { TableBorderSide } from './table-borders.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 
 const SIMPLE_SIDE_STYLES = ['single', 'thick'];
+
+/** True when the edge is a rule of a style other than the simple ones. */
+function compoundSideRule(edge: TableBorderSide): boolean {
+  return edge.state === 'edge' && !SIMPLE_SIDE_STYLES.includes(edge.style);
+}
+
+/** The width of a simple, visible side rule; else `undefined`. */
+function simpleSideRuleWidth(edge: TableBorderSide): number | undefined {
+  return edge.state === 'edge' && SIMPLE_SIDE_STYLES.includes(edge.style) && edge.widthPt > 0
+    ? edge.widthPt
+    : undefined;
+}
 
 /**
  * Mode-15 table width types that take one side-rule geometry.
@@ -30,11 +43,7 @@ const MODERN_GRID_WIDTH_TYPES: readonly PreferredWidthType[] = ['dxa', 'auto'];
 function sharesSideRuleGridLine(cell: SemanticTableCell, simpleSidesOnly = false): boolean {
   const { left, right } = cell.contentBorders ?? cell.borders;
   // Modern admission does not extend the simple-rule controls to an opposite compound rule.
-  if (
-    simpleSidesOnly &&
-    [left, right].some((edge) => edge.state === 'edge' && !SIMPLE_SIDE_STYLES.includes(edge.style))
-  )
-    return false;
+  if (simpleSidesOnly && (compoundSideRule(left) || compoundSideRule(right))) return false;
   const leftRule = left.state === 'edge' && SIMPLE_SIDE_STYLES.includes(left.style);
   const rightRule = right.state === 'edge' && SIMPLE_SIDE_STYLES.includes(right.style);
   if (!leftRule && !rightRule) return false;
@@ -47,12 +56,15 @@ function mapCells(
   extend: (cell: SemanticTableCell) => SemanticTableCell,
   simpleSidesOnly = false
 ): readonly SemanticTableRow[] {
-  return rows.map((row) => ({
-    ...row,
-    cells: row.cells.map((cell) =>
-      sharesSideRuleGridLine(cell, simpleSidesOnly) ? extend(cell) : cell
-    ),
-  }));
+  const mapped = rows.map((row) =>
+    carryUniformRow(row, {
+      ...row,
+      cells: row.cells.map((cell) =>
+        sharesSideRuleGridLine(cell, simpleSidesOnly) ? extend(cell) : cell
+      ),
+    })
+  );
+  return carryUniformTable(rows, mapped);
 }
 
 /**
@@ -116,6 +128,29 @@ const uniformTables = new WeakMap<
   readonly SemanticTableRow[],
   { columns: number; value: number | undefined }
 >();
+
+/**
+ * Give `copy` the uniform-rule answer of `source`. Only for a copy that adds or drops the
+ * centred side-rule flags: the answer reads cell grid columns, spans, merge continuation and
+ * side borders (`contentBorders`, else `borders`), which those copies share by reference.
+ * The memo value holds no row, so the source row is not retained.
+ */
+function carryUniformRow(source: SemanticTableRow, copy: SemanticTableRow): SemanticTableRow {
+  const known = uniformRows.get(source);
+  if (known) uniformRows.set(copy, known);
+  return copy;
+}
+
+/** `carryUniformRow` for a table: `copy` maps each row of `source`, in order, that way. */
+function carryUniformTable(
+  source: readonly SemanticTableRow[],
+  copy: readonly SemanticTableRow[]
+): readonly SemanticTableRow[] {
+  const known = uniformTables.get(source);
+  if (known) uniformTables.set(copy, known);
+  return copy;
+}
+
 function uniformRowRule(row: SemanticTableRow, columnCount: number): number | null | undefined {
   const known = uniformRows.get(row);
   if (known?.columns === columnCount) return known.value;
@@ -133,16 +168,10 @@ function uniformRowRule(row: SemanticTableRow, columnCount: number): number | nu
     for (const cell of row.cells) {
       if (cell.vMergeContinue) continue;
       const { left, right } = cell.contentBorders ?? cell.borders;
-      for (const edge of [left, right]) {
-        if (
-          edge.state !== 'edge' ||
-          !SIMPLE_SIDE_STYLES.includes(edge.style) ||
-          !(edge.widthPt > 0)
-        )
-          return null;
-        if (width !== undefined && edge.widthPt !== width) return null;
-        width = edge.widthPt;
-      }
+      const leftWidth = simpleSideRuleWidth(left);
+      if (leftWidth === undefined || (width !== undefined && leftWidth !== width)) return null;
+      if (simpleSideRuleWidth(right) !== leftWidth) return null;
+      width = leftWidth;
     }
     return width;
   };
@@ -249,7 +278,7 @@ function withoutSharedSides(row: SemanticTableRow): SemanticTableRow {
     const { centeredSideRules: _rules, centeredSidePaint: _paint, ...plain } = cell;
     return plain;
   });
-  const result = changed ? { ...row, cells } : row;
+  const result = changed ? carryUniformRow(row, { ...row, cells }) : row;
   rowsWithoutSharedSides.set(row, result);
   return result;
 }
@@ -277,7 +306,7 @@ export function retargetSharedGridLineSideRules(
         ? {}
         : { outerRuleOffsetPt: next.outerRuleOffsetPt }),
     };
-  return withSharedGridLineSideRules(rows.map(withoutSharedSides), shape);
+  return withSharedGridLineSideRules(carryUniformTable(rows, rows.map(withoutSharedSides)), shape);
 }
 
 export function withSharedGridLineSideRules(

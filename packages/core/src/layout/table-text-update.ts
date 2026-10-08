@@ -13,7 +13,7 @@ import {
   type CellPlaceCursor,
 } from './semantic-table-layout.ts';
 import { finalizeTableRows } from './table-fragment-finalize.ts';
-import { updateTableWidths } from './table-width-update.ts';
+import { updateTableWidths, type TablePageBand } from './table-width-update.ts';
 import { finalizedWithHeadroom, withBudgetProof } from './table-budget-proof.ts';
 import { tableCellBreakKeysOf, registerTableCellBreakKeys } from './layout-cache.ts';
 import type { BlockFragmentRecord, PageRecord } from './semantic-records.ts';
@@ -24,7 +24,9 @@ export function updateTableText(
   after: OoxmlElement,
   pages: readonly PageRecord[],
   width: number,
-  deps: TableFlowDeps
+  deps: TableFlowDeps,
+  /** The paginator's body band per page; a width change may grow a row only within it. */
+  pageBand?: TablePageBand
 ): {
   pages: readonly PageRecord[];
   lineDelta: number;
@@ -48,7 +50,7 @@ export function updateTableText(
   if (!oldStructure || !structure || structure.float) return null;
   if (oldStructure.rows.length !== structure.rows.length) return null;
   if (JSON.stringify(oldStructure.columnWidthsPt) !== JSON.stringify(structure.columnWidthsPt)) {
-    const update = updateTableWidths(after, oldStructure, structure, pages, width, deps);
+    const update = updateTableWidths(after, oldStructure, structure, pages, width, deps, pageBand);
     // The width lane requires ordinaryTableParagraph, which excludes revision markup and
     // drawings. The text-only source proof preserves cell properties and shading authors.
     // Unchanged page membership then preserves attribution order and drawing presence.

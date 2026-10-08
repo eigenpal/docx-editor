@@ -143,3 +143,17 @@ test('matching line ids preserve a settled previous placement and still call the
         for (const line of block.lines) expect(line.id.startsWith('changed:')).toBe(true);
     }
 });
+
+test('probe dependency comparison handles removed, undefined, and inherited keys', () => {
+  const s = fixture();
+  const source = s.rows[0]!;
+  const probe = createRowProbeReuse(s.columnWidthsPt, s.cellSpacingPt);
+  const base = deps();
+  probe.measure(source, 0, 0, { ...base, defaultTabStopPt: 80 });
+  expect(probe.take(source, 0, 0, base)).toBeNull();
+  probe.measure(source, 0, 0, { ...base, defaultTabStopPt: undefined });
+  expect(probe.take(source, 0, 0, base)).not.toBeNull();
+  const inherited = Object.assign(Object.create({ unrelated: 'ignored' }), base) as TableFlowDeps;
+  probe.measure(source, 0, 0, base);
+  expect(probe.take(source, 0, 0, inherited)).not.toBeNull();
+});

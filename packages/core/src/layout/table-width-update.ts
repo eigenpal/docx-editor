@@ -30,6 +30,15 @@ import { registerTableCellBreakKeys } from './layout-cache.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
 import { finalizedWithHeadroom, withBudgetProof } from './table-budget-proof.ts';
 import { moveRowToWidths } from './table-row-geometry-reuse.ts';
+import {
+  closeGrownRow,
+  growthBandOf,
+  nextFragmentOpening,
+  nextRowMovesAt,
+  rowGrowthKeepsNothing,
+  rowLineCount,
+  sameRowMembership,
+} from './table-row-growth.ts';
 import type { CellContentInsets } from './table-cell-geometry.ts';
 import type { TableBorderStrokeRecord } from './table-borders.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
@@ -58,15 +67,17 @@ export interface TableWidthUpdate {
  * answers are memoized per row as well.
  */
 const eligibleStructures = new WeakMap<SemanticTableStructure, boolean>();
-const listFreeStructures = new WeakMap<
-  SemanticTableStructure,
-  WeakRef<NonNullable<TableFlowDeps['listItems']>>
->();
+const listFreeStructures = new WeakMap<SemanticTableStructure, number>();
 const eligibleRows = new WeakMap<SemanticTableRow, boolean>();
-const listFreeRows = new WeakMap<
-  SemanticTableRow,
-  WeakRef<NonNullable<TableFlowDeps['listItems']>>
->();
+const listFreeRows = new WeakMap<SemanticTableRow, number>();
+const listIdentities = new WeakMap<NonNullable<TableFlowDeps['listItems']>, number>();
+let nextListIdentity = 1;
+
+function listIdentity(items: NonNullable<TableFlowDeps['listItems']>): number {
+  let identity = listIdentities.get(items);
+  if (identity === undefined) listIdentities.set(items, (identity = nextListIdentity++));
+  return identity;
+}
 
 function eligibleRow(row: SemanticTableRow): boolean {
   let known = eligibleRows.get(row);
@@ -84,12 +95,16 @@ function eligibleRow(row: SemanticTableRow): boolean {
   return known;
 }
 
-function listFreeRow(row: SemanticTableRow, listItems: NonNullable<TableFlowDeps['listItems']>) {
-  if (listFreeRows.get(row)?.deref() === listItems) return true;
+function listFreeRow(
+  row: SemanticTableRow,
+  listItems: NonNullable<TableFlowDeps['listItems']>,
+  identity: number
+) {
+  if (listFreeRows.get(row) === identity) return true;
   const listFree = row.cells.every((cell) =>
     cell.blocks.every((block) => !listItems.has(block.id))
   );
-  if (listFree) listFreeRows.set(row, new WeakRef(listItems));
+  if (listFree) listFreeRows.set(row, identity);
   return listFree;
 }
 
@@ -105,10 +120,11 @@ function eligibleStructure(structure: SemanticTableStructure, deps: TableFlowDep
   }
   // List markers depend on the body counter stream, which this lane does not walk.
   const listItems = deps.listItems;
-  if (!known || !listItems?.size || listFreeStructures.get(structure)?.deref() === listItems)
-    return known;
-  const listFree = structure.rows.every((row) => listFreeRow(row, listItems));
-  if (listFree) listFreeStructures.set(structure, new WeakRef(listItems));
+  if (!known || !listItems?.size) return known;
+  const identity = listIdentity(listItems);
+  if (listFreeStructures.get(structure) === identity) return true;
+  const listFree = structure.rows.every((row) => listFreeRow(row, listItems, identity));
+  if (listFree) listFreeStructures.set(structure, identity);
   return listFree;
 }
 
@@ -262,8 +278,15 @@ interface RowPlacement {
 }
 
 /**
+ * The paginator's body band for the page at an index of the pages being updated, note
+ * reserve included. Without it, no row may grow.
+ */
+export type TablePageBand = (pageIndex: number) => number;
+
+/**
  * Place every fragment of `after` again at its old row tops under the new column widths.
- * Returns null unless the whole table keeps its vertical geometry on every page.
+ * Returns null unless the whole table keeps its vertical geometry on every page, except a
+ * last row that grows within `pageBand` (`table-row-growth.ts`).
  */
 export function updateTableWidths(
   after: OoxmlElement,
@@ -271,7 +294,8 @@ export function updateTableWidths(
   structure: SemanticTableStructure,
   pages: readonly PageRecord[],
   width: number,
-  deps: TableFlowDeps
+  deps: TableFlowDeps,
+  pageBand?: TablePageBand
 ): TableWidthUpdate | null {
   if (!sameGrid(oldStructure, structure)) return null;
   if (!eligibleStructure(structure, deps) || !eligibleStructure(oldStructure, deps)) return null;
@@ -309,7 +333,8 @@ export function updateTableWidths(
   const headerPlans = new Map<number, HeaderGroupPlan>();
 
   const fragments: TableFragment[] = [];
-  for (const page of pages) {
+  const pageIndexOf = new Map<TableFragment, number>();
+  for (const [pageIndex, page] of pages.entries()) {
     const own = page.fragments.filter(
       (fragment): fragment is TableFragment =>
         fragment.kind === 'table' && fragment.tableId === after.id
@@ -326,9 +351,28 @@ export function updateTableWidths(
       return null;
     // Finalize below runs without the pass budgets; a fragment cut by a spent one would differ.
     if (!own.every(finalizedWithHeadroom)) return null;
+    for (const fragment of own) pageIndexOf.set(fragment, pageIndex);
     fragments.push(...own);
   }
   if (fragments.length === 0) return null;
+  let lineDelta = 0;
+
+  /**
+   * The band the fragment's last row may grow into, when the table continues at the top of
+   * the next page and the paginator would still move that row's successor there.
+   */
+  const growthOf = (fragment: TableFragment) => {
+    const at = fragments.indexOf(fragment);
+    const pageIndex = pageIndexOf.get(fragment)!;
+    const next = fragments[at + 1];
+    const page = pages[pageIndex]!;
+    // The band is addressed by the index the pass filled the page at.
+    if (!pageBand || page.index !== pageIndex) return null;
+    if (!next || pageIndexOf.get(next) !== pageIndex + 1) return null;
+    const band = growthBandOf(page, fragment, next, pageBand(pageIndex));
+    const opening = band === null ? null : nextFragmentOpening(next);
+    return band === null || !opening ? null : { band, opening };
+  };
 
   const replaceFragment = (fragment: TableFragment): TableFragmentRecord | null => {
     if (fragment.nestingDepth !== 0 || fragment.box.x !== oldLeft) return null;
@@ -381,6 +425,7 @@ export function updateTableWidths(
     };
     const headerDeps =
       headers.length > 0 ? firstRowContentDeps(structure, headers[0]!, base) : base;
+    let grown = false;
     for (let index = 0; index < rows.length; index += 1) {
       const old = rows[index]!;
       const source = sources.get(old.id);
@@ -405,9 +450,13 @@ export function updateTableWidths(
       if (
         result.record.box.height !== old.box.height &&
         terminal?.record.box.height !== old.box.height
-      )
-        return null;
+      ) {
+        // Only the last row of a fragment may grow; see table-row-growth.ts.
+        if (index !== rows.length - 1 || result.moved) return null;
+        grown = true;
+      }
     }
+    if (grown) return growLastRow(fragment, rows, placed);
     // The paginator measures the terminal row with its own bottom edge whenever that probe
     // fits; the vertical comparison tells which placement it kept.
     const candidates = terminal ? [[...placed.slice(0, -1), terminal], placed] : [placed];
@@ -449,6 +498,104 @@ export function updateTableWidths(
     return null;
   };
 
+  /** Replace a fragment whose last body row grew below every unchanged row above it. */
+  const growLastRow = (
+    fragment: TableFragment,
+    rows: readonly TableRowFragmentRecord[],
+    placed: readonly RowPlacement[]
+  ): TableFragmentRecord | null => {
+    const index = rows.length - 1;
+    const old = rows[index]!;
+    const before = rows[index - 1];
+    const source = sources.get(old.id)!;
+    const ordinal = ordinals.get(old.id)!;
+    const previousSource = before && sources.get(before.id);
+    const nextSource = structure.rows[ordinal + 1];
+    const growth = growthOf(fragment);
+    const grownRow = placed[index]!.record;
+    if (
+      !growth ||
+      !before ||
+      !previousSource ||
+      !nextSource ||
+      source.isHeader ||
+      // The row follows body content on its page, so the paginator places it mid-page.
+      before.isHeaderRow ||
+      before.isHeaderRepeat ||
+      growth.opening.id !== nextSource.id ||
+      grownRow.box.height <= old.box.height ||
+      grownRow.box.y + grownRow.box.height > growth.band + 0.001 ||
+      !rowGrowthKeepsNothing(source, previousSource, deps) ||
+      !nextRowMovesAt(
+        structure,
+        nextSource,
+        left,
+        grownRow.box.y + grownRow.box.height,
+        growth.band,
+        base,
+        rowHeightOf
+      )
+    )
+      return null;
+    const closed = closeGrownRow(
+      structure,
+      source,
+      grownRow,
+      placed[index]!.insets,
+      left,
+      growth.band,
+      base
+    );
+    const chosen: RowPlacement[] = [...placed.slice(0, index), closed];
+    const records = chosen.map((entry) => entry.record);
+    const insets = new Map<TableRowFragmentRecord, ReadonlyMap<string, CellContentInsets>>();
+    const settled = new Set<TableRowFragmentRecord>();
+    for (const entry of chosen) {
+      if (entry.insets) insets.set(entry.record, entry.insets);
+      if (entry.moved) settled.add(entry.record);
+    }
+    const finalized = finalizeTableRows(
+      records,
+      structure,
+      records.map((record) => sources.get(record.id)!),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      insets,
+      settled
+    );
+    const last = finalized[index]!;
+    const candidate = annotateTableFragmentGeometry(
+      {
+        kind: 'table',
+        id: fragment.id,
+        tableId: fragment.tableId,
+        fragmentIndex: fragment.fragmentIndex,
+        rows: finalized,
+        box: {
+          x: left,
+          y: fragment.box.y,
+          width: tableWidth,
+          height: last.box.y + last.box.height - fragment.box.y,
+        },
+      },
+      columnWidthsPt,
+      0,
+      ordinals
+    );
+    const grownLast = candidate.rows[index]!;
+    if (
+      !candidate.rows.every((row, at) => at === index || sameRowHeights(rows[at]!, row)) ||
+      !sameRowMembership(old, grownLast) ||
+      grownLast.box.y + grownLast.box.height > growth.band + 0.001
+    )
+      return null;
+    lineDelta += rowLineCount(grownLast) - rowLineCount(old);
+    return candidate;
+  };
+
   // The edited rows decide most refusals, so their fragments go first.
   const edited = editedRows(oldStructure, structure);
   const order = [
@@ -463,10 +610,11 @@ export function updateTableWidths(
   }
   registerTableCellBreakKeys(after, keys);
   return {
-    // sameRowHeights rejects changed block heights, line counts, and vertical positions.
-    // Each replacement keeps the original rows on their original page fragments.
+    // sameRowHeights rejects changed block heights, line counts, and vertical positions,
+    // except in a grown last row, which keeps its paragraphs on its page. Each replacement
+    // keeps the original rows on their original page fragments.
     paragraphPagesUnchanged: true,
-    lineDelta: 0,
+    lineDelta,
     pages: pages.map((page) =>
       page.fragments.some((fragment) => replacements.has(fragment))
         ? { ...page, fragments: page.fragments.map((f) => replacements.get(f) ?? f) }

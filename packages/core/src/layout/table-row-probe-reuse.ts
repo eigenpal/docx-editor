@@ -11,6 +11,30 @@ import { placementFromPrevious, rememberRowPlacement } from './table-row-placeme
 
 type Placement = ReturnType<typeof layoutRowFragment>;
 
+// Resolved rows are immutable and survive text edits in other rows.
+const ordinaryRows = new WeakMap<SemanticTableRow, boolean>();
+
+function sameProbeValue(a: TableFlowDeps, b: TableFlowDeps, key: keyof TableFlowDeps): boolean {
+  if (key === 'pageExclusionZones') return true;
+  if (key === 'rowAtPageStart') return !!a[key] === !!b[key];
+  return a[key] === b[key];
+}
+
+/** Compare the union of own keys without allocating arrays and a set for every row. */
+function sameProbeDeps(a: TableFlowDeps, b: TableFlowDeps): boolean {
+  if (a === b) return true;
+  for (const key in a)
+    if (Object.hasOwn(a, key) && !sameProbeValue(a, b, key as keyof TableFlowDeps)) return false;
+  for (const key in b)
+    if (
+      Object.hasOwn(b, key) &&
+      !Object.hasOwn(a, key) &&
+      !sameProbeValue(a, b, key as keyof TableFlowDeps)
+    )
+      return false;
+  return true;
+}
+
 /** Keep only the latest ordinary row probe until its placement, without retaining prior rows. */
 export function createRowProbeReuse(
   cols: readonly number[],
@@ -21,7 +45,6 @@ export function createRowProbeReuse(
   let probe:
     | { row: SemanticTableRow; result: Placement; deps: TableFlowDeps; left: number; top: number }
     | undefined;
-  const ordinaryRows = new WeakMap<SemanticTableRow, boolean>();
   const ordinary = (row: SemanticTableRow, deps: TableFlowDeps): boolean => {
     let safe = ordinaryRows.get(row);
     if (safe === undefined) {
@@ -84,13 +107,7 @@ export function createRowProbeReuse(
         deps.pageExclusionZones?.().length
       )
         return null;
-      for (const key of new Set([...Object.keys(deps), ...Object.keys(known.deps)]) as Set<
-        keyof TableFlowDeps
-      >) {
-        if (key === 'pageExclusionZones') continue;
-        if (key === 'rowAtPageStart' && !!deps[key] === !!known.deps[key]) continue;
-        if (deps[key] !== known.deps[key]) return null;
-      }
+      if (!sameProbeDeps(deps, known.deps)) return null;
       // A prior finalized row already carries the same paragraph-local line ids. Keep its
       // records when no id changes; remapping must still call nextLineId for every line.
       let cells: (typeof known.result.record.cells)[number][] | undefined;

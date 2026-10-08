@@ -18,7 +18,7 @@
 // and the paginator takes them once.
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
-import { cellContentInsets } from './table-cell-geometry.ts';
+import { sharedCellContentInsets } from './cell-content-insets-memo.ts';
 import { moveRowToWidths } from './table-row-geometry-reuse.ts';
 import { finalizedWithHeadroom } from './table-budget-proof.ts';
 import type { LayoutRowBoundedResult, TableFlowDeps } from './semantic-table-layout.ts';
@@ -46,7 +46,7 @@ const placements = new WeakMap<object, RowPlacement>();
 function verticalInputs(row: SemanticTableRow, deps: TableFlowDeps): (number | string)[] {
   const values: (number | string)[] = [];
   for (const cell of row.cells) {
-    const insets = deps.cellContentInsets?.get(cell.id) ?? cellContentInsets(cell, true);
+    const insets = deps.cellContentInsets?.get(cell.id) ?? sharedCellContentInsets(cell, true);
     const minimum = deps.cellMinimumContentInsets?.get(cell.id) ?? cell.minimumContentInsets;
     values.push(
       insets.top,
@@ -59,13 +59,29 @@ function verticalInputs(row: SemanticTableRow, deps: TableFlowDeps): (number | s
   return values;
 }
 
-function sameVertical(a: readonly (number | string)[], b: readonly (number | string)[]): boolean {
-  if (a.length !== b.length) return false;
-  for (let index = 0; index < a.length; index += 1) {
-    const x = a[index];
-    const y = b[index];
-    // NaN marks an absent minimum on both sides.
-    if (x !== y && !(Number.isNaN(x) && Number.isNaN(y))) return false;
+function sameMinimum(value: number | undefined, previous: number | string | undefined): boolean {
+  const current = value ?? Number.NaN;
+  return current === previous || (Number.isNaN(current) && Number.isNaN(previous));
+}
+
+function sameVertical(
+  row: SemanticTableRow,
+  deps: TableFlowDeps,
+  known: readonly (number | string)[]
+): boolean {
+  if (known.length !== row.cells.length * 5) return false;
+  let index = 0;
+  for (const cell of row.cells) {
+    const insets = deps.cellContentInsets?.get(cell.id) ?? sharedCellContentInsets(cell, true);
+    const minimum = deps.cellMinimumContentInsets?.get(cell.id) ?? cell.minimumContentInsets;
+    if (
+      known[index++] !== insets.top ||
+      known[index++] !== insets.bottom ||
+      !sameMinimum(minimum?.top, known[index++]) ||
+      !sameMinimum(minimum?.bottom, known[index++]) ||
+      known[index++] !== cell.vAlign
+    )
+      return false;
   }
   return true;
 }
@@ -126,7 +142,7 @@ export function placementFromPrevious(
     row.height.rule !== known.heightRule.rule ||
     (row.height.rule !== 'auto' &&
       (known.heightRule.rule === 'auto' || row.height.valuePt !== known.heightRule.valuePt)) ||
-    !sameVertical(verticalInputs(row, deps), known.vertical)
+    !sameVertical(row, deps, known.vertical)
   )
     return null;
   const record = moveRowToWidths(row, previous, cols, left, deps);
