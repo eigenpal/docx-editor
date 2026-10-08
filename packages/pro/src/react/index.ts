@@ -74,6 +74,7 @@ export {
   useReviewOf,
   useStackedReviewPositions,
   type ReviewActivationOptions,
+  type ReviewAdoptOptions,
   type ReviewItemView,
   type UseReviewReturn,
 } from './useReview';

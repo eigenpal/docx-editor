@@ -9,6 +9,11 @@ import type {
 import { partOfNodeId, storyScopeOfNodeId } from './surface-scope.ts';
 import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import { planRevisionBatch, type RevisionBatchResult } from '../store/store/revision-batch.ts';
+import {
+  invalidRevisionAuthorInput,
+  planRevisionAuthorChange,
+  type RevisionAuthorResult,
+} from '../store/store/revision-author-change.ts';
 import { commandProtectionRefusal } from './command-protection.ts';
 import { revisionSiteNodeIdsOf, reviewItemKey } from '../store/store/review-items.ts';
 import type {
@@ -112,8 +117,8 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       .surface()
       ?.session.reviewItems()
       .filter((item): item is ReviewRevisionItem => item.kind === 'revision') ?? [];
-  const bulkPlan = (command: Extract<EditorCommand, { type: 'resolveAllReviewChanges' }>) => {
-    const styles = stylesPartOf(deps.surface()!.session.currentPackage());
+  /** The parts a bulk review command reaches, with the keys it selects in each. */
+  const selection = (command: { scope?: 'visible' | 'document'; keys?: readonly string[] }) => {
     const items = all();
     // A paired replacement's key selects both of its halves. The paired queue is read once,
     // however many pair keys the command names.
@@ -160,25 +165,82 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       const key = reviewItemKey(item);
       if (selected.delete(key)) group.keys.push(key);
     }
+    return { scopes: [...scopes.values()], missing: [...selected], unfilteredDocument };
+  };
+  /** Story ops commit as groups; the styles part commits as a part op. */
+  const routed = (
+    plans: readonly { scope: StoryScope; part: OoxmlPart; ops: readonly TreeDocOp[] }[]
+  ) => {
+    const styles = stylesPartOf(deps.surface()!.session.currentPackage());
+    const groups: { scope: StoryScope; ops: readonly TreeDocOp[] }[] = [];
+    const partOps: { partName: string; ops: readonly TreeDocOp[] }[] = [];
+    for (const { scope, part, ops } of plans) {
+      if (!ops.length) continue;
+      if (part.name === styles?.name) partOps.push({ partName: part.name, ops });
+      else groups.push({ scope, ops });
+    }
+    return { groups, partOps };
+  };
+  const bulkPlan = (command: Extract<EditorCommand, { type: 'resolveAllReviewChanges' }>) => {
+    const { scopes, missing, unfilteredDocument } = selection(command);
     const resolved: RevisionBatchResult['resolved'][number][] = [];
-    const skipped: RevisionBatchResult['skipped'][number][] = [...selected].map((key) => ({
+    const skipped: RevisionBatchResult['skipped'][number][] = missing.map((key) => ({
       key,
       reason: 'unknown-revision',
     }));
-    const groups: { scope: StoryScope; ops: readonly TreeDocOp[] }[] = [];
-    const partOps: { partName: string; ops: readonly TreeDocOp[] }[] = [];
+    const plans: { scope: StoryScope; part: OoxmlPart; ops: readonly TreeDocOp[] }[] = [];
     let remaining = 0;
-    for (const { scope, part, keys } of scopes.values()) {
+    for (const { scope, part, keys } of scopes) {
       const plan = planRevisionBatch(part, command.action, unfilteredDocument ? undefined : keys);
       resolved.push(...plan.result.resolved);
       skipped.push(...plan.result.skipped);
       remaining += plan.result.remaining;
-      if (plan.ops.length) {
-        if (part.name === styles?.name) partOps.push({ partName: part.name, ops: plan.ops });
-        else groups.push({ scope, ops: plan.ops });
-      }
+      plans.push({ scope, part, ops: plan.ops });
     }
-    return { groups, partOps, result: { resolved, skipped, remaining } };
+    return { ...routed(plans), result: { resolved, skipped, remaining } };
+  };
+  /** The command's author, or the editor's own when the command names none. */
+  const authorOf = (command: Extract<EditorCommand, { type: 'setReviewChangesAuthor' }>) =>
+    command.author === undefined ? deps.surface()?.author() : command.author;
+  const authorPlan = (command: Extract<EditorCommand, { type: 'setReviewChangesAuthor' }>) => {
+    const { scopes, missing } = selection(command);
+    const attribution = {
+      author: authorOf(command) ?? '',
+      ...(command.date === undefined ? {} : { date: command.date }),
+    };
+    const unknown: RevisionAuthorResult['skipped'][number][] = missing.map((key) => ({
+      key,
+      reason: 'unknown-revision',
+    }));
+    const plans: {
+      scope: StoryScope;
+      part: OoxmlPart;
+      ops: readonly TreeDocOp[];
+      plan: ReturnType<typeof planRevisionAuthorChange>;
+    }[] = [];
+    for (const { scope, part, keys } of scopes) {
+      if (!keys.length) continue;
+      const plan = planRevisionAuthorChange(part, attribution, keys, undefined, command.authors);
+      plans.push({ scope, part, ops: plan.ops, plan });
+    }
+    const combine = (results: readonly RevisionAuthorResult[]): RevisionAuthorResult => ({
+      updated: results.flatMap((result) => result.updated),
+      skipped: [...unknown, ...results.flatMap((result) => result.skipped)],
+    });
+    return {
+      ...routed(plans),
+      result: combine(plans.map(({ plan }) => plan.result)),
+      /** Name each updated change by its key in the committed document. */
+      finish: () => {
+        const parts = deps.surface()!.session.currentPackage().parts;
+        return combine(
+          plans.map(({ part, plan }) => {
+            const after = parts.get(part.name);
+            return after ? plan.finish(after) : plan.result;
+          })
+        );
+      },
+    };
   };
   const ready = (): CanResult => {
     if (deps.destroyed())
@@ -187,7 +249,125 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     if (!deps.surface()) return { ok: false, code: 'notFound', reason: 'no document is open' };
     return { ok: true };
   };
+  const selectionRefusal = (command: {
+    scope?: unknown;
+    keys?: unknown;
+    unsupported?: unknown;
+  }): CanResult | null =>
+    (command.scope !== undefined && !['visible', 'document'].includes(command.scope as string)) ||
+    (command.unsupported !== undefined &&
+      !['skip', 'fail'].includes(command.unsupported as string)) ||
+    (command.keys !== undefined &&
+      (!Array.isArray(command.keys) || command.keys.some((key) => typeof key !== 'string')))
+      ? { ok: false, code: 'invalidArgs', reason: 'invalid bulk revision selection' }
+      : null;
+  /** The gate and, when the arguments are valid, the one plan it was judged on. */
+  const planSetAuthor = (
+    command: Extract<EditorCommand, { type: 'setReviewChangesAuthor' }>
+  ): { gate: CanResult; plan?: ReturnType<typeof authorPlan> } => {
+    const gate = ready();
+    if (!gate.ok) return { gate };
+    if (deps.viewing())
+      return { gate: { ok: false, code: 'locked', reason: 'the document is open for viewing' } };
+    const protectedWrite = commandProtectionRefusal(command, deps.surface()!);
+    if (protectedWrite) return { gate: protectedWrite };
+    const author = authorOf(command);
+    if (author === undefined)
+      return {
+        gate: {
+          ok: false,
+          code: 'invalidArgs',
+          reason: 'pass an author, or configure the editor author, to change the author',
+        },
+      };
+    if (
+      typeof author !== 'string' ||
+      (command.date !== undefined && typeof command.date !== 'string') ||
+      invalidRevisionAuthorInput({
+        author,
+        ...(command.date === undefined ? {} : { date: command.date }),
+      })
+    )
+      return {
+        gate: {
+          ok: false,
+          code: 'invalidArgs',
+          reason: 'author must be nonblank text, and date an ISO 8601 date and time',
+        },
+      };
+    const invalidSelection = selectionRefusal(command);
+    if (invalidSelection) return { gate: invalidSelection };
+    // Exact keys and a scope narrowed by authors are two selections; the type excludes the mix.
+    if (
+      (command.keys !== undefined &&
+        (command.scope !== undefined || command.authors !== undefined)) ||
+      (command.authors !== undefined &&
+        (!Array.isArray(command.authors) ||
+          command.authors.some((name) => typeof name !== 'string')))
+    )
+      return {
+        gate: {
+          ok: false,
+          code: 'invalidArgs',
+          reason: 'select by keys, or by scope and authors; authors must be a list of names',
+        },
+      };
+    const plan = authorPlan(command);
+    const { result } = plan;
+    if (command.unsupported === 'fail' && result.skipped.length)
+      return {
+        gate: {
+          ok: false,
+          code: 'unsupported',
+          reason: 'some selected changes cannot change author',
+        },
+        plan,
+      };
+    if (!result.updated.length)
+      return {
+        gate: {
+          ok: false,
+          code: result.skipped.some((entry) => entry.reason === 'unsupported-revision')
+            ? 'unsupported'
+            : 'notFound',
+          reason: 'no eligible selected changes to update',
+        },
+        plan,
+      };
+    return { gate: { ok: true }, plan };
+  };
+  const setAuthor = (
+    command: Extract<EditorCommand, { type: 'setReviewChangesAuthor' }>
+  ): ExecResult => {
+    deps.surface()?.flushPendingInput();
+    const { gate, plan } = planSetAuthor(command);
+    // A refused selection still reports which changes stopped it.
+    if (!gate.ok)
+      return plan ? { ...gate, revisionAuthors: { ...plan.result, updated: [] } } : gate;
+    const surface = deps.surface()!;
+    const { groups, partOps } = plan!;
+    if (!groups.length && !partOps.length)
+      return { ok: true, changed: false, revisionAuthors: plan!.result };
+    const active = deps.placements().find((placement) => placement.isActive)?.key;
+    let applied: { committed: boolean; reason?: unknown } | undefined;
+    surface.commitReviewOps(() => {
+      applied = surface.session.applyTreeOpsAtomic(groups, { partOps });
+      return applied;
+    }, 'revision-attribution');
+    if (!applied?.committed)
+      return {
+        ok: false,
+        code: 'unsupported',
+        reason: typeof applied?.reason === 'string' ? applied.reason : 'the changes were refused',
+      };
+    const result = plan!.finish();
+    // Keys include the author, so an active card keeps its place under its new key.
+    const moved = result.updated.find((entry) => entry.previousKey === active);
+    if (moved) deps.activate(moved.key);
+    return { ok: true, changed: true, revisionAuthors: result };
+  };
   const can = (command: EditorCommand): CanResult | null => {
+    if (command.type === 'setReviewChangesAuthor') return planSetAuthor(command).gate;
     if (
       command.type !== 'navigateReviewChange' &&
       command.type !== 'resolveAllReviewChanges' &&
@@ -218,13 +398,8 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
     const protectedWrite = commandProtectionRefusal(command, deps.surface()!);
     if (protectedWrite) return protectedWrite;
-    if (
-      (command.scope !== undefined && !['visible', 'document'].includes(command.scope)) ||
-      (command.unsupported !== undefined && !['skip', 'fail'].includes(command.unsupported)) ||
-      (command.keys !== undefined &&
-        (!Array.isArray(command.keys) || command.keys.some((key) => typeof key !== 'string')))
-    )
-      return { ok: false, code: 'invalidArgs', reason: 'invalid bulk revision selection' };
+    const invalidSelection = selectionRefusal(command);
+    if (invalidSelection) return invalidSelection;
     const { result, groups, partOps } = bulkPlan(command);
     if (command.unsupported === 'fail' && result.skipped.length)
       return { ok: false, code: 'unsupported', reason: 'some selected changes cannot be resolved' };
@@ -292,6 +467,7 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     return { ok: true, changed: true };
   };
   const exec = (command: EditorCommand): ExecResult | null => {
+    if (command.type === 'setReviewChangesAuthor') return setAuthor(command);
     if (
       !['navigateReviewChange', 'resolveAllReviewChanges', 'setReviewDisplayMode'].includes(
         command.type

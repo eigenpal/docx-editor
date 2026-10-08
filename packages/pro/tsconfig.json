@@ -64,6 +64,7 @@
     "src/__tests__/review-sidebar-vue.test.ts",
     "src/__tests__/review-compact-card-vue.test.ts",
     "src/__tests__/review-reply-author-vue.test.ts",
+    "src/__tests__/review-adopt-vue.test.ts",
     "src/__tests__/review-region-vue.test.ts",
     "src/__tests__/formatting-page-balloon-vue.test.ts",
     "src/__tests__/review-balloons-vue.test.ts",

@@ -6,7 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import type { ReviewActivationOptions } from '@docx-editor.dev/core/contracts/editor';
 import type { VNode } from 'vue';
-import type { ReviewItemView } from './useReview.ts';
+import type { ReviewAdoptOptions, ReviewItemView } from './useReview.ts';
 
 /** @public */
 export interface ReviewPartProps {
@@ -52,6 +52,7 @@ export interface ReviewActions {
   setActive(key: string | null, options?: ReviewActivationOptions): boolean;
   accept(item: ReviewItemView): boolean;
   reject(item: ReviewItemView): boolean;
+  adopt(items: ReviewItemView | readonly ReviewItemView[], options?: ReviewAdoptOptions): boolean;
   resolve(item: ReviewItemView): boolean;
   reopen(item: ReviewItemView): boolean;
   readonly commentResolutionDisabledReason: string | null;

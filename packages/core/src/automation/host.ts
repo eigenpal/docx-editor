@@ -257,6 +257,8 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
           (step.packageEdits?.length || operation.op === 'setContentControlProperties')
         )
           requiresReview = true;
+        // Changing who a change belongs to is review authoring, tracked or not.
+        if (operation.op === 'setRevisionAuthorBatch') requiresReview = true;
         if (step.packageEdits) packageEdits.push(...step.packageEdits);
         if (firstCommand < 0) firstCommand = index;
         if (step.lifecycle) lifecycle = step.ops[0] ?? null;

@@ -25,6 +25,9 @@ import type {
   ReviewItemQuery,
 } from '@docx-editor.dev/core/contracts/editor';
 import { notificationYieldsToTask, useDocxEditor } from '@docx-editor.dev/react';
+import { adoptReviewItems, type ReviewAdoptOptions } from '../review/review-item-author.ts';
+
+export type { ReviewAdoptOptions };
 
 /**
  * Collapse an input burst into one rail refresh.
@@ -113,6 +116,20 @@ export interface UseReviewReturn {
   readonly accept: (item: ReviewItemView) => boolean;
   /** Reject a revision. Reports whether it landed, on the same terms as {@link accept}. */
   readonly reject: (item: ReviewItemView) => boolean;
+  /**
+   * Adopt tracked changes as the reviewer's own: they record the reviewer as their author
+   * and stay pending for the next reviewer.
+   *
+   * Takes one item or a list, and ignores comment items. The default author is
+   * `DocxEditorConfig.author`; `options.author` records someone else, and `options.date`
+   * records a new date. All the changes update in one undo step. Reports whether it landed:
+   * false when no revision was passed, when no author is known, or when the editor refuses
+   * the write, as it does in viewing mode or under document protection.
+   */
+  readonly adopt: (
+    items: ReviewItemView | readonly ReviewItemView[],
+    options?: ReviewAdoptOptions
+  ) => boolean;
   /** Resolve a comment thread. Repeating this on a resolved thread succeeds without a write. */
   readonly resolve: (item: ReviewItemView) => boolean;
   /** Reopen a resolved comment thread. Repeating this on an open thread is likewise idempotent. */
@@ -252,6 +269,12 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
     [editor]
   );
 
+  const adopt = useCallback(
+    (items: ReviewItemView | readonly ReviewItemView[], options?: ReviewAdoptOptions): boolean =>
+      adoptReviewItems(editor, items, options),
+    [editor]
+  );
+
   const resolve = useCallback(
     (item: ReviewItemView): boolean => {
       if (!editor || item.kind !== 'comment') return false;
@@ -331,6 +354,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       setActive,
       accept,
       reject,
+      adopt,
       resolve,
       reopen,
       commentResolutionDisabledReason,
@@ -355,6 +379,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       setActive,
       accept,
       reject,
+      adopt,
       resolve,
       reopen,
       commentResolutionDisabledReason,

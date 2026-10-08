@@ -126,6 +126,7 @@ function buildReviewActions(hook: UseReviewReturn, list: readonly ReviewItemView
     setActive: hook.setActive,
     accept: hook.accept,
     reject: hook.reject,
+    adopt: hook.adopt,
     resolve: hook.resolve,
     reopen: hook.reopen,
     commentResolutionDisabledReason: hook.commentResolutionDisabledReason.value,

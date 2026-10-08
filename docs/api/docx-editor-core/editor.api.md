@@ -2003,6 +2003,7 @@ export interface PaginatedSurface {
     applyImageProperties(input: ApplyImagePropertiesInput): ImageIntentResult;
     applyTableCommandPlan(plan: TableCommandPlan): ExecResult;
     armForcePlainPaste(): void;
+    author(): string | undefined;
     bookmarks(): BookmarkIndex;
     canAdjustIndent(direction: 'increase' | 'decrease'): boolean;
     canEditTextFormField(): boolean;
@@ -2735,7 +2736,7 @@ export interface ReviewModuleContribution {
 export function reviewPaneEntitledZoom(mode: ZoomMode | undefined, zoom: number): number | null;
 
 // @public
-export type ReviewWriteIntent = 'revision-resolve' | 'comment-add' | 'comment-reply' | 'comment-resolve' | 'comment-delete' | 'package-scoped';
+export type ReviewWriteIntent = 'revision-resolve' | 'revision-attribution' | 'comment-add' | 'comment-reply' | 'comment-resolve' | 'comment-delete' | 'package-scoped';
 
 // @public
 export const REVISION_MARKUP_COLORS: readonly ['black', 'blue', 'turquoise', 'green', 'pink', 'red', 'yellow', 'white', 'darkBlue', 'teal', 'darkGreen', 'violet', 'darkRed', 'darkYellow', 'gray50', 'gray25', 'lightBlue', 'lightYellow', 'lightOrange', 'lightPurple', 'lightGreen', 'gray'];
