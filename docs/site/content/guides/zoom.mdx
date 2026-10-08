@@ -150,6 +150,8 @@ The review pane needs a 316-pixel card column beside the page. A fit with `maxZo
 
 Set `shrinkForReviewPane: true` to let the fit make room for the column instead. While the pane is open, the page can shrink to `minZoom` so that the full column fits. The pane changes to the marker strip only if the column does not fit at `minZoom` either. If you omit `minZoom`, the limit is 10%, so set a `minZoom` that keeps the text readable, such as `0.35`. When the pane closes, the page returns to its usual fit.
 
+To keep the page size and scroll sideways to the cards instead, set the `paneOverflow: 'scroll'` revision markup preference. For more information, see [Choose where review items appear](/docs/2.x/pro/revision-markup#choose-where-review-items-appear).
+
 <FrameworkTabs>
 <Framework value="react">
 

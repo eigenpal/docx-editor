@@ -60,6 +60,13 @@ export interface ZoomController {
 }
 
 /**
+ * The closed review pane's marker strip on both edges, in CSS px: the adapters'
+ * `2 * REVIEW_MARKERS_GUTTER`. The fallback for a host that marks the pane but has not
+ * published `--docx-review-strip`, so an unmeasured first frame fits as a measured one does.
+ */
+const REVIEW_STRIP_FALLBACK_PX = 88;
+
+/**
  * The scroller's content box, or null when it cannot be measured.
  *
  * `panesScroll` (`paneOverflow: 'scroll'`) lets the panes that scroll beside the page stop
@@ -75,7 +82,8 @@ function availableWidth(container: HTMLElement, panesScroll = false): number | n
   if (!Number.isFinite(width) || width <= 0) return null;
   const style = scroller.ownerDocument.defaultView?.getComputedStyle(scroller);
   if (panesScroll && scroller.hasAttribute('data-review-pane')) {
-    const strip = Number.parseFloat(style?.getPropertyValue('--docx-review-strip') ?? '') || 0;
+    const published = Number.parseFloat(style?.getPropertyValue('--docx-review-strip') ?? '');
+    const strip = Number.isFinite(published) ? published : REVIEW_STRIP_FALLBACK_PX;
     return Math.max(width - strip, 0);
   }
   if (!style) return width;

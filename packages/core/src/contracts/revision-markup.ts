@@ -82,9 +82,9 @@ export interface ResolvedRevisionMarkup {
   readonly commentMarkers: CommentMarkers;
   /**
    * What happens when the review card column does not fit beside the page. `'float'` keeps
-   * the page in view and floats the open card over it. `'scroll'` reserves the full column
-   * and keeps the page at its fit size; the viewport scrolls sideways to reach the cards.
-   * Under `'scroll'`, an open navigation pane does not shrink a capped fit either.
+   * the page in view and floats the open card over it. `'scroll'` fits the page beside the
+   * closed pane's marker strip and keeps that size when the pane opens; the full column
+   * stands and the viewport scrolls sideways. An open navigation pane does not shrink it.
    */
   readonly paneOverflow: PaneOverflow;
 }

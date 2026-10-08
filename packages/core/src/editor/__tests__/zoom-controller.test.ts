@@ -289,6 +289,15 @@ describe('tracking the viewport', () => {
     expect(harness.editor.getZoom()).toBe(closed);
   });
 
+  // A host that marks the pane but has not published the strip yet still fits beside it.
+  test("paneOverflow: 'scroll' falls back to the 88px strip when none is published", async () => {
+    const harness = mount({ revisionMarkup: { paneOverflow: 'scroll' } });
+    harness.pane(false);
+    harness.resize(800);
+    await harness.settle();
+    expect(harness.editor.getZoom() * 816).toBeLessThanOrEqual(800 - 88);
+  });
+
   test('a refit is PUBLISHED, not just readable', async () => {
     const harness = mount();
     const seen: number[] = [];

@@ -204,6 +204,8 @@ Under `'scroll'`, the page keeps one size whether the review pane is open or clo
 - With a fit zoom that has no maximum, the page fills the box that remains beside the panes.
 - With `shrinkForReviewPane: true`, the page shrinks toward the fit's minimum to make room for the column. If the column still does not fit at the minimum, the full column stays and the viewport scrolls sideways.
 
+Under `'scroll'`, the fit measures the scroll container's width less the closed pane's marker strip. It does not subtract padding that your host adds to the scroll container. If your host pads the scroll container, the page can be wider than the remaining box.
+
 `DocxEditorReview` reads these preferences from the editor and updates when they change. Call `setRevisionMarkup()` to switch the layout at runtime:
 
 ```ts
