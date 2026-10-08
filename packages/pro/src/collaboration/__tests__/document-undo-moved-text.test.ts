@@ -56,4 +56,43 @@ describe('undo of typing a peer moved', () => {
     expect(body(bob)).toEqual(['AB']);
     expect(alice.room.session.status()).toBe('ready');
   });
+
+  test('typing right after a redo is a step of its own', async () => {
+    const harness = createPeerHarness('undo-moved-text-retype');
+    harnesses.push(harness);
+    const { alice, bob } = await harness.pair(
+      zipDocument('<w:p><w:r><w:t>A</w:t></w:r></w:p><w:p><w:r><w:t>B</w:t></w:r></w:p>')
+    );
+    const body = (peer: Peer): string[] => {
+      const pkg = harness.packageOf(peer);
+      const paragraphs: string[] = [];
+      walk(pkg.parts.get(pkg.mainDocumentPart)!.root, (node: OoxmlNode) => {
+        if (node.kind !== 'textValue' && node.localName === 'p') paragraphs.push(nodeText(node));
+      });
+      return paragraphs;
+    };
+    harness.apply(alice, [
+      { op: 'insertText', paragraphId: harness.paragraphIdAt(alice, 1), offset: 0, text: 'X' },
+    ]);
+    harness.apply(bob, [
+      {
+        op: 'joinParagraphs',
+        firstId: harness.paragraphIdAt(bob, 0),
+        secondId: harness.paragraphIdAt(bob, 1),
+      },
+    ]);
+    expect(alice.room.session.undo()).toBe(true);
+    expect(alice.room.session.redo()).toBe(true);
+    // Within the capture window of the redo.
+    harness.apply(alice, [
+      { op: 'insertText', paragraphId: harness.paragraphIdAt(alice, 0), offset: 2, text: 'Y' },
+    ]);
+    expect(body(alice)).toEqual(['AXYB']);
+    expect(alice.room.session.undo()).toBe(true);
+    expect(body(alice)).toEqual(['AXB']);
+    expect(alice.room.session.undo()).toBe(true);
+    harness.expectConverged(alice, bob);
+    expect(body(alice)).toEqual(['AB']);
+    expect(body(bob)).toEqual(['AB']);
+  });
 });

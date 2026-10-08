@@ -401,7 +401,8 @@ function adoptFollowingText(
       const attributesOf = (): Record<string, string> =>
         (encoded ??= encodeAttributes(
           decodeAttributes(op.attributes, registry.limits, following.source),
-          paragraphId
+          paragraphId,
+          registry.limits
         ));
       if (typeof op.insert === 'string') {
         for (let offset = 0; offset < length; offset += 1) {
@@ -843,7 +844,7 @@ export function applyInlinePlan(
   for (const { id, after } of plan.paragraphs) {
     const record = registry.schema.nodes.get(id);
     if (!record || adopted.has(id)) continue;
-    const tokens = encoded.get(id) ?? tokensOfParagraph(after);
+    const tokens = encoded.get(id) ?? tokensOfParagraph(after, registry.limits);
     for (const token of tokens) {
       if (typeof token.insert !== 'string' && 'n' in token.insert) embedsAfter.add(token.insert.n);
     }

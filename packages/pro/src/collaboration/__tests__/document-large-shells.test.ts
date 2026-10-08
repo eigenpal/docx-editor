@@ -75,4 +75,36 @@ describe('content controls with large fixed parts', () => {
       ydoc.destroy();
     }
   });
+
+  test('a tag longer than the shared text holds refuses the room instead of losing it', async () => {
+    const tagged = (length: number) =>
+      zipDocument(
+        '<w:p><w:sdt><w:sdtPr>' +
+          `<w:tag w:val="${'t'.repeat(length)}"/>` +
+          '</w:sdtPr><w:sdtContent><w:r><w:t>Value</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+      );
+    // At the bound the control arrives whole.
+    const harness = createPeerHarness('long-tag');
+    harnesses.push(harness);
+    const { alice } = await harness.pair(tagged(4_096));
+    const pkg = harness.packageOf(alice);
+    expect(count(pkg.parts.get(pkg.mainDocumentPart)!.root, 'tag')).toBe(1);
+    // One past it, the room is refused with the bound it breaks.
+    const ydoc = new Y.Doc();
+    const awareness = new Awareness(ydoc);
+    try {
+      await expect(
+        createDocumentCollaboration({
+          ydoc,
+          awareness,
+          documentId: 'long-tag-refused',
+          identity: { actorId: 'alice', name: 'Alice' },
+          bootstrap: { kind: 'create', document: tagged(4_097) },
+        })
+      ).rejects.toMatchObject({ code: 'invalid-string' });
+    } finally {
+      awareness.destroy();
+      ydoc.destroy();
+    }
+  });
 });

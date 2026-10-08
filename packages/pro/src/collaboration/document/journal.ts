@@ -31,7 +31,7 @@ import {
 } from './limits.ts';
 import { isNodeMap, JOURNAL_ORIGIN, mapFieldArriving } from './schema.ts';
 import { INLINE_FIELD } from './paragraph-text.ts';
-import { SharedTextValueTooLarge } from './paragraph-text-codec.ts';
+import { SharedTextValueRefused } from './paragraph-text-codec.ts';
 import { tokensOfParagraph, type Token } from './paragraph-text-diff.ts';
 import { JournalProjection, projectEffect } from './journal-projection.ts';
 import type { DocumentRegistry } from './registry.ts';
@@ -422,6 +422,12 @@ interface JournalPlan {
   /** Ids this journal puts back somewhere, so a removal is a move and not a death. */
   readonly reinserted: ReadonlySet<LogicalId>;
   /**
+   * Nodes the journal's last change to removes: a node it moved and then removed is gone, as
+   * one it only removed is. A part root lists adopted members where they show before an
+   * edit addresses it, so deleting an adopted member moves it first.
+   */
+  readonly unlistedAtEnd: ReadonlySet<LogicalId>;
+  /**
    * Text nodes this journal describes with a `putNode`, whatever shared state currently holds.
    *
    * The test cannot consult the registry. On a second apply the node already exists, so a
@@ -462,6 +468,7 @@ function planJournal(
   const projection = new JournalProjection(registry);
   const removed: LogicalId[] = [];
   const reinserted = new Set<LogicalId>();
+  const unlistedAtEnd = new Set<LogicalId>();
   const mintedText = new Set<string>();
   const mintedNodes = new Set<string>();
   const replacementsByEffect = new Map<SharedEffect, LogicalId[]>();
@@ -476,6 +483,7 @@ function planJournal(
           const childId = parent.children[at];
           if (childId === undefined) continue;
           removed.push(childId);
+          unlistedAtEnd.add(childId);
           // The runs this same splice inserts at the dropped slot are its replacements.
           if (effect.childLogicalIds.length > 0) {
             const ids = replacementsByEffect.get(effect) ?? [];
@@ -484,16 +492,20 @@ function planJournal(
           }
         }
       }
-      for (const childId of effect.childLogicalIds) reinserted.add(childId);
+      for (const childId of effect.childLogicalIds) {
+        reinserted.add(childId);
+        unlistedAtEnd.delete(childId);
+      }
     } else if (effect.kind === 'moveNode') {
       reinserted.add(effect.logicalId);
+      unlistedAtEnd.delete(effect.logicalId);
     } else if (effect.kind === 'putNode') {
       mintedNodes.add(effect.descriptor.logicalId);
       if (effect.descriptor.kind === 'textValue') mintedText.add(effect.descriptor.logicalId);
     }
     projectEffect(projection, effect);
   }
-  return { removed, reinserted, mintedText, mintedNodes, replacementsByEffect };
+  return { removed, reinserted, unlistedAtEnd, mintedText, mintedNodes, replacementsByEffect };
 }
 
 function mintedNodeCount(effects: readonly SharedEffect[]): number {
@@ -560,10 +572,12 @@ export function applyPrimitiveJournal(
   // text refuses the edit here, where nothing has changed yet.
   let tokens: ReadonlyMap<LogicalId, Token[]>;
   try {
-    tokens = new Map(plan?.paragraphs.map(({ id, after }) => [id, tokensOfParagraph(after)]));
+    tokens = new Map(
+      plan?.paragraphs.map(({ id, after }) => [id, tokensOfParagraph(after, registry.limits)])
+    );
   } catch (error) {
-    if (!(error instanceof SharedTextValueTooLarge)) throw error;
-    return { ok: false, code: 'too-many-nodes', detail: error.detail };
+    if (!(error instanceof SharedTextValueRefused)) throw error;
+    return { ok: false, code: error.code, detail: error.detail };
   }
   registry.doc.transact(() => {
     // Inside the transaction, so the flag is set before Yjs can deliver the events that clear
@@ -649,7 +663,9 @@ function tombstoneRemoved(
   const partRoots = new Set<LogicalId>();
   for (const part of registry.partEntries()) partRoots.add(part.rootLogicalId);
   for (const id of planned.removed) {
-    if (planned.reinserted.has(id) || !registry.hasNode(id) || registry.isTombstoned(id)) continue;
+    // A node the journal moved and left listed survives; one it moved and then removed does not.
+    if (planned.reinserted.has(id) && !planned.unlistedAtEnd.has(id)) continue;
+    if (!registry.hasNode(id) || registry.isTombstoned(id)) continue;
     if (partRoots.has(id)) continue;
     const survivor = inferReplacement(registry, id, formerChildren, effects);
     // The survivor adopts whatever the tombstone still lists, and the tombstone still lists

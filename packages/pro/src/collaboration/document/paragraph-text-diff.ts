@@ -10,6 +10,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import type * as Y from 'yjs';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { linearizeParagraph } from './paragraph-linear.ts';
+import type { DocumentLimits } from './limits.ts';
 import {
   attributeSignature,
   embedContent,
@@ -69,14 +70,14 @@ export function tokensOfText(text: Y.Text, hidden?: ReadonlySet<number>): Token[
   return tokens;
 }
 
-export function tokensOfParagraph(after: OoxmlElement): Token[] {
+export function tokensOfParagraph(after: OoxmlElement, limits: DocumentLimits): Token[] {
   const paragraphId = after.id;
   // Characters of one run share one attributes object, so each is encoded once.
   const encoded = new Map<object, InlineAttributes>();
   return linearizeParagraph(after).items.map((item) => {
     let attributes = encoded.get(item.attributes);
     if (!attributes) {
-      attributes = encodeAttributes(item.attributes, paragraphId);
+      attributes = encodeAttributes(item.attributes, paragraphId, limits);
       encoded.set(item.attributes, attributes);
     }
     if (item.kind === 'char') {

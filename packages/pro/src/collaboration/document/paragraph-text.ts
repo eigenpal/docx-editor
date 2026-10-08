@@ -35,15 +35,16 @@ import {
   elementData,
   encodeId,
   isRecord,
-  jsonNodeCount,
   MAX_JSON_DEPTH,
   MAX_JSON_NODES,
   namespaceCode,
   namespaceFromCode,
   readElement,
   RUN_PROPERTIES_SLOT,
+  hasLongString,
+  refusalOf,
   RUN_SLOT,
-  SharedTextValueTooLarge,
+  SharedTextValueRefused,
   TEXT_SLOT,
   type JsonValue,
   type Slot,
@@ -122,7 +123,9 @@ function propertyName(key: string): { namespaceUri: string; localName: string } 
  */
 export function encodeAttributes(
   attributes: LinearAttributes,
-  paragraphId: string
+  paragraphId: string,
+  /** The bounds readers apply: the writer refuses a value they would drop. */
+  limits: DocumentLimits
 ): InlineAttributes {
   const out: Record<string, string> = {};
   const run = attributes.run;
@@ -132,15 +135,10 @@ export function encodeAttributes(
     out[KEY_RUN_PROPERTIES] = JSON.stringify(
       shellData(attributes.runProperties, paragraphId, RUN_PROPERTIES_SLOT, { o: keys })
     );
-    // A reader decodes a run's properties under one budget.
-    let nodes = 0;
     attributes.properties.forEach((property, index) => {
       const slot = { kind: 'generic', localName: property.localName };
-      const data = elementData(property, slot, true);
-      nodes += jsonNodeCount(data);
-      out[keys[index]!] = JSON.stringify(data);
+      out[keys[index]!] = JSON.stringify(elementData(property, slot, true));
     });
-    if (nodes > MAX_JSON_NODES) throw new SharedTextValueTooLarge(`properties of ${run.id}`);
   }
   if (attributes.text) {
     const textId = attributes.text.id;
@@ -150,27 +148,94 @@ export function encodeAttributes(
     out[KEY_TEXT] = JSON.stringify(shellData(attributes.text, paragraphId, TEXT_SLOT, extra));
   }
   if (attributes.wrap.length > MAX_JSON_DEPTH) {
-    throw new SharedTextValueTooLarge(`${attributes.wrap.length} nested wrappers`);
+    throw new SharedTextValueRefused('tree-too-deep', `${attributes.wrap.length} nested wrappers`);
   }
   if (attributes.wrap.length > 0) {
-    // A reader decodes each wrapper, with its fixed parts, under a budget of its own.
     out[KEY_WRAP] = JSON.stringify(
-      attributes.wrap.map((wrapper) => {
-        const data = shellData(wrapper, paragraphId, null, {
+      attributes.wrap.map((wrapper) =>
+        shellData(wrapper, paragraphId, null, {
           c: wrapper.children.map((child) => elementData(child, null, true)),
-        });
-        if (jsonNodeCount(data) > MAX_JSON_NODES) {
-          throw new SharedTextValueTooLarge(`fixed parts of ${wrapper.id}`);
-        }
-        return data;
-      })
+        })
+      )
     );
+  }
+  if (Object.values(out).some((value) => mayBeUnreadable(value, limits))) {
+    refuseUnreadable(attributes, out, paragraphId, limits);
   }
   return out;
 }
 
+/**
+ * Whether a reader could drop an encoded value: it is long enough to break one of the
+ * reader's length bounds, nests deeper than it reads, or names a key it refuses. Every
+ * other value reads back whole, so a keystroke encodes without reading its value back.
+ */
+function mayBeUnreadable(value: string, limits: DocumentLimits): boolean {
+  const shortest = Math.min(
+    limits.maxStringLength,
+    limits.maxAttributes,
+    limits.maxChildren,
+    limits.maxTextLength,
+    MAX_JSON_NODES
+  );
+  if (value.length > shortest || DANGEROUS_KEY.test(value)) return true;
+  // Each element level opens an object and its child list.
+  let depth = 0;
+  for (let at = 0; at < value.length; at += 1) {
+    const code = value.charCodeAt(at);
+    if (code === 0x7b || code === 0x5b) {
+      depth += 1;
+      if (depth > 2 * MAX_JSON_DEPTH + 2) return true;
+    } else if (code === 0x7d || code === 0x5d) {
+      depth -= 1;
+    }
+  }
+  return false;
+}
+
+/** A key the reader refuses wherever it stands. */
+const DANGEROUS_KEY = /__proto__|constructor|prototype/;
+
+/**
+ * Refuse attributes a reader would read back with a part missing: a run, a property, a text
+ * element, or a wrapper. The reader drops what breaks one of its bounds, so the writer reads
+ * its own output under the same bounds, and refuses with the bound broken rather than
+ * publish a document every replica shows without the part.
+ */
+function refuseUnreadable(
+  attributes: LinearAttributes,
+  out: Readonly<Record<string, string>>,
+  paragraphId: string,
+  limits: DocumentLimits
+): void {
+  const read = decodeAttributes(out, limits, paragraphId);
+  if (
+    (read.run === null) === (attributes.run === null) &&
+    read.properties.length === (attributes.run ? attributes.properties.length : 0) &&
+    (read.text === null) === (attributes.text === null) &&
+    read.wrap.length === attributes.wrap.length
+  ) {
+    return;
+  }
+  for (const [key, value] of Object.entries(out)) {
+    const parsed = parseJson(value);
+    const values = Array.isArray(parsed) ? parsed : [parsed];
+    for (const entry of values) {
+      const code = refusalOf(entry as JsonValue, limits);
+      if (code !== 'invalid-string' || hasLongString(entry, limits)) {
+        throw new SharedTextValueRefused(code, `${key} of an item in ${paragraphId}`);
+      }
+    }
+  }
+  throw new SharedTextValueRefused('invalid-string', `an item in ${paragraphId}`);
+}
+
 /** The shared text's content for one inline sequence, consecutive equal attributes merged. */
-export function encodeItems(items: readonly LinearItem[], paragraphId: string): InlineDeltaOp[] {
+export function encodeItems(
+  items: readonly LinearItem[],
+  paragraphId: string,
+  limits: DocumentLimits
+): InlineDeltaOp[] {
   const ops: InlineDeltaOp[] = [];
   let pending: { text: string; attributes: InlineAttributes; signature: string } | null = null;
   const flush = (): void => {
@@ -178,7 +243,7 @@ export function encodeItems(items: readonly LinearItem[], paragraphId: string): 
     pending = null;
   };
   for (const item of items) {
-    const attributes = encodeAttributes(item.attributes, paragraphId);
+    const attributes = encodeAttributes(item.attributes, paragraphId, limits);
     if (item.kind === 'char') {
       const signature = attributeSignature(attributes);
       if (pending && pending.signature === signature) pending.text += item.value;

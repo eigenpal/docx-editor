@@ -19,7 +19,7 @@ import {
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
 import { type AttributeFields, attributeListFrom, elementFrom, textNode } from './node-shapes.ts';
-import { rejectDangerousKey, type DocumentLimits } from './limits.ts';
+import { rejectDangerousKey, type DocumentLimits, type LimitCode } from './limits.ts';
 
 export type JsonValue =
   | string
@@ -63,11 +63,74 @@ export function jsonNodeCount(value: JsonValue, depth = 0): number {
   return count;
 }
 
-/** A value too large for the shared text: the writer refuses it rather than lose it. */
-export class SharedTextValueTooLarge extends Error {
-  constructor(readonly detail: string) {
-    super(`shared text value too large: ${detail}`);
+/**
+ * A value the shared text cannot hold: a reader would drop it. The writer refuses it with
+ * the bound it breaks, rather than publish what every reader then loses.
+ */
+export class SharedTextValueRefused extends Error {
+  constructor(
+    readonly code: LimitCode,
+    readonly detail: string
+  ) {
+    super(`shared text value refused (${code}): ${detail}`);
   }
+}
+
+/**
+ * The bound a value breaks that `readElement` would drop it for, as a failure code. Reads
+ * every bound the reader applies; `invalid-string` when none is broken, as for a name the
+ * reader cannot read.
+ */
+export function refusalOf(value: JsonValue, limits: DocumentLimits, depth = 0): LimitCode {
+  if (depth === 0 && jsonNodeCount(value) > MAX_JSON_NODES) return 'too-many-nodes';
+  if (depth > MAX_JSON_DEPTH) return 'tree-too-deep';
+  if (!isRecord(value)) return 'invalid-string';
+  for (const [key, field] of Object.entries(value)) {
+    if (key === 'v' && typeof field === 'string') {
+      if (field.length > limits.maxTextLength) return 'text-too-long';
+    } else if (typeof field === 'string' && field.length > limits.maxStringLength) {
+      return 'invalid-string';
+    }
+  }
+  for (const key of ['a', 'b'] as const) {
+    const list = value[key];
+    if (!Array.isArray(list)) continue;
+    if (list.length > limits.maxAttributes) return 'too-many-attributes';
+    for (const entry of list) {
+      if (!Array.isArray(entry)) continue;
+      for (const part of entry) {
+        if (typeof part === 'string' && part.length > limits.maxStringLength) {
+          return 'invalid-string';
+        }
+        if (typeof part === 'string' && rejectDangerousKey(part)) return 'prototype-key';
+      }
+    }
+  }
+  for (const key of ['l', 'k', 'p'] as const) {
+    const name = value[key];
+    if (typeof name === 'string' && rejectDangerousKey(name)) return 'prototype-key';
+  }
+  const children = value.c;
+  if (Array.isArray(children)) {
+    if (children.length > limits.maxChildren) return 'too-many-children';
+    for (const child of children) {
+      const code = refusalOf(child as JsonValue, limits, depth + 1);
+      if (code !== 'invalid-string' || hasLongString(child, limits)) return code;
+    }
+  }
+  return 'invalid-string';
+}
+
+/** Whether a value holds a string longer than the reader takes, outside text values. */
+export function hasLongString(value: unknown, limits: DocumentLimits): boolean {
+  if (typeof value === 'string') return value.length > limits.maxStringLength;
+  if (Array.isArray(value)) return value.some((entry) => hasLongString(entry, limits));
+  if (isRecord(value)) {
+    return Object.entries(value).some(([key, field]) =>
+      key === 'v' ? false : hasLongString(field, limits)
+    );
+  }
+  return false;
 }
 
 /** Short codes for namespaces other than WordprocessingML. A URI never starts with `#`. */

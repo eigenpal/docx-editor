@@ -80,6 +80,7 @@ interface HistoryStack {
   readonly redoStack: StackItemShape[];
   undo(): unknown;
   redo(): unknown;
+  stopCapturing(): void;
 }
 
 /**
@@ -108,10 +109,9 @@ export function stepHistory(
       ? copiesOf(registry, popped)
       : (runsOf<DeletedRun>(popped, COPY_RUNS) ?? []);
   const before = opposite.length;
-  if (
-    popped?.meta.get(COPIES_ONLY) === true ||
-    (runs.length > 0 && nothingElse(registry, popped))
-  ) {
+  // A step for copies alone that Yjs later merged an edit into has that edit to reverse too.
+  const copiesOnly = popped?.meta.get(COPIES_ONLY) === true && changesOf(popped) === 0;
+  if (copiesOnly || (runs.length > 0 && nothingElse(registry, popped))) {
     stack.pop();
   } else if (direction === 'undo') {
     history.undo();
@@ -144,6 +144,15 @@ export function stepHistory(
     direction === 'redo' ? popped : pushed,
     registry.takeUnlisted()
   );
+  // The next edit is a step of its own. Yjs merges an edit made within its capture window into
+  // the step on top, and a step this module pushed would take an edit it then never reverses.
+  history.stopCapturing();
+}
+
+/** How many runs of items a step reverses: what it inserted and what it deleted. */
+function changesOf(step: StackItemShape): number {
+  const shape = step as { insertions?: unknown; deletions?: unknown };
+  return deleteSetRuns(shape.insertions).length + deleteSetRuns(shape.deletions).length;
 }
 
 /**

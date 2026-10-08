@@ -28,7 +28,7 @@ function throughSharedText(paragraph: OoxmlElement): OoxmlElement {
   const doc = new Y.Doc();
   const text = doc.getText('inline');
   let at = 0;
-  for (const op of encodeItems(linear.items, paragraph.id)) {
+  for (const op of encodeItems(linear.items, paragraph.id, DEFAULT_DOCUMENT_LIMITS)) {
     if (typeof op.insert === 'string') {
       text.insert(at, op.insert, { ...op.attributes });
       at += op.insert.length;
