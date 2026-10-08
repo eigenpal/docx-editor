@@ -31,7 +31,7 @@ Use the named part for controls that collect a value or open UI, such as `FontCo
 </Framework>
 </FrameworkTabs>
 
-Use `Action` for a host-owned action without a registry slot. Use `Separator` only for layout. The `Button`, `Action`, and `Separator` helpers don't add slot IDs.
+Use `Action` for a host-owned action without a registry slot. Use `Separator` only for layout. Use `Group` to add controls to the preset toolbar as a group that collapses into the **More** panel, and `Slot` to replace one slot with your own content. `AddComment` starts a comment draft in the review rail. The `Button`, `Action`, `Separator`, `Group`, `Slot`, and `AddComment` helpers don't add slot IDs.
 
 ## History, zoom, styles, and font
 
@@ -89,7 +89,7 @@ Comments and reviewer filtering require the Pro review module. Content-control s
 
 | Slot | Packaged surface | Toolbar part | Purpose |
 | --- | --- | --- | --- |
-| `review.comments` | Default toolbar | `Comments` | Open comments and changes |
+| `review.comments` | Default toolbar | `Comments` | Show or hide the comments and changes pane. To start a comment, use the `AddComment` part, which is not a slot |
 | `review.paragraphMarks` | Review menu | — | Show paragraph-break marks |
 | `review.protectDocument` | Review menu | — | Toggle document protection |
 | `review.simpleMarkup` | Review menu | — | Show the proposed result with change bars |
@@ -118,7 +118,7 @@ The toolbar shows image controls when you select an image. It shows table border
 | `image.properties` | Image context | `ImageProperties` | Open image properties |
 | `image.wrap` | Image context | `ImageWrap` | Choose text wrapping |
 | `image.altText` | Image context | `ImageAltText` | Edit alternative text |
-| `table.insert` | Insert menu | `TableInsert` | Insert a table |
+| `table.insert` | Insert menu | `TableInsert` | Insert a table of the size picked in a 6×6 grid |
 | `table.borderTarget` | Table context | `TableBorderTarget` | Choose which borders to affect |
 | `table.borderColor` | Table context | `TableBorderColor` | Choose and apply border color |
 | `table.borderStyle` | Table context | `TableBorderStyle` | Choose border style |

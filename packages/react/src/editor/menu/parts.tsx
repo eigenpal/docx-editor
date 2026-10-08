@@ -26,7 +26,14 @@ import { useDocxEditor } from '../context';
 import { openReportIssue } from '../../lib/reportIssue';
 import { useEditorCommand } from '../useEditorCommand';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
-import { useMenuContext, useMenuLabel, type MenuId } from './menu-context';
+import {
+  MENU_OVERFLOW_ID,
+  useMenuContext,
+  useMenuLabel,
+  useMenuOverflow,
+  type MenuId,
+} from './menu-context';
+import { GROUP_ATTRIBUTE, MORE_ATTRIBUTE } from '../toolbar/useToolbarOverflow';
 import { usePlatformShortcut } from '../usePlatformShortcut';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
 import { useImageInsertOptional } from '../images/ImageInsert';
@@ -476,6 +483,8 @@ const EDGE_INSET = 8;
 export interface MenuSubmenuProps {
   /** i18n key of the parent row's label. */
   labelKey: string;
+  /** Literal parent row label, already resolved. Wins over `labelKey`. */
+  label?: string;
   /** Material Symbols paths for the parent row's icon. */
   paths?: readonly string[] | null;
   className?: string;
@@ -492,13 +501,19 @@ export interface MenuSubmenuProps {
  *
  * @public
  */
-export function MenuSubmenu({ labelKey, paths, className, children }: MenuSubmenuProps) {
+export function MenuSubmenu({
+  labelKey,
+  label: literal,
+  paths,
+  className,
+  children,
+}: MenuSubmenuProps) {
   const label = useMenuLabel();
   const [open, setOpen] = useState(false);
   const parentRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const panelId = useId();
-  const text = label(labelKey);
+  const text = literal ?? label(labelKey);
 
   // Placed in client space, not with `left: 100%`. The context menu is a scroller
   // (`max-height` plus `overflow-y: auto`, which forces the other axis to `auto` with it), so
@@ -820,6 +835,7 @@ export function Menu({
   children,
 }: MenuProps) {
   const { openMenu, setOpenMenu, activeMenu } = useMenuContext();
+  const { measuring, overflow, inMore } = useMenuOverflow();
   const label = useMenuLabel();
   const panelId = useId();
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -838,7 +854,20 @@ export function Menu({
   const open = openMenu === id;
   if (hidden) return null;
   const text = literal ?? label(labelKey ?? registry?.labelKey ?? id);
+  // A menu that does not fit renders in the "⋯" menu instead of the bar, as a submenu row
+  // with the same panel. Inside that menu, every menu that still fits renders nothing.
+  const collapsed = overflow.has(id);
+  if (inMore) {
+    if (!collapsed) return null;
+    return (
+      <MenuSubmenu labelKey={labelKey ?? registry?.labelKey ?? id} label={text}>
+        {mergePanel(registry?.entries, children, preset)}
+      </MenuSubmenu>
+    );
+  }
+  if (collapsed) return null;
   const rows = mergePanel(registry?.entries, children, preset);
+  const iconOnly = id === MENU_OVERFLOW_ID;
   // Closing returns focus to the trigger. Every close path UNMOUNTS the panel, so without
   // this the element holding focus disappears and focus falls to <body> — the user is
   // dumped at the top of the page with no announcement and has to tab back through the
@@ -855,6 +884,9 @@ export function Menu({
       role="none"
       className={`docx-menubar__menu-root${className ? ` ${className}` : ''}`}
       data-menu={id}
+      // Measured as a unit that can move into the "⋯" menu. The "⋯" menu itself cannot.
+      {...(measuring && !iconOnly ? { [GROUP_ATTRIBUTE]: id } : {})}
+      {...(iconOnly ? { [MORE_ATTRIBUTE]: '' } : {})}
     >
       <button
         ref={triggerRef}
@@ -867,8 +899,15 @@ export function Menu({
         // Roving tabindex: the bar is ONE tab stop, and arrows move within it. Without
         // this every trigger is a stop and a keyboard user tabs through four of them to
         // get past the editor's chrome.
-        tabIndex={activeMenu === id ? 0 : -1}
+        // When the active menu moved into "⋯", the "⋯" trigger holds the stop instead.
+        tabIndex={
+          activeMenu === id || (iconOnly && activeMenu !== null && overflow.has(activeMenu))
+            ? 0
+            : -1
+        }
         {...(open ? { 'data-open': '' } : {})}
+        // The "⋯" trigger shows only its icon, so its name goes on the element.
+        {...(iconOnly ? { 'aria-label': text, title: text } : {})}
         onMouseDown={guardToolbarMousedown}
         onKeyDown={(event) => {
           if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
@@ -909,7 +948,7 @@ export function Menu({
             {icon}
           </span>
         ) : null}
-        {text}
+        {iconOnly ? null : text}
       </button>
       {open ? (
         <div

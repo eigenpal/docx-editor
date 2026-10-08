@@ -16,7 +16,9 @@ import { useDocxEditor } from '../context';
 import { openReportIssue } from '../../lib/reportIssue';
 import { useEditorCommand } from '../useEditorCommand';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
-import { useMenuContext, useMenuLabel, type MenuContextValue, type MenuId } from './menu-context';
+import { MENU_OVERFLOW_ID, useMenuContext, useMenuLabel, useMenuOverflow } from './menu-context';
+import type { MenuContextValue, MenuId } from './menu-context';
+import { GROUP_ATTRIBUTE, MORE_ATTRIBUTE } from '../toolbar/useToolbarOverflow';
 import { usePlatformShortcut } from '../usePlatformShortcut';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
 import { useImageInsertOptional } from '../images/ImageInsert';
@@ -719,6 +721,7 @@ export const Menu = defineComponent({
   },
   setup(props, { slots }) {
     const menuContext = useMenuContext();
+    const menuOverflow = useMenuOverflow();
     const label = useMenuLabel();
     const panelId = useStableDocxId('menu-panel');
     const triggerRef = ref<HTMLButtonElement | null>(null);
@@ -737,6 +740,20 @@ export const Menu = defineComponent({
       const registry = CHROME_MENUS.find((menu) => menu.id === props.id);
       const open = openMenu === props.id;
       const text = props.label ?? label(props.labelKey ?? registry?.labelKey ?? props.id);
+      // A menu that does not fit renders in the "⋯" menu instead of the bar, as a submenu
+      // row with the same panel. Inside that menu, every menu that still fits renders nothing.
+      const { measuring, overflow, inMore } = menuOverflow.value;
+      const collapsed = overflow.has(props.id);
+      if (inMore) {
+        if (!collapsed) return null;
+        return (
+          <MenuSubmenu labelKey={props.labelKey ?? registry?.labelKey ?? props.id} label={text}>
+            {mergePanel(registry?.entries, flattenChildren(slots.default?.() ?? []), props.preset)}
+          </MenuSubmenu>
+        );
+      }
+      if (collapsed) return null;
+      const iconOnly = props.id === MENU_OVERFLOW_ID;
       const rows = mergePanel(
         registry?.entries,
         flattenChildren(slots.default?.() ?? []),
@@ -748,6 +765,9 @@ export const Menu = defineComponent({
           role="none"
           class={`docx-menubar__menu-root${props.className ? ` ${props.className}` : ''}`}
           data-menu={props.id}
+          // Measured as a unit that can move into the "⋯" menu. The "⋯" menu itself cannot.
+          {...(measuring && !iconOnly ? { [GROUP_ATTRIBUTE]: props.id } : {})}
+          {...(iconOnly ? { [MORE_ATTRIBUTE]: '' } : {})}
         >
           <button
             ref={triggerRef}
@@ -757,8 +777,11 @@ export const Menu = defineComponent({
             aria-expanded={open}
             aria-controls={open ? panelId : undefined}
             class="docx-menubar__trigger"
-            tabindex={activeMenu === props.id ? 0 : -1}
+            // When the active menu moved into "⋯", the "⋯" trigger holds the stop instead.
+            tabindex={activeMenu === props.id || (iconOnly && overflow.has(activeMenu!)) ? 0 : -1}
             {...(open ? { 'data-open': '' } : {})}
+            // The "⋯" trigger shows only its icon, so its name goes on the element.
+            {...(iconOnly ? { 'aria-label': text, title: text } : {})}
             onMousedown={guardToolbarMousedown}
             onKeydown={(event) => {
               if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
@@ -796,7 +819,7 @@ export const Menu = defineComponent({
                 {props.icon}
               </span>
             ) : null}
-            {text}
+            {iconOnly ? null : text}
           </button>
           {open ? (
             <div

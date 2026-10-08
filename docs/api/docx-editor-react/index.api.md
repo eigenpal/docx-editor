@@ -906,6 +906,7 @@ export interface DocxEditorMenuProps {
     onPageSetup?: () => void;
     onReportIssue?: () => void;
     onSave?: () => void;
+    overflow?: boolean;
     preset?: boolean;
     reportIssue?: boolean;
     t?: ToolbarTranslate;
@@ -1440,6 +1441,7 @@ export interface DocxEditorToolbarNamespace {
     // (undocumented)
     (props: DocxEditorToolbarProps): ReactNode;
     readonly Action: typeof ToolbarAction;
+    readonly AddComment: typeof ToolbarAddComment;
     // (undocumented)
     readonly AlignCenter: ToolbarPartComponent;
     // (undocumented)
@@ -1476,6 +1478,7 @@ export interface DocxEditorToolbarNamespace {
     readonly FontFamily: typeof FontFamily;
     // (undocumented)
     readonly FontSize: ToolbarSlotPartComponent;
+    readonly Group: typeof ToolbarGroup$1;
     // (undocumented)
     readonly Highlight: ToolbarColorSplitComponent;
     // (undocumented)
@@ -1510,6 +1513,7 @@ export interface DocxEditorToolbarNamespace {
     readonly Save: ToolbarSlotPartComponent;
     // (undocumented)
     readonly Separator: typeof ToolbarSeparator;
+    readonly Slot: typeof ToolbarSlot;
     // (undocumented)
     readonly Strike: ToolbarPartComponent;
     // (undocumented)
@@ -1986,6 +1990,7 @@ export interface MenuSubmenuProps {
     children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
+    label?: string;
     labelKey: string;
     paths?: readonly string[] | null;
 }
@@ -2595,6 +2600,21 @@ export interface ToolbarContextValue {
 // @public @deprecated (undocumented)
 export function ToolbarGroup(input: ToolbarGroupProps): react__default.JSX.Element;
 
+// @public
+export interface ToolbarGroupPartProps {
+    after?: string;
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+    id: string;
+    label?: string;
+    overflowContent?: () => DocxEditorChildren;
+    pinned?: boolean;
+    priority?: number;
+}
+
 // @public (undocumented)
 export const ToolbarImageProperties: typeof ImagePropertiesTrigger & {
     docxSlot: 'image.properties';
@@ -2695,6 +2715,15 @@ export type ToolbarReviewersProps = {
 export interface ToolbarSeparatorProps {
     // (undocumented)
     className?: string;
+}
+
+// @public
+export interface ToolbarSlotOverrideProps {
+    // (undocumented)
+    children?: DocxEditorChildren;
+    hidden?: boolean;
+    overflowContent?: () => DocxEditorChildren;
+    slot: ChromeSlotId;
 }
 
 // @public

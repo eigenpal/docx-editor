@@ -79,14 +79,130 @@ export interface ToolbarFitInput {
   readonly hysteresis?: number;
 }
 
-/** The collapse order actually used: the declared one, with undeclared groups first. */
+/**
+ * The priority of a declared group: its place in {@link TOOLBAR_COLLAPSE_ORDER}, in steps of
+ * 10, so zoom is 10 and history is 90. A host group with a `priority` sorts among these, and
+ * a LOWER number leaves the bar first. The steps leave room between two built-in groups.
+ */
+export function toolbarGroupPriority(
+  id: string,
+  order: readonly string[] = TOOLBAR_COLLAPSE_ORDER
+): number | undefined {
+  const index = order.indexOf(id);
+  return index === -1 ? undefined : (index + 1) * 10;
+}
+
+/**
+ * The collapse order actually used: the declared one, with undeclared groups first.
+ *
+ * `priorities` gives a group an explicit place among the declared ones (see
+ * {@link toolbarGroupPriority}), and overrides a declared group's own priority. Groups with
+ * neither collapse first, in reverse bar order. Two groups with the same priority collapse
+ * in reverse bar order too: the one further along the bar leaves first.
+ */
 export function collapseOrder(
   groups: readonly string[],
-  order: readonly string[] = TOOLBAR_COLLAPSE_ORDER
+  order: readonly string[] = TOOLBAR_COLLAPSE_ORDER,
+  priorities?: ReadonlyMap<string, number>
 ): readonly string[] {
-  const declared = order.filter((id) => groups.includes(id));
-  const undeclared = groups.filter((id) => !order.includes(id)).reverse();
-  return [...undeclared, ...declared];
+  const ranked: { id: string; priority: number; position: number }[] = [];
+  const undeclared: string[] = [];
+  groups.forEach((id, position) => {
+    const priority = priorities?.get(id) ?? toolbarGroupPriority(id, order);
+    if (priority === undefined || Number.isNaN(priority)) undeclared.push(id);
+    else ranked.push({ id, priority, position });
+  });
+  ranked.sort((a, b) => a.priority - b.priority || b.position - a.position);
+  return [...undeclared.reverse(), ...ranked.map((entry) => entry.id)];
+}
+
+/** One host group's placement request. */
+export interface ToolbarHostGroupPlacement {
+  readonly id: string;
+  /** The group this one follows. Absent, or unknown, places it after every group. */
+  readonly after?: string | undefined;
+}
+
+/**
+ * Bar order with the host's groups placed.
+ *
+ * A host group without `after` follows every built-in group, in order of appearance. A group
+ * with `after` follows the group it names, after any host groups already placed there, so
+ * several groups anchored to one place keep their order of appearance. An anchor may be
+ * another host group. An anchor that never resolves (an unknown id, or a cycle) places the
+ * group at the end.
+ */
+export function arrangeToolbarGroups(
+  builtIn: readonly string[],
+  hosts: readonly ToolbarHostGroupPlacement[]
+): readonly string[] {
+  const result = [...builtIn];
+  // The last id placed after each anchor, so a second group anchored there follows the first.
+  const tail = new Map<string, string>();
+  let pending = hosts.filter((host) => !builtIn.includes(host.id));
+  while (pending.length > 0) {
+    const deferred: ToolbarHostGroupPlacement[] = [];
+    for (const host of pending) {
+      const anchor = host.after;
+      if (anchor === undefined || anchor === host.id) {
+        result.push(host.id);
+        continue;
+      }
+      if (!result.includes(anchor)) {
+        deferred.push(host);
+        continue;
+      }
+      const after = tail.get(anchor) ?? anchor;
+      result.splice(result.indexOf(after) + 1, 0, host.id);
+      tail.set(anchor, host.id);
+    }
+    if (deferred.length === pending.length) {
+      // Nothing resolved in this pass: the rest name groups that do not exist.
+      result.push(...deferred.map((host) => host.id));
+      break;
+    }
+    pending = deferred;
+  }
+  return result;
+}
+
+/** The margin the "⋯" panel keeps from each viewport edge, in px. */
+export const TOOLBAR_PANEL_EDGE_MARGIN = 8;
+
+/** Where the "⋯" panel opens, in viewport px. */
+export interface ToolbarPanelPlacement {
+  /** The panel's left edge. */
+  readonly left: number;
+  /** The widest the panel may be: the viewport less both margins. */
+  readonly maxWidth: number;
+  /** Which trigger edge the panel lines up with, or `clamped` when neither fits. */
+  readonly anchor: 'start' | 'end' | 'clamped';
+}
+
+/**
+ * Keep the "⋯" panel inside the viewport.
+ *
+ * The panel lines up with the trigger's end edge first, which suits a trigger at the end of
+ * the bar. When that runs past the left edge (a centered or narrow bar), it lines up with
+ * the trigger's start edge instead. When neither fits, it is clamped to the margins.
+ */
+export function toolbarPanelPlacement(input: {
+  readonly triggerLeft: number;
+  readonly triggerRight: number;
+  readonly panelWidth: number;
+  readonly viewportWidth: number;
+  readonly margin?: number;
+}): ToolbarPanelPlacement {
+  const margin = input.margin ?? TOOLBAR_PANEL_EDGE_MARGIN;
+  const maxWidth = Math.max(0, input.viewportWidth - margin * 2);
+  const width = Math.min(input.panelWidth, maxWidth);
+  const min = margin;
+  const max = input.viewportWidth - margin - width;
+  const end = input.triggerRight - width;
+  if (end >= min && end <= max) return { left: end, maxWidth, anchor: 'end' };
+  const start = input.triggerLeft;
+  if (start >= min && start <= max) return { left: start, maxWidth, anchor: 'start' };
+  return { left: Math.max(min, Math.min(end, max)), maxWidth, anchor: 'clamped' };
 }
 
 function fit(input: ToolbarFitInput, available: number): ReadonlySet<string> {

@@ -19,8 +19,11 @@ import type { ReactNode } from 'react';
 // never displayName, which minifies away) — REPLACES its slot in the default
 // arrangement in place, so `<Toolbar><Bold className="fat"/></Toolbar>` is still the
 // whole toolbar with one customized button. A part child with `hidden` removes its
-// slot (the part renders null where it stands). Non-part children append after the
-// default set. `preset={false}` opts out entirely: children render verbatim.
+// slot (the part renders null where it stands), and a group whose slots are all hidden is
+// dropped with its separator. `Toolbar.Group` children describe groups: a built-in id adds
+// controls to that group or hides it, any other id is a host group that is measured and
+// collapses like the built-in ones. Other children append after the default set and never
+// collapse. `preset={false}` opts out entirely: children render verbatim.
 //
 // ONE ROW, MEASURED. The bar used to wrap to a second and third row when it ran out of
 // width, which on a laptop beside an open navigation pane cost more vertical space than the
@@ -51,7 +54,16 @@ import {
   ToolbarOverflowItem,
   type ToolbarOverflowSection,
 } from './ToolbarOverflow';
-import { collapseOrder, TOOLBAR_PINNED_GROUPS } from './toolbar-overflow';
+import {
+  arrangeToolbarGroups,
+  collapseOrder,
+  TOOLBAR_COLLAPSE_ORDER,
+  TOOLBAR_PINNED_GROUPS,
+} from './toolbar-overflow';
+import { readToolbarChildren, type ToolbarChildren } from './toolbar-children';
+import { ToolbarGroup, ToolbarPlacementContext, ToolbarSlot } from './ToolbarGroup';
+import { ToolbarAddComment } from './AddComment';
+import { warnSlotOutsideArrangement, warnUnknownGroupAnchor } from './toolbar-warnings';
 import { FIXED_ATTRIBUTE, GROUP_ATTRIBUTE, useToolbarOverflow } from './useToolbarOverflow';
 import {
   type ImageAltTextPartComponent,
@@ -314,14 +326,37 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
     () => new Set(defaultGroups.flatMap((group) => group.entries.map((entry) => entry.slot))),
     [defaultGroups]
   );
+  // Read once per render, before measuring: which groups exist decides what can collapse.
+  const parsed = useMemo(
+    () =>
+      preset
+        ? readToolbarChildren<ArrangementKey>(
+            children,
+            slotOfChild,
+            (slot) => defaultSlots.has(slot),
+            (slot) => (TABLE_CHROME_SLOTS as readonly string[]).includes(slot)
+          )
+        : null,
+    [preset, children, defaultSlots]
+  );
+  const arranged = useMemo(
+    () => (parsed ? arrangeGroups(defaultGroups, parsed) : []),
+    [defaultGroups, parsed]
+  );
   const collapsible = useMemo(
     () => [
-      ...defaultGroups.map((group) => group.id).filter((id) => !TOOLBAR_PINNED_GROUPS.has(id)),
+      ...arranged.filter((group) => !group.pinned).map((group) => group.id),
       ...(tableChromeVisible ? [TABLE_CONTEXTUAL_GROUP_ID] : []),
     ],
-    [defaultGroups, tableChromeVisible]
+    [arranged, tableChromeVisible]
   );
-  const collapseOrderIds = useMemo(() => collapseOrder(collapsible), [collapsible]);
+  const collapseOrderIds = useMemo(() => {
+    const priorities = new Map<string, number>();
+    for (const group of arranged) {
+      if (group.priority !== undefined) priorities.set(group.id, group.priority);
+    }
+    return collapseOrder(collapsible, TOOLBAR_COLLAPSE_ORDER, priorities);
+  }, [arranged, collapsible]);
 
   // Only the preset arrangement has groups to collapse; `preset={false}` is the host's own
   // markup, and moving pieces of it into a menu would be the library rearranging a bar it
@@ -330,24 +365,10 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
   const { attach, overflow } = useToolbarOverflow(measuring, collapsible, collapseOrderIds);
 
   let content: ReactNode;
-  if (!preset) {
+  if (!parsed) {
     content = children;
   } else {
-    const kids = Children.toArray(children);
-    const overrides = new Map<ArrangementKey, ReactElement>();
-    const tableOverrides = new Map<ArrangementKey, ReactElement>();
-    const appended: ReactNode[] = [];
-    for (const child of kids) {
-      const slot = slotOfChild(child);
-      if (slot && defaultSlots.has(slot)) {
-        // Last override for a slot wins, matching how later props win in a spread.
-        overrides.set(slot, child as ReactElement);
-      } else if (slot && (TABLE_CHROME_SLOTS as readonly string[]).includes(slot)) {
-        tableOverrides.set(slot, child as ReactElement);
-      } else {
-        appended.push(child);
-      }
-    }
+    const { overrides, tableOverrides, appended } = parsed;
 
     const render = (entry: DefaultEntry): ReactNode => {
       // A `hidden` override renders null where it stands, removing the slot.
@@ -367,13 +388,15 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
     const bar: ReactNode[] = [];
     const sections: ToolbarOverflowSection[] = [];
     let drawn = 0;
-    for (const group of defaultGroups) {
+    for (const group of arranged) {
       if (overflow.has(group.id)) {
         const rows = group.entries.flatMap((entry) => {
           const row = overflowRow(entry, overrides, label, group.labelKey, render);
           if (row === null) return [];
           return [<Fragment key={entry.slot}>{row}</Fragment>];
         });
+        const extra = hostPanelContent(group);
+        if (extra !== null) rows.push(<Fragment key="host">{extra}</Fragment>);
         if (rows.length === 0) continue;
         sections.push({
           id: group.id,
@@ -386,17 +409,18 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
       // does not renumber the ones that stayed.
       if (drawn > 0) bar.push(<ToolbarSeparator key={`separator-${group.id}`} />);
       drawn += 1;
-      const pinned = TOOLBAR_PINNED_GROUPS.has(group.id);
       bar.push(
         <div
           key={group.id}
-          className="docx-toolbar__group"
+          className={`docx-toolbar__group${group.className ? ` ${group.className}` : ''}`}
+          {...(group.host ? { role: 'group', 'aria-label': label(group.labelKey) } : {})}
           // Pinned groups are costed as fixed width rather than offered to the fit.
-          {...(pinned ? { [FIXED_ATTRIBUTE]: '' } : { [GROUP_ATTRIBUTE]: group.id })}
+          {...(group.pinned ? { [FIXED_ATTRIBUTE]: '' } : { [GROUP_ATTRIBUTE]: group.id })}
         >
           {group.entries.map((entry) => (
             <Fragment key={entry.slot}>{render(entry)}</Fragment>
           ))}
+          {group.extras.length > 0 ? <Fragment key="host">{group.extras}</Fragment> : null}
         </div>
       );
     }
@@ -440,8 +464,9 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
           </div>
         ) : null}
         {appended.length > 0 ? (
-          // Host children never collapse — the library does not own them — so they are
-          // costed as fixed width like a pinned group.
+          // Loose host children never collapse: they have no group, and so no label for a
+          // panel section. They are costed as fixed width like a pinned group. A host that
+          // wants them to collapse puts them in a `Toolbar.Group`.
           <div className="docx-toolbar__group" {...{ [FIXED_ATTRIBUTE]: '' }}>
             {appended}
           </div>
@@ -498,6 +523,105 @@ function isHiddenOverride(override: ReactElement | undefined): boolean {
   return Boolean((override.props as { hidden?: boolean }).hidden);
 }
 
+/** A group as the preset bar renders it: built-in or host-owned, in bar order. */
+interface ArrangedGroup {
+  readonly id: string;
+  /** Panel heading and host-group name: a registry key, or the host's label. */
+  readonly labelKey: string;
+  readonly entries: readonly DefaultEntry[];
+  /** Host content: a host group's children, or controls added to a built-in group. */
+  readonly extras: readonly ReactNode[];
+  readonly pinned: boolean;
+  readonly priority: number | undefined;
+  readonly overflowContent: (() => DocxEditorChildren) | undefined;
+  readonly className: string | undefined;
+  readonly host: boolean;
+}
+
+/**
+ * The bar's groups: the built-in ones with their `Toolbar.Group` changes applied, and the
+ * host's own groups placed by {@link arrangeToolbarGroups}. A group with nothing left to
+ * render (hidden, or every slot hidden and no host content) is dropped, so it leaves no
+ * empty box and no separator in the bar or the panel.
+ */
+function arrangeGroups(
+  defaultGroups: readonly DefaultGroup[],
+  parsed: ToolbarChildren<ArrangementKey>
+): readonly ArrangedGroup[] {
+  const specs = new Map(parsed.groups.map((spec) => [spec.id, spec]));
+  const builtInIds = new Set(defaultGroups.map((group) => group.id));
+  const byId = new Map<string, ArrangedGroup>();
+  for (const group of defaultGroups) {
+    const spec = specs.get(group.id);
+    if (spec?.hidden) continue;
+    const extras = spec?.children != null ? [spec.children] : [];
+    const visible = group.entries.some(
+      (entry) => !isHiddenOverride(parsed.overrides.get(entry.slot))
+    );
+    if (!visible && extras.length === 0) continue;
+    byId.set(group.id, {
+      id: group.id,
+      labelKey: group.labelKey,
+      entries: group.entries,
+      extras,
+      pinned: spec?.pinned ?? TOOLBAR_PINNED_GROUPS.has(group.id),
+      priority: spec?.priority,
+      overflowContent: spec?.overflowContent,
+      className: spec?.className,
+      host: false,
+    });
+  }
+  const hosts = parsed.groups.filter(
+    (spec) => !builtInIds.has(spec.id) && spec.id !== TABLE_CONTEXTUAL_GROUP_ID
+  );
+  for (const spec of hosts) {
+    if (spec.hidden || spec.children == null) continue;
+    byId.set(spec.id, {
+      id: spec.id,
+      labelKey: spec.label ?? spec.id,
+      entries: [],
+      extras: [spec.children],
+      pinned: spec.pinned === true,
+      priority: spec.priority,
+      overflowContent: spec.overflowContent,
+      className: spec.className,
+      host: true,
+    });
+  }
+  const known = [...builtInIds, ...hosts.map((spec) => spec.id)];
+  for (const spec of hosts) {
+    if (spec.after !== undefined && !known.includes(spec.after)) {
+      warnUnknownGroupAnchor(spec.id, spec.after, known);
+    }
+  }
+  for (const child of parsed.appended) {
+    // A `Toolbar.Slot` exists only to take a slot's place, so landing here is a mistake.
+    if (!isValidElement(child) || child.type !== ToolbarSlot) continue;
+    const slot = (child.props as { slot: ChromeSlotId }).slot;
+    warnSlotOutsideArrangement(slot, chromeControlForSlot(slot) !== null);
+  }
+  // Placed over EVERY built-in id, hidden ones included, so `after` still finds its anchor.
+  const order = arrangeToolbarGroups(
+    defaultGroups.map((group) => group.id),
+    hosts.map((spec) => ({ id: spec.id, after: spec.after }))
+  );
+  return order.flatMap((id) => {
+    const group = byId.get(id);
+    return group ? [group] : [];
+  });
+}
+
+/** A collapsed group's host content in the panel, or null when it has none. */
+function hostPanelContent(group: ArrangedGroup): ReactNode {
+  if (group.extras.length === 0) return null;
+  if (group.overflowContent) return group.overflowContent();
+  return (
+    <ToolbarPlacementContext.Provider value="panel">
+      <div className="docx-toolbar__more-host">{group.extras}</div>
+    </ToolbarPlacementContext.Provider>
+  );
+}
+
 /** One row in a collapsed group's overflow panel, or null when hidden. */
 function overflowRow(
   entry: DefaultEntry,
@@ -508,10 +632,15 @@ function overflowRow(
 ): ReactNode {
   const override = overrides.get(entry.slot);
   if (isHiddenOverride(override)) return null;
+  // A `Toolbar.Slot` may give its own panel content.
+  const panelContent =
+    override?.type === ToolbarSlot
+      ? (override.props as { overflowContent?: () => DocxEditorChildren }).overflowContent
+      : undefined;
   if (override || isValueSlot(entry.slot)) {
     return (
       <ToolbarOverflowControl label={labelOf(label, entry, groupLabelKey)}>
-        {render(entry)}
+        {panelContent ? panelContent() : render(entry)}
       </ToolbarOverflowControl>
     );
   }
@@ -535,6 +664,15 @@ export interface DocxEditorToolbarNamespace {
   /** A host-owned action the chrome registry does not describe. */
   readonly Action: typeof ToolbarAction;
   readonly Separator: typeof ToolbarSeparator;
+  /**
+   * A group of the preset bar: host content that is measured and collapses into the "⋯"
+   * panel, or, with a built-in id, controls added to that group or the group hidden.
+   */
+  readonly Group: typeof ToolbarGroup;
+  /** Replaces one built-in slot with arbitrary content, in the slot's place. */
+  readonly Slot: typeof ToolbarSlot;
+  /** Opens a comment draft on the selection in the review rail. */
+  readonly AddComment: typeof ToolbarAddComment;
   readonly Undo: ToolbarPartComponent;
   readonly Redo: ToolbarPartComponent;
   readonly Bold: ToolbarPartComponent;
@@ -598,6 +736,9 @@ export const DocxEditorToolbar: DocxEditorToolbarNamespace = Object.assign(DocxE
   Button: ToolbarButton,
   Action: ToolbarAction,
   Separator: ToolbarSeparator,
+  Group: ToolbarGroup,
+  Slot: ToolbarSlot,
+  AddComment: ToolbarAddComment,
   Undo: ToolbarUndo,
   Redo: ToolbarRedo,
   Bold: ToolbarBold,

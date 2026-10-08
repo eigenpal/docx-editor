@@ -3042,6 +3042,7 @@ export interface DocxEditorMenuProps {
     onReportIssue?: () => void;
     // (undocumented)
     onSave?: () => void;
+    overflow?: boolean;
     // (undocumented)
     preset?: boolean;
     // (undocumented)
@@ -4170,6 +4171,7 @@ export interface DocxEditorToolbarNamespace {
     (props: DocxEditorToolbarProps): VNode;
     // (undocumented)
     readonly Action: typeof ToolbarAction;
+    readonly AddComment: typeof ToolbarAddComment;
     // (undocumented)
     readonly AlignCenter: ToolbarPartComponent;
     // (undocumented)
@@ -4206,6 +4208,7 @@ export interface DocxEditorToolbarNamespace {
     readonly FontFamily: typeof FontFamily;
     // (undocumented)
     readonly FontSize: ToolbarSlotPartComponent;
+    readonly Group: typeof ToolbarGroup$1;
     // (undocumented)
     readonly Highlight: ToolbarColorSplitComponent;
     // (undocumented)
@@ -4240,6 +4243,7 @@ export interface DocxEditorToolbarNamespace {
     readonly Save: ToolbarSlotPartComponent;
     // (undocumented)
     readonly Separator: typeof ToolbarSeparator;
+    readonly Slot: typeof ToolbarSlot;
     // (undocumented)
     readonly Strike: ToolbarPartComponent;
     // (undocumented)
@@ -5065,6 +5069,7 @@ export interface MenuSubmenuProps {
     children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
+    label?: string;
     labelKey: string;
     paths?: readonly string[] | null;
 }
@@ -6190,6 +6195,20 @@ export const ToolbarGroup: vue.DefineComponent<{}, () => VNode<vue.RendererNode,
     [key: string]: any;
 }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
+// @public
+export interface ToolbarGroupPartProps {
+    after?: string;
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+    id: string;
+    label?: string;
+    overflowContent?: () => DocxEditorChildren;
+    pinned?: boolean;
+    priority?: number;
+}
+
 // @public (undocumented)
 export const ToolbarImageProperties: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
@@ -6402,6 +6421,14 @@ export interface ToolbarSeparatorProps {
     class?: string;
     // (undocumented)
     className?: string;
+}
+
+// @public
+export interface ToolbarSlotOverrideProps {
+    children?: DocxEditorChildren;
+    hidden?: boolean;
+    overflowContent?: () => DocxEditorChildren;
+    slot: ChromeSlotId;
 }
 
 // @public (undocumented)

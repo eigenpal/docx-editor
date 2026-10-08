@@ -72,7 +72,8 @@ export const ToolbarBulletList = definePart('list.bullet');
 export const ToolbarNumberedList = definePart('list.numbered');
 export const ToolbarOutdent = definePart('list.outdent');
 export const ToolbarIndent = definePart('list.indent');
-export const ToolbarTableInsert = definePart('table.insert');
+export { ToolbarTableInsert } from './TableInsert';
+export { ToolbarAddComment } from './AddComment';
 export const ToolbarComments = definePart('review.comments');
 
 /** @public */

@@ -16,6 +16,7 @@ import {
   useContext,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -27,13 +28,14 @@ import { usePlatformShortcut } from '../usePlatformShortcut';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
 import { MORE_ATTRIBUTE } from './useToolbarOverflow';
+import { toolbarPanelPlacement, type ToolbarPanelPlacement } from './toolbar-overflow';
 
 /**
  * `more_horiz`. Here rather than in the registry for the reason the context menu's icons
  * are: the trigger is not a chrome slot, and giving it one would put a dead control in the
  * default arrangement. Material Symbols (Google, Apache-2.0), viewBox "0 -960 960 960".
  */
-const MORE_PATHS: readonly string[] = [
+export const MORE_PATHS: readonly string[] = [
   'M240-400q-33 0-56.5-23.5T160-480q0-33 23.5-56.5T240-560q33 0 56.5 23.5T320-480q0 33-23.5 56.5T240-400Zm240 0q-33 0-56.5-23.5T400-480q0-33 23.5-56.5T480-560q33 0 56.5 23.5T560-480q0 33-23.5 56.5T480-400Zm240 0q-33 0-56.5-23.5T640-480q0-33 23.5-56.5T720-560q33 0 56.5 23.5T800-480q0 33-23.5 56.5T720-400Z',
 ];
 
@@ -56,6 +58,14 @@ interface OverflowPanelContextValue {
 const OverflowPanelContext = createContext<OverflowPanelContextValue>({
   close: () => {},
 });
+
+/**
+ * Closes the "⋯" panel from a row inside it. `focusTrigger` returns focus to the trigger,
+ * which a keyboard activation needs because the focused row unmounts.
+ */
+export function useToolbarOverflowClose(): (focusTrigger: boolean) => void {
+  return useContext(OverflowPanelContext).close;
+}
 
 /** Focus the first tabbable control inside the panel. */
 function focusFirstInteractive(panel: HTMLElement): void {
@@ -157,6 +167,45 @@ export function ToolbarOverflow({ sections, className }: ToolbarOverflowProps) {
     return () => document.removeEventListener('mousedown', onPointerDown, true);
   }, [open]);
 
+  // Clamped into the viewport. The stylesheet lines the panel up with the trigger's end,
+  // which runs off the left edge when the bar is centered or narrow. Measured in a layout
+  // effect so the browser never paints the unclamped panel, and again on resize.
+  const [placement, setPlacement] = useState<ToolbarPanelPlacement | null>(null);
+  useLayoutEffect(() => {
+    if (!open) {
+      setPlacement(null);
+      return undefined;
+    }
+    const place = (): void => {
+      const root = rootRef.current;
+      const panel = panelRef.current;
+      const trigger = triggerRef.current;
+      const view = root?.ownerDocument.defaultView;
+      if (!root || !panel || !trigger || !view) return;
+      const rect = trigger.getBoundingClientRect();
+      const next = toolbarPanelPlacement({
+        triggerLeft: rect.left,
+        triggerRight: rect.right,
+        panelWidth: panel.offsetWidth,
+        viewportWidth: view.innerWidth,
+      });
+      // In the root's own coordinates, because the panel is positioned against it.
+      const left = next.left - root.getBoundingClientRect().left;
+      setPlacement((current) =>
+        current &&
+        current.left === left &&
+        current.maxWidth === next.maxWidth &&
+        current.anchor === next.anchor
+          ? current
+          : { ...next, left }
+      );
+    };
+    place();
+    const view = rootRef.current?.ownerDocument.defaultView;
+    view?.addEventListener('resize', place);
+    return () => view?.removeEventListener('resize', place);
+  }, [open]);
+
   useEffect(() => {
     if (!open || !focusOnOpenRef.current) return;
     focusOnOpenRef.current = false;
@@ -207,6 +256,17 @@ export function ToolbarOverflow({ sections, className }: ToolbarOverflowProps) {
             aria-label={text}
             className="docx-toolbar__more-panel"
             data-testid="toolbar-overflow-panel"
+            {...(placement ? { 'data-anchor': placement.anchor } : {})}
+            style={
+              placement
+                ? {
+                    left: placement.left,
+                    right: 'auto',
+                    insetInlineEnd: 'auto',
+                    maxInlineSize: placement.maxWidth,
+                  }
+                : undefined
+            }
             onKeyDown={onPanelKeyDown}
           >
             {sections.map((section) => (

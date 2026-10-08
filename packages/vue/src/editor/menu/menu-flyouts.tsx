@@ -1,7 +1,6 @@
-import { computed, defineComponent, ref, watch, type PropType, type VNode } from 'vue';
+import { defineComponent, ref, watch, type PropType } from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { type ChromeMenuItemEntry, type ChromeSlotId } from '@docx-editor.dev/core/editor';
-import { useDocxEditor } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { useMenuContext, useMenuLabel } from './menu-context';
@@ -9,9 +8,8 @@ import { useStableDocxId } from '../../lib/stable-id';
 import { formatPx } from '../../lib/units';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
 import { MenuItem } from './parts';
+import { TableSizeGrid } from '../toolbar/TableSizeGrid';
 
-const TABLE_GRID_COLUMNS = 6;
-const TABLE_GRID_ROWS = 6;
 /** Props for `DocxEditor.Menu.Submenu`. @public */
 /** How close a floating panel may come to the window edge, in px. */
 const EDGE_INSET = 8;
@@ -19,6 +17,8 @@ const EDGE_INSET = 8;
 export interface MenuSubmenuProps {
   /** i18n key of the parent row's label. */
   labelKey: string;
+  /** Literal parent row label, already resolved. Wins over `labelKey`. */
+  label?: string;
   /** Material Symbols paths for the parent row's icon. */
   paths?: readonly string[] | null;
   className?: string;
@@ -39,6 +39,7 @@ export const MenuSubmenu = defineComponent({
   name: 'MenuSubmenu',
   props: {
     labelKey: { type: String, required: true },
+    label: { type: String, default: undefined },
     paths: { type: null as unknown as PropType<readonly string[] | null>, default: undefined },
     className: { type: String, default: undefined },
   },
@@ -76,7 +77,7 @@ export const MenuSubmenu = defineComponent({
     );
 
     return () => {
-      const text = label(props.labelKey);
+      const text = props.label ?? label(props.labelKey);
       return (
         <div
           role="none"
@@ -184,8 +185,8 @@ export interface MenuTableGridProps {
 }
 
 /**
- * Word's insert-table size picker: a 6×6 grid that highlights as the pointer sweeps it
- * and reads back the size underneath.
+ * The insert-table size picker: a 6×6 grid that highlights as the pointer sweeps it and
+ * reads back the size underneath. A pick inserts the table and closes the menu bar.
  *
  * Rendered only when the engine will honour an insert (see `MenuTablePicker`). A panel
  * that opens onto a grid nothing can be picked from is worse than no panel: the row
@@ -201,107 +202,17 @@ export const MenuTableGrid = defineComponent({
     className: { type: null as unknown as PropType<unknown>, default: undefined },
   },
   setup(props) {
-    const editorRef = useDocxEditor();
-    const gridCmd = useEditorCommand(
-      computed(
-        () => (props.slot as ChromeSlotId | undefined) ?? 'table.insert'
-      ) as unknown as ChromeSlotId
-    );
     const menuContext = useMenuContext();
     const label = useMenuLabel();
-    const hover = ref<{ rows: number; cols: number } | null>(null);
-    const cursor = ref({ rows: 1, cols: 1 });
-    const gridRef = ref<HTMLDivElement | null>(null);
-
-    const insert = (rows: number, cols: number) => {
-      if (!editorRef.value || !gridCmd.isEnabled.value) return;
-      const command = { type: 'insertTable' as const, rows, cols };
-      if (!editorRef.value.can(command).ok) return;
-      editorRef.value.exec(command);
-      menuContext.value.setOpenMenu(null);
-      editorRef.value.focus();
-    };
-
-    const move = (step: { rows?: number; cols?: number; toCol?: number }) => {
-      const current = cursor.value;
-      const next = {
-        rows: Math.min(TABLE_GRID_ROWS, Math.max(1, current.rows + (step.rows ?? 0))),
-        cols: Math.min(
-          TABLE_GRID_COLUMNS,
-          Math.max(1, step.toCol ?? current.cols + (step.cols ?? 0))
-        ),
-      };
-      cursor.value = next;
-      hover.value = next;
-      queueMicrotask(() =>
-        gridRef.value
-          ?.querySelector<HTMLElement>(`[data-cell="${next.rows}x${next.cols}"]`)
-          ?.focus()
-      );
-    };
-
-    return () => {
-      const cellRows: VNode[] = [];
-      for (let row = 1; row <= TABLE_GRID_ROWS; row += 1) {
-        const cells: VNode[] = [];
-        for (let col = 1; col <= TABLE_GRID_COLUMNS; col += 1) {
-          const filled = !!hover.value && row <= hover.value.rows && col <= hover.value.cols;
-          cells.push(
-            <button
-              key={col}
-              type="button"
-              role="gridcell"
-              data-cell={`${row}x${col}`}
-              class="docx-menubar__grid-cell"
-              tabindex={cursor.value.rows === row && cursor.value.cols === col ? 0 : -1}
-              {...(filled ? { 'data-filled': '' } : {})}
-              aria-label={`${col} × ${row}`}
-              onMousedown={guardToolbarMousedown}
-              onMouseenter={() => {
-                hover.value = { rows: row, cols: col };
-              }}
-              onFocus={() => {
-                hover.value = { rows: row, cols: col };
-              }}
-              onClick={() => insert(row, col)}
-            />
-          );
-        }
-        cellRows.push(
-          <div key={row} role="row" class="docx-menubar__grid-row">
-            {cells}
-          </div>
-        );
-      }
-
-      return (
-        <div
-          ref={gridRef}
-          role="grid"
-          class={`docx-menubar__grid${props.className ? ` ${props.className}` : ''}`}
-          aria-label={label('toolbar.insertTable')}
-          onKeydown={(event: KeyboardEvent) => {
-            if (event.key === 'ArrowRight') move({ cols: 1 });
-            else if (event.key === 'ArrowLeft') move({ cols: -1 });
-            else if (event.key === 'ArrowDown') move({ rows: 1 });
-            else if (event.key === 'ArrowUp') move({ rows: -1 });
-            else if (event.key === 'Home') move({ toCol: 1 });
-            else if (event.key === 'End') move({ toCol: TABLE_GRID_COLUMNS });
-            else if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              insert(cursor.value.rows, cursor.value.cols);
-            } else return;
-            event.preventDefault();
-            event.stopPropagation();
-          }}
-        >
-          <div class="docx-menubar__grid-cells">{cellRows}</div>
-          <div class="docx-menubar__grid-caption" aria-hidden="true">
-            {hover.value ? `${hover.value.cols} × ${hover.value.rows}` : ''}
-          </div>
-        </div>
-      );
-    };
+    const close = () => menuContext.value.setOpenMenu(null);
+    return () => (
+      <TableSizeGrid
+        slot={(props.slot as ChromeSlotId | undefined) ?? 'table.insert'}
+        label={label('toolbar.insertTable')}
+        onInserted={close}
+        className={props.className}
+      />
+    );
   },
 });
 

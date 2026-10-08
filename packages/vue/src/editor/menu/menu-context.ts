@@ -1,5 +1,14 @@
 import type { ChromeExportFormat } from '@docx-editor.dev/core/editor';
-import { computed, inject, unref, type ComputedRef, type InjectionKey, type MaybeRef } from 'vue';
+import {
+  computed,
+  defineComponent,
+  inject,
+  provide,
+  unref,
+  type ComputedRef,
+  type InjectionKey,
+  type MaybeRef,
+} from 'vue';
 import { useTranslation, type TranslationKey } from '../../i18n';
 import type { ChromeMenuId } from '@docx-editor.dev/core/editor';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
@@ -50,3 +59,43 @@ export function useMenuLabel() {
   const { t: catalogT } = useTranslation();
   return (key: string) => context.value.t?.(key) ?? catalogT(key as TranslationKey);
 }
+
+/** The id of the "⋯" menu that holds the menus that do not fit. */
+export const MENU_OVERFLOW_ID = 'docx-menubar-more';
+
+/** Which menus moved into the "⋯" menu, and where the reading component renders. */
+export interface MenuOverflowValue {
+  /** Whether the bar measures its menus. Menus then mark themselves as collapsible. */
+  readonly measuring: boolean;
+  /** Ids of the menus that render inside the "⋯" menu instead of the bar. */
+  readonly overflow: ReadonlySet<string>;
+  /** True inside the "⋯" menu's panel, where a menu renders as a submenu row. */
+  readonly inMore: boolean;
+}
+
+export const MenuOverflowContext: InjectionKey<ComputedRef<MenuOverflowValue>> =
+  Symbol('MenuOverflowContext');
+
+const NO_OVERFLOW: MenuOverflowValue = {
+  measuring: false,
+  overflow: new Set<string>(),
+  inMore: false,
+};
+
+export function useMenuOverflow(): ComputedRef<MenuOverflowValue> {
+  const value = inject(MenuOverflowContext, null);
+  return computed(() => value?.value ?? NO_OVERFLOW);
+}
+
+/** Renders its children as the "⋯" menu's content: collapsed menus become submenus. */
+export const MenuOverflowScope = defineComponent({
+  name: 'MenuOverflowScope',
+  setup(_, { slots }) {
+    const parent = useMenuOverflow();
+    provide(
+      MenuOverflowContext,
+      computed(() => ({ ...parent.value, measuring: false, inMore: true }))
+    );
+    return () => slots.default?.();
+  },
+});

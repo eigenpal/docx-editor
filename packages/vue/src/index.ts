@@ -155,6 +155,8 @@ export {
   type ParagraphStylePartProps,
   type ParagraphStyleProps,
   type ToolbarButtonProps,
+  type ToolbarGroupPartProps,
+  type ToolbarSlotOverrideProps,
   type ToolbarPartComponent,
   type ToolbarPartProps,
   type ToolbarReviewersProps,

@@ -50,8 +50,17 @@ import type { TranslationKey } from '../../i18n';
 import { DocxEditorPageSetupDialog } from '../DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from '../DocxEditorParagraphDialog';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
-import { guardToolbarMousedown } from '../toolbar/ToolbarButton';
-import { MenuContext, type MenuContextValue, type MenuId } from './menu-context';
+import { chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
+import {
+  MENU_OVERFLOW_ID,
+  MenuContext,
+  MenuOverflowContext,
+  type MenuContextValue,
+  type MenuId,
+  type MenuOverflowValue,
+} from './menu-context';
+import { useToolbarOverflow } from '../toolbar/useToolbarOverflow';
+import { MORE_PATHS } from '../toolbar/ToolbarOverflow';
 import { download, downloadName } from './download';
 import { barTriggers, restoreExportFocus } from './menu-keyboard';
 import {
@@ -134,7 +143,42 @@ export interface DocxEditorMenuProps {
    * children override their menu in place, others append.
    */
   preset?: boolean;
+  /**
+   * What the bar does when its menus do not fit on one line. Default `true`: the bar stays
+   * one line, measures its menus, and moves the ones that do not fit, from the end, into
+   * one "⋯" menu, where each becomes a submenu with the same rows. `false` lets the bar
+   * wrap onto more lines instead.
+   *
+   * The bar must be able to shrink for this to work, so give it a bounded width (for
+   * example `min-width: 0` in a flex row). Host children that are not menus never move.
+   *
+   * @example
+   * ```tsx
+   * <DocxEditor.Menu overflow={false} />
+   * ```
+   */
+  overflow?: boolean;
   children?: DocxEditorChildren;
+}
+
+/**
+ * The id of any menu element, registry or host: a pinned part's `docxMenu`, or the generic
+ * `Menu`'s `id` prop. Null for a hidden menu and for anything that is not a menu.
+ */
+function anyMenuIdOfChild(child: ReactNode): string | null {
+  if (!isValidElement(child)) return null;
+  if (child.type === Fragment) {
+    const inner = Children.toArray((child.props as { children?: DocxEditorChildren }).children);
+    const ids = inner.map(anyMenuIdOfChild).filter((id): id is string => id !== null);
+    return ids.length === 1 ? ids[0]! : null;
+  }
+  const props = child.props as { id?: unknown; hidden?: unknown };
+  if (props.hidden === true) return null;
+  const type = child.type as { docxMenu?: unknown };
+  if ((typeof type === 'function' || typeof type === 'object') && typeof type.docxMenu === 'string')
+    return type.docxMenu;
+  if (child.type === Menu && typeof props.id === 'string') return props.id;
+  return null;
 }
 
 const MENU_IDS = new Set<string>(CHROME_MENUS.map((menu) => menu.id));
@@ -192,6 +236,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
     onReportIssue,
     reportIssue,
     preset = true,
+    overflow: overflowEnabled = true,
     children,
   } = props;
   const editor = useDocxEditor();
@@ -383,6 +428,38 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
     ]
   );
 
+  // The menus in bar order, which is also what can move into the "⋯" menu.
+  const kids = Children.toArray(children);
+  const menuIds: string[] = [];
+  if (preset) {
+    const replaced = new Map(kids.map((child) => [menuOfChild(child), child] as const));
+    for (const menu of CHROME_MENUS) {
+      const override = replaced.get(menu.id);
+      if (override === undefined || anyMenuIdOfChild(override) !== null) menuIds.push(menu.id);
+    }
+    for (const child of kids) {
+      if (menuOfChild(child) !== null) continue;
+      const id = anyMenuIdOfChild(child);
+      if (id !== null) menuIds.push(id);
+    }
+  } else {
+    for (const child of kids) {
+      const id = anyMenuIdOfChild(child);
+      if (id !== null) menuIds.push(id);
+    }
+  }
+  // The end of the bar leaves first: Help, then Review, and so on toward File.
+  const collapseIds = [...menuIds].reverse();
+  const { attach, overflow } = useToolbarOverflow(overflowEnabled, menuIds, collapseIds);
+  const overflowValue = useMemo<MenuOverflowValue>(
+    () => ({ measuring: overflowEnabled, overflow, inMore: false }),
+    [overflowEnabled, overflow]
+  );
+  const moreValue = useMemo<MenuOverflowValue>(
+    () => ({ measuring: false, overflow, inMore: true }),
+    [overflow]
+  );
+
   let content: ReactNode;
   if (!preset) {
     content = children;
@@ -408,11 +485,14 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
     );
   }
 
+  const moreLabel = t?.('formattingBar.more') ?? catalogT('formattingBar.more' as TranslationKey);
+
   return (
     <MenuContext.Provider value={context}>
       <div
         ref={(node) => {
           rootRef.current = node;
+          attach(node);
           // Seed the tab stop on the first RENDERED menu rather than on the registry's
           // first: a bar whose File menu was hidden would otherwise have its only tab stop
           // on an element that does not exist, and be unreachable by keyboard.
@@ -429,6 +509,8 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
           catalogT('titleBar.menuBarAriaLabel' as TranslationKey)
         }
         data-testid="docx-menubar"
+        // One line when the bar measures itself; the stylesheet reads this.
+        {...(overflowEnabled ? { 'data-overflow': '' } : {})}
         // `docx-editor` self-emitted so a composed menu bar is styled outside the packaged
         // wrapper, as `DocxEditorLoading` and `DocxEditorViewport` already do.
         className={`${scopeClassName}docx-menubar${className ? ` ${className}` : ''}`}
@@ -455,7 +537,21 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
           if (openMenu !== null) setOpenMenu(id);
         }}
       >
-        {content}
+        <MenuOverflowContext.Provider value={overflowValue}>
+          {content}
+          {overflow.size > 0 ? (
+            <Menu
+              id={MENU_OVERFLOW_ID}
+              label={moreLabel}
+              icon={chromeIcon(MORE_PATHS)}
+              preset={false}
+            >
+              <MenuOverflowContext.Provider value={moreValue}>
+                {content}
+              </MenuOverflowContext.Provider>
+            </Menu>
+          ) : null}
+        </MenuOverflowContext.Provider>
       </div>
       <DialogPortal>
         {exportState.visible && popups?.export !== false ? (

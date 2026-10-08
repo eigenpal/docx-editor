@@ -148,8 +148,9 @@ Choose the amount of customization you need:
 2. Replace a part's `icon` prop.
 3. Use `as-child` to merge behavior into your element.
 4. Override one compound part.
-5. Set `:preset="false"` and arrange all parts.
-6. Build your markup with [Vue composables](/docs/2.x/vue/composables).
+5. Add your controls to the preset with `DocxEditorToolbar.Group`, or replace a slot's content with `DocxEditorToolbar.Slot`.
+6. Set `:preset="false"` and arrange all parts.
+7. Build your markup with [Vue composables](/docs/2.x/vue/composables).
 
 ### Use `as-child`
 
@@ -173,6 +174,29 @@ A named part replaces the matching part in the preset. The `hidden` prop removes
   <DocxEditorToolbar.Highlight hidden />
 </DocxEditorToolbar>
 ```
+
+A group whose slots are all hidden is removed with its separator.
+
+### Add controls to the preset toolbar
+
+`DocxEditorToolbar.Group` adds your controls to the preset toolbar as a group. The group collapses into the **More** panel like the built-in groups. `DocxEditorToolbar.Slot` replaces one built-in slot with your own content in the slot's place:
+
+```vue
+<DocxEditorToolbar>
+  <DocxEditorToolbar.Group id="review-nav" label="Review" :priority="15">
+    <DocxEditorToolbar.Action label="Next change" @select="next" />
+  </DocxEditorToolbar.Group>
+  <DocxEditorToolbar.Group id="review">
+    <DocxEditorToolbar.AddComment />
+  </DocxEditorToolbar.Group>
+  <DocxEditorToolbar.Slot slot="zoom.level">
+    <ZoomPicker />
+  </DocxEditorToolbar.Slot>
+  <DocxEditorToolbar.Group id="zoom" hidden />
+</DocxEditorToolbar>
+```
+
+For placement, collapse priorities, and panel content, see [Keep host controls responsive](/docs/2.x/guides/toolbar#keep-host-controls-responsive).
 
 ## Custom toolbar
 
@@ -271,6 +295,8 @@ You can keep packaged rows, remove rows, add registry slots, and add host rows.
 `DocxEditorContextMenu.Slot` gets its label, icon, state, and command from the registry.
 
 ## Custom menu bar
+
+The menu bar stays on one line. Menus that do not fit move into one `⋯` menu as submenus. Set `:overflow="false"` to let the bar wrap instead. For details, see [Menu bar overflow](/docs/2.x/guides/toolbar#menu-bar-overflow).
 
 Pass `exporters` to the menu to connect export and print handlers. For setup, see [Print documents](/docs/2.x/guides/print).
 

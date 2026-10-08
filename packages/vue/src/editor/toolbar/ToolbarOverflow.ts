@@ -17,8 +17,9 @@ import { useStableDocxId } from '../../lib/stable-id';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
 import { MORE_ATTRIBUTE } from './useToolbarOverflow';
+import { toolbarPanelPlacement, type ToolbarPanelPlacement } from './toolbar-overflow';
 
-const MORE_PATHS: readonly string[] = [
+export const MORE_PATHS: readonly string[] = [
   'M240-400q-33 0-56.5-23.5T160-480q0-33 23.5-56.5T240-560q33 0 56.5 23.5T320-480q0 33-23.5 56.5T240-400Zm240 0q-33 0-56.5-23.5T400-480q0-33 23.5-56.5T480-560q33 0 56.5 23.5T560-480q0 33-23.5 56.5T480-400Zm240 0q-33 0-56.5-23.5T640-480q0-33 23.5-56.5T720-560q33 0 56.5 23.5T800-480q0 33-23.5 56.5T720-400Z',
 ];
 
@@ -35,6 +36,14 @@ interface OverflowPanelContextValue {
 
 const OverflowPanelContext: InjectionKey<OverflowPanelContextValue> =
   Symbol('OverflowPanelContext');
+
+/**
+ * Closes the "⋯" panel from a row inside it. `focusTrigger` returns focus to the trigger,
+ * which a keyboard activation needs because the focused row unmounts.
+ */
+export function useToolbarOverflowClose(): (focusTrigger: boolean) => void {
+  return inject(OverflowPanelContext, { close: () => {} }).close;
+}
 
 function focusFirstInteractive(panel: HTMLElement): void {
   const selector =
@@ -131,6 +140,41 @@ export const ToolbarOverflow = defineComponent({
 
     provide(OverflowPanelContext, { close });
 
+    // Clamped into the viewport. The stylesheet lines the panel up with the trigger's end,
+    // which runs off the left edge when the bar is centered or narrow. Placed after the
+    // panel renders, before the browser paints it, and again on resize.
+    const placement = ref<ToolbarPanelPlacement | null>(null);
+    const place = (): void => {
+      const root = rootRef.value;
+      const panel = panelRef.value;
+      const trigger = triggerRef.value;
+      const view = root?.ownerDocument.defaultView;
+      if (!root || !panel || !trigger || !view) return;
+      const rect = trigger.getBoundingClientRect();
+      const next = toolbarPanelPlacement({
+        triggerLeft: rect.left,
+        triggerRight: rect.right,
+        panelWidth: panel.offsetWidth,
+        viewportWidth: view.innerWidth,
+      });
+      // In the root's own coordinates, because the panel is positioned against it.
+      placement.value = { ...next, left: next.left - root.getBoundingClientRect().left };
+    };
+    watch(
+      open,
+      (isOpen, _, onCleanup) => {
+        if (!isOpen) {
+          placement.value = null;
+          return;
+        }
+        place();
+        const view = rootRef.value?.ownerDocument.defaultView;
+        view?.addEventListener('resize', place);
+        onCleanup(() => view?.removeEventListener('resize', place));
+      },
+      { flush: 'post' }
+    );
+
     watch(open, (isOpen, _, onCleanup) => {
       if (!isOpen) return;
       const onPointerDown = (event: MouseEvent) => {
@@ -198,6 +242,15 @@ export const ToolbarOverflow = defineComponent({
                   'aria-label': text,
                   class: 'docx-toolbar__more-panel',
                   'data-testid': 'toolbar-overflow-panel',
+                  ...(placement.value ? { 'data-anchor': placement.value.anchor } : {}),
+                  style: placement.value
+                    ? {
+                        left: `${placement.value.left}px`,
+                        right: 'auto',
+                        insetInlineEnd: 'auto',
+                        maxInlineSize: `${placement.value.maxWidth}px`,
+                      }
+                    : undefined,
                   onKeydown: (event: KeyboardEvent) => {
                     if (event.key !== 'Escape' || event.defaultPrevented) return;
                     event.preventDefault();

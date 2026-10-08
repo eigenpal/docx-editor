@@ -122,8 +122,9 @@ Choose the amount of customization you need:
 2. Use the `icon` prop to replace a glyph.
 3. Use `asChild` to apply behavior to your element.
 4. Override a compound slot while preserving other default slots.
-5. Set `preset={false}` and arrange all parts.
-6. Use [React hooks](/docs/2.x/react/hooks) with your own markup.
+5. Add your controls to the preset with `Toolbar.Group`, or replace a slot's content with `Toolbar.Slot`.
+6. Set `preset={false}` and arrange all parts.
+7. Use [React hooks](/docs/2.x/react/hooks) with your own markup.
 
 ### Use `asChild`
 
@@ -149,6 +150,29 @@ A compound child replaces the slot with the same name. Other default slots remai
   <DocxEditor.Toolbar.Highlight hidden />
 </DocxEditor.Toolbar>
 ```
+
+A group whose slots are all hidden is removed with its separator.
+
+### Add controls to the preset toolbar
+
+`Toolbar.Group` adds your controls to the preset toolbar as a group. The group collapses into the **More** panel like the built-in groups. `Toolbar.Slot` replaces one built-in slot with your own content in the slot's place:
+
+```tsx
+<DocxEditor.Toolbar>
+  <DocxEditor.Toolbar.Group id="review-nav" label="Review" priority={15}>
+    <DocxEditor.Toolbar.Action label="Next change" icon={<DownIcon />} onSelect={next} />
+  </DocxEditor.Toolbar.Group>
+  <DocxEditor.Toolbar.Group id="review">
+    <DocxEditor.Toolbar.AddComment />
+  </DocxEditor.Toolbar.Group>
+  <DocxEditor.Toolbar.Slot slot="zoom.level">
+    <ZoomPicker />
+  </DocxEditor.Toolbar.Slot>
+  <DocxEditor.Toolbar.Group id="zoom" hidden />
+</DocxEditor.Toolbar>
+```
+
+For placement, collapse priorities, and panel content, see [Keep host controls responsive](/docs/2.x/guides/toolbar#keep-host-controls-responsive).
 
 ## Custom toolbar
 
@@ -288,6 +312,8 @@ You can combine packaged rows, custom rows, slots, and submenus. This example al
 The compound appends unrecognized children after its rows. It keeps the packaged panel element, roles, keyboard behavior, and placement.
 
 ## Custom menu bar
+
+The menu bar stays on one line. Menus that do not fit move into one `⋯` menu as submenus. Set `overflow={false}` to let the bar wrap instead. For details, see [Menu bar overflow](/docs/2.x/guides/toolbar#menu-bar-overflow).
 
 Pass `exporters` to the menu to connect export and print handlers. For setup, see [Print documents](/docs/2.x/guides/print).
 
