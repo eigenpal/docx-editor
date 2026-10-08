@@ -4,7 +4,10 @@
 // uses, at the member's scaled box. The stories render and export read-only: they carry no
 // editing bindings, and the editor never enters them.
 
-import type { DrawingProjection } from '../store/package/drawing-projection.ts';
+import {
+  drawingAccessibility,
+  type DrawingProjection,
+} from '../store/package/drawing-projection.ts';
 import type { GroupTextboxProjection } from '../store/package/group-textbox-projection.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from './drawing-layout.ts';
 import type { TextboxStoryLayouter } from './inline-textbox-flow.ts';
@@ -51,7 +54,8 @@ export function layoutGroupTextboxStories(
   layout: TextboxStoryLayouter | undefined
 ): readonly GroupTextboxStoryRecord[] | undefined {
   const members = projection.groupTextboxes;
-  if (!members || !layout || projection.hidden) return undefined;
+  // A hidden drawing or a wrap footprint paints nothing, so its member text is never laid out.
+  if (!members || !layout || drawingAccessibility(projection).hidden) return undefined;
   const records: GroupTextboxStoryRecord[] = [];
   for (const member of members) {
     const story = layout(memberProjection(projection, member));

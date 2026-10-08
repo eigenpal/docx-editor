@@ -418,7 +418,7 @@ function textboxStoryOrigin(
 }
 
 interface OwnedTextboxStory {
-  readonly story: StoryDrawingHost;
+  readonly story: import('./textbox-story-layout.ts').TextboxStoryLayout;
   /** Origin of the story's content box inside the drawing extent. */
   readonly offset: Readonly<{ x: number; y: number }>;
 }

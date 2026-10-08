@@ -146,6 +146,9 @@ describe('an inline group with a picture and a text box member', () => {
       expect(container.querySelectorAll('.docx-drawing-ready')).toHaveLength(0);
       expect(container.querySelectorAll('.docx-drawing-placeholder')).toHaveLength(0);
       expect(paintedMemberText(container)).toBe('Caption words');
+      // An empty frame keeps the group selectable and labelled.
+      const frame = container.querySelector<HTMLElement>('.docx-drawing-group-frame');
+      expect(frame?.dataset.drawingNodeId).toBe(drawing!.drawingNodeId);
     });
   });
 

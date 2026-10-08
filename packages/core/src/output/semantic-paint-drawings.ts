@@ -727,8 +727,16 @@ function paintDrawingRecordElement(
     return paintTextboxStory(document, drawing, drawing.textboxStory, ctx, origin);
   }
 
-  // A group made only of text box members paints its text in its own layer and nothing here.
-  if (drawing.groupTextboxStories && !drawing.groupPicture && !drawing.vectorShape) return null;
+  // A group made only of text box members paints its text in its own layer. Its frame here is
+  // empty, but it keeps the group selectable and labelled like any other drawing.
+  if (drawing.groupTextboxStories && !drawing.groupPicture && !drawing.vectorShape) {
+    const frame = document.createElement('div');
+    frame.className = 'docx-drawing docx-drawing-group-frame';
+    frame.dataset.drawingNodeId = drawing.drawingNodeId;
+    positionedBox(frame, drawing.paintBounds, ctx.scale, origin);
+    applyAccessibility(frame, drawing, false);
+    return frame;
+  }
 
   const { resource } = drawing;
   const url =

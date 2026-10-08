@@ -47,6 +47,7 @@ export function wrapFootprintProjection(projection: DrawingProjection): DrawingP
           vectorShape: null,
           groupPicture: null,
           textboxStory: null,
+          groupTextboxes: undefined,
           legacyGraphic: undefined,
           footprintOnly: true as const,
         })

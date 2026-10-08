@@ -581,10 +581,15 @@ function createPartDrawingContextSlot(options: {
     const visit = (atomIds: readonly string[], depth: number): void => {
       if (depth >= MAX_HOSTED_STORY_TOKEN_DEPTH) return;
       for (const atomId of atomIds) {
-        const story = atomProjections.get(atomId)?.textboxStory;
-        if (!story) continue;
+        const projection = atomProjections.get(atomId);
+        if (!projection) continue;
+        // A group's text box members host stories too, so their pictures key the host.
+        const roots = [
+          ...(projection.textboxStory ? [projection.textboxStory.content] : []),
+          ...(projection.groupTextboxes ?? []).map((member) => member.story.content),
+        ];
         const inner: string[] = [];
-        collectStoryDrawingAtoms(story.content, inner);
+        for (const root of roots) collectStoryDrawingAtoms(root, inner);
         if (inner.length === 0) continue;
         if (!expanded) expanded = [...direct];
         // A LOOP, not `push(...inner)`: the count comes from the file, and spreading a few

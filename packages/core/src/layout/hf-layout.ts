@@ -49,7 +49,11 @@ import {
   type ExclusionZone,
 } from './drawing-exclusion.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
-import { forEachStoryDrawing, forEachStoryParagraphFragment } from './semantic-record-queries.ts';
+import {
+  forEachStoryDrawing,
+  forEachStoryParagraphFragment,
+  ownedTextboxStories,
+} from './semantic-record-queries.ts';
 import { withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
 import type { NumberingIndex } from './numbering-index.ts';
 import { hostedStoryFlowDeps, layoutTextboxStory } from './textbox-story-layout.ts';
@@ -905,8 +909,9 @@ export function storyDrawingResourceToken(story: HeaderFooterStoryLayout): strin
   const tokens: string[] = [];
   forEachStoryDrawing(story, (drawing) => {
     tokens.push(drawingResourceLayoutToken(drawing.resource));
-    if (drawing.textboxStory?.clippedResourceToken) {
-      tokens.push(`clip:${drawing.textboxStory.clippedResourceToken}`);
+    for (const owned of ownedTextboxStories(drawing)) {
+      const clipped = owned.story.clippedResourceToken;
+      if (clipped) tokens.push(`clip:${clipped}`);
     }
   });
   // Empty for the overwhelmingly common story with no pictures, so the context string for a

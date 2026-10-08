@@ -22,6 +22,8 @@ import {
   projectDrawing,
 } from '../../store/package/drawing-projection.ts';
 import { paintSemanticLayout } from '../../output/semantic-paint.ts';
+import type { DrawingProjection } from '../../store/package/drawing-projection.ts';
+import { wrapFootprintProjection } from '../../store/package/drawing-wrap-footprint.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -132,12 +134,20 @@ function drawingLayoutFor(part: OoxmlPart): InlineDrawingLayoutContext {
   };
 }
 
-function layoutBody(run: string): SemanticLayout {
+function layoutBody(run: string, footprint = false): SemanticLayout {
   const part = documentPart(run);
+  const context = drawingLayoutFor(part);
+  // A group whose picture fails under mc:AlternateContent keeps only its wrap footprint.
+  const asFootprint = (projection: DrawingProjection | null) =>
+    footprint && projection ? wrapFootprintProjection(projection) : projection;
   return layoutSemanticDocument(part, 1, {
     measurer,
     producer: 'test',
-    inlineDrawingLayout: drawingLayoutFor(part),
+    inlineDrawingLayout: {
+      ...context,
+      projectionForAtom: (atomId) => asFootprint(context.projectionForAtom(atomId)),
+      project: (node) => asFootprint(context.project(node)),
+    },
   });
 }
 
@@ -251,6 +261,21 @@ describe('group text box members', () => {
       )
     ).pages[0]!.anchoredDrawings?.[0];
     expect(record?.groupTextboxStories).toBeUndefined();
+  });
+
+  test('a wrap footprint of the group carries no member text', () => {
+    const layout = layoutBody(
+      group(
+        picture(0, 0, 100 * PT, 100 * PT) + textbox(100 * PT, 0, 100 * PT, 100 * PT, para('ab'))
+      ).replace('<wp:wrapNone/>', '<wp:wrapSquare wrapText="bothSides"/>'),
+      true
+    );
+    const record = layout.pages[0]!.anchoredDrawings![0]!;
+    expect(record.accessibility.hidden).toBe(true);
+    expect(record.groupTextboxStories).toBeUndefined();
+    const texts: string[] = [];
+    forEachSemanticSpan(layout, (visit) => texts.push(visit.span.text));
+    expect(texts).not.toContain('ab');
   });
 
   test('span walks reach member text at its painted position', () => {

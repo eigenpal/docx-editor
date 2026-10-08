@@ -107,6 +107,39 @@ function docx(options: {
   });
 }
 
+const WPG_NS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup';
+
+/** An anchored shape group whose only member is a text box holding a picture. */
+function groupTextboxWithPicture(): string {
+  return (
+    `<w:r><w:drawing xmlns:wpg="${WPG_NS}">` +
+    '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" behindDoc="0" locked="0" ' +
+    'layoutInCell="1" allowOverlap="1" relativeHeight="1"><wp:simplePos x="0" y="0"/>' +
+    '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>' +
+    '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
+    '<wp:extent cx="2743200" cy="1828800"/><wp:wrapNone/><wp:docPr id="30" name="group"/>' +
+    `<a:graphic><a:graphicData uri="${WPG_NS}"><wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr>` +
+    '<a:xfrm><a:off x="0" y="0"/><a:ext cx="2743200" cy="1828800"/>' +
+    '<a:chOff x="0" y="0"/><a:chExt cx="2743200" cy="1828800"/></a:xfrm></wpg:grpSpPr>' +
+    '<wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm><a:off x="0" y="0"/>' +
+    '<a:ext cx="2743200" cy="1828800"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
+    '</wps:spPr><wps:txbx><w:txbxContent>' +
+    `<w:p><w:r><w:t>in the group</w:t></w:r>${inlinePicture(31)}</w:p>` +
+    '</w:txbxContent></wps:txbx><wps:bodyPr/></wps:wsp>' +
+    '</wpg:wgp></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>'
+  );
+}
+
+function groupMemberDrawingKinds(page: PageRecord): string[] {
+  const kinds: string[] = [];
+  for (const drawing of page.anchoredDrawings ?? []) {
+    for (const member of drawing.groupTextboxStories ?? []) {
+      for (const kind of blockDrawingKinds(member.story.fragments)) kinds.push(kind);
+    }
+  }
+  return kinds;
+}
+
 const FOOTNOTE_REFERENCE = '<w:r><w:footnoteReference w:id="1"/></w:r>';
 const ENDNOTE_REFERENCE = '<w:r><w:endnoteReference w:id="1"/></w:r>';
 
@@ -197,6 +230,20 @@ describe('pictures in stories outside the body flow', () => {
     release();
     await settle();
     expect(textboxDrawingKinds(surface.layout().pages[0]!)).toEqual(['ready']);
+    surface.destroy();
+    container.remove();
+  });
+
+  test('a picture in a group text box member pending at first paint reaches the page', async () => {
+    const { port, release } = deferredDecodePort();
+    const { surface, container } = await mountWithImages(
+      docx({ bodyRuns: groupTextboxWithPicture(), footnoteRuns: '<w:r><w:t>plain</w:t></w:r>' }),
+      port
+    );
+    expect(groupMemberDrawingKinds(surface.layout().pages[0]!)).toEqual(['pending']);
+    release();
+    await settle();
+    expect(groupMemberDrawingKinds(surface.layout().pages[0]!)).toEqual(['ready']);
     surface.destroy();
     container.remove();
   });

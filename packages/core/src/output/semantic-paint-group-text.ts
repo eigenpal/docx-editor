@@ -15,6 +15,7 @@ const STORY_BINDING_ATTRIBUTES = [
   'data-start',
   'data-drawing-paragraph-id',
   'data-drawing-start',
+  'data-drawing-node-id',
 ] as const;
 
 /**
@@ -65,6 +66,11 @@ export function paintGroupTextboxStories(
       for (const bound of content.querySelectorAll<HTMLElement>(`[${attribute}]`)) {
         bound.removeAttribute(attribute);
       }
+    }
+    // Pictures and equations inside the story are inert too: no drawing selection target,
+    // and no pointer target that would turn back on inside the inert layer.
+    for (const nested of content.querySelectorAll<HTMLElement>('[style*="pointer-events"]')) {
+      nested.style.pointerEvents = 'none';
     }
     layer.append(content);
   }

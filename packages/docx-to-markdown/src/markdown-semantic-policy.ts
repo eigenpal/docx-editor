@@ -253,6 +253,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     revisions: 'explicitly-omitted',
     bidiLevel: 'layout-only',
     textboxStory: 'explicitly-omitted',
+    groupTextboxStories: 'explicitly-omitted',
   } satisfies Record<keyof InlineDrawingRecord, MarkdownFieldPolicy>,
   anchoredDrawing: {
     kind: 'represented',
@@ -291,6 +292,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     layoutFallback: 'layout-only',
     sourceOrder: 'represented',
     textboxStory: 'explicitly-omitted',
+    groupTextboxStories: 'explicitly-omitted',
   } satisfies Record<keyof AnchoredDrawingRecord, MarkdownFieldPolicy>,
   drawingAccessibility: {
     hidden: 'explicitly-omitted',
