@@ -623,7 +623,7 @@ An omitted part has no interface.
 
 Import the stylesheet once and give the editor container a height. Use a flex column when chrome shares that height. Packaged controls and the viewport apply their own `.docx-editor` scope. The wrapper in [Primitives](#primitives) also makes editor styles and tokens available to custom controls.
 
-Place the navigation pane and viewport in a row with `position: relative`. The pane uses that row as its positioning context.
+Inside `DocxEditorViewport`, the navigation pane is sticky and needs no positioning context. If you place the pane beside the viewport instead, put both in a row with `position: relative`. Beside the viewport, the pane uses that row as its positioning context.
 
 Do not set `z-index` on the workspace row or viewport. Either value creates a stacking context that can put a fixed context menu below other chrome.
 
