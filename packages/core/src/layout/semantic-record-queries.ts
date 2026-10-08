@@ -430,15 +430,16 @@ interface OwnedTextboxStory {
 export function ownedTextboxStories(drawing: TextboxOwnerRecord): readonly OwnedTextboxStory[] {
   const stories: OwnedTextboxStory[] = [];
   if (drawing.textboxStory) {
-    stories.push({ story: drawing.textboxStory, offset: drawing.textboxStory.contentOffset });
+    stories.push({
+      story: drawing.textboxStory,
+      offset: drawing.textboxStory.contentOffset ?? ZERO_STORY_ORIGIN,
+    });
   }
   for (const member of drawing.groupTextboxStories ?? []) {
+    const contentOffset = member.story.contentOffset ?? ZERO_STORY_ORIGIN;
     stories.push({
       story: member.story,
-      offset: {
-        x: member.box.x + member.story.contentOffset.x,
-        y: member.box.y + member.story.contentOffset.y,
-      },
+      offset: { x: member.box.x + contentOffset.x, y: member.box.y + contentOffset.y },
     });
   }
   return stories;
