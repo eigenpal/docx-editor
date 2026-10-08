@@ -217,3 +217,26 @@ test('a rotated group member turns its text about the member center', async () =
   // A quarter turn clockwise about the member center (144pt, 702pt in PDF space).
   expect(stream).toContain('0 -1 1 0 -558 846 cm');
 });
+
+test('a turned table cell inside a rotated member turns inside the member clip', async () => {
+  const table =
+    '<w:tbl><w:tblPr><w:tblW w:w="1000" w:type="dxa"/></w:tblPr>' +
+    '<w:tblGrid><w:gridCol w:w="1000"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:val="600"/></w:trPr>' +
+    '<w:tc><w:tcPr><w:tcW w:w="1000" w:type="dxa"/><w:textDirection w:val="btLr"/></w:tcPr>' +
+    `${paragraph('Cell')}</w:tc></w:tr></w:tbl>${paragraph('')}`;
+  const { stream, text } = await exported(
+    `<w:p><w:r>${groupDrawing(member(457200, 914400, table, ' rot="5400000"'))}</w:r></w:p>`
+  );
+  expect(text).toContain('Cell');
+  const turn = stream.indexOf('0 -1 1 0 -558 846 cm');
+  expect(turn).toBeGreaterThan(-1);
+  // The member clip follows the member turn; the cell's own turn and its glyphs come after
+  // both and before the member's clip closes, not in the page's text stream.
+  const memberClip = stream.indexOf('W n', turn);
+  const cellTurn = stream.indexOf(' cm', memberClip);
+  const glyphs = stream.indexOf(' Tm ', cellTurn);
+  expect(memberClip).toBeGreaterThan(turn);
+  expect(cellTurn).toBeGreaterThan(memberClip);
+  expect(glyphs).toBeGreaterThan(cellTurn);
+  expect(stream.indexOf(' Tm ')).toBe(glyphs);
+});

@@ -423,6 +423,11 @@ export async function paint(
     }
   };
   forEachSemanticStory(layout, (root) => markRotated(root.host.fragments));
+  // Text-box stories hold turned cells too: a box's own story and each group member's.
+  forEachSemanticDrawing(layout, ({ drawing }) => {
+    if (drawing.textboxStory) markRotated(drawing.textboxStory.fragments);
+    for (const member of drawing.groupTextboxStories ?? []) markRotated(member.story.fragments);
+  });
   const rotatedBuffers = new Map<
     string,
     {
@@ -435,8 +440,26 @@ export async function paint(
       commands: Commands;
       /** Behind-text drawings of the cell, turned with it but painted under the page's text. */
       behind: Commands;
+      /**
+       * The text box or group member buffer the turned cell joins, so that box's own turn
+       * and clips apply over the cell's. Absent for a cell outside a text box story.
+       */
+      member?: Commands;
     }
   >();
+  const textboxBuffer = (page: number, key: object): Commands => {
+    let owners = textboxBuffers.get(page);
+    if (!owners) {
+      owners = new Map();
+      textboxBuffers.set(page, owners);
+    }
+    let buffer = owners.get(key);
+    if (!buffer) {
+      buffer = new Commands(work);
+      owners.set(key, buffer);
+    }
+    return buffer;
+  };
   const outFor = (
     visit: Pick<SemanticSpanVisit, 'story' | 'rootStory' | 'textboxOwner' | 'page'> & {
       readonly paragraph?: SemanticSpanVisit['paragraph'] | null;
@@ -457,25 +480,21 @@ export async function paint(
           commands: new Commands(work),
           behind: new Commands(work),
         };
+        // A cell inside a text box turns inside that box's (or group member's) clip.
+        if (visit.story === 'textbox' && visit.textboxOwner) {
+          const owner = visit.textboxOwner;
+          const key = groupMemberStoryOf(owner, visit.paragraph) ?? owner;
+          entry.member = textboxBuffer(visit.page.index, key);
+        }
         rotatedBuffers.set(key, entry);
       }
       return entry.commands;
     }
     if (visit.story !== 'textbox' || !visit.textboxOwner)
       return textStream(visit.rootStory, visit.page.index);
-    let owners = textboxBuffers.get(visit.page.index);
-    if (!owners) {
-      owners = new Map();
-      textboxBuffers.set(visit.page.index, owners);
-    }
     // A group member's text keys on its member story, so each member clips on its own.
     const key = groupMemberStoryOf(visit.textboxOwner, visit.paragraph) ?? visit.textboxOwner;
-    let buffer = owners.get(key);
-    if (!buffer) {
-      buffer = new Commands(work);
-      owners.set(key, buffer);
-    }
-    return buffer;
+    return textboxBuffer(visit.page.index, key);
   };
   // PDF extractors expect glyphs in visual order within each physical line.
   // Retain logical Unicode separately in one ActualText region for the complete line.
@@ -721,6 +740,20 @@ export async function paint(
     const buffer = outFor(visit);
     if (visit.paintLayer === 'behind-text') buffer.unshift(commands);
     else buffer.push(commands);
+  }
+  // A turned cell inside a text box story joins its box's buffer before the box paints, so
+  // the box's (or group member's) turn and clips enclose the cell's own turn.
+  for (const [key, entry] of rotatedBuffers) {
+    if (!entry.member) continue;
+    const matrix = rotatedCellMatrix(
+      entry.cell.box,
+      entry.x,
+      entry.y,
+      pageHeight(pages[entry.page]!)
+    );
+    if (entry.behind.length) entry.member.unshift('q', matrix, ...entry.behind, 'Q');
+    if (entry.commands.length) entry.member.push('q', matrix, ...entry.commands, 'Q');
+    rotatedBuffers.delete(key);
   }
   // Behind-text drawings belong below the owner's text and decoration. A drawing laid out
   // inside a `btLr` cell sits in that cell's upright plane, so it joins the cell's buffer

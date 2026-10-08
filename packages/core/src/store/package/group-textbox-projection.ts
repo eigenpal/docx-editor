@@ -49,6 +49,8 @@ export interface GroupTextboxProjection {
 
 /** EMU-free angle units of `ST_Angle`: 60000 per degree. */
 const ANGLE_UNITS_PER_DEGREE = 60_000;
+/** `ST_Angle` is an `xsd:int`. */
+const XSD_INT_MAX = 2_147_483_647;
 
 /**
  * The clockwise turn of a member's text, or null when its transform is schema-invalid.
@@ -79,7 +81,9 @@ function memberTextRotation(member: OoxmlElement): number | null {
     const collapsed = collapseSchemaWhitespace(raw);
     // Bounded digit count: `rot` is an xsd:int and only scales an angle here.
     if (!/^[+-]?\d{1,12}$/.test(collapsed)) return null;
-    degrees = Number(collapsed) / ANGLE_UNITS_PER_DEGREE;
+    const units = Number(collapsed);
+    if (units < -XSD_INT_MAX - 1 || units > XSD_INT_MAX) return null;
+    degrees = units / ANGLE_UNITS_PER_DEGREE;
   }
   if (schemaFlagIsSet(flipV)) degrees += 180;
   const turned = ((degrees % 360) + 360) % 360;
