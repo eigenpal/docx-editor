@@ -28,7 +28,7 @@ Use your own React components and TSX for toolbars, menus, and panels. Connect t
 | `.docx-editor` wrapper | Custom controls that use editor styles | Supplies scoped styles and tokens |
 | Container height | Every composed editor | Gives the viewport room to render |
 | Remount `key` | When you change modules | Loads the new modules |
-| Positioned workspace row | When you use the navigation pane | Anchors the navigation pane |
+| Positioned workspace row | When you place the navigation pane beside the viewport | Anchors the navigation pane |
 | Pro review module | When you use Pro review chrome | Enables comments, tracked changes, and custom-node review chrome |
 
 If you use Pro review chrome, register its modules once on `Root`. For setup, see the [Pro package documentation](/docs/2.x/pro).
@@ -345,7 +345,7 @@ Navigation parts are compound statics. Add a class to each part instead of targe
 
 ### Place the navigation pane
 
-Place `DocxEditor.Navigation` as a direct child of `DocxEditor.Viewport`, or beside the viewport in a positioned container. Inside the viewport, the pane stays in place while the pages scroll. In both positions, the pane moves the page only when the left margin area cannot hold it.
+Place `DocxEditor.Navigation` as a direct child of `DocxEditor.Viewport`, or beside the viewport in a positioned container. As a direct child of the viewport, the pane stays in place while the pages scroll. In both positions, the pane moves the page only when the left margin area cannot hold it.
 
 If the viewport leaves less than `NAVIGATION_PANE_MIN_PAGE_ROOM` (320 pixels) beside the pane, the pane covers the page instead. It then spans the viewport width less its inset on each side, and the page doesn't move. The pane closes after you choose a heading or a result. `useNavigationPane().overlay` reports this mode.
 
