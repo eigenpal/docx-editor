@@ -8,9 +8,9 @@ Pass a card class through `card`. Compose `Author`, `Summary`, `Accept`, `Reject
 
 Use `List` for custom cards. Its React callback or Vue `#item` slot supplies each review item. `useReviewItem()` reads the surrounding card item.
 
-Use `useReviewAuthor()` for the resolved author color and avatar. Use `Markers` for custom marker icons. Keep rejected writes visible to the user.
+Use `useReviewAuthor()` for the resolved author color and avatar. To choose between initials badges and the comment icon on collapsed markers, set the `commentMarkers` review pane setting. Use `Markers` with an `icon` function for marker icons of your own. Keep rejected writes visible to the user.
 
-A comments-only filter hides revision cards. Provide another route to revision decisions, such as balloons or an application review panel.
+To list comments only and open each tracked change in a balloon at its text, set `revisionsIn: 'balloons'` instead of a filter. A comments-only `filter` hides revision cards and gives no other route to revision decisions. For more information, see [Customize your review display](/docs/2.x/customization/review-display).
 
 <CustomizationDemo topic="review-cards" />
 

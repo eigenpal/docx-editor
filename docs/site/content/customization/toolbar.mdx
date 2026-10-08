@@ -4,7 +4,7 @@ description: 'Choose controls, replace icons, and connect your own buttons.'
 category: 'Customization'
 ---
 
-Use `className` for styling. Use `icon` for an icon element, `asChild` for your element, and `hidden` to remove a default part.
+Use `className` for styling. Use `icon` for an icon element, `asChild` for your element, and `hidden` to remove a default part. `hidden` on a named part, such as `Toolbar.Bold`, is shorthand for `<Toolbar.Slot slotId="text.bold" hidden />`.
 
 Set `preset={false}` to choose the complete arrangement. Use `useEditorCommand(slotId)` for application controls. It supplies enabled state and refusal reasons.
 
@@ -102,6 +102,74 @@ const modules = [reviewModule()];
     </DocxEditor.Root>
   </div>
 </template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+## Group your own controls
+
+Put your controls in a `Toolbar.Group`. A group collapses into the **More** panel as a whole when the toolbar runs out of width, and its label becomes the heading of its panel section. Give a host group a `label`, or a `labelKey` from your translation catalog. The `id` of a built-in group, such as `review` or `zoom`, changes that group instead. TypeScript suggests the built-in ids through the `ChromeGroupId` type.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor.Toolbar>
+  <DocxEditor.Toolbar.Group id="contract" label="Contract" priority={15}>
+    <DocxEditor.Toolbar.Action label="Ask legal" onSelect={askLegal} />
+  </DocxEditor.Toolbar.Group>
+  <DocxEditor.Toolbar.Group id="review">
+    <DocxEditor.Toolbar.AddComment />
+  </DocxEditor.Toolbar.Group>
+  <DocxEditor.Toolbar.Group id="zoom" hidden />
+</DocxEditor.Toolbar>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditor.Toolbar>
+  <DocxEditor.Toolbar.Group id="contract" label="Contract" :priority="15">
+    <DocxEditor.Toolbar.Action label="Ask legal" @select="askLegal" />
+  </DocxEditor.Toolbar.Group>
+  <DocxEditor.Toolbar.Group id="review">
+    <DocxEditor.Toolbar.AddComment />
+  </DocxEditor.Toolbar.Group>
+  <DocxEditor.Toolbar.Group id="zoom" hidden />
+</DocxEditor.Toolbar>
+```
+
+</Framework>
+</FrameworkTabs>
+
+A lower `priority` leaves the bar first. `hidden` on a group removes the whole group and its separator.
+
+## Replace one control
+
+`Toolbar.Slot` replaces one built-in control with your own content. Name the control with `slotId`. Your content keeps the control's place and collapses with its group.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor.Toolbar>
+  <DocxEditor.Toolbar.Slot slotId="zoom.level">
+    <MyZoomPicker />
+  </DocxEditor.Toolbar.Slot>
+</DocxEditor.Toolbar>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditor.Toolbar>
+  <DocxEditor.Toolbar.Slot slot-id="zoom.level">
+    <MyZoomPicker />
+  </DocxEditor.Toolbar.Slot>
+</DocxEditor.Toolbar>
 ```
 
 </Framework>

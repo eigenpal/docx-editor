@@ -1,24 +1,97 @@
 ---
 title: 'Customize your balloons'
-description: 'Build application balloons for text revisions and keep editor review actions.'
+description: 'Open tracked changes in balloons at their text, style the balloon, or build your own.'
 category: 'Customization'
 ---
+
+The review module can open each tracked change in a balloon at its text. Start with the built-in balloon. Build your own balloon only when your design needs a different component.
+
+## Use the built-in balloons
+
+Set `revisionsIn` to `'balloons'`. The review pane then lists comments only, and `DocxEditorReview` opens a balloon at the text of each tracked change. The balloon has the author, the date, the changed words, replies, a reply field, and **Accept** and **Reject**.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
+
+const modules = [reviewModule({ pane: { revisionsIn: 'balloons' } })];
+
+<DocxEditor.Root document={bytes} modules={modules} author="Jess Lin">
+  <DocxEditor.Viewport style={{ height: 520 }}>
+    <DocxEditor.Content />
+    <DocxEditorReview />
+  </DocxEditor.Viewport>
+</DocxEditor.Root>;
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/vue';
+
+defineProps<{ bytes: Uint8Array }>();
+const modules = [reviewModule({ pane: { revisionsIn: 'balloons' } })];
+</script>
+
+<template>
+  <DocxEditor.Root :document="bytes" :modules="modules" author="Jess Lin">
+    <DocxEditor.Viewport :style="{ height: '520px' }">
+      <DocxEditor.Content />
+      <DocxEditorReview />
+    </DocxEditor.Viewport>
+  </DocxEditor.Root>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+To switch between the pane and balloons at runtime, and to combine balloons with other display settings, see [Customize your review display](/docs/2.x/customization/review-display).
+
+To add a class to the built-in balloon, pass `className` to `DocxEditorReview.Balloon`:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditorReview>
+  <DocxEditorReview.Balloon className="contract-change-balloon" />
+</DocxEditorReview>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditorReview>
+  <DocxEditorReview.Balloon class-name="contract-change-balloon" />
+</DocxEditorReview>
+```
+
+</Framework>
+</FrameworkTabs>
+
+## Build your own text balloon
 
 The live example uses an application balloon for painted text revisions. It opens when you select a tracked change.
 
 <CustomizationDemo topic="balloons" />
 
-## Connect the balloon to review state
+This recipe keeps the default `revisionsIn: 'pane'`. The pane keeps listing every change, including changes in tables, drawings, headers, footers, and changes that have no painted text. Your balloon adds a second route to the changes in body text.
 
-The packaged review surface supplies balloons for structural and formatting changes. It keeps text revisions and comments in the review pane.
+Match `data-revision-id` against the review item ID and its revision addresses. Scope every query to your editor container.
 
-For a custom text balloon, match `data-revision-id` against the review item ID and its revision addresses. Scope every query to your editor container.
+Open the balloon for `activatedKey` from `useReview()`, not for `activeKey`. `activatedKey` is set only when **Next Change**, **Previous Change**, or `setActive` opens an item on purpose. The click handler in this recipe calls `setActive`, so a click opens the balloon too. `activeKey` follows the caret, so a balloon keyed on it opens each time the caret lands in a change. Outside a component, `editor.getActivatedReviewItemKey()` returns the same key.
 
 Read the painted anchor rectangle for popup placement. Recalculate after scrolling, resizing, and repainting. Hide the balloon when its anchor disappears.
 
 Use `useReview()` to activate, accept, and reject the item. Check each returned Boolean. Handle Escape, dismissal, read-only state, and cleanup.
-
-This example covers body text revisions. Keep the packaged review pane for tables, drawings, headers, footers, and unplaced changes.
 
 ## React and Vue reference
 
@@ -128,7 +201,7 @@ export function ContractBalloons({
   rounded: boolean;
   authorAccent?: boolean;
 }) {
-  const { items, activeKey, setActive, accept, reject } = useReview();
+  const { items, activatedKey, setActive, accept, reject } = useReview();
   const authors = useReviewAuthors();
   const panel = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{
@@ -136,7 +209,7 @@ export function ContractBalloons({
     top: number;
   } | null>(null);
   const [failure, setFailure] = useState('');
-  const item = items.find((entry) => entry.key === activeKey && entry.kind === 'revision');
+  const item = items.find((entry) => entry.key === activatedKey && entry.kind === 'revision');
 
   useEffect(() => {
     const host = container.current;
@@ -267,12 +340,12 @@ const props = defineProps<{
   authorAccent?: boolean;
 }>();
 const authors = useReviewAuthors();
-const { items, activeKey, setActive, accept, reject } = useReview();
+const { items, activatedKey, setActive, accept, reject } = useReview();
 const panel = ref<HTMLElement | null>(null);
 const position = ref<BalloonPosition | null>(null);
 const failure = ref('');
 const item = computed(() =>
-  items.value.find((entry) => entry.key === activeKey.value && entry.kind === 'revision')
+  items.value.find((entry) => entry.key === activatedKey.value && entry.kind === 'revision')
 );
 
 const authorColor = computed(

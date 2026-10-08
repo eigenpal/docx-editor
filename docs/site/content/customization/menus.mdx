@@ -6,7 +6,7 @@ category: 'Customization'
 
 Compose `Menu` and `ContextMenu` independently. Keep named parts for packaged command state and behavior.
 
-Use `ContextMenu.Slot` for a fixed-command slot. Use `Row` for application actions. Use `Submenu` to group actions. Use named toolbar parts for controls that collect values.
+Use `ContextMenu.Slot` with a `slotId`, such as `format.clear`, for a packaged command. It takes its label, icon, enabled state, and command from the editor. Use `ContextMenu.Item` for application actions, and `Submenu` to group them. `Menu.Item` takes `slotId` in the same way. Use named toolbar parts for controls that collect values.
 
 Context changes determine which commands the editor enables. A hidden control does not block the corresponding operation.
 
@@ -50,7 +50,7 @@ export function ContractEditor({
           <DocxEditor.ContextMenu preset={false}>
             <DocxEditor.ContextMenu.Cut />
             <DocxEditor.ContextMenu.Copy />
-            <DocxEditor.ContextMenu.Slot slot="format.clear" />
+            <DocxEditor.ContextMenu.Slot slotId="format.clear" />
           </DocxEditor.ContextMenu>
           <DocxEditorReview />
         </DocxEditor.Viewport>
@@ -91,13 +91,65 @@ const modules = [reviewModule()];
         <DocxEditor.ContextMenu :preset="false">
           <DocxEditor.ContextMenu.Cut />
           <DocxEditor.ContextMenu.Copy />
-          <DocxEditor.ContextMenu.Slot slot="format.clear" />
+          <DocxEditor.ContextMenu.Slot slot-id="format.clear" />
         </DocxEditor.ContextMenu>
         <DocxEditorReview />
       </DocxEditor.Viewport>
     </DocxEditor.Root>
   </div>
 </template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+## Remove a packaged row
+
+Render the row's slot with `hidden`. A named row part is shorthand for the same override, so both lines in each of the following examples remove a row in place. The `review.addComment` slot is the **Add a comment** row.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor.ContextMenu>
+  <DocxEditor.ContextMenu.Slot slotId="review.addComment" hidden />
+  <DocxEditor.ContextMenu.Cut hidden />
+</DocxEditor.ContextMenu>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditor.ContextMenu>
+  <DocxEditor.ContextMenu.Slot slot-id="review.addComment" hidden />
+  <DocxEditor.ContextMenu.Cut hidden />
+</DocxEditor.ContextMenu>
+```
+
+</Framework>
+</FrameworkTabs>
+
+## Add an application row
+
+`ContextMenu.Item` supplies all of its behavior. Pass a `label` and an `onSelect` handler. To disable the row, pass `disabled` and a `disabledReason`.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor.ContextMenu>
+  <DocxEditor.ContextMenu.Item label="Ask legal" onSelect={askLegal} />
+</DocxEditor.ContextMenu>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditor.ContextMenu>
+  <DocxEditor.ContextMenu.Item label="Ask legal" @select="askLegal" />
+</DocxEditor.ContextMenu>
 ```
 
 </Framework>

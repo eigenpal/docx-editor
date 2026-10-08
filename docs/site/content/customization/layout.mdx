@@ -8,7 +8,7 @@ Use `Root` to own the application frame. Give the viewport a height or a flexibl
 
 Place `Toolbar` before or after `Viewport`. Omit it for a document-only workspace. Keep `HyperLink`, `ContextMenu`, and review controls under the same root.
 
-Add `Navigation` inside the viewport for document search and navigation. Keep application panels outside the painted document surface.
+Add `Navigation` for headings and search. Keep application panels outside the painted document surface.
 
 <CustomizationDemo topic="layout" />
 
@@ -94,6 +94,39 @@ const modules = [reviewModule()];
 
 </Framework>
 </FrameworkTabs>
+
+## Add the navigation pane
+
+Place `DocxEditor.Navigation` as a direct child of `DocxEditor.Viewport`, or beside the viewport in a positioned container. Inside the viewport, the pane stays in place while the pages scroll. The pane moves the page only when the margin area beside the page cannot hold it. On a narrow viewport, the pane covers the page instead.
+
+While focus is in the editor, <kbd>Ctrl</kbd>+<kbd>F</kbd> (<kbd>Cmd</kbd>+<kbd>F</kbd> on macOS) opens the **Find** tab. To leave the shortcut to the browser, set `findShortcut` to `false`.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor.Viewport style={{ height: 520 }}>
+  <DocxEditor.Navigation findShortcut={false} />
+  <DocxEditor.Content />
+  <DocxEditorReview />
+</DocxEditor.Viewport>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditor.Viewport :style="{ height: '520px' }">
+  <DocxEditor.Navigation :find-shortcut="false" />
+  <DocxEditor.Content />
+  <DocxEditorReview />
+</DocxEditor.Viewport>
+```
+
+</Framework>
+</FrameworkTabs>
+
+The navigation pane and the review pane can be open together. The review pane's `overflow` setting doesn't change the navigation pane, which stays docked at its side in every mode. For more information, see [Customize your review display](/docs/2.x/customization/review-display#choose-what-happens-when-the-pane-does-not-fit).
 
 ## More control
 
