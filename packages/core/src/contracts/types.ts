@@ -142,6 +142,7 @@ export interface DocRange {
 export type ExecResult =
   | {
       ok: true;
+      /** Whether the DOCUMENT changed; view-only calls (pane, activation, mode) always report `false`. */
       changed: boolean;
       revisions?: RevisionBatchResult;
       /** Present on `setReviewChangesAuthor`: the changes it updated and the ones it skipped. */
