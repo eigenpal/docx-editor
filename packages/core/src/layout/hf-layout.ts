@@ -695,13 +695,16 @@ export function layoutHeaderFooterStory(
         tables = placeTables();
       };
       if (tables.zones.length) wrapTables();
-      // Wrapped text longer than its natural height can still pass the sheet: rise once more.
-      if (
-        framedFooter &&
-        storyTop + flow.bottom > floatingGeometry.pageHeight + 0.01 &&
-        liftAbove(Number.NEGATIVE_INFINITY)
-      )
+      // Text wrapped beside a narrow table can grow past its natural height and the sheet.
+      // The footer then grows upward by that height, a bounded number of times, and as a last
+      // resort its text rises above every table it meets.
+      const offSheet = () => storyTop + flow.bottom > floatingGeometry.pageHeight + 0.01;
+      for (let pass = 0; framedFooter && pass < 3 && offSheet(); pass++) {
+        storyTop = Math.min(storyTop, footerBottom - flow.bottom);
+        tables = placeTables();
         wrapTables();
+      }
+      if (framedFooter && offSheet() && liftAbove(Number.NEGATIVE_INFINITY)) wrapTables();
       flow = {
         blocks: [...flow.blocks, ...tables.tables],
         bottom: framedFooter ? footerBottom - storyTop : flow.bottom,

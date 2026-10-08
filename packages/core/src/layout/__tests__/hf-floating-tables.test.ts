@@ -28,6 +28,10 @@ const PICTURE_RUN = PICTURE_XML.slice(
   PICTURE_XML.indexOf('</w:drawing></w:r>') + '</w:drawing></w:r>'.length
 );
 
+const WORDS = 'alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu';
+/** A paragraph long enough to wrap over several lines at the story width. */
+const longParagraph = (label: string) =>
+  `<w:p><w:r><w:t xml:space="preserve">${label} ${WORDS} ${WORDS} ${WORDS} ${WORDS} ${WORDS}</w:t></w:r></w:p>`;
 const table = (tblpPr: string, cell = '<w:r><w:t>Ref</w:t></w:r>', width = 2000) =>
   `<w:tbl><w:tblPr>${tblpPr}<w:tblW w:w="${width}" w:type="dxa"/></w:tblPr>` +
   `<w:tblGrid><w:gridCol w:w="${width}"/></w:tblGrid>` +
@@ -192,6 +196,16 @@ describe('story blocks wrap around a floating table', () => {
     expect(story.flowHeight).toBeCloseTo(title.box.height, 3);
   });
 
+  test('the paragraph a narrow table anchors to wraps beside it from its first line', () => {
+    const left =
+      '<w:tblpPr w:vertAnchor="text" w:horzAnchor="margin" w:tblpXSpec="left" w:tblpY="1"/>';
+    const { table: placed, title } = header(table(left) + longParagraph('First'), MODERN);
+    const right = placed.box.x + placed.box.width;
+    const beside = title.lines.filter((line) => line.box.y < placed.box.y + placed.box.height);
+    expect(beside.length).toBeGreaterThan(1);
+    for (const line of beside) expect(line.contentX).toBeGreaterThanOrEqual(right - 0.01);
+  });
+
   test('a table raised above its anchor does not move the paragraph before it', () => {
     const raised = TEXT_ANCHOR.replace('w:tblpY="1"', 'w:tblpY="-199"');
     const lead = '<w:p><w:r><w:t>Lead</w:t></w:r></w:p>';
@@ -254,28 +268,49 @@ describe('story blocks wrap around a floating table', () => {
   });
 
   test('footer text around a page-framed table always stays on the sheet', () => {
-    // Text moved below the table rises above it instead when it would pass the sheet bottom.
-    for (const storyDistance of [10, 36]) {
-      for (const extra of [0, 1, 2]) {
-        for (let y = 14000; y <= 16000; y += 100) {
-          const tblpPr = `<w:tblpPr w:vertAnchor="page" w:horzAnchor="margin" w:tblpXSpec="center" w:tblpY="${y}"/>`;
-          const lead = Array.from({ length: extra }, () => '<w:p><w:r><w:t>Line</w:t></w:r></w:p>');
-          const { story, table: placed } = header(wide(tblpPr) + lead.join(''), {
-            storyDistance,
-            footer: true,
-            compatibilityMode: 15,
-          });
-          const footerTop = 792 - storyDistance - story.flowHeight;
-          const tableTop = footerTop + placed.box.y;
-          const tableBottom = tableTop + placed.box.height;
-          for (const fragment of story.fragments) {
-            if (fragment.kind !== 'paragraph') continue;
-            for (const line of fragment.lines) {
-              const top = footerTop + line.box.y;
-              const bottom = top + line.box.height;
-              expect(top).toBeGreaterThanOrEqual(0);
-              expect(bottom).toBeLessThanOrEqual(792 + 0.01);
-              expect(bottom <= tableTop + 0.01 || top >= tableBottom - 0.01).toBe(true);
+    // Text moved below a wide table rises above it when it would pass the sheet bottom. Text
+    // wrapped beside a narrow table grows the footer upward, and never covers the table.
+    const variants = [
+      { xSpec: 'center', width: 9360, step: 100 },
+      { xSpec: 'left', width: 3000, step: 200 },
+      { xSpec: 'right', width: 3000, step: 200 },
+    ];
+    const bodies = [
+      ...[0, 1, 2].map((extra) =>
+        Array.from({ length: extra }, () => '<w:p><w:r><w:t>Line</w:t></w:r></w:p>').join('')
+      ),
+      ...[1, 2, 3].map((count) =>
+        Array.from({ length: count }, (_, i) => longParagraph(`P${i}`)).join('')
+      ),
+    ];
+    for (const { xSpec, width, step } of variants) {
+      for (const storyDistance of [10, 36]) {
+        for (const body of bodies) {
+          for (let y = 14000; y <= 16000; y += step) {
+            const tblpPr = `<w:tblpPr w:vertAnchor="page" w:horzAnchor="margin" w:tblpXSpec="${xSpec}" w:tblpY="${y}"/>`;
+            const { story, table: placed } = header(table(tblpPr, undefined, width) + body, {
+              storyDistance,
+              footer: true,
+              compatibilityMode: 15,
+            });
+            const footerTop = 792 - storyDistance - story.flowHeight;
+            const tableTop = footerTop + placed.box.y;
+            const tableBottom = tableTop + placed.box.height;
+            for (const fragment of story.fragments) {
+              if (fragment.kind !== 'paragraph') continue;
+              for (const line of fragment.lines) {
+                const top = footerTop + line.box.y;
+                const bottom = top + line.box.height;
+                expect(top).toBeGreaterThanOrEqual(0);
+                expect(bottom).toBeLessThanOrEqual(792 + 0.01);
+                if (bottom <= tableTop + 0.01 || top >= tableBottom - 0.01) continue;
+                const ink = line.spans.filter((span) => span.text.trim() !== '');
+                const left = Math.min(...ink.map((span) => span.box.x));
+                const right = Math.max(...ink.map((span) => span.box.x + span.box.width));
+                const clear =
+                  right <= placed.box.x + 0.01 || left >= placed.box.x + placed.box.width - 0.01;
+                expect(clear).toBe(true);
+              }
             }
           }
         }

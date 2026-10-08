@@ -96,7 +96,9 @@ function storyTableZone(
   anchorTop: number,
   contentWidth: number
 ): ExclusionZone | undefined {
-  const anchorId = entry.nextBlockId ?? `table:${table.tableId}`;
+  // The zone names the table, not the paragraph it anchors to: that paragraph wraps beside
+  // the table like any later one, from its first line.
+  const anchorId = `table:${table.tableId}`;
   const zone = addFloatingTableExclusions(
     [
       {
@@ -203,6 +205,8 @@ export function placeFloatingStoryTables(
  * table reaches past the footer's bottom edge, or when the text moved below the table would
  * end past `pageBottom`, the sheet's bottom edge in story coordinates. Otherwise the text
  * after the table moves below it. `naturalHeight` is the footer's height before wrapping.
+ * A `pageBottom` of negative infinity lifts the text above every table it meets, a narrow
+ * one included: the last resort that keeps it on the sheet.
  */
 export function footerLiftAboveTables(
   tables: PlacedFloatingStoryTables,
@@ -210,12 +214,14 @@ export function footerLiftAboveTables(
   pageBottom: number
 ): number {
   let lift = 0;
+  const forced = pageBottom === Number.NEGATIVE_INFINITY;
   for (const zone of tables.pageFramedZones) {
-    if (zone.input.mode !== 'topAndBottom') continue;
+    if (!forced && zone.input.mode !== 'topAndBottom') continue;
     const top = zone.verticalBand.y;
     const bottom = top + zone.verticalBand.height;
     if (top >= naturalHeight || bottom <= 0) continue;
-    if (bottom > naturalHeight || bottom + naturalHeight > pageBottom)
+    // Only the text the table meets moves below it; the lines above its top stay.
+    if (bottom > naturalHeight || bottom + naturalHeight - Math.max(0, top) > pageBottom)
       lift = Math.max(lift, naturalHeight - top);
   }
   return lift;
