@@ -78,6 +78,7 @@ import { useReview, type ReviewItemView } from './useReview';
 import {
   authorAccent,
   authorCardStyle,
+  authorHooks,
   authorSlot,
   useReviewAuthorInfo,
 } from './review-author-styles';
@@ -1371,18 +1372,7 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
                 className="docx-review__card"
                 data-testid="review-balloon-card"
                 data-kind={served.revisionKind ?? 'revision'}
-                // Gated, as the card and the fallback balloon are: an anonymous change would
-                // otherwise carry `data-review-author=""` and match a host's `[data-review-author]`.
-                {...(served.author
-                  ? {
-                      'data-review-author': served.author,
-                      'data-review-author-slot': authorSlot(
-                        authorInfo.get(served.author),
-                        authorSlots.get(served.author) ?? 0
-                      ),
-                    }
-                  : {})}
-                style={authorCardStyle(
+                {...authorHooks(
                   served.author,
                   authorInfo.get(served.author),
                   authorSlots.get(served.author) ?? 0
@@ -1410,16 +1400,7 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
               className="docx-review__card"
               data-testid="review-balloon-card"
               data-kind={fallbackKind}
-              {...(anchor.author
-                ? {
-                    'data-review-author': anchor.author,
-                    'data-review-author-slot': authorSlot(
-                      authorInfo.get(anchor.author),
-                      authorSlots.get(anchor.author) ?? 0
-                    ),
-                  }
-                : {})}
-              style={authorCardStyle(
+              {...authorHooks(
                 anchor.author,
                 authorInfo.get(anchor.author),
                 authorSlots.get(anchor.author) ?? 0
@@ -1985,16 +1966,7 @@ function ReviewReplies({ className, hidden }: ReviewPartProps) {
             className="docx-review__reply"
             data-testid="review-reply"
             // Each reply draws in its OWN author's colour, not the thread's.
-            {...(reply.author
-              ? {
-                  'data-review-author': reply.author,
-                  'data-review-author-slot': authorSlot(
-                    authorInfo.get(reply.author),
-                    authorSlots.get(reply.author) ?? 0
-                  ),
-                }
-              : {})}
-            style={authorCardStyle(
+            {...authorHooks(
               reply.author,
               authorInfo.get(reply.author),
               authorSlots.get(reply.author) ?? 0

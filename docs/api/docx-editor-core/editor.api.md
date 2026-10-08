@@ -1178,6 +1178,9 @@ export const DEFAULT_FONT: FontConfiguration['defaultFont'];
 export const DEFAULT_IMAGE_RESOURCE_LIMITS: ImageResourceLimits;
 
 // @public
+export const DEFAULT_REVIEW_PANE: ResolvedReviewPane;
+
+// @public
 export const DEFAULT_REVISION_MARKUP: ResolvedRevisionMarkup;
 
 // @public
@@ -1329,6 +1332,7 @@ export interface DocxEditorInstance extends Editor {
     setMode(mode: 'edit' | 'view' | 'suggesting' | undefined): void;
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setReviewAuthorVisible(author: string, visible: boolean): void;
+    setReviewPane(options: ReviewPaneOptions): void;
     setRevisionMarkup(options: RevisionMarkupOptions): void;
     setRevisionMarkupChrome(handlers: RevisionMarkupChromeHandlers | null, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setRevisionStyles(styles: RevisionStyles): void;
@@ -1381,6 +1385,9 @@ export interface EditorCommandExecute {
 
 // @internal
 export function editorCommandKey(command: EditorCommand): string;
+
+// @internal
+export function editorInstanceScope(from: Element | null): Element | null;
 
 // @public
 export interface EditorModule {
@@ -1586,6 +1593,9 @@ export function generateRulerTicks(lengthPx: number, unit: RulerUnit): RulerTick
 
 // @public
 export function handlePosition(handle: RulerIndentHandle, indent: RulerIndent, page: RulerPageMetrics): number;
+
+// @internal
+export function hasOpenNestedPopup(panel: Element | null): boolean;
 
 // @public
 export const HIGHLIGHT_REFRESH_MS = 150;
@@ -1873,6 +1883,9 @@ export function isTableChromeSlot(slot: ChromeSlotId): slot is TableChromeSlotId
 // @public
 export function layoutPointsToCssPixels(points: number, paintScale: number): number;
 
+// @internal
+export function listenForPopupEscape(options: PopupEscapeOptions): () => void;
+
 // @public
 export function loadFonts(request: LoadFontsRequest): Promise<LoadFontsResult>;
 
@@ -1917,7 +1930,7 @@ export function mountPaginatedSurface(container: HTMLElement, bytes: Uint8Array,
 
 // @public
 export interface NavigateToChangeOptions extends ScrollToAnchorOptions {
-    readonly block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest';
+    readonly block?: ScrollPlacement;
     readonly focus?: boolean;
 }
 
@@ -2493,6 +2506,15 @@ export interface PopupChromeRegistrationOptions {
     readonly fallback?: boolean;
 }
 
+// @internal
+export interface PopupEscapeOptions {
+    readonly close: (fromInside: boolean) => void;
+    readonly contains: (node: Node) => boolean;
+    readonly editorElements?: () => readonly (Element | null | undefined)[];
+    readonly popup: HTMLElement;
+    readonly skip?: (event: KeyboardEvent) => boolean;
+}
+
 // @public
 export function positionContentControlPopup(panel: HTMLElement, anchor: HTMLElement): void;
 
@@ -2629,6 +2651,12 @@ export function resizePreservesAspect(handle: ImageResizeHandle, aspectLocked: b
 export function resolveColorValueToCss(color: ColorValue | undefined | null, themeColors: readonly DocumentThemeColorEntry[], defaultHex?: string): string;
 
 // @public
+export interface ResolvedReviewPane {
+    readonly opening: ReviewPaneOpening;
+    readonly overflow: ReviewPaneOverflow;
+}
+
+// @public
 export interface ResolvedRevisionMarkup {
     // (undocumented)
     readonly cells: {
@@ -2660,6 +2688,9 @@ export function resolveEditorModules(modules: readonly EditorModule[] | undefine
 
 // @public
 export function resolveImageResourceLimits(overrides?: Partial<ImageResourceLimits>): ImageResourceLimits;
+
+// @public
+export function resolveReviewPane(options: ReviewPaneOptions | undefined, base?: ResolvedReviewPane): ResolvedReviewPane;
 
 // @public
 export function resolveRevisionMarkup(input?: RevisionMarkupOptions, previous?: ResolvedRevisionMarkup): ResolvedRevisionMarkup;
@@ -2719,12 +2750,24 @@ export interface ReviewModuleContribution {
     readonly collectReviewItems: CollectReviewItems;
     readonly createRevisionMarkupDialog?: (host: RevisionMarkupDialogHost) => RevisionMarkupDialog;
     readonly displayModes: readonly ReviewDisplayMode[];
-    readonly paneOpening?: 'automatic' | 'manual';
+    readonly pane?: ReviewPaneOptions;
     readonly revisionItemsOfParagraph: (part: OoxmlPart, paragraphId: string) => readonly ReviewRevisionItem[];
 }
 
+// @internal
+export function reviewPaneEntitledZoom(mode: ZoomMode | undefined, zoom: number, overflow?: ReviewPaneOverflow): number | null;
+
 // @public
-export function reviewPaneEntitledZoom(mode: ZoomMode | undefined, zoom: number): number | null;
+export type ReviewPaneOpening = 'auto' | 'manual';
+
+// @public
+export interface ReviewPaneOptions {
+    readonly opening?: ReviewPaneOpening;
+    readonly overflow?: ReviewPaneOverflow;
+}
+
+// @public
+export type ReviewPaneOverflow = 'float' | 'shrinkPage';
 
 // @public
 export type ReviewWriteIntent = 'revision-resolve' | 'revision-attribution' | 'comment-add' | 'comment-reply' | 'comment-resolve' | 'comment-delete' | 'package-scoped';
@@ -2917,9 +2960,12 @@ export function sameTabStops(a: readonly ParagraphTabStop[], b: readonly Paragra
 export function sameZoomMode(a: ZoomMode, b: ZoomMode): boolean;
 
 // @public
+export type ScrollPlacement = 'start' | 'center' | 'centerIfNeeded' | 'nearest';
+
+// @public
 export interface ScrollToAnchorOptions {
     readonly behavior?: 'instant' | 'smooth';
-    readonly block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest';
+    readonly block?: ScrollPlacement;
     readonly offsetPx?: number;
 }
 

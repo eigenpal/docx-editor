@@ -2,6 +2,7 @@ import type {
   RevisionMarkupOptions,
   RevisionMarkupChromeHandlers,
 } from '../contracts/revision-markup.ts';
+import type { ReviewPaneOptions } from '../contracts/review-pane.ts';
 import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
 import type {
   PopupChromeRegistrationOptions,
@@ -390,6 +391,17 @@ export interface DocxEditorInstance extends Editor {
    * Invalid settings throw TypeError without changing the previous settings.
    */
   setRevisionMarkup(options: RevisionMarkupOptions): void;
+  /**
+   * Change review pane settings. An omitted field keeps its value. Invalid settings throw a
+   * `TypeError` and change nothing. The new values show in `snapshot().reviewPane`. They
+   * stay in force across `load()` and are never saved into the document.
+   *
+   * @example
+   * ```ts
+   * editor.setReviewPane({ opening: 'manual', overflow: 'shrinkPage' });
+   * ```
+   */
+  setReviewPane(options: ReviewPaneOptions): void;
   /**
    * Mount into `el`. If the instance holds pending document bytes (created without a
    * container, or previously detached), they mount now — under the shaped measurer when

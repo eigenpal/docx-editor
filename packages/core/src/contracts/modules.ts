@@ -1,4 +1,5 @@
 import type { RevisionMarkupDialogSession } from './revision-markup.ts';
+import type { ReviewPaneOptions } from './review-pane.ts';
 /**
  * `@docx-editor.dev/core/contracts/modules` — the `EditorModule` seam.
  *
@@ -90,12 +91,9 @@ export interface ReviewModuleContribution {
    */
   readonly displayModes: readonly ReviewDisplayMode[];
   /**
-   * Whether the editor opens the review pane by itself. Default `'automatic'`: the pane
-   * opens when a document with review items loads, and when a tracked change is made while
-   * the pane is closed. `'manual'` leaves it closed until the host or the user opens it,
-   * for a host that shows review items its own way (a balloon, a margin marker).
+   * The review pane settings the editor starts with. `setReviewPane` changes them later.
    */
-  readonly paneOpening?: 'automatic' | 'manual';
+  readonly pane?: ReviewPaneOptions;
   /** The review queue derivation. */
   readonly collectReviewItems: CollectReviewItems;
   /**

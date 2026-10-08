@@ -23,7 +23,7 @@
 // at the fixed zoom in force — is independent of the padding, so the mode settles in one
 // pass. A fit with NO cap has no entitlement to measure against — it fills whatever box
 // it is given — so the full column stands and the page absorbs it, exactly as it always
-// has. A fit that opts in with `shrinkForReviewPane` is entitled to its FLOOR instead:
+// has. Under the review pane's `overflow: 'shrinkPage'`, a fit is entitled to its FLOOR instead:
 // the column stands whenever any scale the fit may take leaves room for it, and the fit
 // then paints at the largest such scale inside the padded box. The floor is still a
 // property of the mode, not of the padding, so this too settles in one pass. Core's
@@ -136,7 +136,7 @@ interface GutterGeometry {
   readonly reviewPaneOpen: boolean;
   /**
    * The zoom the page is entitled to, whatever it paints at right now: a fit's own cap
-   * (`'auto'` caps at 1), a shrinking fit's floor, or the fixed scale in force. Reading the LIVE zoom instead
+   * (`'auto'` caps at 1), a fit's floor under `overflow: 'shrinkPage'`, or the fixed scale in force. Reading the LIVE zoom instead
    * re-creates the feedback loop the module comment describes — under a fit the live
    * zoom already includes whatever this gutter reserved last frame. `null` marks an
    * uncapped fit, which has no entitlement to measure against.
@@ -149,7 +149,7 @@ const selectGutterGeometry = (snapshot: EditorSnapshot): GutterGeometry => {
   return {
     pageSetup: snapshot.pageSetup ?? null,
     reviewPaneOpen: snapshot.reviewPaneOpen ?? true,
-    entitledZoom: reviewPaneEntitledZoom(mode, snapshot.zoom),
+    entitledZoom: reviewPaneEntitledZoom(mode, snapshot.zoom, snapshot.reviewPane?.overflow),
   };
 };
 

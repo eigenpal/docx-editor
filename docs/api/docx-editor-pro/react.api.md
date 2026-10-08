@@ -322,13 +322,19 @@ export interface ResolvedCustomNodeActivation {
 }
 
 // @public
+export interface ResolvedReviewPane {
+    readonly opening: ReviewPaneOpening;
+    readonly overflow: ReviewPaneOverflow;
+}
+
+// @public
 export interface ReviewActionProps extends ReviewPartProps {
     icon?: ReactNode;
 }
 
 // @public
 export interface ReviewActivationOptions {
-    readonly reveal?: 'start' | 'center' | 'centerIfNeeded' | 'nearest' | false;
+    readonly reveal?: ScrollPlacement | false;
 }
 
 // @public
@@ -362,8 +368,20 @@ export function reviewModule(options?: ReviewModuleOptions): EditorModule;
 
 // @public
 export interface ReviewModuleOptions extends ProLicenseOptions {
-    readonly paneOpening?: 'automatic' | 'manual';
+    readonly pane?: ReviewPaneOptions;
 }
+
+// @public
+export type ReviewPaneOpening = 'auto' | 'manual';
+
+// @public
+export interface ReviewPaneOptions {
+    readonly opening?: ReviewPaneOpening;
+    readonly overflow?: ReviewPaneOverflow;
+}
+
+// @public
+export type ReviewPaneOverflow = 'float' | 'shrinkPage';
 
 // @public
 export interface ReviewPartProps {
@@ -390,6 +408,9 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
     structural?: boolean;
     t?: ToolbarTranslate;
 }
+
+// @public
+export type ScrollPlacement = 'start' | 'center' | 'centerIfNeeded' | 'nearest';
 
 // @public
 export function useCollaborationParticipants(session?: CollaborationSession | null): readonly CollaborationParticipant[];

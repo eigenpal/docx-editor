@@ -984,6 +984,12 @@ export interface ResolvedCustomNodeActivation {
     readonly node: ActivatedCustomNode;
 }
 
+// @public
+export interface ResolvedReviewPane {
+    readonly opening: ReviewPaneOpening;
+    readonly overflow: ReviewPaneOverflow;
+}
+
 // @public (undocumented)
 export interface ReviewActionProps extends ReviewPartProps {
     // (undocumented)
@@ -992,7 +998,7 @@ export interface ReviewActionProps extends ReviewPartProps {
 
 // @public
 export interface ReviewActivationOptions {
-    readonly reveal?: 'start' | 'center' | 'centerIfNeeded' | 'nearest' | false;
+    readonly reveal?: ScrollPlacement | false;
 }
 
 // @public
@@ -1024,8 +1030,20 @@ export function reviewModule(options?: ReviewModuleOptions): EditorModule;
 
 // @public
 export interface ReviewModuleOptions extends ProLicenseOptions {
-    readonly paneOpening?: 'automatic' | 'manual';
+    readonly pane?: ReviewPaneOptions;
 }
+
+// @public
+export type ReviewPaneOpening = 'auto' | 'manual';
+
+// @public
+export interface ReviewPaneOptions {
+    readonly opening?: ReviewPaneOpening;
+    readonly overflow?: ReviewPaneOverflow;
+}
+
+// @public
+export type ReviewPaneOverflow = 'float' | 'shrinkPage';
 
 // @public (undocumented)
 export interface ReviewPartProps {
@@ -1065,6 +1083,9 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children' | 'hidden'
     // (undocumented)
     t?: (key: string, params?: Record<string, string | number>) => string;
 }
+
+// @public
+export type ScrollPlacement = 'start' | 'center' | 'centerIfNeeded' | 'nearest';
 
 // @public
 export function useCollaborationParticipants(session?: MaybeRefOrGetter<CollaborationSession | null>): UseCollaborationParticipantsReturn;

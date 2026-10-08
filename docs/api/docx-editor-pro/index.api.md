@@ -304,12 +304,30 @@ export interface RecognizedCustomNode {
 export function removeCustomNode(editor: Editor, nodeId: string): CustomNodeWriteOutcome;
 
 // @public
+export interface ResolvedReviewPane {
+    readonly opening: ReviewPaneOpening;
+    readonly overflow: ReviewPaneOverflow;
+}
+
+// @public
 export function reviewModule(options?: ReviewModuleOptions): EditorModule;
 
 // @public
 export interface ReviewModuleOptions extends ProLicenseOptions {
-    readonly paneOpening?: 'automatic' | 'manual';
+    readonly pane?: ReviewPaneOptions;
 }
+
+// @public
+export type ReviewPaneOpening = 'auto' | 'manual';
+
+// @public
+export interface ReviewPaneOptions {
+    readonly opening?: ReviewPaneOpening;
+    readonly overflow?: ReviewPaneOverflow;
+}
+
+// @public
+export type ReviewPaneOverflow = 'float' | 'shrinkPage';
 
 // @public
 export function saveForExport(editor: Editor, options?: SaveForExportOptions): Promise<DocumentExportResult>;

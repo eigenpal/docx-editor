@@ -1,4 +1,6 @@
-import { useEffect, type RefObject } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
+import { listenForPopupEscape } from '@docx-editor.dev/core/editor';
+import { useNavigationViewportElement } from '../navigation/navigation-layout';
 
 /** Bind keyboard dismissal and option navigation to this mounted picker. */
 export function usePickerKeyboard(
@@ -6,27 +8,32 @@ export function usePickerKeyboard(
   open: boolean,
   close: () => void
 ): void {
+  // Read through refs: callers pass a fresh `close` each render, and re-binding on every
+  // render would reorder this listener behind ones registered later.
+  const viewport = useNavigationViewportElement();
+  const latest = useRef({ close, viewport });
+  latest.current = { close, viewport };
   useEffect(() => {
     const root = rootRef.current;
     if (!open || !root) return;
-    return bindPickerKeyboard(root, close);
-  }, [rootRef, open, close]);
+    return bindPickerKeyboard(
+      root,
+      () => latest.current.close(),
+      () => latest.current.viewport
+    );
+  }, [rootRef, open]);
 }
 
-function bindPickerKeyboard(root: HTMLElement, close: () => void): () => void {
+function bindPickerKeyboard(
+  root: HTMLElement,
+  close: () => void,
+  viewport: () => HTMLElement | null
+): () => void {
   const keydown = (event: KeyboardEvent) => {
     if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
     const target = event.target as HTMLElement;
     // The editable size input owns its draft and step keys.
     if (target.matches('input[role="combobox"]')) return;
-    const trigger = root.querySelector<HTMLElement>('[aria-haspopup]');
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      event.stopPropagation();
-      trigger?.focus();
-      close();
-      return;
-    }
     const typing = target.matches('input, textarea, select');
     if (typing && event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
     const options = Array.from(root.querySelectorAll<HTMLElement>('[role="option"]')).filter(
@@ -48,21 +55,27 @@ function bindPickerKeyboard(root: HTMLElement, close: () => void): () => void {
   const focusout = (event: FocusEvent) => {
     if (event.relatedTarget instanceof Node && !root.contains(event.relatedTarget)) close();
   };
-  // Toolbar mousedown keeps focus in the document, so a picker opened by a click never
-  // sees its keys. Escape anywhere else still closes it. Bubble phase, and the event goes
-  // on: a dialog, the find bar, or the surface handles the same key as it would anyway.
-  const escapeOutside = (event: KeyboardEvent) => {
-    if (event.key !== 'Escape' || event.isComposing || event.defaultPrevented) return;
-    if (event.target instanceof Node && root.contains(event.target)) return;
-    close();
-  };
-  const owner = root.ownerDocument;
+  // Escape is not handled here: the capture listener below hears it before the surface,
+  // also when a click opened the picker and focus stayed in the pages.
+  const stopEscape = listenForPopupEscape({
+    popup: root,
+    contains: (node) => root.contains(node),
+    editorElements: () => [viewport()],
+    // The editable size input owns its draft and its Escape.
+    skip: (event) =>
+      event.target instanceof Element &&
+      root.contains(event.target) &&
+      event.target.matches('input[role="combobox"]'),
+    close: (fromInside) => {
+      if (fromInside) root.querySelector<HTMLElement>('[aria-haspopup]')?.focus();
+      close();
+    },
+  });
   root.addEventListener('keydown', keydown);
   root.addEventListener('focusout', focusout);
-  owner.addEventListener('keydown', escapeOutside);
   return () => {
     root.removeEventListener('keydown', keydown);
     root.removeEventListener('focusout', focusout);
-    owner.removeEventListener('keydown', escapeOutside);
+    stopEscape();
   };
 }

@@ -21,6 +21,7 @@ import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import type {
   Editor,
   ReviewActivationOptions,
+  ScrollPlacement,
   ReviewItemPlacement,
   ReviewItemQuery,
 } from '@docx-editor.dev/core/contracts/editor';
@@ -71,7 +72,7 @@ export type ReviewItemView = ReviewItemPlacement;
  * Re-exported here so a host taking this hook can name what it passes without reaching past
  * the adapter into the engine's contract module.
  */
-export type { ReviewActivationOptions };
+export type { ReviewActivationOptions, ScrollPlacement };
 
 function reviewAuthorFilterKey(editor: Editor): string {
   const snapshot = (

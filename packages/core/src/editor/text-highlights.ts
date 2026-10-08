@@ -645,8 +645,22 @@ export function createTextHighlights(deps: {
 
   return {
     members,
-    /** The frame the surface last painted, for hit tests that must match painted geometry. */
-    frame: (): SurfaceOverlayFrame | null => lastFrame,
+    /**
+     * The frame the surface last painted, for hit tests that must match painted geometry.
+     *
+     * When the document moved since that paint, the layout is brought up to date first, so
+     * a caller's model ranges and the line geometry describe the same text. A deferred
+     * paint keeps the painted scale and page offsets, with the current layout.
+     */
+    frame: (): SurfaceOverlayFrame | null => {
+      const surface = deps.surface();
+      if (!lastFrame || !surface) return lastFrame;
+      const revision = surface.session.packageRevision();
+      if (lastFrame.layout.revision === revision) return lastFrame;
+      const layout = surface.layout();
+      if (lastFrame.layout === layout) return lastFrame;
+      return { ...lastFrame, layout, revision };
+    },
     /** Record what each search result covers now, before the document can move under it. */
     noteMatches<T extends HighlightRange>(found: readonly T[]): readonly T[] {
       const surface = deps.surface();

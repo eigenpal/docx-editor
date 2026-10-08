@@ -194,9 +194,7 @@ export function createZoomLane(config: ZoomLaneConfig, host: ZoomLaneHost): Zoom
         return {
           ok: false,
           code: 'invalidArgs',
-          reason: shrinkForReviewPaneInvalid(next)
-            ? 'shrinkForReviewPane must be true or false'
-            : `unknown zoom mode ${JSON.stringify(next)}`,
+          reason: `unknown zoom mode ${JSON.stringify(next)}`,
         };
       }
       // BY VALUE, and the held object is kept. A host's `zoomMode` prop is an object, and the
@@ -299,16 +297,4 @@ export function zoomFacadeMembers(
         : [];
     },
   };
-}
-
-/** A fit whose only fault is a `shrinkForReviewPane` that is not a boolean. */
-function shrinkForReviewPaneInvalid(mode: unknown): boolean {
-  if (!mode || typeof mode !== 'object') return false;
-  const fit = mode as { type?: unknown; fit?: unknown; shrinkForReviewPane?: unknown };
-  return (
-    fit.type === 'fit' &&
-    fit.fit === 'pageWidth' &&
-    fit.shrinkForReviewPane !== undefined &&
-    typeof fit.shrinkForReviewPane !== 'boolean'
-  );
 }

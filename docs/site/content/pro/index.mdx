@@ -114,15 +114,33 @@ The editor saves that review content without changes. It renders revisions in th
 
 Register the module to show review content and provide review actions.
 
-### Control when the review pane opens
+### Control the review pane
 
-By default, the editor opens the review pane when a document with review items loads. It also opens the pane when you make a tracked change while the pane is closed.
+The review pane has two settings. They apply to one editor instance, and the editor never saves them into the document.
 
-If your app shows review items in its own way, such as in balloons or margin markers, set `paneOpening` to `'manual'`. The pane then stays closed until your app or the user opens it:
+| Setting | Values | Default | Effect |
+| --- | --- | --- | --- |
+| `opening` | `auto`, `manual` | `auto` | Whether the pane opens by itself. |
+| `overflow` | `float`, `shrinkPage` | `float` | What the open pane does when its card column does not fit beside the page. |
+
+With `opening: 'auto'`, the editor opens the pane when a document with review items loads. It also opens the pane when you make a tracked change while the pane is closed. With `opening: 'manual'`, the pane stays closed until your app or the user opens it. Use `'manual'` if your app shows review items in its own way, such as in balloons or margin markers.
+
+With `overflow: 'float'`, the pane changes to a marker strip and floats the active card over the page. With `overflow: 'shrinkPage'`, a fit zoom mode can shrink the page so that the full column fits. For more information, see [Make room for the review pane](/docs/2.x/guides/zoom#make-room-for-the-review-pane).
+
+Set the starting values on the module:
 
 ```ts
-const MODULES = [reviewModule({ paneOpening: 'manual' })];
+const MODULES = [reviewModule({ pane: { opening: 'manual' } })];
 ```
+
+Change them at runtime with `setReviewPane`, and read them from `snapshot().reviewPane`:
+
+```ts
+editor.setReviewPane({ opening: 'auto', overflow: 'shrinkPage' });
+const opening = editor.snapshot().reviewPane?.opening;
+```
+
+The settings stay in force when you load another document. An unknown field or value throws a `TypeError` and changes nothing.
 
 To open or close the pane, call `setPaneOpen` from `useReview()`, or run the `toggleReviewPane` command.
 

@@ -72,7 +72,7 @@ const selectGutterGeometry = (snapshot: EditorSnapshot): GutterGeometry => {
   return {
     pageSetup: snapshot.pageSetup ?? null,
     reviewPaneOpen: snapshot.reviewPaneOpen ?? true,
-    entitledZoom: reviewPaneEntitledZoom(mode, snapshot.zoom),
+    entitledZoom: reviewPaneEntitledZoom(mode, snapshot.zoom, snapshot.reviewPane?.overflow),
   };
 };
 

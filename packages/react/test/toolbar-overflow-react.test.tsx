@@ -17,6 +17,7 @@ import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorToolbar } from '../src/editor/toolbar/index.ts';
 import { LocaleProvider } from '../src/i18n/index.ts';
 import { en, type Translations } from '@docx-editor.dev/i18n';
+import { POPUP_ESCAPE_SOURCE } from '../../vue/test/helpers/popup-escape-document';
 
 /** Every leaf key in the shipped catalogue, dotted. */
 const catalogueKeys = new Set<string>(
@@ -402,35 +403,84 @@ describe('toolbar overflow integration', () => {
     });
     expect(view.queryByTestId('toolbar-overflow-panel')).toBeNull();
 
-    // A click leaves focus outside the panel; Escape there still closes it.
+    // Escape from outside the editor closes the panel and leaves the key alone.
     await act(async () => {
       trigger.click();
     });
     expect(view.queryByTestId('toolbar-overflow-panel')).not.toBeNull();
+    const outside = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      bubbles: true,
+      cancelable: true,
+    });
     await act(async () => {
-      fireEvent.keyDown(document.body, { key: 'Escape' });
+      document.body.dispatchEvent(outside);
     });
     expect(view.queryByTestId('toolbar-overflow-panel')).toBeNull();
+    expect(outside.defaultPrevented).toBe(false);
 
-    // A nested menu inside the panel handles its own Escape and re-renders away before the
-    // key reaches the document. The panel around it stays open.
+    // An open nested popup inside the panel takes the Escape, and the panel stays open.
     await act(async () => {
       trigger.click();
     });
     const panel = view.getByTestId('toolbar-overflow-panel');
     const nested = document.createElement('div');
     nested.setAttribute('role', 'menu');
-    nested.addEventListener('keydown', (event) => {
-      event.preventDefault();
-      nested.remove();
-    });
     panel.append(nested);
+    const pages = view.container.querySelector<HTMLElement>('.docx-pages')!;
     await act(async () => {
-      nested.dispatchEvent(
+      pages.dispatchEvent(
         new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
       );
     });
     expect(view.queryByTestId('toolbar-overflow-panel')).not.toBeNull();
+    nested.remove();
+  });
+
+  test('Escape closes the More dialog before the header scope or the format painter', async () => {
+    installResizeObserverMock();
+    const { view, editor } = mountToolbar(
+      <DocxEditorToolbar t={(key) => (key === 'formattingBar.more' ? 'More' : key)} />,
+      POPUP_ESCAPE_SOURCE
+    );
+    await collapseToolbar(view, { barWidth: 280 });
+    const trigger = view.getByLabelText('More') as HTMLButtonElement;
+    const pages = view.container.querySelector<HTMLElement>('.docx-pages')!;
+    const escape = async (): Promise<KeyboardEvent> => {
+      const event = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+      });
+      await act(async () => {
+        pages.dispatchEvent(event);
+      });
+      return event;
+    };
+
+    expect(editor().exec({ type: 'editHeaderFooter', position: 'header' }).ok).toBe(true);
+    await act(async () => {
+      pages.focus();
+      trigger.click();
+    });
+    expect(view.queryByTestId('toolbar-overflow-panel')).not.toBeNull();
+    expect((await escape()).defaultPrevented).toBe(true);
+    expect(view.queryByTestId('toolbar-overflow-panel')).toBeNull();
+    expect(editor().surface!.activeScope().kind).toBe('headerFooter');
+    // With nothing open, the next Escape reaches the surface and leaves the header.
+    await escape();
+    expect(editor().surface!.activeScope().kind).toBe('body');
+
+    expect(editor().surface!.formatPainter.press()).toBe(true);
+    expect(editor().surface!.formatPainter.state().mode).not.toBe('off');
+    await act(async () => {
+      trigger.click();
+    });
+    await escape();
+    expect(view.queryByTestId('toolbar-overflow-panel')).toBeNull();
+    expect(editor().surface!.formatPainter.state().mode).not.toBe('off');
+    await escape();
+    expect(editor().surface!.formatPainter.state().mode).toBe('off');
   });
 
   test('a command in the overflow dialog executes through shared engine state', async () => {

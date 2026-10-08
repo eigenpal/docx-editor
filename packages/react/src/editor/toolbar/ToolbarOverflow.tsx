@@ -21,7 +21,13 @@ import {
   useState,
 } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { chromeSlotIsToggle, type ChromeSlotId } from '@docx-editor.dev/core/editor';
+import {
+  chromeSlotIsToggle,
+  hasOpenNestedPopup,
+  listenForPopupEscape,
+  type ChromeSlotId,
+} from '@docx-editor.dev/core/editor';
+import { useNavigationViewportElement } from '../navigation/navigation-layout';
 import { useEditorCommand } from '../useEditorCommand';
 import { usePlatformShortcut } from '../usePlatformShortcut';
 import { useToolbarLabel } from './toolbar-context';
@@ -134,6 +140,9 @@ export function ToolbarOverflow({ sections, className }: ToolbarOverflowProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const focusOnOpenRef = useRef(false);
   const panelId = useId();
+  const viewport = useNavigationViewportElement();
+  const viewportRef = useRef(viewport);
+  viewportRef.current = viewport;
   const text = label('formattingBar.more');
 
   const close = useCallback((focusTrigger: boolean) => {
@@ -153,26 +162,26 @@ export function ToolbarOverflow({ sections, className }: ToolbarOverflowProps) {
       if (target instanceof Node && rootRef.current?.contains(target)) return;
       setOpen(false);
     };
-    // A click opens the panel with focus left in the pages, where its own Escape handler
-    // never hears the key. Bubble phase, and the event goes on to whoever else handles it.
-    // An inner control that already handled the key (a table menu inside the panel) marks
-    // it handled; by the time the key reaches the document, that menu may have re-rendered
-    // away, so its detached target no longer counts as inside and only `defaultPrevented`
-    // says so.
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || event.isComposing || event.defaultPrevented) return;
-      const target = event.target;
-      if (target instanceof Node && rootRef.current?.contains(target)) return;
-      if (target instanceof Node && panelRef.current?.contains(target)) return;
-      setOpen(false);
-    };
+    const root = rootRef.current;
+    // Escape in the capture phase, ahead of the surface: a click opens the panel with focus
+    // left in the pages, and the surface would spend the key on its own mode first. An open
+    // nested popup (a table menu, a picker) takes this Escape, and the panel stays open.
+    const stopEscape = root
+      ? listenForPopupEscape({
+          popup: root,
+          contains: (node) =>
+            rootRef.current?.contains(node) === true || panelRef.current?.contains(node) === true,
+          editorElements: () => [viewportRef.current],
+          skip: () => hasOpenNestedPopup(panelRef.current),
+          close,
+        })
+      : undefined;
     document.addEventListener('mousedown', onPointerDown, true);
-    document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('mousedown', onPointerDown, true);
-      document.removeEventListener('keydown', onKeyDown);
+      stopEscape?.();
     };
-  }, [open]);
+  }, [open, close]);
 
   useEffect(() => {
     if (!open || !focusOnOpenRef.current) return;

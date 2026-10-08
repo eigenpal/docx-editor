@@ -148,44 +148,27 @@ Set `minZoom` to choose a different minimum scale:
 
 The review pane needs a 316-pixel card column beside the page. A fit with `maxZoom` keeps the page at that maximum. If the column does not fit beside the page at that scale, the pane changes to a marker strip. It then shows one floating card for the active item, and that card can cover page text.
 
-Set `shrinkForReviewPane: true` to let the fit make room for the column instead. While the pane is open, the page can shrink to `minZoom` so that the full column fits. The pane changes to the marker strip only if the column does not fit at `minZoom` either. If you omit `minZoom`, the limit is 10%, so set a `minZoom` that keeps the text readable, such as `0.35`. When the pane closes, the page returns to its usual fit.
+To let the fit make room for the column instead, set the review pane's `overflow` setting to `'shrinkPage'`. While the pane is open, the page can shrink to `minZoom` so that the full column fits. The pane changes to the marker strip only if the column does not fit at `minZoom` either. If you omit `minZoom`, the limit is 10%, so set a `minZoom` that keeps the text readable, such as `0.35`. When the pane closes, the page returns to its usual fit. A fixed zoom ignores this setting.
 
-<FrameworkTabs>
-<Framework value="react">
+The following example sets the starting value through the review module and the zoom mode through the editor:
 
 ```tsx
+const MODULES = [reviewModule({ pane: { overflow: 'shrinkPage' } })];
+
 <DocxEditor
   document={bytes}
-  zoomMode={{
-    type: 'fit',
-    fit: 'pageWidth',
-    minZoom: 0.35,
-    maxZoom: 1,
-    shrinkForReviewPane: true,
-  }}
-/>
+  modules={MODULES}
+  zoomMode={{ type: 'fit', fit: 'pageWidth', minZoom: 0.35, maxZoom: 1 }}
+/>;
 ```
 
-</Framework>
-<Framework value="vue">
+To change the setting at runtime, call `setReviewPane` on the editor instance. Read the value in force from `snapshot().reviewPane`:
 
-```vue
-<DocxEditor
-  :document="bytes"
-  :zoom-mode="{
-    type: 'fit',
-    fit: 'pageWidth',
-    minZoom: 0.35,
-    maxZoom: 1,
-    shrinkForReviewPane: true,
-  }"
-/>
+```ts
+editor.setReviewPane({ overflow: 'float' });
 ```
 
-</Framework>
-</FrameworkTabs>
-
-`shrinkForReviewPane` accepts only `true` or `false`. `setZoomMode` refuses any other value with `invalidArgs`.
+`setReviewPane` throws a `TypeError` for an unknown field or value and keeps the previous settings. For more information, see [Control the review pane](/docs/2.x/pro#control-the-review-pane).
 
 ## Without an adapter
 

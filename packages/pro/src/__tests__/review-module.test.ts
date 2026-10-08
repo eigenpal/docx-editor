@@ -93,15 +93,15 @@ describe('the free packages carry no review derivation', () => {
   });
 });
 
-describe('reviewModule paneOpening', () => {
+describe('review pane opening', () => {
   const PLAIN = `<w:p><w:r><w:t>Plain words</w:t></w:r></w:p>`;
 
-  function open(body: string, paneOpening?: 'automatic' | 'manual') {
+  function open(body: string, opening?: 'auto' | 'manual') {
     return createDocxEditor({
       container: document.createElement('div'),
       document: docx(body),
       author: 'Grace Hopper',
-      modules: [reviewModule(paneOpening ? { paneOpening } : {})],
+      modules: [reviewModule(opening ? { pane: { opening } } : {})],
     });
   }
 
@@ -143,9 +143,46 @@ describe('reviewModule paneOpening', () => {
     edited.destroy();
   });
 
-  test('an unknown value is refused, not read as the default', () => {
-    const bad = { paneOpening: 'Manual' } as unknown as { paneOpening: 'manual' };
-    expect(() => reviewModule(bad)).toThrow(TypeError);
+  test('an unknown field or value is refused, not read as the default', () => {
+    const badValue = { pane: { opening: 'Manual' } } as unknown as { pane: { opening: 'manual' } };
+    expect(() => reviewModule(badValue)).toThrow(TypeError);
+    const badField = { pane: { openning: 'manual' } } as unknown as { pane: { opening: 'manual' } };
+    expect(() => reviewModule(badField)).toThrow(TypeError);
+    // The old spelling of the default is refused too.
+    const oldValue = { pane: { opening: 'automatic' } } as unknown as { pane: { opening: 'auto' } };
+    expect(() => reviewModule(oldValue)).toThrow(TypeError);
+  });
+
+  test('manual stays in force across a second load', () => {
+    const editor = open(PLAIN, 'manual');
+    expect(editor.snapshot().reviewPane?.opening).toBe('manual');
+    editor.load(docx(TRACKED));
+    expect(editor.getReviewItems().length).toBeGreaterThan(0);
+    expect(editor.isReviewPaneOpen()).toBe(false);
+    editor.load(docx(TRACKED));
+    expect(editor.isReviewPaneOpen()).toBe(false);
+    editor.destroy();
+  });
+
+  test('setReviewPane changes the opening at runtime, and invalid settings change nothing', () => {
+    const editor = open(PLAIN);
+    const before = editor.snapshot().reviewPane;
+    expect(before).toEqual({ opening: 'auto', overflow: 'float' });
+    editor.setReviewPane({ opening: 'manual' });
+    expect(editor.snapshot().reviewPane).toEqual({ opening: 'manual', overflow: 'float' });
+    typeTracked(editor);
+    expect(editor.isReviewPaneOpen()).toBe(false);
+    // An unchanged value keeps the snapshot's reference.
+    const same = editor.snapshot().reviewPane;
+    editor.setReviewPane({ opening: 'manual' });
+    expect(editor.snapshot().reviewPane).toBe(same);
+    const bad = { overflow: 'scrollPage' } as unknown as { overflow: 'float' };
+    expect(() => editor.setReviewPane(bad)).toThrow(TypeError);
+    expect(editor.snapshot().reviewPane).toBe(same);
+    editor.setReviewPane({ opening: 'auto' });
+    editor.load(docx(TRACKED));
+    expect(editor.isReviewPaneOpen()).toBe(true);
+    editor.destroy();
   });
 
   test('manual still lets the host open and close the pane', () => {
