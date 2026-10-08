@@ -105,6 +105,11 @@ export interface TextboxStoryProjection {
   readonly verticalAnchor: 'top' | 'center' | 'bottom';
   /** Autofit child of `wps:bodyPr`; extent stays authoritative either way (diagnostic only). */
   readonly autofit: 'none' | 'shape' | 'normal';
+  /**
+   * `wps:bodyPr/@wrap="none"` (VML `mso-wrap-style:none`): lines never wrap at the box edge,
+   * and the box takes the width of its widest line plus the insets. Absent for wrapped text.
+   */
+  readonly noWrap?: true;
   /** Solid fill of the hosting shape, painted behind the story; null for no fill. */
   readonly fillHex: string | null;
   /** Solid outline of the hosting shape; null for no outline. */
@@ -762,6 +767,7 @@ export function projectTextboxStory(
   const anchorRaw = bodyPr ? schemaAttributeValue(bodyPr.attributes, 'anchor') : undefined;
   const verticalAnchor =
     anchorRaw === 'ctr' ? 'center' : anchorRaw === 'b' ? 'bottom' : ('top' as const);
+  const noWrap = bodyPr ? schemaAttributeValue(bodyPr.attributes, 'wrap') === 'none' : false;
   let autofit: TextboxStoryProjection['autofit'] = 'none';
   if (bodyPr) {
     if (
@@ -821,6 +827,7 @@ export function projectTextboxStory(
     },
     verticalAnchor,
     autofit,
+    ...(noWrap ? { noWrap: true as const } : {}),
     fillHex,
     strokeHex,
     strokeWidthEmu,

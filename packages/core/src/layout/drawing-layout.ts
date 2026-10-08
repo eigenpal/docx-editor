@@ -39,6 +39,7 @@ import {
   type DrawingGeometry,
 } from './drawing-geometry.ts';
 import type { LayoutBox } from './semantic-records.ts';
+import { textboxPlacementProjection } from './textbox-placement.ts';
 import {
   anchoredDrawingAtomsInParagraph,
   drawingModelOffsetsInParagraph,
@@ -1258,7 +1259,13 @@ export function publishAnchoredDrawingsForParagraph(
       cellContentBox: options.cellContentBox,
       layoutInCell,
     });
-    const resolved = resolveAnchoredDrawingPosition(projection, frameContext);
+    // An unwrapped text box sizes its own width, so its story lays out before placement.
+    const textboxStory =
+      projection.textboxStory && options.layoutTextboxStory
+        ? options.layoutTextboxStory(projection)
+        : undefined;
+    const placed = textboxPlacementProjection(projection, textboxStory);
+    const resolved = resolveAnchoredDrawingPosition(placed, frameContext);
     const clipToCell =
       projection.wrap !== 'inFront' &&
       projection.wrap !== 'behind' &&
@@ -1277,7 +1284,7 @@ export function publishAnchoredDrawingsForParagraph(
       input: Object.freeze({
         drawingNodeId: atom.atomId,
         ownerPartName: options.drawingLayout.ownerPartName,
-        projection,
+        projection: placed,
         resource: options.drawingLayout.resourceOf(projection),
       }),
       anchorParagraphId: options.paragraphId,
@@ -1289,9 +1296,7 @@ export function publishAnchoredDrawingsForParagraph(
       ...(options.sourceOrderOf
         ? { sourceOrder: options.sourceOrderOf(projection.drawingNodeId) }
         : {}),
-      ...(projection.textboxStory && options.layoutTextboxStory
-        ? { textboxStory: options.layoutTextboxStory(projection) }
-        : {}),
+      ...(textboxStory !== undefined ? { textboxStory } : {}),
     });
     records.push(record);
   }

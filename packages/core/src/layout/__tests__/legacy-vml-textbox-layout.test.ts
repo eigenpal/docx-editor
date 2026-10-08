@@ -162,6 +162,40 @@ describe('floating VML text box', () => {
   });
 });
 
+describe('unwrapped VML text box', () => {
+  // The fixed measurer's 6pt advance, scaled from 11pt to the 10pt default run size.
+  const CHAR = 60 / 11;
+  const narrowRect = (content: string, shapeStyle: string, textboxStyle = '') =>
+    '<w:r><w:pict><v:rect style="position:absolute;left:0;text-align:left;margin-left:36pt;' +
+    `margin-top:12pt;width:20pt;height:30pt;z-index:251659264;${shapeStyle}" stroked="f">` +
+    `<v:textbox${textboxStyle}><w:txbxContent>${content}</w:txbxContent></v:textbox></v:rect></w:pict></w:r>`;
+
+  test('mso-wrap-style:none keeps each paragraph on one line and sizes the box', () => {
+    const part = documentPart(
+      `<w:p>${narrowRect(paragraph('Unwrapped label'), 'mso-wrap-style:none', ' style="mso-fit-shape-to-text:t"')}</w:p>` +
+        paragraph('Body')
+    );
+    const drawing = layoutBody(part).pages[0]!.anchoredDrawings![0]!;
+    expect(storyTexts(drawing)).toEqual(['Unwrapped label']);
+    expect(drawing.textboxStory!.contentWidth).toBeCloseTo(15 * CHAR, 1);
+    expect(drawing.width).toBeCloseTo(15 * CHAR + 14.4, 1);
+  });
+
+  test('square wrapping still breaks at the box', () => {
+    const part = documentPart(
+      `<w:p>${narrowRect(paragraph('Wrapped label'), 'mso-wrap-style:square')}</w:p>` +
+        paragraph('Body')
+    );
+    const drawing = layoutBody(part).pages[0]!.anchoredDrawings![0]!;
+    expect(storyTexts(drawing).join('')).toBe('Wrapped label');
+    const lines = paragraphFragmentsOfBlocks(drawing.textboxStory!.fragments, true).flatMap(
+      (fragment) => fragment.lines
+    );
+    expect(lines.length).toBeGreaterThan(1);
+    expect(drawing.width).toBe(20);
+  });
+});
+
 describe('inline VML text box', () => {
   test('takes its extent on the line and lays its story out', () => {
     const part = documentPart(
