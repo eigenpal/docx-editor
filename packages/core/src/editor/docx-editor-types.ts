@@ -399,8 +399,9 @@ export interface DocxEditorInstance extends Editor {
    * the document. This sets how the pane behaves; to open or close the pane itself, use
    * `useReview().setPaneOpen` or the `toggleReviewPane` command.
    *
-   * Returns `changed: true` when a setting changed and `changed: false` when every value was
-   * already in force. Refused with `unsupported` when no review module is registered, and
+   * Returns `changed: false` on success, like every view-only call, because `changed` answers
+   * for the document; to detect a settings change, compare the `snapshot().reviewPane`
+   * reference, which changes only when a setting changes. Refused with `unsupported` when no review module is registered, and
    * with `invalidArgs` for an unknown field or value. A refusal changes nothing.
    *
    * @example

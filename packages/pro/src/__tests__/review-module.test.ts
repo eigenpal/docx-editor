@@ -184,7 +184,12 @@ describe('review pane opening', () => {
     const editor = open(PLAIN);
     const before = editor.snapshot().reviewPane;
     expect(before).toEqual({ opening: 'auto', overflow: 'float' });
-    expect(editor.setReviewPaneOptions({ opening: 'manual' })).toEqual({ ok: true, changed: true });
+    expect(editor.setReviewPaneOptions({ opening: 'manual' })).toEqual({
+      ok: true,
+      changed: false,
+    });
+    // `changed` answers for the document; the snapshot reference shows the settings change.
+    expect(editor.snapshot().reviewPane).not.toBe(before);
     expect(editor.snapshot().reviewPane).toEqual({ opening: 'manual', overflow: 'float' });
     typeTracked(editor);
     expect(editor.isReviewPaneOpen()).toBe(false);

@@ -42,11 +42,11 @@ export function createReviewPaneState(
       } catch (error) {
         return { ok: false, code: 'invalidArgs', reason: (error as Error).message };
       }
-      // `changed` reports whether a setting moved, so a host can tell a no-op from a switch.
+      // `changed: false`, as for every view-only call: `changed` answers for the document.
       if (next === value) return { ok: true, changed: false };
       value = next;
       host.changed(value);
-      return { ok: true, changed: true };
+      return { ok: true, changed: false };
     },
     opensOnLoad: (items) => value.opening === 'auto' && items.length > 0,
     opensOnTrackedChange: () => value.opening === 'auto',
