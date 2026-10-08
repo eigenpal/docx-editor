@@ -106,10 +106,11 @@ export function focusPaneEntry(element: HTMLElement): void {
 }
 
 /**
- * Make the page area `inert` while an overlaying pane covers it, so Tab and the pointer
+ * Make the page content `inert` while an overlaying pane covers it, so Tab and the pointer
  * cannot reach content the pane hides. A pane inside the scroll container leaves its own
- * ancestors alone and marks their other children; a pane beside the container marks the
- * container. Only attributes set here are removed again. Returns the cleanup.
+ * ancestors alone and marks their other children. A pane beside the container marks the
+ * container's children, never the container itself, so the wheel still scrolls it. Only
+ * attributes set here are removed again. Returns the cleanup.
  */
 export function inertBehindPane(pane: Element, viewport: Element): () => void {
   const marked: Element[] = [];
@@ -125,11 +126,29 @@ export function inertBehindPane(pane: Element, viewport: Element): () => void {
       node = node.parentElement;
     }
   } else {
-    mark(viewport);
+    for (const child of viewport.children) mark(child);
   }
   return () => {
     for (const element of marked) element.removeAttribute('inert');
     marked.length = 0;
+  };
+}
+
+/**
+ * Cover the page with an overlaying pane: its content turns inert (see
+ * {@link inertBehindPane}), and a press on the scroll container outside the pane calls
+ * `close`. Returns the cleanup, which undoes both.
+ */
+export function coverPage(pane: Element, viewport: HTMLElement, close: () => void): () => void {
+  const release = inertBehindPane(pane, viewport);
+  const onPointerDown = (event: Event) => {
+    if (event.target instanceof Node && pane.contains(event.target)) return;
+    close();
+  };
+  viewport.addEventListener('pointerdown', onPointerDown);
+  return () => {
+    viewport.removeEventListener('pointerdown', onPointerDown);
+    release();
   };
 }
 

@@ -11,7 +11,7 @@ import './dom-setup.ts';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import deCatalog from '../../i18n/de.json';
 import { resolve } from 'node:path';
@@ -23,6 +23,7 @@ import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorNavigation } from '../src/editor/navigation/DocxEditorNavigation.tsx';
+import { inertBehindPane } from '../src/editor/navigation/navigation-keys.ts';
 import type { NavigationTab } from '../src/editor/navigation/useNavigationPane.ts';
 import {
   NAVIGATION_PANE_MIN_PAGE_ROOM,
@@ -552,6 +553,51 @@ describe('narrow viewports', () => {
     const { container } = render(<Host navigation={{ defaultOpen: true }} />);
     await settle();
     expect(q(container, '.docx-pages').closest('[inert]')).toBeNull();
+  });
+
+  test('a host that keeps the pane open after a pick keeps the page inert and focus in the pane', async () => {
+    scrollerWidth = 390;
+    const onOpenChange = mock(() => {});
+    const { container } = render(<Host navigation={{ open: true, onOpenChange }} />);
+    await settle();
+    const pages = q(container, '.docx-pages');
+    const heading = q(container, '.docx-nav__heading');
+    act(() => {
+      heading.focus();
+      heading.click();
+    });
+    await settle();
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(q(container, '.docx-nav').getAttribute('data-open')).toBe('true');
+    expect(pages.closest('[inert]')).not.toBeNull();
+    expect(pages.contains(document.activeElement)).toBe(false);
+  });
+
+  test('a press on the page it leaves visible closes the overlaying pane', async () => {
+    scrollerWidth = 390;
+    const { container } = render(<Host navigation={{ defaultOpen: true }} />);
+    await settle();
+    const scroller = q(container, '.docx-editor__scroll-container');
+    act(() => {
+      scroller.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    });
+    await settle();
+    expect(q(container, '.docx-nav').getAttribute('data-open')).toBe('false');
+    expect(q(container, '.docx-pages').closest('[inert]')).toBeNull();
+  });
+
+  test('a pane beside the scroll container leaves the container itself scrollable', () => {
+    const row = document.createElement('div');
+    const pane = document.createElement('div');
+    const viewport = document.createElement('div');
+    const content = document.createElement('div');
+    viewport.append(content);
+    row.append(pane, viewport);
+    const release = inertBehindPane(pane, viewport);
+    expect(viewport.hasAttribute('inert')).toBe(false);
+    expect(content.hasAttribute('inert')).toBe(true);
+    release();
+    expect(content.hasAttribute('inert')).toBe(false);
   });
 
   test('a wide viewport keeps the pane open after a pick', async () => {

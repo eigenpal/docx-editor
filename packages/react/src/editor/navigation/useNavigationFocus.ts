@@ -17,7 +17,7 @@ import type { NavigationIntents } from './navigation-context';
 import { useNavigationViewportElement } from './navigation-layout';
 import {
   focusPaneEntry,
-  inertBehindPane,
+  coverPage,
   isFindShortcut,
   ownsShortcutTarget,
   paneEntryTarget,
@@ -45,6 +45,8 @@ export function useNavigationFocus(
   const opener = useRef<HTMLElement | null>(null);
   const focusRequest = useRef(false);
   const restoreRequest = useRef(false);
+  // A pick from an overlaying pane asked to close it; the document takes focus once it has.
+  const pickRequest = useRef(false);
   const requestToken = useRef(0);
   // Drop whatever is still pending once the event's updates have flushed.
   const expireRequests = useCallback(() => {
@@ -53,14 +55,12 @@ export function useNavigationFocus(
       if (requestToken.current !== token) return;
       focusRequest.current = false;
       restoreRequest.current = false;
+      pickRequest.current = false;
     }, 0);
   }, []);
 
   const paneRef = useRef(pane);
   paneRef.current = pane;
-  // Undoes the overlay's `inert` on the page area. Called before focus moves back to the
-  // document, which an inert ancestor would refuse.
-  const releaseInert = useRef<(() => void) | null>(null);
 
   const focusEntry = useCallback(() => {
     focusRequest.current = false;
@@ -70,7 +70,6 @@ export function useNavigationFocus(
 
   const restoreFocus = useCallback(() => {
     restoreRequest.current = false;
-    releaseInert.current?.();
     const back = opener.current;
     opener.current = null;
     const disc = rootRef.current?.querySelector<HTMLElement>('.docx-nav__toggle') ?? null;
@@ -112,15 +111,19 @@ export function useNavigationFocus(
       picked: () => {
         const current = paneRef.current;
         if (!current.overlay) return;
-        current.setOpen(false);
-        // The chosen row is about to turn inert; send focus to the document it pointed at.
+        // The chosen row turns inert once the pane closes; the document it pointed at takes
+        // focus then. A host that keeps the pane open keeps the page inert and focus here.
         const active = rootRef.current?.ownerDocument.activeElement;
-        releaseInert.current?.();
-        if (active && rootRef.current?.contains(active)) editor?.focus();
+        pickRequest.current = !!active && !!rootRef.current?.contains(active);
+        current.setOpen(false);
+        expireRequests();
       },
     }),
-    [close, editor, expireRequests]
+    [close, expireRequests]
   );
+
+  const intentsRef = useRef(intents);
+  intentsRef.current = intents;
 
   // Ctrl/Cmd+F, on the document so it reaches the toolbar and the pane as well as the pages.
   // Bubble phase: the engine's keymap and the viewport's zoom capture see it first, and an
@@ -162,6 +165,11 @@ export function useNavigationFocus(
       if (!paneRef.current.open) restoreFocus();
       else restoreRequest.current = false;
     }
+    if (pickRequest.current) {
+      pickRequest.current = false;
+      // The close is answered: the page's `inert` went in the cleanup below, before this runs.
+      if (!paneRef.current.open) editor?.focus();
+    }
   });
 
   // An overlaying pane hides the page, so the page leaves the tab order while it does.
@@ -169,12 +177,8 @@ export function useNavigationFocus(
   useEffect(() => {
     const root = rootRef.current;
     if (!covering || !root || !viewport) return undefined;
-    const release = inertBehindPane(root, viewport);
-    releaseInert.current = release;
-    return () => {
-      release();
-      if (releaseInert.current === release) releaseInert.current = null;
-    };
+    // A press on the page it leaves visible closes the pane, as a press outside any popup does.
+    return coverPage(root, viewport, () => intentsRef.current.close());
   }, [covering, viewport]);
 
   // A pane inside the scroll container is sticky and sizes itself from these properties.

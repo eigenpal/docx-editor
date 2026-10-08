@@ -12,7 +12,7 @@ import type { NavigationIntents } from './navigation-context';
 import { useNavigationViewportElement } from './navigation-layout';
 import {
   focusPaneEntry,
-  inertBehindPane,
+  coverPage,
   isFindShortcut,
   ownsShortcutTarget,
   paneEntryTarget,
@@ -40,9 +40,8 @@ export function useNavigationFocus(
   let opener: HTMLElement | null = null;
   let focusRequest = false;
   let restoreRequest = false;
-  // Undoes the overlay's `inert` on the page area. Called before focus moves back to the
-  // document, which an inert ancestor would refuse.
-  let releaseInert: (() => void) | null = null;
+  // A pick from an overlaying pane asked to close it; the document takes focus once it has.
+  let pickRequest = false;
 
   const focusEntry = () => {
     focusRequest = false;
@@ -52,7 +51,6 @@ export function useNavigationFocus(
 
   const restoreFocus = () => {
     restoreRequest = false;
-    releaseInert?.();
     const back = opener;
     opener = null;
     const disc = rootRef.value?.querySelector<HTMLElement>('.docx-nav__toggle') ?? null;
@@ -70,6 +68,11 @@ export function useNavigationFocus(
       if (restoreRequest) {
         if (!pane.open.value) restoreFocus();
         else restoreRequest = false;
+      }
+      if (pickRequest) {
+        pickRequest = false;
+        // The close is answered: the page's `inert` went in the watch cleanup before this.
+        if (!pane.open.value) editor.value?.focus();
       }
     });
   };
@@ -96,11 +99,12 @@ export function useNavigationFocus(
     close,
     picked: () => {
       if (!pane.overlay.value) return;
-      pane.setOpen(false);
-      // The chosen row is about to turn inert; send focus to the document it pointed at.
+      // The chosen row turns inert once the pane closes; the document it pointed at takes
+      // focus then. A host that keeps the pane open keeps the page inert and focus here.
       const active = rootRef.value?.ownerDocument.activeElement;
-      releaseInert?.();
-      if (active && rootRef.value?.contains(active)) editor.value?.focus();
+      pickRequest = !!active && !!rootRef.value?.contains(active);
+      pane.setOpen(false);
+      answerRequests();
     },
   };
 
@@ -143,12 +147,9 @@ export function useNavigationFocus(
       [rootRef, viewport, () => pane.open.value && pane.overlay.value],
       ([root, element, covering], _previous, onCleanup) => {
         if (!covering || !root || !element) return;
-        const release = inertBehindPane(root, element);
-        releaseInert = release;
-        onCleanup(() => {
-          release();
-          if (releaseInert === release) releaseInert = null;
-        });
+        // A press on the page it leaves visible closes the pane, as a press outside any popup
+        // does.
+        onCleanup(coverPage(root, element, () => intents.close()));
       },
       { immediate: true, flush: 'post' }
     )

@@ -4,7 +4,7 @@
 
 import './dom-setup.ts';
 
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import deCatalog from '../../i18n/de.json';
 import { resolve } from 'node:path';
@@ -548,6 +548,33 @@ describe('narrow viewports', () => {
   test('a docked pane leaves the page area interactive', async () => {
     const view = mountPane({ defaultOpen: true });
     await flush();
+    expect(q(view.container, '.docx-pages').closest('[inert]')).toBeNull();
+  });
+
+  test('a host that keeps the pane open after a pick keeps the page inert and focus in the pane', async () => {
+    scrollerWidth = 390;
+    const onOpenChange = mock(() => {});
+    const view = mountPane({ open: true, onOpenChange });
+    await flush();
+    const pages = q(view.container, '.docx-pages');
+    const heading = q(view.container, '.docx-nav__heading');
+    heading.focus();
+    heading.click();
+    await flush();
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(q(view.container, '.docx-nav').getAttribute('data-open')).toBe('true');
+    expect(pages.closest('[inert]')).not.toBeNull();
+    expect(pages.contains(document.activeElement)).toBe(false);
+  });
+
+  test('a press on the page it leaves visible closes the overlaying pane', async () => {
+    scrollerWidth = 390;
+    const view = mountPane({ defaultOpen: true });
+    await flush();
+    const scroller = q(view.container, '.docx-editor__scroll-container');
+    scroller.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    await flush();
+    expect(q(view.container, '.docx-nav').getAttribute('data-open')).toBe('false');
     expect(q(view.container, '.docx-pages').closest('[inert]')).toBeNull();
   });
 
