@@ -353,7 +353,8 @@ export function createLineExclusionClearance(context: {
     const width = context.measurer.measure('¶', context.emptyStyle);
     const left = context.left();
     const skip = narrowRectangularWrapSkip(top, line.height, zones, left, context.right, width);
-    if (skip > 0.001) line.exclusionSkipBefore = (line.exclusionSkipBefore ?? 0) + skip;
+    // Like a text line, it keeps its space before below the floats, applied once.
+    if (skip > 0.001) pushTextLineDown(line, skip);
   };
   return {
     applyBreakClearance,

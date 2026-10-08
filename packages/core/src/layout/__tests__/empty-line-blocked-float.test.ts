@@ -31,8 +31,8 @@ function float(width: number): string {
 }
 
 /** Lines of the paragraphs after the anchor: two empty ones, then text. */
-function after(width: number, empties = 2): ParagraphFragmentRecord[] {
-  const empty = '<w:p/>'.repeat(empties);
+function after(width: number, empties = 2, paragraph = '<w:p/>'): ParagraphFragmentRecord[] {
+  const empty = paragraph.repeat(empties);
   const part = load(
     `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}">` +
       `<w:body><w:p>${float(width)}<w:r><w:t>Anchor</w:t></w:r></w:p>${empty}` +
@@ -58,6 +58,24 @@ describe('an empty paragraph beside a square float', () => {
     // As far below the float as the text after it lands without the empty paragraphs.
     const [, direct] = after(468, 0);
     expect(first!.lines[0]!.box.y).toBeCloseTo(direct!.lines[0]!.box.y, 3);
+  });
+
+  test('keeps its space before below the float, once, as a text paragraph does', () => {
+    const before = '<w:pPr><w:spacing w:before="240"/></w:pPr>';
+    const [, empty] = after(468, 1, `<w:p>${before}</w:p>`);
+    const [, text] = after(468, 1, `<w:p>${before}<w:r><w:t>Text</w:t></w:r></w:p>`);
+    // A text paragraph sets the reference: below the float, with its space before once.
+    expect(empty!.box.y).toBeCloseTo(text!.box.y, 3);
+    expect(empty!.lines[0]!.box.y).toBeCloseTo(text!.lines[0]!.box.y, 3);
+    const [, plain] = after(468, 1);
+    expect(empty!.lines[0]!.box.y - plain!.lines[0]!.box.y).toBeCloseTo(12, 3);
+  });
+
+  test('contextual spacing drops the space before below the float too', () => {
+    const before = '<w:pPr><w:contextualSpacing/><w:spacing w:before="240"/></w:pPr>';
+    const [, empty] = after(468, 1, `<w:p>${before}</w:p>`);
+    const [, text] = after(468, 1, `<w:p>${before}<w:r><w:t>Text</w:t></w:r></w:p>`);
+    expect(empty!.lines[0]!.box.y).toBeCloseTo(text!.lines[0]!.box.y, 3);
   });
 
   test('keeps its place beside a float that leaves a passage', () => {
