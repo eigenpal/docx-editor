@@ -31,7 +31,7 @@ export interface CollaborationModuleOptions extends ProLicenseOptions {
 }
 
 // @public
-export type CommentMarkers = 'initials' | 'icon';
+export type CommentMarkerStyle = 'initials' | 'icon';
 
 // @public
 export const CUSTOM_NODE_STORE_ROOT = "docxEditor";
@@ -308,10 +308,10 @@ export function removeCustomNode(editor: Editor, nodeId: string): CustomNodeWrit
 
 // @public
 export interface ResolvedReviewPane {
-    readonly commentMarkers: CommentMarkers;
+    readonly commentMarkers: CommentMarkerStyle;
     readonly opening: ReviewPaneOpening;
     readonly overflow: ReviewPaneOverflow;
-    readonly revisionsIn: RevisionsIn;
+    readonly revisionsIn: RevisionDisplay;
 }
 
 // @public
@@ -327,17 +327,17 @@ export type ReviewPaneOpening = 'auto' | 'manual';
 
 // @public
 export interface ReviewPaneOptions {
-    readonly commentMarkers?: CommentMarkers;
+    readonly commentMarkers?: CommentMarkerStyle;
     readonly opening?: ReviewPaneOpening;
     readonly overflow?: ReviewPaneOverflow;
-    readonly revisionsIn?: RevisionsIn;
+    readonly revisionsIn?: RevisionDisplay;
 }
 
 // @public
 export type ReviewPaneOverflow = 'float' | 'shrinkPage' | 'scroll';
 
 // @public
-export type RevisionsIn = 'pane' | 'balloons';
+export type RevisionDisplay = 'pane' | 'balloons';
 
 // @public
 export function saveForExport(editor: Editor, options?: SaveForExportOptions): Promise<DocumentExportResult>;

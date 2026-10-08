@@ -651,23 +651,30 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
   setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult;
 
   /**
-   * The key of the review item that {@link setActiveReviewItem}, Next Change, or Previous
-   * Change made active, while the caret stays in that item.
+   * The key of the ACTIVATED review item: the one {@link setActiveReviewItem}, Next Change, or
+   * Previous Change made active, while the caret stays in it.
    *
-   * Returns `null` when no item is active, and when only a caret move made an item active.
-   * To find the item the caret is in, read `isActive` on the placements that
-   * {@link getReviewItems} returns. A paired replacement reports the key of its deletion.
-   * The value changes with the selection, so read it again on `selectionChange`.
+   * Two ideas of "active" exist. The caret-active item is the one the caret is in, however it
+   * got there: `isActive` on the placements {@link getReviewItems} returns, and `activeKey` in
+   * `useReview()`. The activated item is narrower: only an explicit activation sets it, so a
+   * caret that merely lands in a change leaves this `null`. Open a balloon or card for the
+   * activated item, and highlight the caret-active one.
+   *
+   * Pass the query you read items with, so the key matches theirs: with
+   * `pairReplacements: true`, a paired replacement reports the pair's key; without it, the
+   * key of the half the caret is in. The value changes with the selection, so read it again
+   * on `selectionChange`.
    *
    * @example
    * ```ts
+   * const query = { pairReplacements: true };
    * editor.on('selectionChange', () => {
-   *   const opened = editor.getActiveReviewItem();
-   *   if (opened !== null) showMyCard(opened);
+   *   const activated = editor.getActivatedReviewItemKey(query);
+   *   if (activated !== null) showMyCard(activated);
    * });
    * ```
    */
-  getActiveReviewItem(): string | null;
+  getActivatedReviewItemKey(query?: ReviewItemQuery): string | null;
 
   /**
    * Revision kinds the caret must never activate, or null for none.

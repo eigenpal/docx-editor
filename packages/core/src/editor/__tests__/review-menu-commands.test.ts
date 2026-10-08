@@ -548,7 +548,7 @@ describe('reviewItemReveal', () => {
     expect(editor.setActiveReviewItem(keys[1]!, { announce: true }).ok).toBe(true);
     expect(editor.setActiveReviewItem(keys[1]!, { announce: true }).ok).toBe(true);
     expect(editor.getReviewItems().find((item) => item.isActive)?.key).toBe(keys[1]);
-    expect(editor.getActiveReviewItem()).toBe(keys[1]);
+    expect(editor.getActivatedReviewItemKey()).toBe(keys[1]);
     expect(events).toEqual([
       { key: keys[1]!, source: 'host' },
       { key: keys[1]!, source: 'host' },
@@ -567,7 +567,7 @@ describe('reviewItemReveal', () => {
       keys: [first!.key],
     });
     expect(result.ok).toBe(true);
-    expect(editor.getActiveReviewItem()).not.toBe(first!.key);
+    expect(editor.getActivatedReviewItemKey()).not.toBe(first!.key);
     expect(events).toEqual([]);
     editor.destroy();
   });

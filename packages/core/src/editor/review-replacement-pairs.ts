@@ -190,3 +190,20 @@ export function resolutionKeysOf(item: ReviewItem): readonly string[] {
     ? [reviewItemKey(halves.deletion), reviewItemKey(halves.insertion)]
     : [reviewItemKey(item)];
 }
+
+/**
+ * The key `query` reads for the review item whose store key is `key`: under
+ * `pairReplacements`, the pair a deletion or insertion belongs to; otherwise `key` itself.
+ */
+export function keyUnderQuery(
+  placements: (query?: ReviewItemQuery) => readonly ReviewItemPlacement[],
+  key: string | null,
+  query: ReviewItemQuery | undefined
+): string | null {
+  if (key === null || query?.pairReplacements !== true) return key;
+  const pair = placements({ ...query, placement: false }).find(
+    (entry) =>
+      isReplacementPairKey(entry.key) && resolutionKeysOf(entry.item as ReviewItem).includes(key)
+  );
+  return pair?.key ?? key;
+}

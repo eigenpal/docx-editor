@@ -151,7 +151,10 @@ export async function checkCommentMarkers(
     expect(marker.hasAttribute('data-marker')).toBe(false);
     expect(q(marker, '[data-testid="review-badge"]')).toBeNull();
   }
-  expect(() => editor.setReviewPane({ commentMarkers: 'bubble' as never })).toThrow(TypeError);
+  expect(editor.setReviewPane({ commentMarkers: 'bubble' as never })).toMatchObject({
+    ok: false,
+    code: 'invalidArgs',
+  });
   await change(() => editor.setReviewPane({ commentMarkers: 'initials' }));
   await change(() => editor.exec({ type: 'toggleReviewPane' }));
 }
@@ -367,11 +370,11 @@ export async function checkRevealReopensBalloon(
   expect(q(container, '[data-testid="review-balloon-live"]')?.textContent).toContain(
     'Ada Lovelace'
   );
-  const key = editor.getActiveReviewItem();
+  const key = editor.getActivatedReviewItemKey();
   await change(escape);
   expect(balloon(container)).toBeNull();
   await change(() => editor.exec({ type: 'navigateReviewChange', direction: 'next' }));
-  expect(editor.getActiveReviewItem()).toBe(key);
+  expect(editor.getActivatedReviewItemKey()).toBe(key);
   expect(balloon(container)).not.toBeNull();
 
   const row = editor

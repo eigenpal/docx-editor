@@ -914,6 +914,7 @@ describe('useReviewOf (Vue)', () => {
     const editor = {
       getReviewRevision: () => revision,
       getEditingMode: () => 'editing',
+      getActivatedReviewItemKey: () => null,
       getReviewItems: () => {
         itemReads++;
         return [];

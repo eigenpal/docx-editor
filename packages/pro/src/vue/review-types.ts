@@ -49,7 +49,7 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children' | 'hidden'
 export interface ReviewActions {
   readonly items: readonly ReviewItemView[];
   readonly activeKey: string | null;
-  readonly explicitActiveKey: string | null;
+  readonly activatedKey: string | null;
   setActive(key: string | null, options?: ReviewActivationOptions): boolean;
   accept(item: ReviewItemView): boolean;
   reject(item: ReviewItemView): boolean;

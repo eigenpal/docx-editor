@@ -502,7 +502,7 @@ export const ReviewBalloon = markPart(
             rail.value.review.paneOpen,
             rail.value.revisionsIn,
             // Opened on purpose (Next/Previous Change, `setActive`), not by a caret landing.
-            rail.value.review.explicitActiveKey !== null
+            rail.value.review.activatedKey !== null
           )
       );
       watch(

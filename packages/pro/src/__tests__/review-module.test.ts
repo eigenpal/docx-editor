@@ -181,6 +181,18 @@ describe('review pane opening', () => {
     edited.destroy();
   });
 
+  test('switching an open pane to balloons closes it when nothing is left to list', () => {
+    const editor = open(TRACKED);
+    expect(editor.isReviewPaneOpen()).toBe(true);
+    expect(editor.setReviewPane({ revisionsIn: 'balloons' }).ok).toBe(true);
+    // The document holds tracked changes only, and they now open in balloons.
+    expect(editor.isReviewPaneOpen()).toBe(false);
+    // Back to the pane: the reader opens it again when they want it.
+    expect(editor.setReviewPane({ revisionsIn: 'pane' }).ok).toBe(true);
+    expect(editor.isReviewPaneOpen()).toBe(false);
+    editor.destroy();
+  });
+
   test('without a review module, setReviewPane is refused and changes nothing', () => {
     const editor = createDocxEditor({
       container: document.createElement('div'),

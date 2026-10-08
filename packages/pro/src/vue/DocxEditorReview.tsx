@@ -125,7 +125,7 @@ function buildReviewActions(hook: UseReviewReturn, list: readonly ReviewItemView
   return {
     items: list,
     activeKey: hook.activeKey.value,
-    explicitActiveKey: hook.explicitActiveKey.value,
+    activatedKey: hook.activatedKey.value,
     setActive: hook.setActive,
     accept: hook.accept,
     reject: hook.reject,

@@ -95,15 +95,17 @@ function reviewAuthorFilterKey(editor: Editor): string {
 export interface UseReviewReturn {
   /** Every pending decision in the document, in reading order. */
   readonly items: readonly ReviewItemView[];
-  /** The item the caret is in, or null. */
+  /** The CARET-ACTIVE item: the one the caret is in, or null. */
   readonly activeKey: string | null;
   /**
-   * The item that {@link setActive}, Next Change, or Previous Change made active, while the
-   * caret stays in it. `null` when only a caret move made an item active. A paired
-   * replacement reports the key of its deletion. The same value as the editor's
-   * `getActiveReviewItem()`, kept current for you.
+   * The key of the ACTIVATED item: the one {@link setActive}, Next Change, or Previous Change
+   * made active, while the caret stays in it. `null` when only a caret move made an item
+   * active. {@link activeKey} is the caret-active item instead: the one the caret is in,
+   * however it got there. The key follows this hook's query, so a paired replacement reports
+   * the pair's key under `pairReplacements: true`. The same value as the editor's
+   * `getActivatedReviewItemKey(query)`, read on every selection change.
    */
-  readonly explicitActiveKey: string | null;
+  readonly activatedKey: string | null;
   /**
    * Card to document: puts the caret at the start of the item's range and scrolls to it. Nothing is selected; the open item draws its own highlight.
    *
@@ -243,7 +245,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
     // switching to viewing must disable Resolve/Reopen in a host-composed card immediately.
     () =>
       editor
-        ? `${editor.getReviewRevision()}:${editor.getEditingMode()}:${reviewAuthorFilterKey(editor)}:${editor.getActiveReviewItem?.() ?? ''}`
+        ? `${editor.getReviewRevision()}:${editor.getEditingMode()}:${reviewAuthorFilterKey(editor)}`
         : 'none',
     () => 'none'
   );
@@ -265,10 +267,24 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
   );
 
   const activeKey = useMemo(() => items.find((entry) => entry.isActive)?.key ?? null, [items]);
-  const explicitActiveKey = useMemo(
-    () => (editor ? (editor.getActiveReviewItem?.() ?? null) : null),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [editor, version]
+  // Read on every selection change, not on the deferred review tick: a balloon decides in the
+  // same frame whether the item was opened on purpose.
+  const subscribeSelection = useCallback(
+    (notify: () => void) => {
+      if (!editor) return () => undefined;
+      const offSelection = editor.on('selectionChange', notify);
+      const offChange = editor.on('change', notify);
+      return () => {
+        offSelection();
+        offChange();
+      };
+    },
+    [editor]
+  );
+  const activatedKey = useSyncExternalStore(
+    subscribeSelection,
+    () => (editor ? editor.getActivatedReviewItemKey(query) : null),
+    () => null
   );
 
   const setActive = useCallback(
@@ -381,7 +397,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
     () => ({
       items,
       activeKey,
-      explicitActiveKey,
+      activatedKey,
       setActive,
       accept,
       reject,
@@ -407,7 +423,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
     [
       items,
       activeKey,
-      explicitActiveKey,
+      activatedKey,
       setActive,
       accept,
       reject,

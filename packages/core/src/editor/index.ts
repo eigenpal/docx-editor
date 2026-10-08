@@ -487,12 +487,12 @@ export type { ChromePrintErrorCode, ChromePrintJob, ChromePrintOptions } from '.
 
 export { DEFAULT_REVIEW_PANE, resolveReviewPane } from '../contracts/review-pane.ts';
 export type {
-  CommentMarkers,
+  CommentMarkerStyle,
   ResolvedReviewPane,
   ReviewPaneOpening,
   ReviewPaneOptions,
   ReviewPaneOverflow,
-  RevisionsIn,
+  RevisionDisplay,
 } from '../contracts/review-pane.ts';
 export {
   DEFAULT_REVISION_MARKUP,

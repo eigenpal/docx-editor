@@ -117,7 +117,10 @@ describe('React review layout preferences', () => {
       expect(kinds()).toContain('insert');
       await change(() => editor().setReviewPane({ revisionsIn: 'balloons' }));
       expect(kinds().every((kind) => kind === 'comment')).toBe(true);
-      expect(() => editor().setReviewPane({ revisionsIn: 'sidebar' as never })).toThrow(TypeError);
+      expect(editor().setReviewPane({ revisionsIn: 'sidebar' as never })).toMatchObject({
+        ok: false,
+        code: 'invalidArgs',
+      });
       await change(() => editor().setReviewPane({ revisionsIn: 'pane' }));
       expect(kinds()).toContain('insert');
     } finally {

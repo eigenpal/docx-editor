@@ -35,13 +35,13 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 export {
   reviewModule,
-  type CommentMarkers,
+  type CommentMarkerStyle,
   type ResolvedReviewPane,
   type ReviewModuleOptions,
   type ReviewPaneOpening,
   type ReviewPaneOptions,
   type ReviewPaneOverflow,
-  type RevisionsIn,
+  type RevisionDisplay,
 } from '../review/review-module.ts';
 export {
   collaborationModule,

@@ -3,7 +3,7 @@
 // change between rail cards and page balloons, or lets a narrow window scroll sideways to
 // the cards instead of floating them over the page. Nothing is written into the document.
 import { useDocxEditor, useEditorState } from '@docx-editor.dev/react';
-import type { ReviewPaneOverflow, RevisionsIn } from '@docx-editor.dev/pro/react';
+import type { ReviewPaneOverflow, RevisionDisplay } from '@docx-editor.dev/pro/react';
 import { exampleText as t } from '../../shared/example-text';
 
 export function ReviewLayoutSwitch() {
@@ -18,7 +18,7 @@ export function ReviewLayoutSwitch() {
           value={revisionsIn}
           disabled={!editor}
           onChange={(event) =>
-            editor?.setReviewPane({ revisionsIn: event.target.value as RevisionsIn })
+            editor?.setReviewPane({ revisionsIn: event.target.value as RevisionDisplay })
           }
         >
           <option value="pane">{t('reviewLayout.pane')}</option>

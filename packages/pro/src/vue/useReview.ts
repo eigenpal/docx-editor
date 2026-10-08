@@ -35,7 +35,7 @@ function reviewRevisionKey(editor: Editor): string {
   ).snapshot?.();
   return `${editor.getReviewRevision()}:${editor.getEditingMode()}:${JSON.stringify(
     snapshot?.hiddenReviewAuthors ?? []
-  )}:${editor.getActiveReviewItem?.() ?? ''}`;
+  )}`;
 }
 
 /** @public */
@@ -53,14 +53,17 @@ export type {
 /** @public */
 export interface UseReviewReturn {
   readonly items: ComputedRef<readonly ReviewItemView[]>;
+  /** The CARET-ACTIVE item: the one the caret is in, or null. */
   readonly activeKey: ComputedRef<string | null>;
   /**
-   * The item that `setActive`, Next Change, or Previous Change made active, while the caret
-   * stays in it. `null` when only a caret move made an item active. A paired replacement
-   * reports the key of its deletion. The same value as the editor's `getActiveReviewItem()`,
-   * kept current for you.
+   * The key of the ACTIVATED item: the one `setActive`, Next Change, or Previous Change
+   * made active, while the caret stays in it. `null` when only a caret move made an item
+   * active. `activeKey` is the caret-active item instead: the one the caret is in,
+   * however it got there. The key follows this hook's query, so a paired replacement reports
+   * the pair's key under `pairReplacements: true`. The same value as the editor's
+   * `getActivatedReviewItemKey(query)`, read on every selection change.
    */
-  readonly explicitActiveKey: ComputedRef<string | null>;
+  readonly activatedKey: ComputedRef<string | null>;
   /**
    * Card to document: puts the caret at the start of the item and scrolls to it. Reports
    * whether it landed.
@@ -139,16 +142,17 @@ function useReviewOfInternal(
 
   // The explicitly activated key is read on every selection change, not on the deferred
   // review tick: a balloon decides in the same flush whether the item was opened on purpose.
-  const explicitKey = shallowRef<string | null>(null);
-  const readExplicitKey = (editor: Editor | null): void => {
-    explicitKey.value = editor?.getActiveReviewItem?.() ?? null;
+  const activatedKeyRef = shallowRef<string | null>(null);
+  const readActivatedKey = (editor: Editor | null): void => {
+    activatedKeyRef.value =
+      editor?.getActivatedReviewItemKey(unwrapMaybeRefOrGetter(query)) ?? null;
   };
 
   if (!renderRevision) {
     watch(
       () => editorRef.value,
       (editor, _prev, onCleanup) => {
-        readExplicitKey(editor);
+        readActivatedKey(editor);
         if (!editor) {
           ownedRevision!.value = 'none';
           return;
@@ -158,7 +162,7 @@ function useReviewOfInternal(
         let disposed = false;
         let scheduled: ReturnType<typeof setTimeout> | null = null;
         const notify = () => {
-          if (!disposed) readExplicitKey(editor);
+          if (!disposed) readActivatedKey(editor);
           if (disposed || scheduled !== null) return;
           scheduled = setTimeout(() => {
             scheduled = null;
@@ -188,9 +192,9 @@ function useReviewOfInternal(
     watch(
       () => editorRef.value,
       (editor, _previous, onCleanup) => {
-        readExplicitKey(editor);
+        readActivatedKey(editor);
         if (!editor) return;
-        const read = (): void => readExplicitKey(editor);
+        const read = (): void => readActivatedKey(editor);
         const offSelection = editor.on('selectionChange', read);
         const offChange = editor.on('change', read);
         onCleanup(() => {
@@ -213,7 +217,7 @@ function useReviewOfInternal(
   });
 
   const activeKey = computed(() => items.value.find((entry) => entry.isActive)?.key ?? null);
-  const explicitActiveKey = computed(() => explicitKey.value);
+  const activatedKey = computed(() => activatedKeyRef.value);
 
   const setActive = (key: string | null, options?: ReviewActivationOptions): boolean => {
     const editor = editorRef.value;
@@ -306,7 +310,7 @@ function useReviewOfInternal(
   return {
     items,
     activeKey,
-    explicitActiveKey,
+    activatedKey,
     setActive,
     accept,
     reject,

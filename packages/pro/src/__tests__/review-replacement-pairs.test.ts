@@ -258,3 +258,23 @@ describe('pairing replacements in the review queue', () => {
     expect(editor.setActiveReviewItem(key).ok).toBe(false);
   });
 });
+
+describe('the activated key of a paired replacement', () => {
+  test('matches the pair key under the pairing query, and the half key without it', () => {
+    const editor = mount(REPLACED);
+    const pair = editor
+      .getReviewItems({ placement: false, pairReplacements: true })
+      .find((item) => item.kind === 'revision' && item.revisionKind === 'replace')!;
+    const deletion = editor
+      .getReviewItems({ placement: false })
+      .find((item) => item.kind === 'revision' && item.revisionKind === 'delete')!;
+    const revealed: string[] = [];
+    editor.on('reviewItemReveal', ({ key }) => revealed.push(key));
+    expect(editor.setActiveReviewItem(pair.key, { announce: true }).ok).toBe(true);
+    // The reveal names the pair, and so does the getter under the same query.
+    expect(revealed).toEqual([pair.key]);
+    expect(editor.getActivatedReviewItemKey({ pairReplacements: true })).toBe(pair.key);
+    // Read without the pairing query, it names the half the caret is in.
+    expect(editor.getActivatedReviewItemKey()).toBe(deletion.key);
+  });
+});

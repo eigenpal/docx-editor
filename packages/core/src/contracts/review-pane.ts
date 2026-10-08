@@ -31,7 +31,8 @@ export type ReviewPaneOpening = 'auto' | 'manual';
  *   `'float'`.
  * - `'scroll'`: a capped fit keeps the page at the size it has beside the closed pane's
  *   marker strip. The full column stands beside it, and the viewport scrolls sideways to
- *   reach the cards. An open navigation pane does not shrink the page either.
+ *   reach the cards. This applies to every side pane, not only the review pane: an open
+ *   navigation pane also no longer shrinks the page, and the viewport scrolls to it too.
  *
  * @public
  */
@@ -47,7 +48,7 @@ export type ReviewPaneOverflow = 'float' | 'shrinkPage' | 'scroll';
  *
  * @public
  */
-export type RevisionsIn = 'pane' | 'balloons';
+export type RevisionDisplay = 'pane' | 'balloons';
 
 /**
  * How a collapsed comment marker looks.
@@ -58,7 +59,7 @@ export type RevisionsIn = 'pane' | 'balloons';
  *
  * @public
  */
-export type CommentMarkers = 'initials' | 'icon';
+export type CommentMarkerStyle = 'initials' | 'icon';
 
 /**
  * Review pane settings to change. Every field is optional, and an omitted field keeps its
@@ -72,9 +73,9 @@ export interface ReviewPaneOptions {
   /** Default `'float'`. */
   readonly overflow?: ReviewPaneOverflow;
   /** Default `'pane'`. */
-  readonly revisionsIn?: RevisionsIn;
+  readonly revisionsIn?: RevisionDisplay;
   /** Default `'initials'`. */
-  readonly commentMarkers?: CommentMarkers;
+  readonly commentMarkers?: CommentMarkerStyle;
 }
 
 /**
@@ -88,9 +89,9 @@ export interface ResolvedReviewPane {
   /** What the open pane does when its card column does not fit beside the page. */
   readonly overflow: ReviewPaneOverflow;
   /** Where tracked changes open. */
-  readonly revisionsIn: RevisionsIn;
+  readonly revisionsIn: RevisionDisplay;
   /** How a collapsed comment marker looks. */
-  readonly commentMarkers: CommentMarkers;
+  readonly commentMarkers: CommentMarkerStyle;
 }
 
 /** The settings an editor starts with when nothing sets them. @public */

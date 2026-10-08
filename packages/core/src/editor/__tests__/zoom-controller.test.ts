@@ -14,6 +14,19 @@ import { zipSync, strToU8 } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { AUTO_ZOOM_MODE } from '../zoom-fit.ts';
 import type { EditorSnapshot } from '../../contracts/editor.ts';
+import type { EditorModule } from '../../contracts/modules.ts';
+import { collectReviewItems } from '../../store/index.ts';
+
+/** A review module whose pane scrolls beside the page: review pane settings need one. */
+const SCROLLING_REVIEW: EditorModule = {
+  id: 'review',
+  review: {
+    displayModes: ['all-markup', 'proposed', 'original'],
+    collectReviewItems,
+    revisionItemsOfParagraph: () => [],
+    pane: { overflow: 'scroll' },
+  },
+};
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -225,8 +238,7 @@ describe('tracking the viewport', () => {
   // `overflow: 'scroll'`: side panes scroll beside the page, so a capped fit keeps its
   // size whatever the review rail or the navigation pane reserves.
   test("overflow: 'scroll' keeps a capped fit at its size beside an open pane", async () => {
-    const harness = mount();
-    harness.editor.setReviewPane({ overflow: 'scroll' });
+    const harness = mount({ modules: [SCROLLING_REVIEW] });
     harness.resize(1100);
     await harness.settle();
     const wide = harness.editor.getZoom();
@@ -247,8 +259,7 @@ describe('tracking the viewport', () => {
   // A closed pane's marker strip still counts: ignoring it overflowed the page sideways
   // with no pane open. Only the navigation pane's shift scrolls beside the page then.
   test("overflow: 'scroll' with the pane closed still fits inside the marker strip", async () => {
-    const harness = mount();
-    harness.editor.setReviewPane({ overflow: 'scroll' });
+    const harness = mount({ modules: [SCROLLING_REVIEW] });
     harness.pane(false);
     harness.strip(88);
     harness.resize(800);
@@ -268,8 +279,7 @@ describe('tracking the viewport', () => {
   // The point of 'scroll': the page has ONE size. Opening the pane swaps the strip for the
   // full column and the start clearance, and the fit must not relay out the document for it.
   test("overflow: 'scroll' keeps one page size whether the pane is open or closed", async () => {
-    const harness = mount();
-    harness.editor.setReviewPane({ overflow: 'scroll' });
+    const harness = mount({ modules: [SCROLLING_REVIEW] });
     harness.strip(88);
     harness.resize(800);
     harness.pane(false);
@@ -294,8 +304,7 @@ describe('tracking the viewport', () => {
 
   // A host that marks the pane but has not published the strip yet still fits beside it.
   test("overflow: 'scroll' falls back to the 88px strip when none is published", async () => {
-    const harness = mount();
-    harness.editor.setReviewPane({ overflow: 'scroll' });
+    const harness = mount({ modules: [SCROLLING_REVIEW] });
     harness.pane(false);
     harness.resize(800);
     await harness.settle();

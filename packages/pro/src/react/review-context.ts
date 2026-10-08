@@ -8,7 +8,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { createContext, useCallback, useContext } from 'react';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
-import type { CommentMarkers, RevisionsIn } from '@docx-editor.dev/core/editor';
+import type { CommentMarkerStyle, RevisionDisplay } from '@docx-editor.dev/core/editor';
 import {
   useReviewAuthors,
   useTranslation,
@@ -101,9 +101,9 @@ export interface ReviewRailValue {
   /** Close it, committed or not, and unpin the range. */
   readonly endDraft: () => void;
   /** The `commentMarkers` review pane setting: how a comment thread's margin marker looks. */
-  readonly commentMarkers: CommentMarkers;
+  readonly commentMarkers: CommentMarkerStyle;
   /** The `revisionsIn` review pane setting: tracked changes as rail cards or page balloons. */
-  readonly revisionsIn: RevisionsIn;
+  readonly revisionsIn: RevisionDisplay;
 }
 
 export function useRail(): ReviewRailValue {
@@ -161,7 +161,7 @@ export const INERT_RAIL: ReviewRailValue = {
     reply: () => false,
     selectionAnchorY: null,
     comment: () => false,
-    explicitActiveKey: null,
+    activatedKey: null,
     paneOpen: true,
     setPaneOpen: () => {},
     ready: false,

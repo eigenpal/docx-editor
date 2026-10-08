@@ -207,7 +207,7 @@ export interface CollaborationStatusSnapshot {
 }
 
 // @public
-export type CommentMarkers = 'initials' | 'icon';
+export type CommentMarkerStyle = 'initials' | 'icon';
 
 // @public
 export interface CreateDocumentCollaborationOptions {
@@ -989,10 +989,10 @@ export interface ResolvedCustomNodeActivation {
 
 // @public
 export interface ResolvedReviewPane {
-    readonly commentMarkers: CommentMarkers;
+    readonly commentMarkers: CommentMarkerStyle;
     readonly opening: ReviewPaneOpening;
     readonly overflow: ReviewPaneOverflow;
-    readonly revisionsIn: RevisionsIn;
+    readonly revisionsIn: RevisionDisplay;
 }
 
 // @public (undocumented)
@@ -1053,10 +1053,10 @@ export type ReviewPaneOpening = 'auto' | 'manual';
 
 // @public
 export interface ReviewPaneOptions {
-    readonly commentMarkers?: CommentMarkers;
+    readonly commentMarkers?: CommentMarkerStyle;
     readonly opening?: ReviewPaneOpening;
     readonly overflow?: ReviewPaneOverflow;
-    readonly revisionsIn?: RevisionsIn;
+    readonly revisionsIn?: RevisionDisplay;
 }
 
 // @public
@@ -1102,7 +1102,7 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children' | 'hidden'
 }
 
 // @public
-export type RevisionsIn = 'pane' | 'balloons';
+export type RevisionDisplay = 'pane' | 'balloons';
 
 // @public
 export type ScrollPlacement = 'start' | 'center' | 'centerIfNeeded' | 'nearest';
@@ -1187,14 +1187,13 @@ export function useReviewOf(editorRef: Ref<Editor | null>, query?: MaybeRefOrGet
 export interface UseReviewReturn {
     // (undocumented)
     readonly accept: (item: ReviewItemView) => boolean;
-    // (undocumented)
+    readonly activatedKey: ComputedRef<string | null>;
     readonly activeKey: ComputedRef<string | null>;
     readonly adopt: (items: ReviewItemView | readonly ReviewItemView[], options?: ReviewAdoptOptions) => boolean;
     // (undocumented)
     readonly comment: (text: string, author?: string) => boolean;
     // (undocumented)
     readonly commentResolutionDisabledReason: ComputedRef<string | null>;
-    readonly explicitActiveKey: ComputedRef<string | null>;
     // (undocumented)
     readonly items: ComputedRef<readonly ReviewItemView[]>;
     // (undocumented)

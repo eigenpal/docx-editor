@@ -4,7 +4,7 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 
-import type { RevisionsIn } from '@docx-editor.dev/core/editor';
+import type { RevisionDisplay } from '@docx-editor.dev/core/editor';
 import type { ReviewItemView } from './useReview.ts';
 
 type BalloonReviewItem = Extract<ReviewItemView, { readonly kind: 'revision' }>;
@@ -150,7 +150,7 @@ export function remeasureBalloonAnchor(
  */
 export function balloonServesRevisionKind(
   revisionKind: string | undefined,
-  revisionsIn: RevisionsIn = 'pane'
+  revisionsIn: RevisionDisplay = 'pane'
 ): boolean {
   if (revisionKind === undefined) return false;
   return revisionsIn === 'balloons' || revisionKind === 'format' || revisionKind === 'structural';
@@ -167,7 +167,7 @@ export function activeItemNeedsBalloon(
   item: ReviewItemView,
   railItems: readonly ReviewItemView[],
   paneOpen: boolean,
-  revisionsIn: RevisionsIn = 'pane',
+  revisionsIn: RevisionDisplay = 'pane',
   explicit = false
 ): boolean {
   if (item.kind !== 'revision' || !balloonServesRevisionKind(item.revisionKind, revisionsIn)) {

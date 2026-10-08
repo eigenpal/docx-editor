@@ -402,13 +402,13 @@ useEditorEvent('reviewItemReveal', ({ key, source }) => {
 
 The packaged balloons and review pane use the same event. With the `revisionsIn: 'balloons'` pane setting, the change balloon opens. With `revisionsIn: 'pane'`, a closed pane opens at the item's card, unless the `opening` pane setting is `'manual'`.
 
-`editor.getActiveReviewItem()` returns the key that `setActiveReviewItem()`, **Next Change**, or **Previous Change** opened, while the caret it placed is still in place. It returns `null` when only the caret makes an item active. For a paired replacement, it returns the key of the deletion. Listen for `selectionChange` to read it again. `useReview()` returns the same value as `explicitActiveKey` and keeps it current.
+`editor.getActivatedReviewItemKey(query)` returns the key of the activated item: the one that `setActiveReviewItem()`, **Next Change**, or **Previous Change** made active, while the caret stays in it. It returns `null` when only a caret move made an item active. The caret-active item is a separate idea: `isActive` on each placement, and `activeKey` in `useReview()`, name the item the caret is in, however it got there. Pass the query you read items with: with `pairReplacements: true`, a paired replacement reports the pair's key, so it matches `getReviewItems({ pairReplacements: true })`. Listen for `selectionChange` to read it again. `useReview()` returns the same value as `activatedKey`, for its own query.
 
 | Host API | Returns |
 | --- | --- |
 | `getReviewItemsAt(clientX, clientY, query?)` | The review items under a point, narrowest first. |
 | `getReviewItemRects(key)` | The item's bands on painted pages, in client coordinates. |
-| `getActiveReviewItem()` | The explicitly activated item key, or `null`. |
+| `getActivatedReviewItemKey(query?)` | The activated item's key under `query`, or `null`. |
 | `on('reviewItemReveal', handler)` | Each explicit reveal, as `{ key, source }`. |
 
 The packaged review rail can draw these balloons for you. See [Control the review pane](/docs/2.x/pro#control-the-review-pane).

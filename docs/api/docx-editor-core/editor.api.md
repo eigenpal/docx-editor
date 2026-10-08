@@ -1019,7 +1019,7 @@ export function commandForSlotValue(slotId: ChromeSlotId, value: unknown): Edito
 export function commandForTableChromeSlotValue(slotId: TableChromeSlotId, value: unknown, draft: TableChromeDraft): EditorCommand | null;
 
 // @public
-export type CommentMarkers = 'initials' | 'icon';
+export type CommentMarkerStyle = 'initials' | 'icon';
 
 // @public
 export function composeFontConfiguration(base: FontConfigurationBase, ...fragments: readonly FontConfigurationFragment[]): FontConfiguration;
@@ -2655,10 +2655,10 @@ export function resolveColorValueToCss(color: ColorValue | undefined | null, the
 
 // @public
 export interface ResolvedReviewPane {
-    readonly commentMarkers: CommentMarkers;
+    readonly commentMarkers: CommentMarkerStyle;
     readonly opening: ReviewPaneOpening;
     readonly overflow: ReviewPaneOverflow;
-    readonly revisionsIn: RevisionsIn;
+    readonly revisionsIn: RevisionDisplay;
 }
 
 // @public
@@ -2770,10 +2770,10 @@ export type ReviewPaneOpening = 'auto' | 'manual';
 
 // @public
 export interface ReviewPaneOptions {
-    readonly commentMarkers?: CommentMarkers;
+    readonly commentMarkers?: CommentMarkerStyle;
     readonly opening?: ReviewPaneOpening;
     readonly overflow?: ReviewPaneOverflow;
-    readonly revisionsIn?: RevisionsIn;
+    readonly revisionsIn?: RevisionDisplay;
 }
 
 // @public
@@ -2806,6 +2806,9 @@ export type RevisionChangedLinesMark = 'none' | 'leftBorder' | 'rightBorder' | '
 
 // @public (undocumented)
 export type RevisionDeletionMark = RevisionMarkupMark | 'hidden' | 'caret' | 'pound';
+
+// @public
+export type RevisionDisplay = 'pane' | 'balloons';
 
 // @public
 export interface RevisionMarkupChromeHandlers {
@@ -2868,9 +2871,6 @@ export interface RevisionMarkupStyle<Mark extends string = RevisionMarkupMark> {
 export interface RevisionMarkupTextStyle<Mark extends string = RevisionMarkupMark> extends RevisionMarkupStyle<Mark> {
     readonly background: RevisionMarkupNamedColor | 'byAuthor' | 'none';
 }
-
-// @public
-export type RevisionsIn = 'pane' | 'balloons';
 
 // @public
 export type RevisionStyles = 'kind' | 'author' | RevisionAuthorAssignments;

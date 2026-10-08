@@ -203,7 +203,7 @@ export interface CollaborationStatusSnapshot {
 }
 
 // @public
-export type CommentMarkers = 'initials' | 'icon';
+export type CommentMarkerStyle = 'initials' | 'icon';
 
 // @public
 export interface CreateDocumentCollaborationOptions {
@@ -326,10 +326,10 @@ export interface ResolvedCustomNodeActivation {
 
 // @public
 export interface ResolvedReviewPane {
-    readonly commentMarkers: CommentMarkers;
+    readonly commentMarkers: CommentMarkerStyle;
     readonly opening: ReviewPaneOpening;
     readonly overflow: ReviewPaneOverflow;
-    readonly revisionsIn: RevisionsIn;
+    readonly revisionsIn: RevisionDisplay;
 }
 
 // @public
@@ -391,10 +391,10 @@ export type ReviewPaneOpening = 'auto' | 'manual';
 
 // @public
 export interface ReviewPaneOptions {
-    readonly commentMarkers?: CommentMarkers;
+    readonly commentMarkers?: CommentMarkerStyle;
     readonly opening?: ReviewPaneOpening;
     readonly overflow?: ReviewPaneOverflow;
-    readonly revisionsIn?: RevisionsIn;
+    readonly revisionsIn?: RevisionDisplay;
 }
 
 // @public
@@ -427,7 +427,7 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
 }
 
 // @public
-export type RevisionsIn = 'pane' | 'balloons';
+export type RevisionDisplay = 'pane' | 'balloons';
 
 // @public
 export type ScrollPlacement = 'start' | 'center' | 'centerIfNeeded' | 'nearest';
@@ -500,11 +500,11 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
 // @public
 export interface UseReviewReturn {
     readonly accept: (item: ReviewItemView) => boolean;
+    readonly activatedKey: string | null;
     readonly activeKey: string | null;
     readonly adopt: (items: ReviewItemView | readonly ReviewItemView[], options?: ReviewAdoptOptions) => boolean;
     readonly comment: (text: string, author?: string) => boolean;
     readonly commentResolutionDisabledReason: string | null;
-    readonly explicitActiveKey: string | null;
     readonly items: readonly ReviewItemView[];
     readonly paneOpen: boolean;
     readonly ready: boolean;

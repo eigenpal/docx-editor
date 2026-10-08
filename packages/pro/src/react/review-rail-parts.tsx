@@ -332,7 +332,7 @@ export function ReviewBalloon({ className, hidden }: ReviewPartProps) {
   const displayMode = useEditorState((snapshot) => snapshot.reviewDisplayMode ?? 'all-markup');
   // Whether the active item was opened on purpose (Next/Previous Change, `setActive`) rather
   // than by a caret that happened to land in it.
-  const explicit = review.explicitActiveKey !== null;
+  const explicit = review.activatedKey !== null;
   useEffect(() => {
     navigationAnchorKeyRef.current = null;
     setAnchor(null);

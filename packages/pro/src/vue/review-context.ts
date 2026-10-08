@@ -24,7 +24,7 @@ import {
 } from 'vue';
 import type { ReviewAuthorInfo } from '@docx-editor.dev/vue';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
-import type { CommentMarkers, RevisionsIn } from '@docx-editor.dev/core/editor';
+import type { CommentMarkerStyle, RevisionDisplay } from '@docx-editor.dev/core/editor';
 import { useReviewAuthors, useTranslation } from '@docx-editor.dev/vue';
 import type { ReviewActions } from './review-types.ts';
 import type { ReviewItemView } from './useReview.ts';
@@ -49,9 +49,9 @@ export interface ReviewRailValue {
   readonly expandedResolvedKey: string | null;
   readonly setExpandedResolvedKey: (key: string | null) => void;
   /** The `commentMarkers` review pane setting: how a comment thread's margin marker looks. */
-  readonly commentMarkers: CommentMarkers;
+  readonly commentMarkers: CommentMarkerStyle;
   /** The `revisionsIn` review pane setting: tracked changes as rail cards or page balloons. */
-  readonly revisionsIn: RevisionsIn;
+  readonly revisionsIn: RevisionDisplay;
 }
 
 export const ReviewContextKey: InjectionKey<ComputedRef<ReviewRailValue>> = Symbol('ReviewContext');
@@ -61,7 +61,7 @@ export const ReviewItemContextKey: InjectionKey<ComputedRef<ReviewItemView | nul
 const INERT_REVIEW: ReviewActions = {
   items: [],
   activeKey: null,
-  explicitActiveKey: null,
+  activatedKey: null,
   setActive: () => false,
   accept: () => false,
   reject: () => false,

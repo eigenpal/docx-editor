@@ -26,6 +26,7 @@ import { createTextHighlights } from './text-highlights.ts';
 import { createReviewItemsAt } from './review-items-at.ts';
 import {
   findReviewPlacement,
+  keyUnderQuery,
   narrowReviewItems,
   replacementPairHalves,
   reviewItemWithHalves,
@@ -2280,7 +2281,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     setEditingMode: (mode) => editor.exec({ type: 'setEditingMode', mode }),
 
     getReviewRevision: () => reviewRevision(),
-    getActiveReviewItem: () => surface?.activatedReviewKey() ?? null,
+    getActivatedReviewItemKey: (query) =>
+      keyUnderQuery(reviewPlacements, surface?.activatedReviewKey() ?? null, query),
 
     setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult {
       // Dismissing is the only thing a key of `null` can mean here. A card the reader closed
