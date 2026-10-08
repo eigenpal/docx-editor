@@ -469,6 +469,7 @@
     "title": "Navigation",
     "openAriaLabel": "Open navigation",
     "openTitle": "Navigation",
+    "openShortcutTitle": "Navigation ({shortcut})",
     "closeAriaLabel": "Close navigation",
     "closeTitle": "Close navigation",
     "tabs": {

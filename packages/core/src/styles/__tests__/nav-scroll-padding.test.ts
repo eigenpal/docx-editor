@@ -38,4 +38,17 @@ describe('navigation scroll padding selectors', () => {
     );
     expect(reduce?.[0] ?? '').toContain('.docx-editor.docx-editor__scroll-container');
   });
+
+  test('a pane inside the scroll container is sticky and cancels the start padding', () => {
+    // Absolute inside the positioned scroller would scroll the pane away with the pages.
+    const sticky = selectorsForProp(css, 'position', 'sticky').join('\n');
+    expect(sticky).toContain('.docx-editor .docx-editor__scroll-container > .docx-nav');
+    expect(sticky).toContain('.docx-editor.docx-editor__scroll-container > .docx-nav');
+    // Sticky offsets resolve inside the padding, so the margin moves the strip back over it
+    // and the negative offset lets sticky hold it there. Either alone leaves it displaced.
+    for (const prop of ['margin-inline-start', 'inset-inline-start']) {
+      const selectors = selectorsForProp(css, prop, '--docx-nav-shift').join('\n');
+      expect(selectors).toContain('.docx-editor__scroll-container > .docx-nav');
+    }
+  });
 });

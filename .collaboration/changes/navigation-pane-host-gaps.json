@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The navigation pane scrolls away inside the viewport, ignores Ctrl+F, keeps focus where it was, and shifts the page off narrow screens.",
+  "after": "The navigation pane stays on the scrollport, opens Find on Ctrl+F or Cmd+F, moves focus in and out, overlays narrow viewports, and measures the widest page.",
+  "reason": "Only adapter chrome changes. The pane reads the outline, search, and page geometry, and moves the local selection through existing calls. No shared field, operation, snapshot, or protocol message changes.",
+  "tests": [
+    "packages/react/test/navigation-pane-host.test.tsx",
+    "packages/vue/test/navigation-pane-host.test.ts"
+  ],
+  "changeset": "navigation-pane-host-gaps",
+  "migration": null
+}

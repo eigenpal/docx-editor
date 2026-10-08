@@ -675,6 +675,7 @@
     },
     "openAriaLabel": "Buka navigasi",
     "openTitle": "Navigasi",
+    "openShortcutTitle": "Navigasi ({shortcut})",
     "tabs": {
       "find": "Temukan",
       "headings": "Judul"

@@ -998,6 +998,7 @@ export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
     children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
+    findShortcut?: boolean;
     searchHighlight?: DocumentSearchHighlight;
     // (undocumented)
     style?: CSSProperties;
@@ -2052,6 +2053,9 @@ export const NAVIGATION_PANE_GAP = 16;
 export const NAVIGATION_PANE_INSET = 32;
 
 // @public
+export const NAVIGATION_PANE_MIN_PAGE_ROOM = 320;
+
+// @public
 export const NAVIGATION_PANE_WIDTH = 280;
 
 // @public
@@ -2065,6 +2069,9 @@ export function NavigationHeader(input: NavigationPartProps): ReactElement;
 
 // @public
 export function NavigationHeadings(input: NavigationPartProps): ReactElement;
+
+// @public
+export function navigationPaneOverlays(viewportWidth: number, reservation: number): boolean;
 
 // @public
 export function navigationPaneReservation(paneWidth?: number): number;
@@ -3029,6 +3036,7 @@ export interface UseNavigationPaneOptions {
 export interface UseNavigationPaneResult {
     // (undocumented)
     readonly open: boolean;
+    readonly overlay: boolean;
     // (undocumented)
     readonly paneWidth: number;
     // (undocumented)

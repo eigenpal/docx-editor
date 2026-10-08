@@ -184,6 +184,9 @@ export interface DocxEditorProps {
    * opens Find. Before this took an object the only way to change any of that was
    * `navigation={false}` plus rebuilding the pane. `true`/undefined keep the packaged
    * defaults.
+   *
+   * The pane captures Ctrl+F (Cmd+F on macOS) while focus is in this editor and opens Find.
+   * `navigation={{ findShortcut: false }}` leaves the shortcut to the browser.
    */
   navigation?: boolean | DocxEditorNavigationProps;
   /**

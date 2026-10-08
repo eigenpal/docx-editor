@@ -45,6 +45,8 @@ const PAIRS = [
       'editor/menu/download.ts',
       'editor/menu/menu-keyboard.ts',
       'editor/menu/menu-overflow-state.ts',
+      'editor/navigation/navigation-keys.ts',
+      'editor/navigation/navigation-widest-page.ts',
       'editor/paragraph-dialog-fields.ts',
       'editor/scroller-geometry.ts',
       'editor/toolbar/toolbar-warnings.ts',

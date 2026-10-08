@@ -134,6 +134,9 @@ export function changedFields(seed: ParagraphDialogFields, current: ParagraphDia
 seedMixed?: ParagraphDialogMixed,
 currentMixed?: ParagraphDialogMixed): ParagraphFormatUpdate | null;
 
+// @internal
+export function chordLetter(event: KeyboardEvent): string;
+
 // @public
 export const CHROME_GROUPS: readonly [{
     readonly controls: readonly [{

@@ -111,11 +111,13 @@ export {
 export {
   NAVIGATION_PANE_GAP,
   NAVIGATION_PANE_INSET,
+  NAVIGATION_PANE_MIN_PAGE_ROOM,
   NAVIGATION_PANE_WIDTH,
   SEARCH_DEBOUNCE_MS,
   SEARCH_HIGHLIGHT_PRIORITY,
   SEARCH_HIGHLIGHT_SET,
   SEARCH_MATCH_LIMIT,
+  navigationPaneOverlays,
   navigationPaneReservation,
   navigationShift,
   useDocumentOutline,

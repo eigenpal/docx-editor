@@ -312,7 +312,7 @@ function Find() {
 
 `setQuery()` waits 150 milliseconds without query changes. `find()` searches immediately. `truncated` means the count is a minimum. The example displays `+` when the search reaches 2,000 matches.
 
-The editor leaves Ctrl+F and Cmd+F to browser search. For shortcut handling, see [Open Find with Ctrl+F](/docs/2.x/guides/navigation#open-find-with-ctrlf). For shared requests and result updates, see [Search from code](/docs/2.x/guides/navigation#search-from-code).
+`DocxEditor.Navigation` opens **Find** on Cmd+F on macOS, or Ctrl+F elsewhere, while focus is in the editor. For details, see [Open Find with Ctrl+F](/docs/2.x/guides/navigation#open-find-with-ctrlf). For shared requests and result updates, see [Search from code](/docs/2.x/guides/navigation#search-from-code).
 
 ## `useHighlights`
 
@@ -466,7 +466,7 @@ For optional development feedback, subscribe with `useEditorEvent('historyDiagno
 | `useHeaderFooterState()` | Returns the active header or footer scope, or `null`. |
 | `useNoteScopeState()` | Returns the active footnote or endnote scope. |
 | `useContextMenuTarget()` | Returns the element that received the last context-menu action. |
-| `useNavigationPane(options?)` | Provides navigation-pane open state and width. |
+| `useNavigationPane(options?)` | Provides navigation-pane open state, width, and whether the open pane covers the page (`overlay`). |
 | `useTranslation()` | Returns `{ t }` for the active locale catalog. |
 | `useChromeTranslate(overrides?)` | Returns a catalog resolver that checks an override `Map` first. |
 | `useFonts(source, ...fragments)` | Builds a stable `FontResolver`. See the [Fonts guide](/docs/2.x/guides/fonts). |
