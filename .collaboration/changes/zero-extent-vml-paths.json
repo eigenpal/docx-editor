@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Zero-extent VML shape paths have no graphic projection.",
+  "after": "Distinct two-point paths paint as native lines without changing their source XML.",
+  "reason": "Only graphic projection changes. Shared nodes, text offsets, operations, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/store/__tests__/legacy-vml-zero-extent.test.ts",
+    "packages/core/src/output/__tests__/legacy-vml-zero-extent-paint.test.ts",
+    "packages/pro/src/collaboration/__tests__/zero-extent-vml.test.ts"
+  ],
+  "changeset": "zero-extent-vml-paths",
+  "migration": null
+}

@@ -658,7 +658,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Standalone w:pict supports bounded unrotated photos and groups of photos, inline photos with one uniform single-line border on all four sides, simple solid geometry including rounded rectangles, arrowed lines, and straight fit-to-box WordArt. Floating lines drawn between from and to points render in the editor and in PDF export. Aligned positions (left, center, right, top, bottom, inside, outside) are supported. A shape without absolute positioning is inline. Previews do not replace canonical VML or add media parts. Unknown templates, unsupported members, rotation, and clipped groups remain opaque as a whole. VML-only MC fallbacks are unchanged.',
+      'Standalone w:pict supports bounded unrotated photos and groups of photos, inline photos with one uniform single-line border on all four sides, simple solid geometry including rounded rectangles, arrowed lines, and straight fit-to-box WordArt. Floating lines drawn between from and to points render in the editor and in PDF export. Floating shape paths with two explicit points and one zero extent also render as native lines. Invalid zero coordinate axes remain opaque. Aligned positions (left, center, right, top, bottom, inside, outside) are supported. A shape without absolute positioning is inline. Previews do not replace canonical VML or add media parts. Unknown templates, unsupported members, rotation, and clipped groups remain opaque as a whole. VML-only MC fallbacks are unchanged.',
   },
   {
     id: 'images.crop',
