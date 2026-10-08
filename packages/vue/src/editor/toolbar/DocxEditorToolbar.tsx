@@ -31,14 +31,24 @@ import {
 import {
   arrangeToolbarGroups,
   collapseOrder,
-  toolbarHostLabel,
   TOOLBAR_COLLAPSE_ORDER,
   TOOLBAR_PINNED_GROUPS,
-} from './toolbar-overflow';
+} from '@docx-editor.dev/core/editor';
 import { readToolbarChildren, vnodeFlag, type ToolbarChildren } from './toolbar-children';
-import { ToolbarHostGroup, ToolbarPanelPlacement, ToolbarSlot } from './ToolbarGroup';
+import {
+  hostGroupText,
+  ToolbarHostGroup,
+  ToolbarPanelPlacement,
+  ToolbarSlot,
+  type DocxEditorToolbarGroupProps,
+} from './ToolbarGroup';
 import { ToolbarAddComment } from './AddComment';
-import { warnSlotOutsideArrangement, warnUnknownGroupAnchor } from './toolbar-warnings';
+import {
+  warnBuiltInGroupSetting,
+  warnReservedGroupId,
+  warnSlotOutsideArrangement,
+  warnUnknownGroupAnchor,
+} from './toolbar-warnings';
 import { FIXED_ATTRIBUTE, GROUP_ATTRIBUTE, useToolbarOverflow } from './useToolbarOverflow';
 import {
   ToolbarImageInsert,
@@ -213,6 +223,11 @@ function slotOfChild(child: VNode): ArrangementKey | null {
   const slot = docxSlotOf(child);
   if (slot) return slot as ArrangementKey;
   const type = child.type;
+  if (typeof type === 'object' && type !== null && 'docxToolbarSlot' in type) {
+    // A template passes the prop as `slot-id`, a render function as `slotId`.
+    const slotId = child.props?.slotId ?? child.props?.['slot-id'];
+    return typeof slotId === 'string' ? (slotId as ArrangementKey) : null;
+  }
   if (typeof type === 'object' && type !== null && 'docxToolbarPart' in type) {
     const slotProp = child.props?.slot;
     if (typeof slotProp === 'string') return slotProp as ArrangementKey;
@@ -422,7 +437,7 @@ const DocxEditorToolbarRoot = defineComponent({
             sections.push({
               id: group.id,
               labelKey: group.labelKey,
-              ...(group.host ? { label: toolbarHostLabel(group.labelKey, label) } : {}),
+              ...(group.heading ? { label: hostGroupText(group.heading, label) } : {}),
               children: rows,
             });
             continue;
@@ -435,8 +450,8 @@ const DocxEditorToolbarRoot = defineComponent({
               {
                 key: group.id,
                 class: `docx-toolbar__group${group.className ? ` ${group.className}` : ''}`,
-                ...(group.host
-                  ? { role: 'group', 'aria-label': toolbarHostLabel(group.labelKey, label) }
+                ...(group.heading
+                  ? { role: 'group', 'aria-label': hostGroupText(group.heading, label) }
                   : {}),
                 ...(group.pinned ? { [FIXED_ATTRIBUTE]: '' } : { [GROUP_ATTRIBUTE]: group.id }),
               },
@@ -531,11 +546,15 @@ const DocxEditorToolbarRoot = defineComponent({
   },
 });
 
+type HostGroupHeading = Pick<DocxEditorToolbarGroupProps, 'id' | 'label' | 'labelKey'>;
+
 /** A group as the preset bar renders it: built-in or host-owned, in bar order. */
 interface ArrangedGroup {
   readonly id: string;
-  /** Panel heading and host-group name: a registry key, or the host's label. */
+  /** Panel heading key of a built-in group. */
   readonly labelKey: string;
+  /** A host group's heading props, resolved with the toolbar's `t` at render. */
+  readonly heading: HostGroupHeading | undefined;
   readonly entries: readonly DefaultEntry[];
   /** Host content: a host group's children, or controls added to a built-in group. */
   readonly extras: readonly VNode[];
@@ -561,6 +580,7 @@ function arrangeGroups(
   const byId = new Map<string, ArrangedGroup>();
   for (const group of defaultGroups) {
     const spec = specs.get(group.id);
+    if (spec) warnBuiltInGroupProps(spec);
     if (spec?.hidden) continue;
     const extras = spec?.children ?? [];
     const visible = group.entries.some(
@@ -570,6 +590,7 @@ function arrangeGroups(
     byId.set(group.id, {
       id: group.id,
       labelKey: group.labelKey,
+      heading: undefined,
       entries: group.entries,
       extras,
       pinned: spec?.pinned ?? TOOLBAR_PINNED_GROUPS.has(group.id),
@@ -579,6 +600,9 @@ function arrangeGroups(
       host: false,
     });
   }
+  for (const spec of parsed.groups) {
+    if (spec.id === TABLE_CONTEXTUAL_GROUP_ID) warnReservedGroupId(spec.id);
+  }
   const hosts = parsed.groups.filter(
     (spec) => !builtInIds.has(spec.id) && spec.id !== TABLE_CONTEXTUAL_GROUP_ID
   );
@@ -586,7 +610,8 @@ function arrangeGroups(
     if (spec.hidden || !spec.children || spec.children.length === 0) continue;
     byId.set(spec.id, {
       id: spec.id,
-      labelKey: spec.label ?? spec.id,
+      labelKey: spec.labelKey ?? spec.id,
+      heading: { id: spec.id, label: spec.label, labelKey: spec.labelKey },
       entries: [],
       extras: spec.children,
       pinned: spec.pinned === true,
@@ -605,7 +630,7 @@ function arrangeGroups(
   for (const child of parsed.appended) {
     // A `Toolbar.Slot` exists only to take a slot's place, so landing here is a mistake.
     if (child.type !== ToolbarSlot) continue;
-    const slot = String(child.props?.slot) as ChromeSlotId;
+    const slot = String(child.props?.slotId ?? child.props?.['slot-id']) as ChromeSlotId;
     warnSlotOutsideArrangement(slot, chromeControlForSlot(slot) !== null);
   }
   // Placed over EVERY built-in id, hidden ones included, so `after` still finds its anchor.
@@ -617,6 +642,15 @@ function arrangeGroups(
     const group = byId.get(id);
     return group ? [group] : [];
   });
+}
+
+/** Props of a built-in `Toolbar.Group` that only a host group uses. */
+function warnBuiltInGroupProps(
+  spec: Pick<DocxEditorToolbarGroupProps, 'id' | 'label' | 'labelKey' | 'after'>
+): void {
+  for (const setting of ['label', 'labelKey', 'after'] as const) {
+    if (spec[setting] !== undefined) warnBuiltInGroupSetting(spec.id, setting);
+  }
 }
 
 /** A collapsed group's host content in the panel, or null when it has none. */

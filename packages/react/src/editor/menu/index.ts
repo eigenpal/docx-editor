@@ -8,7 +8,6 @@ export {
   MenuEntry,
   MenuGroup,
   MenuItem,
-  MenuReportIssue,
   MenuRow,
   MenuSeparator,
   MenuSubmenu,
@@ -18,12 +17,12 @@ export {
   type MenuItemProps,
   type MenuPartComponent,
   type MenuProps,
-  type MenuReportIssueProps,
   type MenuRowProps,
   type MenuSeparatorProps,
   type MenuSubmenuProps,
   type MenuTableGridProps,
 } from './parts';
+export { MenuReportIssue, type MenuReportIssueProps } from './menu-help';
 export type { MenuId } from './menu-context';
 export { MenuReview, MenuReviewers, type MenuReviewersProps } from './Reviewers';
 

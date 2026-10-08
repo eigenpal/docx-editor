@@ -1,23 +1,29 @@
-// Add Comment: starts a comment draft on the selection.
+// Add Comment (`review.addComment`): starts a comment draft on the selection.
 //
 // `review.comments` is the "Comments & Changes" pane toggle, not an authoring command, so a
-// host that wanted a button that ADDS a comment had none. This part asks the composed
-// review rail for a draft, the same request the context menu's Add Comment row makes. It
-// needs the review module and a mounted review rail, and it is disabled in viewing mode and
-// without a selection on the page, where the rail would refuse the draft.
+// host that wanted a button that ADDS a comment had none. Enabled state and the disabled
+// reason come from `toolbarCommandState`, like every other slot. The press asks the
+// composed review rail for a draft, the same request the context menu's row makes. When the
+// engine would allow a comment but no review rail is mounted to open the draft, the part
+// renders nothing rather than an enabled button that does nothing.
 
 import { defineComponent, h, type PropType, type VNode } from 'vue';
-import { useDocxEditor, useEditorStateTick, useReviewRailRegistry } from '../context';
+import type { ChromeSlotId } from '@docx-editor.dev/core/editor';
+import { useReviewRailRegistry } from '../context';
+import { useEditorCommand } from '../useEditorCommand';
 import { mergeHostClass } from '../../lib/mergeHostClass';
 import { useToolbarLabel } from './toolbar-context';
 import { Slot } from './Slot';
-import { chromeIcon, guardToolbarMousedown } from './ToolbarButton';
-import { ADD_COMMENT_PATHS } from './toolbar-icons';
+import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
 import { useToolbarOverflowClose } from './ToolbarOverflow';
+import type { ToolbarPartComponent } from './parts';
+
+const SLOT: ChromeSlotId = 'review.addComment';
 
 /**
- * Add Comment (`DocxEditorToolbar.AddComment`): opens a comment draft on the selection in
- * the review rail. Not part of the default arrangement; place it with `Toolbar.Group`.
+ * Add Comment (`DocxEditorToolbar.AddComment`, slot `review.addComment`): opens a comment
+ * draft on the selection in the review rail. It needs a mounted review rail to open the
+ * draft. It is not part of the default arrangement; place it with `Toolbar.Group`.
  *
  * @example
  * ```ts
@@ -38,40 +44,32 @@ export const ToolbarAddComment = defineComponent({
     icon: { type: Object as PropType<VNode>, default: undefined },
   },
   setup(props, { slots }) {
-    const editorRef = useDocxEditor();
-    const stateTick = useEditorStateTick();
     const rail = useReviewRailRegistry();
     const label = useToolbarLabel();
+    const { isEnabled, disabledReason } = useEditorCommand(SLOT);
     // Inside the "⋯" panel, the press also closes the panel. Outside it this does nothing.
     const closePanel = useToolbarOverflowClose();
     return () => {
-      if (props.hidden) return null;
-      // Re-renders on every editor state change, so a moved selection updates the state.
-      void stateTick.value;
-      const editor = editorRef.value;
-      const gate = editor?.can({ type: 'toggleReviewPane' });
-      const readOnly = editor?.snapshot().editingMode === 'viewing';
-      const placed = editor ? editor.getSelectionPlacement() !== null : false;
-      const enabled = gate?.ok === true && !readOnly && rail.value.mounted > 0 && placed;
-      const text = label('common.comment');
-      const reason =
-        gate && !gate.ok ? gate.reason : readOnly ? label('editingMode.viewingHint') : undefined;
+      if (props.hidden || (isEnabled.value && rail.value.mounted === 0)) return null;
+      const control = chromeControlForSlot(SLOT);
+      const text = label(control?.labelKey ?? SLOT);
+      const enabled = isEnabled.value;
       const shared = {
         class: mergeHostClass('docx-toolbar__button', props.class, props.className),
-        // Not a chrome slot, so it carries a part marker instead of `data-slot`.
-        'data-part': 'add-comment',
+        'data-slot': SLOT,
         disabled: !enabled,
         ...(!enabled ? { 'data-disabled': '' } : {}),
         'aria-label': text,
-        title: (!enabled ? reason : undefined) ?? text,
+        title: disabledReason.value ?? text,
         onMousedown: guardToolbarMousedown,
         onClick: () => {
           if (rail.value.requestCommentDraft()) closePanel(false);
         },
       };
       if (props.asChild) return h(Slot, shared, slots.default);
-      const content = props.icon ?? slots.default?.() ?? chromeIcon(ADD_COMMENT_PATHS);
+      const content = props.icon ?? slots.default?.() ?? chromeIcon(control?.paths);
       return h('button', { type: 'button', ...shared }, content ?? undefined);
     };
   },
 });
+(ToolbarAddComment as unknown as ToolbarPartComponent).docxSlot = SLOT;

@@ -12,6 +12,7 @@ import { CHROME_GROUPS } from '@docx-editor.dev/core/editor';
 import { CHROME_MENUS } from '@docx-editor.dev/core/editor';
 import { ChromeExportFormat } from '@docx-editor.dev/core/editor';
 import { ChromeExportHandlers } from '@docx-editor.dev/core/editor';
+import { ChromeGroupId } from '@docx-editor.dev/core/editor';
 import { ChromeMenu } from '@docx-editor.dev/core/editor';
 import { ChromeMenuEntry } from '@docx-editor.dev/core/editor';
 import { ChromeMenuId } from '@docx-editor.dev/core/editor';
@@ -1437,6 +1438,22 @@ export interface DocxEditorTextFormFieldDialogProps extends DialogCustomizationP
 export const DocxEditorToolbar: DocxEditorToolbarNamespace;
 
 // @public
+export interface DocxEditorToolbarGroupProps {
+    after?: ChromeGroupId | (string & {});
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+    id: ChromeGroupId | (string & {});
+    label?: string;
+    labelKey?: string;
+    overflowContent?: () => DocxEditorChildren;
+    pinned?: boolean;
+    priority?: number;
+}
+
+// @public
 export interface DocxEditorToolbarNamespace {
     // (undocumented)
     (props: DocxEditorToolbarProps): ReactNode;
@@ -1546,6 +1563,14 @@ export interface DocxEditorToolbarProps {
     overflow?: boolean;
     preset?: boolean;
     t?: ToolbarTranslate;
+}
+
+// @public
+export interface DocxEditorToolbarSlotProps {
+    // (undocumented)
+    children?: DocxEditorChildren;
+    overflowContent?: () => DocxEditorChildren;
+    slotId: ChromeSlotId;
 }
 
 // @public
@@ -2600,21 +2625,6 @@ export interface ToolbarContextValue {
 // @public @deprecated (undocumented)
 export function ToolbarGroup(input: ToolbarGroupProps): react__default.JSX.Element;
 
-// @public
-export interface ToolbarGroupPartProps {
-    after?: string;
-    // (undocumented)
-    children?: DocxEditorChildren;
-    // (undocumented)
-    className?: string;
-    hidden?: boolean;
-    id: string;
-    label?: string;
-    overflowContent?: () => DocxEditorChildren;
-    pinned?: boolean;
-    priority?: number;
-}
-
 // @public (undocumented)
 export const ToolbarImageProperties: typeof ImagePropertiesTrigger & {
     docxSlot: 'image.properties';
@@ -2715,15 +2725,6 @@ export type ToolbarReviewersProps = {
 export interface ToolbarSeparatorProps {
     // (undocumented)
     className?: string;
-}
-
-// @public
-export interface ToolbarSlotOverrideProps {
-    // (undocumented)
-    children?: DocxEditorChildren;
-    hidden?: boolean;
-    overflowContent?: () => DocxEditorChildren;
-    slot: ChromeSlotId;
 }
 
 // @public

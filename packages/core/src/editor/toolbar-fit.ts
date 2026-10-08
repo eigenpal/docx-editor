@@ -1,3 +1,6 @@
+// Shared by both adapters: the toolbar fit is arithmetic over measured widths, so React
+// and Vue read one implementation and cannot drift on what collapses first.
+//
 // Which toolbar groups give up their place to the "⋯" menu when the bar runs out of room.
 //
 // THE BAR IS ONE ROW. Wrapping to a second and third row was the old answer, and on a
@@ -26,6 +29,8 @@
  * last. A group the registry has but this list does not is collapsed before all of these,
  * in reverse bar order — a host-added group has no declared standing, and the alternative
  * is a new group that silently never collapses.
+ *
+ * @internal
  */
 export const TOOLBAR_COLLAPSE_ORDER: readonly string[] = [
   'zoom',
@@ -45,6 +50,8 @@ export const TOOLBAR_COLLAPSE_ORDER: readonly string[] = [
  * `review` holds the comments toggle and the editing-mode pill. The comments rail is
  * reached through that toggle and nothing else, and a narrow window is exactly where a
  * reader needs it, so burying it one menu deep is the wrong trade.
+ *
+ * @internal
  */
 export const TOOLBAR_PINNED_GROUPS: ReadonlySet<string> = new Set(['review']);
 
@@ -54,13 +61,19 @@ export const TOOLBAR_PINNED_GROUPS: ReadonlySet<string> = new Set(['review']);
  * Without it a value control that widens with its own value (font family going from
  * "Arial" to "Times New Roman") pushes itself out, which frees the width that pulled it
  * back in, forever. One-directional slack breaks the loop.
+ *
+ * @internal
  */
 export const TOOLBAR_OVERFLOW_HYSTERESIS = 24;
 
 /** No group overflows. Shared so an unmeasured toolbar returns a stable identity. */
 const NONE: ReadonlySet<string> = new Set<string>();
 
-/** What {@link toolbarOverflowGroups} measures against. */
+/**
+ * What {@link toolbarOverflowGroups} measures against.
+ *
+ * @internal
+ */
 export interface ToolbarFitInput {
   /** Content width of the bar, in px. `0` or less means "not measured yet". */
   readonly available: number;
@@ -83,6 +96,8 @@ export interface ToolbarFitInput {
  * The priority of a declared group: its place in {@link TOOLBAR_COLLAPSE_ORDER}, in steps of
  * 10, so zoom is 10 and history is 90. A host group with a `priority` sorts among these, and
  * a LOWER number leaves the bar first. The steps leave room between two built-in groups.
+ *
+ * @internal
  */
 export function toolbarGroupPriority(
   id: string,
@@ -99,6 +114,8 @@ export function toolbarGroupPriority(
  * {@link toolbarGroupPriority}), and overrides a declared group's own priority. Groups with
  * neither collapse first, in reverse bar order. Two groups with the same priority collapse
  * in reverse bar order too: the one further along the bar leaves first.
+ *
+ * @internal
  */
 export function collapseOrder(
   groups: readonly string[],
@@ -116,7 +133,11 @@ export function collapseOrder(
   return [...undeclared.reverse(), ...ranked.map((entry) => entry.id)];
 }
 
-/** One host group's placement request. */
+/**
+ * One host group's placement request.
+ *
+ * @internal
+ */
 export interface ToolbarHostGroupPlacement {
   readonly id: string;
   /** The group this one follows. Absent, or unknown, places it after every group. */
@@ -131,6 +152,8 @@ export interface ToolbarHostGroupPlacement {
  * several groups anchored to one place keep their order of appearance. An anchor may be
  * another host group. An anchor that never resolves (an unknown id, or a cycle) places the
  * group at the end.
+ *
+ * @internal
  */
 export function arrangeToolbarGroups(
   builtIn: readonly string[],
@@ -166,32 +189,18 @@ export function arrangeToolbarGroups(
   return result;
 }
 
-/** A dotted catalog key, such as `formattingBar.groups.font`. */
-const CATALOG_KEY = /^[A-Za-z][\w-]*(?:\.[\w-]+)+$/;
-
 /**
- * A host group's label as display text.
+ * The margin the "⋯" panel keeps from each viewport edge, in px.
  *
- * Only a dotted catalog key goes through `translate`, and only a string result is used.
- * Anything else renders as written, so plain text with ICU syntax (`{`) never reaches the
- * message formatter, and a key that names a branch of the catalog (an object) does not
- * replace the label.
+ * @internal
  */
-export function toolbarHostLabel(text: string, translate: (key: string) => unknown): string {
-  if (!CATALOG_KEY.test(text)) return text;
-  let resolved: unknown;
-  try {
-    resolved = translate(text);
-  } catch {
-    return text;
-  }
-  return typeof resolved === 'string' && resolved.length > 0 ? resolved : text;
-}
-
-/** The margin the "⋯" panel keeps from each viewport edge, in px. */
 export const TOOLBAR_PANEL_EDGE_MARGIN = 8;
 
-/** Where the "⋯" panel opens, in viewport px. */
+/**
+ * Where the "⋯" panel opens, in viewport px.
+ *
+ * @internal
+ */
 export interface ToolbarPanelPlacement {
   /** The panel's left edge. */
   readonly left: number;
@@ -207,6 +216,8 @@ export interface ToolbarPanelPlacement {
  * The panel lines up with the trigger's end edge first, which suits a trigger at the end of
  * the bar. When that runs past the left edge (a centered or narrow bar), it lines up with
  * the trigger's start edge instead. When neither fits, it is clamped to the margins.
+ *
+ * @internal
  */
 export function toolbarPanelPlacement(input: {
   readonly triggerLeft: number;
@@ -254,7 +265,11 @@ function sameIds(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
   return true;
 }
 
-/** True when two answers describe the same bar, so a re-render can be skipped. */
+/**
+ * True when two answers describe the same bar, so a re-render can be skipped.
+ *
+ * @internal
+ */
 export const sameOverflow = sameIds;
 
 /**
@@ -263,6 +278,8 @@ export const sameOverflow = sameIds;
  * An unmeasured bar (`available <= 0`, which is every server render and every jsdom test)
  * overflows nothing: the full toolbar is the honest answer when nothing is known about the
  * space, and it is also what a host that opted out of overflow renders.
+ *
+ * @internal
  */
 export function toolbarOverflowGroups(input: ToolbarFitInput): ReadonlySet<string> {
   if (!(input.available > 0)) return NONE;
@@ -273,4 +290,24 @@ export function toolbarOverflowGroups(input: ToolbarFitInput): ReadonlySet<strin
   if (!previous || previous.size === 0 || next.size >= previous.size) return next;
   const relaxed = fit(input, input.available - (input.hysteresis ?? TOOLBAR_OVERFLOW_HYSTERESIS));
   return sameIds(relaxed, previous) ? previous : relaxed;
+}
+
+/**
+ * The left edge, in viewport px, of a popup that opens under a bar control.
+ *
+ * The popup lines up with the control's start edge, and moves left or right only as far as
+ * it must to keep {@link TOOLBAR_PANEL_EDGE_MARGIN} from each viewport edge. A popup wider
+ * than the viewport keeps its left margin.
+ *
+ * @internal
+ */
+export function toolbarPopupLeft(input: {
+  readonly anchorLeft: number;
+  readonly popupWidth: number;
+  readonly viewportWidth: number;
+  readonly margin?: number;
+}): number {
+  const margin = input.margin ?? TOOLBAR_PANEL_EDGE_MARGIN;
+  const max = input.viewportWidth - margin - input.popupWidth;
+  return Math.max(margin, Math.min(input.anchorLeft, max));
 }

@@ -11,7 +11,6 @@ export {
   MenuFile,
   MenuFormat,
   MenuInsert,
-  MenuHelp,
   MenuItem,
   MenuOpen,
   MenuSave,
@@ -19,7 +18,6 @@ export {
   MenuRow,
   MenuGroup,
   MenuSeparator,
-  MenuReportIssue,
   MenuSubmenu,
   MenuTableGrid,
   menuRowSlot,
@@ -28,11 +26,11 @@ export {
   type MenuItemProps,
   type MenuPartComponent,
   type MenuProps,
-  type MenuReportIssueProps,
   type MenuRowProps,
   type MenuSeparatorProps,
   type MenuSubmenuProps,
   type MenuTableGridProps,
 } from './parts';
+export { MenuHelp, MenuReportIssue, type MenuReportIssueProps } from './menu-help';
 
 export type { ChromeExportHandlers, ChromeExportFormat } from '@docx-editor.dev/core/editor';

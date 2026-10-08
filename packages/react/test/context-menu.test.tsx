@@ -245,7 +245,7 @@ describe('opening', () => {
       'edit.delete',
       'edit.selectAll',
       'text.link',
-      'review.comments',
+      'review.addComment',
     ]);
   });
 
@@ -442,7 +442,7 @@ describe('composition', () => {
       'edit.delete',
       'edit.selectAll',
       'text.link',
-      'review.comments',
+      'review.addComment',
     ]);
     expect(rowNamed(view, 'edit.cut').textContent).toContain('igloo.carve');
   });

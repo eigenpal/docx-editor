@@ -326,6 +326,29 @@ export function tableChromeToolbarState(
 const EDITING_MODES: readonly DocumentEditingMode[] = ['editing', 'suggesting', 'viewing'];
 
 /**
+ * Whether a comment could be started at the selection: the review module is installed, the
+ * document is not open for viewing, and the selection is on the page. The click does not run
+ * an engine command; the adapter's review rail opens the draft, the way the link popover
+ * owns `text.link`.
+ */
+function addCommentState(editor: Editor): ToolbarCommandState {
+  const id: ChromeSlotId = 'review.addComment';
+  const refuse = (reason: string): ToolbarCommandState => ({
+    id,
+    enabled: false,
+    disabledReason: reason,
+    active: false,
+  });
+  const review = editor.can({ type: 'toggleReviewPane' });
+  if (!review.ok) return refuse(review.reason);
+  if ((editor.getEditingMode?.() ?? 'editing') === 'viewing') {
+    return refuse('the document is open for viewing');
+  }
+  if (editor.getSelectionPlacement() === null) return refuse('a comment needs a selected range');
+  return { id, enabled: true, disabledReason: null, active: false };
+}
+
+/**
  * Ask the engine whether one control should be enabled.
  *
  * @public
@@ -420,6 +443,7 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
           active: false,
         };
   }
+  if (id === 'review.addComment') return addCommentState(editor);
   if (id === 'review.authors') {
     const capability = editor.can({ type: 'toggleReviewPane' });
     if (!capability.ok) {

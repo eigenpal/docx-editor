@@ -102,7 +102,8 @@
     "formatPainter": "格式刷",
     "formatPainterShortcut": "格式刷 (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "显示段落标记",
-    "label": "格式设置控件"
+    "label": "格式设置控件",
+    "addComment": "添加批注"
   },
   "alignment": {
     "alignLeft": "左对齐",

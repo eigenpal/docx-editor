@@ -102,7 +102,8 @@
     "formatPainter": "Format übertragen",
     "formatPainterShortcut": "Format übertragen (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "Absatzmarken anzeigen",
-    "label": "Formatierungssteuerelemente"
+    "label": "Formatierungssteuerelemente",
+    "addComment": "Kommentar hinzufügen"
   },
   "alignment": {
     "alignLeft": "Linksbündig",

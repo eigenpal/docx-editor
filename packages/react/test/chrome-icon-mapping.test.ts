@@ -76,6 +76,7 @@ const ICON_FOR_SLOT: Record<string, string> = {
   'review.acceptAllChanges': 'check',
   'review.rejectAllChanges': 'close',
   'review.comments': 'comment',
+  'review.addComment': 'add_comment',
   'review.authors': 'visibility',
   // The "✎ Editing ▾" mode pill's leading pencil glyph.
   'review.editingMode': 'edit_note',

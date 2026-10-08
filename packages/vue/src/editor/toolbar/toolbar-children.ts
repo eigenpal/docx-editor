@@ -4,10 +4,10 @@
 import { camelize, Comment, isVNode, type VNode } from 'vue';
 import { flattenChildren } from '../../lib/flattenChildren';
 import type { DocxEditorChildren } from '../../docx-editor-children';
-import type { ToolbarGroupPartProps } from './ToolbarGroup';
+import type { DocxEditorToolbarGroupProps } from './ToolbarGroup';
 
 /** A `Toolbar.Group` description, with its default slot content. */
-export interface ToolbarGroupSpec extends Omit<ToolbarGroupPartProps, 'children'> {
+export interface ToolbarGroupSpec extends Omit<DocxEditorToolbarGroupProps, 'children'> {
   readonly children: VNode[] | null;
 }
 
@@ -47,6 +47,7 @@ function groupSpec(vnode: VNode): ToolbarGroupSpec {
   const priority = raw.priority === undefined ? undefined : Number(raw.priority);
   return {
     id: String(raw.id),
+    ...(typeof raw.labelKey === 'string' ? { labelKey: raw.labelKey } : {}),
     ...(typeof raw.label === 'string' ? { label: raw.label } : {}),
     ...(priority !== undefined ? { priority } : {}),
     ...(raw.pinned !== undefined ? { pinned: vnodeFlag(raw.pinned) } : {}),

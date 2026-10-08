@@ -17,6 +17,7 @@ import type { DocxEditorChildren } from '../../docx-editor-children';
 import { mergeArrangement } from '../merge-arrangement';
 import { flattenChildren } from '../../lib/flattenChildren';
 import { useDocxEditor, useEditorStateTick, useReviewRailRegistry } from '../context';
+import { useEditorCommand } from '../useEditorCommand';
 import { useTranslation, type TranslationKey } from '../../i18n';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import {
@@ -72,22 +73,22 @@ type DefaultEntry =
 const ContextMenuAddComment = defineComponent({
   name: 'ContextMenuAddComment',
   setup() {
-    const editorRef = useDocxEditor();
     const rail = useReviewRailRegistry();
     const menu = useMenuContext();
     const label = useMenuLabel();
+    // The same slot as `Toolbar.AddComment`, so enabled state and its reason have one
+    // source: `toolbarCommandState`. An allowed comment with no review rail to open the
+    // draft would be a row that does nothing, so the row is left out instead.
+    const { isEnabled, disabledReason } = useEditorCommand('review.addComment');
     return () => {
-      const editor = editorRef.value;
-      const gate = editor?.can({ type: 'toggleReviewPane' });
-      const disabled =
-        !gate?.ok || rail.value.mounted === 0 || editor?.getSelectionPlacement() === null;
-      const control = chromeControlForSlot('review.comments');
+      if (isEnabled.value && rail.value.mounted === 0) return null;
+      const control = chromeControlForSlot('review.addComment');
       return (
         <MenuRow
           icon={chromeIcon(control?.paths) ?? undefined}
-          {...{ rowSlot: 'review.comments' }}
-          disabled={disabled}
-          title={gate && !gate.ok ? gate.reason : undefined}
+          {...{ rowSlot: 'review.addComment' }}
+          disabled={!isEnabled.value}
+          title={disabledReason.value ?? undefined}
           selectHandler={() => {
             if (!rail.value.requestCommentDraft()) return;
             menu.value.setOpenMenu(null);
@@ -153,7 +154,7 @@ const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
   },
   {
     kind: 'row',
-    id: 'review.comments',
+    id: 'review.addComment',
     render: () => <ContextMenuAddComment />,
   },
 ];

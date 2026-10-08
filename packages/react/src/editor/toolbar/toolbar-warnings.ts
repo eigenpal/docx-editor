@@ -5,11 +5,9 @@
 // value, and what the toolbar did instead. Each message prints once, and never in a
 // production build.
 
-const printed = new Set<string>();
+import { isDevelopment } from '../../lib/is-development';
 
-function isDevelopment(): boolean {
-  return typeof process === 'undefined' || process.env?.NODE_ENV !== 'production';
-}
+const printed = new Set<string>();
 
 /** Print `message` once per page, in development builds only. */
 export function toolbarDevWarning(message: string): void {
@@ -23,6 +21,22 @@ export function warnUnknownGroupAnchor(id: string, after: string, known: readonl
   toolbarDevWarning(
     `Toolbar.Group "${id}" has after="${after}", but no group has that id. ` +
       `The group is placed after every other group. Known ids: ${known.join(', ')}.`
+  );
+}
+
+/** A `Toolbar.Group` with a built-in id sets a prop that only a host group uses. */
+export function warnBuiltInGroupSetting(id: string, setting: string): void {
+  toolbarDevWarning(
+    `Toolbar.Group "${id}" is a built-in group, so its ${setting} is ignored. ` +
+      `A built-in group keeps its own label and place in the bar.`
+  );
+}
+
+/** A `Toolbar.Group` uses an id the toolbar keeps for its own contextual group. */
+export function warnReservedGroupId(id: string): void {
+  toolbarDevWarning(
+    `Toolbar.Group "${id}" uses the id of the contextual table group, so it is ignored. ` +
+      `Give the group another id.`
   );
 }
 

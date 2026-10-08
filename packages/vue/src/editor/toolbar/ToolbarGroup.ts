@@ -3,13 +3,13 @@
 // The preset bar collapses whole GROUPS into the "⋯" panel when it runs out of width. A
 // loose host child has no group, so it used to sit in one fixed block that never collapsed.
 // `Toolbar.Group` gives host content the same standing as a built-in group: it is measured,
-// it takes a place in the collapse order, and when it collapses it becomes a labelled section
+// it takes a place in the collapse order, and when it collapses it becomes a labeled section
 // of the panel. The same part, given a BUILT-IN group id, adds the host's controls to that
 // group, or removes the group with `hidden`.
 //
-// `Toolbar.Slot` replaces one built-in slot with arbitrary content. It is a toolbar part like
-// any other (the `docxToolbarPart` marker plus its `slot` prop), so the root's existing
-// override path places it, and it keeps the slot's position and collapse behavior.
+// `Toolbar.Slot` replaces one built-in slot with arbitrary content. The root recognizes it by
+// its own marker and reads its `slotId`, so it keeps the slot's position and collapse
+// behavior.
 //
 // Both parts are DESCRIPTIONS under the preset: the root reads their props and renders the
 // content itself. They render on their own only under `preset={false}`.
@@ -23,26 +23,25 @@ import {
   type PropType,
   type VNode,
 } from 'vue';
-import type { ChromeSlotId } from '@docx-editor.dev/core/editor';
+import type { ChromeGroupId, ChromeSlotId } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { useToolbarLabel } from './toolbar-context';
-import { toolbarHostLabel } from './toolbar-overflow';
 
 /** Props for `DocxEditor.Toolbar.Group`. @public */
-export interface ToolbarGroupPartProps {
+export interface DocxEditorToolbarGroupProps {
   /**
    * The group id. A built-in id (`'history'`, `'font'`, `'text'`, `'review'`, ...) adds the
    * children to that group, after its own controls. Any other id makes a host group.
    */
-  id: string;
+  id: ChromeGroupId | (string & {});
   /**
-   * Section heading in the "⋯" panel and the group's accessible name. Defaults to `id`.
-   * Built-in groups keep their own label.
-   *
-   * A dotted catalog key (`'myApp.reviewNav'`) goes through the toolbar's `t` and the
-   * locale catalogue, and is used when it resolves to a string. Anything else, including a
-   * key that resolves to no string, renders as written, so plain text such as
-   * `'Review {beta}'` is safe.
+   * Catalog key for the host group's "⋯" panel heading and accessible name. It goes through
+   * the toolbar's `t` and the locale catalog. Built-in groups keep their own label.
+   */
+  labelKey?: string;
+  /**
+   * Literal heading and accessible name for a host group. It wins over `labelKey`. Without
+   * either, the heading is `id`. Built-in groups keep their own label.
    */
   label?: string;
   /**
@@ -57,13 +56,14 @@ export interface ToolbarGroupPartProps {
    * The group this one follows in the bar. Without it, a host group follows every built-in
    * group, in order of appearance. Ignored for built-in ids.
    */
-  after?: string;
+  after?: ChromeGroupId | (string & {});
   /** Removes the group, built-in or host, from the bar and the "⋯" panel. */
   hidden?: boolean;
   /**
    * Content for the group's "⋯" panel section, rendered after a built-in group's own rows.
    * It renders even when the group has no children, so a built-in id can add a panel-only
-   * row. Without it the panel renders the children in panel rows: actions become labelled rows, other content renders as is.
+   * row. Without it, the panel renders the children in panel rows: actions become labeled
+   * rows, and other content renders as is.
    */
   overflowContent?: () => DocxEditorChildren;
   className?: string;
@@ -71,9 +71,18 @@ export interface ToolbarGroupPartProps {
   children?: DocxEditorChildren;
 }
 
+/** A host group's heading: the literal label, else the translated key, else the id. */
+export function hostGroupText(
+  spec: Pick<DocxEditorToolbarGroupProps, 'id' | 'label' | 'labelKey'>,
+  translate: (key: string) => string
+): string {
+  if (spec.label !== undefined) return spec.label;
+  return spec.labelKey !== undefined ? translate(spec.labelKey) : spec.id;
+}
+
 /**
  * A group of the preset toolbar: measured, collapsed in priority order, and shown as a
- * labelled section of the "⋯" panel when it does not fit.
+ * labeled section of the "⋯" panel when it does not fit.
  *
  * @example
  * ```ts
@@ -90,11 +99,12 @@ export const ToolbarHostGroup = Object.assign(
   defineComponent({
     name: 'ToolbarHostGroup',
     props: {
-      id: { type: String, required: true },
+      id: { type: String as PropType<ChromeGroupId | (string & {})>, required: true },
+      labelKey: { type: String, default: undefined },
       label: { type: String, default: undefined },
       priority: { type: Number, default: undefined },
       pinned: { type: Boolean, default: undefined },
-      after: { type: String, default: undefined },
+      after: { type: String as PropType<ChromeGroupId | (string & {})>, default: undefined },
       hidden: { type: Boolean, default: undefined },
       overflowContent: {
         type: Function as PropType<() => DocxEditorChildren>,
@@ -111,7 +121,7 @@ export const ToolbarHostGroup = Object.assign(
               'div',
               {
                 role: 'group',
-                'aria-label': toolbarHostLabel(props.label ?? props.id, label),
+                'aria-label': hostGroupText(props, label),
                 class: `docx-toolbar__group${props.className ? ` ${props.className}` : ''}`,
                 'data-toolbar-host-group': props.id,
               },
@@ -124,11 +134,9 @@ export const ToolbarHostGroup = Object.assign(
 );
 
 /** Props for `DocxEditor.Toolbar.Slot`. @public */
-export interface ToolbarSlotOverrideProps {
+export interface DocxEditorToolbarSlotProps {
   /** The built-in slot this content replaces, for example `'text.bold'`. */
-  slot: ChromeSlotId;
-  /** Render nothing. Inside the preset arrangement this removes the slot. */
-  hidden?: boolean;
+  slotId: ChromeSlotId;
   /**
    * Content for the slot's "⋯" panel row when its group collapses. Without it the panel row
    * shows the default slot content under the slot's label.
@@ -141,12 +149,13 @@ export interface ToolbarSlotOverrideProps {
 /**
  * Replaces one built-in slot with arbitrary content. The content takes the slot's place and
  * collapses with the slot's group. A slot the preset arrangement does not draw has no place
- * to take, so the content is appended and a development warning names the slot.
+ * to take, so the content is appended and a development warning names the slot. To remove a
+ * slot, use its own part with `hidden`, for example `h(DocxEditorToolbar.Bold, { hidden: true })`.
  *
  * @example
  * ```ts
  * h(DocxEditorToolbar, null, () => [
- *   h(DocxEditorToolbar.Slot, { slot: 'zoom.level' }, () => [h(MyZoomPicker)]),
+ *   h(DocxEditorToolbar.Slot, { slotId: 'zoom.level' }, () => [h(MyZoomPicker)]),
  * ]);
  * ```
  *
@@ -156,19 +165,18 @@ export const ToolbarSlot = Object.assign(
   defineComponent({
     name: 'ToolbarSlot',
     props: {
-      slot: { type: String as PropType<ChromeSlotId>, required: true },
-      hidden: { type: Boolean, default: undefined },
+      slotId: { type: String as PropType<ChromeSlotId>, required: true },
       overflowContent: {
         type: Function as PropType<() => DocxEditorChildren>,
         default: undefined,
       },
     },
-    setup(props, { slots }) {
-      return () => (props.hidden ? null : (slots.default?.() ?? null));
+    setup(_, { slots }) {
+      return () => slots.default?.() ?? null;
     },
   }),
-  // The same part marker `ToolbarButton` carries: the root reads the `slot` prop with it.
-  { docxToolbarPart: true as const }
+  // Marker for the toolbar root, which reads `slotId` from a vnode that carries it.
+  { docxToolbarSlot: true as const }
 );
 
 /** Where a host control renders: in the bar, or as a row of the "⋯" panel. */

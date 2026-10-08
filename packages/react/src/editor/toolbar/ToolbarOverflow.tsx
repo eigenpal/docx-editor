@@ -28,7 +28,7 @@ import { usePlatformShortcut } from '../usePlatformShortcut';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
 import { MORE_ATTRIBUTE } from './useToolbarOverflow';
-import { toolbarPanelPlacement, type ToolbarPanelPlacement } from './toolbar-overflow';
+import { toolbarPanelPlacement, type ToolbarPanelPlacement } from '@docx-editor.dev/core/editor';
 
 /**
  * `more_horiz`. Here rather than in the registry for the reason the context menu's icons

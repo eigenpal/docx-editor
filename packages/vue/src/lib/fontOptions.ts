@@ -6,6 +6,8 @@
  * @public
  */
 
+import { isDevelopment } from './is-development';
+
 export interface FontOption {
   name: string;
   fontFamily: string;
@@ -25,7 +27,7 @@ export function normalizeFontFamilies(
   const normalized = fontFamilies.map(
     (f): FontOption => (typeof f === 'string' ? { name: f, fontFamily: f, category: 'other' } : f)
   );
-  if (isDev()) {
+  if (isDevelopment()) {
     const warned = new Set<string>();
     const seen = new Set<string>();
     for (const f of normalized) {
@@ -37,8 +39,4 @@ export function normalizeFontFamilies(
     }
   }
   return normalized;
-}
-
-function isDev(): boolean {
-  return typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production';
 }

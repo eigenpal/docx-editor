@@ -5,7 +5,7 @@ export {
 } from './DocxEditorToolbar';
 export { ToolbarButton, type ToolbarButtonProps } from './ToolbarButton';
 export { ToolbarAction, type ToolbarActionProps } from './ToolbarAction';
-export { type ToolbarGroupPartProps, type ToolbarSlotOverrideProps } from './ToolbarGroup';
+export { type DocxEditorToolbarGroupProps, type DocxEditorToolbarSlotProps } from './ToolbarGroup';
 export {
   ToolbarSeparator,
   type ToolbarPartComponent,

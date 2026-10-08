@@ -50,7 +50,6 @@ import {
   MenuEntry,
   MenuFile,
   MenuFormat,
-  MenuHelp,
   MenuImageInsert,
   MenuInsert,
   MenuItem,
@@ -63,11 +62,11 @@ import {
   MenuPrint,
   MenuGroup,
   MenuSeparator,
-  MenuReportIssue,
   MenuSubmenu,
   MenuTableGrid,
   type MenuPartComponent,
 } from './parts';
+import { MenuHelp, MenuReportIssue } from './menu-help';
 import { useScopeClassName } from '../scope-context';
 import { MenuReview, MenuReviewers } from './Reviewers';
 

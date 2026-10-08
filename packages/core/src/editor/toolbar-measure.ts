@@ -1,3 +1,6 @@
+// Shared by both adapters: the bar is plain DOM whichever framework renders it, so the
+// width reads live once, beside the fit they feed.
+//
 // Pure width accounting for the measured toolbar row.
 //
 // Collapsible groups are costed with the separator slot that precedes them on the bar:
@@ -8,7 +11,11 @@
 // Fixed groups and the More trigger never receive that separator allowance: More sits
 // after flex content with margin-inline-start: auto, not after a rule.
 
-/** Leading separator slot cost for one collapsible group (px). */
+/**
+ * Leading separator slot cost for one collapsible group (px).
+ *
+ * @internal
+ */
 export function separatorLeadingCost(
   separatorWidth: number,
   marginInlineStart: number,
@@ -18,17 +25,29 @@ export function separatorLeadingCost(
   return separatorWidth + marginInlineStart + marginInlineEnd + gap * 2;
 }
 
-/** Total width charged for one collapsible group on the bar. */
+/**
+ * Total width charged for one collapsible group on the bar.
+ *
+ * @internal
+ */
 export function collapsibleGroupCost(groupWidth: number, separatorLeading: number): number {
   return groupWidth + separatorLeading;
 }
 
-/** Flex gap charged after a fixed group or the More trigger. */
+/**
+ * Flex gap charged after a fixed group or the More trigger.
+ *
+ * @internal
+ */
 export function trailingGapCost(width: number, gap: number): number {
   return width + gap;
 }
 
-/** Read inline margins from computed style (px). */
+/**
+ * Read inline margins from computed style (px).
+ *
+ * @internal
+ */
 export function readInlineMargins(style: CSSStyleDeclaration): {
   readonly start: number;
   readonly end: number;
@@ -46,12 +65,20 @@ function px(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-/** Parse column gap from toolbar computed style. */
+/**
+ * Parse column gap from toolbar computed style.
+ *
+ * @internal
+ */
 export function readColumnGap(style: CSSStyleDeclaration): number {
   return px(style.columnGap);
 }
 
-/** What {@link barRoomWidth} measures against, all in px. */
+/**
+ * What {@link barRoomWidth} measures against, all in px.
+ *
+ * @internal
+ */
 export interface BarRoomInput {
   /** The bar's current content width: its client width less its inline padding. */
   readonly own: number;
@@ -75,6 +102,8 @@ export interface BarRoomInput {
  * never shows the room outside it, and a collapsed group would never come back. The room is
  * the parent's content width, less the siblings on the same line and the bar's margins,
  * capped by the bar's `max-width`. It is never less than the box the bar already has.
+ *
+ * @internal
  */
 export function barRoomWidth(input: BarRoomInput): number {
   if (!(input.parentContent > 0)) return input.own;
@@ -231,6 +260,8 @@ const CONTROLS = '[data-toolbar-group], [data-toolbar-fixed], [data-toolbar-more
  * and null when the bar has no layout to read (a zero-width box, as in a DOM without
  * layout). Measured from the controls, not `scrollWidth`, so an open popup (the More panel,
  * the table grid) that reaches past the bar's edge is not mistaken for an overflow.
+ *
+ * @internal
  */
 export function controlsOverflow(bar: HTMLElement, style: CSSStyleDeclaration): boolean | null {
   const box = bar.getBoundingClientRect();
@@ -314,6 +345,8 @@ function readRoom(
  * measures its own box, so the fit collapses groups until they fit. When that overflow
  * follows groups that came back from the room, the room was wrong: the bar's width becomes
  * a cap until the parent's width changes, so the bar does not flicker.
+ *
+ * @internal
  */
 export function readAvailableWidth(bar: HTMLElement, style: CSSStyleDeclaration): number {
   const padding = px(style.paddingLeft) + px(style.paddingRight);

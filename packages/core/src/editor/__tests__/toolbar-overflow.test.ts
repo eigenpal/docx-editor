@@ -7,7 +7,7 @@ import {
   sameOverflow,
   toolbarOverflowGroups,
   type ToolbarFitInput,
-} from '../src/editor/toolbar/toolbar-overflow.ts';
+} from '../toolbar-fit.ts';
 
 function fit(
   available: number,

@@ -10,7 +10,6 @@ import { DocxEditorToolbar as T } from '../src/editor/toolbar';
 import { DocxEditorMenu } from '../src/editor/menu';
 import { useReviewRailRegistry } from '../src/editor/context';
 import { flush, mountEditorTree } from './helpers/mount';
-import { readAvailableWidth } from '../src/editor/toolbar/toolbar-measure';
 
 class MockResizeObserver {
   static readonly instances: MockResizeObserver[] = [];
@@ -149,7 +148,7 @@ describe('Vue Toolbar.Group', () => {
           h(T.Group, { id: 'vue-mine', after: 'vue-missing' }, () => [
             h(T.Action, { label: 'Go' }),
           ]),
-          h(T.Slot, { slot: 'vue.nope' as never }, () => [h('span')]),
+          h(T.Slot, { slotId: 'vue.nope' as never }, () => [h('span')]),
         ])
       );
       await flush();
@@ -170,7 +169,10 @@ describe('Vue Toolbar.Slot', () => {
       h(T, { t }, () => [
         h(
           T.Slot,
-          { slot: 'zoom.level', overflowContent: () => h('span', { 'data-testid': 'panel-zoom' }) },
+          {
+            slotId: 'zoom.level',
+            overflowContent: () => h('span', { 'data-testid': 'panel-zoom' }),
+          },
           () => [h('button', { type: 'button', 'data-testid': 'my-zoom' }, 'Z')]
         ),
       ])
@@ -364,291 +366,73 @@ describe('Vue TableInsert and AddComment', () => {
       head: { paragraphId: paragraph, offset: 5 },
     });
     await flush();
-    const button = view.container.querySelector<HTMLButtonElement>('[data-part="add-comment"]')!;
+    const button = view.container.querySelector<HTMLButtonElement>(
+      '[data-slot="review.addComment"]'
+    )!;
     expect(button.disabled).toBe(false);
+    expect(button.getAttribute('aria-label')).toBe(en.formattingBar.addComment);
     button.click();
     expect(onDraft).toHaveBeenCalledTimes(1);
+    editor.exec({ type: 'setEditingMode', mode: 'viewing' });
+    await flush();
+    expect(button.disabled).toBe(true);
+    expect(button.title).toBe(en.disabledReason.viewing);
     view.unmount();
   });
-});
 
-describe('available width', () => {
-  /** A parent with a bar of `own` px; the bar specifies `width` through a Typed OM stub. */
-  function layout(options: {
-    parent: string;
-    parentWidth: number;
-    own: number;
-    width?: string;
-    barStyle?: string;
-    margins?: { left: string; right: string };
-    siblings?: {
-      style: string;
-      width: number;
-      margins?: [string, string];
-      tag?: string;
-      text?: string;
-      svg?: boolean;
-      contents?: boolean;
-    }[];
-    typedOm?: boolean;
-    overflow?: boolean;
-    parentText?: string;
-  }): HTMLElement {
-    const parent = document.createElement('div');
-    parent.setAttribute('style', options.parent);
-    Object.defineProperty(parent, 'clientWidth', {
+  test('Add Comment without the review module is disabled with a reason', async () => {
+    const view = mountEditorTree(() => h(T, { preset: false }, () => [h(T.AddComment)]));
+    await flush();
+    const button = view.container.querySelector<HTMLButtonElement>(
+      '[data-slot="review.addComment"]'
+    )!;
+    expect(button.disabled).toBe(true);
+    expect(button.title).not.toBe(en.formattingBar.addComment);
+    view.unmount();
+  });
+
+  test('focus that leaves the table grid closes it', async () => {
+    const view = mountEditorTree(() => [
+      h(T, { preset: false }, () => [h(T.TableInsert)]),
+      h('button', { type: 'button', 'data-testid': 'elsewhere' }),
+    ]);
+    await flush();
+    const trigger = view.container.querySelector<HTMLButtonElement>('[data-slot="table.insert"]')!;
+    trigger.click();
+    await flush();
+    const cell = view.container.querySelector<HTMLElement>('[role="gridcell"]')!;
+    cell.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: trigger }));
+    await flush();
+    expect(view.container.querySelector('[role="grid"]')).not.toBeNull();
+    const elsewhere = view.container.querySelector('[data-testid="elsewhere"]')!;
+    cell.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: elsewhere }));
+    await flush();
+    expect(view.container.querySelector('[role="grid"]')).toBeNull();
+    view.unmount();
+  });
+
+  test('the table grid moves left to stay inside the viewport', async () => {
+    const view = mountEditorTree(() => h(T, { preset: false }, () => [h(T.TableInsert)]));
+    await flush();
+    const trigger = view.container.querySelector<HTMLButtonElement>('[data-slot="table.insert"]')!;
+    trigger.parentElement!.getBoundingClientRect = () =>
+      ({ left: window.innerWidth - 40, right: window.innerWidth - 6, width: 34 }) as DOMRect;
+    const offsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
       configurable: true,
-      get: () => options.parentWidth,
+      get(this: HTMLElement) {
+        return this.classList.contains('docx-toolbar__table-insert-menu') ? 200 : 0;
+      },
     });
-    const bar = document.createElement('div');
-    bar.setAttribute('style', `${options.barStyle ?? ''}`);
-    Object.defineProperty(bar, 'clientWidth', { configurable: true, get: () => options.own });
-    Object.defineProperty(bar, 'offsetWidth', { configurable: true, get: () => options.own });
-    bar.getBoundingClientRect = () =>
-      ({ left: 0, right: options.own, width: options.own }) as DOMRect;
-    if (options.overflow) {
-      const control = document.createElement('div');
-      control.setAttribute('data-toolbar-group', 'overflowing');
-      control.getBoundingClientRect = () =>
-        ({ left: 0, right: options.own + 50, width: options.own + 50 }) as DOMRect;
-      bar.appendChild(control);
+    try {
+      trigger.click();
+      await flush();
+    } finally {
+      if (offsetWidth) Object.defineProperty(HTMLElement.prototype, 'offsetWidth', offsetWidth);
     }
-    if (options.parentText) parent.appendChild(document.createTextNode(options.parentText));
-    const keywords: Record<string, string> = {};
-    if (options.width) keywords.width = options.width;
-    if (options.margins?.left === 'auto') keywords['margin-left'] = 'auto';
-    if (options.margins?.right === 'auto') keywords['margin-right'] = 'auto';
-    if (options.typedOm !== false) {
-      (bar as unknown as { computedStyleMap: () => unknown }).computedStyleMap = () => ({
-        get: (property: string) =>
-          property in keywords ? { value: keywords[property] } : { value: 0, unit: 'px' },
-      });
-    }
-    for (const sibling of options.siblings ?? []) {
-      const node: Element = sibling.svg
-        ? document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-        : document.createElement(sibling.tag ?? 'div');
-      node.setAttribute('style', sibling.style);
-      if (sibling.text) node.textContent = sibling.text;
-      node.getBoundingClientRect = () =>
-        ({ left: 0, right: sibling.width, width: sibling.width }) as DOMRect;
-      const [left, right] = sibling.margins ?? ['', ''];
-      (node as unknown as { computedStyleMap: () => unknown }).computedStyleMap = () => ({
-        get: (property: string) =>
-          (property === 'margin-left' && left === 'auto') ||
-          (property === 'margin-right' && right === 'auto')
-            ? { value: 'auto' }
-            : { value: 0, unit: 'px' },
-      });
-      if (sibling.contents) {
-        const wrapper = document.createElement('div');
-        wrapper.setAttribute('style', 'display: contents');
-        wrapper.appendChild(node);
-        parent.appendChild(wrapper);
-      } else {
-        parent.appendChild(node);
-      }
-    }
-    parent.appendChild(bar);
-    document.body.appendChild(parent);
-    return bar;
-  }
-  const available = (bar: HTMLElement) => readAvailableWidth(bar, getComputedStyle(bar));
-
-  afterEach(() => {
-    document.body.innerHTML = '';
-  });
-
-  test('a content-sized bar in a flex row gets the parent room', () => {
-    const bar = layout({
-      parent: 'display: flex',
-      parentWidth: 1000,
-      own: 300,
-      width: 'max-content',
-    });
-    expect(available(bar)).toBe(1000);
-  });
-
-  test('a bar in a grid cell, or with a fixed width, keeps its own box', () => {
-    const grid = layout({
-      parent: 'display: grid; grid-template-columns: auto 1fr auto',
-      parentWidth: 1000,
-      own: 300,
-      width: 'auto',
-    });
-    expect(available(grid)).toBe(300);
-    document.body.innerHTML = '';
-    const fixed = layout({ parent: 'display: flex', parentWidth: 1000, own: 600 });
-    expect(available(fixed)).toBe(600);
-    document.body.innerHTML = '';
-    const inline = layout({
-      parent: 'display: block',
-      parentWidth: 1000,
-      own: 300,
-      width: 'auto',
-      barStyle: 'display: inline-flex',
-    });
-    expect(available(inline)).toBe(300);
-  });
-
-  test('without Typed OM the bar keeps its own box', () => {
-    const bar = layout({ parent: 'display: flex', parentWidth: 1000, own: 300, typedOm: false });
-    expect(available(bar)).toBe(300);
-  });
-
-  test('equal fixed margins count, auto margins do not', () => {
-    const fixed = layout({
-      parent: 'display: flex',
-      parentWidth: 1000,
-      own: 300,
-      width: 'max-content',
-      barStyle: 'margin: 0 40px',
-    });
-    expect(available(fixed)).toBe(920);
-    document.body.innerHTML = '';
-    const centered = layout({
-      parent: 'display: block',
-      parentWidth: 1000,
-      own: 300,
-      width: 'max-content',
-      barStyle: 'margin: 0 350px',
-      margins: { left: 'auto', right: 'auto' },
-    });
-    expect(available(centered)).toBe(1000);
-  });
-
-  test('an unresolved max-width, an overflowing bar, and a floated bar keep their own box', () => {
-    const calc = layout({
-      parent: 'display: flex',
-      parentWidth: 1000,
-      own: 300,
-      width: 'max-content',
-      barStyle: 'max-width: calc(100% - 200px)',
-    });
-    expect(available(calc)).toBe(300);
-    document.body.innerHTML = '';
-    const overflowing = layout({
-      parent: 'display: flex',
-      parentWidth: 1000,
-      own: 300,
-      width: 'max-content',
-      overflow: true,
-    });
-    expect(available(overflowing)).toBe(300);
-    document.body.innerHTML = '';
-    const floated = layout({
-      parent: 'display: block',
-      parentWidth: 1000,
-      own: 300,
-      width: 'max-content',
-      barStyle: 'float: left',
-    });
-    expect(available(floated)).toBe(300);
-  });
-
-  test('a growing sibling with content keeps the bar to its own box', () => {
-    const bar = layout({
-      parent: 'display: flex',
-      parentWidth: 1000,
-      own: 300,
-      width: 'max-content',
-      siblings: [{ style: 'flex: 1 1 0px', width: 600, tag: 'input' }],
-    });
-    expect(available(bar)).toBe(300);
-    document.body.innerHTML = '';
-    const titled = layout({
-      parent: 'display: flex',
-      parentWidth: 1000,
-      own: 300,
-      width: 'max-content',
-      siblings: [{ style: 'flex: 1 1 0px', width: 600, text: 'Quarterly plan' }],
-    });
-    expect(available(titled)).toBe(300);
-  });
-
-  test('the net is sticky: a wrong room does not flicker until the parent width changes', () => {
-    const bar = layout({
-      parent: 'display: flex',
-      parentWidth: 1000,
-      own: 300,
-      width: 'max-content',
-    });
-    const control = document.createElement('div');
-    control.setAttribute('data-toolbar-group', 'g');
-    bar.appendChild(control);
-    let right = 200;
-    control.getBoundingClientRect = () => ({ left: 0, right, width: right }) as DOMRect;
-    bar.getBoundingClientRect = () => ({ left: 0, right: 300, width: 300 }) as DOMRect;
-    expect(available(bar)).toBe(1000);
-    // Groups came back from that room and overflow: the room was wrong.
-    right = 420;
-    expect(available(bar)).toBe(300);
-    // They collapsed and fit again. The room stays capped, so they do not come back.
-    right = 200;
-    expect(available(bar)).toBe(300);
-    expect(available(bar)).toBe(300);
-    // A new parent width is a new question.
-    Object.defineProperty(bar.parentElement!, 'clientWidth', {
-      configurable: true,
-      get: () => 1200,
-    });
-    expect(available(bar)).toBe(1200);
-  });
-
-  test('an open popup past the bar edge is not an overflow', () => {
-    const bar = layout({
-      parent: 'display: flex',
-      parentWidth: 1000,
-      own: 300,
-      width: 'max-content',
-    });
-    const popup = document.createElement('div');
-    popup.className = 'docx-toolbar__more-panel';
-    popup.getBoundingClientRect = () => ({ left: 100, right: 900, width: 800 }) as DOMRect;
-    bar.appendChild(popup);
-    bar.getBoundingClientRect = () => ({ left: 0, right: 300, width: 300 }) as DOMRect;
-    expect(available(bar)).toBe(1000);
-  });
-
-  test('every sibling counts: an svg logo, a display: contents wrapper, a min-width', () => {
-    const bar = layout({
-      parent: 'display: flex',
-      parentWidth: 1000,
-      own: 300,
-      width: 'max-content',
-      siblings: [
-        { style: '', width: 40, svg: true },
-        { style: '', width: 60, contents: true },
-        { style: 'flex: 1 1 0px; min-width: 200px', width: 500 },
-      ],
-    });
-    expect(available(bar)).toBe(700);
-  });
-
-  test('loose text in the row keeps the bar to its own box', () => {
-    const bar = layout({
-      parent: 'display: flex',
-      parentWidth: 1000,
-      own: 300,
-      width: 'max-content',
-      parentText: 'Draft',
-    });
-    expect(available(bar)).toBe(300);
-  });
-
-  test('a flex: 1 spacer and an auto margin do not take the room', () => {
-    const bar = layout({
-      parent: 'display: flex',
-      parentWidth: 1000,
-      own: 300,
-      width: 'max-content',
-      siblings: [
-        { style: 'flex: 1 1 0px', width: 500 },
-        { style: 'margin-left: 100px', width: 100, margins: ['auto', ''] },
-      ],
-    });
-    // 1000 less the 100px button; the spacer and the auto margin are free space.
-    expect(available(bar)).toBe(900);
+    const popup = view.container.querySelector<HTMLElement>('.docx-toolbar__table-insert-menu')!;
+    expect(popup.style.left).toBe('-168px');
+    view.unmount();
   });
 });
 
@@ -675,24 +459,65 @@ describe('Vue review fixes', () => {
     view.unmount();
   });
 
-  test('labels render as written unless they are a catalog key with a string', async () => {
+  test('label renders as written, labelKey is translated, and the id is the fallback', async () => {
     const view = mountEditorTree(() =>
       h(T, null, () => [
-        h(T.Group, { id: 'a', label: 'Review {beta}' }, () => [h(T.Action, { label: 'A' })]),
-        h(T.Group, { id: 'b', label: 'formattingBar.groups' }, () => [h(T.Action, { label: 'B' })]),
-        h(T.Group, { id: 'c', label: 'formattingBar.groups.font' }, () => [
+        h(T.Group, { id: 'a', label: 'formattingBar.groups.font' }, () => [
+          h(T.Action, { label: 'A' }),
+        ]),
+        h(T.Group, { id: 'b', labelKey: 'formattingBar.groups.font' }, () => [
+          h(T.Action, { label: 'B' }),
+        ]),
+        h(T.Group, { id: 'c', label: 'Mine', labelKey: 'formattingBar.groups.font' }, () => [
           h(T.Action, { label: 'C' }),
         ]),
+        h(T.Group, { id: 'd' }, () => [h(T.Action, { label: 'D' })]),
       ])
     );
     await flush();
     const toolbar = toolbarOf(view.container);
     const name = (id: string) =>
       toolbar.querySelector(`[data-toolbar-group="${id}"]`)!.getAttribute('aria-label');
-    expect(name('a')).toBe('Review {beta}');
-    expect(name('b')).toBe('formattingBar.groups');
-    expect(name('c')).toBe(en.formattingBar.groups.font);
+    // A literal label is never looked up, even when it reads like a key.
+    expect(name('a')).toBe('formattingBar.groups.font');
+    expect(name('b')).toBe(en.formattingBar.groups.font);
+    expect(name('c')).toBe('Mine');
+    expect(name('d')).toBe('d');
     view.unmount();
+  });
+
+  test('a built-in group warns about label, labelKey, and after, and a reserved id warns', async () => {
+    const warn = mock(() => {});
+    const original = console.warn;
+    console.warn = warn;
+    try {
+      const view = mountEditorTree(() =>
+        h(T, null, () => [
+          h(
+            T.Group,
+            { id: 'font', label: 'Fonts', labelKey: 'x.y', after: 'history', priority: 95 },
+            () => [h(T.Action, { label: 'F' })]
+          ),
+          h(T.Group, { id: 'contextual-table', label: 'Mine' }, () => [
+            h(T.Action, { label: 'G' }),
+          ]),
+        ])
+      );
+      await flush();
+      expect(view.container.querySelector('[aria-label="G"]')).toBeNull();
+      expect(view.container.querySelector('[aria-label="F"]')).not.toBeNull();
+      view.unmount();
+    } finally {
+      console.warn = original;
+    }
+    const messages = warn.mock.calls.map((call) => String((call as unknown[])[0]));
+    for (const setting of ['label', 'labelKey', 'after']) {
+      expect(
+        messages.some((text) => text.includes('"font"') && text.includes(` ${setting} `))
+      ).toBe(true);
+    }
+    expect(messages.some((text) => text.includes('priority'))).toBe(false);
+    expect(messages.some((text) => text.includes('"contextual-table"'))).toBe(true);
   });
 
   test('overflowContent on a built-in group renders without children', async () => {

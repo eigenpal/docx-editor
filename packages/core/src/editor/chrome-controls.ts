@@ -754,6 +754,7 @@ export type ChromeSlotId =
   | 'format.clear'
   | 'review.revisionMarkup'
   | 'review.comments'
+  | 'review.addComment'
   | 'review.paragraphMarks'
   | 'review.protectDocument'
   | 'review.simpleMarkup'

@@ -394,6 +394,12 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
+    "editor/menu/menu-help": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["name", "props"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
     "editor/menu/parts": {
       "propsAddedInReact": [],
       "propsAddedInVue": ["name", "props"],

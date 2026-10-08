@@ -3866,15 +3866,15 @@ a.docx-hyperlink:focus-visible {
   margin-top: 4px;
 }
 
-.docx-toolbar__more-panel .docx-toolbar__table-insert-menu {
-  right: 0;
-  left: auto;
+/* In the "⋯" panel the grid is panel content: it opens in the flow under its row, so the
+ * panel keeps its max-height and scrolls instead of letting the grid spill past it. */
+.docx-toolbar__more-panel .docx-toolbar__table-insert {
+  flex-wrap: wrap;
 }
 
-/* The size grid is a popover, not panel content: it opens over the panel instead of
- * making the panel scroll. */
-.docx-toolbar__more-panel:has(.docx-toolbar__table-insert-menu) {
-  overflow-y: visible;
+.docx-toolbar__more-panel .docx-toolbar__table-insert-menu {
+  position: static;
+  flex-basis: 100%;
 }
 
 /* Separator: `w-px h-6 bg-border mx-1.5`. */

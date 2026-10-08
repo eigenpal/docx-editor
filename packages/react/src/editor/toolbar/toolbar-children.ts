@@ -4,7 +4,7 @@
 import { Children, isValidElement } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import type { DocxEditorChildren } from '../../docx-editor-children';
-import type { ToolbarGroupPartProps } from './ToolbarGroup';
+import type { DocxEditorToolbarGroupProps } from './ToolbarGroup';
 
 /** The parts of the preset toolbar's children, by role. */
 export interface ToolbarChildren<Key extends string> {
@@ -13,7 +13,7 @@ export interface ToolbarChildren<Key extends string> {
   /** Slot overrides of the contextual table chrome. */
   readonly tableOverrides: Map<Key, ReactElement>;
   /** `Toolbar.Group` descriptions in order of appearance. The last one for an id wins. */
-  readonly groups: readonly ToolbarGroupPartProps[];
+  readonly groups: readonly DocxEditorToolbarGroupProps[];
   /** Everything else, rendered in one fixed block after the groups. */
   readonly appended: readonly ReactNode[];
 }
@@ -21,7 +21,7 @@ export interface ToolbarChildren<Key extends string> {
 /** True for a `Toolbar.Group` element. */
 export function isToolbarGroupElement(
   child: ReactNode
-): child is ReactElement<ToolbarGroupPartProps> {
+): child is ReactElement<DocxEditorToolbarGroupProps> {
   if (!isValidElement(child)) return false;
   const type = child.type as { docxToolbarGroup?: unknown };
   return (typeof type === 'function' || typeof type === 'object') && type.docxToolbarGroup === true;
@@ -35,7 +35,7 @@ export function readToolbarChildren<Key extends string>(
 ): ToolbarChildren<Key> {
   const overrides = new Map<Key, ReactElement>();
   const tableOverrides = new Map<Key, ReactElement>();
-  const groups = new Map<string, ToolbarGroupPartProps>();
+  const groups = new Map<string, DocxEditorToolbarGroupProps>();
   const appended: ReactNode[] = [];
   for (const child of Children.toArray(children)) {
     if (isToolbarGroupElement(child)) {

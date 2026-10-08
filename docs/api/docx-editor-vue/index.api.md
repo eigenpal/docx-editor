@@ -13,6 +13,7 @@ import { CHROME_GROUPS } from '@docx-editor.dev/core/editor';
 import { CHROME_MENUS } from '@docx-editor.dev/core/editor';
 import { ChromeExportFormat } from '@docx-editor.dev/core/editor';
 import { ChromeExportHandlers } from '@docx-editor.dev/core/editor';
+import { ChromeGroupId } from '@docx-editor.dev/core/editor';
 import { ChromeMenu } from '@docx-editor.dev/core/editor';
 import { ChromeMenuEntry } from '@docx-editor.dev/core/editor';
 import { ChromeMenuId } from '@docx-editor.dev/core/editor';
@@ -4165,6 +4166,21 @@ export interface DocxEditorTextFormFieldDialogProps extends DialogCustomizationP
 // @public (undocumented)
 export const DocxEditorToolbar: DocxEditorToolbarNamespace;
 
+// @public
+export interface DocxEditorToolbarGroupProps {
+    after?: ChromeGroupId | (string & {});
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+    id: ChromeGroupId | (string & {});
+    label?: string;
+    labelKey?: string;
+    overflowContent?: () => DocxEditorChildren;
+    pinned?: boolean;
+    priority?: number;
+}
+
 // @public (undocumented)
 export interface DocxEditorToolbarNamespace {
     // (undocumented)
@@ -4286,6 +4302,13 @@ export interface DocxEditorToolbarProps {
     preset?: boolean;
     // (undocumented)
     t?: ToolbarTranslate;
+}
+
+// @public
+export interface DocxEditorToolbarSlotProps {
+    children?: DocxEditorChildren;
+    overflowContent?: () => DocxEditorChildren;
+    slotId: ChromeSlotId;
 }
 
 // @public (undocumented)
@@ -6195,20 +6218,6 @@ export const ToolbarGroup: vue.DefineComponent<{}, () => VNode<vue.RendererNode,
     [key: string]: any;
 }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
-// @public
-export interface ToolbarGroupPartProps {
-    after?: string;
-    children?: DocxEditorChildren;
-    // (undocumented)
-    className?: string;
-    hidden?: boolean;
-    id: string;
-    label?: string;
-    overflowContent?: () => DocxEditorChildren;
-    pinned?: boolean;
-    priority?: number;
-}
-
 // @public (undocumented)
 export const ToolbarImageProperties: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
@@ -6421,14 +6430,6 @@ export interface ToolbarSeparatorProps {
     class?: string;
     // (undocumented)
     className?: string;
-}
-
-// @public
-export interface ToolbarSlotOverrideProps {
-    children?: DocxEditorChildren;
-    hidden?: boolean;
-    overflowContent?: () => DocxEditorChildren;
-    slot: ChromeSlotId;
 }
 
 // @public (undocumented)

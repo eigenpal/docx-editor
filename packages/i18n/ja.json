@@ -135,7 +135,8 @@
     "commentsAndChanges": "コメントと変更履歴",
     "more": "その他",
     "unavailableInPreview": "このプレビュー版では使用できません",
-    "paragraphMarks": "段落記号の表示"
+    "paragraphMarks": "段落記号の表示",
+    "addComment": "コメントを追加"
   },
   "alignment": {
     "alignLeft": "左揃え",

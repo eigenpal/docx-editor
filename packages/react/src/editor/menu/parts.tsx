@@ -23,7 +23,6 @@ import {
   type ChromeSlotId,
 } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
-import { openReportIssue } from '../../lib/reportIssue';
 import { useEditorCommand } from '../useEditorCommand';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import {
@@ -33,7 +32,7 @@ import {
   useMenuOverflow,
   type MenuId,
 } from './menu-context';
-import { GROUP_ATTRIBUTE, MORE_ATTRIBUTE } from '../toolbar/useToolbarOverflow';
+import { menuOverflowPlacement } from './menu-overflow-state';
 import { useMenuPanelPlacement } from './menu-panel-placement';
 import { usePlatformShortcut } from '../usePlatformShortcut';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
@@ -836,7 +835,7 @@ export function Menu({
   children,
 }: MenuProps) {
   const { openMenu, setOpenMenu, activeMenu } = useMenuContext();
-  const { measuring, overflow, inMore } = useMenuOverflow();
+  const menuOverflow = useMenuOverflow();
   const label = useMenuLabel();
   const panelId = useId();
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -859,18 +858,17 @@ export function Menu({
   const text = literal ?? label(labelKey ?? registry?.labelKey ?? id);
   // A menu that does not fit renders in the "⋯" menu instead of the bar, as a submenu row
   // with the same panel. Inside that menu, every menu that still fits renders nothing.
-  const collapsed = overflow.has(id);
-  if (inMore) {
-    if (!collapsed) return null;
+  const placement = menuOverflowPlacement(menuOverflow, id, activeMenu);
+  if (placement.skip) return null;
+  if (placement.asSubmenu) {
     return (
       <MenuSubmenu labelKey={labelKey ?? registry?.labelKey ?? id} label={text}>
         {mergePanel(registry?.entries, children, preset)}
       </MenuSubmenu>
     );
   }
-  if (collapsed) return null;
   const rows = mergePanel(registry?.entries, children, preset);
-  const iconOnly = id === MENU_OVERFLOW_ID;
+  const iconOnly = placement.iconOnly;
   // Closing returns focus to the trigger. Every close path UNMOUNTS the panel, so without
   // this the element holding focus disappears and focus falls to <body> — the user is
   // dumped at the top of the page with no announcement and has to tab back through the
@@ -888,8 +886,7 @@ export function Menu({
       className={`docx-menubar__menu-root${className ? ` ${className}` : ''}`}
       data-menu={id}
       // Measured as a unit that can move into the "⋯" menu. The "⋯" menu itself cannot.
-      {...(measuring && !iconOnly ? { [GROUP_ATTRIBUTE]: id } : {})}
-      {...(iconOnly ? { [MORE_ATTRIBUTE]: '' } : {})}
+      {...placement.rootAttributes}
     >
       <button
         ref={triggerRef}
@@ -903,11 +900,7 @@ export function Menu({
         // this every trigger is a stop and a keyboard user tabs through four of them to
         // get past the editor's chrome.
         // When the active menu moved into "⋯", the "⋯" trigger holds the stop instead.
-        tabIndex={
-          activeMenu === id || (iconOnly && activeMenu !== null && overflow.has(activeMenu))
-            ? 0
-            : -1
-        }
+        tabIndex={placement.tabStop ? 0 : -1}
         {...(open ? { 'data-open': '' } : {})}
         // The "⋯" trigger shows only its icon, so its name goes on the element.
         {...(iconOnly ? { 'aria-label': text, title: text } : {})}
@@ -1020,89 +1013,3 @@ function defineMenu(id: ChromeMenuId): MenuPartComponent {
 export const MenuFile = defineMenu('file');
 export const MenuFormat = defineMenu('format');
 export const MenuInsert = defineMenu('insert');
-
-/** Props for `DocxEditor.Menu.ReportIssue`. @public */
-export interface MenuReportIssueProps {
-  className?: string;
-  /** Render nothing — inside the packaged Help menu this removes the row. */
-  hidden?: boolean;
-  /** Replaces the packaged handler. Falls back to the menu's `onReportIssue`, then to
-   *  this project's own tracker. */
-  onSelect?: () => void;
-}
-
-/**
- * Help › Report issue.
- *
- * A NAMED part rather than anonymous markup inside the Help menu, because it is the one
- * packaged row that reaches OUTSIDE the host's product: it opens this project's issue
- * tracker with the current page URL and user agent prefilled. A host embedding the editor
- * in its own app has every reason to point that somewhere else or drop it, and it should
- * not have to rebuild the menu to do either — `reportIssue={false}` removes it,
- * `onReportIssue` redirects it, and this part composes it back by name.
- *
- * @public
- */
-function MenuReportIssueImpl({ className, hidden, onSelect }: MenuReportIssueProps) {
-  const { setOpenMenu, onReportIssue, reportIssue } = useMenuContext();
-  const label = useMenuLabel();
-  if (hidden || reportIssue === false) return null;
-  const run = onSelect ?? onReportIssue ?? openReportIssue;
-  return (
-    <MenuRow
-      slot="help.reportIssue"
-      onSelect={() => {
-        run();
-        setOpenMenu(null);
-      }}
-      {...(className ? { className } : {})}
-    >
-      {label('toolbar.reportIssue')}
-    </MenuRow>
-  );
-}
-
-/**
- * The report-issue row, with its row-identity marker.
- *
- * The key is NOT a `ChromeSlotId` — the row is React's, not the shared registry's — but the
- * merge only needs a stable string, and using one here is what lets a host write
- * `<Menu.ReportIssue hidden/>` and have it REPLACE the packaged row rather than render a
- * second, invisible one beside it.
- *
- * @public
- */
-export const MenuReportIssue = Object.assign(MenuReportIssueImpl, {
-  docxSlot: 'help.reportIssue',
-});
-
-/**
- * Help.
- *
- * The registry leaves this menu EMPTY on purpose — a product's documentation and support
- * channel are the host's, not the library's. The one row the library can honestly own is
- * a report for this project's own tracker, so the packaged Help menu supplies it here
- * rather than in the shared registry, where a Vue or vanilla host would inherit a link it
- * never asked for. Replace the whole menu by name to say something else.
- *
- * With no children and `reportIssue` unset the menu carries that one row; with
- * `reportIssue={false}` it carries nothing, and Help is dropped rather than left as a
- * trigger that opens an empty panel.
- */
-function MenuHelpImpl({ children, ...rest }: Omit<MenuProps, 'id'>) {
-  const { reportIssue } = useMenuContext();
-  if (children === undefined && reportIssue === false) return null;
-  // The packaged row is passed as a CHILD rather than as a fallback, so the ordinary merge
-  // rules reach it: a host adds rows beside it, and `<Menu.ReportIssue hidden/>` removes
-  // just that row without taking the menu with it.
-  return (
-    <Menu id="help" {...rest}>
-      <MenuReportIssue />
-      {children}
-    </Menu>
-  );
-}
-
-export const MenuHelp: MenuPartComponent = Object.assign(MenuHelpImpl, {
-  docxMenu: 'help' as ChromeMenuId,
-});

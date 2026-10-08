@@ -110,6 +110,33 @@ export {
   type ToolbarCommandState,
 } from './toolbar-commands.ts';
 export { editorCommandKey } from './command-key.ts';
+export {
+  arrangeToolbarGroups,
+  collapseOrder,
+  sameOverflow,
+  toolbarGroupPriority,
+  toolbarOverflowGroups,
+  toolbarPanelPlacement,
+  toolbarPopupLeft,
+  TOOLBAR_COLLAPSE_ORDER,
+  TOOLBAR_OVERFLOW_HYSTERESIS,
+  TOOLBAR_PANEL_EDGE_MARGIN,
+  TOOLBAR_PINNED_GROUPS,
+  type ToolbarFitInput,
+  type ToolbarHostGroupPlacement,
+  type ToolbarPanelPlacement,
+} from './toolbar-fit.ts';
+export {
+  barRoomWidth,
+  collapsibleGroupCost,
+  controlsOverflow,
+  readAvailableWidth,
+  readColumnGap,
+  readInlineMargins,
+  separatorLeadingCost,
+  trailingGapCost,
+  type BarRoomInput,
+} from './toolbar-measure.ts';
 export { tableCommandState } from './docx-editor-derive.ts';
 export {
   applyTableChromePick,

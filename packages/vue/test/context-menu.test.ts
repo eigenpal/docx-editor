@@ -94,7 +94,7 @@ describe('DocxEditorContextMenu', () => {
     }
   });
 
-  test('the default set is the packaged rows, ending with review.comments', async () => {
+  test('the default set is the packaged rows, ending with review.addComment', async () => {
     const mounted = mountMenu();
     try {
       await flush();
@@ -109,19 +109,19 @@ describe('DocxEditorContextMenu', () => {
         'edit.delete',
         'edit.selectAll',
         'text.link',
-        'review.comments',
+        'review.addComment',
       ]);
     } finally {
       mounted.unmount();
     }
   });
 
-  test('review.comments row is present for Add a comment entry point', async () => {
+  test('review.addComment row is present for Add a comment entry point', async () => {
     const mounted = mountMenu();
     try {
       await flush();
       await openMenu(mounted.container);
-      const commentRow = mounted.container.querySelector('[data-slot="review.comments"]');
+      const commentRow = mounted.container.querySelector('[data-slot="review.addComment"]');
       expect(commentRow?.textContent).toContain('comments.addComment');
     } finally {
       mounted.unmount();

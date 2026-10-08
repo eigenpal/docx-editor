@@ -1,29 +1,54 @@
-// Add Comment: starts a comment draft on the selection.
+// Add Comment (`review.addComment`): starts a comment draft on the selection.
 //
 // `review.comments` is the "Comments & Changes" pane toggle, not an authoring command, so a
-// host that wanted a button that ADDS a comment had none. This part asks the composed
-// review rail for a draft, the same request the context menu's Add Comment row makes. It
-// needs the review module and a mounted review rail, and it is disabled in viewing mode and
-// without a selection on the page, where the rail would refuse the draft.
+// host that wanted a button that ADDS a comment had none. Enabled state and the disabled
+// reason come from `toolbarCommandState`, like every other slot. The press asks the
+// composed review rail for a draft, the same request the context menu's row makes. When the
+// engine would allow a comment but no review rail is mounted to open the draft, the part
+// renders nothing rather than an enabled button that does nothing.
 
 import { useContext } from 'react';
-import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
-import { ReviewRailContext, useDocxEditor } from '../context';
-import { useEditorState } from '../useEditorState';
+import type { ChromeSlotId } from '@docx-editor.dev/core/editor';
+import { ReviewRailContext } from '../context';
+import { useEditorCommand } from '../useEditorCommand';
 import { useToolbarLabel } from './toolbar-context';
 import { Slot } from './Slot';
-import { chromeIcon, guardToolbarMousedown } from './ToolbarButton';
-import { ADD_COMMENT_PATHS } from './toolbar-icons';
+import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
 import { useToolbarOverflowClose } from './ToolbarOverflow';
-import type { ToolbarPartProps } from './parts';
+import type { ToolbarPartComponent, ToolbarPartProps } from './parts';
 
-const selectReadOnly = (snapshot: EditorSnapshot): boolean => snapshot.editingMode === 'viewing';
-// Read so the part re-renders when the selection moves; the placement is asked below.
-const selectSelection = (snapshot: EditorSnapshot) => snapshot.selection;
+const SLOT: ChromeSlotId = 'review.addComment';
+
+function ToolbarAddCommentImpl({ className, hidden, icon, asChild, children }: ToolbarPartProps) {
+  const rail = useContext(ReviewRailContext);
+  const label = useToolbarLabel();
+  const { isEnabled, disabledReason } = useEditorCommand(SLOT);
+  // Inside the "⋯" panel, the press also closes the panel. Outside it this does nothing.
+  const closePanel = useToolbarOverflowClose();
+  if (hidden || (isEnabled && (rail?.mounted ?? 0) === 0)) return null;
+  const control = chromeControlForSlot(SLOT);
+  const text = label(control?.labelKey ?? SLOT);
+  const shared = {
+    type: 'button' as const,
+    className: `docx-toolbar__button${className ? ` ${className}` : ''}`,
+    'data-slot': SLOT,
+    disabled: !isEnabled,
+    ...(!isEnabled ? { 'data-disabled': '' } : {}),
+    'aria-label': text,
+    title: disabledReason ?? text,
+    onMouseDown: guardToolbarMousedown,
+    onClick: () => {
+      if (rail?.requestCommentDraft()) closePanel(false);
+    },
+  };
+  if (asChild) return <Slot {...shared}>{children}</Slot>;
+  return <button {...shared}>{icon ?? children ?? chromeIcon(control?.paths)}</button>;
+}
 
 /**
- * Add Comment (`DocxEditorToolbar.AddComment`): opens a comment draft on the selection in
- * the review rail. Not part of the default arrangement; place it with `Toolbar.Group`.
+ * Add Comment (`DocxEditorToolbar.AddComment`, slot `review.addComment`): opens a comment
+ * draft on the selection in the review rail. It needs a mounted review rail to open the
+ * draft. It is not part of the default arrangement; place it with `Toolbar.Group`.
  *
  * @example
  * ```tsx
@@ -36,41 +61,6 @@ const selectSelection = (snapshot: EditorSnapshot) => snapshot.selection;
  *
  * @public
  */
-export function ToolbarAddComment({
-  className,
-  hidden,
-  icon,
-  asChild,
-  children,
-}: ToolbarPartProps) {
-  const editor = useDocxEditor();
-  const rail = useContext(ReviewRailContext);
-  const label = useToolbarLabel();
-  const readOnly = useEditorState(selectReadOnly);
-  // Inside the "⋯" panel, the press also closes the panel. Outside it this does nothing.
-  const closePanel = useToolbarOverflowClose();
-  useEditorState(selectSelection);
-  if (hidden) return null;
-  const gate = editor?.can({ type: 'toggleReviewPane' });
-  const placed = editor ? editor.getSelectionPlacement() !== null : false;
-  const enabled = gate?.ok === true && !readOnly && (rail?.mounted ?? 0) > 0 && placed;
-  const text = label('common.comment');
-  const reason =
-    gate && !gate.ok ? gate.reason : readOnly ? label('editingMode.viewingHint') : undefined;
-  const shared = {
-    type: 'button' as const,
-    className: `docx-toolbar__button${className ? ` ${className}` : ''}`,
-    // Not a chrome slot, so it carries a part marker instead of `data-slot`.
-    'data-part': 'add-comment',
-    disabled: !enabled,
-    ...(!enabled ? { 'data-disabled': '' } : {}),
-    'aria-label': text,
-    title: (!enabled ? reason : undefined) ?? text,
-    onMouseDown: guardToolbarMousedown,
-    onClick: () => {
-      if (rail?.requestCommentDraft()) closePanel(false);
-    },
-  };
-  if (asChild) return <Slot {...shared}>{children}</Slot>;
-  return <button {...shared}>{icon ?? children ?? chromeIcon(ADD_COMMENT_PATHS)}</button>;
-}
+export const ToolbarAddComment: ToolbarPartComponent = Object.assign(ToolbarAddCommentImpl, {
+  docxSlot: SLOT,
+});

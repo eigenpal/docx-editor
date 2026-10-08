@@ -4,9 +4,9 @@
 // The size is the user's to pick, so the press opens the same grid as Insert › Table in the
 // menu bar, and the enabled state still comes from the engine through the slot.
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { ChromeSlotId } from '@docx-editor.dev/core/editor';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import type { FocusEvent as ReactFocusEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { toolbarPopupLeft, type ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
 import { useToolbarLabel } from './toolbar-context';
@@ -25,21 +25,24 @@ function ToolbarTableInsertImpl({ className, hidden, icon, asChild, children }: 
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLSpanElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popupRef = useRef<HTMLDivElement | null>(null);
   const popupId = useId();
   // Inside the "⋯" panel, a pick also closes the panel. Outside it this does nothing.
   const closePanel = useToolbarOverflowClose();
 
   // A press outside closes the popup. Capture, because the painted surface prevents the
-  // default on its own pointer handling.
+  // default on its own pointer handling. The editor's own document, which is not the global
+  // one when the editor renders into an iframe or a popup window.
   useEffect(() => {
-    if (!open) return undefined;
+    const doc = rootRef.current?.ownerDocument;
+    if (!open || !doc) return undefined;
     const onMouseDown = (event: globalThis.MouseEvent) => {
       const root = rootRef.current;
       if (root && event.target instanceof Node && root.contains(event.target)) return;
       setOpen(false);
     };
-    document.addEventListener('mousedown', onMouseDown, true);
-    return () => document.removeEventListener('mousedown', onMouseDown, true);
+    doc.addEventListener('mousedown', onMouseDown, true);
+    return () => doc.removeEventListener('mousedown', onMouseDown, true);
   }, [open]);
 
   // Every open, by pointer or key, moves focus into the grid's tab stop, so the grid's own
@@ -49,6 +52,23 @@ function ToolbarTableInsertImpl({ className, hidden, icon, asChild, children }: 
     rootRef.current?.querySelector<HTMLElement>('[role="gridcell"][tabindex="0"]')?.focus();
   }, [open]);
 
+  // In the bar the grid opens under its button, moved in only as far as it must to stay
+  // inside the viewport. In the "⋯" panel it is panel content and needs no placement.
+  const shown = open && isEnabled;
+  useLayoutEffect(() => {
+    const popup = popupRef.current;
+    const root = rootRef.current;
+    const view = root?.ownerDocument.defaultView;
+    if (!shown || !popup || !root || !view || root.closest('.docx-toolbar__more-panel')) return;
+    const anchor = root.getBoundingClientRect();
+    const left = toolbarPopupLeft({
+      anchorLeft: anchor.left,
+      popupWidth: popup.offsetWidth,
+      viewportWidth: view.innerWidth,
+    });
+    popup.style.left = `${left - anchor.left}px`;
+  }, [shown]);
+
   const close = useCallback(() => {
     setOpen(false);
     closePanel(false);
@@ -57,7 +77,6 @@ function ToolbarTableInsertImpl({ className, hidden, icon, asChild, children }: 
   if (hidden) return null;
   const control = chromeControlForSlot(SLOT);
   const text = label(control?.labelKey ?? SLOT);
-  const shown = open && isEnabled;
   const trigger = {
     ref: triggerRef,
     type: 'button' as const,
@@ -98,8 +117,15 @@ function ToolbarTableInsertImpl({ className, hidden, icon, asChild, children }: 
       )}
       {shown ? (
         <div
+          ref={popupRef}
           id={popupId}
           className="docx-toolbar__menu docx-toolbar__table-insert-menu"
+          // Focus that leaves the control (Tab, a click elsewhere) closes the grid, so it
+          // never stays open behind the focus.
+          onBlur={(event: ReactFocusEvent) => {
+            const next = event.relatedTarget;
+            if (next instanceof Node && !rootRef.current?.contains(next)) setOpen(false);
+          }}
           onKeyDown={(event) => {
             if (event.key !== 'Escape') return;
             // Stopped so an enclosing "⋯" panel stays open: Escape closes one layer.

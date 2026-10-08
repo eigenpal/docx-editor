@@ -1,7 +1,7 @@
 // Keeps the menu bar's "⋯" panel inside the viewport, with the toolbar's placement rule.
 
 import { ref, watch, type Ref } from 'vue';
-import { toolbarPanelPlacement } from '../toolbar/toolbar-overflow';
+import { toolbarPanelPlacement } from '@docx-editor.dev/core/editor';
 
 /** The clamp for an open panel, in the trigger parent's coordinates. */
 export interface MenuPanelStyle {

@@ -157,14 +157,14 @@ If you use a locale provider, mount this component inside it so `useChromeTransl
 
 ## Keep host controls responsive
 
-The preset toolbar stays on one row. When it runs out of width, it moves whole groups into the **More** (`⋯`) panel, and each moved group becomes a labelled section of the panel. Use `Toolbar.Group` to give your own controls the same behavior.
+The preset toolbar stays on one row. When it runs out of width, it moves whole groups into the **More** (`⋯`) panel, and each moved group becomes a labeled section of the panel. Use `Toolbar.Group` to give your own controls the same behavior.
 
 <FrameworkTabs>
 <Framework value="react">
 
 ```tsx
 <DocxEditor.Toolbar>
-  {/* A host group: measured, collapsed by priority, and labelled in the panel. */}
+  {/* A host group: measured, collapsed by priority, and labeled in the panel. */}
   <DocxEditor.Toolbar.Group id="review-nav" label="Review" priority={15}>
     <DocxEditor.Toolbar.Action label="Previous change" icon={<UpIcon />} onSelect={previous} />
     <DocxEditor.Toolbar.Action label="Next change" icon={<DownIcon />} onSelect={next} />
@@ -185,7 +185,7 @@ The preset toolbar stays on one row. When it runs out of width, it moves whole g
 
 ```vue
 <DocxEditorToolbar>
-  <!-- A host group: measured, collapsed by priority, and labelled in the panel. -->
+  <!-- A host group: measured, collapsed by priority, and labeled in the panel. -->
   <DocxEditorToolbar.Group id="review-nav" label="Review" :priority="15">
     <DocxEditorToolbar.Action label="Previous change" @select="previous" />
     <DocxEditorToolbar.Action label="Next change" @select="next" />
@@ -209,10 +209,11 @@ The preset toolbar stays on one row. When it runs out of width, it moves whole g
 | Prop | Description |
 | --- | --- |
 | `id` | The group id. A built-in id changes that group. Any other id creates a host group. |
-| `label` | The panel heading and the group's accessible name. The default is `id`. A dotted catalog key, such as `myApp.reviewNav`, goes through the toolbar's `t` and is used when it resolves to a string. Any other text renders as written. |
+| `labelKey` | A catalog key for a host group's panel heading and accessible name, such as `myApp.reviewNav`. It goes through the toolbar's `t` and the locale catalog. |
+| `label` | Literal text for a host group's panel heading and accessible name. It wins over `labelKey`. Without either, the heading is `id`. Built-in groups keep their own label. |
 | `priority` | The collapse priority. A lower number leaves the bar first. |
 | `pinned` | `true` keeps the group in the bar at every width. |
-| `after` | The id of the group that this group follows. |
+| `after` | The id of the group that this group follows. Built-in groups keep their place and ignore it. |
 | `hidden` | Removes the group from the bar and the panel. |
 | `overflowContent` | A function that returns the group's panel content. Use it when the panel needs a different form than the bar. On a built-in id, it renders after the group's own rows, even when the group has no children. |
 
@@ -259,14 +260,14 @@ In every other case, the toolbar measures its own box and collapses as before. T
 
 ### Replace a slot's content
 
-`Toolbar.Slot` replaces one built-in slot with your own content. The content keeps the slot's place and collapses with the slot's group. In the panel, it renders under the slot's label, or as `overflowContent` when you pass it.
+`Toolbar.Slot` replaces one built-in slot with your own content. Name the slot with `slotId`. The content keeps the slot's place and collapses with the slot's group. In the panel, it renders under the slot's label, or as `overflowContent` when you pass it. To remove a slot, use its own part with `hidden`, for example `<DocxEditor.Toolbar.Bold hidden />`.
 
 <FrameworkTabs>
 <Framework value="react">
 
 ```tsx
 <DocxEditor.Toolbar>
-  <DocxEditor.Toolbar.Slot slot="zoom.level" overflowContent={() => <ZoomList />}>
+  <DocxEditor.Toolbar.Slot slotId="zoom.level" overflowContent={() => <ZoomList />}>
     <ZoomPicker />
   </DocxEditor.Toolbar.Slot>
 </DocxEditor.Toolbar>
@@ -287,7 +288,7 @@ const zoomList = () => h(ZoomList);
 
 <template>
   <DocxEditorToolbar>
-    <DocxEditorToolbar.Slot slot="zoom.level" :overflow-content="zoomList">
+    <DocxEditorToolbar.Slot slot-id="zoom.level" :overflow-content="zoomList">
       <ZoomPicker />
     </DocxEditorToolbar.Slot>
   </DocxEditorToolbar>
@@ -299,16 +300,18 @@ const zoomList = () => h(ZoomList);
 
 ### Development warnings
 
-The toolbar renders a misplaced part and prints a development warning that names it. Production builds do not print these warnings.
+The toolbar renders a misplaced part and prints a development warning that names it. A build counts as development when `process.env.NODE_ENV` is not `production`. A page without a `process` global, such as a browser bundle that does not replace `process.env.NODE_ENV`, prints no warnings.
 
 - A `Toolbar.Group` whose `after` names no group goes to the end of the bar.
+- A `Toolbar.Group` with a built-in id ignores `label`, `labelKey`, and `after`.
+- A `Toolbar.Group` whose id is `contextual-table` is ignored, because the toolbar uses that id for the table controls.
 - A `Toolbar.Slot` for a slot that the preset arrangement does not draw is appended after the groups. An id that is not a `ChromeSlotId` gets the same treatment.
 
 ### Insert tables and add comments
 
-`Toolbar.TableInsert` opens a 6×6 size grid, the same grid as **Insert** > **Table** in the menu bar. Arrow keys move in the grid, a press inserts a table of that size, and `Esc` closes the grid. In the **More** panel, the grid opens over the panel, and an insert also closes the panel.
+`Toolbar.TableInsert` opens a 6×6 size grid, the same grid as **Insert** > **Table** in the menu bar. Arrow keys move in the grid, a press inserts a table of that size, and `Esc` closes the grid. In the toolbar, the grid stays inside the viewport. In the **More** panel, the grid opens inside the panel, and an insert also closes the panel. When focus leaves the grid, the grid closes.
 
-`Toolbar.AddComment` starts a comment draft on the selection in the review rail. It needs the review module and a mounted review rail. It is disabled in viewing mode and when nothing is selected. In the **More** panel, a press also closes the panel. `Toolbar.Comments` is a different control: it shows or hides the **Comments & Changes** pane.
+`Toolbar.AddComment` starts a comment draft on the selection in the review rail. Its slot is `review.addComment`, the same slot as the context menu's **Add a comment** row, and `toolbarCommandState` decides when it is enabled. Without the review module, in viewing mode, or with no selection on the page, it is disabled and its tooltip gives the reason. If the review module allows a comment but no review rail is mounted to open the draft, the control is not rendered. In the **More** panel, a press also closes the panel. `Toolbar.Comments` is a different control: it shows or hides the **Comments & Changes** pane.
 
 ### Menu bar overflow
 

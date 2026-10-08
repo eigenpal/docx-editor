@@ -31,8 +31,7 @@ import {
 import type { CSSProperties, ReactElement } from 'react';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import { ReviewRailContext, useDocxEditor } from '../context';
-import { useEditorState } from '../useEditorState';
-import type { EditorSnapshot } from '@docx-editor.dev/core';
+import { useEditorCommand } from '../useEditorCommand';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
@@ -94,36 +93,27 @@ export interface DocxEditorContextMenuProps {
   children?: DocxEditorChildren;
 }
 
-/** Viewing refuses every review write, comment authoring included. */
-const selectDocumentReadOnly = (snapshot: EditorSnapshot): boolean =>
-  snapshot.editingMode === 'viewing';
-
 /** The packaged set, in order. Separators are positional, so they are part of the list. */
 type DefaultEntry =
   | { readonly kind: 'row'; readonly id: string; readonly render: () => ReactElement }
   | { readonly kind: 'separator'; readonly id: string };
 
 function ContextMenuAddComment() {
-  const editor = useDocxEditor();
   const rail = useContext(ReviewRailContext);
   const menu = useMenuContext();
   const label = useMenuLabel();
-  const gate = editor?.can({ type: 'toggleReviewPane' });
-  // `toggleReviewPane` is deliberately NON-mutating, so it stays `ok` in viewing — and this
-  // row, which writes a comment, rode on it and showed up fully enabled. It then closed the
-  // menu and wrote nothing, because the rail refuses a draft on a read-only document.
-  const readOnly = useEditorState(selectDocumentReadOnly);
-  const disabled =
-    !gate?.ok || readOnly || (rail?.mounted ?? 0) === 0 || editor?.getSelectionPlacement() === null;
-  const control = chromeControlForSlot('review.comments');
+  // The same slot as `Toolbar.AddComment`, so enabled state and its reason have one source:
+  // `toolbarCommandState`. An allowed comment with no review rail to open the draft would be
+  // a row that does nothing, so the row is left out instead.
+  const { isEnabled, disabledReason } = useEditorCommand('review.addComment');
+  if (isEnabled && (rail?.mounted ?? 0) === 0) return null;
+  const control = chromeControlForSlot('review.addComment');
   return (
     <MenuRow
       icon={chromeIcon(control?.paths)}
-      slot="review.comments"
-      disabled={disabled}
-      title={
-        gate && !gate.ok ? gate.reason : readOnly ? label('editingMode.viewingHint') : undefined
-      }
+      slot="review.addComment"
+      disabled={!isEnabled}
+      title={disabledReason ?? undefined}
       onSelect={() => {
         if (!rail?.requestCommentDraft()) return;
         menu.setOpenMenu(null);
@@ -188,7 +178,7 @@ const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
   },
   {
     kind: 'row',
-    id: 'review.comments',
+    id: 'review.addComment',
     render: () => <ContextMenuAddComment />,
   },
 ];

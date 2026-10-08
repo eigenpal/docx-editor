@@ -104,6 +104,17 @@ export const REVIEW_CHROME_GROUP = {
       state: { kind: 'command' },
     },
     {
+      // Starts a comment draft on the selection in the review rail. Not in the default bar:
+      // `comments` above is the pane toggle. The engine answers whether a comment could be
+      // added here; the adapter's review rail opens the draft.
+      id: 'addComment',
+      shape: 'icon',
+      labelKey: 'formattingBar.addComment',
+      defaultToolbar: false,
+      paths: GENERATED_ICON_PATHS['add_comment'],
+      state: { kind: 'command' },
+    },
+    {
       // Packaged under Review > Markup Options > Reviewers; hosts may compose a shortcut.
       id: 'authors',
       shape: 'dropdown',
