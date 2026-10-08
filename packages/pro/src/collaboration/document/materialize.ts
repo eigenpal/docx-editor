@@ -561,6 +561,9 @@ export class PackageMaterializer {
         // A peer's text can arrive before the record it embeds, which Yjs holds back until
         // what it depends on arrives: pending, so it shows nothing yet.
         if (!this.registry.hasNode(id) && awaitingUpdates(this.registry.doc)) return null;
+        // A text embeds only a node no child array lists. A peer's text that names a listed
+        // node, or a part root, would give it a second parent: it shows where it is listed.
+        if (this.registry.listingParents(id).length > 0 || this.partRoots.has(id)) return null;
         const node = this.materialize(id, placed, path, incremental);
         if (node) this.shownUnder.set(id, logicalId);
         return node;

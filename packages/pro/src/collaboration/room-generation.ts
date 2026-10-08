@@ -39,6 +39,32 @@ const GENERATION_CLOSE_CODE = 4409;
 const DEFAULT_MINIMUM_GAIN = 2;
 
 /**
+ * Stored states found not worth compacting, by digest and minimum gain. A check reads the
+ * whole room and builds it again, and a client causes one each time it opens an unloaded
+ * room. The same bytes give the same answer, so opening a room again checks nothing.
+ */
+const NOT_WORTH_COMPACTING = new Set<string>();
+const MAX_REMEMBERED_CHECKS = 1024;
+
+async function checkKey(state: Uint8Array, minimumGain: number): Promise<string> {
+  // The digest reads only a view over an `ArrayBuffer`; any other view is copied once.
+  const bytes =
+    state.buffer instanceof ArrayBuffer ? (state as Uint8Array<ArrayBuffer>) : state.slice();
+  const digest = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes));
+  let hex = '';
+  for (const byte of digest) hex += byte.toString(16).padStart(2, '0');
+  return `${minimumGain}:${hex}`;
+}
+
+function rememberNotWorthIt(key: string): void {
+  if (NOT_WORTH_COMPACTING.size >= MAX_REMEMBERED_CHECKS) {
+    const oldest = NOT_WORTH_COMPACTING.values().next().value;
+    if (oldest !== undefined) NOT_WORTH_COMPACTING.delete(oldest);
+  }
+  NOT_WORTH_COMPACTING.add(key);
+}
+
+/**
  * The generation ID of the room a document holds: empty for a room never compacted, and
  * empty for a document that holds no room yet.
  *
@@ -67,6 +93,10 @@ export interface CompactCollaborationStateOptions {
  * unreferenced media are gone. Call it when the server loads a room, before any participant
  * syncs, and store the result in place of the old state.
  *
+ * A check reads the whole room and builds it again. The answer for a state found not worth
+ * compacting is remembered in this process, so the same bytes are checked once. A state that
+ * changed is checked again.
+ *
  * Throws `CollaborationSchemaError` when the stored state cannot be read, as
  * `readCollaborationDocument` does.
  *
@@ -76,18 +106,22 @@ export async function compactCollaborationState(
   state: Uint8Array,
   options: CompactCollaborationStateOptions = {}
 ): Promise<Uint8Array | null> {
+  const minimumGain = options.minimumGain ?? DEFAULT_MINIMUM_GAIN;
+  const key = await checkKey(state, minimumGain);
+  if (NOT_WORTH_COMPACTING.has(key)) return null;
   const stored = new Y.Doc();
   try {
     Y.applyUpdate(stored, state);
     const meta = stored.getMap(PACKAGE_META_KEY);
     const documentId = meta.get('documentId');
     if (typeof documentId !== 'string') throw new CollaborationSchemaError('not-initialized');
-    const minimumGain = options.minimumGain ?? DEFAULT_MINIMUM_GAIN;
     // Measured against a fresh build of the content the room holds now. The size the room had
     // when it was seeded is no bound: deleting most of a document makes the fresh build far
     // smaller than the seed while the stored state hardly grows.
     const compacted = await seedGeneration(readCollaborationDocument(stored), documentId);
-    return state.byteLength / Math.max(1, compacted.byteLength) >= minimumGain ? compacted : null;
+    if (state.byteLength / Math.max(1, compacted.byteLength) >= minimumGain) return compacted;
+    rememberNotWorthIt(key);
+    return null;
   } finally {
     stored.destroy();
   }
@@ -156,12 +190,19 @@ const CHECKED = Symbol('docx-room-generation-checked');
  * Hocuspocus `beforeHandleMessage` hook. A client sends the generation it holds before its
  * first sync message; on a mismatch, or a sync message without one, this throws an error
  * that closes the connection with `room-generation-changed` before any of its state merges.
+ * A message the gate cannot read is refused the same way.
+ *
+ * A replica that holds no room yet names no generation and passes: it has no state of an
+ * earlier generation to merge. The gate keeps honest replicas of two generations apart. It
+ * is not access control: a client that may write to the room can send any update, so
+ * authenticate connections in `onAuthenticate`.
  *
  * @public
  */
 export function checkCollaborationRoomGeneration(payload: CollaborationRoomGatePayload): void {
   const message = readMessageHead(payload.update);
-  if (!message) return;
+  // A message the gate cannot read could be one the server reads as a sync.
+  if (!message) throw generationRefusal();
   if (message.type === STATELESS_MESSAGE) {
     const generation = generationOf(message.payload);
     if (generation === undefined) return;

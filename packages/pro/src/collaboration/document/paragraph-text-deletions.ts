@@ -73,6 +73,22 @@ class Coverage {
   private readonly starts: number[] = [];
   private readonly ends: number[] = [];
 
+  /** The coverage of many ranges at once: sorted and merged, never inserted one by one. */
+  static of(ranges: readonly { readonly from: number; readonly to: number }[]): Coverage {
+    const coverage = new Coverage();
+    const sorted = [...ranges].sort((left, right) => left.from - right.from);
+    for (const { from, to } of sorted) {
+      const last = coverage.ends.length - 1;
+      if (last >= 0 && from <= coverage.ends[last]!) {
+        coverage.ends[last] = Math.max(coverage.ends[last]!, to);
+      } else {
+        coverage.starts.push(from);
+        coverage.ends.push(to);
+      }
+    }
+    return coverage;
+  }
+
   add(from: number, to: number): void {
     // The ranges this one touches merge into one.
     let low = 0;
@@ -110,8 +126,12 @@ class Coverage {
 /** The deletions of one document, indexed for lookup by any identity. */
 export class TextDeletions {
   private readonly byKey = new Map<string, readonly DeletedRun[]>();
+  /** The keys whose runs name each client's identities. */
+  private readonly keysByClient = new Map<number, Set<string>>();
   /** Deleted characters, by the client of their identity. */
-  private characters = new Map<number, Coverage>();
+  private readonly characters = new Map<number, Coverage>();
+  /** Clients whose coverage a withdrawn or rewritten record changed, indexed on next read. */
+  private readonly stale = new Set<number>();
   private readonly listeners = new Set<(runs: readonly DeletedRun[]) => void>();
 
   constructor(
@@ -129,6 +149,10 @@ export class TextDeletions {
 
   /** Whether a participant deleted the identity `client:clock`. */
   isDeleted(client: number, clock: number): boolean {
+    if (this.stale.has(client)) {
+      this.stale.delete(client);
+      this.reindex(client);
+    }
     return this.characters.get(client)?.has(clock) ?? false;
   }
 
@@ -176,28 +200,53 @@ export class TextDeletions {
   }
 
   private refresh(key: string, value: unknown): void {
-    const had = this.byKey.has(key);
+    const previous = this.byKey.get(key);
     this.byKey.delete(key);
     const parsed = recordOf(key, value);
     const entry = parsed ? mapEntry(this.map, key) : undefined;
     const valid = parsed !== null && (!entry || entry.id.client === parsed.client);
     if (valid) this.byKey.set(key, parsed.runs);
-    // An undo withdraws a record; the index is built again from the records that remain.
-    if (had) this.rebuild();
-    else if (valid) this.index(parsed.runs);
-  }
-
-  private index(runs: readonly DeletedRun[]): void {
-    for (const run of runs) {
-      let coverage = this.characters.get(run.client);
-      if (!coverage) this.characters.set(run.client, (coverage = new Coverage()));
-      coverage.add(run.from, run.to);
+    if (previous) {
+      // An undo withdraws a record. The clients it named are indexed again from the records
+      // that remain, and only those, once, when one of them is next read: a step that
+      // withdraws many records costs the records of those clients once.
+      const clients = new Set(previous.map((run) => run.client));
+      for (const client of clients) this.keysByClient.get(client)?.delete(key);
+      if (valid) this.list(key, parsed.runs);
+      for (const run of valid ? parsed.runs : []) clients.add(run.client);
+      for (const client of clients) this.stale.add(client);
+    } else if (valid) {
+      this.list(key, parsed.runs);
+      for (const run of parsed.runs) {
+        // A stale client is indexed whole on its next read, this record with it.
+        if (this.stale.has(run.client)) continue;
+        let coverage = this.characters.get(run.client);
+        if (!coverage) this.characters.set(run.client, (coverage = new Coverage()));
+        coverage.add(run.from, run.to);
+      }
     }
   }
 
-  private rebuild(): void {
-    this.characters = new Map();
-    for (const runs of this.byKey.values()) this.index(runs);
+  private list(key: string, runs: readonly DeletedRun[]): void {
+    for (const run of runs) {
+      let keys = this.keysByClient.get(run.client);
+      if (!keys) this.keysByClient.set(run.client, (keys = new Set()));
+      keys.add(key);
+    }
+  }
+
+  private reindex(client: number): void {
+    const keys = this.keysByClient.get(client);
+    if (!keys || keys.size === 0) {
+      this.keysByClient.delete(client);
+      this.characters.delete(client);
+      return;
+    }
+    const ranges: DeletedRun[] = [];
+    for (const key of keys) {
+      for (const run of this.byKey.get(key) ?? []) if (run.client === client) ranges.push(run);
+    }
+    this.characters.set(client, Coverage.of(ranges));
   }
 }
 

@@ -26,6 +26,8 @@ import {
 import * as Y from 'yjs';
 
 const PORT = Number(process.env.PORT ?? 1234);
+// The benchmark trusts its clients, so it listens on this machine unless told otherwise.
+const ADDRESS = process.env.ADDRESS ?? '127.0.0.1';
 const TOKEN = process.env.BENCH_TOKEN ?? 'benchmark-token';
 const DATA_DIR = process.env.BENCH_DATA_DIR ?? path.join(import.meta.dirname, '.data');
 const ROOM_ID = /^[A-Za-z0-9_-]{24,256}$/;
@@ -43,6 +45,7 @@ function roomFile(documentName: string): string | null {
 
 const server = new Server({
   port: PORT,
+  address: ADDRESS,
   name: 'docx-editor-collaboration-benchmark',
   quiet: true,
 
@@ -113,4 +116,4 @@ const server = new Server({
 });
 
 await server.listen();
-console.log(`Hocuspocus is listening on ws://127.0.0.1:${PORT}`);
+console.log(`Hocuspocus is listening on ws://${ADDRESS}:${PORT}`);

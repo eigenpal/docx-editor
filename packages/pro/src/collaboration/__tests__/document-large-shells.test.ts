@@ -107,4 +107,47 @@ describe('content controls with large fixed parts', () => {
       ydoc.destroy();
     }
   });
+
+  test('a run-properties attribute longer than the shared text holds refuses the room', async () => {
+    const marked = (length: number) =>
+      zipDocument(
+        '<w:p><w:r>' +
+          `<w:rPr xmlns:custom="urn:custom" custom:metadata="${'m'.repeat(length)}"><w:b/></w:rPr>` +
+          '<w:t>Bold</w:t></w:r></w:p>'
+      );
+    const runProperties = (root: OoxmlNode): string => {
+      let found = '';
+      walk(root, (node) => {
+        if (node.kind !== 'textValue' && node.localName === 'rPr') found = JSON.stringify(node);
+      });
+      return found;
+    };
+    // At the bound the attribute and its namespace arrive whole.
+    const harness = createPeerHarness('long-run-properties');
+    harnesses.push(harness);
+    const { alice, bob } = await harness.pair(marked(4_096));
+    for (const peer of [alice, bob]) {
+      const pkg = harness.packageOf(peer);
+      const shown = runProperties(pkg.parts.get(pkg.mainDocumentPart)!.root);
+      expect(shown).toContain('urn:custom');
+      expect(shown).toContain('m'.repeat(4_096));
+    }
+    // One past it, the room is refused rather than shown with a plain `w:rPr`.
+    const ydoc = new Y.Doc();
+    const awareness = new Awareness(ydoc);
+    try {
+      await expect(
+        createDocumentCollaboration({
+          ydoc,
+          awareness,
+          documentId: 'long-run-properties-refused',
+          identity: { actorId: 'alice', name: 'Alice' },
+          bootstrap: { kind: 'create', document: marked(4_097) },
+        })
+      ).rejects.toMatchObject({ code: 'invalid-string' });
+    } finally {
+      awareness.destroy();
+      ydoc.destroy();
+    }
+  });
 });

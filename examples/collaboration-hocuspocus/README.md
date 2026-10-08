@@ -62,7 +62,7 @@ The server stores rooms in `server/.data/`. It reads each `.ydoc` file when a ro
 
 Replace `onLoadDocument` and `onStoreDocument` when you need database or object storage. Keep the `prepareCollaborationServerDocument` call at the start of `onLoadDocument`, before the room's state loads.
 
-When a saved room has grown to twice its seeded size, `onLoadDocument` compacts it with `compactCollaborationState` and stores the new generation in place of the old state. If compaction throws `CollaborationSchemaError`, the server keeps the stored state unchanged. `beforeHandleMessage` calls `checkCollaborationRoomGeneration`, which refuses a client that still holds the room from before a compaction. That client reports `room-generation-changed` and can rejoin. Keep both calls when you replace the storage hooks. For more information, see [Compact rooms on a server](https://www.docx-editor.dev/docs/2.x/pro/collaboration#compact-rooms-on-a-server).
+When a saved room is at least twice the size of a fresh build of its content, `onLoadDocument` compacts it with `compactCollaborationState` and stores the new generation in place of the old state. The server writes each file through a temporary file, so a crash during a write keeps the previous state. If compaction throws `CollaborationSchemaError`, the server keeps the stored state unchanged. `beforeHandleMessage` calls `checkCollaborationRoomGeneration`, which refuses a client that still holds the room from before a compaction. That client reports `room-generation-changed` and can rejoin. Keep both calls when you replace the storage hooks. For more information, see [Compact rooms on a server](https://www.docx-editor.dev/docs/2.x/pro/collaboration#compact-rooms-on-a-server).
 
 ### Recover after a version mismatch
 

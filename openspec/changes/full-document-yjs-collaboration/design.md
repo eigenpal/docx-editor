@@ -116,7 +116,7 @@ If shared state keys records on that minted id, the merge joins two different no
 
 The production session maps canonical ids to replica-scoped logical ids. `packages/collaboration-yjs/src/document-identity.ts` exports `LogicalIdentityMap`. Every `putNode` effect receives a fresh logical id from `LogicalIdAllocator`. Later effects in the same journal resolve through the map. The pass is ordered because a later effect can name a node this journal just created. Ids that came from the shared baseline resolve to themselves. Every replica read those ids from the same bytes. The map resets after each materialized install. Every node then already carries a logical id. A re-minted canonical id would otherwise resolve to the wrong node.
 
-Yjs client/clock item IDs remain internal ordering identities. They do not become `OoxmlNodeId`, `w14:paraId`, comment IDs, relationship IDs, drawing IDs, or revision IDs. Word-facing IDs keep their own typed allocation and collision repair rules. Word-facing collision repair remains deferred.
+Yjs client/clock item IDs remain internal ordering identities. They do not become `OoxmlNodeId`, `w14:paraId`, comment IDs, relationship IDs, drawing IDs, or revision IDs. Document-facing IDs keep their own typed allocation and collision repair rules. Document-facing collision repair remains deferred.
 
 Rejected alternative: a process-wide mint scope in core. `setNodeIdMintScope` in `packages/core/src/store/package/ooxml-edit.ts` was implemented and then reverted. Two replicas in one process share module state. Examples are headless tests, the server runtime, and two editors on one page. The last attach won. The scope changed ids without making them unique. That result is worse than no scope. Core is unchanged as a result. A test in `packages/core/src/store/__tests__/ooxml-edit.test.ts` pins the property: two documents opened from the same bytes mint the SAME ids.
 
@@ -170,7 +170,7 @@ Alternative considered: publish best-effort invalid XML. Rejected because layout
 
 Each repair rule has a version, stable ordering, bounded work, and one canonical outcome from the same shared state. The default repair is a pure materialization rule with stable derived IDs. It publishes a canonical repair-origin revision without writing a competing Yjs transaction from every replica.
 
-Safe repair may remove duplicate parent references, normalize invalid known elements to generic nodes, allocate colliding Word-facing IDs, or restore required wrapper shape when semantics are unambiguous. It must not invent missing review intent, choose between conflicting user text, or silently discard unknown content.
+Safe repair may remove duplicate parent references, normalize invalid known elements to generic nodes, allocate colliding document-facing IDs, or restore required wrapper shape when semantics are unambiguous. It must not invent missing review intent, choose between conflicting user text, or silently discard unknown content.
 
 When shared state itself must change, only an explicit versioned maintenance operation may normalize it. That operation must be idempotent and must not duplicate required children when several replicas observe the same issue. Repair and maintenance origins do not enter actor undo.
 
@@ -219,7 +219,7 @@ The first production guarantee covers transient disconnection while one client p
 
 The server retains a room according to host retention policy even when no clients are connected. File storage is a single-process convenience. Multi-instance deployments must use the production storage interface and consumer-provided coordination.
 
-A DOCX exported from a room is a snapshot, not the durable collaboration artifact. If someone edits that file in Word, importing it creates a new room. An administrator may explicitly replace an existing room only through a destructive reset that records an audit item and rejects connected writers.
+A DOCX exported from a room is a snapshot, not the durable collaboration artifact. If someone edits that file in a desktop editor, importing it creates a new room. An administrator may explicitly replace an existing room only through a destructive reset that records an audit item and rejects connected writers.
 
 ### D12: Version schemas and make migrations explicit
 

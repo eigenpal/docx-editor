@@ -45,7 +45,23 @@ interface Baseline {
       readonly target?: string;
     }
   >;
+  /**
+   * Each endpoint whose paragraph is gone, as last looked up, with the document revision of
+   * the lookup. Finding its character reads paragraphs, so the answer holds until the
+   * document changes.
+   */
+  readonly missing: Map<
+    string,
+    { readonly revision: number; readonly address: ResolvedAddress | null }
+  >;
 }
+
+/**
+ * Text pairs one resolve aligns at most. Peers publish presence for up to
+ * `MAX_AWARENESS_STATES` clients, each with its own baseline, so without a bound one change
+ * to a paragraph could align it hundreds of times. Past it, an offset holds its place.
+ */
+const MAX_ALIGNED_PAIRS = 16;
 
 type ResolvedAddress = CollaborationRemoteSelection['anchor'];
 
@@ -66,6 +82,8 @@ export class RemoteSelectionResolver {
     const states = [...awareness.getStates().entries()].slice(0, MAX_AWARENESS_STATES);
     const selections: CollaborationRemoteSelection[] = [];
     const present = new Set<number>();
+    const aligned = new Set<string>();
+    let revision: number | undefined;
     for (const [clientId, state] of states) {
       if (clientId === awareness.clientID) continue;
       const payload = awarenessPayload((state as Record<string, unknown>)[AWARENESS_FIELD]);
@@ -77,10 +95,10 @@ export class RemoteSelectionResolver {
         `${to.paragraphId}:${to.offset}:${to.digest ?? ''}`;
       let baseline = this.baselines.get(clientId);
       if (baseline?.key !== key) {
-        baseline = { key, texts: new Map(), resolved: new Map() };
+        baseline = { key, texts: new Map(), resolved: new Map(), missing: new Map() };
         this.baselines.set(clientId, baseline);
       }
-      const { texts, resolved } = baseline;
+      const { texts, resolved, missing } = baseline;
       const resolve = (address: EncodedSelectionAddress): ResolvedAddress | null => {
         // Beside the published character, wherever it shows here, and that paragraph's text.
         const beside = (): { address: ResolvedAddress; text: string } | null => {
@@ -94,7 +112,15 @@ export class RemoteSelectionResolver {
         };
         const paragraph = port.paragraphByStableId(address.paragraphId);
         // A join or deletion removed the paragraph: the character can still show elsewhere.
-        if (!paragraph) return beside()?.address ?? null;
+        if (!paragraph) {
+          const key = address.paragraphId + ':' + address.offset;
+          revision ??= port.revision();
+          const looked = missing.get(key);
+          if (looked?.revision === revision) return looked.address;
+          const found = beside()?.address ?? null;
+          missing.set(key, { revision, address: found });
+          return found;
+        }
         const cached = resolved.get(address.paragraphId + ':' + address.offset);
         if (
           cached?.text === paragraph.text &&
@@ -130,10 +156,18 @@ export class RemoteSelectionResolver {
           before = paragraph.text;
           texts.set(address.paragraphId, before);
         }
+        const pair =
+          before === paragraph.text
+            ? ''
+            : `${address.paragraphId}:${before.length}:${textDigest(before)}`;
+        const alignable = pair === '' || aligned.has(pair) || aligned.size < MAX_ALIGNED_PAIRS;
+        if (alignable && pair !== '') aligned.add(pair);
         const mapped = Object.freeze({
           paragraphId: paragraph.paragraphId,
           nodeId: paragraph.nodeId,
-          offset: mapOffsetAcrossText(address.offset, before, paragraph.text),
+          offset: alignable
+            ? mapOffsetAcrossText(address.offset, before, paragraph.text)
+            : Math.min(address.offset, paragraph.text.length),
         });
         resolved.set(address.paragraphId + ':' + address.offset, {
           text: paragraph.text,

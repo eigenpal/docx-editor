@@ -145,6 +145,25 @@ describe('compaction', () => {
     const { alice } = await harness.pair(collaborationDocx());
     expect(await compactCollaborationState(Y.encodeStateAsUpdate(alice.ydoc))).toBeNull();
   });
+
+  test('a room opened again is checked once, and checked again after it changes', async () => {
+    const paragraphs = Array.from(
+      { length: 60 },
+      (_, index) => `<w:p><w:r><w:t>Paragraph ${index} with text to keep it long</w:t></w:r></w:p>`
+    ).join('');
+    const { alice } = await harness.pair(zipDocument(`${paragraphs}<w:sectPr/>`));
+    const unchanged = Y.encodeStateAsUpdate(alice.ydoc);
+    expect(await compactCollaborationState(unchanged)).toBeNull();
+    // The answer for these bytes is remembered, even for a copy of them.
+    expect(await compactCollaborationState(unchanged.slice())).toBeNull();
+    // Deleting the content changes the bytes, so the room is checked again and compacted.
+    for (let index = 59; index >= 1; index -= 1) {
+      harness.apply(alice, [
+        { op: 'deleteBlock', blockId: harness.paragraphIdAt(alice, index) } as never,
+      ]);
+    }
+    expect(await compactCollaborationState(Y.encodeStateAsUpdate(alice.ydoc))).not.toBeNull();
+  });
 });
 
 describe('the server gate', () => {
@@ -200,6 +219,22 @@ describe('the server gate', () => {
     expect(() =>
       checkCollaborationRoomGeneration({ context: {}, document, update: message(9) })
     ).not.toThrow();
+  });
+
+  test('a message the gate cannot read is refused', () => {
+    const document = new Y.Doc();
+    const context = {};
+    checkCollaborationRoomGeneration({
+      context,
+      document,
+      update: message(5, generationPayload('')),
+    });
+    // A room name longer than the message, and a type that never ends.
+    for (const update of [new Uint8Array([0x7f, 0x61]), new Uint8Array([1, 0x61, 0xff, 0xff])]) {
+      expect(() => checkCollaborationRoomGeneration({ context, document, update })).toThrow(
+        'room-generation-changed'
+      );
+    }
   });
 });
 

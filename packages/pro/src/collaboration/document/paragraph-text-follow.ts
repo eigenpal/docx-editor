@@ -481,6 +481,15 @@ export class TextFollow {
     return this.targetsOf.get(source) ?? EMPTY;
   }
 
+  /**
+   * The paragraphs that showed some of a source's following text when sources were last
+   * placed. It does not place waiting sources: a placement that moves text reports its new
+   * targets itself (`settle`).
+   */
+  placedTargetsFor(source: LogicalId): ReadonlySet<LogicalId> {
+    return this.targetsOf.get(source) ?? EMPTY;
+  }
+
   /** Forget a text's identities: a writer changed it inside a transaction. */
   invalidate(paragraphId: LogicalId): void {
     this.identities.delete(paragraphId);

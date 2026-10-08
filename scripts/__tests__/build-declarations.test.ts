@@ -168,4 +168,11 @@ test('an entry keeps its package documentation, and only that comment', () => {
     ['/**', ' * The package.', ' *', ' * @packageDocumentation', ' */'].join('\n')
   );
   expect(packageDocumentationOf('/** No tag. */\nexport {};')).toBeNull();
+  expect(packageDocumentationOf('/** First. */\n/** @packageDocumentation */')).toBe(
+    '/** @packageDocumentation */'
+  );
+  // Many unclosed comment openers are read once each.
+  const started = performance.now();
+  expect(packageDocumentationOf(`${'/**'.repeat(50_000)}@packageDocumentation`)).toBeNull();
+  expect(performance.now() - started).toBeLessThan(1000);
 });

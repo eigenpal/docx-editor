@@ -11,7 +11,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { describe, expect, test } from 'bun:test';
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import { DEFAULT_DOCUMENT_LIMITS } from '../document/limits.ts';
-import { decodeAttributes } from '../document/paragraph-text.ts';
+import { attributeSignature, decodeAttributes } from '../document/paragraph-text.ts';
 import { collaborationDocx } from './support.ts';
 import {
   destroyReplica,
@@ -105,4 +105,28 @@ describe('hostile formatting attributes in shared text', () => {
       }
     });
   }
+});
+
+describe('attribute sets a peer shapes to look like others', () => {
+  // Under a joined signature, a separator inside a value made these two sets one cache entry,
+  // so whichever decoded first was shown for both.
+  const plain = { r: RUN, 'p:b': '{}' };
+  const shaped = { 'p:b': `{}\u0001r\u0000${RUN}` };
+
+  test('different sets give different signatures', () => {
+    expect(attributeSignature(plain)).not.toBe(attributeSignature(shaped));
+    expect(attributeSignature({ a: '1' })).not.toBe(
+      attributeSignature({ a: 1 } as unknown as Record<string, string>)
+    );
+    expect(attributeSignature({ b: 'x', a: 'y' })).toBe(attributeSignature({ a: 'y', b: 'x' }));
+  });
+
+  test('a shaped set decoded first does not decide how the real set reads', () => {
+    const limits = { ...DEFAULT_DOCUMENT_LIMITS };
+    const shapedFirst = decodeAttributes(shaped, limits, 'paragraph');
+    const real = decodeAttributes(plain, limits, 'paragraph');
+    expect(shapedFirst.run).toBeNull();
+    expect(real.run).not.toBeNull();
+    expect(real.properties).toHaveLength(1);
+  });
 });

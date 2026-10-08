@@ -34,41 +34,69 @@ export function mapOffsetAcrossText(offset: number, before: string, after: strin
     return Math.min(after.length, offset + after.length - before.length);
   }
   // A peer that stays idle in a changed paragraph asks the same question on every remote
-  // update, so the last text pair's answers are kept.
-  if (aligned?.before !== before || aligned.after !== after) {
-    aligned = { before, after, offsets: new Map() };
-  }
-  let mapped = aligned.offsets.get(offset);
+  // update, and many peers ask it of one text pair, so recent pairs keep their alignment
+  // and their answers.
+  const pair = alignmentOf(before, after, prefix, suffix);
+  let mapped = pair.offsets.get(offset);
   if (mapped === undefined) {
     mapped =
-      alignedOffset(offset, before, after, prefix, suffix) ??
+      (pair.table ? alignedOffset(pair.table, offset, before, after, prefix) : null) ??
       contextOffset(offset, before, after, prefix, suffix) ??
       prefix;
-    aligned.offsets.set(offset, mapped);
+    pair.offsets.set(offset, mapped);
   }
   return mapped;
 }
 
-let aligned: { before: string; after: string; offsets: Map<number, number> } | null = null;
+interface AlignmentTable {
+  readonly lengths: Uint32Array;
+  readonly width: number;
+  readonly columns: number;
+}
+
+interface Alignment {
+  readonly before: string;
+  readonly after: string;
+  /** Null when the changed middle is too large to align. */
+  readonly table: AlignmentTable | null;
+  readonly offsets: Map<number, number>;
+}
+
+/** Text pairs whose alignment is kept, most recent last. */
+const alignments: Alignment[] = [];
+const MAX_KEPT_ALIGNMENTS = 16;
+
+function alignmentOf(before: string, after: string, prefix: number, suffix: number): Alignment {
+  const at = alignments.findIndex((pair) => pair.before === before && pair.after === after);
+  if (at >= 0) {
+    const [pair] = alignments.splice(at, 1);
+    alignments.push(pair!);
+    return pair!;
+  }
+  const pair = {
+    before,
+    after,
+    table: alignTable(before, after, prefix, suffix),
+    offsets: new Map(),
+  };
+  if (alignments.length >= MAX_KEPT_ALIGNMENTS) alignments.shift();
+  alignments.push(pair);
+  return pair;
+}
 
 /** Above this many character pairs the changed middle is treated as one change. */
 const MAX_ALIGNED_CELLS = 1 << 18;
 
 /**
- * An offset inside the changed middle, carried by a character alignment of the middles.
- *
- * Two edits in one paragraph, one before the offset and one after it, leave no shared prefix
- * or suffix that reaches the offset, and treating the whole middle as one change put the
- * caret at its start. Aligning the characters keeps it next to the same character. Null when
- * the middle is too large to align.
+ * The character alignment of two changed middles: the longest common subsequence of the
+ * middles from each pair of positions on. Null when the middles are too large to align.
  */
-function alignedOffset(
-  offset: number,
+function alignTable(
   before: string,
   after: string,
   prefix: number,
   suffix: number
-): number | null {
+): AlignmentTable | null {
   const rows = before.length - suffix - prefix;
   const columns = after.length - suffix - prefix;
   if (rows * columns > MAX_ALIGNED_CELLS) return null;
@@ -83,6 +111,24 @@ function alignedOffset(
           : Math.max(lengths[(i + 1) * width + j]!, lengths[i * width + j + 1]!);
     }
   }
+  return { lengths, width, columns };
+}
+
+/**
+ * An offset inside the changed middle, carried by a character alignment of the middles.
+ *
+ * Two edits in one paragraph, one before the offset and one after it, leave no shared prefix
+ * or suffix that reaches the offset, and treating the whole middle as one change put the
+ * caret at its start. Aligning the characters keeps it next to the same character.
+ */
+function alignedOffset(
+  table: AlignmentTable,
+  offset: number,
+  before: string,
+  after: string,
+  prefix: number
+): number {
+  const { lengths, width, columns } = table;
   const target = offset - prefix;
   let i = 0;
   let j = 0;

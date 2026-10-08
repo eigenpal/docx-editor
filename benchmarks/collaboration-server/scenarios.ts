@@ -24,6 +24,7 @@ import {
   type ScenarioOptions,
 } from './scenario-harness.ts';
 import { readCase, replayOf, writeCase, type SavedCase } from './scenario-case.ts';
+import { zipDocument } from '../../packages/pro/src/collaboration/__tests__/document-peer-support.ts';
 
 const TEXTBOX_DOCUMENT = path.resolve(
   import.meta.dirname,
@@ -35,6 +36,15 @@ const fixture = (name: string): string =>
 
 /** Everything at once on a small document, so that edits keep landing on the same nodes. */
 const DENSE = { replicas: 3, steps: 120, offlineChance: 0.05, undoChance: 0.1, lateJoiners: 1 };
+
+/** Three plain paragraphs, so splits, joins and breaks keep landing on the same text. */
+const PARAGRAPHS_BODY = [
+  'First paragraph with repeated words and shared edits.',
+  'Second paragraph with text to split and join.',
+  'Third paragraph for concurrent deletion and formatting.',
+]
+  .map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`)
+  .join('');
 
 /** Named scenario shapes. Each varies one source of concurrency over the same edit mix. */
 export const SCENARIO_CONFIGS = {
@@ -60,7 +70,11 @@ export const SCENARIO_CONFIGS = {
   denseImages: { ...DENSE, documentPath: fixture('images-wrap-sides.docx') },
   denseControls: { ...DENSE, documentPath: fixture('block-sdt-showcase.docx') },
   denseLinks: { ...DENSE, documentPath: fixture('hyperlink-demo.docx') },
-} as const satisfies Record<string, Partial<ScenarioOptions> & { documentPath?: string }>;
+  denseParagraphs: { ...DENSE, replicas: 4, documentBody: PARAGRAPHS_BODY },
+} as const satisfies Record<
+  string,
+  Partial<ScenarioOptions> & { documentPath?: string; documentBody?: string }
+>;
 
 export type ScenarioConfig = keyof typeof SCENARIO_CONFIGS;
 
@@ -71,7 +85,8 @@ export const DEFAULT_DOCUMENT = path.resolve(
 
 /** The document a shape runs on: its own, or the one the command line names. */
 export function documentFor(config: ScenarioConfig, fallback: Uint8Array): Uint8Array {
-  const shape = SCENARIO_CONFIGS[config] as { documentPath?: string };
+  const shape = SCENARIO_CONFIGS[config] as { documentPath?: string; documentBody?: string };
+  if (shape.documentBody !== undefined) return zipDocument(shape.documentBody);
   return shape.documentPath ? new Uint8Array(readFileSync(shape.documentPath)) : fallback;
 }
 

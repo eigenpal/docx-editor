@@ -209,7 +209,14 @@ function refuseUnreadable(
   limits: DocumentLimits
 ): void {
   const read = decodeAttributes(out, limits, paragraphId);
+  // A `w:rPr` shell the reader drops is replaced by a plain one, so only reading the shell
+  // itself shows that its attributes are lost.
+  const runPropertiesRead =
+    out[KEY_RUN_PROPERTIES] === undefined ||
+    readShell(parseJson(out[KEY_RUN_PROPERTIES]), paragraphId, RUN_PROPERTIES_SLOT, limits) !==
+      null;
   if (
+    runPropertiesRead &&
     (read.run === null) === (attributes.run === null) &&
     read.properties.length === (attributes.run ? attributes.properties.length : 0) &&
     (read.text === null) === (attributes.text === null) &&
@@ -260,13 +267,21 @@ export function encodeItems(
   return ops;
 }
 
-/** Equal attribute sets give equal signatures, whatever order their keys were written in. */
+/**
+ * Equal attribute sets give equal signatures, whatever order their keys were written in, and
+ * different ones give different signatures: a peer writes keys and values, so no separator
+ * character may join them. A value that is not a string decodes as nothing, so only its type
+ * counts.
+ */
 export function attributeSignature(attributes: InlineAttributes | undefined): string {
   if (!attributes) return '';
-  return Object.keys(attributes)
+  const entries = Object.keys(attributes)
     .sort()
-    .map((key) => `${key}\u0000${attributes[key]}`)
-    .join('\u0001');
+    .map((key) => {
+      const value: unknown = attributes[key];
+      return typeof value === 'string' ? [key, value] : [key, null, typeof value];
+    });
+  return entries.length === 0 ? '' : JSON.stringify(entries);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -379,7 +394,10 @@ export function decodeAttributes(
   paragraphId: string
 ): LinearAttributes {
   // IDs are relative to the paragraph, so one attribute set reads differently in each.
-  const signature = `${paragraphId}\u0002${attributeSignature(attributes as InlineAttributes | undefined)}`;
+  const signature = JSON.stringify([
+    paragraphId,
+    attributeSignature(attributes as InlineAttributes | undefined),
+  ]);
   let cache = decodedAttributes.get(limits);
   if (!cache) decodedAttributes.set(limits, (cache = new Map()));
   const cached = cache.get(signature);
@@ -459,11 +477,11 @@ function decodeUncached(
     }
   }
   const runSignature = run
-    ? [
+    ? JSON.stringify([
         attributes[KEY_RUN],
-        attributes[KEY_RUN_PROPERTIES] ?? '',
-        ...propertyKeysShown.map((key) => `${key}\u0000${String(attributes[key])}`),
-      ].join('\u0001')
+        typeof attributes[KEY_RUN_PROPERTIES] === 'string' ? attributes[KEY_RUN_PROPERTIES] : '',
+        ...propertyKeysShown.map((key) => [key, attributes[key]]),
+      ])
     : undefined;
   return Object.freeze({
     run: run?.shell ?? null,

@@ -181,6 +181,48 @@ describe('webrtc chunked framing', () => {
     expect(receiver.passthrough).toHaveLength(0);
   });
 
+  test('closes the link on a frame larger than any sender writes', () => {
+    const receiver = createPeer();
+    let abandoned = 0;
+    installChunkedFraming(receiver, { onAbandonedMessage: () => (abandoned += 1) });
+    const frame = (index: number, payload: number): Uint8Array => {
+      const bytes = new Uint8Array(HEADER_BYTES + payload);
+      bytes[0] = 0xfb;
+      bytes.set([0, 0, 0, 1], 1);
+      bytes.set([0, 0, 0, index], 5);
+      bytes.set([0, 0, 0, 3], 9);
+      return bytes;
+    };
+    receiver._onChannelMessage({ data: frame(0, 100) });
+    receiver._onChannelMessage({ data: frame(1, 1024 * 1024) });
+
+    expect(receiver.delivered).toHaveLength(0);
+    expect(abandoned).toBe(1);
+    expect(receiver.destroyed).toBe(true);
+  });
+
+  test('bounds the bytes all incomplete messages hold together', () => {
+    const receiver = createPeer();
+    let abandoned = 0;
+    installChunkedFraming(receiver, {
+      maxPartialBytes: 1000,
+      onAbandonedMessage: () => (abandoned += 1),
+    });
+    // Each message stays under the bound alone; together they pass it.
+    for (let message = 1; message <= 3; message += 1) {
+      const bytes = new Uint8Array(HEADER_BYTES + 400);
+      bytes[0] = 0xfb;
+      bytes.set([0, 0, 0, message], 1);
+      bytes.set([0, 0, 0, 0], 5);
+      bytes.set([0, 0, 0, 2], 9);
+      receiver._onChannelMessage({ data: bytes });
+    }
+
+    expect(receiver.delivered).toHaveLength(0);
+    expect(abandoned).toBe(1);
+    expect(receiver.destroyed).toBe(true);
+  });
+
   test('installs once per peer', () => {
     const sender = createPeer();
     installChunkedFraming(sender);

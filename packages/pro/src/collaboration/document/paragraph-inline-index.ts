@@ -339,7 +339,10 @@ export class InlineIndex {
    * deleted paragraph's, or no longer: an undo of the edit that made it unlists it.
    */
   listingChanged(paragraphId: LogicalId): void {
-    if (!this.built || !this.textOf(paragraphId)) return;
+    if (!this.built) return;
+    // A text embeds only a node no child array lists, so a listing decides where it shows.
+    for (const holder of this.holders.get(paragraphId) ?? []) this.affected.add(holder);
+    if (!this.textOf(paragraphId)) return;
     this.noteOthers(this.follow.paragraphChanged(paragraphId));
     this.affected.add(paragraphId);
   }
@@ -356,11 +359,13 @@ export class InlineIndex {
       if (paragraphId < first) this.affected.add(first);
     }
     holders.add(paragraphId);
+    this.holdersChanged(holders);
   }
 
   private release(id: string, paragraphId: LogicalId): void {
     const holders = this.holders.get(id);
     if (!holders) return;
+    this.holdersChanged(holders);
     const wasFirst = firstHolder(holders) === paragraphId;
     holders.delete(paragraphId);
     if (holders.size === 0) {
@@ -370,6 +375,19 @@ export class InlineIndex {
     }
     // The next holder now shows the ID bare.
     if (wasFirst) this.affected.add(firstHolder(holders));
+  }
+
+  /**
+   * The holders of one ID changed. A paragraph that shows a holder's text where it follows a
+   * move shows that ID by the holders too: tagged or bare, and an embed only while no other
+   * text holds it. Its own text and its following text can stay the same, so it reads again.
+   */
+  private holdersChanged(holders: ReadonlySet<LogicalId>): void {
+    for (const holder of holders) {
+      for (const target of this.follow.placedTargetsFor(holder)) {
+        if (!holders.has(target)) this.affected.add(target);
+      }
+    }
   }
 
   /**

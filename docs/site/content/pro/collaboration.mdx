@@ -539,17 +539,29 @@ If your server holds each room's `Y.Doc`, as a Hocuspocus server does, pass that
 
 Yjs removes formatting markers that it finds redundant after it receives an update. On a server, that removal is a change of the server's own, which the server sends to every participant. It can remove the formatting of text that a participant is typing. A prepared document does not remove markers.
 
+The client chooses `documentName`, so treat it as untrusted. The examples in this guide accept only the room ID shape before they use the name in a file path. They omit authentication. A production server also checks in `onAuthenticate` that the user may open the room.
+
 ```ts
 import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { Server } from '@hocuspocus/server';
 import * as Y from 'yjs';
 import { prepareCollaborationServerDocument } from '@docx-editor.dev/pro/collaboration';
+
+const ROOMS_DIR = '/var/lib/rooms';
+// No `.`, `/`, or `\`, so a room name cannot leave ROOMS_DIR.
+const ROOM_ID = /^[A-Za-z0-9_-]{24,256}$/;
+
+function roomFile(documentName: string): string {
+  if (!ROOM_ID.test(documentName)) throw new Error('unknown room');
+  return path.join(ROOMS_DIR, `${documentName}.ydoc`);
+}
 
 const server = new Server({
   async onLoadDocument({ documentName, document }) {
     prepareCollaborationServerDocument(document);
     // Load the saved state after the preparation.
-    const saved = await readFile(`${documentName}.ydoc`).catch(() => null);
+    const saved = await readFile(roomFile(documentName)).catch(() => null);
     if (saved) Y.applyUpdate(document, new Uint8Array(saved));
     return document;
   },
@@ -566,8 +578,10 @@ Compact a room when the server loads it, before any participant syncs. Pass the 
 
 Every server that holds rooms must also call `checkCollaborationRoomGeneration` from `beforeHandleMessage`. A participant that still holds the previous generation is refused before any of its state merges into the new one.
 
+The example uses the `roomFile` function from [Prepare the room document on a server](#prepare-the-room-document-on-a-server). It writes the new state to a temporary file and renames it, so a crash during the write keeps the old state.
+
 ```ts
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, rename, writeFile } from 'node:fs/promises';
 import { Server } from '@hocuspocus/server';
 import * as Y from 'yjs';
 import {
@@ -579,12 +593,15 @@ import {
 const server = new Server({
   async onLoadDocument({ documentName, document }) {
     prepareCollaborationServerDocument(document);
-    const file = `${documentName}.ydoc`;
+    const file = roomFile(documentName);
     const saved = await readFile(file).catch(() => null);
     if (!saved) return document;
     // A damaged room throws CollaborationSchemaError. Keep the stored state unchanged.
     const compacted = await compactCollaborationState(new Uint8Array(saved)).catch(() => null);
-    if (compacted) await writeFile(file, compacted);
+    if (compacted) {
+      await writeFile(`${file}.tmp`, compacted);
+      await rename(`${file}.tmp`, file);
+    }
     Y.applyUpdate(document, compacted ?? new Uint8Array(saved));
     return document;
   },
@@ -593,6 +610,8 @@ const server = new Server({
   },
 });
 ```
+
+A check reads the whole room and builds it again. `compactCollaborationState` remembers each stored state that it found not worth compacting, so a client that opens a room again and again causes one check. A room that changed is checked again.
 
 `compactCollaborationState` throws `CollaborationSchemaError` when it cannot read the stored state as a room, as `readCollaborationDocument` does. The example catches the error and keeps the stored state unchanged, so the server never overwrites its only copy of a damaged room.
 
@@ -636,7 +655,8 @@ import type * as Y from 'yjs';
 import { readCollaborationDocument } from '@docx-editor.dev/pro/collaboration';
 
 async function exportRoom(documentName: string, document: Y.Doc) {
-  await writeFile(`${documentName}.docx`, readCollaborationDocument(document));
+  // `roomFile` refuses a name that is not a room ID.
+  await writeFile(`${roomFile(documentName)}.docx`, readCollaborationDocument(document));
 }
 ```
 

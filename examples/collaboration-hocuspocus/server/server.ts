@@ -11,7 +11,7 @@
 // Run it with Node 22.18 or later: `node server/server.ts`. Node strips the types.
 // Hocuspocus v4 targets Node, not Bun.
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Server } from '@hocuspocus/server';
 import {
@@ -48,6 +48,12 @@ const ROOM_ID = /^[A-Za-z0-9_-]{24,256}$/;
 function roomFile(documentName: string): string | null {
   if (!ROOM_ID.test(documentName)) return null;
   return path.join(DATA_DIR, `${documentName}.ydoc`);
+}
+
+/** Write through a temporary file, so a crash mid-write keeps the previous room state. */
+async function writeAtomically(file: string, bytes: Uint8Array): Promise<void> {
+  await writeFile(`${file}.tmp`, bytes);
+  await rename(`${file}.tmp`, file);
 }
 
 const server = new Server({
@@ -89,7 +95,7 @@ const server = new Server({
     });
     if (stored) {
       const compacted = await compactCollaborationState(new Uint8Array(stored)).catch(() => null);
-      if (compacted) await writeFile(file, compacted);
+      if (compacted) await writeAtomically(file, compacted);
       loadStoredDemoDocument(document, compacted ?? new Uint8Array(stored));
     }
     return document;
@@ -119,9 +125,9 @@ const server = new Server({
     const file = roomFile(documentName);
     if (!file) return;
     await mkdir(DATA_DIR, { recursive: true });
-    await writeFile(file, Y.encodeStateAsUpdate(document));
+    await writeAtomically(file, Y.encodeStateAsUpdate(document));
     try {
-      await writeFile(`${file}.docx`, readCollaborationDocument(document));
+      await writeAtomically(`${file}.docx`, readCollaborationDocument(document));
     } catch (error) {
       // A room mid-seed, or one two creators polluted, refuses to export. That must not stop
       // the `.ydoc` write above — losing the room is worse than losing one export.
