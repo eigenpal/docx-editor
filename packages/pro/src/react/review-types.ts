@@ -86,6 +86,23 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
 }
 
 /**
+ * Props for `DocxEditorReview.Balloon`, the balloon that opens a review item at its text:
+ * each tracked change under `revisionsIn: 'balloons'`, and format and structural changes in
+ * every mode.
+ *
+ * @public
+ */
+export interface ReviewBalloonProps {
+  /** A class added to the balloon element. */
+  className?: string;
+  /**
+   * Remove the built-in balloon, for example to render your own. Format and structural
+   * change balloons go with it.
+   */
+  hidden?: boolean;
+}
+
+/**
  * Props for the collapsed rail's gutter markers. @public
  *
  * `scale`, `offset` and `window` are the rail's own geometry and are supplied for you — an

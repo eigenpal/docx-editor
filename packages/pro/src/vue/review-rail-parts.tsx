@@ -376,7 +376,12 @@ const BalloonChangeSummary = defineComponent({
   },
 });
 
-/** @public */
+/**
+ * `DocxEditorReview.Balloon`: the balloon that opens a review item at its text. Takes
+ * {@link ReviewBalloonProps}.
+ *
+ * @public
+ */
 export const ReviewBalloon = markPart(
   defineComponent({
     name: 'ReviewBalloon',

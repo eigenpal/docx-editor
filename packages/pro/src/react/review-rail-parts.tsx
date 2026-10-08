@@ -11,7 +11,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import { Slot, useDocxEditor, useEditorEvent, useEditorState } from '@docx-editor.dev/react';
 import type { ReviewItemView } from './useReview.ts';
-import type { ReviewMarkersProps, ReviewPartProps } from './review-types.ts';
+import type { ReviewBalloonProps, ReviewMarkersProps, ReviewPartProps } from './review-types.ts';
 import {
   ReviewItemContext,
   useRail,
@@ -320,7 +320,7 @@ ReviewAddComment.docxReviewPart = 'AddComment' as const;
  *
  * @public
  */
-export function ReviewBalloon({ className, hidden }: ReviewPartProps) {
+export function ReviewBalloon({ className, hidden }: ReviewBalloonProps) {
   const editor = useDocxEditor();
   const editorRef = useRef(editor);
   editorRef.current = editor;

@@ -1,5 +1,5 @@
 // Switches where review items appear, through the review pane settings. The review rail
-// reads `revisionsIn` and `overflow` live, so one `setReviewPane` call moves every tracked
+// reads `revisionsIn` and `overflow` live, so one `setReviewPaneOptions` call moves every tracked
 // change between rail cards and page balloons, or lets a narrow window scroll sideways to
 // the cards instead of floating them over the page. Nothing is written into the document.
 import { useDocxEditor, useEditorState } from '@docx-editor.dev/react';
@@ -8,8 +8,8 @@ import { exampleText as t } from '../../shared/example-text';
 
 export function ReviewLayoutSwitch() {
   const editor = useDocxEditor();
-  const revisionsIn = useEditorState((snapshot) => snapshot.reviewPane?.revisionsIn ?? 'pane');
-  const overflow = useEditorState((snapshot) => snapshot.reviewPane?.overflow ?? 'float');
+  const revisionsIn = useEditorState((snapshot) => snapshot.reviewPane.revisionsIn);
+  const overflow = useEditorState((snapshot) => snapshot.reviewPane.overflow);
   return (
     <>
       <label className="demo-review-layout">
@@ -18,7 +18,7 @@ export function ReviewLayoutSwitch() {
           value={revisionsIn}
           disabled={!editor}
           onChange={(event) =>
-            editor?.setReviewPane({ revisionsIn: event.target.value as RevisionDisplay })
+            editor?.setReviewPaneOptions({ revisionsIn: event.target.value as RevisionDisplay })
           }
         >
           <option value="pane">{t('reviewLayout.pane')}</option>
@@ -31,7 +31,7 @@ export function ReviewLayoutSwitch() {
           value={overflow}
           disabled={!editor}
           onChange={(event) =>
-            editor?.setReviewPane({ overflow: event.target.value as ReviewPaneOverflow })
+            editor?.setReviewPaneOptions({ overflow: event.target.value as ReviewPaneOverflow })
           }
         >
           <option value="float">{t('reviewLayout.float')}</option>

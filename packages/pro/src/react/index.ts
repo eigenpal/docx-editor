@@ -54,6 +54,7 @@ export {
   useReviewItem,
   type DocxEditorReviewNamespace,
   type ReviewActionProps,
+  type ReviewBalloonProps,
   type ReviewMarkersProps,
   type ReviewPartProps,
   type ReviewProps,

@@ -40,7 +40,7 @@ export type {
 export interface ReviewModuleOptions extends ProLicenseOptions {
   /**
    * The review pane settings the editor starts with. Change them later with
-   * `editor.setReviewPane()`, and read them from `snapshot.reviewPane`. Pass
+   * `editor.setReviewPaneOptions()`, and read them from `snapshot.reviewPane`. Pass
    * `{ opening: 'manual' }` when the host shows review items its own way, for example in
    * balloons or margin markers, and opens the pane only on demand. An unknown field or
    * value throws a `TypeError`.

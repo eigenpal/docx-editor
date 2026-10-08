@@ -93,8 +93,8 @@ const selectGutterGeometry = (snapshot: EditorSnapshot): GutterGeometry => {
   return {
     pageSetup: snapshot.pageSetup ?? null,
     reviewPaneOpen: snapshot.reviewPaneOpen ?? true,
-    entitledZoom: reviewPaneEntitledZoom(mode, snapshot.zoom, snapshot.reviewPane?.overflow),
-    scroll: snapshot.reviewPane?.overflow === 'scroll',
+    entitledZoom: reviewPaneEntitledZoom(mode, snapshot.zoom, snapshot.reviewPane.overflow),
+    scroll: snapshot.reviewPane.overflow === 'scroll',
   };
 };
 

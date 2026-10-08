@@ -393,21 +393,23 @@ export interface DocxEditorInstance extends Editor {
    */
   setRevisionMarkup(options: RevisionMarkupOptions): void;
   /**
-   * Change review pane settings. An omitted field keeps its value. The new values show in
-   * `snapshot().reviewPane`. They stay in force across `load()` and are never saved into the
-   * document. To open or close the pane, use `useReview().setPaneOpen` or the
-   * `toggleReviewPane` command instead.
+   * Change how the review pane behaves: when it opens by itself, and what it does when its
+   * card column does not fit. An omitted field keeps its value. Read the settings in force
+   * from `snapshot().reviewPane`. They stay in force across `load()` and are never saved into
+   * the document. This sets how the pane behaves; to open or close the pane itself, use
+   * `useReview().setPaneOpen` or the `toggleReviewPane` command.
    *
-   * Refused with `unsupported` when no review module is registered, and with `invalidArgs`
-   * for an unknown field or value. A refusal changes nothing.
+   * Returns `changed: true` when a setting changed and `changed: false` when every value was
+   * already in force. Refused with `unsupported` when no review module is registered, and
+   * with `invalidArgs` for an unknown field or value. A refusal changes nothing.
    *
    * @example
    * ```ts
-   * const result = editor.setReviewPane({ opening: 'manual', overflow: 'shrinkPage' });
+   * const result = editor.setReviewPaneOptions({ opening: 'manual', overflow: 'shrinkPage' });
    * if (!result.ok) console.warn(result.reason);
    * ```
    */
-  setReviewPane(options: ReviewPaneOptions): ExecResult;
+  setReviewPaneOptions(options: ReviewPaneOptions): ExecResult;
   /**
    * Mount into `el`. If the instance holds pending document bytes (created without a
    * container, or previously detached), they mount now — under the shaped measurer when

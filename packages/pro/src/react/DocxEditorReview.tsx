@@ -113,6 +113,7 @@ import {
 export { useReviewAuthor, useReviewItem } from './review-context.ts';
 export type {
   ReviewActionProps,
+  ReviewBalloonProps,
   ReviewMarkersProps,
   ReviewPartProps,
   ReviewProps,

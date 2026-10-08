@@ -146,16 +146,16 @@ export async function checkCommentMarkers(
   expect(insert?.hasAttribute('data-marker')).toBe(false);
   expect(q(insert!, '[data-testid="review-badge"]')).toBeNull();
 
-  await change(() => editor.setReviewPane({ commentMarkers: 'icon' }));
+  await change(() => editor.setReviewPaneOptions({ commentMarkers: 'icon' }));
   for (const marker of all(container, '[data-testid="review-marker"]')) {
     expect(marker.hasAttribute('data-marker')).toBe(false);
     expect(q(marker, '[data-testid="review-badge"]')).toBeNull();
   }
-  expect(editor.setReviewPane({ commentMarkers: 'bubble' as never })).toMatchObject({
+  expect(editor.setReviewPaneOptions({ commentMarkers: 'bubble' as never })).toMatchObject({
     ok: false,
     code: 'invalidArgs',
   });
-  await change(() => editor.setReviewPane({ commentMarkers: 'initials' }));
+  await change(() => editor.setReviewPaneOptions({ commentMarkers: 'initials' }));
   await change(() => editor.exec({ type: 'toggleReviewPane' }));
 }
 
@@ -423,7 +423,7 @@ export async function checkRevealOpensPane(
   ).toBe(true);
 
   // With `opening: 'manual'`, neither Next Change nor an announced activation opens it.
-  await change(() => editor.setReviewPane({ opening: 'manual' }));
+  await change(() => editor.setReviewPaneOptions({ opening: 'manual' }));
   await change(() => editor.exec({ type: 'toggleReviewPane' }));
   expect(editor.isReviewPaneOpen()).toBe(false);
   await change(() => editor.exec({ type: 'navigateReviewChange', direction: 'next' }));
@@ -432,7 +432,7 @@ export async function checkRevealOpensPane(
     editor.setActiveReviewItem(insert.key, { announce: true });
   });
   expect(editor.isReviewPaneOpen()).toBe(false);
-  await change(() => editor.setReviewPane({ opening: 'auto' }));
+  await change(() => editor.setReviewPaneOptions({ opening: 'auto' }));
 }
 
 /**

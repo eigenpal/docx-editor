@@ -1014,6 +1014,12 @@ export interface ReviewAdoptOptions {
 }
 
 // @public
+export interface ReviewBalloonProps {
+    className?: string;
+    hidden?: boolean;
+}
+
+// @public
 export interface ReviewItemRevealEvent {
     readonly key: string;
     readonly source: ReviewItemRevealSource;

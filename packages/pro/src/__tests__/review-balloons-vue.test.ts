@@ -102,9 +102,9 @@ describe('Vue review layout preferences', () => {
           (card) => card.dataset.kind
         );
       expect(kinds()).toContain('insert');
-      await change(() => mounted.editor().setReviewPane({ revisionsIn: 'balloons' }));
+      await change(() => mounted.editor().setReviewPaneOptions({ revisionsIn: 'balloons' }));
       expect(kinds().every((kind) => kind === 'comment')).toBe(true);
-      await change(() => mounted.editor().setReviewPane({ revisionsIn: 'pane' }));
+      await change(() => mounted.editor().setReviewPaneOptions({ revisionsIn: 'pane' }));
       expect(kinds()).toContain('insert');
     } finally {
       mounted.unmount();
@@ -168,14 +168,14 @@ describe('Vue review layout preferences', () => {
       )!;
       const gutter = () => scroller.style.getPropertyValue('--docx-review-gutter');
       expect(gutter()).toBe('44px');
-      await change(() => editor.setReviewPane({ overflow: 'scroll' }));
+      await change(() => editor.setReviewPaneOptions({ overflow: 'scroll' }));
       expect(gutter()).toBe('316px');
       expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('24px');
       // The rail shows its full card column, not the compact strip.
       expect(
         mounted.container.querySelector('[data-testid="review-rail"]')?.hasAttribute('data-compact')
       ).toBe(false);
-      await change(() => editor.setReviewPane({ overflow: 'float' }));
+      await change(() => editor.setReviewPaneOptions({ overflow: 'float' }));
       expect(gutter()).toBe('44px');
     } finally {
       mounted.unmount();
@@ -201,7 +201,7 @@ describe('Vue review layout preferences', () => {
       await ready(mounted);
       const editor = mounted.editor() as DocxEditorInstance;
       await change(() => {
-        editor.setReviewPane({ overflow: 'scroll' });
+        editor.setReviewPaneOptions({ overflow: 'scroll' });
         if (editor.snapshot().reviewPaneOpen) editor.exec({ type: 'toggleReviewPane' });
       });
       // Leave the fit and come back, so it measures the settled paddings now.

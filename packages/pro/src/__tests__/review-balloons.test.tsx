@@ -115,13 +115,13 @@ describe('React review layout preferences', () => {
           (card) => card.dataset.kind
         );
       expect(kinds()).toContain('insert');
-      await change(() => editor().setReviewPane({ revisionsIn: 'balloons' }));
+      await change(() => editor().setReviewPaneOptions({ revisionsIn: 'balloons' }));
       expect(kinds().every((kind) => kind === 'comment')).toBe(true);
-      expect(editor().setReviewPane({ revisionsIn: 'sidebar' as never })).toMatchObject({
+      expect(editor().setReviewPaneOptions({ revisionsIn: 'sidebar' as never })).toMatchObject({
         ok: false,
         code: 'invalidArgs',
       });
-      await change(() => editor().setReviewPane({ revisionsIn: 'pane' }));
+      await change(() => editor().setReviewPaneOptions({ revisionsIn: 'pane' }));
       expect(kinds()).toContain('insert');
     } finally {
       view.unmount();

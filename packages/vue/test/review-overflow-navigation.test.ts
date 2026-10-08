@@ -102,7 +102,7 @@ async function mountBothPanes(overflow: ReviewPaneOverflow) {
   );
   await flush();
   const editor = view.editor();
-  editor.setReviewPane({ overflow });
+  editor.setReviewPaneOptions({ overflow });
   if (!editor.snapshot().reviewPaneOpen) editor.exec({ type: 'toggleReviewPane' });
   await flush();
   await refit(editor);

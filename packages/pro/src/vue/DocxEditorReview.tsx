@@ -856,6 +856,7 @@ const ReviewRoot = defineComponent({
 export { useReviewItem };
 export type {
   ReviewActionProps,
+  ReviewBalloonProps,
   ReviewMarkersProps,
   ReviewPartProps,
   ReviewProps,

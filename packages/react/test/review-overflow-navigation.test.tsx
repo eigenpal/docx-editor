@@ -138,7 +138,7 @@ async function mountBothPanes(overflow: ReviewPaneOverflow) {
   );
   await settle();
   act(() => {
-    editor!.setReviewPane({ overflow });
+    editor!.setReviewPaneOptions({ overflow });
     if (!editor!.snapshot().reviewPaneOpen) editor!.exec({ type: 'toggleReviewPane' });
   });
   await refit(editor!);

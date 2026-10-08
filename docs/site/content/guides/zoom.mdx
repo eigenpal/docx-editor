@@ -164,13 +164,13 @@ const MODULES = [reviewModule({ pane: { overflow: 'shrinkPage' } })];
 />;
 ```
 
-To change the setting at runtime, call `setReviewPane` on the editor instance. Read the value in force from `snapshot().reviewPane`:
+To change the setting at runtime, call `setReviewPaneOptions` on the editor instance. Read the value in force from `snapshot().reviewPane`:
 
 ```ts
-editor.setReviewPane({ overflow: 'float' });
+editor.setReviewPaneOptions({ overflow: 'float' });
 ```
 
-`setReviewPane` refuses an unknown field or value with `invalidArgs` and keeps the previous settings. For more information, see [Control the review pane](/docs/2.x/pro#control-the-review-pane).
+`setReviewPaneOptions` refuses an unknown field or value with `invalidArgs` and keeps the previous settings. For more information, see [Control the review pane](/docs/2.x/pro#control-the-review-pane).
 
 ## Without an adapter
 

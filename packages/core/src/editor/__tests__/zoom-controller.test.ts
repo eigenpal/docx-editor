@@ -258,7 +258,7 @@ describe('tracking the viewport', () => {
     expect(harness.editor.getZoom()).toBe(closed);
 
     // Switching back to 'float' refits at once and the full column shrinks the page.
-    harness.editor.setReviewPane({ overflow: 'float' });
+    harness.editor.setReviewPaneOptions({ overflow: 'float' });
     await harness.settle();
     expect(harness.editor.getZoom()).toBeLessThan(closed);
   });
@@ -285,7 +285,7 @@ describe('tracking the viewport', () => {
     expect(beside * 816).toBeLessThanOrEqual(800 - 88 - 284);
 
     // 'float' gives the same page beside the navigation pane: the setting does not touch it.
-    harness.editor.setReviewPane({ overflow: 'float' });
+    harness.editor.setReviewPaneOptions({ overflow: 'float' });
     await harness.settle();
     expect(harness.editor.getZoom()).toBe(beside);
   });

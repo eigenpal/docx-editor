@@ -181,7 +181,7 @@ describe('the viewport’s review gutter', () => {
     );
     await settle();
     act(() => {
-      editor!.setReviewPane({ overflow: 'scroll' });
+      editor!.setReviewPaneOptions({ overflow: 'scroll' });
       editor!.exec({ type: 'toggleReviewPane' });
     });
     await settle();
@@ -189,7 +189,7 @@ describe('the viewport’s review gutter', () => {
     expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('316px');
     expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('24px');
     act(() => {
-      editor!.setReviewPane({ overflow: 'float' });
+      editor!.setReviewPaneOptions({ overflow: 'float' });
     });
     await settle();
     expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('44px');
@@ -222,7 +222,7 @@ describe('the viewport’s review gutter', () => {
       );
       await settle();
       act(() => {
-        editor!.setReviewPane({ overflow: 'scroll' });
+        editor!.setReviewPaneOptions({ overflow: 'scroll' });
         if (editor!.snapshot().reviewPaneOpen) editor!.exec({ type: 'toggleReviewPane' });
       });
       await settle();
@@ -327,7 +327,7 @@ describe('the viewport’s review gutter', () => {
     expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('0px');
     // Back to 'float' at runtime: the page keeps its cap and the strip mirrors.
     act(() => {
-      editor!.setReviewPane({ overflow: 'float' });
+      editor!.setReviewPaneOptions({ overflow: 'float' });
     });
     await settle();
     expect(editor!.snapshot().reviewPane).toMatchObject({ opening: 'auto', overflow: 'float' });

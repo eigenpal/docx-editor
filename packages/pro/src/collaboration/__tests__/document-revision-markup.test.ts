@@ -149,7 +149,11 @@ test('local markup stays private while tracked edits converge, undo, reconnect, 
   // The review pane settings are view state too: one participant's choice never reaches
   // the other, and switching them writes nothing into the shared document.
   const beforeLayout = packageFingerprint(alice.editor.surface!.session.currentPackage());
-  bob.editor.setReviewPane({ revisionsIn: 'balloons', commentMarkers: 'icon', overflow: 'scroll' });
+  bob.editor.setReviewPaneOptions({
+    revisionsIn: 'balloons',
+    commentMarkers: 'icon',
+    overflow: 'scroll',
+  });
   converge();
   expect(alice.editor.snapshot().reviewPane).toEqual({
     opening: 'auto',
@@ -158,7 +162,11 @@ test('local markup stays private while tracked edits converge, undo, reconnect, 
     commentMarkers: 'initials',
   });
   expect(packageFingerprint(alice.editor.surface!.session.currentPackage())).toBe(beforeLayout);
-  bob.editor.setReviewPane({ revisionsIn: 'pane', commentMarkers: 'initials', overflow: 'float' });
+  bob.editor.setReviewPaneOptions({
+    revisionsIn: 'pane',
+    commentMarkers: 'initials',
+    overflow: 'float',
+  });
 
   bob.editor.setRevisionMarkup({ trackFormatting: false });
   select(bob.editor, 0, 1);

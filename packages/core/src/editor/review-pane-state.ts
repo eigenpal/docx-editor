@@ -55,12 +55,12 @@ export function createReviewPaneState(
       } catch (error) {
         return { ok: false, code: 'invalidArgs', reason: (error as Error).message };
       }
-      // `changed: false`, as for an activation: a view setting is not document state.
+      // `changed` reports whether a setting moved, so a host can tell a no-op from a switch.
       if (next === value) return { ok: true, changed: false };
       const previous = value;
       value = next;
       host.changed(value, previous);
-      return { ok: true, changed: false };
+      return { ok: true, changed: true };
     },
     shows: (items) => items.some((item) => paneShows(value, item)),
     // An empty pane is not worth opening: under balloons a document with tracked changes

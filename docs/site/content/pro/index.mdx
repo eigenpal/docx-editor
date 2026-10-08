@@ -145,15 +145,15 @@ Set the starting values on the module:
 const MODULES = [reviewModule({ pane: { revisionsIn: 'balloons', opening: 'manual' } })];
 ```
 
-To change a setting at runtime, call `setReviewPane` with only the settings that change. Read the values in force from `snapshot().reviewPane`:
+To change a setting at runtime, call `setReviewPaneOptions` with only the settings that change. Read the values in force from `snapshot().reviewPane`:
 
 ```ts
-editor.setReviewPane({ revisionsIn: 'balloons' });
-editor.setReviewPane({ commentMarkers: 'icon', overflow: 'scroll' });
-const revisionsIn = editor.snapshot().reviewPane?.revisionsIn;
+editor.setReviewPaneOptions({ revisionsIn: 'balloons' });
+editor.setReviewPaneOptions({ commentMarkers: 'icon', overflow: 'scroll' });
+const revisionsIn = editor.snapshot().reviewPane.revisionsIn;
 ```
 
-`DocxEditorReview` reads the settings from the editor and updates when they change. The settings stay in force when you load another document. `setReviewPane` returns an `ExecResult`. It refuses an unknown field or value with `invalidArgs`, and refuses with `unsupported` when no review module is registered. A refusal changes nothing. Switching `revisionsIn` to `'balloons'` closes an open pane that has nothing left to list.
+`DocxEditorReview` reads the settings from the editor and updates when they change. The settings stay in force when you load another document. `setReviewPaneOptions` returns an `ExecResult`. It refuses an unknown field or value with `invalidArgs`, and refuses with `unsupported` when no review module is registered. A refusal changes nothing. Switching `revisionsIn` to `'balloons'` closes an open pane that has nothing left to list.
 
 To open or close the pane, call `setPaneOpen` from `useReview()`, or run the `toggleReviewPane` command.
 
