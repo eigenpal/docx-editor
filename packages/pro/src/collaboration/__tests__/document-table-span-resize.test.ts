@@ -22,16 +22,17 @@ afterEach(() => {
   for (const editor of editors.splice(0)) editor.destroy();
   harness.cleanup();
 });
-const cell = (text: string) => `<w:tc><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+const cell = (text: string) =>
+  `<w:tc>${['B', 'E'].includes(text) ? '<w:tcPr><w:tcBorders><w:left w:val="nil"/></w:tcBorders></w:tcPr>' : ''}<w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
 
 test('resizing below merged headers converges with concurrent edits, history, deletion, and reconnect', async () => {
   const peers = await harness.pair(
     zipDocument(
-      '<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>' +
+      '<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/><w:tblBorders><w:left w:val="single" w:sz="4"/><w:right w:val="single" w:sz="4"/><w:insideV w:val="single" w:sz="4"/></w:tblBorders></w:tblPr><w:tblGrid>' +
         '<w:gridCol w:w="2000"/>'.repeat(3) +
         '</w:tblGrid>' +
         '<w:tr>' +
-        cell('') +
+        '<w:tc><w:tcPr><w:tcBorders><w:left w:val="nil"/></w:tcBorders></w:tcPr><w:p/></w:tc>' +
         '<w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr><w:p><w:r><w:t>Heading</w:t></w:r></w:p></w:tc></w:tr>' +
         '<w:tr>' +
         cell('A') +
@@ -42,7 +43,17 @@ test('resizing below merged headers converges with concurrent edits, history, de
         cell('D') +
         cell('E') +
         cell('F') +
-        '</w:tr></w:tbl><w:p/>'
+        '</w:tr></w:tbl><w:p/>',
+      {
+        overrides:
+          '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>',
+        documentRels:
+          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="settings" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/></Relationships>',
+        extraXml: {
+          'word/settings.xml':
+            '<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>',
+        },
+      }
     )
   );
   const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
@@ -73,6 +84,11 @@ test('resizing below merged headers converges with concurrent edits, history, de
     expect(packageFingerprint(a)).toBe(packageFingerprint(b));
     expect(saveReopenDigest(a)).toEqual(saveReopenDigest(b));
     expect(tableOf(alice).columnEdges).toEqual(tableOf(bob).columnEdges);
+    for (const editor of [alice, bob]) {
+      for (const row of tableOf(editor).rows.slice(1)) {
+        expect(row.cells[0]!.borders?.right?.widthPt).toBe(0.5);
+      }
+    }
   };
   const select = (editor: Editor, text: string) => {
     const paragraphId = editor
