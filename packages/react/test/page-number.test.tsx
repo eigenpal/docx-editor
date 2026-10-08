@@ -117,4 +117,50 @@ describe('DocxEditor.PageNumber', () => {
     view.rerender(tree(THREE_PAGES));
     expect(view.getByRole('status').getAttribute('data-visible')).toBe('false');
   });
+
+  for (const inside of [false, true]) {
+    test(`stays outside the scroll container when placed ${inside ? 'inside' : 'beside'} the viewport`, () => {
+      const view = render(
+        <DocxEditorRoot document={THREE_PAGES}>
+          <div className="host-workspace" style={{ position: 'relative' }}>
+            <DocxEditorViewport>
+              <DocxEditorContent />
+              {inside ? <DocxEditorPageNumber /> : null}
+            </DocxEditorViewport>
+            {inside ? null : <DocxEditorPageNumber />}
+          </div>
+        </DocxEditorRoot>
+      );
+      const viewport = view.getByTestId('docx-editor-scroll');
+      const workspace = view.container.querySelector<HTMLElement>('.host-workspace')!;
+      const status = view.getByRole('status');
+      // A direct child of the positioned wrapper, so scrolling the pages never moves it.
+      expect(status.parentElement).toBe(workspace);
+      expect(viewport.contains(status)).toBe(false);
+      // The wrapper is not scoped, so the indicator scopes itself.
+      expect(status.classList.contains('docx-editor')).toBe(true);
+
+      Object.defineProperty(viewport, 'clientHeight', { value: 300, configurable: true });
+      viewport.scrollTop = 400;
+      act(() => viewport.dispatchEvent(new Event('scroll')));
+      expect(status.getAttribute('data-visible')).toBe('true');
+      expect(status.textContent).toContain('of 3');
+    });
+  }
+
+  test('does not scope itself again under a scoped wrapper', () => {
+    const view = render(
+      <DocxEditorRoot document={THREE_PAGES}>
+        <div className="docx-editor host-workspace">
+          <DocxEditorViewport>
+            <DocxEditorContent />
+            <DocxEditorPageNumber />
+          </DocxEditorViewport>
+        </div>
+      </DocxEditorRoot>
+    );
+    const status = view.getByRole('status');
+    expect(status.parentElement?.classList.contains('host-workspace')).toBe(true);
+    expect(status.classList.contains('docx-editor')).toBe(false);
+  });
 });

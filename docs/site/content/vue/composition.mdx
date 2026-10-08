@@ -617,6 +617,8 @@ Import the stylesheet once and give the editor container a height. Use a flex co
 
 Place the navigation pane and viewport in a row with `position: relative`. The pane uses that row as its positioning context.
 
+`DocxEditorPageNumber` uses absolute positioning against the same positioning context. Place it beside the viewport or inside it. Inside the viewport, it renders into the viewport's parent element, so it stays in view while the pages scroll.
+
 Do not set `z-index` on the workspace row or viewport. Either value creates a stacking context that can put a fixed context menu below other chrome.
 
 ## Keep the caret

@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { CSSProperties } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../i18n';
@@ -6,6 +7,7 @@ import { useDocxEditor } from './context';
 import { useNavigationViewportElement } from './navigation/navigation-layout';
 import { useEditorState } from './useEditorState';
 import { useScopeClassName } from './scope-context';
+import { useViewportOverlayHost } from './viewport-context';
 
 const HIDE_DELAY_MS = 600;
 const selectTotalPages = (snapshot: EditorSnapshot): number => snapshot.page.total;
@@ -24,15 +26,31 @@ export interface DocxEditorPageNumberProps {
 /**
  * Floating localized page readout for the active `DocxEditor.Viewport`.
  *
- * Render it as a sibling of the viewport inside a positioned wrapper. It appears while a
- * multi-page document scrolls and fades after 600 ms of inactivity.
+ * It appears while a multi-page document scrolls and fades after 600 ms of inactivity. It is
+ * positioned `absolute` against the nearest positioned ancestor, so give the element that holds
+ * the viewport `position: relative`.
+ *
+ * Place it as a sibling of the viewport or inside it. Inside the viewport, it renders into the
+ * viewport's parent element, so it stays in view while the pages scroll.
+ *
+ * @example
+ * ```tsx
+ * <div style={{ position: 'relative', height: '100%' }}>
+ *   <DocxEditor.Viewport>
+ *     <DocxEditor.Content />
+ *   </DocxEditor.Viewport>
+ *   <DocxEditor.PageNumber />
+ * </div>
+ * ```
  *
  * @public
  */
 export function DocxEditorPageNumber({ className, style }: DocxEditorPageNumberProps) {
-  const scopeClassName = useScopeClassName();
+  const ancestorScope = useScopeClassName();
   const editor = useDocxEditor();
   const viewport = useNavigationViewportElement();
+  // Inside the scroll container, an absolute overlay scrolls away with the pages.
+  const { inside, host } = useViewportOverlayHost(viewport);
   const total = useEditorState(selectTotalPages);
   const { t } = useTranslation();
   const translate = useContext(PageNumberTranslationContext);
@@ -58,12 +76,18 @@ export function DocxEditorPageNumber({ className, style }: DocxEditorPageNumberP
   }, [editor, total, viewport]);
 
   if (total <= 1) return null;
+  // The viewport scoped everything inside it; its parent may not be scoped.
+  const scopeClassName = host
+    ? host.closest('.docx-editor')
+      ? ''
+      : 'docx-editor '
+    : ancestorScope;
   const label = translate
     ? translate('viewer.pageIndicator')
         .replace(/\{current\}/g, String(current))
         .replace(/\{total\}/g, String(total))
     : t('viewer.pageIndicator', { current, total });
-  return (
+  const chip = (
     <div
       className={`${scopeClassName}docx-editor-shell__page-indicator-chip docx-editor__page-number${
         className ? ` ${className}` : ''
@@ -76,4 +100,7 @@ export function DocxEditorPageNumber({ className, style }: DocxEditorPageNumberP
       {label}
     </div>
   );
+  if (!inside) return chip;
+  // Before the viewport mounts its parent is unknown; render nothing until it is.
+  return host ? createPortal(chip, host) : null;
 }

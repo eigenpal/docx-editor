@@ -624,6 +624,8 @@ Composition lets you mount each part explicitly. Omitted parts do not render an 
 
 Import the stylesheet once and give the editor container a height. Use a flex column when chrome shares that height. Packaged controls and the viewport apply their own `.docx-editor` scope. The wrapper in [Primitives](#primitives) also makes editor styles and tokens available to custom controls.
 
+`DocxEditor.PageNumber` uses absolute positioning against the same positioning context. Place it beside the viewport or inside it. Inside the viewport, it renders into the viewport's parent element, so it stays in view while the pages scroll.
+
 The navigation pane requires a positioning context. Place it beside the viewport in a row with `position: relative`. The pane uses absolute positioning over the document gutter. Without that context, it enters normal flow and moves the page.
 
 Do not set `z-index` on the workspace row or viewport. That property can create a stacking context around the context menu. A fixed panel cannot escape its containing stacking context. The panel can then render under the chrome bar.

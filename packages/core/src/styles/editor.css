@@ -2543,8 +2543,9 @@ a.docx-hyperlink:focus-visible {
   pointer-events: none;
 }
 
-/* Public React page-number primitive. It is an overlay sibling of the viewport inside the
- * positioned workspace, so scrolling the document never moves the readout itself. */
+/* Public page-number primitive. It is an overlay sibling of the viewport inside the
+ * positioned workspace, so scrolling the document never moves the readout itself. A part
+ * placed inside the viewport renders into the viewport's parent element for the same reason. */
 .docx-editor__page-number {
   position: absolute;
   right: 24px;
