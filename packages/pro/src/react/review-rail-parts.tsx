@@ -17,7 +17,7 @@ import {
 } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
-import { Slot, useDocxEditor, useEditorState } from '@docx-editor.dev/react';
+import { Slot, useDocxEditor, useEditorEvent, useEditorState } from '@docx-editor.dev/react';
 import type { ReviewItemView } from './useReview.ts';
 import type { ReviewMarkersProps, ReviewPartProps } from './review-types.ts';
 import { ReviewItemContext, useRail, useReviewLabel } from './review-context.ts';
@@ -340,6 +340,11 @@ export function ReviewBalloon({ className, hidden }: ReviewPartProps) {
     navigationAnchorKeyRef.current = null;
     setAnchor(null);
   }, [displayMode]);
+  // Counts `reviewItemReveal` events. Next/Previous Change and `setActive` fire one on every
+  // landing, the active item included, so a balloon the reader closed opens again even though
+  // the active key did not move. A caret move fires none.
+  const [revealCount, setRevealCount] = useState(0);
+  useEditorEvent('reviewItemReveal', () => setRevealCount((count) => count + 1));
   const navigationActive = allItems.find((entry) => entry.isActive) ?? null;
   const navigationActiveRef = useRef(navigationActive);
   navigationActiveRef.current = navigationActive;
@@ -463,6 +468,8 @@ export function ReviewBalloon({ className, hidden }: ReviewPartProps) {
       return undefined;
     }
 
+    // A reveal of the decision already open keeps its balloon rather than redrawing it.
+    if (openRef.current && navigationAnchorKeyRef.current === active.key) return undefined;
     // Do not show the previous decision while the new painted site catches up.
     navigationAnchorKeyRef.current = active.key;
     setAnchor(null);
@@ -486,7 +493,7 @@ export function ReviewBalloon({ className, hidden }: ReviewPartProps) {
       cancelled = true;
       cancelAnimationFrame(frame);
     };
-  }, [displayMode, navigationActiveKey, navigationNeedsBalloon, revisionsIn]);
+  }, [displayMode, navigationActiveKey, navigationNeedsBalloon, revisionsIn, revealCount]);
 
   // Resolving the decision removes it from the queue; the balloon it was resolved from
   // must not linger over the text the accept just changed.

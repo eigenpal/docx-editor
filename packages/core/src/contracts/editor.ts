@@ -32,8 +32,15 @@ export type {
 import type { EditorReviewHits } from './editor-review-hits.ts';
 import type { ReviewItemQuery } from './editor-review-query.ts';
 export type { ReviewItemQuery } from './editor-review-query.ts';
+import type { ReviewActivationOptions } from './review-activation.ts';
+export type { ReviewActivationOptions } from './review-activation.ts';
 export type { EditorReviewHits, ReviewItemHit } from './editor-review-hits.ts';
-export type { DocumentChange, EditorEvents } from './editor-events.ts';
+export type {
+  DocumentChange,
+  EditorEvents,
+  ReviewItemRevealEvent,
+  ReviewItemRevealSource,
+} from './editor-events.ts';
 import type {
   DocumentEditingMode,
   ResolveReviewChangesOptions,
@@ -628,6 +635,9 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    * {@link setReviewActivationExclusions}), for a custom node without `reviewCard`, and when
    * the story it lives in will not open — and a host walking a queue with next/previous
    * controls has no other way to learn that a step did nothing. Consult {@link ReviewItemPlacement.activatable} to avoid asking.
+   *
+   * A call that lands fires `reviewItemReveal` with `source: 'host'`, also when the item was
+   * already active, unless `options.announce` is `false`. A `null` key fires nothing.
    */
   setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult;
 
@@ -896,28 +906,6 @@ export interface ReviewItemPlacementBase {
   readonly anchorY: number | null;
   readonly pageIndex: number | null;
   readonly isActive: boolean;
-}
-
-/**
- * How activating a review item places it in the viewport.
- *
- * @public
- */
-export interface ReviewActivationOptions {
-  /**
-   * Where the item lands, or `false` to open it without scrolling at all.
-   *
-   * Default `'centerIfNeeded'`: silent while the item is already on screen, centred when it
-   * has to travel. `'nearest'` scrolls the minimum instead, which parks the item flush
-   * against the edge it came in from; `'start'` puts it near the top, the way a jump to a
-   * heading reads. `false` is for a host whose own list already drives the scroll and does
-   * not want the engine competing with it.
-   *
-   * It governs the reveal of the ITEM. An item in a header, a footer or a note also opens
-   * that story, and opening one always brings its band into view — a story the reader cannot
-   * see is one they cannot read the change in, which is the whole point of activating it.
-   */
-  readonly reveal?: 'start' | 'center' | 'centerIfNeeded' | 'nearest' | false;
 }
 
 /** A comment thread's card. @public */

@@ -37,6 +37,7 @@ export {
   useStackedReviewPositions,
   type ReviewActivationOptions,
   type ReviewAdoptOptions,
+  type ReviewItemRevealEvent,
   type ReviewItemView,
   type UseReviewReturn,
 } from './useReview.ts';

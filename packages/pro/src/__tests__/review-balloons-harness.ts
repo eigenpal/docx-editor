@@ -339,3 +339,73 @@ export async function checkStructuralCaret(
     'structural'
   );
 }
+
+/**
+ * `revisionsIn: 'balloons'` with one tracked row: Next Change lands on the same change each
+ * time, and each landing opens the balloon again after the reader closed it.
+ */
+export async function checkRevealReopensBalloon(
+  container: HTMLElement,
+  editor: DocxEditorInstance,
+  change: Change
+): Promise<void> {
+  const page = q(container, '.docx-paginated-surface')!;
+  const escape = () =>
+    page.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    );
+  await change(() => editor.exec({ type: 'navigateReviewChange', direction: 'next' }));
+  expect(balloon(container)).not.toBeNull();
+  const key = editor.getActivatedReviewKey();
+  await change(escape);
+  expect(balloon(container)).toBeNull();
+  await change(() => editor.exec({ type: 'navigateReviewChange', direction: 'next' }));
+  expect(editor.getActivatedReviewKey()).toBe(key);
+  expect(balloon(container)).not.toBeNull();
+
+  const row = editor
+    .getReviewItems({ placement: false })
+    .find((item) => item.kind === 'revision' && item.revisionKind === 'structural')!;
+  await change(escape);
+  await change(() => {
+    editor.setActiveReviewItem(row.key);
+  });
+  expect(balloon(container)).not.toBeNull();
+  // Opting out of the event keeps the closed balloon closed.
+  await change(escape);
+  await change(() => {
+    editor.setActiveReviewItem(row.key, { announce: false });
+  });
+  expect(balloon(container)).toBeNull();
+}
+
+/** `revisionsIn: 'pane'`: Next Change opens a closed pane at the card it lands on. */
+export async function checkRevealOpensPane(
+  container: HTMLElement,
+  editor: DocxEditorInstance,
+  change: Change
+): Promise<void> {
+  if (editor.isReviewPaneOpen()) await change(() => editor.exec({ type: 'toggleReviewPane' }));
+  expect(editor.isReviewPaneOpen()).toBe(false);
+  const insert = editor
+    .getReviewItems({ placement: false })
+    .find((item) => item.kind === 'revision' && item.revisionKind === 'insert')!;
+  // An activation that opts out of the event leaves the pane closed.
+  await change(() => {
+    editor.setActiveReviewItem(insert.key, { announce: false });
+  });
+  expect(editor.isReviewPaneOpen()).toBe(false);
+  // A caret move announces nothing either.
+  const paragraphs = editor.surface!.session.paragraphIds();
+  const plain = { paragraphId: paragraphs[0]!, offset: 1 };
+  await change(() => editor.surface!.setSelection({ anchor: plain, head: plain }));
+  expect(editor.isReviewPaneOpen()).toBe(false);
+  await change(() => editor.exec({ type: 'navigateReviewChange', direction: 'next' }));
+  expect(editor.isReviewPaneOpen()).toBe(true);
+  const active = editor.getReviewItems({ placement: false }).find((item) => item.isActive)!;
+  expect(active.kind).toBe('revision');
+  const kind = active.kind === 'revision' ? active.revisionKind : '';
+  expect(
+    all(container, '[data-testid="review-card"]').some((card) => card.dataset.kind === kind)
+  ).toBe(true);
+}

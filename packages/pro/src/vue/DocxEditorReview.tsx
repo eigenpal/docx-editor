@@ -31,6 +31,7 @@ import type { ReviewRevisionKind, SelectionPin } from '@docx-editor.dev/core/con
 import {
   ReviewRailContext,
   useDocxEditor,
+  useEditorEvent,
   useEditorState,
   useReviewAuthors,
   useReviewGutter,
@@ -252,6 +253,12 @@ const ReviewRoot = defineComponent({
           (!props.filter || props.filter(entry))
       )
     );
+    // A revealed card opens a closed pane, as a click on its marker does. A change that the
+    // balloon serves is not in `items`, so the balloon opens it instead.
+    useEditorEvent('reviewItemReveal', ({ key }) => {
+      if (!props.hidden && items.value.some((entry) => entry.key === key))
+        reviewHook.setPaneOpen(true);
+    });
     const expandedResolvedKey = ref<string | null>(null);
     watch(
       items,

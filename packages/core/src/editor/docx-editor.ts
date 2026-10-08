@@ -1737,10 +1737,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     visible: () =>
       filterReviewItemsByAuthor(surface?.session.reviewItems() ?? [], reviewAuthorVisibility),
     scope: storyScopeOfReviewItem,
+    reveal: events.emitReviewItemReveal,
     activate: (key, allowExcludedFormat) => {
       allowExcludedFormatNavigation = allowExcludedFormat ?? false;
       try {
-        return editor.setActiveReviewItem(key);
+        return editor.setActiveReviewItem(key, { announce: false });
       } finally {
         allowExcludedFormatNavigation = false;
       }
@@ -2438,6 +2439,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // not respond to any number of further clicks.
       bump();
       emitSelectionChange();
+      if (options?.announce !== false) events.emitReviewItemReveal({ key, source: 'host' });
       // `changed: false` — activation moves the caret and the open card, and neither is
       // document state. A host must not mark its document dirty for opening a card.
       return { ok: true, changed: false };

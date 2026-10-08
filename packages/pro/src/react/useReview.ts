@@ -23,6 +23,7 @@ import type {
   ReviewActivationOptions,
   ReviewItemPlacement,
   ReviewItemQuery,
+  ReviewItemRevealEvent,
 } from '@docx-editor.dev/core/contracts/editor';
 import { notificationYieldsToTask, useDocxEditor } from '@docx-editor.dev/react';
 import { adoptReviewItems, type ReviewAdoptOptions } from '../review/review-item-author.ts';
@@ -72,6 +73,8 @@ export type ReviewItemView = ReviewItemPlacement;
  * the adapter into the engine's contract module.
  */
 export type { ReviewActivationOptions };
+/** The payload of the editor's `reviewItemReveal` event. The engine's own type, unchanged. */
+export type { ReviewItemRevealEvent };
 
 function reviewAuthorFilterKey(editor: Editor): string {
   const snapshot = (
@@ -104,6 +107,19 @@ export interface UseReviewReturn {
    * `options.reveal` picks where the item lands, or turns the engine's scroll off entirely
    * for a host whose own list already drives it. Default is centred when it has to travel,
    * still when it is already on screen.
+   *
+   * A call that lands fires the editor's `reviewItemReveal` event with `source: 'host'`, also
+   * when the item was already active, so the built-in balloon or card opens. Pass
+   * `{ announce: false }` when your own code must not hear that event, for example when your
+   * list follows the caret. A `null` key closes the card and fires no event.
+   *
+   * @example
+   * ```tsx
+   * const { setActive } = useReview();
+   * useEditorEvent('reviewItemReveal', ({ key, source }) => openMyCard(key, source));
+   * setActive(key); // fires 'reviewItemReveal'
+   * setActive(key, { announce: false }); // fires nothing
+   * ```
    */
   readonly setActive: (key: string | null, options?: ReviewActivationOptions) => boolean;
   /**

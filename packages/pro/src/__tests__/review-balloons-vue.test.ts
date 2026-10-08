@@ -6,7 +6,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
-import { h } from 'vue';
+import { defineComponent, h } from 'vue';
+import { useEditorEvent } from '@docx-editor.dev/vue';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { mountEditorTree } from '../../../vue/test/helpers/mount.ts';
 import { DocxEditorReview } from '../vue/index.ts';
@@ -17,6 +18,8 @@ import {
   checkChangeBalloons,
   checkCommentMarkers,
   checkReadOnlyBalloon,
+  checkRevealOpensPane,
+  checkRevealReopensBalloon,
   checkStructuralCaret,
   ROW_SOURCE,
 } from './review-balloons-harness.ts';
@@ -226,6 +229,70 @@ describe('Vue review layout preferences', () => {
       else delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
     }
   }, 20000);
+
+  test('Next Change reopens a closed balloon on the change it lands on again', async () => {
+    const mounted = mountReview(
+      ROW_SOURCE,
+      {},
+      { author: 'Grace Hopper', revisionMarkup: { revisionsIn: 'balloons' } }
+    );
+    try {
+      await flush();
+      await waitFor(() => mounted.container.querySelector('[data-paragraph-id]') !== null);
+      await checkRevealReopensBalloon(
+        mounted.container,
+        mounted.editor() as DocxEditorInstance,
+        change
+      );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  for (const paneOverflow of ['float', 'scroll'] as const) {
+    test(`Next Change opens a closed pane at its card (paneOverflow: '${paneOverflow}')`, async () => {
+      const mounted = mountReview(
+        BALLOON_SOURCE,
+        {},
+        { author: 'Grace Hopper', revisionMarkup: { paneOverflow } }
+      );
+      try {
+        await ready(mounted);
+        await checkRevealOpensPane(
+          mounted.container,
+          mounted.editor() as DocxEditorInstance,
+          change
+        );
+      } finally {
+        mounted.unmount();
+      }
+    });
+  }
+
+  test('useEditorEvent hears reviewItemReveal', async () => {
+    const heard: { key: string; source: string }[] = [];
+    const Listener = defineComponent({
+      setup() {
+        useEditorEvent('reviewItemReveal', (event) => heard.push({ ...event }));
+        return () => null;
+      },
+    });
+    const mounted = mountEditorTree(
+      () => [],
+      BALLOON_SOURCE,
+      () => [h(DocxEditorReview), h(Listener)],
+      [reviewModule()]
+    );
+    try {
+      await ready(mounted);
+      const editor = mounted.editor() as DocxEditorInstance;
+      await change(() => editor.exec({ type: 'navigateReviewChange', direction: 'next' }));
+      const key = editor.getReviewItems({ placement: false }).find((item) => item.isActive)!.key;
+      expect(heard).toEqual([{ key, source: 'navigate' }]);
+    } finally {
+      mounted.unmount();
+    }
+  });
 
   test('viewing mode keeps balloon decisions unavailable', async () => {
     const mounted = mountReview(

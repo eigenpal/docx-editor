@@ -50,6 +50,7 @@ import {
   ReviewRailContext,
   Slot,
   useDocxEditor,
+  useEditorEvent,
   useEditorState,
   useReviewAuthors,
   useReviewGutter,
@@ -209,6 +210,13 @@ function ReviewRoot({
         (!filter || filter(entry))
     );
   }, [review.items, filter, formatting, revisionsIn]);
+  // A revealed card opens a closed pane, as a click on its marker does. A change that the
+  // balloon serves is not in `items`, so the balloon opens it instead.
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  useEditorEvent('reviewItemReveal', ({ key }) => {
+    if (!hidden && itemsRef.current.some((entry) => entry.key === key)) setReviewPaneOpen(true);
+  });
   const configuredAuthor = useSyncExternalStore(
     useCallback((notify) => editor?.on('selectionChange', notify) ?? (() => {}), [editor]),
     () => editor?.getConfiguredAuthor() ?? null,

@@ -26,6 +26,7 @@ import type {
   ReviewRevisionItem,
   ReviewRevisionPlacement,
 } from '../contracts/editor.ts';
+import type { ReviewItemRevealEvent } from '../contracts/editor-events.ts';
 import type { StoryScope, TreeDocOp } from '../store/index.ts';
 import {
   deepParagraphOrderOfPart,
@@ -59,7 +60,9 @@ interface ReviewCommandDependencies {
   placements(query?: ReviewItemQuery): readonly ReviewItemPlacement[];
   visible(): readonly ReviewItem[];
   scope(item: ReviewItem): StoryScope;
+  /** Activates without announcing: only the caller knows whether the activation reveals. */
   activate(key: string | null, allowExcludedFormat?: boolean): ExecResult;
+  reveal(event: ReviewItemRevealEvent): void;
   setDisplayMode(mode: ReviewDisplayMode): void;
 }
 
@@ -510,7 +513,14 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
           ? nextFromCaret(items, surface, step)
           : (active + step + items.length) % items.length;
       const target = items[index]!;
-      return deps.activate(target.key, !target.activatable && target.revisionKind === 'format');
+      const result = deps.activate(
+        target.key,
+        !target.activatable && target.revisionKind === 'format'
+      );
+      // Every landing reveals, the active item included: a lone change navigates to itself,
+      // and its closed card must open again.
+      if (result.ok) deps.reveal({ key: target.key, source: 'navigate' });
+      return result;
     }
     if (command.type !== 'resolveAllReviewChanges') return null;
     const { groups, partOps, result } = bulkPlan(command);

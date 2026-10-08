@@ -11,6 +11,7 @@ import type {
   ReviewActivationOptions,
   ReviewItemPlacement,
   ReviewItemQuery,
+  ReviewItemRevealEvent,
 } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor, type MaybeRefOrGetter } from '@docx-editor.dev/vue';
 import { useEditorRenderRevision, type EditorRenderRevision } from './useEditorRenderRevision.ts';
@@ -39,12 +40,29 @@ function reviewRevisionKey(editor: Editor): string {
 export type ReviewItemView = ReviewItemPlacement;
 
 /** @public */
-export type { ReviewActivationOptions, ReviewAdoptOptions };
+export type { ReviewActivationOptions, ReviewAdoptOptions, ReviewItemRevealEvent };
 
 /** @public */
 export interface UseReviewReturn {
   readonly items: ComputedRef<readonly ReviewItemView[]>;
   readonly activeKey: ComputedRef<string | null>;
+  /**
+   * Card to document: puts the caret at the start of the item and scrolls to it. Reports
+   * whether it landed.
+   *
+   * A call that lands fires the editor's `reviewItemReveal` event with `source: 'host'`, also
+   * when the item was already active, so the built-in balloon or card opens. Pass
+   * `{ announce: false }` when your own code must not hear that event, for example when your
+   * list follows the caret. A `null` key closes the card and fires no event.
+   *
+   * @example
+   * ```ts
+   * const { setActive } = useReview();
+   * useEditorEvent('reviewItemReveal', ({ key, source }) => openMyCard(key, source));
+   * setActive(key); // fires 'reviewItemReveal'
+   * setActive(key, { announce: false }); // fires nothing
+   * ```
+   */
   readonly setActive: (key: string | null, options?: ReviewActivationOptions) => boolean;
   readonly accept: (item: ReviewItemView) => boolean;
   readonly reject: (item: ReviewItemView) => boolean;

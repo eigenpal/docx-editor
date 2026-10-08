@@ -3,6 +3,7 @@ import type {
   EditorError,
   EditorEvents,
   EditorSnapshot,
+  ReviewItemRevealEvent,
   Unsubscribe,
 } from '../contracts/editor.ts';
 import type { HistoryDiagnostic } from '../contracts/editor-scope.ts';
@@ -16,6 +17,7 @@ export function createEditorEvents(snapshot: () => EditorSnapshot) {
     error: new Set(),
     historyDiagnostic: new Set(),
     revisionMarkupChange: new Set(),
+    reviewItemReveal: new Set(),
   };
   return {
     emitError(error: EditorError) {
@@ -34,6 +36,10 @@ export function createEditorEvents(snapshot: () => EditorSnapshot) {
     },
     emitRevisionMarkupChange(value: ResolvedRevisionMarkup) {
       for (const handler of [...handlers.revisionMarkupChange]) handler(value);
+    },
+    emitReviewItemReveal(event: ReviewItemRevealEvent) {
+      const value = Object.freeze({ ...event });
+      for (const handler of [...handlers.reviewItemReveal]) handler(value);
     },
     hasErrorHandlers: () => handlers.error.size > 0,
     clear() {

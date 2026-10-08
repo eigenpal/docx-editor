@@ -10,7 +10,12 @@ import { describe, expect, test } from 'bun:test';
 import { act, render } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { DocxEditorInstance, RevisionMarkupOptions } from '@docx-editor.dev/core/editor';
-import { DocxEditorContent, DocxEditorRoot, DocxEditorViewport } from '@docx-editor.dev/react';
+import {
+  DocxEditorContent,
+  DocxEditorRoot,
+  DocxEditorViewport,
+  useEditorEvent,
+} from '@docx-editor.dev/react';
 import { DocxEditorReview } from '../react/index.ts';
 import { reviewModule } from '../index.ts';
 import {
@@ -18,6 +23,8 @@ import {
   checkChangeBalloons,
   checkCommentMarkers,
   checkReadOnlyBalloon,
+  checkRevealOpensPane,
+  checkRevealReopensBalloon,
   checkStructuralCaret,
   ROW_SOURCE,
 } from './review-balloons-harness.ts';
@@ -115,6 +122,50 @@ describe('React review layout preferences', () => {
     const { view, editor } = mount({ revisionsIn: 'balloons' }, <DocxEditorReview />, ROW_SOURCE);
     try {
       await checkStructuralCaret(view.container, editor(), change);
+    } finally {
+      view.unmount();
+    }
+  });
+
+  test('Next Change reopens a closed balloon on the change it lands on again', async () => {
+    const { view, editor } = mount({ revisionsIn: 'balloons' }, <DocxEditorReview />, ROW_SOURCE);
+    try {
+      await checkRevealReopensBalloon(view.container, editor(), change);
+    } finally {
+      view.unmount();
+    }
+  });
+
+  for (const paneOverflow of ['float', 'scroll'] as const) {
+    test(`Next Change opens a closed pane at its card (paneOverflow: '${paneOverflow}')`, async () => {
+      const { view, editor } = mount({ paneOverflow });
+      try {
+        await checkRevealOpensPane(view.container, editor(), change);
+      } finally {
+        view.unmount();
+      }
+    });
+  }
+
+  test('useEditorEvent hears reviewItemReveal', async () => {
+    const heard: { key: string; source: string }[] = [];
+    function Listener() {
+      useEditorEvent('reviewItemReveal', (event) => heard.push({ ...event }));
+      return null;
+    }
+    const { view, editor } = mount(
+      undefined,
+      <>
+        <DocxEditorReview />
+        <Listener />
+      </>
+    );
+    try {
+      await change(() => editor().exec({ type: 'navigateReviewChange', direction: 'next' }));
+      const key = editor()
+        .getReviewItems({ placement: false })
+        .find((item) => item.isActive)!.key;
+      expect(heard).toEqual([{ key, source: 'navigate' }]);
     } finally {
       view.unmount();
     }

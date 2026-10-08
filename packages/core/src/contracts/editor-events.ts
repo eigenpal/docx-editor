@@ -18,7 +18,48 @@ export interface EditorEvents {
   selectionChange: (snapshot: EditorSnapshot) => void;
   error: (error: EditorError) => void;
   historyDiagnostic: (diagnostic: HistoryDiagnostic) => void;
+  /**
+   * An explicit request landed on a review item, and its card or balloon should open.
+   *
+   * Fires each time Next Change or Previous Change lands (`source: 'navigate'`), and each time
+   * `setActiveReviewItem(key)` succeeds (`source: 'host'`). It fires again when the item was
+   * already active, so a card the reader closed can open again.
+   *
+   * It does not fire for a caret move, a click in the page, a dismissal (`key` of `null`), a
+   * refused activation, or `setActiveReviewItem(key, { announce: false })`. A remote edit in a
+   * collaboration session never fires it: it is a local view event.
+   *
+   * @example
+   * ```ts
+   * editor.on('reviewItemReveal', ({ key, source }) => {
+   *   openMyBalloon(key); // `source` is 'navigate' or 'host'
+   * });
+   * ```
+   */
+  reviewItemReveal: (event: ReviewItemRevealEvent) => void;
 }
+
+/**
+ * The payload of the `reviewItemReveal` event.
+ *
+ * @public
+ */
+export interface ReviewItemRevealEvent {
+  /**
+   * The key of the review item to open. It matches `ReviewItemPlacement.key` in
+   * `getReviewItems()`, including a paired replacement's key.
+   */
+  readonly key: string;
+  /**
+   * What asked for the item. `'navigate'` is Next Change or Previous Change, from the menu,
+   * the toolbar, a shortcut, or `exec({ type: 'navigateReviewChange' })`. `'host'` is a call
+   * to `setActiveReviewItem` (and so `useReview().setActive`).
+   */
+  readonly source: ReviewItemRevealSource;
+}
+
+/** What asked to reveal a review item. See {@link ReviewItemRevealEvent.source}. @public */
+export type ReviewItemRevealSource = 'navigate' | 'host';
 
 /**
  * The payload of the `change` event / `onChange`. It carries revision + identity

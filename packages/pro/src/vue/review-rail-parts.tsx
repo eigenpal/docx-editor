@@ -17,7 +17,7 @@ import {
   type PropType,
   type VNode,
 } from 'vue';
-import { Slot, useDocxEditor, useEditorState } from '@docx-editor.dev/vue';
+import { Slot, useDocxEditor, useEditorEvent, useEditorState } from '@docx-editor.dev/vue';
 import { cloneReviewCard, partitionReviewChildren } from './review-composition.ts';
 import {
   MARKER_STEP,
@@ -385,6 +385,13 @@ export const ReviewBalloon = markPart(
         navigationAnchorKey.value = null;
         anchor.value = null;
       });
+      // Counts `reviewItemReveal` events. Next/Previous Change and `setActive` fire one on every
+      // landing, the active item included, so a balloon the reader closed opens again even
+      // though the active key did not move. A caret move fires none.
+      const revealCount = ref(0);
+      useEditorEvent('reviewItemReveal', () => {
+        revealCount.value += 1;
+      });
       const openRef = ref(false);
       const hadEntry = ref(false);
 
@@ -483,7 +490,7 @@ export const ReviewBalloon = markPart(
           )
       );
       watch(
-        [navigationActiveKey, navigationNeedsBalloon, () => rail.value.revisionsIn],
+        [navigationActiveKey, navigationNeedsBalloon, () => rail.value.revisionsIn, revealCount],
         ([activeKey, needsBalloon, revisionsIn], _previous, onCleanup) => {
           const active = navigationActive.value;
           const host = instance?.proxy?.$el as HTMLElement | undefined;
@@ -502,6 +509,8 @@ export const ReviewBalloon = markPart(
             return;
           }
           if (!railEl || !scroller) return;
+          // A reveal of the decision already open keeps its balloon rather than redrawing it.
+          if (openRef.value && navigationAnchorKey.value === active.key) return;
           navigationAnchorKey.value = active.key;
           anchor.value = null;
           let cancelled = false;

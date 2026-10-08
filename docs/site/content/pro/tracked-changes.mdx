@@ -320,6 +320,8 @@ A reply to a revision creates a comment over its range. Its `parentRevisionId` l
 
 `setActive` returns `false` when activation is excluded, no range exists, or the story cannot open.
 
+A `setActive` call that succeeds fires the editor's `reviewItemReveal` event. Pass `{ announce: false }` when your own reveal handler must not run, for example when your list follows the caret.
+
 Use `useReviewOf(editor, query)` with an existing editor. React accepts `Editor | null`. Vue requires `Ref<Editor | null>` and accepts a reactive query.
 
 | Query or exclusion              | Effect                                                         |
@@ -384,13 +386,30 @@ An item hits when the character under the pointer is inside its range. The right
 
 To anchor a balloon to an item without a pointer, call `editor.getReviewItemRects(key)`. It returns the item's bands on painted pages in client coordinates, or an empty array.
 
-To open your own balloon on navigation but not on a caret move, call `editor.getActivatedReviewKey()`. It returns the key that `setActiveReviewItem()`, **Next Change**, or **Previous Change** opened, while the caret it placed is still in place. It returns `null` when only the caret makes an item active. For a paired replacement, it returns the key of the deletion. Listen for `selectionChange` to read it again.
+To open your own balloon on navigation but not on a caret move, listen for the `reviewItemReveal` event. It fires each time **Next Change** or **Previous Change** lands on an item, and each time `setActiveReviewItem(key)` succeeds. It also fires when the item is already active, so a balloon that the reader closed opens again. The event does not fire for a caret move, a click in the page, a dismissal, a refused activation, or a call with `{ announce: false }`. It is a local view event, so edits from other participants in a collaboration session never fire it.
+
+The following example opens a host balloon in React. In Vue, use `useEditorEvent` from `@docx-editor.dev/vue` with the same handler:
+
+```tsx
+import { useEditorEvent } from '@docx-editor.dev/react';
+
+useEditorEvent('reviewItemReveal', ({ key, source }) => {
+  // source is 'navigate' for Next Change and Previous Change,
+  // or 'host' for setActiveReviewItem() and useReview().setActive().
+  openBalloon(key);
+});
+```
+
+The packaged balloons and review pane use the same event. With `revisionsIn: 'balloons'`, the change balloon opens. With `revisionsIn: 'pane'`, a closed pane opens at the item's card.
+
+`editor.getActivatedReviewKey()` returns the key that `setActiveReviewItem()`, **Next Change**, or **Previous Change** opened, while the caret it placed is still in place. It returns `null` when only the caret makes an item active. For a paired replacement, it returns the key of the deletion. Listen for `selectionChange` to read it again.
 
 | Host API | Returns |
 | --- | --- |
 | `getReviewItemsAt(clientX, clientY, query?)` | The review items under a point, narrowest first. |
 | `getReviewItemRects(key)` | The item's bands on painted pages, in client coordinates. |
 | `getActivatedReviewKey()` | The explicitly activated item key, or `null`. |
+| `on('reviewItemReveal', handler)` | Each explicit reveal, as `{ key, source }`. |
 
 The packaged review rail can draw these balloons for you. See [Choose where review items appear](/docs/2.x/pro/revision-markup#choose-where-review-items-appear).
 
