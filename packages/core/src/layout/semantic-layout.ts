@@ -1713,7 +1713,7 @@ function layoutBlocksPass(
       columnX + columnWidth(),
       omittedAnchor
     );
-    const exclusionToken = exclusionLayoutToken(localPageZones);
+    const exclusionToken = exclusionLayoutToken(localPageZones, contentHeight());
     const anchorParagraphStartY =
       paragraphStartY - paragraphDrawingWrap.displacement(pages.length, paragraphId);
     // `entry.key` already folds the content, the cascade props, the tab stops, and the
@@ -1774,6 +1774,7 @@ function layoutBlocksPass(
           columnCount > 1 ? columnWidth() : entry.indent.left + available + entry.indent.right,
         paragraphStartY,
         anchorParagraphStartY,
+        regionBottomY: contentHeight(),
         ...(paragraphSpaceBefore > 0 ? { paragraphSpaceBefore } : {}),
         ...(localPageZones.length > 0 ? { pageExclusionZones: localPageZones } : {}),
         ...(suppressChrome ? { suppressEmptyPlaceholderLine: true } : {}),

@@ -12,10 +12,13 @@ interface Beside {
   readonly text: string;
   /** Paragraph spacing above, in twentieths of a point. */
   readonly before?: number;
+  /** Float height in points; 100 when absent. */
+  readonly height?: number;
 }
 
-/** A 100pt tall square-wrapped rectangle anchored in the paragraph that holds `text`. */
+/** A square-wrapped rectangle anchored in the paragraph that holds `text`. */
 function layoutBeside(shape: Beside) {
+  const cy = (shape.height ?? 100) * 12700;
   const spacing = shape.before ? `<w:pPr><w:spacing w:before="${shape.before}"/></w:pPr>` : '';
   const xml = `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
     xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
@@ -25,9 +28,9 @@ function layoutBeside(shape: Beside) {
     <w:p>${spacing}<w:r><w:drawing><wp:anchor simplePos="0" relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1">
     <wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:posOffset>${shape.x * 12700}</wp:posOffset></wp:positionH>
     <wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>
-    <wp:extent cx="${shape.width * 12700}" cy="1270000"/><wp:wrapSquare wrapText="bothSides"/><wp:docPr id="1" name="rectangle"/>
+    <wp:extent cx="${shape.width * 12700}" cy="${cy}"/><wp:wrapSquare wrapText="bothSides"/><wp:docPr id="1" name="rectangle"/>
     <wp:cNvGraphicFramePr/><a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
-    <wps:wsp><wps:cNvSpPr/><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${shape.width * 12700}" cy="1270000"/></a:xfrm>
+    <wps:wsp><wps:cNvSpPr/><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${shape.width * 12700}" cy="${cy}"/></a:xfrm>
     <a:prstGeom prst="rect"><a:avLst/></a:prstGeom></wps:spPr><wps:bodyPr/></wps:wsp></a:graphicData></a:graphic>
     </wp:anchor></w:drawing></w:r><w:r><w:t xml:space="preserve">${shape.text}</w:t></w:r></w:p></w:body></w:document>`;
   const parsed = readOoxmlPart(xml, { name: '/word/document.xml', contentType: 'app/xml' });
@@ -53,7 +56,9 @@ function layoutBeside(shape: Beside) {
       text: line.spans.map((span) => span.text).join(''),
       x: line.spans[0]!.box.x,
       y: line.box.y,
-    }));
+      spans: line.spans.map((span) => [span.box.x, span.box.x + span.box.width]),
+    }))
+    .map(({ spans, ...line }) => (shape.height === undefined ? line : { ...line, spans }));
 }
 
 function layoutCaption(text: string) {
@@ -162,4 +167,18 @@ test('a first line moved below a float takes its paragraph spacing again there',
 test('a word that fits a passage stays beside the float', () => {
   const lines = layoutBeside({ x: 0, width: 100, text: 'Alpha' });
   expect(lines[0]).toEqual({ text: 'Alpha', x: 100, y: 12 });
+});
+
+test('an opening line keeps to the passages when clearing its own float would leave the page', () => {
+  // The float covers 12pt to 382pt of a 380pt region. Below it the paragraph and its float
+  // would move on together, so the line stays beside the float rather than over it.
+  const lines = layoutBeside({ x: 30, width: 140, height: 370, text: 'Alphabet go' });
+  expect(lines.map((line) => [line.text, line.y])).toEqual([
+    ['Alp', 12],
+    ['hab', 24],
+    ['et go', 36],
+  ]);
+  for (const line of lines)
+    for (const [start, end] of (line as { spans: number[][] }).spans)
+      expect(end! <= 30 || start! >= 170).toBe(true);
 });

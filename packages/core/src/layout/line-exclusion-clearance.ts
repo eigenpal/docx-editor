@@ -96,6 +96,10 @@ export function createLineExclusionClearance(context: {
   lineSpacing: ParagraphLineSpacing;
   /** Whether the line holds content; see {@link lineHoldsContent}. */
   holdsContent: () => boolean;
+  /** The paragraph being broken, whose own floats move with it to a later region. */
+  paragraphId?: string;
+  /** Page-content Y of the flow region's bottom, when the caller paginates. */
+  regionBottom?: number;
 }) {
   let appliedLine: PendingLine | undefined;
   /** The line whose only skip is the estimate taken before it had content. */
@@ -198,6 +202,15 @@ export function createLineExclusionClearance(context: {
       Math.min(width, Math.max(0, context.right - left))
     );
     if (!(skip > 0.001)) return false;
+    // Below the region a float anchored in this paragraph moves on with it, and blocks the
+    // line again there. Keep the line beside the float instead of overlapping it.
+    const bottom = context.regionBottom;
+    if (
+      bottom !== undefined &&
+      context.top() + (line.exclusionSkipBefore ?? 0) + skip + height > bottom + 0.001 &&
+      zones.some((zone) => zone.anchorParagraphId === context.paragraphId)
+    )
+      return false;
     pushTextLineDown(line, skip);
     return true;
   };

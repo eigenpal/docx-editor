@@ -679,9 +679,16 @@ function wrapInputToken(input: WrapExclusionInput): string {
   ].join(':');
 }
 
-export function exclusionLayoutToken(zones: readonly ExclusionZone[]): string {
+/**
+ * A token for the zones a break sees. `regionBottomY`, when given, joins it: an opening line
+ * that would clear its own float past the region bottom keeps to the passages beside it.
+ */
+export function exclusionLayoutToken(
+  zones: readonly ExclusionZone[],
+  regionBottomY?: number
+): string {
   if (zones.length === 0) return '';
-  return zones
+  const token = zones
     .map((zone) => {
       const band = zone.verticalBand;
       const probeY = zone.y + zone.input.contentBounds.height / 2;
@@ -706,6 +713,7 @@ export function exclusionLayoutToken(zones: readonly ExclusionZone[]): string {
       ].join('|');
     })
     .join('\n');
+  return regionBottomY === undefined ? token : `${token}\nbottom:${regionBottomY.toFixed(3)}`;
 }
 
 export function paintLayerRecords(

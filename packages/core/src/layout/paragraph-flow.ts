@@ -507,6 +507,8 @@ export function breakParagraph(
     measurer,
     lineSpacing,
     holdsContent,
+    paragraphId,
+    ...(flow?.regionBottomY !== undefined ? { regionBottom: flow.regionBottomY } : {}),
   });
 
   // Where the line will actually sit. A band that pushed this line down has already been

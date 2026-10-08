@@ -108,6 +108,12 @@ export interface ParagraphFlowOptions {
   readonly anchorParagraphStartY?: number;
   /** Spacing applied above the first line; `paragraphStartY` already includes it. */
   readonly paragraphSpaceBefore?: number;
+  /**
+   * Page-content Y of the flow region's bottom. An empty line does not move below a float
+   * anchored in its own paragraph past it: the float travels with the paragraph, so the
+   * next region would block the line the same way.
+   */
+  readonly regionBottomY?: number;
   /** Active exclusion zones on the current page while breaking. */
   readonly pageExclusionZones?: readonly ExclusionZone[];
   /** When breaking inside a table cell, the cell content box for anchored frame resolution. */

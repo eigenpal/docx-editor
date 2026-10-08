@@ -96,7 +96,9 @@ for (const control of ['\u200f', '\u200e', '\u200b', '\u0301']) {
 
 test('an oversized glyph after a zero-width prefix moves below a passage too narrow for it', () => {
   // 48pt WW beside a 20pt passage: no glyph fits there, so the zero-width prefix and the
-  // word open one line below the band instead of overflowing beside it.
+  // word open one line below the band instead of overflowing beside it. Reference renders
+  // of a left floating table, with and without borders and cell margins, leaving an 18pt
+  // to 40pt right passage, place the word below the table with and without the RLM prefix.
   for (const table of [false, true])
     for (const split of [false, true]) {
       const lines = layoutPrefix('\u200f', split, {
