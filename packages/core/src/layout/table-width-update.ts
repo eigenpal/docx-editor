@@ -12,6 +12,7 @@
 // returns null and the caller runs the full table layout instead.
 
 import { ordinaryTableParagraph } from './table-ordinary-paragraph.ts';
+import { noteRowFactRead, rowFacts } from './table-row-facts.ts';
 import { firstRowContentDeps, lastRowContentDeps } from './table-fragment-content-insets.ts';
 import { bodyLineId } from './body-line-id.ts';
 import {
@@ -64,12 +65,11 @@ export interface TableWidthUpdate {
 /**
  * Structural eligibility of one resolved table, memoized per immutable structure. A text
  * edit gives the table a new structure that shares every unchanged row object, so the row
- * answers are memoized per row as well.
+ * answers are kept per row as well, in the record its side-rule copies share
+ * (`table-row-facts.ts`).
  */
 const eligibleStructures = new WeakMap<SemanticTableStructure, boolean>();
 const listFreeStructures = new WeakMap<SemanticTableStructure, number>();
-const eligibleRows = new WeakMap<SemanticTableRow, boolean>();
-const listFreeRows = new WeakMap<SemanticTableRow, number>();
 const listIdentities = new WeakMap<NonNullable<TableFlowDeps['listItems']>, number>();
 let nextListIdentity = 1;
 
@@ -80,9 +80,10 @@ function listIdentity(items: NonNullable<TableFlowDeps['listItems']>): number {
 }
 
 function eligibleRow(row: SemanticTableRow): boolean {
-  let known = eligibleRows.get(row);
-  if (known === undefined) {
-    known = row.cells.every(
+  const facts = rowFacts(row);
+  if (facts.eligible === undefined) {
+    noteRowFactRead('eligible');
+    facts.eligible = row.cells.every(
       (cell) =>
         cell.logicalGridColumn === undefined &&
         cell.textDirection === 'horizontal' &&
@@ -90,9 +91,8 @@ function eligibleRow(row: SemanticTableRow): boolean {
         (!cell.vMergeContinue || row.isHeader) &&
         cell.blocks.every((block) => block.kind === 'paragraph' && ordinaryTableParagraph(block))
     );
-    eligibleRows.set(row, known);
   }
-  return known;
+  return facts.eligible;
 }
 
 function listFreeRow(
@@ -100,11 +100,13 @@ function listFreeRow(
   listItems: NonNullable<TableFlowDeps['listItems']>,
   identity: number
 ) {
-  if (listFreeRows.get(row) === identity) return true;
+  const facts = rowFacts(row);
+  if (facts.listFree === identity) return true;
+  noteRowFactRead('listFree');
   const listFree = row.cells.every((cell) =>
     cell.blocks.every((block) => !listItems.has(block.id))
   );
-  if (listFree) listFreeRows.set(row, identity);
+  if (listFree) facts.listFree = identity;
   return listFree;
 }
 

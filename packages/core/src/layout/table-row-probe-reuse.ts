@@ -9,11 +9,12 @@ import type { SemanticTableRow } from './semantic-table.ts';
 import type { TableRowFragmentRecord } from './semantic-records.ts';
 import { placementFromPrevious, rememberRowPlacement } from './table-row-placement-reuse.ts';
 import { withLines } from './table-row-geometry-reuse.ts';
+import { noteRowFactRead, rowFacts } from './table-row-facts.ts';
 
 type Placement = ReturnType<typeof layoutRowFragment>;
 
-// Resolved rows are immutable and survive text edits in other rows.
-const ordinaryRows = new WeakMap<SemanticTableRow, boolean>();
+// Resolved rows are immutable and survive text edits in other rows. The answer is kept in the
+// record a row's side-rule copies share (`table-row-facts.ts`).
 
 function sameProbeValue(a: TableFlowDeps, b: TableFlowDeps, key: keyof TableFlowDeps): boolean {
   if (key === 'pageExclusionZones') return true;
@@ -47,9 +48,10 @@ export function createRowProbeReuse(
     | { row: SemanticTableRow; result: Placement; deps: TableFlowDeps; left: number; top: number }
     | undefined;
   const ordinary = (row: SemanticTableRow, deps: TableFlowDeps): boolean => {
-    let safe = ordinaryRows.get(row);
-    if (safe === undefined) {
-      safe =
+    const facts = rowFacts(row);
+    if (facts.ordinary === undefined) {
+      noteRowFactRead('ordinary');
+      facts.ordinary =
         !row.isHeader &&
         row.cells.every(
           (cell) =>
@@ -57,9 +59,10 @@ export function createRowProbeReuse(
             cell.textDirection === 'horizontal' &&
             cell.blocks.every((b) => b.kind === 'paragraph' && ordinaryTableParagraph(b))
         );
-      ordinaryRows.set(row, safe);
     }
-    return safe && !row.cells.some((c) => c.blocks.some((b) => deps.listItems?.has(b.id)));
+    return (
+      facts.ordinary && !row.cells.some((c) => c.blocks.some((b) => deps.listItems?.has(b.id)))
+    );
   };
   return {
     measure(row: SemanticTableRow, left: number, top: number, deps: TableFlowDeps): number {

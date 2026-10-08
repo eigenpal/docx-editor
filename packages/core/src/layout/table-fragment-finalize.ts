@@ -8,6 +8,7 @@
 // because a row cannot know its merged neighbour's box until every row of the span is down.
 
 import { shiftInlineDrawingRecord } from './drawing-layout.ts';
+import { rememberMovableCopy } from './table-row-geometry-reuse.ts';
 import { relayOutMergedBottomToTop } from './table-cell-text-direction.ts';
 import { republishAnchoredParagraphsInBlocks } from './table-anchor-republish.ts';
 import type { CellContentInsets } from './table-cell-geometry.ts';
@@ -80,7 +81,7 @@ export function shiftBlocks(
         })),
       };
     }
-    return {
+    return rememberMovableCopy(block, {
       ...block,
       box: { ...block.box, y: block.box.y + dy },
       ...(block.shadingBox
@@ -135,7 +136,7 @@ export function shiftBlocks(
             }
           : {}),
       })),
-    };
+    });
   });
 }
 
