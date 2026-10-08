@@ -77,21 +77,21 @@ To add a class to the built-in balloon, pass `className` to `DocxEditorReview.Ba
 </Framework>
 </FrameworkTabs>
 
-## Build your own text balloon
+## Build your own balloon
 
-The live example uses an application balloon for painted text revisions. It opens when you select a tracked change.
+The live example draws an application balloon for tracked changes. It opens when you click a tracked change.
 
 <CustomizationDemo topic="balloons" />
 
-This recipe keeps the default `revisionsIn: 'pane'`. The pane keeps listing every change, including changes in tables, drawings, headers, footers, and changes that have no painted text. Your balloon adds a second route to the changes in body text.
+Keep `revisionsIn: 'balloons'` and pass `hidden` to `DocxEditorReview.Balloon`. The review pane then lists comments only, the built-in balloon stays closed, and your balloon is the route to each tracked change. The built-in format and structural change balloons go with it, so your balloon handles every revision kind.
 
-Match `data-revision-id` against the review item ID and its revision addresses. Scope every query to your editor container.
+Read the item and its position from the editor, not from the painted pages:
 
-Open the balloon for `activatedKey` from `useReview()`, not for `activeKey`. `activatedKey` is set only when **Next Change**, **Previous Change**, or `setActive` opens an item on purpose. The click handler in this recipe calls `setActive`, so a click opens the balloon too. `activeKey` follows the caret, so a balloon keyed on it opens each time the caret lands in a change. Outside a component, `editor.getActivatedReviewItemKey()` returns the same key.
-
-Read the painted anchor rectangle for popup placement. Recalculate after scrolling, resizing, and repainting. Hide the balloon when its anchor disappears.
-
-Use `useReview()` to activate, accept, and reject the item. Check each returned Boolean. Handle Escape, dismissal, read-only state, and cleanup.
+- On a click, call `editor.getReviewItemsAt(event.clientX, event.clientY, { pairReplacements: true })`. It returns the review items under the point, innermost first. Open the first revision. Do not call `setActive` on a click, because it moves the caret to the start of the change.
+- To place the balloon, call `editor.getReviewItemRects(key)`. It returns the painted bands of the item in client coordinates. Anchor the balloon to the first band. If the array is empty, the item has no painted text, so hide the balloon. Read the bands again after a scroll, a resize, and each `change` event.
+- To follow **Next Change** and **Previous Change**, listen for `reviewItemReveal` with `useEditorEvent`. The event gives the key of the item to open. You can read `activatedKey` from `useReview()` instead. Do not open the balloon for `activeKey`. It follows the caret, so the balloon opens each time the caret lands in a change.
+- Pass the same query, `{ pairReplacements: true }`, to `useReview()` and to the hit test, so that the keys match. A replacement is then one item with `revisionKind: 'replace'`.
+- Check the Boolean that `accept` and `reject` return. Handle Escape, dismissal, read-only items, and cleanup.
 
 ## React and Vue reference
 
@@ -105,7 +105,7 @@ import { DocxEditor, type DocxEditorRootProps } from '@docx-editor.dev/react';
 import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
 import '@docx-editor.dev/core/styles/editor.css';
 
-const modules = [reviewModule()];
+const modules = [reviewModule({ pane: { revisionsIn: 'balloons' } })];
 
 export function ContractEditor({
   bytes,
@@ -129,7 +129,9 @@ export function ContractEditor({
           <DocxEditor.Content />
           <DocxEditor.HyperLink />
           <DocxEditor.ContextMenu />
-          <DocxEditorReview />
+          <DocxEditorReview>
+            <DocxEditorReview.Balloon hidden />
+          </DocxEditorReview>
         </DocxEditor.Viewport>
       </DocxEditor.Root>
     </div>
@@ -148,7 +150,7 @@ import type { FontConfigurationFragment } from '@docx-editor.dev/vue';
 import '@docx-editor.dev/core/styles/editor.css';
 
 defineProps<{ bytes: Uint8Array; fonts: FontConfigurationFragment }>();
-const modules = [reviewModule()];
+const modules = [reviewModule({ pane: { revisionsIn: 'balloons' } })];
 </script>
 
 <template>
@@ -166,7 +168,9 @@ const modules = [reviewModule()];
         <DocxEditor.Content />
         <DocxEditor.HyperLink />
         <DocxEditor.ContextMenu />
-        <DocxEditorReview />
+        <DocxEditorReview>
+          <DocxEditorReview.Balloon hidden />
+        </DocxEditorReview>
       </DocxEditor.Viewport>
     </DocxEditor.Root>
   </div>
@@ -176,9 +180,9 @@ const modules = [reviewModule()];
 </Framework>
 </FrameworkTabs>
 
-## Build the text balloon
+## Build the balloon
 
-Create `ContractBalloons.tsx` or `ContractBalloons.vue` with these examples. Both use the same application geometry helper. Set `authorAccent` in React or `author-accent` in Vue to tint the balloon by author.
+Create `ContractBalloons.tsx` or `ContractBalloons.vue` with these examples. Both use the same placement helper. Set `authorAccent` in React or `author-accent` in Vue to tint the balloon by author.
 
 <FrameworkTabs variant="block">
 <Framework value="react">
@@ -187,11 +191,14 @@ Create `ContractBalloons.tsx` or `ContractBalloons.vue` with these examples. Bot
 'use client';
 
 import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useDocxEditor, useEditorEvent, useReviewAuthors } from '@docx-editor.dev/react';
 import { useReview } from '@docx-editor.dev/pro/react';
-import { useReviewAuthors } from '@docx-editor.dev/react';
-import { observeTextRevisionAnchor } from './observe-text-revision-anchor';
+import { revisionLabel, watchBalloonAnchor, type BalloonPosition } from './watch-balloon-anchor';
 
-/** Application-owned balloons for painted text revisions in the main story. */
+/** One key for a replacement, in the hit test and in the review queue. */
+const query = { pairReplacements: true };
+
+/** Application-owned balloons for tracked changes. */
 export function ContractBalloons({
   container,
   rounded,
@@ -201,54 +208,53 @@ export function ContractBalloons({
   rounded: boolean;
   authorAccent?: boolean;
 }) {
-  const { items, activatedKey, setActive, accept, reject } = useReview();
+  const editor = useDocxEditor();
+  const { items, accept, reject } = useReview(query);
   const authors = useReviewAuthors();
   const panel = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<{
-    left: number;
-    top: number;
-  } | null>(null);
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const [position, setPosition] = useState<BalloonPosition | null>(null);
   const [failure, setFailure] = useState('');
-  const item = items.find((entry) => entry.key === activatedKey && entry.kind === 'revision');
+  const item = items.find((entry) => entry.key === openKey && entry.kind === 'revision');
+  const itemKey = item?.key;
+
+  // Next Change and Previous Change ask the host to open an item.
+  useEditorEvent('reviewItemReveal', ({ key }) => {
+    setFailure('');
+    setOpenKey(key);
+  });
 
   useEffect(() => {
     const host = container.current;
-    if (!host) return;
-    function click(event: MouseEvent) {
-      if (!(event.target instanceof Element) || panel.current?.contains(event.target)) return;
-      const span = event.target.closest<HTMLElement>('[data-revision-id]');
-      const match = items.find(
-        (entry) =>
-          entry.kind === 'revision' &&
-          entry.item.kind === 'revision' &&
-          [entry.id, ...entry.item.addresses.map((address) => address.id)].includes(
-            span?.dataset.revisionId ?? ''
-          )
-      );
+    if (!host || !editor) return;
+    const click = (event: MouseEvent) => {
+      if (event.target instanceof Node && panel.current?.contains(event.target)) return;
+      // Read the item under the pointer. Do not activate it: that moves the caret.
+      const hit = editor
+        .getReviewItemsAt(event.clientX, event.clientY, query)
+        .find((entry) => entry.placement.kind === 'revision');
       setFailure('');
-      setActive(match?.key ?? null, { reveal: false });
-    }
-    function keydown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setActive(null);
-    }
+      setOpenKey(hit?.placement.key ?? null);
+    };
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpenKey(null);
+    };
     host.addEventListener('click', click);
     host.addEventListener('keydown', keydown);
     return () => {
       host.removeEventListener('click', click);
       host.removeEventListener('keydown', keydown);
     };
-  }, [container, items, setActive]);
+  }, [container, editor]);
 
   useEffect(() => {
     const host = container.current;
-    if (!host) return;
-    if (!item || item.kind !== 'revision') return;
-    return observeTextRevisionAnchor(
-      host,
-      [item.id, ...item.item.addresses.map((address) => address.id)],
-      setPosition
-    );
-  }, [container, item]);
+    if (!host || !editor || !itemKey) {
+      setPosition(null);
+      return;
+    }
+    return watchBalloonAnchor(editor, host, itemKey, setPosition);
+  }, [container, editor, itemKey]);
 
   if (!item || item.kind !== 'revision' || !position) return null;
   const authorColor =
@@ -268,19 +274,21 @@ export function ContractBalloons({
       data-review-author={item.author}
       role="group"
       aria-label="Tracked change balloon"
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') setActive(null);
-      }}
       onMouseDown={(event) => event.preventDefault()}
     >
       <div className="contract-balloonHeading">
         <span className="contract-initials">{item.initials}</span>
         <strong>{item.author}</strong>
-        <button type="button" aria-label="Close balloon" onClick={() => setActive(null)}>
+        <button type="button" aria-label="Close balloon" onClick={() => setOpenKey(null)}>
           ×
         </button>
       </div>
-      <p>{item.revisionKind === 'delete' ? 'Deleted text' : 'Inserted text'}</p>
+      <p>{revisionLabel(item.revisionKind)}</p>
+      {item.replacedText && (
+        <p className="contract-excerpt">
+          <del>{item.replacedText}</del>
+        </p>
+      )}
       <p className="contract-excerpt">{item.text}</p>
       <div className="contract-decisions">
         <button
@@ -318,7 +326,9 @@ const container = useRef<HTMLDivElement>(null);
 <div ref={container} className="contract-stage">
   <DocxEditor.Viewport style={{ height: 520 }}>
     <DocxEditor.Content />
-    <DocxEditorReview />
+    <DocxEditorReview>
+      <DocxEditorReview.Balloon hidden />
+    </DocxEditorReview>
   </DocxEditor.Viewport>
   <ContractBalloons container={container} rounded />
 </div>;
@@ -330,22 +340,27 @@ const container = useRef<HTMLDivElement>(null);
 ```vue
 <script setup lang="ts">
 import { computed, ref, watchEffect } from 'vue';
-import { useReviewAuthors } from '@docx-editor.dev/vue';
+import { useDocxEditor, useEditorEvent, useReviewAuthors } from '@docx-editor.dev/vue';
 import { useReview } from '@docx-editor.dev/pro/vue';
-import { observeTextRevisionAnchor } from './observe-text-revision-anchor';
-import type { BalloonPosition } from './observe-text-revision-anchor';
+import { revisionLabel, watchBalloonAnchor } from './watch-balloon-anchor';
+import type { BalloonPosition } from './watch-balloon-anchor';
+
+/** One key for a replacement, in the hit test and in the review queue. */
+const query = { pairReplacements: true };
 
 const props = defineProps<{
   container: HTMLElement | null;
   authorAccent?: boolean;
 }>();
+const editor = useDocxEditor();
 const authors = useReviewAuthors();
-const { items, activatedKey, setActive, accept, reject } = useReview();
+const { items, accept, reject } = useReview(query);
 const panel = ref<HTMLElement | null>(null);
+const openKey = ref<string | null>(null);
 const position = ref<BalloonPosition | null>(null);
 const failure = ref('');
 const item = computed(() =>
-  items.value.find((entry) => entry.key === activatedKey.value && entry.kind === 'revision')
+  items.value.find((entry) => entry.key === openKey.value && entry.kind === 'revision')
 );
 
 const authorColor = computed(
@@ -354,26 +369,28 @@ const authorColor = computed(
     'var(--doc-primary)'
 );
 
+// Next Change and Previous Change ask the host to open an item.
+useEditorEvent('reviewItemReveal', ({ key }) => {
+  failure.value = '';
+  openKey.value = key;
+});
+
 watchEffect((cleanup) => {
   const host = props.container;
-  const entries = items.value;
-  if (!host) return;
-  function click(event: MouseEvent) {
-    if (!(event.target instanceof Element) || panel.value?.contains(event.target)) return;
-    const span = event.target.closest<HTMLElement>('[data-revision-id]');
-    const match = entries.find(
-      (entry) =>
-        entry.kind === 'revision' &&
-        [entry.id, ...entry.item.addresses.map((address) => address.id)].includes(
-          span?.dataset.revisionId ?? ''
-        )
-    );
+  const view = editor.value;
+  if (!host || !view) return;
+  const click = (event: MouseEvent) => {
+    if (event.target instanceof Node && panel.value?.contains(event.target)) return;
+    // Read the item under the pointer. Do not activate it: that moves the caret.
+    const hit = view
+      .getReviewItemsAt(event.clientX, event.clientY, query)
+      .find((entry) => entry.placement.kind === 'revision');
     failure.value = '';
-    setActive(match?.key ?? null, { reveal: false });
-  }
-  function keydown(event: KeyboardEvent) {
-    if (event.key === 'Escape') setActive(null);
-  }
+    openKey.value = hit?.placement.key ?? null;
+  };
+  const keydown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') openKey.value = null;
+  };
   host.addEventListener('click', click);
   host.addEventListener('keydown', keydown);
   cleanup(() => {
@@ -383,19 +400,16 @@ watchEffect((cleanup) => {
 });
 watchEffect((cleanup) => {
   const host = props.container;
-  const active = item.value;
-  if (!host || !active || active.kind !== 'revision') {
+  const view = editor.value;
+  const key = item.value?.key;
+  if (!host || !view || !key) {
     position.value = null;
     return;
   }
   cleanup(
-    observeTextRevisionAnchor(
-      host,
-      [active.id, ...active.item.addresses.map((address) => address.id)],
-      (value) => {
-        position.value = value;
-      }
-    )
+    watchBalloonAnchor(view, host, key, (value) => {
+      position.value = value;
+    })
   );
 });
 function decide(kind: 'accept' | 'reject') {
@@ -424,11 +438,13 @@ function decide(kind: 'accept' | 'reject') {
         : undefined,
     }"
     @mousedown.prevent
-    @keydown.esc="setActive(null)"
   >
     <strong>{{ item.author }}</strong>
-    <button type="button" aria-label="Close balloon" @click="setActive(null)">×</button>
-    <p>{{ item.revisionKind === 'delete' ? 'Deleted text' : 'Inserted text' }}</p>
+    <button type="button" aria-label="Close balloon" @click="openKey = null">×</button>
+    <p>{{ revisionLabel(item.revisionKind) }}</p>
+    <p v-if="item.replacedText">
+      <del>{{ item.replacedText }}</del>
+    </p>
     <p>{{ item.text }}</p>
     <button type="button" :disabled="item.readOnly" @click="decide('accept')">Accept</button>
     <button type="button" :disabled="item.readOnly" @click="decide('reject')">Reject</button>
@@ -443,7 +459,9 @@ Import `ContractBalloons` into your editor component. Declare `const container =
 <div ref="container" class="contract-stage">
   <DocxEditor.Viewport :style="{ height: '520px' }">
     <DocxEditor.Content />
-    <DocxEditorReview />
+    <DocxEditorReview>
+      <DocxEditorReview.Balloon hidden />
+    </DocxEditorReview>
   </DocxEditor.Viewport>
   <ContractBalloons :container="container" />
 </div>
@@ -452,56 +470,62 @@ Import `ContractBalloons` into your editor component. Declare `const container =
 </Framework>
 </FrameworkTabs>
 
-## Observe the painted anchor
+## Place the balloon
 
-Create `observe-text-revision-anchor.ts` beside the balloon component. The helper scopes queries and removes observers when the balloon stops observing.
+Create `watch-balloon-anchor.ts` beside the balloon component. The helper reads the bands of the item from the editor with `getReviewItemRects(key)`, so it reads no painted page markup. It places the balloon under the first band, relative to your container. It reads the bands again after a scroll, a resize, and each document change, and it hides the balloon when the item has no painted band.
 
 ```ts
+import type { Editor } from '@docx-editor.dev/core';
+
 export interface BalloonPosition {
   left: number;
   top: number;
 }
 
-/** Geometry belongs to the application popup, never to document editing. */
-export function observeTextRevisionAnchor(
+/** Places a balloon under the first painted band of one review item. */
+export function watchBalloonAnchor(
+  editor: Editor,
   host: HTMLElement,
-  revisionIds: readonly string[],
+  key: string,
   notify: (position: BalloonPosition | null) => void
 ): () => void {
-  const ids = new Set(revisionIds);
+  let frame = 0;
   function update() {
-    const anchor = Array.from(host.querySelectorAll<HTMLElement>('[data-revision-id]')).find(
-      (span) => ids.has(span.dataset.revisionId ?? '')
-    );
-    if (!anchor) {
-      notify(null);
-      return;
-    }
-    const rect = anchor.getBoundingClientRect();
+    frame = 0;
+    const [band] = editor.getReviewItemRects(key);
     const bounds = host.getBoundingClientRect();
-    if (rect.bottom < bounds.top || rect.top > bounds.bottom || rect.width === 0) {
+    if (!band || band.bottom < bounds.top || band.top > bounds.bottom) {
       notify(null);
       return;
     }
-    const panel = host.querySelector<HTMLElement>('[aria-label="Tracked change balloon"]');
-    const height = panel?.offsetHeight ?? 150;
     const width = Math.min(280, host.clientWidth - 24);
     notify({
-      left: Math.max(12, Math.min(rect.left - bounds.left, host.clientWidth - width - 12)),
-      top: Math.max(12, Math.min(rect.bottom - bounds.top + 8, host.clientHeight - height - 12)),
+      left: Math.max(12, Math.min(band.left - bounds.left, host.clientWidth - width - 12)),
+      top: band.bottom - bounds.top + 8,
     });
   }
+  function schedule() {
+    if (!frame) frame = requestAnimationFrame(update);
+  }
   update();
-  const observer = new ResizeObserver(update);
-  observer.observe(host);
-  const mutation = new MutationObserver(update);
-  mutation.observe(host, { childList: true, subtree: true });
-  host.addEventListener('scroll', update, true);
+  const resize = new ResizeObserver(schedule);
+  resize.observe(host);
+  host.addEventListener('scroll', schedule, true);
+  const offChange = editor.on('change', schedule);
   return () => {
-    observer.disconnect();
-    mutation.disconnect();
-    host.removeEventListener('scroll', update, true);
+    cancelAnimationFrame(frame);
+    resize.disconnect();
+    host.removeEventListener('scroll', schedule, true);
+    offChange();
   };
+}
+
+/** A short heading for each kind of tracked change. */
+export function revisionLabel(kind: string): string {
+  if (kind === 'insert') return 'Inserted text';
+  if (kind === 'delete') return 'Deleted text';
+  if (kind === 'replace') return 'Replaced text';
+  return 'Tracked change';
 }
 ```
 
@@ -539,7 +563,7 @@ Load these application rules after the editor stylesheet. Both framework example
 }
 ```
 
-A replacement can contain separate deletion and insertion records. These actions resolve one record at a time. For a combined decision, retain both record identities and handle a refused operation explicitly.
+A replacement records a deletion and an insertion. With `useReview({ pairReplacements: true })`, the balloon shows them as one item, and **Accept** and **Reject** decide both. For more information, see [Show a replacement as one item](/docs/2.x/pro/tracked-changes#show-a-replacement-as-one-item).
 
 ## More control
 
