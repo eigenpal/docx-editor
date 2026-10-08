@@ -31,6 +31,7 @@ import {
 import { finalizedWithHeadroom } from './table-budget-proof.ts';
 import type { LayoutRowBoundedResult, TableFlowDeps } from './semantic-table-layout.ts';
 import type { SemanticTableRow } from './semantic-table.ts';
+import type { SectionPrepass } from './section-prepass-types.ts';
 import type {
   BlockFragmentRecord,
   PageRecord,
@@ -187,6 +188,14 @@ const offered = new WeakMap<OoxmlElement, WeakRef<ReadonlyMap<string, TableRowFr
  * finalized after a pass budget ran out.
  */
 export function offerPreviousRows(table: OoxmlElement, pages: readonly PageRecord[]): void {
+  const rows = previousRowsOf(table, pages);
+  if (rows) offered.set(table, new WeakRef(rows));
+}
+
+function previousRowsOf(
+  table: OoxmlElement,
+  pages: readonly PageRecord[]
+): ReadonlyMap<string, TableRowFragmentRecord> | undefined {
   const rows = new Map<string, TableRowFragmentRecord>();
   const repeated = new Set<string>();
   for (const page of pages)
@@ -203,14 +212,45 @@ export function offerPreviousRows(table: OoxmlElement, pages: readonly PageRecor
       }
     }
   for (const id of repeated) rows.delete(id);
-  if (rows.size > 0) offered.set(table, new WeakRef(rows));
+  return rows.size > 0 ? rows : undefined;
+}
+
+// Scoped to the current pass, never to a table node shared by separate editor sessions.
+// Keep only a weak reference to old pages: retained flow dependencies must not retain history.
+const unchangedTables = new WeakMap<
+  TableFlowDeps,
+  { tables: ReadonlySet<OoxmlElement>; pages: WeakRef<readonly PageRecord[]> }
+>();
+
+/**
+ * Paragraph insertion or deletion before a table can move its rows without editing them.
+ * The caller proves identical section inputs. Match the source node and prepared key too;
+ * collect row records only if this pass actually paginates that unchanged table.
+ */
+export function offerUnchangedTableRows(
+  deps: TableFlowDeps,
+  previous: SectionPrepass,
+  next: SectionPrepass,
+  pages: readonly PageRecord[]
+): void {
+  const oldKeys = new Map<OoxmlElement, string>();
+  for (const entry of previous.prepared)
+    if (entry.kind === 'table') oldKeys.set(entry.table, entry.key);
+  const tables = new Set<OoxmlElement>();
+  for (const entry of next.prepared)
+    if (entry.kind === 'table' && oldKeys.get(entry.table) === entry.key) tables.add(entry.table);
+  if (tables.size > 0) unchangedTables.set(deps, { tables, pages: new WeakRef(pages) });
 }
 
 /** The rows offered for `table`, once. */
 export function takePreviousRows(
-  table: OoxmlElement
+  table: OoxmlElement,
+  deps?: TableFlowDeps
 ): ReadonlyMap<string, TableRowFragmentRecord> | undefined {
   const rows = offered.get(table)?.deref();
   offered.delete(table);
-  return rows;
+  if (rows) return rows;
+  const unchanged = deps ? unchangedTables.get(deps) : undefined;
+  const pages = unchanged?.tables.has(table) ? unchanged.pages.deref() : undefined;
+  return pages ? previousRowsOf(table, pages) : undefined;
 }

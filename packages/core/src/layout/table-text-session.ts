@@ -8,7 +8,7 @@ import { carryTableAutofitScope } from './table-autofit-widths.ts';
 import { updateTableText } from './table-text-update.ts';
 import type { TablePageBand } from './table-width-update.ts';
 import { carryTableCaretContexts } from './table-caret-context.ts';
-import { offerPreviousRows } from './table-row-placement-reuse.ts';
+import { offerPreviousRows, offerUnchangedTableRows } from './table-row-placement-reuse.ts';
 import { drawingInputsUnchangedByTextEdit } from './drawing-text-only-change.ts';
 
 type Result = Omit<BlockLayoutResult, 'overflowShellAt'>;
@@ -57,6 +57,8 @@ export function tryUpdateTableSession(input: {
 }): Result | null {
   const { session, previous, prepass, firstChanged, deps, revision, lineCounterStart } = input;
   const sameInputs = carryTableAutofitScope(previous, prepass, input.inputsEqual, deps);
+  if (input.eligible && sameInputs && previous && session?.previous)
+    offerUnchangedTableRows(deps, previous, prepass, session.previous.pages);
   if (
     !input.eligible ||
     !sameInputs ||
