@@ -6,6 +6,7 @@ import {
   localizeExclusionZones,
   type ExclusionZone,
 } from './drawing-exclusion.ts';
+import { furnitureTableZones, storyHasFloatingTable } from './furniture-table-exclusion.ts';
 import { headerFooterAnchoredDrawingOrigin } from './header-footer-drawing-origin.ts';
 import type { PageFurniture } from './page-furniture-insets.ts';
 import { TablePaginationError } from './semantic-table-layout.ts';
@@ -31,11 +32,17 @@ function anyFurnitureDrawing(
   return false;
 }
 
-/** Whether any header or footer variant wraps body text; `omitHidden` skips hidden records. */
+/**
+ * Whether any header or footer variant wraps body text, with a drawing or a floating table;
+ * `omitHidden` skips hidden drawing records.
+ */
 export function hasFurnitureDrawingExclusions(
   furniture: PageFurniture | undefined,
   omitHidden = false
 ): boolean {
+  if (!furniture) return false;
+  for (const stories of [furniture.headers, furniture.footers])
+    for (const story of stories.values()) if (storyHasFloatingTable(story)) return true;
   return anyFurnitureDrawing(
     furniture,
     (drawing) => wraps(drawing) && !(omitHidden && drawing.accessibility.hidden)
@@ -104,7 +111,10 @@ export function furnitureDrawingExclusionsForPage(
 ): readonly ExclusionZone[] {
   const added: ExclusionZone[] = [];
   for (const story of [page.header, page.footer]) {
-    if (!story?.part || !story.anchoredDrawings?.length) continue;
+    if (!story?.part) continue;
+    // A floating table in the story wraps body text as a floating body table does.
+    added.push(...furnitureTableZones(story, page.contentBox));
+    if (!story.anchoredDrawings?.length) continue;
     let projections = projectionsByPart.get(story.part);
     if (!projections) {
       projections = indexInlineDrawingProjectionsInPart(story.part);
