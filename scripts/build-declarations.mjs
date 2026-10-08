@@ -297,7 +297,15 @@ export function withDeclarations(configUrl, config) {
         dts: false,
         onSuccess: async () => {
           await previous?.();
-          await buildDeclarations(configUrl, { ...declarations, entry: options.entry, outDir });
+          // A list builds one declaration program per item, each over its own entries: one
+          // bundle can hold entries that type-check under different compiler options, as
+          // React and Vue JSX do.
+          const programs = Array.isArray(declarations)
+            ? declarations
+            : [{ ...declarations, entry: options.entry }];
+          for (const program of programs) {
+            await buildDeclarations(configUrl, { ...program, outDir });
+          }
         },
       };
     };

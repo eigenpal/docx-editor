@@ -10,7 +10,16 @@ export interface DeclarationSettings {
   ambient?: string[];
 }
 
-export type ConfigWithDeclarations = Options & { declarations?: DeclarationSettings };
+export type ConfigWithDeclarations = Options & {
+  /**
+   * Settings for the declaration build of the config's entries, or one declaration program
+   * per item, each over its own entries, for a bundle whose entries need different compiler
+   * options.
+   */
+  declarations?:
+    | DeclarationSettings
+    | (DeclarationSettings & { entry: string[] | Record<string, string> })[];
+};
 
 export declare function withDeclarations(
   configUrl: string | URL,
