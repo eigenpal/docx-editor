@@ -7,6 +7,21 @@ export const EMPTY_NODE_CHILDREN: readonly OoxmlNode[] = Object.freeze([]);
 const MAX_ENTRIES = 2_048;
 const MAX_KEY_BYTES = 1024 * 1024;
 
+/**
+ * One string per attribute list, length-framed so no value can forge a field boundary. It
+ * covers every field and the attribute order. An absent prefix (`-`) and a present one (a
+ * length, then `:`) cannot be confused.
+ */
+function attributesKey(attributes: readonly OoxmlAttribute[]): string {
+  let key = '';
+  for (const { kind, namespaceUri, prefix, localName, value } of attributes) {
+    key += `${kind.length}:${kind}${namespaceUri.length}:${namespaceUri}`;
+    key += prefix === undefined ? '-' : `${prefix.length}:${prefix}`;
+    key += `${localName.length}:${localName}${value.length}:${value}`;
+  }
+  return key;
+}
+
 /** Shares immutable metadata within one part read, without retaining document nodes. */
 export class OoxmlReadMetadata {
   private readonly attributes = new Map<string, readonly OoxmlAttribute[]>();
@@ -14,14 +29,11 @@ export class OoxmlReadMetadata {
 
   shareAttributes(attributes: readonly OoxmlAttribute[]): readonly OoxmlAttribute[] {
     if (attributes.length === 0) return EMPTY_ATTRIBUTES;
-    // JSON framing preserves value, prefix, kind, and attribute order without delimiter aliases.
-    const key = JSON.stringify(attributes);
+    const key = attributesKey(attributes);
+    // A hit does not move the entry. Reordering on every hit cost more than the sharing saved
+    // on a long part; eviction stays oldest-first.
     const cached = this.attributes.get(key);
-    if (cached) {
-      this.attributes.delete(key);
-      this.attributes.set(key, cached);
-      return cached;
-    }
+    if (cached) return cached;
     const bytes = key.length * 2;
     if (bytes > MAX_KEY_BYTES) return attributes;
     for (const attribute of attributes) Object.freeze(attribute);
