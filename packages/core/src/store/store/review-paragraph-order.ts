@@ -1,6 +1,7 @@
 // Paragraph-order indexes shared by interactive review derivation and editor positioning.
 
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
+import { keepsSubtreeMemo } from '../package/subtree-memo-policy.ts';
 import { createRecentRootCache } from './recent-root-cache.ts';
 
 /**
@@ -68,17 +69,29 @@ export function deepParagraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, n
 
 const EMPTY_DEEP_PARAGRAPH_IDS: readonly string[] = Object.freeze([]);
 
+const MAX_DEEP_PARAGRAPH_DEPTH = 64;
+
+interface DeepParagraphIds {
+  readonly depth: number;
+  readonly ids: readonly string[];
+}
+
+/** One shared entry per depth for the subtrees that hold no paragraph. */
+const EMPTY_DEEP_PARAGRAPH_ENTRIES: readonly DeepParagraphIds[] = Array.from(
+  { length: MAX_DEEP_PARAGRAPH_DEPTH + 1 },
+  (_, depth) => Object.freeze({ depth, ids: EMPTY_DEEP_PARAGRAPH_IDS })
+);
+
 /**
  * Deep paragraph ids under one immutable node, memoized per node. The depth is part of the
  * entry because republishing a shared subtree at another depth can cross the hostile-input cap.
+ * Only nodes `keepsSubtreeMemo` admits get an entry: a node of leaves answers from them.
  */
-const subtreeDeepParagraphIdsCache = new WeakMap<
-  OoxmlNode,
-  { readonly depth: number; readonly ids: readonly string[] }
->();
+const subtreeDeepParagraphIdsCache = new WeakMap<OoxmlNode, DeepParagraphIds>();
 
 function subtreeDeepParagraphIds(node: OoxmlNode, depth: number): readonly string[] {
-  if (node.kind === 'textValue' || depth > 64) return EMPTY_DEEP_PARAGRAPH_IDS;
+  if (node.kind === 'textValue' || depth > MAX_DEEP_PARAGRAPH_DEPTH)
+    return EMPTY_DEEP_PARAGRAPH_IDS;
   // Property leaves cannot contain paragraphs. Empty paragraphs still contribute their id.
   if (node.kind !== 'paragraph' && node.children.length === 0) return EMPTY_DEEP_PARAGRAPH_IDS;
   const cached = subtreeDeepParagraphIdsCache.get(node);
@@ -91,9 +104,12 @@ function subtreeDeepParagraphIds(node: OoxmlNode, depth: number): readonly strin
     found ??= [];
     for (const id of ids) found.push(id);
   }
-  const result: readonly string[] = found ?? EMPTY_DEEP_PARAGRAPH_IDS;
-  subtreeDeepParagraphIdsCache.set(node, { depth, ids: result });
-  return result;
+  if (keepsSubtreeMemo(node))
+    subtreeDeepParagraphIdsCache.set(
+      node,
+      found ? { depth, ids: found } : EMPTY_DEEP_PARAGRAPH_ENTRIES[depth]!
+    );
+  return found ?? EMPTY_DEEP_PARAGRAPH_IDS;
 }
 
 const deepParagraphOrderCache = createRecentRootCache<Map<string, number>>(8);

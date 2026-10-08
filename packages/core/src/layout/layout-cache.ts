@@ -30,6 +30,7 @@ import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { registerParagraphCacheDiagnostics } from './paragraph-cache-diagnostics.ts';
 import { sha256FontBytes } from '../store/package/sha256.ts';
+import { keepsSubtreeMemo } from '../store/package/subtree-memo-policy.ts';
 import { framedTokenJoin } from './framed-token.ts';
 
 export { framedTokenJoin } from './framed-token.ts';
@@ -187,8 +188,9 @@ export function withDrawingContext(token: string, inlineDrawingContext: boolean)
  *
  * Tree edits are copy-on-write: every changed ancestor gets a new identity, while untouched
  * siblings keep theirs. Caching at each element therefore makes rehashing proportional to the
- * changed path instead of the size of an enclosing table. Text values and text-only or empty
- * elements stay inline in their parent's token, avoiding a WeakMap entry for every leaf. No
+ * changed path instead of the size of an enclosing table. Text values, and elements without an
+ * element grandchild (`keepsSubtreeMemo`), stay inline in their parent's token, avoiding a
+ * WeakMap entry for every leaf and every node of leaves (`w:rPr`, `w:tcPr`, a plain `w:r`). No
  * inherited/contextual state enters this digest; every field below belongs to the node itself,
  * so identity reuse is always sound.
  */
@@ -274,6 +276,16 @@ function holdsOnlyText(node: Exclude<OoxmlNode, { kind: 'textValue' }>): boolean
   return true;
 }
 
+/**
+ * A child read inline: text-only or empty, or without an element grandchild and narrower than
+ * `WIDE_SUBTREE_CHILDREN`. Such a child re-reads in at most a few hundred node visits, about
+ * what one digest costs, so it needs no entry. The choice depends only on the child's own
+ * subtree, and the role framing tells an inline token from a digest.
+ */
+function readsInline(child: Exclude<OoxmlNode, { kind: 'textValue' }>): boolean {
+  return holdsOnlyText(child) || !keepsSubtreeMemo(child);
+}
+
 function computeNodeToken(
   node: OoxmlNode,
   scope: LayoutKeyMemoScope = sharedLayoutKeyMemoScope
@@ -295,13 +307,13 @@ function computeNodeToken(
   for (const child of node.children) {
     // A digest is fixed-width and collision-resistant, so retaining one per immutable child
     // avoids both the old whole-table rewalk and quadratic retained recursive token strings.
-    // A child with no element children (`w:b`, `w:sz`, `w:t`) costs no more to re-read than its
-    // digest and makes up most of a document's elements, so its token stays inline like text.
+    // A child of leaves (`w:rPr` of `w:b` and `w:sz`, or `w:t`) costs no more to re-read than
+    // its digest and makes up most of a document's elements, so its token stays inline.
     // Frame each role as well as its value: no token can masquerade as another kind of child.
     children.push(
       child.kind === 'textValue'
         ? computeNodeToken(child)
-        : holdsOnlyText(child)
+        : readsInline(child)
           ? framedTokenJoin(['child-inline', computeNodeToken(child, scope)])
           : framedTokenJoin(['child-digest', nodeLayoutIdentity(child, scope)])
     );

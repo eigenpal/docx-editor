@@ -1,5 +1,6 @@
 import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from '@docx-editor.dev/core/store';
 import { MAX_XML_DEPTH } from '../store/package/xml-reader.ts';
+import { keepsSubtreeMemo } from '../store/package/subtree-memo-policy.ts';
 import { isParagraphMarkRevision } from '../store/store/tree-op-nodes.ts';
 import { recordedProperties } from '../store/store/tree-op-tracked-properties.ts';
 import { cacheProjection } from './bounded-projection-cache.ts';
@@ -141,6 +142,9 @@ export function projectRevisionFormatting(
       ? ({ ...node, children: projected ?? children } as OoxmlElement)
       : node;
   if (resolvedChange) resolvedFormatChanges.set(result, resolvedChange);
+  // An unchanged node of leaves answers itself again in a few steps; the identity a caller
+  // keys on is the node's own. A changed result is always kept, so its identity is stable.
+  if (result === node && !keepsSubtreeMemo(node)) return node;
   if (defaultCache) {
     defaultCache.set(node, result);
     if (result !== node) defaultCache.set(result, result);

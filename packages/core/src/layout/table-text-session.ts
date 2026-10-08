@@ -6,6 +6,7 @@ import type { BlockLayoutResult } from './column-balance-layout.ts';
 import { withContentControlMetadata } from './content-control-boundary-layout.ts';
 import { carryTableAutofitScope } from './table-autofit-widths.ts';
 import { updateTableText } from './table-text-update.ts';
+import type { TablePageBand } from './table-width-update.ts';
 import { carryTableCaretContexts } from './table-caret-context.ts';
 import { offerPreviousRows } from './table-row-placement-reuse.ts';
 import { drawingInputsUnchangedByTextEdit } from './drawing-text-only-change.ts';
@@ -49,6 +50,8 @@ export function tryUpdateTableSession(input: {
   firstChanged: number;
   commonSuffix: number;
   deps: TableFlowDeps;
+  /** The body band of each previous page, by the index the pass fills it at. */
+  pageBand: TablePageBand;
   revision: number;
   lineCounterStart: number;
 }): Result | null {
@@ -71,7 +74,8 @@ export function tryUpdateTableSession(input: {
     entry.table,
     session.previous.pages,
     prepass.contentWidth,
-    deps
+    deps,
+    input.pageBand
   );
   if (!update) {
     // The full pagination that follows can still reuse every row that keeps its place. A
@@ -93,13 +97,26 @@ export function tryUpdateTableSession(input: {
   carryTableCaretContexts(oldLayout, session.previous);
   if (update.paragraphPagesUnchanged) carryParagraphPageRoutes(oldLayout, session.previous);
   session.keys = prepass.flowKeys;
-  session.checkpoints = session.checkpoints.map((mark, index) => ({
-    ...mark,
-    lineCounter: mark.lineCounter + (index > firstChanged ? update.lineDelta : 0),
-    pageFragments: mark.pageFragments.map(
-      (fragment) => update.replacements.get(fragment) ?? fragment
-    ),
-  }));
+  session.checkpoints = session.checkpoints.map((mark, index) => {
+    // Checkpoints precede their block. A table edit cannot change an earlier checkpoint.
+    if (index <= firstChanged) return mark;
+    let fragments: (typeof mark.pageFragments)[number][] | undefined;
+    for (let at = 0; at < mark.pageFragments.length; at += 1) {
+      const fragment = mark.pageFragments[at]!;
+      // Only table fragments enter the replacement map. Avoid hashing unrelated paragraphs.
+      const replacement = fragment.kind === 'table' ? update.replacements.get(fragment) : undefined;
+      if (replacement && replacement !== fragment) {
+        fragments ??= mark.pageFragments.slice();
+        fragments[at] = replacement;
+      }
+    }
+    if (!fragments && update.lineDelta === 0) return mark;
+    return {
+      ...mark,
+      lineCounter: mark.lineCounter + update.lineDelta,
+      pageFragments: fragments ?? mark.pageFragments,
+    };
+  });
   session.endLineCounter =
     lineCounterStart + session.endLineCounter - session.startLineCounter + update.lineDelta;
   session.startLineCounter = lineCounterStart;

@@ -841,18 +841,18 @@ function layoutBlocksPass(
    * full-height overflow page, so a block taller than the limit still terminates, and the
    * search reads "produced a second page" as "does not fit".
    */
-  const contentHeightOf = (reservedPt: number): number => {
-    const base = Math.max(1, insetsFor(pages.length).height - reservedPt);
-    return columnRegionBottom !== undefined && pages.length === 0
+  const contentHeightOf = (reservedPt: number, index = pages.length): number => {
+    const base = Math.max(1, insetsFor(index).height - reservedPt);
+    return columnRegionBottom !== undefined && index === 0
       ? Math.max(1, Math.min(base, columnRegionBottom))
       : base;
   };
-  const contentHeight = (): number =>
+  const contentHeight = (index = pages.length): number =>
     // Reserves are keyed by DOCUMENT page index (computeFootnoteReserves); this pass fills
-    // the document page at `pageIndexStart + pages.length`. A continuous section's local
-    // page 0 IS the previous section's last sheet: both passes read the same document slot,
-    // so every flow sharing the sheet stops above the same note area.
-    contentHeightOf(pageBottomReserves?.get(pageIndexStart + pages.length) ?? 0);
+    // the document page at `pageIndexStart + index`. A continuous section's local page 0
+    // IS the previous section's last sheet: both passes read the same document slot, so
+    // every flow sharing the sheet stops above the same note area.
+    contentHeightOf(pageBottomReserves?.get(pageIndexStart + index) ?? 0, index);
   /** The same band with the footnote reserve ignored — the table paginator's recovery. */
   const unreservedContentHeight = (): number => contentHeightOf(0);
 
@@ -1632,6 +1632,7 @@ function layoutBlocksPass(
     firstChanged,
     commonSuffix,
     deps: tableDeps,
+    pageBand: contentHeight,
     revision,
     lineCounterStart,
   });
