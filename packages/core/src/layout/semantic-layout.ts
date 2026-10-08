@@ -201,6 +201,7 @@ import {
   type SemanticLayout,
 } from './semantic-records.ts';
 import { withResolvedListItems, withResolvedListItemsForSession } from './list-resolve.ts';
+import { listItemToken, markerFlowToken, relabelListMarkers } from './list-marker-reuse.ts';
 import { refTokenForTableBlock } from './field-ref.ts';
 import { createListFirstLineMetrics, markerLineStart, publishListMarker } from './list-marker.ts';
 import { FlowCheckpointOwner, flowCheckpointsMatch } from './flow-checkpoint.ts';
@@ -395,6 +396,10 @@ export function layoutSemanticDocument(
         ...(contentControls !== undefined ? { contentControls } : {}),
         ...(controlContextToken !== undefined ? { controlContextToken } : {}),
       };
+    }
+    // Reused records keep the labels they were laid out with; renumbered ones get theirs here.
+    if (options.session) {
+      projected = relabelListMarkers(projected, optionsWithLists.listItems, options.measurer);
     }
     const withBoundaries = attachContentControlBoundaries(projected, part, controlToken);
     carryLayoutReadCaches(layout, withBoundaries);
@@ -776,9 +781,8 @@ function layoutBlocksPass(
 
   const pages: PageRecord[] = [];
   // Built HERE, above the unchanged-pass early return below, not beside the flow that uses it.
-  // `overflowShellAt` is handed to the notes pass by that return, and a closure over a `const`
-  // declared after it would sit in its temporal dead zone forever — the body's later statements
-  // never run on that path.
+  // `overflowShellAt` is handed to the notes pass by that return; a closure over a `const`
+  // declared after it would stay in its temporal dead zone, as the rest never runs there.
   const sectionFurniture = createSectionPageFurniture({
     ...(furniture ? { furniture } : {}),
     geometry,
@@ -945,7 +949,7 @@ function layoutBlocksPass(
     const ownListToken =
       block.kind === 'table'
         ? listTokenForTableBlock(block, listItems)
-        : (listItems?.get(block.id)?.cacheToken ?? '');
+        : listItemToken(listItems?.get(block.id));
     const listToken =
       ownListToken === '' && hostedListToken === ''
         ? ''
@@ -1041,7 +1045,7 @@ function layoutBlocksPass(
       const { tabStops, properties: breakProperties } = prepareParagraphBreakInputs(
         preparedParagraph,
         defaultTabStopPt,
-        { listToken: listItem?.cacheToken, hostedListToken, refToken }
+        { listToken: markerFlowToken(listItem), hostedListToken, refToken }
       );
       entry = {
         kind: 'paragraph',
@@ -1168,7 +1172,7 @@ function layoutBlocksPass(
     );
     const keepsNext = prepared.map((entry) => entry.kind === 'paragraph' && entry.keeps.keepNext);
     const markerTexts = prepared.map((entry) =>
-      entry.kind === 'paragraph' ? listItems?.get(entry.paragraph.id)?.markerText : undefined
+      entry.kind === 'paragraph' ? markerFlowToken(listItems?.get(entry.paragraph.id)) : undefined
     );
     // A paragraph's bottom edge belongs to its border GROUP, which the block after it can
     // join or leave. A table never groups, and neither does a paragraph with no borders.
@@ -1253,8 +1257,7 @@ function layoutBlocksPass(
   const { positionedTables, positionedTablePolicy } = prepass.positioned;
   /** Retain the whole document's live keys — block keys plus recorded table-cell keys. */
   const publishRetainedKeys = (): void => {
-    // `false` is the orchestrator saying this pass skips the sweep; a standalone pass asks
-    // its own cache's stride.
+    // `false`: the orchestrator skips this pass's sweep; a standalone pass asks its own stride.
     if (options.retainKeys === false) return;
     if (options.retainKeys === undefined && cache && !(cache.retentionPassDue?.() ?? true)) {
       return;
@@ -1554,8 +1557,7 @@ function layoutBlocksPass(
     measurer,
     cache,
     producer,
-    // Recorded per table node, so retention can name cell entries of tables a later
-    // resumed pass never places.
+    // Per table node, so retention can name cell entries of tables a resumed pass never places.
     onCellBreakKey: collectingCellBreakKeys.add,
     nextLineId: (paragraphId, start, lineIndex, occurrence) => {
       lineCounter += 1;
@@ -2660,9 +2662,8 @@ function layoutBlocksPass(
             appliedSkipByLineIndex,
             fragmentBefore
           );
-      // Word can let auto spacing below the glyph band cross the bottom text
-      // margin. The painted line keeps its full box; only the pagination budget drops that
-      // trailing external depth.
+      // Auto spacing below the glyph band may cross the bottom text margin. The painted line
+      // keeps its full box; only the pagination budget drops that trailing external depth.
       // An empty anchor's own clearance moves its mark, not the anchor onto another sheet.
       const lineExtent =
         (pendingLine.anchorClearanceBefore ?? skipBefore) +
@@ -2940,9 +2941,8 @@ function layoutBlocksPass(
     deferredAnchoredDrawings = [];
     flushPage();
   }
-  // Entries for paragraphs this pass never asked for are gone from the document, or their
-  // context changed; holding them would let the cache grow with the session rather than
-  // with the document.
+  // Entries this pass never asked for are gone from the document or changed context; holding
+  // them would let the cache grow with the session rather than with the document.
   // Retain by the keys of every paragraph in the DOCUMENT, not just those this pass
   // re-placed: a resumed pass never visits the prefix, and evicting its entries would make
   // the next full pass measure the whole document again.
