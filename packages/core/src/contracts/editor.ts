@@ -1533,8 +1533,9 @@ export interface EditorSnapshot {
    */
   readonly reviewPaneOpen?: boolean;
   /**
-   * The review pane settings in force: when it opens by itself, and what it does when its
-   * card column does not fit. Change them with `setReviewPaneOptions`. Never saved. Always
+   * The review pane settings in force: every field of `ReviewPaneOptions`, such as when the
+   * pane opens by itself and what it does when its card column does not fit. Change them with
+   * `setReviewPaneOptions`. Never saved. Always
    * set: an editor without a review module reports `DEFAULT_REVIEW_PANE`.
    */
   readonly reviewPane: ResolvedReviewPane;

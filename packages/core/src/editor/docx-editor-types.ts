@@ -393,8 +393,9 @@ export interface DocxEditorInstance extends Editor {
    */
   setRevisionMarkup(options: RevisionMarkupOptions): void;
   /**
-   * Change how the review pane behaves: when it opens by itself, and what it does when its
-   * card column does not fit. An omitted field keeps its value. Read the settings in force
+   * Change the review pane settings: every field of `ReviewPaneOptions`, such as when the
+   * pane opens by itself and what it does when its card column does not fit. An omitted
+   * field keeps its value. Read the settings in force
    * from `snapshot().reviewPane`. They stay in force across `load()` and are never saved into
    * the document. This sets how the pane behaves; to open or close the pane itself, use
    * `useReview().setPaneOpen` or the `toggleReviewPane` command.
