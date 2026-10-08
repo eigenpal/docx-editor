@@ -307,6 +307,23 @@ describe('the pair key of a revealed replacement half', () => {
     expect(events[0]).toMatchObject({ pairKey: pair.key, source: 'navigate' });
   });
 
+  test('Previous Change on the other half reports the same pair key', () => {
+    const editor = mount(REPLACED);
+    const pair = pairOf(editor);
+    const events: ReviewItemRevealEvent[] = [];
+    editor.on('reviewItemReveal', (event) => events.push(event));
+    expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
+    expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
+    expect(editor.exec({ type: 'navigateReviewChange', direction: 'previous' }).ok).toBe(true);
+    expect(events).toHaveLength(3);
+    const [first, second, back] = events;
+    // Next steps from one half to the other; Previous returns to the first half.
+    expect(second!.key).not.toBe(first!.key);
+    expect(back!.key).toBe(first!.key);
+    for (const event of events) expect(event.pairKey).toBe(pair.key);
+    expect(back!.source).toBe('navigate');
+  });
+
   test('a change that is not part of a replacement reports no pair key', () => {
     const editor = mount(paragraph(run('The fee '), ins(3, 'Ada', 'now '), run('applies.')));
     const [insertion] = editor.getReviewItems({ placement: false });
