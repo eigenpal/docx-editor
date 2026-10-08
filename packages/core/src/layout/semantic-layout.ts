@@ -72,7 +72,6 @@ import {
   appliedSpaceBefore,
   paragraphBorderExtentPt,
   collapsedSpaceBefore,
-  paragraphBreaksBefore,
 } from './paragraph-style.ts';
 import {
   adjustedBreakIndex,
@@ -174,7 +173,7 @@ import {
   paragraphSectionNode,
   sectionLineGridPt,
 } from './section-properties.ts';
-import { markIgnoresPageBreakBefore } from './section-mark-break.ts';
+import { pageBreakBeforeRules } from './page-break-before.ts';
 import { columnSeparatorBoxes, resolveSectionColumns } from './section-columns.ts';
 import {
   inheritNotesLayoutInput,
@@ -1658,10 +1657,11 @@ function layoutBlocksPass(
     columnCount,
   });
 
-  /** `w:pageBreakBefore`, except on an empty section mark after its section's content. */
-  const breaksBeforeAt = (at: number, entry: PreparedParagraph): boolean =>
-    paragraphBreaksBefore(entry.props) &&
-    !markIgnoresPageBreakBefore(entry.paragraph, at, prepared.length);
+  const { breaksBeforeAt, keepsBeforeAtPageStart } = pageBreakBeforeRules(
+    prepared.length,
+    options.compatibilityMode,
+    () => firstParagraphOfSection
+  );
 
   // Placement and keep-with-next lookahead share cached line breaks.
   const breakBlock = (
@@ -1696,7 +1696,7 @@ function layoutBlocksPass(
         before,
         previousSpaceAfter,
         cursorY === 0 && !regionHasFragments(),
-        firstParagraphOfSection || breaksBeforeAt(entryIndex, entry)
+        keepsBeforeAtPageStart(entryIndex, entry)
       );
       paragraphStartY +=
         paragraphSpaceBefore +
@@ -2325,7 +2325,7 @@ function layoutBlocksPass(
           pricedLead: collapsedMark
             ? 0
             : collapsedSpaceBefore(authoredSpacing.before, previousSpaceAfter),
-          freshLead: firstParagraphOfSection || breaksBeforeAt(index, entry) ? spacing.before : 0,
+          freshLead: keepsBeforeAtPageStart(index, entry) ? spacing.before : 0,
         });
         if (need !== null) needed = Math.max(needed, need);
       }
@@ -2350,7 +2350,7 @@ function layoutBlocksPass(
           spacing.before,
           previousSpaceAfter,
           frame ? false : atTopOfPage,
-          frame ? false : firstParagraphOfSection || breaksBeforeAt(index, entry)
+          frame ? false : keepsBeforeAtPageStart(index, entry)
         );
     if (appliedBefore > 0) cursorY += appliedBefore;
     // The top rule and its gap are flow height above the first line, exactly as the bottom

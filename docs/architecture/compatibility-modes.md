@@ -52,6 +52,7 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `modernGridLineSideRules` | `modern` | Side rules center on grid lines for covered shapes; edge-aligned grids move by half a rule |
 | `noteTableCellKeeps` | `modern` | Note bands in table rows honor cell widow control and `w:keepLines` |
 | `positionedTableBreaksAtMargin` | `modern` | A breaking page- or margin-positioned table ends its first fragment at the bottom margin; legacy modes run it to the page edge |
+| `pageBreakBeforeKeepsSpace` | `legacy` | A paragraph with `w:pageBreakBefore` keeps its space before at the top of the new page |
 | `pageBreakLinesStretch` | `legacy` | A justified line before a page or column break stretches, unless it ends its paragraph |
 | `rowPageBreakYieldsToKeep` | `modern` | A row with a page break follows a row that keeps with it |
 | `tableParagraphWidowControl` | `modern` | Paragraphs that split in table cells apply widow control |

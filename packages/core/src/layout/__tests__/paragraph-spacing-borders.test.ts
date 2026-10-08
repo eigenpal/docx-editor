@@ -378,6 +378,21 @@ describe('Word 2013+ top-of-page space-before suppression', () => {
     expect(second.lines[0]!.box.y).toBe(10);
   });
 
+  test('pageBreakBefore drops before at the top of the new page in compatibility mode 15', () => {
+    const part = load(
+      paragraph('first') + paragraph('second', '<w:pageBreakBefore/><w:spacing w:before="200"/>')
+    );
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer,
+      styleCascade: elevenPointDefaults(),
+      compatibilityMode: 15,
+    });
+    const second = firstParagraphOnPage(layout, 1);
+    expect(second.lines[0]!.spans.map((span) => span.text).join('')).toBe('second');
+    expect(second.spacing.before).toBe(0);
+    expect(second.lines[0]!.box.y).toBe(0);
+  });
+
   test('natural pagination suppresses before when a paragraph moves to the next page', () => {
     // Content height 80pt; first paragraph's after pushes the second onto page 2.
     const layout = lay(
