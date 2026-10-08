@@ -41,7 +41,8 @@ export function alignCellLine(
   const { alignment } = shared;
   const placedSpans = pendingLine.spans.map((span) => ({
     ...span,
-    range: { ...span.range, paragraphId },
+    // A cell paragraph breaks under its own id, so its spans share the broken range.
+    range: span.range.paragraphId === paragraphId ? span.range : { ...span.range, paragraphId },
     box: { ...span.box, x: span.box.x + penX, y },
   }));
   return alignLineWithPictures(

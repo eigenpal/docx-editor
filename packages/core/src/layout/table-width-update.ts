@@ -190,35 +190,138 @@ function sameBlockHeights(a: BlockFragmentRecord, b: BlockFragmentRecord): boole
 }
 
 /**
- * The horizontal rules of a cell, in publication order.
+ * `sameBlockHeights(a, moved)` for the one block `moveRowToWidths` built from `a`. The move
+ * copies every compared field and gives the block one line, so only a second line, a drawing
+ * or a NaN (`x === x` fails for NaN alone) can still fail.
+ */
+function sameMovedBlockHeights(a: BlockFragmentRecord): boolean {
+  if (a.kind !== 'paragraph' || a.lines.length !== 1) return false;
+  const line = a.lines[0]!;
+  const { box, spacing } = a;
+  return (
+    !line.drawings?.length &&
+    a.fragmentIndex === a.fragmentIndex &&
+    box.y === box.y &&
+    box.height === box.height &&
+    spacing.before === spacing.before &&
+    spacing.after === spacing.after &&
+    line.box.y === line.box.y &&
+    line.box.height === line.box.height &&
+    line.baseline === line.baseline &&
+    line.leading === line.leading &&
+    line.trailingSpacing === line.trailingSpacing
+  );
+}
+
+const NO_STROKES: readonly TableBorderStrokeRecord[] = [];
+
+/** Index of the next top, bottom or `between` rule at or after `index`. */
+function nextHorizontalRule(strokes: readonly TableBorderStrokeRecord[], index: number): number {
+  while (index < strokes.length) {
+    const side = strokes[index]!.side;
+    if (side !== 'left' && side !== 'right') break;
+    index += 1;
+  }
+  return index;
+}
+
+/**
+ * The horizontal rules of two cells, in publication order, compared pairwise.
  *
  * Only top, bottom and `between` rules carry occurrence facts: the bottom rule's placement
  * follows the inset the row was finalized with. Side rules run the cell box (compared
  * separately), and whether a cell publishes its leading side rule follows the table's
  * side-rule geometry, which a width change may switch without moving anything vertically.
  */
-function horizontalRules(cell: TableCellFragmentRecord): TableBorderStrokeRecord[] {
-  const rules: TableBorderStrokeRecord[] = [];
-  for (const stroke of cell.borders?.strokes ?? [])
-    if (stroke.side !== 'left' && stroke.side !== 'right') rules.push(stroke);
-  return rules;
-}
-
 function sameStrokeHeights(a: TableCellFragmentRecord, b: TableCellFragmentRecord): boolean {
-  const before = horizontalRules(a);
-  const after = horizontalRules(b);
-  if (before.length !== after.length) return false;
-  for (let index = 0; index < before.length; index += 1) {
-    const x = before[index]!;
-    const y = after[index]!;
+  const before = a.borders?.strokes ?? NO_STROKES;
+  const after = b.borders?.strokes ?? NO_STROKES;
+  let left = nextHorizontalRule(before, 0);
+  let right = nextHorizontalRule(after, 0);
+  while (left < before.length && right < after.length) {
+    const x = before[left]!;
+    const y = after[right]!;
     if (x.side !== y.side || x.role !== y.role || x.y !== y.y || x.height !== y.height)
       return false;
+    left = nextHorizontalRule(before, left + 1);
+    right = nextHorizontalRule(after, right + 1);
   }
-  return true;
+  return left === before.length && right === after.length;
 }
 
-/** Every vertical measurement of a finalized row, plus the facts pagination keyed on. */
-function sameRowHeights(a: TableRowFragmentRecord, b: TableRowFragmentRecord): boolean {
+let rowComparisonObserver: RowComparisonCounts | null = null;
+
+interface RowComparisonCounts {
+  accepted: number;
+  refused: number;
+  /** Cells whose block walk the move's construction replaced. */
+  movedCells: number;
+  /** Comparisons where the full walk would decide differently. */
+  disagreements: number;
+}
+
+/**
+ * @internal Counts comparisons of moved rows and checks each against the full walk, for
+ * tests that must see the shorter comparison decide like the full one.
+ */
+export function movedRowComparisonTestRecorder(): Readonly<RowComparisonCounts> & {
+  dispose(): void;
+} {
+  const observer: RowComparisonCounts = {
+    accepted: 0,
+    refused: 0,
+    movedCells: 0,
+    disagreements: 0,
+  };
+  rowComparisonObserver = observer;
+  return {
+    get accepted() {
+      return observer.accepted;
+    },
+    get refused() {
+      return observer.refused;
+    },
+    get movedCells() {
+      return observer.movedCells;
+    },
+    get disagreements() {
+      return observer.disagreements;
+    },
+    dispose() {
+      if (rowComparisonObserver === observer) rowComparisonObserver = null;
+    },
+  };
+}
+
+/**
+ * Every vertical measurement of a finalized row, plus the facts pagination keyed on.
+ *
+ * `moved` is the record `moveRowToWidths` built from `a`, when `b` was finalized from it.
+ * Finalize and annotation keep a cell's `blocks` array unless they shift its content, so a
+ * cell of `b` that still holds the move's array holds the move's block.
+ *
+ * @internal Exported for the comparison tests.
+ */
+export function sameRowHeights(
+  a: TableRowFragmentRecord,
+  b: TableRowFragmentRecord,
+  moved?: TableRowFragmentRecord
+): boolean {
+  if (!moved || !rowComparisonObserver) return compareRowHeights(a, b, moved);
+  const observer = rowComparisonObserver;
+  const decision = compareRowHeights(a, b, moved, observer);
+  if (decision) observer.accepted += 1;
+  else observer.refused += 1;
+  if (decision !== compareRowHeights(a, b, undefined)) observer.disagreements += 1;
+  return decision;
+}
+
+function compareRowHeights(
+  a: TableRowFragmentRecord,
+  b: TableRowFragmentRecord,
+  moved: TableRowFragmentRecord | undefined,
+  observer?: RowComparisonCounts
+): boolean {
   if (
     a.id !== b.id ||
     a.rowIndex !== b.rowIndex ||
@@ -245,6 +348,11 @@ function sameRowHeights(a: TableRowFragmentRecord, b: TableRowFragmentRecord): b
       !sameStrokeHeights(x, y)
     )
       return false;
+    if (moved && y.blocks === moved.cells[index]?.blocks) {
+      if (observer) observer.movedCells += 1;
+      if (!sameMovedBlockHeights(x.blocks[0]!)) return false;
+      continue;
+    }
     for (let block = 0; block < x.blocks.length; block += 1)
       if (!sameBlockHeights(x.blocks[block]!, y.blocks[block]!)) return false;
   }
@@ -276,6 +384,10 @@ interface RowPlacement {
   /** Moved from the old finalized row: only its borders are resolved again. */
   readonly moved?: true;
 }
+
+/** The record a move built from the old row at the same index, for `sameRowHeights`. */
+const movedOf = (placement: RowPlacement): TableRowFragmentRecord | undefined =>
+  placement.moved ? placement.record : undefined;
 
 /**
  * The paginator's body band for the page at an index of the pages being updated, note
@@ -493,7 +605,12 @@ export function updateTableWidths(
         0,
         ordinals
       );
-      if (candidate.rows.every((row, index) => sameRowHeights(rows[index]!, row))) return candidate;
+      if (
+        candidate.rows.every((row, index) =>
+          sameRowHeights(rows[index]!, row, movedOf(chosen[index]!))
+        )
+      )
+        return candidate;
     }
     return null;
   };
@@ -587,7 +704,9 @@ export function updateTableWidths(
     );
     const grownLast = candidate.rows[index]!;
     if (
-      !candidate.rows.every((row, at) => at === index || sameRowHeights(rows[at]!, row)) ||
+      !candidate.rows.every(
+        (row, at) => at === index || sameRowHeights(rows[at]!, row, movedOf(chosen[at]!))
+      ) ||
       !sameRowMembership(old, grownLast) ||
       grownLast.box.y + grownLast.box.height > growth.band + 0.001
     )

@@ -8,6 +8,7 @@ import {
 import type { SemanticTableRow } from './semantic-table.ts';
 import type { TableRowFragmentRecord } from './semantic-records.ts';
 import { placementFromPrevious, rememberRowPlacement } from './table-row-placement-reuse.ts';
+import { withLines } from './table-row-geometry-reuse.ts';
 
 type Placement = ReturnType<typeof layoutRowFragment>;
 
@@ -123,7 +124,7 @@ export function createRowProbeReuse(
             const id = deps.nextLineId(line.range.paragraphId, line.range.start, index);
             if (id !== line.id) (lines ??= block.lines.slice())[index] = { ...line, id };
           }
-          if (lines) (blocks ??= cell.blocks.slice())[blockIndex] = { ...block, lines };
+          if (lines) (blocks ??= cell.blocks.slice())[blockIndex] = withLines(block, lines);
         }
         if (blocks) (cells ??= known.result.record.cells.slice())[cellIndex] = { ...cell, blocks };
       }
