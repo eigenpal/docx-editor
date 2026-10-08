@@ -1,0 +1,108 @@
+---
+title: 'Customize your menus'
+description: 'Choose file menu and context menu actions.'
+category: 'Customization'
+---
+
+Compose `Menu` and `ContextMenu` independently. Keep named parts for packaged command state and behavior.
+
+Use `ContextMenu.Slot` for a fixed-command slot. Use `Row` for application actions. Use `Submenu` to group actions. Use named toolbar parts for controls that collect values.
+
+Context changes determine which commands the editor enables. A hidden control does not block the corresponding operation.
+
+<CustomizationDemo topic="menus" />
+
+## React and Vue reference
+
+Pass your DOCX bytes and loaded fonts to this component. The preview uses a fictional contract.
+
+<FrameworkTabs variant="block">
+<Framework value="react">
+
+```tsx
+import { DocxEditor, type DocxEditorRootProps } from '@docx-editor.dev/react';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
+import '@docx-editor.dev/core/styles/editor.css';
+
+const modules = [reviewModule()];
+
+export function ContractEditor({
+  bytes,
+  fonts,
+}: {
+  bytes: Uint8Array;
+  fonts: DocxEditorRootProps['fonts'];
+}) {
+  return (
+    <div className="docx-editor contract-workspace">
+      <DocxEditor.Root
+        document={bytes}
+        fonts={fonts}
+        modules={modules}
+        author="Demo reviewer"
+        mode="suggesting"
+        reviewDisplayMode="all-markup"
+      >
+        <DocxEditor.Menu />
+        <DocxEditor.Viewport style={{ height: 520 }}>
+          <DocxEditor.Content />
+          <DocxEditor.HyperLink />
+          <DocxEditor.ContextMenu preset={false}>
+            <DocxEditor.ContextMenu.Cut />
+            <DocxEditor.ContextMenu.Copy />
+            <DocxEditor.ContextMenu.Slot slot="format.clear" />
+          </DocxEditor.ContextMenu>
+          <DocxEditorReview />
+        </DocxEditor.Viewport>
+      </DocxEditor.Root>
+    </div>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/vue';
+import type { FontConfigurationFragment } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/core/styles/editor.css';
+
+defineProps<{ bytes: Uint8Array; fonts: FontConfigurationFragment }>();
+const modules = [reviewModule()];
+</script>
+
+<template>
+  <div class="docx-editor contract-workspace">
+    <DocxEditor.Root
+      :document="bytes"
+      :fonts="fonts"
+      :modules="modules"
+      author="Demo reviewer"
+      mode="suggesting"
+      review-display-mode="all-markup"
+    >
+      <DocxEditor.Menu />
+      <DocxEditor.Viewport :style="{ height: '520px' }">
+        <DocxEditor.Content />
+        <DocxEditor.HyperLink />
+        <DocxEditor.ContextMenu :preset="false">
+          <DocxEditor.ContextMenu.Cut />
+          <DocxEditor.ContextMenu.Copy />
+          <DocxEditor.ContextMenu.Slot slot="format.clear" />
+        </DocxEditor.ContextMenu>
+        <DocxEditorReview />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  </div>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+## More control
+
+See [Chrome slot reference](/docs/2.x/guides/chrome-slots) for supported parts, types, and additional examples.

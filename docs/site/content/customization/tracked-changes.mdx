@@ -1,0 +1,143 @@
+---
+title: 'Customize your tracked changes'
+description: 'Set revision colors, marks, backgrounds, and change bars.'
+category: 'Customization'
+---
+
+Use `revisionMarkup` for marks, named colors, background highlights, changed-line bars, and cell shading. Use `AuthorStyle` for exact author colors and avatars.
+
+Use `ColorByChangeType` to color unmatched insertions and deletions by kind. Author declarations take precedence for matched authors.
+
+Viewer preferences stay outside the DOCX file and collaboration state. `trackFormatting` also controls future formatting revisions. Keep text marks so color is not the only indicator.
+
+<CustomizationDemo topic="tracked-changes" />
+
+## React and Vue reference
+
+Pass your DOCX bytes and loaded fonts to this component. The preview uses a fictional contract.
+
+<FrameworkTabs variant="block">
+<Framework value="react">
+
+```tsx
+import { DocxEditor, type DocxEditorRootProps } from '@docx-editor.dev/react';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
+import '@docx-editor.dev/core/styles/editor.css';
+
+const modules = [reviewModule()];
+
+export function ContractEditor({
+  bytes,
+  fonts,
+}: {
+  bytes: Uint8Array;
+  fonts: DocxEditorRootProps['fonts'];
+}) {
+  return (
+    <div className="docx-editor contract-workspace">
+      <DocxEditor.Root
+        document={bytes}
+        fonts={fonts}
+        modules={modules}
+        author="Demo reviewer"
+        mode="suggesting"
+        reviewDisplayMode="all-markup"
+        revisionMarkup={{
+          insertions: { mark: 'underline', color: 'darkGreen', background: 'lightGreen' },
+          deletions: { mark: 'strikethrough', color: 'darkRed', background: 'pink' },
+        }}
+      >
+        <DocxEditor.ColorByChangeType />
+        <DocxEditor.Viewport style={{ height: 520 }}>
+          <DocxEditor.Content />
+          <DocxEditor.HyperLink />
+          <DocxEditor.ContextMenu />
+          <DocxEditorReview />
+        </DocxEditor.Viewport>
+      </DocxEditor.Root>
+    </div>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/vue';
+import type { FontConfigurationFragment } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/core/styles/editor.css';
+
+defineProps<{ bytes: Uint8Array; fonts: FontConfigurationFragment }>();
+const modules = [reviewModule()];
+</script>
+
+<template>
+  <div class="docx-editor contract-workspace">
+    <DocxEditor.Root
+      :document="bytes"
+      :fonts="fonts"
+      :modules="modules"
+      author="Demo reviewer"
+      mode="suggesting"
+      :revision-markup="{
+        insertions: { mark: 'underline', color: 'darkGreen', background: 'lightGreen' },
+        deletions: { mark: 'strikethrough', color: 'darkRed', background: 'pink' },
+      }"
+      review-display-mode="all-markup"
+    >
+      <DocxEditor.ColorByChangeType />
+      <DocxEditor.Viewport :style="{ height: '520px' }">
+        <DocxEditor.Content />
+        <DocxEditor.HyperLink />
+        <DocxEditor.ContextMenu />
+        <DocxEditorReview />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  </div>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+## Set author colors and avatars
+
+The author name must match the document value. Author styling does not prove identity. Use a trusted application URL for each avatar.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor.AuthorStyle
+  author="Legal reviewer"
+  color="var(--doc-review-author-0)"
+  background="transparent"
+  avatarUrl="/avatars/legal-reviewer.png"
+/>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditor.AuthorStyle
+  author="Legal reviewer"
+  color="var(--doc-review-author-0)"
+  background="transparent"
+  avatar-url="/avatars/legal-reviewer.png"
+/>
+```
+
+</Framework>
+</FrameworkTabs>
+
+Mount each declaration under the editor root. Override the author ramp with your application color tokens. Use `--doc-revision-insertion-decoration-style` to change insertion underlines. Use `revisionMarkup.changedLines` for change bar placement.
+
+Named markup colors use `--doc-revision-color-*` tokens. `revisionMarkup` does not accept arbitrary CSS color strings. PDF output uses named print colors and the default author ramp. Application CSS and `revisionStyles` do not change PDF colors.
+
+## More control
+
+See [Customize revision markup](/docs/2.x/pro/revision-markup) for supported parts, types, and additional examples.

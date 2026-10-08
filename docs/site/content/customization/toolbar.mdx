@@ -1,0 +1,112 @@
+---
+title: 'Customize your toolbar'
+description: 'Choose controls, replace icons, and connect your own buttons.'
+category: 'Customization'
+---
+
+Use `className` for styling. Use `icon` for an icon element, `asChild` for your element, and `hidden` to remove a default part.
+
+Set `preset={false}` to choose the complete arrangement. Use `useEditorCommand(slotId)` for application controls. It supplies enabled state and refusal reasons.
+
+Keep the caret when a toolbar button receives a mouse press. Call `preventDefault()` for buttons, but skip inputs, selects, and text areas. Hiding a button does not remove its API operation.
+
+<CustomizationDemo topic="toolbar" />
+
+## React and Vue reference
+
+Pass your DOCX bytes and loaded fonts to this component. The preview uses a fictional contract.
+
+<FrameworkTabs variant="block">
+<Framework value="react">
+
+```tsx
+import { DocxEditor, type DocxEditorRootProps } from '@docx-editor.dev/react';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
+import '@docx-editor.dev/core/styles/editor.css';
+
+const modules = [reviewModule()];
+
+export function ContractEditor({
+  bytes,
+  fonts,
+}: {
+  bytes: Uint8Array;
+  fonts: DocxEditorRootProps['fonts'];
+}) {
+  return (
+    <div className="docx-editor contract-workspace">
+      <DocxEditor.Root
+        document={bytes}
+        fonts={fonts}
+        modules={modules}
+        author="Demo reviewer"
+        mode="suggesting"
+        reviewDisplayMode="all-markup"
+      >
+        <DocxEditor.Toolbar preset={false}>
+          <DocxEditor.Toolbar.Undo />
+          <DocxEditor.Toolbar.Redo />
+          <DocxEditor.Toolbar.Bold icon={<span>Bold</span>} />
+          <DocxEditor.Toolbar.Italic icon={<span>Italic</span>} />
+          <DocxEditor.Toolbar.Zoom />
+        </DocxEditor.Toolbar>
+        <DocxEditor.Viewport style={{ height: 520 }}>
+          <DocxEditor.Content />
+          <DocxEditor.HyperLink />
+          <DocxEditor.ContextMenu />
+          <DocxEditorReview />
+        </DocxEditor.Viewport>
+      </DocxEditor.Root>
+    </div>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/vue';
+import type { FontConfigurationFragment } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/core/styles/editor.css';
+
+defineProps<{ bytes: Uint8Array; fonts: FontConfigurationFragment }>();
+const modules = [reviewModule()];
+</script>
+
+<template>
+  <div class="docx-editor contract-workspace">
+    <DocxEditor.Root
+      :document="bytes"
+      :fonts="fonts"
+      :modules="modules"
+      author="Demo reviewer"
+      mode="suggesting"
+      review-display-mode="all-markup"
+    >
+      <DocxEditor.Toolbar :preset="false">
+        <DocxEditor.Toolbar.Undo />
+        <DocxEditor.Toolbar.Redo />
+        <DocxEditor.Toolbar.Bold />
+        <DocxEditor.Toolbar.Italic />
+        <DocxEditor.Toolbar.Zoom />
+      </DocxEditor.Toolbar>
+      <DocxEditor.Viewport :style="{ height: '520px' }">
+        <DocxEditor.Content />
+        <DocxEditor.HyperLink />
+        <DocxEditor.ContextMenu />
+        <DocxEditorReview />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  </div>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+## More control
+
+See [Toolbar](/docs/2.x/guides/toolbar) for supported parts, types, and additional examples.

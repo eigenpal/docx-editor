@@ -1,0 +1,130 @@
+---
+title: 'Customize your review cards'
+description: 'Style comments, change cards, markers, and review actions.'
+category: 'Customization'
+---
+
+Pass a card class through `card`. Compose `Author`, `Summary`, `Accept`, `Reject`, `Replies`, and `Reply` parts.
+
+Use `List` for custom cards. Its React callback or Vue `#item` slot supplies each review item. `useReviewItem()` reads the surrounding card item.
+
+Use `useReviewAuthor()` for the resolved author color and avatar. Use `Markers` for custom marker icons. Keep rejected writes visible to the user.
+
+A comments-only filter hides revision cards. Provide another route to revision decisions, such as balloons or an application review panel.
+
+<CustomizationDemo topic="review-cards" />
+
+## React and Vue reference
+
+Pass your DOCX bytes and loaded fonts to this component. The preview uses a fictional contract.
+
+<FrameworkTabs variant="block">
+<Framework value="react">
+
+```tsx
+import { DocxEditor, type DocxEditorRootProps } from '@docx-editor.dev/react';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
+import '@docx-editor.dev/core/styles/editor.css';
+
+const modules = [reviewModule()];
+
+export function ContractEditor({
+  bytes,
+  fonts,
+}: {
+  bytes: Uint8Array;
+  fonts: DocxEditorRootProps['fonts'];
+}) {
+  return (
+    <div className="docx-editor contract-workspace">
+      <DocxEditor.Root
+        document={bytes}
+        fonts={fonts}
+        modules={modules}
+        author="Demo reviewer"
+        mode="suggesting"
+        reviewDisplayMode="all-markup"
+      >
+        <DocxEditor.Toolbar />
+        <DocxEditor.Viewport style={{ height: 520 }}>
+          <DocxEditor.Content />
+          <DocxEditor.HyperLink />
+          <DocxEditor.ContextMenu />
+          <DocxEditorReview card={{ className: 'contract-card' }}>
+            <DocxEditorReview.Author />
+            <DocxEditorReview.Summary />
+            <DocxEditorReview.Accept icon={<span>Accept</span>} />
+            <DocxEditorReview.Reject icon={<span>Reject</span>} />
+          </DocxEditorReview>
+        </DocxEditor.Viewport>
+      </DocxEditor.Root>
+    </div>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/vue';
+import type { FontConfigurationFragment } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/core/styles/editor.css';
+
+defineProps<{ bytes: Uint8Array; fonts: FontConfigurationFragment }>();
+const modules = [reviewModule()];
+</script>
+
+<template>
+  <div class="docx-editor contract-workspace">
+    <DocxEditor.Root
+      :document="bytes"
+      :fonts="fonts"
+      :modules="modules"
+      author="Demo reviewer"
+      mode="suggesting"
+      review-display-mode="all-markup"
+    >
+      <DocxEditor.Toolbar />
+      <DocxEditor.Viewport :style="{ height: '520px' }">
+        <DocxEditor.Content />
+        <DocxEditor.HyperLink />
+        <DocxEditor.ContextMenu />
+        <DocxEditorReview :card="{ className: 'contract-card' }">
+          <DocxEditorReview.Author />
+          <DocxEditorReview.Summary />
+          <DocxEditorReview.Accept />
+          <DocxEditorReview.Reject />
+        </DocxEditorReview>
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  </div>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+## Style card parts
+
+Add a selector under your editor wrapper. Use the resolved author token for the leading border.
+
+```css
+.docx-editor.contract-workspace .contract-card {
+  border-radius: 12px;
+  border-inline-start: 3px solid var(--doc-review-author-current);
+  background: var(--doc-surface);
+  box-shadow: 0 3px 14px var(--doc-border);
+}
+.docx-editor.contract-workspace .contract-card[data-active] {
+  background: var(--doc-review-card-active-bg);
+}
+```
+
+Use `card.className` for every card. Root `className` styles the review column. Custom card arrangements must retain reply, resolve, accept, and reject actions that your workflow needs.
+
+## More control
+
+See [Review colors and styling](/docs/2.x/pro/review-styling) for supported parts, types, and additional examples.

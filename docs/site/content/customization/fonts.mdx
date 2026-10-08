@@ -1,0 +1,211 @@
+---
+title: 'Customize your fonts'
+description: 'Supply font bytes for measurement and expose font controls.'
+category: 'Customization'
+---
+
+Pass a font configuration through `fonts`. Use `loadFonts()` for application font files. Include each weight and style that your document uses.
+
+CSS `@font-face` rules supply browser rendering only. The editor also needs font bytes to measure text.
+
+The contract preview uses packaged fonts. Select text and use the font picker to apply a family or size.
+
+Embedded DOCX fonts load automatically. Font names from the document do not authorize remote font requests.
+
+<CustomizationDemo topic="fonts" />
+
+## React and Vue reference
+
+Pass your DOCX bytes and loaded fonts to this component. The preview uses a fictional contract.
+
+<FrameworkTabs variant="block">
+<Framework value="react">
+
+```tsx
+import { DocxEditor, type DocxEditorRootProps } from '@docx-editor.dev/react';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
+import '@docx-editor.dev/core/styles/editor.css';
+
+const modules = [reviewModule()];
+
+export function ContractEditor({
+  bytes,
+  fonts,
+}: {
+  bytes: Uint8Array;
+  fonts: DocxEditorRootProps['fonts'];
+}) {
+  return (
+    <div className="docx-editor contract-workspace">
+      <DocxEditor.Root
+        document={bytes}
+        fonts={fonts}
+        modules={modules}
+        author="Demo reviewer"
+        mode="suggesting"
+        reviewDisplayMode="all-markup"
+      >
+        <DocxEditor.Toolbar preset={false}>
+          <DocxEditor.Toolbar.FontFamily />
+          <DocxEditor.Toolbar.FontSize />
+        </DocxEditor.Toolbar>
+        <DocxEditor.Viewport style={{ height: 520 }}>
+          <DocxEditor.Content />
+          <DocxEditor.HyperLink />
+          <DocxEditor.ContextMenu />
+          <DocxEditorReview />
+        </DocxEditor.Viewport>
+      </DocxEditor.Root>
+    </div>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/vue';
+import type { FontConfigurationFragment } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/core/styles/editor.css';
+
+defineProps<{ bytes: Uint8Array; fonts: FontConfigurationFragment }>();
+const modules = [reviewModule()];
+</script>
+
+<template>
+  <div class="docx-editor contract-workspace">
+    <DocxEditor.Root
+      :document="bytes"
+      :fonts="fonts"
+      :modules="modules"
+      author="Demo reviewer"
+      mode="suggesting"
+      review-display-mode="all-markup"
+    >
+      <DocxEditor.Toolbar :preset="false">
+        <DocxEditor.Toolbar.FontFamily />
+        <DocxEditor.Toolbar.FontSize />
+      </DocxEditor.Toolbar>
+      <DocxEditor.Viewport :style="{ height: '520px' }">
+        <DocxEditor.Content />
+        <DocxEditor.HyperLink />
+        <DocxEditor.ContextMenu />
+        <DocxEditorReview />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  </div>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+## Load your font files
+
+Host font files in your application. Load them before you mount the editor. This helper supplies bytes for measurement and rendering.
+
+```ts
+// contract-fonts.ts
+import { loadFonts } from '@docx-editor.dev/core/editor';
+
+export function loadContractFonts() {
+  return loadFonts({
+    sources: [
+      {
+        url: '/fonts/ContractSans-Regular.ttf',
+        family: 'Contract Sans',
+        weight: 400,
+        style: 'normal',
+      },
+      {
+        url: '/fonts/ContractSans-Bold.ttf',
+        family: 'Contract Sans',
+        weight: 700,
+        style: 'normal',
+      },
+    ],
+  });
+}
+```
+
+Call the helper after mount. Keep loading failures visible.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { useEffect, useState } from 'react';
+import { DocxEditor } from '@docx-editor.dev/react';
+import { loadContractFonts } from './contract-fonts';
+
+type Fonts = Awaited<ReturnType<typeof loadContractFonts>>;
+
+export function FontEditor({ bytes }: { bytes: Uint8Array }) {
+  const [fonts, setFonts] = useState<Fonts>();
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let disposed = false;
+    loadContractFonts().then(
+      (value) => {
+        if (!disposed) setFonts(value);
+      },
+      () => {
+        if (!disposed) setFailed(true);
+      }
+    );
+    return () => {
+      disposed = true;
+    };
+  }, []);
+  if (failed) return <p role="alert">Fonts failed to load.</p>;
+  if (!fonts) return <p role="status">Loading fonts…</p>;
+  return <DocxEditor document={bytes} fonts={fonts} />;
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { onMounted, onUnmounted, ref, shallowRef } from 'vue';
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { loadContractFonts } from './contract-fonts';
+
+defineProps<{ bytes: Uint8Array }>();
+const fonts = shallowRef<Awaited<ReturnType<typeof loadContractFonts>>>();
+const failed = ref(false);
+let disposed = false;
+onMounted(() => {
+  loadContractFonts().then(
+    (value) => {
+      if (!disposed) fonts.value = value;
+    },
+    () => {
+      if (!disposed) failed.value = true;
+    }
+  );
+});
+onUnmounted(() => {
+  disposed = true;
+});
+</script>
+
+<template>
+  <p v-if="failed" role="alert">Fonts failed to load.</p>
+  <DocxEditor v-else-if="fonts" :document="bytes" :fonts="fonts" />
+  <p v-else role="status">Loading fonts…</p>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+Use `useFonts()` with `packagedFonts()` to load the packaged families. `fonts` identity changes remount a Root. Load a stable configuration before editing starts.
+
+## More control
+
+See [Fonts and measurement](/docs/2.x/guides/fonts) for supported parts, types, and additional examples.

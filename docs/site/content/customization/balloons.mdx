@@ -1,0 +1,473 @@
+---
+title: 'Customize your balloons'
+description: 'Build application balloons for text revisions and keep editor review actions.'
+category: 'Customization'
+---
+
+The live example uses an application balloon for painted text revisions. It opens when you select a tracked change.
+
+<CustomizationDemo topic="balloons" />
+
+## Connect the balloon to review state
+
+The packaged review surface supplies balloons for structural and formatting changes. It keeps text revisions and comments in the review pane.
+
+For a custom text balloon, match `data-revision-id` against the review item ID and its revision addresses. Scope every query to your editor container.
+
+Read the painted anchor rectangle for popup placement. Recalculate after scrolling, resizing, and repainting. Hide the balloon when its anchor disappears.
+
+Use `useReview()` to activate, accept, and reject the item. Check each returned Boolean. Handle Escape, dismissal, read-only state, and cleanup.
+
+This example covers body text revisions. Keep the packaged review pane for tables, drawings, headers, footers, and unplaced changes.
+
+## React and Vue reference
+
+Pass your DOCX bytes and loaded fonts to this component. The preview uses a fictional contract.
+
+<FrameworkTabs variant="block">
+<Framework value="react">
+
+```tsx
+import { DocxEditor, type DocxEditorRootProps } from '@docx-editor.dev/react';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
+import '@docx-editor.dev/core/styles/editor.css';
+
+const modules = [reviewModule()];
+
+export function ContractEditor({
+  bytes,
+  fonts,
+}: {
+  bytes: Uint8Array;
+  fonts: DocxEditorRootProps['fonts'];
+}) {
+  return (
+    <div className="docx-editor contract-workspace">
+      <DocxEditor.Root
+        document={bytes}
+        fonts={fonts}
+        modules={modules}
+        author="Demo reviewer"
+        mode="suggesting"
+        reviewDisplayMode="all-markup"
+      >
+        <DocxEditor.Toolbar />
+        <DocxEditor.Viewport style={{ height: 520 }}>
+          <DocxEditor.Content />
+          <DocxEditor.HyperLink />
+          <DocxEditor.ContextMenu />
+          <DocxEditorReview />
+        </DocxEditor.Viewport>
+      </DocxEditor.Root>
+    </div>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/vue';
+import type { FontConfigurationFragment } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/core/styles/editor.css';
+
+defineProps<{ bytes: Uint8Array; fonts: FontConfigurationFragment }>();
+const modules = [reviewModule()];
+</script>
+
+<template>
+  <div class="docx-editor contract-workspace">
+    <DocxEditor.Root
+      :document="bytes"
+      :fonts="fonts"
+      :modules="modules"
+      author="Demo reviewer"
+      mode="suggesting"
+      review-display-mode="all-markup"
+    >
+      <DocxEditor.Toolbar />
+      <DocxEditor.Viewport :style="{ height: '520px' }">
+        <DocxEditor.Content />
+        <DocxEditor.HyperLink />
+        <DocxEditor.ContextMenu />
+        <DocxEditorReview />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  </div>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+## Build the text balloon
+
+Create `ContractBalloons.tsx` or `ContractBalloons.vue` with these examples. Both use the same application geometry helper. Set `authorAccent` in React or `author-accent` in Vue to tint the balloon by author.
+
+<FrameworkTabs variant="block">
+<Framework value="react">
+
+```tsx
+'use client';
+
+import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useReview } from '@docx-editor.dev/pro/react';
+import { useReviewAuthors } from '@docx-editor.dev/react';
+import { observeTextRevisionAnchor } from './observe-text-revision-anchor';
+
+/** Application-owned balloons for painted text revisions in the main story. */
+export function ContractBalloons({
+  container,
+  rounded,
+  authorAccent = false,
+}: {
+  container: RefObject<HTMLDivElement | null>;
+  rounded: boolean;
+  authorAccent?: boolean;
+}) {
+  const { items, activeKey, setActive, accept, reject } = useReview();
+  const authors = useReviewAuthors();
+  const panel = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{
+    left: number;
+    top: number;
+  } | null>(null);
+  const [failure, setFailure] = useState('');
+  const item = items.find((entry) => entry.key === activeKey && entry.kind === 'revision');
+
+  useEffect(() => {
+    const host = container.current;
+    if (!host) return;
+    function click(event: MouseEvent) {
+      if (!(event.target instanceof Element) || panel.current?.contains(event.target)) return;
+      const span = event.target.closest<HTMLElement>('[data-revision-id]');
+      const match = items.find(
+        (entry) =>
+          entry.kind === 'revision' &&
+          entry.item.kind === 'revision' &&
+          [entry.id, ...entry.item.addresses.map((address) => address.id)].includes(
+            span?.dataset.revisionId ?? ''
+          )
+      );
+      setFailure('');
+      setActive(match?.key ?? null, { reveal: false });
+    }
+    function keydown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setActive(null);
+    }
+    host.addEventListener('click', click);
+    host.addEventListener('keydown', keydown);
+    return () => {
+      host.removeEventListener('click', click);
+      host.removeEventListener('keydown', keydown);
+    };
+  }, [container, items, setActive]);
+
+  useEffect(() => {
+    const host = container.current;
+    if (!host) return;
+    if (!item || item.kind !== 'revision') return;
+    return observeTextRevisionAnchor(
+      host,
+      [item.id, ...item.item.addresses.map((address) => address.id)],
+      setPosition
+    );
+  }, [container, item]);
+
+  if (!item || item.kind !== 'revision' || !position) return null;
+  const authorColor =
+    authors.find((author) => author.author === item.author)?.color ?? 'var(--doc-primary)';
+  return (
+    <div
+      ref={panel}
+      className="contract-balloon"
+      style={{
+        ...position,
+        borderRadius: rounded ? 16 : 4,
+        borderInlineStart: authorAccent ? `3px solid ${authorColor}` : undefined,
+        background: authorAccent
+          ? `color-mix(in srgb, ${authorColor} 8%, var(--doc-surface))`
+          : undefined,
+      }}
+      data-review-author={item.author}
+      role="group"
+      aria-label="Tracked change balloon"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') setActive(null);
+      }}
+      onMouseDown={(event) => event.preventDefault()}
+    >
+      <div className="contract-balloonHeading">
+        <span className="contract-initials">{item.initials}</span>
+        <strong>{item.author}</strong>
+        <button type="button" aria-label="Close balloon" onClick={() => setActive(null)}>
+          ×
+        </button>
+      </div>
+      <p>{item.revisionKind === 'delete' ? 'Deleted text' : 'Inserted text'}</p>
+      <p className="contract-excerpt">{item.text}</p>
+      <div className="contract-decisions">
+        <button
+          type="button"
+          disabled={item.readOnly}
+          onClick={() => {
+            if (!accept(item))
+              setFailure('The editor refused this change. Review the document and try again.');
+          }}
+        >
+          Accept
+        </button>
+        <button
+          type="button"
+          disabled={item.readOnly}
+          onClick={() => {
+            if (!reject(item))
+              setFailure('The editor refused this change. Review the document and try again.');
+          }}
+        >
+          Reject
+        </button>
+      </div>
+      {failure && <p role="alert">{failure}</p>}
+    </div>
+  );
+}
+```
+
+Inside your editor root, create the container ref and place the balloon beside the viewport:
+
+```tsx
+const container = useRef<HTMLDivElement>(null);
+
+<div ref={container} className="contract-stage">
+  <DocxEditor.Viewport style={{ height: 520 }}>
+    <DocxEditor.Content />
+    <DocxEditorReview />
+  </DocxEditor.Viewport>
+  <ContractBalloons container={container} rounded />
+</div>;
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { computed, ref, watchEffect } from 'vue';
+import { useReviewAuthors } from '@docx-editor.dev/vue';
+import { useReview } from '@docx-editor.dev/pro/vue';
+import { observeTextRevisionAnchor } from './observe-text-revision-anchor';
+import type { BalloonPosition } from './observe-text-revision-anchor';
+
+const props = defineProps<{
+  container: HTMLElement | null;
+  authorAccent?: boolean;
+}>();
+const authors = useReviewAuthors();
+const { items, activeKey, setActive, accept, reject } = useReview();
+const panel = ref<HTMLElement | null>(null);
+const position = ref<BalloonPosition | null>(null);
+const failure = ref('');
+const item = computed(() =>
+  items.value.find((entry) => entry.key === activeKey.value && entry.kind === 'revision')
+);
+
+const authorColor = computed(
+  () =>
+    authors.value.find((author) => author.author === item.value?.author)?.color ??
+    'var(--doc-primary)'
+);
+
+watchEffect((cleanup) => {
+  const host = props.container;
+  const entries = items.value;
+  if (!host) return;
+  function click(event: MouseEvent) {
+    if (!(event.target instanceof Element) || panel.value?.contains(event.target)) return;
+    const span = event.target.closest<HTMLElement>('[data-revision-id]');
+    const match = entries.find(
+      (entry) =>
+        entry.kind === 'revision' &&
+        [entry.id, ...entry.item.addresses.map((address) => address.id)].includes(
+          span?.dataset.revisionId ?? ''
+        )
+    );
+    failure.value = '';
+    setActive(match?.key ?? null, { reveal: false });
+  }
+  function keydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') setActive(null);
+  }
+  host.addEventListener('click', click);
+  host.addEventListener('keydown', keydown);
+  cleanup(() => {
+    host.removeEventListener('click', click);
+    host.removeEventListener('keydown', keydown);
+  });
+});
+watchEffect((cleanup) => {
+  const host = props.container;
+  const active = item.value;
+  if (!host || !active || active.kind !== 'revision') {
+    position.value = null;
+    return;
+  }
+  cleanup(
+    observeTextRevisionAnchor(
+      host,
+      [active.id, ...active.item.addresses.map((address) => address.id)],
+      (value) => {
+        position.value = value;
+      }
+    )
+  );
+});
+function decide(kind: 'accept' | 'reject') {
+  const active = item.value;
+  if (!active || active.kind !== 'revision') return;
+  if (!(kind === 'accept' ? accept(active) : reject(active))) {
+    failure.value = 'The editor refused this change. Review the document and try again.';
+  }
+}
+</script>
+
+<template>
+  <div
+    v-if="item?.kind === 'revision' && position"
+    ref="panel"
+    class="contract-balloon"
+    role="group"
+    aria-label="Tracked change balloon"
+    :data-review-author="item.author"
+    :style="{
+      left: `${position.left}px`,
+      top: `${position.top}px`,
+      borderInlineStart: authorAccent ? `3px solid ${authorColor}` : undefined,
+      background: authorAccent
+        ? `color-mix(in srgb, ${authorColor} 8%, var(--doc-surface))`
+        : undefined,
+    }"
+    @mousedown.prevent
+    @keydown.esc="setActive(null)"
+  >
+    <strong>{{ item.author }}</strong>
+    <button type="button" aria-label="Close balloon" @click="setActive(null)">×</button>
+    <p>{{ item.revisionKind === 'delete' ? 'Deleted text' : 'Inserted text' }}</p>
+    <p>{{ item.text }}</p>
+    <button type="button" :disabled="item.readOnly" @click="decide('accept')">Accept</button>
+    <button type="button" :disabled="item.readOnly" @click="decide('reject')">Reject</button>
+    <p v-if="failure" role="alert">{{ failure }}</p>
+  </div>
+</template>
+```
+
+Import `ContractBalloons` into your editor component. Declare `const container = ref<HTMLElement | null>(null)` in its setup block. Place the container under `DocxEditor.Root`:
+
+```vue
+<div ref="container" class="contract-stage">
+  <DocxEditor.Viewport :style="{ height: '520px' }">
+    <DocxEditor.Content />
+    <DocxEditorReview />
+  </DocxEditor.Viewport>
+  <ContractBalloons :container="container" />
+</div>
+```
+
+</Framework>
+</FrameworkTabs>
+
+## Observe the painted anchor
+
+Create `observe-text-revision-anchor.ts` beside the balloon component. The helper scopes queries and removes observers when the balloon stops observing.
+
+```ts
+export interface BalloonPosition {
+  left: number;
+  top: number;
+}
+
+/** Geometry belongs to the application popup, never to document editing. */
+export function observeTextRevisionAnchor(
+  host: HTMLElement,
+  revisionIds: readonly string[],
+  notify: (position: BalloonPosition | null) => void
+): () => void {
+  const ids = new Set(revisionIds);
+  function update() {
+    const anchor = Array.from(host.querySelectorAll<HTMLElement>('[data-revision-id]')).find(
+      (span) => ids.has(span.dataset.revisionId ?? '')
+    );
+    if (!anchor) {
+      notify(null);
+      return;
+    }
+    const rect = anchor.getBoundingClientRect();
+    const bounds = host.getBoundingClientRect();
+    if (rect.bottom < bounds.top || rect.top > bounds.bottom || rect.width === 0) {
+      notify(null);
+      return;
+    }
+    const panel = host.querySelector<HTMLElement>('[aria-label="Tracked change balloon"]');
+    const height = panel?.offsetHeight ?? 150;
+    const width = Math.min(280, host.clientWidth - 24);
+    notify({
+      left: Math.max(12, Math.min(rect.left - bounds.left, host.clientWidth - width - 12)),
+      top: Math.max(12, Math.min(rect.bottom - bounds.top + 8, host.clientHeight - height - 12)),
+    });
+  }
+  update();
+  const observer = new ResizeObserver(update);
+  observer.observe(host);
+  const mutation = new MutationObserver(update);
+  mutation.observe(host, { childList: true, subtree: true });
+  host.addEventListener('scroll', update, true);
+  return () => {
+    observer.disconnect();
+    mutation.disconnect();
+    host.removeEventListener('scroll', update, true);
+  };
+}
+```
+
+## Style the balloon
+
+Load these application rules after the editor stylesheet. Both framework examples use the same container and balloon classes.
+
+```css
+.contract-stage {
+  position: relative;
+  min-height: 0;
+}
+.docx-editor .contract-balloon {
+  position: absolute;
+  z-index: 40;
+  width: min(280px, calc(100% - 24px));
+  padding: 14px;
+  border: 1px solid var(--doc-border);
+  border-radius: 16px;
+  background: var(--doc-surface);
+  color: var(--doc-text);
+  box-shadow: 0 12px 32px var(--doc-border);
+}
+.docx-editor .contract-balloon button {
+  margin: 4px;
+  padding: 5px 8px;
+  border: 1px solid var(--doc-border);
+  border-radius: 6px;
+  background: var(--doc-bg);
+  color: var(--doc-text);
+}
+.docx-editor .contract-balloon button:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 3px;
+}
+```
+
+A replacement can contain separate deletion and insertion records. These actions resolve one record at a time. For a combined decision, retain both record identities and handle a refused operation explicitly.
+
+## More control
+
+See [Review colors and styling](/docs/2.x/pro/review-styling) for supported parts, types, and additional examples.
