@@ -157,7 +157,7 @@ export function paginateTableInFlow(
   const rowProbes = createRowProbeReuse(
     structure.columnWidthsPt,
     structure.cellSpacingPt,
-    takePreviousRows(table)
+    takePreviousRows(table, flowDeps)
   );
   /** One row's natural height at the current table origin. */
   const rowHeightOf = (
