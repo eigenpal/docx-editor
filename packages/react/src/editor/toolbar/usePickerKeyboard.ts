@@ -52,7 +52,7 @@ function bindPickerKeyboard(root: HTMLElement, close: () => void): () => void {
   // sees its keys. Escape anywhere else still closes it. Bubble phase, and the event goes
   // on: a dialog, the find bar, or the surface handles the same key as it would anyway.
   const escapeOutside = (event: KeyboardEvent) => {
-    if (event.key !== 'Escape' || event.isComposing) return;
+    if (event.key !== 'Escape' || event.isComposing || event.defaultPrevented) return;
     if (event.target instanceof Node && root.contains(event.target)) return;
     close();
   };

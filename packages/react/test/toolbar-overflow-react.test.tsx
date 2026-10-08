@@ -411,6 +411,26 @@ describe('toolbar overflow integration', () => {
       fireEvent.keyDown(document.body, { key: 'Escape' });
     });
     expect(view.queryByTestId('toolbar-overflow-panel')).toBeNull();
+
+    // A nested menu inside the panel handles its own Escape and re-renders away before the
+    // key reaches the document. The panel around it stays open.
+    await act(async () => {
+      trigger.click();
+    });
+    const panel = view.getByTestId('toolbar-overflow-panel');
+    const nested = document.createElement('div');
+    nested.setAttribute('role', 'menu');
+    nested.addEventListener('keydown', (event) => {
+      event.preventDefault();
+      nested.remove();
+    });
+    panel.append(nested);
+    await act(async () => {
+      nested.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+      );
+    });
+    expect(view.queryByTestId('toolbar-overflow-panel')).not.toBeNull();
   });
 
   test('a command in the overflow dialog executes through shared engine state', async () => {

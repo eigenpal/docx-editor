@@ -171,6 +171,34 @@ describe('DocxEditorToolbar composition', () => {
     await flush();
     expect(panel.querySelector('.docx-table-chrome__panel')).not.toBeNull();
     expect(view.container.querySelector('[data-testid="toolbar-overflow-panel"]')).toBe(panel);
+    // The table menu's own Escape closes the menu, and only the menu: it re-renders away
+    // before the key reaches the document, and the panel around it must stay open.
+    const menuItem = panel.querySelector<HTMLElement>(
+      '.docx-table-chrome__panel [role="menuitemradio"], .docx-table-chrome__panel [role="menu"]'
+    )!;
+    expect(menuItem).not.toBeNull();
+    menuItem.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    );
+    await flush();
+    expect(panel.querySelector('.docx-table-chrome__panel')).toBeNull();
+    expect(view.container.querySelector('[data-testid="toolbar-overflow-panel"]')).toBe(panel);
+    // The browser re-renders the menu away between listeners; stand that in directly, so the
+    // key reaches the document with a detached target that only `defaultPrevented` explains.
+    const nested = document.createElement('div');
+    nested.setAttribute('role', 'menu');
+    nested.addEventListener('keydown', (event) => {
+      event.preventDefault();
+      nested.remove();
+    });
+    panel.append(nested);
+    nested.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    );
+    await flush();
+    expect(view.container.querySelector('[data-testid="toolbar-overflow-panel"]')).toBe(panel);
+    panel.querySelector<HTMLButtonElement>('[data-slot="table.borderTarget"] button')!.click();
+    await flush();
     // A click leaves focus outside the panel; Escape there still closes it.
     document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     await flush();
