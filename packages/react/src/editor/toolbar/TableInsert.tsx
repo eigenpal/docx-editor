@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { ChromeSlotId } from '@docx-editor.dev/core/editor';
+import { useDocxEditor } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
 import { useToolbarLabel } from './toolbar-context';
 import { Slot } from './Slot';
@@ -18,6 +19,7 @@ import type { ToolbarPartComponent, ToolbarPartProps } from './parts';
 const SLOT: ChromeSlotId = 'table.insert';
 
 function ToolbarTableInsertImpl({ className, hidden, icon, asChild, children }: ToolbarPartProps) {
+  const editor = useDocxEditor();
   const { isEnabled, disabledReason } = useEditorCommand(SLOT);
   const label = useToolbarLabel();
   const [open, setOpen] = useState(false);
@@ -70,7 +72,16 @@ function ToolbarTableInsertImpl({ className, hidden, icon, asChild, children }: 
     'aria-label': text,
     title: disabledReason ?? text,
     onMouseDown: guardToolbarMousedown,
-    onClick: () => setOpen((current) => !current),
+    onClick: () => {
+      if (!open) {
+        setOpen(true);
+        return;
+      }
+      // Focus is in the grid, which unmounts: give it back to the document, or typing goes
+      // nowhere.
+      setOpen(false);
+      editor?.focus();
+    },
     onKeyDown: (event: ReactKeyboardEvent) => {
       if (event.key !== 'ArrowDown') return;
       event.preventDefault();

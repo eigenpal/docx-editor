@@ -6,6 +6,7 @@
 
 import { defineComponent, h, nextTick, ref, watch, type PropType, type VNode } from 'vue';
 import type { ChromeSlotId } from '@docx-editor.dev/core/editor';
+import { useDocxEditor } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
 import { mergeHostClass } from '../../lib/mergeHostClass';
 import { useStableDocxId } from '../../lib/stable-id';
@@ -29,6 +30,7 @@ export const ToolbarTableInsert = defineComponent({
     icon: { type: Object as PropType<VNode>, default: undefined },
   },
   setup(props, { slots }) {
+    const editorRef = useDocxEditor();
     const command = useEditorCommand(SLOT);
     const label = useToolbarLabel();
     const open = ref(false);
@@ -82,7 +84,14 @@ export const ToolbarTableInsert = defineComponent({
         title: command.disabledReason.value ?? text,
         onMousedown: guardToolbarMousedown,
         onClick: () => {
-          open.value = !open.value;
+          if (!open.value) {
+            open.value = true;
+            return;
+          }
+          // Focus is in the grid, which unmounts: give it back to the document, or typing
+          // goes nowhere.
+          open.value = false;
+          editorRef.value?.focus();
         },
         onKeydown: (event: KeyboardEvent) => {
           if (event.key !== 'ArrowDown') return;

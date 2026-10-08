@@ -132,13 +132,22 @@ function marginWidth(
   return px(side === 'left' ? style.marginLeft : style.marginRight);
 }
 
+/** True when an element has something to show: a form control, child elements, or text. */
+function hasContent(element: HTMLElement): boolean {
+  if (/^(INPUT|TEXTAREA|SELECT|BUTTON|IMG|VIDEO|CANVAS|IFRAME)$/.test(element.tagName)) return true;
+  return element.children.length > 0 || (element.textContent ?? '').trim().length > 0;
+}
+
 /**
- * The width that siblings take beside the bar in a single-line flex row, gaps included.
+ * The width that siblings take beside the bar in a single-line flex row, gaps included, or
+ * null when it cannot be known.
  *
  * A sibling that grows (a `flex: 1` spacer) fills the free space, so its box is not what it
- * needs: it counts by its flex basis instead. Auto margins are free space too.
+ * needs: an empty one counts by its flex basis instead. Auto margins are free space too. A
+ * growing sibling WITH content and `min-width: auto` (a title field, a search box) needs at
+ * least its content width, which this file cannot read, so the answer is null.
  */
-function readSiblingWidth(bar: HTMLElement, parentStyle: CSSStyleDeclaration): number {
+function readSiblingWidth(bar: HTMLElement, parentStyle: CSSStyleDeclaration): number | null {
   if (!isFlexRow(parentStyle) || !bar.parentElement) return 0;
   let width = 0;
   let items = 0;
@@ -150,6 +159,10 @@ function readSiblingWidth(bar: HTMLElement, parentStyle: CSSStyleDeclaration): n
     if (child === bar) continue;
     const specified = specifiedStyle(child);
     const grows = Number.parseFloat(childStyle.flexGrow) > 0;
+    if (grows && hasContent(child)) {
+      const minWidth = keywordOf(specified, 'min-width') ?? childStyle.minWidth.trim();
+      if (minWidth === 'auto' || minWidth === '') return null;
+    }
     const basis = childStyle.flexBasis.trim();
     const box = grows ? (basis.endsWith('px') ? px(basis) : 0) : child.offsetWidth;
     width +=
@@ -160,18 +173,22 @@ function readSiblingWidth(bar: HTMLElement, parentStyle: CSSStyleDeclaration): n
   return width + Math.max(0, items - 1) * px(parentStyle.columnGap);
 }
 
-/** The bar's resolved `max-width` as a border-box width, or null for none. */
+/**
+ * The bar's resolved `max-width` as a border-box width, null for `none`, or undefined for a
+ * value this file cannot resolve (`calc()`, `min()`, a font-relative unit).
+ */
 function readMaxWidth(
   style: CSSStyleDeclaration,
   parentContent: number,
   chrome: number
-): number | null {
+): number | null | undefined {
   const value = style.maxWidth.trim();
+  if (value === 'none' || value === '') return null;
   let width: number;
-  if (value.endsWith('%')) width = (Number.parseFloat(value) / 100) * parentContent;
-  else if (value.endsWith('px')) width = Number.parseFloat(value);
-  else return null;
-  if (!Number.isFinite(width)) return null;
+  if (/^-?[\d.]+%$/.test(value)) width = (Number.parseFloat(value) / 100) * parentContent;
+  else if (/^-?[\d.]+px$/.test(value)) width = Number.parseFloat(value);
+  else return undefined;
+  if (!Number.isFinite(width)) return undefined;
   return style.boxSizing === 'border-box' ? width : width + chrome;
 }
 
@@ -182,15 +199,21 @@ function readMaxWidth(
  * `fit-content`, or `min-content`, and not growing as a flex item) in a layout this file
  * understands: a block-level bar in a `block` or `flow-root` parent, or an item of a
  * single-line flex row. That bar gets the room it can take, see {@link barRoomWidth}. A grid
- * cell, a table cell, an inline bar, an explicit width, an out-of-flow bar, and a browser
- * without Typed OM all keep the bar's own box: the safe side, which collapses early rather
- * than overflowing the next column.
+ * cell, a table cell, an inline bar, a floated bar, an explicit width, an out-of-flow bar, a
+ * `max-width` that does not resolve, a growing sibling with content, and a browser without
+ * Typed OM all keep the bar's own box: the safe side, which collapses early rather than
+ * overflowing the next column.
+ *
+ * The parent-based room only ever brings groups BACK. A bar whose content already overflows
+ * its box measures its own box, so the fit collapses groups until the content fits.
  */
 export function readAvailableWidth(bar: HTMLElement, style: CSSStyleDeclaration): number {
   const padding = px(style.paddingLeft) + px(style.paddingRight);
   const own = bar.clientWidth - padding;
   const parent = bar.parentElement;
   if (!parent || outOfFlow(style)) return own;
+  if (bar.scrollWidth > bar.clientWidth + 1) return own;
+  if ((style.cssFloat || style.getPropertyValue('float') || 'none') !== 'none') return own;
   const specified = specifiedStyle(bar);
   const width = keywordOf(specified, 'width');
   if (width === null || !CONTENT_WIDTHS.has(width)) return own;
@@ -204,12 +227,15 @@ export function readAvailableWidth(bar: HTMLElement, style: CSSStyleDeclaration)
   const parentContent =
     parent.clientWidth - px(parentStyle.paddingLeft) - px(parentStyle.paddingRight);
   const chrome = Math.max(0, bar.offsetWidth - bar.clientWidth) + padding;
+  const siblings = readSiblingWidth(bar, parentStyle);
+  const maxWidth = readMaxWidth(style, parentContent, chrome);
+  if (siblings === null || maxWidth === undefined) return own;
   return barRoomWidth({
     own,
     parentContent,
-    siblings: readSiblingWidth(bar, parentStyle),
+    siblings,
     margins: marginWidth(specified, style, 'left') + marginWidth(specified, style, 'right'),
     chrome,
-    maxWidth: readMaxWidth(style, parentContent, chrome),
+    maxWidth,
   });
 }

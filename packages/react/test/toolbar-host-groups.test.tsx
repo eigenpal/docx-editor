@@ -476,8 +476,15 @@ describe('available width', () => {
     width?: string;
     barStyle?: string;
     margins?: { left: string; right: string };
-    siblings?: { style: string; width: number; margins?: [string, string] }[];
+    siblings?: {
+      style: string;
+      width: number;
+      margins?: [string, string];
+      tag?: string;
+      text?: string;
+    }[];
     typedOm?: boolean;
+    scrollWidth?: number;
   }): HTMLElement {
     const parent = document.createElement('div');
     parent.setAttribute('style', options.parent);
@@ -489,6 +496,10 @@ describe('available width', () => {
     bar.setAttribute('style', `${options.barStyle ?? ''}`);
     Object.defineProperty(bar, 'clientWidth', { configurable: true, get: () => options.own });
     Object.defineProperty(bar, 'offsetWidth', { configurable: true, get: () => options.own });
+    Object.defineProperty(bar, 'scrollWidth', {
+      configurable: true,
+      get: () => options.scrollWidth ?? options.own,
+    });
     const keywords: Record<string, string> = {};
     if (options.width) keywords.width = options.width;
     if (options.margins?.left === 'auto') keywords['margin-left'] = 'auto';
@@ -500,8 +511,9 @@ describe('available width', () => {
       });
     }
     for (const sibling of options.siblings ?? []) {
-      const node = document.createElement('div');
+      const node = document.createElement(sibling.tag ?? 'div');
       node.setAttribute('style', sibling.style);
+      if (sibling.text) node.textContent = sibling.text;
       Object.defineProperty(node, 'offsetWidth', { configurable: true, get: () => sibling.width });
       const [left, right] = sibling.margins ?? ['', ''];
       (node as unknown as { computedStyleMap: () => unknown }).computedStyleMap = () => ({
@@ -579,6 +591,55 @@ describe('available width', () => {
       margins: { left: 'auto', right: 'auto' },
     });
     expect(available(centered)).toBe(1000);
+  });
+
+  test('an unresolved max-width, an overflowing bar, and a floated bar keep their own box', () => {
+    const calc = layout({
+      parent: 'display: flex',
+      parentWidth: 1000,
+      own: 300,
+      width: 'max-content',
+      barStyle: 'max-width: calc(100% - 200px)',
+    });
+    expect(available(calc)).toBe(300);
+    document.body.innerHTML = '';
+    const overflowing = layout({
+      parent: 'display: flex',
+      parentWidth: 1000,
+      own: 300,
+      width: 'max-content',
+      scrollWidth: 420,
+    });
+    expect(available(overflowing)).toBe(300);
+    document.body.innerHTML = '';
+    const floated = layout({
+      parent: 'display: block',
+      parentWidth: 1000,
+      own: 300,
+      width: 'max-content',
+      barStyle: 'float: left',
+    });
+    expect(available(floated)).toBe(300);
+  });
+
+  test('a growing sibling with content keeps the bar to its own box', () => {
+    const bar = layout({
+      parent: 'display: flex',
+      parentWidth: 1000,
+      own: 300,
+      width: 'max-content',
+      siblings: [{ style: 'flex: 1 1 0px', width: 600, tag: 'input' }],
+    });
+    expect(available(bar)).toBe(300);
+    document.body.innerHTML = '';
+    const titled = layout({
+      parent: 'display: flex',
+      parentWidth: 1000,
+      own: 300,
+      width: 'max-content',
+      siblings: [{ style: 'flex: 1 1 0px', width: 600, text: 'Quarterly plan' }],
+    });
+    expect(available(titled)).toBe(300);
   });
 
   test('a flex: 1 spacer and an auto margin do not take the room', () => {
@@ -721,6 +782,28 @@ describe('review fixes', () => {
 });
 
 describe('TableInsert', () => {
+  test('a second click on the trigger closes the grid and focuses the document', async () => {
+    const { view, editor } = mount(
+      <T preset={false}>
+        <T.TableInsert />
+      </T>
+    );
+    await waitFor(() => expect(editor().surface).not.toBeNull());
+    const trigger = view.container.querySelector<HTMLButtonElement>('[data-slot="table.insert"]')!;
+    await waitFor(() => expect(trigger.disabled).toBe(false));
+    const focus = mock(() => {});
+    editor().focus = focus;
+    await act(async () => {
+      trigger.click();
+    });
+    expect(view.container.querySelector('[role="grid"]')).not.toBeNull();
+    await act(async () => {
+      trigger.click();
+    });
+    expect(view.container.querySelector('[role="grid"]')).toBeNull();
+    expect(focus).toHaveBeenCalledTimes(1);
+  });
+
   test('opens a size grid and inserts the picked size', async () => {
     const { view, editor } = mount(
       <T preset={false}>
