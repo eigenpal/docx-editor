@@ -725,7 +725,7 @@
   },
   "Word.Body#getRange": {
     "status": "partial",
-    "notes": "Answers a range through paragraph identities and offsets. A range whose text moved since it was read refuses with StaleDocument. A range that spans paragraphs, such as body.getRange('Whole'), also refuses when its first paragraph changed, when a paragraph between its ends changed, or when a paragraph was inserted or removed there. Get the range again after such an edit."
+    "notes": "Answers a range through paragraph identities and offsets. A range whose text moved since it was read refuses with StaleDocument. A range that spans paragraphs, such as body.getRange('Whole'), also refuses when its first paragraph changed, when a paragraph between its ends changed, or when a paragraph was inserted or removed there. Get the range again after such an edit. In a very long session, a range read long ago can also refuse with StaleDocument when its history record was dropped; then expectedRevision can equal actualRevision although the range did not move. Read the range again."
   },
   "Word.Paragraph#getRange": {
     "status": "partial",
