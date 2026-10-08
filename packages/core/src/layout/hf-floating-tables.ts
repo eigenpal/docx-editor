@@ -78,6 +78,10 @@ export interface PlacedFloatingStoryTables {
   /** The table fragments, out of flow, in story coordinates. */
   readonly tables: readonly BlockFragmentRecord[];
   readonly zones: readonly ExclusionZone[];
+  /** Whether a table is framed by the page or a margin, so it keeps its page position. */
+  readonly pageFramed: boolean;
+  /** The whole bands of the page- and margin-framed tables, not cut at their anchors. */
+  readonly pageFramedZones: readonly ExclusionZone[];
 }
 
 /**
@@ -145,6 +149,8 @@ export function placeFloatingStoryTables(
 ): PlacedFloatingStoryTables {
   const tables: BlockFragmentRecord[] = [];
   const zones: ExclusionZone[] = [];
+  const pageFramedZones: ExclusionZone[] = [];
+  let pageFramed = false;
   const horizontal: TableAnchorFrames = {
     text: { left: 0, width: frames.contentWidth },
     margin: { left: 0, width: frames.contentWidth },
@@ -168,14 +174,45 @@ export function placeFloatingStoryTables(
       page: { top: -frames.storyTop, height: frames.pageHeight },
     };
     const x = tableFloatOriginX(entry.float, measured.box.width, horizontal);
-    const y = tableFloatOriginY(entry.float, measured.box.height, vertical);
+    const framed = entry.float.vertAnchor !== 'text';
+    pageFramed ||= framed;
+    // A page- or margin-framed table never passes the sheet's bottom edge: it moves up onto it.
+    const y = Math.min(
+      tableFloatOriginY(entry.float, measured.box.height, vertical),
+      framed ? frames.pageHeight - frames.storyTop - measured.box.height : Number.POSITIVE_INFINITY
+    );
     // The alone layout already offset the table by its own indent or alignment.
     for (const fragment of layoutAlone(entry.table, x - measured.box.x, y, true)) {
       tables.push({ ...fragment, outOfFlow: true } as BlockFragmentRecord);
       if (!wrap || fragment.kind !== 'table' || fragment.tableId !== entry.table.id) continue;
       const zone = storyTableZone(fragment, entry, index, textTop, frames.contentWidth);
       if (zone) zones.push(zone);
+      // The whole band, before the cut at the anchor: a lift above the table clears all of it.
+      const whole = framed
+        ? storyTableZone(fragment, entry, index, Number.NEGATIVE_INFINITY, frames.contentWidth)
+        : undefined;
+      if (whole) pageFramedZones.push(whole);
     }
   }
-  return { tables, zones };
+  return { tables, zones, pageFramed, pageFramedZones };
+}
+
+/**
+ * How far a footer story rises above its natural top so that its text clears a page-framed
+ * table that spans the story and reaches past the footer's bottom edge. The text then ends
+ * where the table starts. A table that ends above that edge lifts nothing: the text after it
+ * moves below it instead. `naturalHeight` is the footer's height before any wrapping.
+ */
+export function footerLiftAboveTables(
+  tables: PlacedFloatingStoryTables,
+  naturalHeight: number
+): number {
+  let lift = 0;
+  for (const zone of tables.pageFramedZones) {
+    if (zone.input.mode !== 'topAndBottom') continue;
+    const top = zone.verticalBand.y;
+    const bottom = top + zone.verticalBand.height;
+    if (top < naturalHeight && bottom > naturalHeight) lift = Math.max(lift, naturalHeight - top);
+  }
+  return lift;
 }

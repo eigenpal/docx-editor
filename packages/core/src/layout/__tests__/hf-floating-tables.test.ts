@@ -143,12 +143,21 @@ describe('floating tables in a header', () => {
 
   test('a footer measures its top edge from the sheet bottom', () => {
     const { table: placed, title } = header(
-      table('<w:tblpPr w:vertAnchor="page" w:horzAnchor="page" w:tblpX="1440" w:tblpY="15000"/>'),
+      table('<w:tblpPr w:vertAnchor="page" w:horzAnchor="page" w:tblpX="1440" w:tblpY="14000"/>'),
       { storyDistance: 36, footer: true }
     );
     // The footer's flow is the title alone, so its top edge is 36pt plus that height up.
     const footerTop = 792 - 36 - title.box.height;
-    expect(placed.box.y).toBeCloseTo(offsetPt(15000) - footerTop, 3);
+    expect(placed.box.y).toBeCloseTo(offsetPt(14000) - footerTop, 3);
+  });
+
+  test('a page-framed table that would pass the sheet bottom moves up onto the sheet', () => {
+    const { table: placed, title } = header(
+      table('<w:tblpPr w:vertAnchor="page" w:horzAnchor="page" w:tblpX="1440" w:tblpY="15600"/>'),
+      { storyDistance: 36, footer: true }
+    );
+    const footerTop = 792 - 36 - title.box.height;
+    expect(footerTop + placed.box.y + placed.box.height).toBeCloseTo(792, 3);
   });
 
   test('without page geometry the table stays in the flow', () => {
@@ -209,10 +218,12 @@ describe('story blocks wrap around a floating table', () => {
     expect(placed.box.y).toBeCloseTo(0, 3);
   });
 
-  test('a page-anchored footer table and the text below it never overlap', () => {
-    // The footer grows by the text the table pushes down, which moves the footer's top edge.
-    // The table keeps the place it resolved against the unwrapped footer, so the two agree.
-    for (const y of [14000, 14401, 14801]) {
+  test('a page-framed footer table keeps its page position and never overlaps the text', () => {
+    // The footer's bottom edge is fixed at 756pt. Its text moves below a table that ends above
+    // that edge, and above one that passes it; the table stays at its page position.
+    const below: number[] = [];
+    const above: number[] = [];
+    for (let y = 13000; y <= 15800; y += 100) {
       const tblpPr = `<w:tblpPr w:vertAnchor="page" w:horzAnchor="margin" w:tblpXSpec="center" w:tblpY="${y}"/>`;
       const {
         story,
@@ -223,10 +234,23 @@ describe('story blocks wrap around a floating table', () => {
         footer: true,
         compatibilityMode: 15,
       });
+      const footerTop = 756 - story.flowHeight;
+      const tableTop = placed.box.y;
+      const tableBottom = tableTop + placed.box.height;
+      expect(footerTop + tableTop).toBeCloseTo(Math.min(offsetPt(y), 792 - 60), 3);
       const line = title.lines[0]!.box;
-      expect(line.y).toBeGreaterThanOrEqual(placed.box.y + placed.box.height - 0.01);
-      expect(story.flowHeight).toBeCloseTo(line.y + line.height, 1);
+      const clear = line.y >= tableBottom - 0.01 || line.y + line.height <= tableTop + 0.01;
+      expect(clear).toBe(true);
+      if (line.y > 0) below.push(y);
+      if (
+        footerTop + line.y + line.height <= footerTop + tableTop + 0.01 &&
+        line.y + footerTop < 742
+      )
+        above.push(y);
     }
+    // A table ending above the bottom edge pushes the text below it; one past it lifts it.
+    expect(below).toContain(13800);
+    expect(above).toContain(14400);
   });
 
   test('compatibility mode 14, or no mode, runs header text under the table', () => {

@@ -63,7 +63,11 @@ import type {
 import type { StyleCascadeTable } from './style-cascade.ts';
 import { storyBlocks } from './story-roots.ts';
 import { positionLegacyFooterPageFrame } from './legacy-footer-page-frame.ts';
-import { placeFloatingStoryTables, splitFloatingStoryTables } from './hf-floating-tables.ts';
+import {
+  footerLiftAboveTables,
+  placeFloatingStoryTables,
+  splitFloatingStoryTables,
+} from './hf-floating-tables.ts';
 import { withoutFloatingTableZones } from './table-float-overlap.ts';
 import { placeHeaderPageFrame, readHeaderPageFrame } from './header-page-frame.ts';
 
@@ -636,11 +640,15 @@ export function layoutHeaderFooterStory(
 
     if (floatingGeometry) {
       const anchors = flow;
-      // A footer's top edge rises with its flow height. Page and margin anchors resolve once,
-      // against the flow before wrapping, so the tables stay where the text wraps around them.
-      const storyTop =
+      // A footer's bottom edge is fixed and its top rises with its height. The tables resolve
+      // once, against the flow before wrapping, so they stay where the text wraps around them.
+      const footerBottom =
         part.root.localName === 'ftr' && floatingGeometry.storyDistance !== undefined
-          ? floatingGeometry.pageHeight - floatingGeometry.storyDistance - anchors.bottom
+          ? floatingGeometry.pageHeight - floatingGeometry.storyDistance
+          : undefined;
+      let storyTop =
+        footerBottom !== undefined
+          ? footerBottom - anchors.bottom
           : (effectiveCtx?.storyTop ?? floatingGeometry.storyDistance!);
       const placeTables = () =>
         placeFloatingStoryTables(
@@ -663,6 +671,17 @@ export function layoutHeaderFooterStory(
             ).blocks
         );
       let tables = placeTables();
+      // A page-framed footer table keeps its page position, so the footer's top edge is fixed
+      // first: at its natural top, or raised so the text ends where a table past the bottom
+      // edge starts. Text the table pushes down then runs past the bottom edge.
+      const framedFooter = footerBottom !== undefined && tables.pageFramed;
+      if (framedFooter) {
+        const lift = footerLiftAboveTables(tables, anchors.bottom);
+        if (lift > 0) {
+          storyTop -= lift;
+          tables = placeTables();
+        }
+      }
       // The placement reads only the unwrapped flow, so one wrapped pass settles it. Placing
       // again after that pass publishes the drawings inside the tables once.
       if (tables.zones.length) {
@@ -670,7 +689,10 @@ export function layoutHeaderFooterStory(
         flowStory(flowBlocks, 0);
         tables = placeTables();
       }
-      flow = { blocks: [...flow.blocks, ...tables.tables], bottom: flow.bottom };
+      flow = {
+        blocks: [...flow.blocks, ...tables.tables],
+        bottom: framedFooter ? footerBottom - storyTop : flow.bottom,
+      };
     }
     flow = positionLegacyFooterPageFrame(
       part,
