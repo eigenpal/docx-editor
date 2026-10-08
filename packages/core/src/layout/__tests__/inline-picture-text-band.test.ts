@@ -155,10 +155,11 @@ describe('a line with only a small inline picture', () => {
 
   test('double spacing scales the run line, and never a tall picture', () => {
     expect(lay(paragraph(pictureRun(20), size(28), 480)).heights[0]).toBeCloseTo(2 * line(10), 5);
-    // The picture stands on the baseline and is the line; spacing does not multiply it.
-    for (const lineValue of [240, 480]) {
-      const tall = lay(paragraph(pictureRun(20, drawing(40)), size(28), lineValue)).heights[0];
-      expect(tall).toBeCloseTo(40, 5);
-    }
+    // The picture stands on the baseline and is the line; spacing does not multiply it. The
+    // multiple's extra run band goes below the picture instead.
+    const single = lay(paragraph(pictureRun(20, drawing(40)), size(28), 240)).heights[0];
+    expect(single).toBeCloseTo(40, 5);
+    const double = lay(paragraph(pictureRun(20, drawing(40)), size(28), 480)).heights[0];
+    expect(double).toBeCloseTo(40 + line(10), 5);
   });
 });

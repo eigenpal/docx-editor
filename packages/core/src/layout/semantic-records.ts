@@ -347,7 +347,8 @@ export interface LineRecord {
    * nothing, which is why the caret, paint's `padding-bottom` and the content-control
    * boundary all need this published rather than recovered from the box.
    *
-   * Zero under exact and atLeast, and on lines holding drawings (the box is authored).
+   * Zero under exact and atLeast. On a line holding drawings, only an auto multiple above
+   * single spacing sets it: the multiple's extra text band below the drawings.
    * Absent on lines published before this was measured; treat as zero.
    */
   readonly trailingSpacing?: number;
