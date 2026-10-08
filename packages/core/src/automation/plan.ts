@@ -2447,6 +2447,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       }
 
       case 'resolveRevisionBatch':
+      case 'setRevisionAuthorBatch':
       case 'acceptAllRevisions':
       case 'rejectAllRevisions':
         return planRevisionDecision(operation, handles, packageReads, (reads) =>

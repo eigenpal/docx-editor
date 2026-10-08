@@ -2835,7 +2835,8 @@ export function mountPaginatedSurface(
       op.op !== 'acceptRevision' &&
       op.op !== 'rejectRevision' &&
       op.op !== 'acceptAllRevisions' &&
-      op.op !== 'rejectAllRevisions'
+      op.op !== 'rejectAllRevisions' &&
+      op.op !== 'setRevisionAttribution'
     );
   }
 
@@ -5279,6 +5280,7 @@ export function mountPaginatedSurface(
     },
 
     editingMode: () => editingMode,
+    author: () => author,
     setAuthor: (nextAuthor) => {
       if (author === nextAuthor) return;
       flushTypeBuffer();

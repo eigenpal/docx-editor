@@ -204,6 +204,8 @@ Accept keeps a proposed content control. Reject restores the original formatted 
 
 Established list definitions and page setup refuse tracked writes. Comments and revision decisions remain available. Never silently fall back to `Off` when an edit cannot be tracked.
 
+When a person adopts an agent's suggestions, attribute them to that person with `revisions.setAuthor(author, revisions)` or `revisions.setAuthor(author, { authors })`. This is a DocxEditor addition; Office.js has no author write. The changes stay pending. Never reject and reinsert suggestions to change their author.
+
 Standard `insertText('', 'Replace')` means deletion, and an empty insertion is a no-op. Agent tools should require nonempty insertion/replacement text and expose deletion as an explicit model decision. The shipped worker does this. The [compatibility manifest](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/compat/manifest.json) records measured members and behavioral differences.
 
 ## Insert table rows

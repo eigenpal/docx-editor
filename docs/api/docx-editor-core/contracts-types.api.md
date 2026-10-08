@@ -155,11 +155,13 @@ export type ExecResult = {
     changed: boolean;
     history?: HistoryGroupOutcome;
     ok: true;
+    revisionAuthors?: RevisionAuthorResult;
     revisions?: RevisionBatchResult;
 } | {
     code: ExecErrorCode;
     ok: false;
     reason: string;
+    revisionAuthors?: RevisionAuthorResult;
     revisions?: RevisionBatchResult;
     target?: DocTarget;
 };

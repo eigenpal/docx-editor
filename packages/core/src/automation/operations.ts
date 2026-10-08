@@ -581,6 +581,19 @@ export type AutomationOperation =
       readonly action: 'accept' | 'reject';
       readonly revisions?: readonly AutomationHandle[];
     }
+  /**
+   * Attribute pending decisions in one story to another author, keeping them pending. Omit
+   * revisions to select every canonical decision. `date` is `xsd:dateTime`; omitted keeps each.
+   */
+  | {
+      readonly op: 'setRevisionAuthorBatch';
+      readonly body: AutomationHandle;
+      readonly author: string;
+      readonly date?: string;
+      readonly revisions?: readonly AutomationHandle[];
+      /** Keep only changes these authors made. Not allowed with `revisions`. */
+      readonly authors?: readonly string[];
+    }
   /** Word's name for the kind of change: `Insert`, `Delete`, `Replace`, `Property`, … */
   | { readonly op: 'getRevisionType'; readonly revision: AutomationHandle }
   | { readonly op: 'getRevisionAuthor'; readonly revision: AutomationHandle }

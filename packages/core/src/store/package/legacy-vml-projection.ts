@@ -1,5 +1,6 @@
 import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from './ooxml-tree.ts';
 import { isStandardVmlTemplate } from './legacy-vml-templates.ts';
+import { shapeLineGeometry } from './legacy-vml-shape-line.ts';
 import { embeddedObjectPreview } from './legacy-vml-object.ts';
 import type {
   DrawingProjection,
@@ -314,7 +315,10 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
   if (!style) return null;
   const floating = style.get('position') === 'absolute';
   // A line spans its `from` and `to` points.
-  const line = root.localName === 'line' ? lineGeometry(root, floating) : undefined;
+  const line =
+    root.localName === 'line'
+      ? lineGeometry(root, floating)
+      : shapeLineGeometry(root, style, floating);
   if (line === null) return null;
   const width = line?.width ?? points(style.get('width')),
     height = line?.height ?? points(style.get('height'));

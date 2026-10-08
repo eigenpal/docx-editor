@@ -78,23 +78,30 @@ jobs:
       fail-fast: true
       matrix:
         include:
+          # Setup-bound checks use the smaller runner; typecheck and tests keep four cores.
           - label: lint
             command: bun run lint
+            runner: blacksmith-2vcpu-ubuntu-2404
           - label: format
             command: bun run format:check
+            runner: blacksmith-2vcpu-ubuntu-2404
           - label: typecheck
             command: bun run typecheck
           - label: tests
             command: bun run test
           - label: parity
             command: bun run check:parity
+            runner: blacksmith-2vcpu-ubuntu-2404
           - label: documentation
             command: bun run check:docs
+            runner: blacksmith-2vcpu-ubuntu-2404
           - label: license headers
             command: bun run check:license-headers
+            runner: blacksmith-2vcpu-ubuntu-2404
           - label: i18n
             command: bun run i18n:validate
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+            runner: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ${{ matrix.runner || 'blacksmith-4vcpu-ubuntu-2404' }}
     timeout-minutes: 20
     permissions:
       contents: read
@@ -210,7 +217,7 @@ jobs:
       fail-fast: false
       matrix:
         shard: ['1/4', '2/4', '3/4', '4/4']
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 30
     permissions:
       contents: read

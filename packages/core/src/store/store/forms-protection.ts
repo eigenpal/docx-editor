@@ -50,6 +50,8 @@ export function documentProtectionRefusal(
   if (!protection.enforced) return null;
   if (protection.edit === 'readOnly') return 'locked';
   if (protection.edit === 'comments' && op?.op !== 'insertCommentMarker') return 'locked';
+  // Tracked-changes protection keeps each change attributed to the person who made it.
+  if (protection.edit === 'trackedChanges' && op?.op === 'setRevisionAttribution') return 'locked';
   return null;
 }
 

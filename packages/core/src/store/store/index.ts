@@ -217,6 +217,12 @@ export {
   type RevisionBatchResult,
   type RevisionBatchSkipReason,
 } from './revision-batch.ts';
+export {
+  planRevisionAuthorChange,
+  type RevisionAuthorEntry,
+  type RevisionAuthorResult,
+  type RevisionAuthorSkipReason,
+} from './revision-author-change.ts';
 export type { HistoryGroup } from './history-group.ts';
 
 export {

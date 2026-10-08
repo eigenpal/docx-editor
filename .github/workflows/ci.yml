@@ -31,8 +31,11 @@ jobs:
       fail-fast: true
       matrix:
         include:
+          # Setup-bound checks finish in under a minute on the smaller runner.
           - check: shipped-advisories
+            runner: blacksmith-2vcpu-ubuntu-2404
           - check: api-changeset
+            runner: blacksmith-2vcpu-ubuntu-2404
           - check: lint
           - check: typecheck
           - check: browser
@@ -46,7 +49,7 @@ jobs:
           - check: unit
             shard: 4/4
     name: "${{ matrix.check == 'unit' && format('unit ({0})', matrix.shard) || matrix.check }}"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ${{ matrix.runner || 'blacksmith-4vcpu-ubuntu-2404' }}
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -269,7 +272,7 @@ jobs:
       fail-fast: false
       matrix:
         shard: ['1/4', '2/4', '3/4', '4/4']
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -298,7 +301,7 @@ jobs:
 
   office-js-compatibility:
     if: github.actor != 'dependabot[bot]'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 15
     continue-on-error: true
     steps:

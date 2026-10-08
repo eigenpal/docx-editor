@@ -21,7 +21,7 @@ A declaration or enum value does not guarantee runtime support for every documen
 | `ServerPaginationOptions` | `measurer`, optional `producer` | [Fields and pagination](/docs/2.x/editor-api/fields) |
 | `RequestContext`, `RunCallback` | `document`, `capabilities`, `trackedObjects`, `sync` and async callback result | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
 | `ClientObject` | Inherited `context`, `isNullObject`, and `load` | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
-| `ClientResult` | `value`, `isLoaded`; returned by `RevisionCollection.resolve()` | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
+| `ClientResult` | `value`, `isLoaded`; returned by `RevisionCollection.resolve()` and `setAuthor()` | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
 | `TrackedObjects` | `add`, `remove`, each accepting one object or an array | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
 | `LoadOption`, `LoadQueryOptions` | Explicit property names; `select`, `top`, `skip`; reserved `expand` | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
 | `DocxEditorError`, `DocxEditorErrorInit`, `DocxEditorErrorCode`, `isDocxEditorError` | Stable error codes, `target`, resource limit, and revision metadata | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
@@ -92,7 +92,7 @@ Font writes honor inherited complex-script properties. Font reads return authore
 | `CommentReply` | `authorName`, `creationDate`, `id`, `text`, `delete` | [Comments](/docs/2.x/editor-api/comments) |
 | `CommentCollection`, `CommentReplyCollection` | `getFirst` | [Comments](/docs/2.x/editor-api/comments) |
 | `Revision` | `author`, `date`, `type`, `range`, `accept`, `reject` | [Tracked changes](/docs/2.x/editor-api/revisions) |
-| `RevisionCollection` | `resolve`, `acceptAll`, `rejectAll` | [Tracked changes](/docs/2.x/editor-api/revisions) |
+| `RevisionCollection` | `resolve`, `setAuthor`, `acceptAll`, `rejectAll` | [Tracked changes](/docs/2.x/editor-api/revisions) |
 | `ChangeTrackingMode`, `RevisionTextView`, `RevisionType` | Runtime tracking modes, read views, and published revision types | [Tracked changes](/docs/2.x/editor-api/revisions) |
 
 ## Distinguish host extensions from Office.js compatibility
