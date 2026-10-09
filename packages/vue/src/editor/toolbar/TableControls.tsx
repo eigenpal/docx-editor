@@ -341,17 +341,17 @@ const TableBorderTargetItem = defineComponent({
 const TableBorderTargetContent = defineComponent({
   name: 'TableBorderTargetContent',
   setup(_, { slots }) {
-    return () => (
-      <targetCompound.Content>
-        {slots.default?.() ?? (
-          <div class="docx-table-chrome__target-grid">
-            {TABLE_BORDER_TARGET_OPTIONS.map((option) => (
-              <TableBorderTargetItem key={option.value} value={option.value} />
-            ))}
-          </div>
-        )}
-      </targetCompound.Content>
-    );
+    return () =>
+      h(targetCompound.Content, null, {
+        default: () =>
+          slots.default?.() ?? (
+            <div class="docx-table-chrome__target-grid">
+              {TABLE_BORDER_TARGET_OPTIONS.map((option) => (
+                <TableBorderTargetItem key={option.value} value={option.value} />
+              ))}
+            </div>
+          ),
+      });
   },
 });
 
@@ -363,11 +363,11 @@ const TableBorderTargetRoot = defineComponent({
     asChild: { type: Boolean, default: undefined },
   },
   setup(props, { slots }) {
-    return () => (
-      <targetCompound.Root {...props}>
-        {slots.default?.() ?? [<targetCompound.Trigger />, <TableBorderTargetContent />]}
-      </targetCompound.Root>
-    );
+    return () =>
+      h(targetCompound.Root, props, {
+        default: () =>
+          slots.default?.() ?? [<targetCompound.Trigger />, <TableBorderTargetContent />],
+      });
   },
 });
 
@@ -423,18 +423,19 @@ export const ToolbarTableBorderStyle = Object.assign(
     name: 'ToolbarTableBorderStyle',
     props: { className: String, hidden: Boolean, asChild: Boolean },
     setup(props, { slots }) {
-      return () => (
-        <styleCompound.Root {...props}>
-          {slots.default?.() ?? [
-            <styleCompound.Trigger />,
-            <styleCompound.Content>
-              {TABLE_BORDER_STYLE_OPTIONS.map((option) => (
-                <TableBorderStyleItem key={option.value} value={option.value} />
-              ))}
-            </styleCompound.Content>,
-          ]}
-        </styleCompound.Root>
-      );
+      return () =>
+        h(styleCompound.Root, props, {
+          default: () =>
+            slots.default?.() ?? [
+              <styleCompound.Trigger />,
+              h(styleCompound.Content, null, {
+                default: () =>
+                  TABLE_BORDER_STYLE_OPTIONS.map((option) => (
+                    <TableBorderStyleItem key={option.value} value={option.value} />
+                  )),
+              }),
+            ],
+        });
     },
   }),
   {
@@ -494,18 +495,19 @@ export const ToolbarTableBorderWidth = Object.assign(
     name: 'ToolbarTableBorderWidth',
     props: { className: String, hidden: Boolean, asChild: Boolean },
     setup(props, { slots }) {
-      return () => (
-        <widthCompound.Root {...props}>
-          {slots.default?.() ?? [
-            <widthCompound.Trigger />,
-            <widthCompound.Content>
-              {TABLE_BORDER_WIDTH_OPTIONS.map((option) => (
-                <TableBorderWidthItem key={option.size} value={String(option.size)} />
-              ))}
-            </widthCompound.Content>,
-          ]}
-        </widthCompound.Root>
-      );
+      return () =>
+        h(widthCompound.Root, props, {
+          default: () =>
+            slots.default?.() ?? [
+              <widthCompound.Trigger />,
+              h(widthCompound.Content, null, {
+                default: () =>
+                  TABLE_BORDER_WIDTH_OPTIONS.map((option) => (
+                    <TableBorderWidthItem key={option.size} value={String(option.size)} />
+                  )),
+              }),
+            ],
+        });
     },
   }),
   {
@@ -760,15 +762,15 @@ export const ToolbarTableBorderColor = Object.assign(
     name: 'ToolbarTableBorderColor',
     props: { className: String, hidden: Boolean, asChild: Boolean },
     setup(props, { slots }) {
-      return () => (
-        <borderColorCompound.Root {...props}>
-          {slots.default?.() ?? [
-            <borderColorCompound.Main />,
-            <borderColorCompound.Trigger />,
-            <borderColorCompound.Content clearFill={false} />,
-          ]}
-        </borderColorCompound.Root>
-      );
+      return () =>
+        h(borderColorCompound.Root, props, {
+          default: () =>
+            slots.default?.() ?? [
+              <borderColorCompound.Main />,
+              <borderColorCompound.Trigger />,
+              <borderColorCompound.Content clearFill={false} />,
+            ],
+        });
     },
   }),
   {
@@ -791,15 +793,15 @@ export const ToolbarTableCellFill = Object.assign(
     name: 'ToolbarTableCellFill',
     props: { className: String, hidden: Boolean, asChild: Boolean },
     setup(props, { slots }) {
-      return () => (
-        <fillCompound.Root {...props}>
-          {slots.default?.() ?? [
-            <fillCompound.Main />,
-            <fillCompound.Trigger />,
-            <fillCompound.Content clearFill={true} />,
-          ]}
-        </fillCompound.Root>
-      );
+      return () =>
+        h(fillCompound.Root, props, {
+          default: () =>
+            slots.default?.() ?? [
+              <fillCompound.Main />,
+              <fillCompound.Trigger />,
+              <fillCompound.Content clearFill={true} />,
+            ],
+        });
     },
   }),
   {

@@ -146,3 +146,25 @@ describe('a picker (Vue)', () => {
     expect((await escape(view.host)).defaultPrevented).toBe(false);
   });
 });
+
+describe('a picker behind a host modal (Vue)', () => {
+  test("focus that moves into a host's modal dialog closes the picker", async () => {
+    const view = await mount(toolbarWith(DocxEditorToolbar.FontFamily));
+    const trigger = view.container.querySelector<HTMLElement>(
+      '[data-slot="font.family"] [aria-haspopup]'
+    )!;
+    await press(trigger);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    const field = document.createElement('input');
+    dialog.append(field);
+    document.body.append(dialog);
+    hosts.push(dialog);
+    field.focus();
+    await flush();
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  });
+});
+

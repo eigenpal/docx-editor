@@ -166,6 +166,7 @@ import {
 import { PROPERTY_CHANGE_WRAPPER_OF_OP } from '../store/store/tree-op-tracked-properties.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
 import { selectionMarkRects } from '../layout/selection-rects.ts';
+import type { CaretGeometry } from '../layout/semantic-interaction.ts';
 import { paintSelectionOverlay, type OverlayRect } from '@docx-editor.dev/core/output';
 // By module path, like the roster walk below: dropping a retained paint is an engine
 // internal for the IME lane, not something the output barrel should offer consumers.
@@ -3196,7 +3197,7 @@ export function mountPaginatedSurface(
     next: SemanticSelection,
     keepDesiredX = false,
     follow: CaretFollowMode = 'caret',
-    pointerCaret?: import('@docx-editor.dev/core/layout').CaretGeometry
+    pointerCaret?: CaretGeometry
   ): void {
     // Compared BEFORE the flush below, which can itself move the caret.
     const moved = !selectionsEqual(next, selection);
