@@ -13,6 +13,7 @@ import type { SemanticTableRow, TableAlignment } from './semantic-table.ts';
 import {
   MAX_TABLE_COLUMNS,
   MAX_TABLE_PERCENT_UNITS,
+  wrappedTablePercentUnits,
   type CellWidthClaim,
   type PreferredWidth,
 } from './table-widths.ts';
@@ -110,7 +111,7 @@ export function legacyTableContentWidth(input: {
   if (
     attr(width, 'type') !== 'pct' ||
     rawWidth === undefined ||
-    ((!/^\d{1,5}$/.test(rawWidth) || Number(rawWidth) > MAX_TABLE_PERCENT_UNITS) &&
+    ((!/^\d{1,9}$/.test(rawWidth) || wrappedTablePercentUnits(Number(rawWidth)) === undefined) &&
       (!/^\d{1,3}(?:\.\d+)?%$/.test(rawWidth) ||
         Number(rawWidth.slice(0, -1)) * 50 > MAX_TABLE_PERCENT_UNITS)) ||
     (stated('tblInd') &&

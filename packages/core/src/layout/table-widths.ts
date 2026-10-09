@@ -65,6 +65,18 @@ const MAX_PREFERRED_PERCENT = 100;
 /** Widest TABLE percentage honoured above 100, as a signed 16-bit count of fiftieths. */
 export const MAX_TABLE_PERCENT_UNITS = 32_767;
 
+/**
+ * A bare table percentage is a 16-bit count of fiftieths: a larger count wraps, and a count
+ * that wraps to zero or past the signed range states no width. `undefined` means `auto`.
+ */
+export function wrappedTablePercentUnits(units: number): number | undefined {
+  const wrapped = units % 65_536;
+  return wrapped > 0 && wrapped <= MAX_TABLE_PERCENT_UNITS ? wrapped : undefined;
+}
+
+/** The narrowest stated table percentage: one fiftieth of a percent. */
+const MIN_TABLE_PERCENT = 1 / 50;
+
 /** A width stated without a unit: its type says whether it is twips or fiftieths of a percent. */
 const UNITLESS = /^[+-]?\d{0,9}(?:\.\d{0,32})?$/;
 
@@ -136,9 +148,16 @@ export function readPreferredWidth(node: OoxmlElement | undefined, table = false
     // A bare `pct` value is fiftieths of a percent, read as whole units like any other.
     const percent = measure.kind === 'percent' ? measure.percent : (measure.pt * 20) / 50;
     if (!Number.isFinite(percent) || percent <= 0) return AUTO_PREFERRED_WIDTH;
-    // A table may extend past the text column. A value beyond its range keeps the full column.
-    const honoured = table && percent * 50 <= MAX_TABLE_PERCENT_UNITS + 1e-6;
-    return { type: 'pct', value: honoured ? percent : Math.min(percent, MAX_PREFERRED_PERCENT) };
+    if (!table) return { type: 'pct', value: Math.min(percent, MAX_PREFERRED_PERCENT) };
+    // A table may extend past the text column, within a 16-bit count of fiftieths. Past that
+    // range a stated percentage lays the table out at its narrowest; a bare count wraps.
+    if (measure.kind === 'percent')
+      return {
+        type: 'pct',
+        value: percent * 50 <= MAX_TABLE_PERCENT_UNITS + 1e-6 ? percent : MIN_TABLE_PERCENT,
+      };
+    const units = wrappedTablePercentUnits(percent * 50);
+    return units === undefined ? AUTO_PREFERRED_WIDTH : { type: 'pct', value: units / 50 };
   }
   if (!Number.isFinite(measure.pt) || measure.pt <= 0) return AUTO_PREFERRED_WIDTH;
   return { type: 'dxa', value: Math.min(measure.pt, MAX_COLUMN_WIDTH_PT) };

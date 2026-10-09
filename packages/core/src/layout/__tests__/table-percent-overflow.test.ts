@@ -202,11 +202,13 @@ describe('a table percentage above 100 extends the table past the text column', 
       type: 'pct',
       value: 120,
     });
-    for (const width of ['32768', '999999', '700%'])
-      expect(readTablePreferredWidth(tblW(`w:w="${width}" w:type="pct"`))).toEqual({
-        type: 'pct',
-        value: 100,
-      });
+    const read = (width: string) => readTablePreferredWidth(tblW(`w:w="${width}" w:type="pct"`));
+    // A bare count is 16 bits wide: it wraps, and past the signed range it states no width.
+    for (const width of ['32768', '40000', '65535', '65536'])
+      expect(read(width)).toEqual({ type: 'auto', value: 0 });
+    expect(read('70000')).toEqual({ type: 'pct', value: 89.28 });
+    // A stated percentage past the range lays the table out at its narrowest.
+    for (const width of ['656%', '700%']) expect(read(width)).toEqual({ type: 'pct', value: 0.02 });
     // A cell's share of its table keeps the 100% limit.
     expect(readPreferredWidth(tblW('w:w="6000" w:type="pct"'))).toEqual({
       type: 'pct',
