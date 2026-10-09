@@ -1,4 +1,5 @@
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
+import { keepsSubtreeMemo } from '../store/package/subtree-memo-policy.ts';
 
 interface Scope {
   readonly key: string;
@@ -9,6 +10,8 @@ interface Entry {
 }
 // Avoid retaining large unions at every ancestor of a font-diverse document.
 const MAX_CACHED_FAMILIES = 256;
+/** Most subtrees name no family; their entries share this answer. */
+const NO_FAMILIES: readonly string[] = Object.freeze([]);
 
 /** Reuse font discoveries on immutable subtrees; edits only revisit their ancestors. */
 export function createFontFamilyTreeCache<C extends Scope>(
@@ -54,8 +57,10 @@ export function createFontFamilyTreeCache<C extends Scope>(
           stack.push({ ...child, next: 0 });
           continue;
         }
-        const found = [...frame.found!];
-        if (found.length <= MAX_CACHED_FAMILIES)
+        const found = frame.found!.size === 0 ? NO_FAMILIES : [...frame.found!];
+        // A node of leaves answers again from them in a few steps. Keeping an entry for every
+        // property element held hundreds of megabytes on a long document.
+        if (found.length <= MAX_CACHED_FAMILIES && keepsSubtreeMemo(frame.node))
           cache.set(frame.node, { key: frame.context.key, families: found });
         else cache.delete(frame.node);
         finish(found);

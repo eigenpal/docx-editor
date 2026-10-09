@@ -23,6 +23,27 @@ interface ScanContext {
   readonly depth: number;
 }
 
+/**
+ * One string and one context per distinct cell scope. Every cell built its own key string
+ * and context, and the subtree cache kept them, one per cell of every table.
+ */
+const cellContexts = new WeakMap<ScanContext, Map<string, ScanContext>>();
+const MAX_CELL_CONTEXTS = 4096;
+
+function cellContext(
+  context: ScanContext,
+  cellStyle: TableCellStyleFormatting | undefined
+): ScanContext {
+  const key = `${context.baseKey}|${context.depth + 1}|${JSON.stringify(cellStyle)}`;
+  let known = cellContexts.get(context);
+  if (!known) cellContexts.set(context, (known = new Map()));
+  const cached = known.get(key);
+  if (cached) return cached;
+  const next = { ...context, depth: context.depth + 1, cellStyle, key };
+  if (known.size < MAX_CELL_CONTEXTS) known.set(key, next);
+  return next;
+}
+
 function inspectFontNode(node: OoxmlElement, context: ScanContext) {
   const { styles, theme, supplementalFamilies, depth } = context;
   if (node.kind === 'table') {
@@ -30,12 +51,7 @@ function inspectFontNode(node: OoxmlElement, context: ScanContext) {
     const children = [];
     for (const row of structure?.rows ?? []) {
       for (const cell of row.cells) {
-        const next = {
-          ...context,
-          depth: depth + 1,
-          cellStyle: cell.styleFormatting,
-          key: `${context.baseKey}|${depth + 1}|${JSON.stringify(cell.styleFormatting)}`,
-        };
+        const next = cellContext(context, cell.styleFormatting);
         for (const block of cell.blocks) children.push({ node: block, context: next });
       }
     }
