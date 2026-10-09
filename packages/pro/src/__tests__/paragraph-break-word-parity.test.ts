@@ -223,6 +223,13 @@ test('formatting cards describe a paragraph direction change', () => {
       label: 'Formatted: Text direction: Left-to-right',
     },
     { pPr: '', prior: '<w:bidi/>', value: null, label: 'Formatted: Text direction: Default' },
+    // The last `w:bidi` wins, as layout reads it.
+    {
+      pPr: '<w:bidi/><w:bidi w:val="0"/>',
+      prior: '<w:bidi/>',
+      value: 'ltr',
+      label: 'Formatted: Text direction: Left-to-right',
+    },
   ] as const;
   for (const { pPr, prior, value, label } of cases) {
     const editor = mount({
@@ -235,6 +242,34 @@ test('formatting cards describe a paragraph direction change', () => {
     expect(vueRevisionItemLabel(card.item, createT(en))).toBe(label);
     editor.destroy();
   }
+});
+
+test('a direction detail appears only for a changed paragraph direction', () => {
+  const cardFor = (body: string) => {
+    const editor = mount({ body });
+    const card = editor.getReviewItems()[0]!;
+    editor.destroy();
+    if (card.kind !== 'revision') throw new Error('expected formatting');
+    return card.item;
+  };
+  // Two `w:bidi`, the last one left to right, against a left-to-right prior: no change.
+  const unchanged = cardFor(
+    `<w:p><w:pPr><w:bidi/><w:bidi w:val="0"/><w:jc w:val="center"/><w:pPrChange w:id="5" ${stamp}><w:pPr><w:bidi w:val="0"/></w:pPr></w:pPrChange></w:pPr><w:r><w:t>Example</w:t></w:r></w:p>`
+  );
+  expect(unchanged.formattingChanges).toEqual([{ property: 'alignment', value: 'center' }]);
+  // A section's own `w:bidi` is a different setting from paragraph direction.
+  const section = cardFor(
+    `<w:p><w:pPr><w:sectPr><w:bidi/><w:sectPrChange w:id="6" ${stamp}><w:sectPr/></w:sectPrChange></w:sectPr></w:pPr><w:r><w:t>Example</w:t></w:r></w:p>`
+  );
+  expect(section.formattingChanges ?? []).not.toContainEqual(
+    expect.objectContaining({ property: 'direction' })
+  );
+  // A file value spelled `rtl` on another property is not shown as a direction.
+  const underline = cardFor(
+    `<w:p><w:r><w:rPr><w:u w:val="rtl"/><w:rPrChange w:id="7" ${stamp}><w:rPr/></w:rPrChange></w:rPr><w:t>Example</w:t></w:r></w:p>`
+  );
+  expect(revisionItemLabel(underline, createT(en))).toBe('Formatted: Underline: rtl');
+  expect(vueRevisionItemLabel(underline, createT(en))).toBe('Formatted: Underline: rtl');
 });
 
 test('opposing paragraph-mark revisions sharing an address have distinct review keys', () => {

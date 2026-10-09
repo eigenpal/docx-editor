@@ -32,6 +32,7 @@ export const EDITING_COVERAGE: Record<string, readonly string[]> = {
     'Paragraph.lineSpacing',
     'Paragraph.spaceBefore',
     'Paragraph.spaceAfter',
+    'Paragraph.readingOrder',
   ],
   edit_review: [
     'Range.insertComment',
