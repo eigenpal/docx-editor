@@ -1,14 +1,15 @@
 {
   "impact": "compatible",
   "fields": [],
-  "before": "A click on a middle field line keeps its model offset but moves the caret to another result line.",
-  "after": "The local editor retains the clicked visual line. Both editors keep the same document and model positions.",
+  "before": "A click on a middle field line or at a wrapped line start keeps its model offset but paints the caret on another line.",
+  "after": "The local editor paints the caret on the clicked line. Both editors keep the same document and model positions.",
   "reason": "Visual preference stays local. It adds no shared field or document operation. Editing clears the preference before normal navigation.",
   "tests": [
     "packages/core/src/layout/__tests__/field-caret-affinity.test.ts",
     "packages/core/src/editor/__tests__/surface-field-caret-affinity.test.ts",
     "packages/pro/src/collaboration/__tests__/field-caret-affinity.test.ts",
-    "e2e/field-caret-affinity.smoke.spec.ts"
+    "packages/core/src/layout/__tests__/pointer-line-affinity.test.ts",
+    "packages/core/src/editor/__tests__/surface-pointer-line-affinity.test.ts"
   ],
   "changeset": "multiline-field-caret-affinity",
   "migration": null
