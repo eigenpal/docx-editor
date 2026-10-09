@@ -138,12 +138,28 @@ describe('a large open laid out in slices', () => {
     const bytes = docx();
     const stepsBefore = progressiveOpenStepCount();
     const editor = createDocxEditor({ document: bytes });
-    editor.attach(document.createElement('div'));
+    const container = document.createElement('div');
+    editor.attach(container);
+    const marked = () =>
+      container.hasAttribute('data-docx-opening-preview') ||
+      container.querySelector('[data-docx-opening-preview]') !== null;
+    // Before the mount the overlay must stay opaque, so nothing is marked yet.
+    expect(marked()).toBe(false);
+    // The mounted document is marked for the preview while its slices run. Recorded at the
+    // call: the slices are queued tasks that can run before any polling timer.
+    let sawPreview = false;
+    const setAttribute = container.setAttribute.bind(container);
+    container.setAttribute = (name: string, value: string) => {
+      if (name === 'data-docx-opening-preview') sawPreview = true;
+      setAttribute(name, value);
+    };
     // No surface is handed out while slices remain.
     await until(() => {
       if (editor.snapshot().isOpening) expect(editor.surface).toBeNull();
       return editor.surface !== null && !editor.snapshot().isOpening;
     });
+    expect(sawPreview).toBe(true);
+    expect(marked()).toBe(false);
     // The open took several steps, each in its own task.
     expect(progressiveOpenStepCount() - stepsBefore).toBeGreaterThan(1);
     const sliced = signature(editor.surface!.layout());

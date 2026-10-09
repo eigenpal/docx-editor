@@ -6326,30 +6326,40 @@ export function mountPaginatedSurface(
   );
   registerRefreshComposition(surface, () => selectionSync.isComposing());
   let openingGrowth = PROGRESSIVE_OPEN_FIRST_BLOCKS;
-  if (openingBlockLimit !== null)
-    registerProgressiveOpen(surface, (budgetMs) => {
-      const deadline = now() + budgetMs;
-      while (openingBlockLimit !== null && !destroyed) {
-        const total = bodyBlockCountOf(layoutSession);
-        if (total !== undefined && openingBlockLimit >= total) {
-          // Nothing left to cut: the normal full layout, resumed from the last slice.
-          scheduler.invalidateAll(session.packageRevision(), 'opening');
-          scheduler.flush();
-          openingBlockLimit = null;
-          return true;
-        }
-        const began = now();
-        openingBlockLimit += openingGrowth;
-        layoutDocument(session.packageRevision(), undefined, undefined, openingBlockLimit);
-        // Size the next slice from this one's cost per block.
-        const msPerBlock = Math.max(now() - began, 1) / openingGrowth;
-        openingGrowth = Math.min(
-          4096,
-          Math.max(16, Math.round(PROGRESSIVE_OPEN_SLICE_MS / msPerBlock))
-        );
-        if (now() >= deadline) return false;
+  /** One opening slice of about `budgetMs`; true once the full layout is published. */
+  function continueOpening(budgetMs: number): boolean {
+    const deadline = now() + budgetMs;
+    while (openingBlockLimit !== null && !destroyed) {
+      const total = bodyBlockCountOf(layoutSession);
+      if (total !== undefined && openingBlockLimit >= total) {
+        // Nothing left to cut: the normal full layout, resumed from the last slice.
+        scheduler.invalidateAll(session.packageRevision(), 'opening');
+        scheduler.flush();
+        openingBlockLimit = null;
+        return true;
       }
-      return true;
+      const began = now();
+      openingBlockLimit += openingGrowth;
+      layoutDocument(session.packageRevision(), undefined, undefined, openingBlockLimit);
+      // Size the next slice from this one's cost per block.
+      const msPerBlock = Math.max(now() - began, 1) / openingGrowth;
+      openingGrowth = Math.min(
+        4096,
+        Math.max(16, Math.round(PROGRESSIVE_OPEN_SLICE_MS / msPerBlock))
+      );
+      if (now() >= deadline) return false;
+    }
+    return true;
+  }
+  // A mounted document still opening is marked, so the loading overlay shows it muted.
+  container.removeAttribute('data-docx-opening-preview');
+  if (openingBlockLimit !== null) {
+    container.setAttribute('data-docx-opening-preview', '');
+    registerProgressiveOpen(surface, (budgetMs) => {
+      const done = continueOpening(budgetMs);
+      if (done) container.removeAttribute('data-docx-opening-preview');
+      return done;
     });
+  }
   return { ok: true, surface };
 }

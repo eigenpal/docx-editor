@@ -4953,10 +4953,9 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* The overlay variant (`<DocxEditor.Loading overlay />`): pinned over the nearest
-   positioned ancestor — the workspace row in the packaged frame. It MUTES what is under it
-   rather than hiding it: the previous document until the next one mounts, then the next
-   one's first pages while the rest is laid out. It still takes every pointer event, so
-   nothing under it can be edited. The 150ms appearance delay keeps an open that finishes
+   positioned ancestor — the workspace row in the packaged frame — and opaque, so it
+   covers the previous document while the next one opens. It takes every pointer event
+   until the open completes. The 150ms appearance delay keeps an open that finishes
    inside a few frames from flashing a spinner.
 
    The fade MUST be a real compositor animation. The engine paints exactly one frame
@@ -4968,7 +4967,7 @@ a.docx-hyperlink:focus-visible {
   position: absolute;
   inset: 0;
   z-index: var(--doc-z-overlay);
-  background: color-mix(in srgb, var(--doc-bg) 65%, transparent);
+  background: var(--doc-bg);
   will-change: opacity;
   animation: docx-editor-loading-appear 0.2s linear 0.15s backwards;
 }
@@ -4993,8 +4992,26 @@ a.docx-hyperlink:focus-visible {
   height: 100%;
 }
 
-/* Over a document, only the indicator shows: no placeholder sheet on top of the real one. */
-.docx-editor__loading--overlay .docx-paginated-surface .docx-page.docx-editor__loading-page {
+/* Once the opening document has mounted and lays out its remaining pages, its first pages
+   show as they are, with the indicator still on the page: the engine marks its container
+   for exactly that phase. The overlay turns clear but still takes every pointer event, so
+   the document becomes clickable only when it is complete. */
+:where(:has([data-docx-opening-preview])) > .docx-editor__loading--overlay {
+  background: transparent;
+}
+
+/* Over real text the ring sits on a disc of paper, so it reads on any page content. */
+:where(:has([data-docx-opening-preview]))
+  > .docx-editor__loading--overlay
+  .docx-editor__loading-spinner {
+  background: var(--doc-page-bg-rendered);
+  box-shadow: 0 0 0 8px var(--doc-page-bg-rendered);
+}
+
+:where(:has([data-docx-opening-preview]))
+  > .docx-editor__loading--overlay
+  .docx-paginated-surface
+  .docx-page.docx-editor__loading-page {
   background: transparent;
   box-shadow: none;
 }
