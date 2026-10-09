@@ -48,7 +48,10 @@ export function tryUpdateTableSession(input: {
   previous: SectionPrepass | null | undefined;
   prepass: SectionPrepass;
   inputsEqual: boolean;
-  /** Unchanged section inputs except list items; each table key proves its own list tokens. */
+  /**
+   * Unchanged section inputs except list items and numbering: each rebuilt table key proves its
+   * own list and hosted-list tokens, and each cached cell its paragraphs' tokens.
+   */
   rowInputsEqual?: boolean;
   eligible: boolean;
   firstChanged: number;
@@ -60,7 +63,13 @@ export function tryUpdateTableSession(input: {
   lineCounterStart: number;
 }): Result | null {
   const { session, previous, prepass, firstChanged, deps, revision, lineCounterStart } = input;
-  const sameInputs = carryTableAutofitScope(previous, prepass, input.inputsEqual, deps);
+  const sameInputs = carryTableAutofitScope(
+    previous,
+    prepass,
+    input.inputsEqual,
+    deps,
+    input.rowInputsEqual === true
+  );
   const rowInputsEqual =
     sameInputs ||
     (input.rowInputsEqual &&

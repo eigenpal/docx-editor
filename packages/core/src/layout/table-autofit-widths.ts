@@ -146,7 +146,9 @@ export function autofitContextOf(deps: AutofitFlowDeps): TableAutofitContext {
     valueDigest(deps.pageContext),
     valueDigest(deps.documentProperties),
     deps.showFieldCodes === true ? 'codes' : '',
-    deps.refFields?.valuesToken ?? '',
+    // Not the story-wide REF values token: each paragraph's own REF outputs are in its
+    // `paragraphToken`, and the story token moved with every slice of an opening, so every
+    // table measured early missed its cache on the first layout after it.
     deps.drawingLayoutToken ?? '',
     deps.inlineDrawingLayout ? 'drawings' : '',
     `tab:${deps.defaultTabStopPt ?? ''}`,
@@ -175,7 +177,8 @@ export function carryTableAutofitScope(
   previous: object | null | undefined,
   next: object,
   inputsEqual: boolean,
-  deps: AutofitFlowDeps
+  deps: AutofitFlowDeps,
+  onlyListsDiffer = false
 ): boolean {
   const context = autofitContextOf(deps);
   return carryAutofitScope(
@@ -187,7 +190,8 @@ export function carryTableAutofitScope(
       valueDigest(deps.fieldCodeRanges),
       valueDigest(deps.tocLinkStyleRanges),
       valueDigest(deps.noteMarks),
-    ].join('\0')
+    ].join('\0'),
+    onlyListsDiffer
   );
 }
 

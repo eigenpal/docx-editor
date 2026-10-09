@@ -955,7 +955,7 @@ function* layoutBlocksPass(
     sectionPrep.framePolicy(columns.count, options.disabledParagraphFrameIds) +
     `|${options.paragraphLineUnitPt ?? '-'}`;
   const prepassMemo = session?.prepass as SectionPrepass | null | undefined;
-  const prepassNonListInputsValid = sectionPrepassInputsMatch(prepassMemo, {
+  const prepassInputs = {
     framePolicy,
     drawingEpoch,
     projectionEpoch,
@@ -965,7 +965,14 @@ function* layoutBlocksPass(
     numberingIndex: options.numberingIndex,
     tocToken,
     refToken: refFields?.valuesToken ?? '',
-  });
+  };
+  const prepassNonListInputsValid = sectionPrepassInputsMatch(prepassMemo, prepassInputs);
+  // Numbering reaches a table only through list tokens its rebuilt key and each cached cell
+  // prove: a list toggle adds a definition and leaves other tables' rows and widths valid.
+  const numberingBefore = prepassMemo?.numberingIndex;
+  const autofitInputsEqual =
+    prepassNonListInputsValid ||
+    sectionPrepassInputsMatch(prepassMemo, { ...prepassInputs, numberingIndex: numberingBefore });
   const prepassInputsValid = prepassNonListInputsValid && prepassMemo.listItems === listItems;
   const prepassValid =
     prepassInputsValid &&
@@ -1460,7 +1467,7 @@ function* layoutBlocksPass(
     previous: prepassMemo,
     prepass,
     inputsEqual: prepassInputsValid,
-    rowInputsEqual: prepassNonListInputsValid,
+    rowInputsEqual: autofitInputsEqual,
     eligible: resumable && !furnitureHasWrap && !options.drawingExclusionZonesByPage?.size,
     firstChanged,
     commonSuffix,

@@ -2,6 +2,7 @@ import { sharedCellContentInsets, widenedCellContentInsets } from './cell-conten
 import { autofitReuseScope } from './autofit-context-reuse.ts';
 import type { AutofitView, TableAutofitContext } from './table-autofit-widths.ts';
 import type { SemanticTableCell } from './semantic-table.ts';
+import { listItemToken } from './list-marker-reuse.ts';
 
 export interface AutofitCellWidths {
   readonly least: number;
@@ -17,7 +18,25 @@ interface Memo {
   readonly mode: AutofitView['displayMode'];
   readonly authors: string;
   readonly collapsed: boolean;
+  /** The cell's paragraphs' tokens: a scope can outlive a change to their inputs. */
+  readonly lists: string;
   readonly value: AutofitCellWidths;
+}
+
+/**
+ * Each paragraph's token: its list, REF, projection and drawing inputs, the same token the
+ * per-paragraph minimums key on. A scope can outlive a change to any of them, so each cell
+ * proves its own.
+ */
+function cellParagraphTokens(cell: SemanticTableCell, context: TableAutofitContext): string {
+  const tokenOf = context.paragraphToken;
+  let token = '';
+  for (const block of cell.blocks) {
+    token += tokenOf
+      ? `${tokenOf(block)}\0`
+      : `${listItemToken(context.listItems?.get(block.id))}\0`;
+  }
+  return token;
 }
 const memos = new WeakMap<SemanticTableCell, Memo>();
 
@@ -34,8 +53,10 @@ export function cachedAutofitCellWidths(
   if (!scope || cell.blocks.some((block) => block.kind === 'table')) return read();
   const known = memos.get(cell);
   const authors = view.authorFilter?.cacheKey ?? '';
+  const lists = cellParagraphTokens(cell, context);
   if (
     known?.scope === scope &&
+    known.lists === lists &&
     known.cascade === view.styleCascade &&
     known.mode === view.displayMode &&
     known.authors === authors &&
@@ -49,6 +70,7 @@ export function cachedAutofitCellWidths(
     mode: view.displayMode,
     authors,
     collapsed,
+    lists,
     value,
   });
   return value;

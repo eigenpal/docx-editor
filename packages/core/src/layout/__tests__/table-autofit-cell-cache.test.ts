@@ -80,3 +80,59 @@ test('unproven contexts and nested tables retain their regular measurement path'
     cachedAutofitCellWidths(nested, true, autofitContextOf(deps), view, read);
   expect(reads).toBe(4);
 });
+
+test('a change to list items alone keeps measurements, and each cell proves its own list', () => {
+  const { cell, view } = fixture();
+  const paragraphId = (cell.blocks[0] as OoxmlElement).id;
+  const item = (cacheToken: string) => ({ cacheToken }) as never;
+  const first = {};
+  const deps = { measurer, producer: 'same', listItems: new Map([['elsewhere', item('a')]]) };
+  carryTableAutofitScope(null, first, false, deps);
+  let reads = 0;
+  const read = () => {
+    reads++;
+    return value;
+  };
+  cachedAutofitCellWidths(cell, true, autofitContextOf(deps), view, read);
+  // A list toggled elsewhere: a new list map, but this cell's paragraph is not in it.
+  const second = {};
+  const toggled = { ...deps, listItems: new Map([['elsewhere', item('b')]]) };
+  expect(carryTableAutofitScope(first, second, false, toggled, true)).toBe(false);
+  cachedAutofitCellWidths(cell, true, autofitContextOf(toggled), view, read);
+  expect(reads).toBe(1);
+  // This cell's own paragraph becomes a list item: measured again.
+  const own = { ...deps, listItems: new Map([[paragraphId, item('c')]]) };
+  carryTableAutofitScope(second, {}, false, own, true);
+  cachedAutofitCellWidths(cell, true, autofitContextOf(own), view, read);
+  expect(reads).toBe(2);
+});
+
+test('a reference value that changes elsewhere keeps the measurements of other cells', () => {
+  const { cell, view } = fixture();
+  const paragraphId = (cell.blocks[0] as OoxmlElement).id;
+  const refs = (story: string, own: string) =>
+    ({
+      valuesToken: story,
+      tokenForParagraph: (id: string) => (id === paragraphId ? own : ''),
+    }) as never;
+  const first = {};
+  const deps = { measurer, producer: 'same', refFields: refs('story-1', 'own-1') };
+  carryTableAutofitScope(null, first, false, deps);
+  let reads = 0;
+  const read = () => {
+    reads++;
+    return value;
+  };
+  cachedAutofitCellWidths(cell, true, autofitContextOf(deps), view, read);
+  // Another paragraph's reference moved, so the story token moved; this cell's did not.
+  const second = {};
+  const elsewhere = { ...deps, refFields: refs('story-2', 'own-1') };
+  expect(carryTableAutofitScope(first, second, true, elsewhere)).toBe(true);
+  cachedAutofitCellWidths(cell, true, autofitContextOf(elsewhere), view, read);
+  expect(reads).toBe(1);
+  // This cell's own reference result changed: measured again.
+  const own = { ...deps, refFields: refs('story-3', 'own-2') };
+  carryTableAutofitScope(second, {}, true, own);
+  cachedAutofitCellWidths(cell, true, autofitContextOf(own), view, read);
+  expect(reads).toBe(2);
+});
