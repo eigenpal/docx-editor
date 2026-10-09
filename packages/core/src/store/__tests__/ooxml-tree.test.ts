@@ -154,6 +154,28 @@ describe('canonical typed OOXML tree', () => {
     expect(
       readOoxmlPart('<x xmlns:a="urn:same" xmlns:b="urn:same" a:id="1" b:id="2"/>', metadata)
     ).toMatchObject({ ok: false, reason: 'duplicate-expanded-attribute' });
+    // Names are shared across reads; a duplicate in a later read of known names still fails.
+    for (let read = 0; read < 2; read += 1) {
+      expect(
+        readOoxmlPart('<x xmlns:a="urn:same" xmlns:b="urn:same" a:id="1" b:id="2"/>', metadata)
+      ).toMatchObject({ ok: false, reason: 'duplicate-expanded-attribute' });
+    }
+  });
+
+  test('a rejected name stays rejected on every read', () => {
+    // The shared name table stores only names that passed, so a bad name is checked again.
+    for (let read = 0; read < 2; read += 1) {
+      expect(readOoxmlPart('<x a:b:c="1" xmlns:a="urn:a"/>', metadata)).toMatchObject({
+        ok: false,
+      });
+    }
+    const ok = readOoxmlPart('<x xmlns:a="urn:a" a:id="1"/>', metadata);
+    const again = readOoxmlPart('<x xmlns:a="urn:a" a:id="2"/>', metadata);
+    expect(ok.ok && again.ok).toBe(true);
+    if (!ok.ok || !again.ok) return;
+    expect(
+      again.part.root.attributes.map((attribute) => [attribute.localName, attribute.value])
+    ).toEqual([['id', '2']]);
   });
 
   test('inherits trust-boundary DTD, entity, size, depth, and element limits', () => {

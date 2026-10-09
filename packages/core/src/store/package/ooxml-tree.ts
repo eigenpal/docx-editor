@@ -22,9 +22,8 @@ import {
   DRAWINGML_MAIN_NAMESPACE_URI,
   WP_NAMESPACE_URI,
   PIC_NAMESPACE_URI,
-  expandedKey,
   knownKindAllowsWmlVal,
-  splitQName,
+  splitQNameShared,
   validKnownKind,
   validateQNameAttributeValues,
   type ExpandedName,
@@ -1609,11 +1608,16 @@ function wmlKindFor(localName: string, parentLocalName: string | undefined): Kno
 
 function deepFreezeNode(node: OoxmlNode): OoxmlNode {
   if (node.kind === 'textValue') return Object.freeze(node);
-  for (const attribute of node.attributes) Object.freeze(attribute);
-  for (const binding of node.namespaceBindings) Object.freeze(binding);
+  // Equal attribute lists are shared across elements, so most are frozen already.
+  if (!Object.isFrozen(node.attributes)) {
+    for (const attribute of node.attributes) Object.freeze(attribute);
+    Object.freeze(node.attributes);
+  }
+  if (!Object.isFrozen(node.namespaceBindings)) {
+    for (const binding of node.namespaceBindings) Object.freeze(binding);
+    Object.freeze(node.namespaceBindings);
+  }
   for (const child of node.children) deepFreezeNode(child);
-  Object.freeze(node.attributes);
-  Object.freeze(node.namespaceBindings);
   Object.freeze(node.children);
   return Object.freeze(node);
 }
@@ -1629,8 +1633,9 @@ function namespaceDeclarations(
   // dominated parse allocation on long documents.
   let bindings: Map<string, string> | null = null;
   const authored: OoxmlNamespaceBinding[] = [];
-  for (const [name, namespaceUri] of Object.entries(element.attributes)) {
+  for (const name in element.attributes) {
     if (name !== 'xmlns' && !name.startsWith('xmlns:')) continue;
+    const namespaceUri = element.attributes[name]!;
     bindings ??= new Map(inherited);
     const prefix = name === 'xmlns' ? '' : name.slice('xmlns:'.length);
     if (
@@ -1652,7 +1657,7 @@ function resolveElementName(
   authoredName: string,
   bindings: ReadonlyMap<string, string>
 ): ExpandedName & { readonly namespaceUri: string } {
-  const name = splitQName(authoredName);
+  const name = splitQNameShared(authoredName);
   if (name.prefix === 'xmlns') throw new TreeReadError('invalid-namespace');
   if (name.prefix !== undefined) {
     const namespaceUri = bindings.get(name.prefix);
@@ -1671,21 +1676,24 @@ function resolveAttributes(
   readonly hasWmlVal: boolean;
 } {
   const attributes: OoxmlAttribute[] = [];
-  const seen = new Set<string>();
   let compatibleWithKnownNode = true;
   let hasWmlVal = false;
-  for (const [authoredName, value] of Object.entries(element.attributes)) {
+  // `for...in`: the attribute record has no prototype, and this runs for every element.
+  for (const authoredName in element.attributes) {
     if (authoredName === 'xmlns' || authoredName.startsWith('xmlns:')) continue;
-    const name = splitQName(authoredName);
+    const value = element.attributes[authoredName]!;
+    const name = splitQNameShared(authoredName);
     let namespaceUri = '';
     if (name.prefix !== undefined) {
       namespaceUri = bindings.get(name.prefix) ?? '';
       if (!bindings.has(name.prefix)) throw new TreeReadError('undeclared-prefix');
       if (name.prefix === 'xmlns') throw new TreeReadError('invalid-namespace');
     }
-    const key = expandedKey(namespaceUri, name.localName);
-    if (seen.has(key)) throw new TreeReadError('duplicate-expanded-attribute');
-    seen.add(key);
+    // Element attribute lists are short; a scan beats a set and a key string per element.
+    for (const earlier of attributes) {
+      if (earlier.localName === name.localName && earlier.namespaceUri === namespaceUri)
+        throw new TreeReadError('duplicate-expanded-attribute');
+    }
     if (namespaceUri === XML_NAMESPACE_URI && name.localName === 'space') {
       if (name.prefix === 'xml' && (value === 'default' || value === 'preserve')) {
         attributes.push({

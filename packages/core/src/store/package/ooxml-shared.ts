@@ -79,6 +79,23 @@ export function splitQName(name: string): ExpandedName {
   return { prefix, localName };
 }
 
+/**
+ * {@link splitQName} for names that repeat across a part. A long document repeats a few
+ * hundred element and attribute names millions of times, and each one was validated again.
+ * Bounded, so a part of unique names cannot grow it without limit. Results are frozen and
+ * shared; a failing name still throws every time, because it is never stored.
+ */
+const qNames = new Map<string, ExpandedName>();
+const MAX_SHARED_QNAMES = 4096;
+
+export function splitQNameShared(authoredName: string): ExpandedName {
+  let name = qNames.get(authoredName);
+  if (name) return name;
+  name = Object.freeze(splitQName(authoredName));
+  if (qNames.size < MAX_SHARED_QNAMES) qNames.set(authoredName, name);
+  return name;
+}
+
 export function expandedKey(namespaceUri: string, localName: string): string {
   return `${namespaceUri}\u0000${localName}`;
 }

@@ -305,6 +305,9 @@ const parser = new XMLParser({
   cdataPropName: '#cdata', // distinguish literal CDATA from entity-bearing text
   ignoreDeclaration: true,
   ignorePiTags: true,
+  // No callback reads a tag path. The default built one string per element and attribute
+  // list, a noticeable share of reading a long part.
+  jPath: false,
 });
 
 /** Read XML into an ordered tree, refusing DTDs/entities and bounding size. */
@@ -402,17 +405,30 @@ function convert(
       out.push({ type: 'text', value: validateXmlText(cdataText(item['#cdata'])) });
       continue;
     }
-    const attrs = (item[':@'] as Record<string, unknown> | undefined) ?? {};
-    const tagKey = Object.keys(item).find((k) => k !== ':@');
+    const attrs = item[':@'] as Record<string, unknown> | undefined;
+    // Plain loops: this runs once per element and attribute of every part, and the
+    // array-building helpers cost a noticeable share of reading a long document.
+    const keys = Object.keys(item);
+    let tagKey: string | undefined;
+    for (const key of keys) {
+      if (key !== ':@') {
+        tagKey = key;
+        break;
+      }
+    }
     if (!tagKey) continue;
     budget.count += 1;
     if (budget.count > budget.maxElements) throw new ElementCountError();
     const attributes = Object.create(null) as Record<string, string>;
-    for (const [k, v] of Object.entries(attrs)) {
-      // Fail closed on non-scalars: `String({})` is "[object Object]", which would
-      // silently corrupt authored attribute values (e.g. w:fldSimple/@w:instr) and
-      // then round-trip as if that garbage were source text.
-      attributes[k.replace(/^@_/, '')] = decodeXmlEntities(requireXmlStringScalar(v, 'attribute'));
+    if (attrs) {
+      for (const k of Object.keys(attrs)) {
+        // Fail closed on non-scalars: `String({})` is "[object Object]", which would
+        // silently corrupt authored attribute values (e.g. w:fldSimple/@w:instr) and
+        // then round-trip as if that garbage were source text.
+        attributes[k.startsWith('@_') ? k.slice(2) : k] = decodeXmlEntities(
+          requireXmlStringScalar(attrs[k], 'attribute')
+        );
+      }
     }
     out.push({
       type: 'element',
