@@ -2816,7 +2816,7 @@ export function reviewPaneEntitledZoom(mode: ZoomMode | undefined, zoom: number,
 
 // @public
 export interface ReviewPaneItemFields {
-    readonly kind: ReviewItem['kind'];
+    readonly kind: 'revision' | 'comment' | 'custom';
     readonly parentRevisionId?: string;
 }
 

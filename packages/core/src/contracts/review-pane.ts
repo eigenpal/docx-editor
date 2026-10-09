@@ -7,8 +7,6 @@
 // initial values, `setReviewPaneOptions` changes them at runtime, and `snapshot.reviewPane` reads
 // them, so a toggle in host chrome re-renders like any other control.
 
-import type { ReviewItem } from '../store/store/review-items.ts';
-
 /**
  * When the review pane opens by itself.
  *
@@ -152,8 +150,8 @@ export function resolveReviewPane(
  * @public
  */
 export interface ReviewPaneItemFields {
-  /** The item kind. */
-  readonly kind: ReviewItem['kind'];
+  /** The item kind, as `ReviewItem.kind` gives it. */
+  readonly kind: 'revision' | 'comment' | 'custom';
   /** For a comment, the tracked change it replies to. */
   readonly parentRevisionId?: string;
 }
