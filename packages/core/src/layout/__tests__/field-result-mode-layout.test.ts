@@ -223,4 +223,35 @@ describe('caches', () => {
     expect(atomicAgain).toBe(atomic);
     expect(atomic.length).toBe(paragraphTextOf(part, id)!.length);
   });
+
+  test('an autofit table cell never reuses widths from the other mode', () => {
+    const field = complex(' MERGEFIELD Long ', run('aaaa bbbb cccc dddd'));
+    const read = readOoxmlPart(
+      `<w:document xmlns:w="${W}"><w:body><w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/>` +
+        '<w:tblLayout w:type="autofit"/></w:tblPr><w:tblGrid><w:gridCol w:w="500"/></w:tblGrid>' +
+        `<w:tr><w:tc><w:p>${field}</w:p></w:tc></w:tr></w:tbl><w:p/></w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'application/xml' }
+    );
+    if (!read.ok) throw Error(read.reason);
+    const cache = createParagraphLayoutCache<never>();
+    const shared = { cache, producer: 'shared' } as const;
+    const widthOf = (layout: SemanticLayout): number => {
+      const table = layout.pages[0]!.fragments.find((fragment) => fragment.kind === 'table')!;
+      return table.box.width;
+    };
+    const atomic = widthOf(lay(read.part, undefined, shared));
+    const editable = widthOf(lay(read.part, 'editable', shared));
+    const atomicAgain = widthOf(lay(read.part, undefined, shared));
+    expect(atomicAgain).toBe(atomic);
+    // A result that breaks as text needs no wider column than its longest word.
+    expect(editable).toBeLessThanOrEqual(atomic);
+    expect(
+      widthOf(
+        lay(read.part, 'editable', {
+          cache: createParagraphLayoutCache<never>(),
+          producer: 'fresh',
+        })
+      )
+    ).toBe(editable);
+  });
 });

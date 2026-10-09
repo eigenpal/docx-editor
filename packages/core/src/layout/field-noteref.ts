@@ -228,8 +228,11 @@ function endnotePropsAt(
 
 const EMPTY_MARK_INDEX: ReadonlyMap<string, string> = new Map();
 
-/** Memo per blocks array, validated on the numbering input's identity (see the wrapper memo). */
-const markIndexMemos = new WeakMap<
+/**
+ * Memo per blocks array, validated on the numbering input's identity (see the wrapper memo).
+ * Built from the mode-keyed note sites, so it is keyed on the field-result mode too.
+ */
+const markIndexMemos = new FieldResultsModeMemo<
   readonly OoxmlElement[],
   { input: NoteRefNumberingInput; index: ReadonlyMap<string, string> }
 >();
