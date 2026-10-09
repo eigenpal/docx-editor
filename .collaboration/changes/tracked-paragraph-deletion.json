@@ -2,7 +2,7 @@
   "impact": "compatible",
   "fields": [],
   "before": "Tracked deletion across paragraphs refused in collaboration, and tracked paragraph deletion refused everywhere. Stamping a paragraph mark replaced an existing w:pPr and w:rPr with new nodes.",
-  "after": "Tracked deletion across paragraphs and tracked paragraph deletion work in collaboration. Stamping a paragraph mark keeps the existing w:pPr and w:rPr nodes, and the containers it creates use the mark id family so resolving the mark removes only those.",
+  "after": "Tracked deletion across paragraphs and tracked paragraph deletion work in collaboration. Stamping a paragraph mark keeps the existing w:pPr and w:rPr nodes, and the containers it creates use the mark id family so resolving the mark removes only those. Only the replica that stamped the mark recognizes those containers; a reject on another replica leaves them as empty elements, which every replica materializes the same way.",
   "reason": "No stored field, update, or format rule changes. The new edits are ordinary text, run, and property writes that released readers already apply, and keeping existing property nodes uses ordinary child splices. Concurrent creation of property elements relies on the paragraph text collaboration model this change builds on.",
   "tests": [
     "packages/pro/src/collaboration/__tests__/document-tracked-paragraph-deletion.test.ts",

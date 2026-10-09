@@ -338,3 +338,30 @@ test('a paragraph deletion refuses an answer that is neither applied nor a span'
     runtime.dispose();
   }
 });
+
+test('after a paragraph deletion, the next paragraph rejects a deletion at its start but takes an insertion', async () => {
+  const r = await open();
+  try {
+    await deleteParagraphs(r, [0]);
+    expect(await revisionCount(r)).toBe(1);
+    const before = oracles(await r.save());
+    await expectRefused(
+      r,
+      (c) => c.document.body.search('Second').getFirst().delete(),
+      'NotImplemented'
+    );
+    expect(oracles(await r.save())).toEqual(before);
+    await r.run(async (c) => {
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      const paragraphs = c.document.body.paragraphs;
+      paragraphs.load('items');
+      await c.sync();
+      paragraphs.items[1]!.insertText('New ', 'Start');
+      await c.sync();
+    });
+    // The insertion is a separate decision from the paragraph deletion.
+    expect(await revisionCount(r)).toBe(2);
+  } finally {
+    r.dispose();
+  }
+});

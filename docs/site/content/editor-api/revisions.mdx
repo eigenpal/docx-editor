@@ -82,9 +82,11 @@ await runtime.run(async (context) => {
 });
 ```
 
-Each paragraph's text becomes deleted text, and its paragraph mark becomes a deleted paragraph mark. The paragraphs stay in the document until a reviewer decides. Accept removes them, and reject restores them. A `range.delete()` over several paragraphs records the same deletions for every paragraph mark that the range covers. Bookmark, comment, and permission markers between the paragraphs stay in place.
+Each paragraph's text becomes deleted text, and its paragraph mark becomes a deleted paragraph mark. The paragraphs stay in the document until a reviewer decides. Accept removes them, and reject restores them. A later insertion at the start of the next paragraph is a separate decision. A `range.delete()` over several paragraphs records the same deletions for every paragraph mark that the range covers. Bookmark, comment, and permission markers between the paragraphs stay in place.
 
 A refusal applies to the whole sync. If one paragraph in the example refuses, such as the last paragraph of the document, no paragraph in that sync is deleted. To delete the others, call `delete()` only on paragraphs that can take a tracked deletion. Delete adjacent paragraphs in the same sync: a later sync that deletes a paragraph beside your own pending deletion refuses, because the two would review as one decision.
+
+Reject restores paragraph properties exactly in the session that proposed the deletion. In a document reopened from saved bytes, or when another participant in a collaboration room rejects, an empty `w:pPr` or `w:rPr` that the proposal added can stay. It has no effect on the paragraph.
 
 These tracked deletions refuse and change nothing:
 
@@ -95,9 +97,10 @@ These tracked deletions refuse and change nothing:
 | A paragraph whose mark ends a section | `NotSupported` |
 | A paragraph that contains an inline content control | `NotSupported` |
 | A paragraph where a complex field starts and the next paragraph ends it, or the reverse | `NotSupported` |
+| A paragraph that nests inline content more than 64 levels deep | `NotSupported` |
 | A paragraph with a pending change, including your own | `NotImplemented` |
 | A paragraph whose next paragraph starts with a pending change, including your own | `NotImplemented` |
-| A paragraph after one whose deletion you already proposed in an earlier sync | `NotImplemented` |
+| A paragraph whose previous paragraph mark you already proposed deleting, including a deletion or replacement at its start | `NotImplemented` |
 
 A `range.delete()` that covers any of these paragraph marks refuses with the same codes.
 

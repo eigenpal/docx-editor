@@ -12,6 +12,8 @@ import { isInertMarker } from '../store/store/revision-marker-content.ts';
 import { paragraphMarkRevisionOf } from '../store/store/tree-op-tracked-marks.ts';
 import type { AutomationError } from './protocol.ts';
 
+const MAX_CHECK_DEPTH = 64;
+
 /** Containers whose content is a separate story, not part of the paragraph's text. */
 const OWN_STORIES = new Set(['drawing', 'pict', 'object', 'AlternateContent', 'txbxContent']);
 
@@ -38,8 +40,14 @@ export function markStrikeRefusal(part: OoxmlPart, paragraphId: string): Automat
   let control = false;
   let fieldDepth = 0;
   let unbalanced = false;
+  let tooDeep = false;
   const visit = (node: OoxmlNode, depth: number): void => {
-    if (node.kind === 'textValue' || depth > 64) return;
+    if (node.kind === 'textValue' || tooDeep) return;
+    // Past the cap nothing below is checked, so the paragraph cannot be proven safe.
+    if (depth > MAX_CHECK_DEPTH) {
+      tooDeep = true;
+      return;
+    }
     // A drawing or text box holds its own story; its controls and fields stay inside it.
     if (isDrawingKnownKind(node.kind) || OWN_STORIES.has(node.localName)) return;
     if (node.kind === 'contentControl') control = true;
@@ -54,6 +62,7 @@ export function markStrikeRefusal(part: OoxmlPart, paragraphId: string): Automat
     for (const child of node.children) visit(child, depth + 1);
   };
   for (const child of paragraph.children) visit(child, 0);
+  if (tooDeep) return refusal('the paragraph nests content too deeply to check', 'depth');
   if (control)
     return refusal(
       'a tracked paragraph deletion cannot remove an inline content control',
@@ -73,11 +82,37 @@ export function nextSiblingParagraph(part: OoxmlPart, paragraphId: string): Ooxm
   if (!parent) return null;
   const at = parent.children.findIndex((child) => child.id === paragraphId);
   if (at < 0) return null;
-  for (const sibling of parent.children.slice(at + 1)) {
+  for (let index = at + 1; index < parent.children.length; index += 1) {
+    const sibling = parent.children[index]!;
     if (sibling.kind === 'paragraph') return sibling;
     if (!isInertMarker(sibling)) return null;
   }
   return null;
+}
+
+/**
+ * Whether these paragraphs follow one another in one container, with only position markers
+ * between them. One pass over the container, so a range over many paragraphs stays linear.
+ */
+export function areSiblingParagraphs(part: OoxmlPart, ids: readonly string[]): boolean {
+  if (ids.length < 2) return true;
+  const parent = parentNodeOf(part, ids[0]!);
+  if (!parent) return false;
+  const children = parent.children;
+  let at = children.findIndex((child) => child.id === ids[0]);
+  if (at < 0) return false;
+  for (let index = 1; index < ids.length; index += 1) {
+    let next = at + 1;
+    while (
+      next < children.length &&
+      children[next]!.kind !== 'paragraph' &&
+      isInertMarker(children[next]!)
+    )
+      next += 1;
+    if (children[next]?.id !== ids[index]) return false;
+    at = next;
+  }
+  return true;
 }
 
 /**

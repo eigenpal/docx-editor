@@ -210,6 +210,16 @@ describe('marks a tracked deletion does not strike', () => {
     expect(savedMainXml(host)).not.toContain('fldChar');
   });
 
+  test('content nested deeper than the checks reach refuses', () => {
+    const open70 = '<w:smartTag w:uri="u" w:element="e">'.repeat(70);
+    const close70 = '</w:smartTag>'.repeat(70);
+    const deep =
+      `<w:p><w:r><w:t>Head </w:t></w:r>${open70}` +
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      `${close70}</w:p>`;
+    expectRefused(docx(deep + p('Next') + p('Last')), 0, 'unsupported-capability');
+  });
+
   test('a paragraph directly before a block content control refuses', () => {
     expectRefused(docx(p('One') + sdt(p('Inside')) + p('After')), 0, 'unsupported-capability');
   });
@@ -281,6 +291,41 @@ describe('deletions beside the author own pending deletion', () => {
       expect(oracles(host)).toEqual(before);
     });
 
+  for (const [name, text] of [
+    ['deletion', ''],
+    ['replacement', 'Changed'],
+  ] as const)
+    test(`a later ${name} of the next paragraph's first word refuses`, () => {
+      const host = open(FOUR);
+      const { body } = roots(host);
+      run2(host, body, 0);
+      const before = oracles(host);
+      const next = paragraphsOf(host, body)[1]!;
+      const response = host.execute({
+        operations: [
+          TRACK,
+          {
+            op: 'replaceSpan',
+            span: { start: { paragraph: next, offset: 0 }, end: { paragraph: next, offset: 5 } },
+            text,
+          },
+        ],
+      });
+      expect(refusal(response)).toBe('unsupported-revision');
+      expect(oracles(host)).toEqual(before);
+    });
+
+  test('a later insertion at the next paragraph start is its own decision', () => {
+    const host = open(FOUR);
+    const { body } = roots(host);
+    run2(host, body, 0);
+    const next = paragraphsOf(host, body)[1]!;
+    run(host, [{ op: 'insertText', at: { paragraph: next, offset: 0 }, text: 'X ' }]);
+    const xml = savedMainXml(host);
+    const ids = new Set([...xml.matchAll(/<w:(?:ins|del) [^>]*w:id="(\d+)"/g)].map((m) => m[1]));
+    expect(ids.size).toBe(3);
+  });
+
   test('a paragraph that is not adjacent to the earlier deletion records its own decision', () => {
     const host = open(FOUR);
     const { body } = roots(host);
@@ -311,3 +356,15 @@ describe('reject restores the source paragraph properties exactly', () => {
       expect(oracles(host)).toEqual(before);
     });
 });
+
+test('a tracked deletion over 8000 paragraphs stays fast', () => {
+  const count = 8000;
+  const host = open(docx(Array.from({ length: count }, (_, i) => p(`Paragraph ${i}`)).join('')));
+  const { body } = roots(host);
+  const paragraphs = paragraphsOf(host, body);
+  const started = performance.now();
+  run(host, [deleteBetween(paragraphs, [0, 0], [count - 1, 0])]);
+  // About 1.7 s here. Walking the part per op, or the siblings per paragraph, took 53 s.
+  expect(performance.now() - started).toBeLessThan(15_000);
+  expect(savedMainXml(host).match(/<w:rPr><w:del /g)).toHaveLength(count - 1);
+}, 120_000);

@@ -31,12 +31,13 @@ export function isInertMarker(node: OoxmlNode): boolean {
  * ids in the `mark` family, so resolving the proposal removes them again. Rejecting a proposed
  * mark deletion then restores the paragraph as it was. A container the source already had
  * keeps its id and stays, even when empty. In a document reopened from saved bytes, ids carry
- * no history, so an emptied container stays as an empty element.
+ * no history, and on another collaboration replica the container has a replica-scoped id, so
+ * there an emptied container stays as an empty element.
  */
 export function heldOnlyResolvedMarks(node: OoxmlNode, dropped: ReadonlySet<string>): boolean {
   if (node.kind === 'textValue' || node.children.length === 0) return false;
   // Only a container a mark stamp created; a source container stays, empty or not.
-  if (!node.id.includes('#mark:')) return false;
+  if (!node.id.slice(node.id.lastIndexOf('#') + 1).startsWith('mark:')) return false;
   const markProperties =
     node.kind === 'runProperties' ||
     (node.kind === 'generic' &&

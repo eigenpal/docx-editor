@@ -6,6 +6,7 @@ import type { PlannedOperation } from './plan.ts';
 import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
 import type { AutomationErrorCode } from './protocol.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
+import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
 import {
   resolveParagraphHandle,
   resolveSpanRef,
@@ -15,6 +16,7 @@ import {
 } from './spans.ts';
 import { proposalInputError, proposalRevisionError } from './proposals.ts';
 import {
+  areSiblingParagraphs,
   followsOwnMarkDeletion,
   markStrikeRefusal,
   nextSiblingParagraph,
@@ -80,6 +82,23 @@ export function trackedProposalOf(
   };
 }
 
+/** A deletion that starts right after the author's own pending mark deletion refuses. */
+function ownMarkDeletionRefusal(
+  part: OoxmlPart,
+  paragraphId: string,
+  author: string
+): PlannedOperation | null {
+  if (!followsOwnMarkDeletion(part, paragraphId, author.trim())) return null;
+  return {
+    ok: false,
+    error: {
+      code: 'unsupported-revision',
+      message: "a deletion beside the author's pending deletion would review as one decision",
+      detail: 'span',
+    },
+  };
+}
+
 export function planProposal(
   operation: Extract<
     AutomationOperation,
@@ -129,27 +148,21 @@ export function planProposal(
     const lastIndex = reads.indexOf(range.end.paragraphId);
     const ids = reads.paragraphIds.slice(firstIndex, lastIndex + 1);
     // Position markers, such as a bookmark end between two paragraphs, do not separate them.
-    if (
-      ids.some(
-        (id, index) => index > 0 && nextSiblingParagraph(reads.part, ids[index - 1]!)?.id !== id
-      )
-    )
+    if (!areSiblingParagraphs(reads.part, ids))
       return refuse(
         'unsupported-content',
         'tracked ranges require adjacent sibling paragraphs',
         'span'
       );
-    if (
-      range.start.offset === 0 &&
-      followsOwnMarkDeletion(reads.part, ids[0]!, operation.author.trim())
-    )
-      return refuse(
-        'unsupported-revision',
-        "a deletion beside the author's pending deletion would review as one decision",
-        'span'
-      );
+    if (range.start.offset === 0) {
+      const adjacent = ownMarkDeletionRefusal(reads.part, ids[0]!, operation.author);
+      if (adjacent) return adjacent;
+    }
     const revision = { author: operation.author.trim(), date: new Date().toISOString() };
     const ops: TreeDocOp[] = [];
+    // Text deletions first, then the marks: a mark op between two text deletions makes the
+    // store walk the whole part again for the next revision id.
+    const marks: TreeDocOp[] = [];
     for (let index = 0; index < ids.length; index++) {
       const paragraphId = ids[index]!;
       const start = index === 0 ? range.start.offset : 0;
@@ -166,8 +179,9 @@ export function planProposal(
       if (conflict) return conflict;
       if (end > start) ops.push({ op: 'deleteText', paragraphId, start, end, revision });
       if (index < ids.length - 1)
-        ops.push({ op: 'setParagraphMarkRevision', paragraphId, kind: 'del', revision });
+        marks.push({ op: 'setParagraphMarkRevision', paragraphId, kind: 'del', revision });
     }
+    ops.push(...marks);
     const at = { ...range.start, offset: (reads.rawText(ids[0]!) ?? '').length };
     const text = deletion ? '' : operation.text;
     const lineBreak = lineBreakRefusal(reads.part, ids[0]!, range.start.offset, at.offset, text);
@@ -196,6 +210,10 @@ export function planProposal(
   const paragraphId = range.start.paragraphId;
   const start = insertion && operation.where === 'After' ? range.end.offset : range.start.offset;
   const end = insertion ? start : range.end.offset;
+  if (tracked && !insertion && end > start && start === 0) {
+    const adjacent = ownMarkDeletionRefusal(story.value.part, paragraphId, operation.author);
+    if (adjacent) return adjacent;
+  }
   if (tracked && !deletion && start === end && operation.text === '')
     return query({ kind: 'span', span: spanOf({ start: range.start, end: range.start }) });
   const revisionError = proposalRevisionError(

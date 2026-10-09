@@ -9,6 +9,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // removes it with the paragraphs. Both replicas stay ready and converge through concurrent
 // edits in either client order, undo, redo, reconnect, and save and reopen.
 import { afterAll, expect, test } from 'bun:test';
+import { strFromU8, unzipSync } from 'fflate';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { canonicalOoxmlFingerprint, readOoxmlPackage } from '@docx-editor.dev/core/store';
@@ -449,6 +450,55 @@ test('undo and redo of a tracked paragraph deletion converge on both peers', asy
   }
 });
 
+async function mainXml(editor: { save(): Promise<ArrayBuffer | Uint8Array> }) {
+  const xml = strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
+  return xml.slice(xml.indexOf('<w:body>'), xml.indexOf('</w:body>'));
+}
+
+test('a peer that did not propose the deletion rejects it', async () => {
+  const r = await room(fixture());
+  try {
+    await r.peers[0]!.runtime.run(deleteMiddleParagraph);
+    r.sync();
+    await r.peers[1]!.runtime.run(async (c) => {
+      c.document.body.revisions.rejectAll();
+      await c.sync();
+    });
+    r.sync();
+    await converged(r);
+    // The text and paragraph come back. The containers the author's replica created keep
+    // replica-scoped ids elsewhere, so this replica cannot tell them from source containers
+    // and leaves them empty, which reads the same as no properties.
+    const xml = await mainXml(r.peers[0]!.editor);
+    expect(xml).toContain('<w:pPr><w:rPr/></w:pPr><w:r><w:t>Middle clause</w:t></w:r>');
+    expect(xml).not.toContain('<w:del');
+    for (const { runtime } of r.peers)
+      await runtime.run(async (c) => {
+        expect(await text(c)).toBe('First clause\rMiddle clause\rLast clause');
+      });
+  } finally {
+    r.close();
+  }
+});
+
+test('a peer undoes its edit after a concurrent tracked paragraph deletion', async () => {
+  const r = await room(fixture());
+  try {
+    await concurrently(r, deleteMiddleParagraph, typeInto(1, 'Note ', 'Start'));
+    await converged(r);
+    expect(r.peers[1]!.editor.exec({ type: 'undo' }).ok).toBe(true);
+    r.sync();
+    await converged(r);
+    await expectDecisions(
+      r,
+      'First clause\rMiddle clause\rLast clause',
+      'First clause\rLast clause'
+    );
+  } finally {
+    r.close();
+  }
+});
+
 test('a peer that edits offline and reconnects converges with a tracked paragraph deletion', async () => {
   const r = await room(fixture());
   try {
@@ -512,3 +562,26 @@ test('a tracked deletion of a paragraph with many runs costs time linear in its 
     r.close();
   }
 }, 120_000);
+
+test('a tracked deletion of 2000 paragraphs in a room stays fast', async () => {
+  const count = 2000;
+  const body = Array.from({ length: count }, (_, index) => p(`Paragraph ${index}`)).join('');
+  const r = await room(fixture(body));
+  try {
+    const started = performance.now();
+    await r.peers[0]!.runtime.run(
+      tracked(async (c) => {
+        const range = c.document.body.getRange('Content');
+        await c.sync();
+        range.delete();
+        await c.sync();
+      })
+    );
+    r.sync();
+    // About 1.5 s here, and close to linear in paragraphs; it took 7.5 to 11 s before.
+    expect(performance.now() - started).toBeLessThan(6000);
+    await converged(r);
+  } finally {
+    r.close();
+  }
+}, 300_000);
