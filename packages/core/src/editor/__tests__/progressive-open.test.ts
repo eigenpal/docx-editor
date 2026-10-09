@@ -10,7 +10,11 @@ import { strToU8, zipSync } from 'fflate';
 import type { BlockFragmentRecord, SemanticLayout } from '../../layout/semantic-records.ts';
 import { createDocxEditor } from '../docx-editor.ts';
 import { mountPaginatedSurface } from '../paginated-surface.ts';
-import { progressiveOpenStepCount } from '../surface-progressive-open.ts';
+import {
+  continueProgressiveOpen,
+  progressiveOpenPending,
+  progressiveOpenStepCount,
+} from '../surface-progressive-open.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -181,5 +185,83 @@ describe('a large open laid out in slices', () => {
     expect(editor.surface).not.toBeNull();
     expect(signature(editor.surface!.layout())).toEqual(unslicedSignature(bytes));
     editor.destroy();
+  }, 60_000);
+
+  /** A body whose long table is one block, after enough text to fill a few pages. */
+  function longTableDocx(): Uint8Array {
+    const parts: string[] = [];
+    for (let index = 0; index < 80; index += 1) parts.push(paragraph(`Lead paragraph ${index}`));
+    parts.push(table(600, 'Long'));
+    for (let index = 0; index < 40; index += 1) parts.push(paragraph(`Tail paragraph ${index}`));
+    return zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/></Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId9" Type="${NUMREL}" Target="numbering.xml"/></Relationships>`
+      ),
+      'word/numbering.xml': strToU8(NUMBERING),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body>${parts.join('')}<w:sectPr/></w:body></w:document>`
+      ),
+    });
+  }
+
+  function slicedMount(bytes: Uint8Array) {
+    const container = document.createElement('div');
+    const mounted = mountPaginatedSurface(container, bytes, {
+      progressiveOpen: true,
+    } as Parameters<typeof mountPaginatedSurface>[2]);
+    if (!mounted.ok) throw new Error(mounted.reason);
+    return mounted.surface;
+  }
+
+  test('a long table is laid out across many slices, pausing between its rows', () => {
+    const bytes = longTableDocx();
+    const surface = slicedMount(bytes);
+    try {
+      // A zero budget runs one step per slice: one pause point at a time.
+      let slices = 0;
+      while (!continueProgressiveOpen(surface, 0)) slices += 1;
+      // 600 rows pause every few rows, so the table alone took far more slices than the
+      // block prefixes around it.
+      expect(slices).toBeGreaterThan(50);
+      expect(progressiveOpenPending(surface)).toBe(false);
+      expect(signature(surface.layout())).toEqual(unslicedSignature(bytes));
+    } finally {
+      surface.destroy();
+    }
+  }, 60_000);
+
+  test('a layout while a slice is paused in a table still ends in the right layout', () => {
+    const bytes = longTableDocx();
+    const surface = slicedMount(bytes);
+    try {
+      // Run until a slice is paused inside the long table.
+      for (let slice = 0; slice < 30; slice += 1) continueProgressiveOpen(surface, 0);
+      expect(progressiveOpenPending(surface)).toBe(true);
+      // A zoom lays the document out at once, on the same session.
+      surface.setScale(surface.state().scale * 1.25);
+      while (!continueProgressiveOpen(surface, 0)) {
+        // Drain whatever the zoom left.
+      }
+      const reference = slicedMount(bytes);
+      try {
+        while (!continueProgressiveOpen(reference, Infinity)) {
+          // An unpaused open at the same scale.
+        }
+        reference.setScale(surface.state().scale);
+        expect(signature(surface.layout())).toEqual(signature(reference.layout()));
+      } finally {
+        reference.destroy();
+      }
+    } finally {
+      surface.destroy();
+    }
   }, 60_000);
 });

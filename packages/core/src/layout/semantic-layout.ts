@@ -2,7 +2,6 @@ import { sectionPrepassInputsMatch } from './section-prepass-inputs.ts';
 import { drawingInputsUnchangedByTextEdit } from './drawing-text-only-change.ts';
 import { tryUpdateTableSession, reuseUnchangedLayout } from './table-text-session.ts';
 import { carryLayoutReadCaches } from './layout-read-caches.ts';
-import { createDrawingExclusionPasses } from './drawing-exclusion-passes.ts';
 import { resolveBodyRefFields } from './style-separator-ref.ts';
 import { styleSeparatorToken } from './style-separator-group.ts';
 import {
@@ -10,7 +9,10 @@ import {
   bodyParagraphOptionFlow,
   bodyParagraphPlacementFlow,
 } from './body-paragraph-flow.ts';
-import { layoutWithCharacterHeaders } from './character-header-layout.ts';
+import {
+  layoutWithCharacterHeaders,
+  layoutWithCharacterHeadersSteps,
+} from './character-header-layout.ts';
 import {
   contextualFlowInputs,
   contextualParagraphSpacing,
@@ -106,7 +108,6 @@ import { createLeadingBreakGroups } from './leading-break-border-group.ts';
 import { type TableAnchorFrames } from './semantic-table.ts';
 import * as tableFloat from './table-float-position.ts';
 import * as tableWrap from './table-float-exclusion.ts';
-import * as frameWrap from './paragraph-frame-exclusion.ts';
 import {
   bodyAnchorFrameBase,
   atKeptBreakY,
@@ -121,7 +122,7 @@ import {
   paragraphDocumentOrderOf,
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
-import { paginateTableInFlow, type TableFlowCursor } from './table-flow-pagination.ts';
+import { paginateTableInFlowSteps, type TableFlowCursor } from './table-flow-pagination.ts';
 import { tableKeepFlow } from './table-row-keeps.ts';
 import * as terminalTables from './terminal-table-anchor.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
@@ -137,11 +138,8 @@ import {
   type AnchoredDrawingRecord,
 } from './drawing-layout.ts';
 import {
-  collectExclusionZonesByPage,
-  collectExclusionZonesByPageMemoized,
   DrawingExclusionConvergenceError,
   exclusionLayoutToken,
-  exclusionMapsEqual,
   MAX_ANCHOR_PAGE_DEFERRALS,
   sortDrawingsForPaint,
   topAndBottomSkipBeforeLine,
@@ -192,7 +190,6 @@ import {
 import { passProducerOf } from './pass-producer.ts';
 import { documentProjectionProducer } from './document-property-context.ts';
 
-import { noteExclusionLayoutPass } from './exclusion-pass-observer.ts';
 export { observeExclusionLayoutPassesForTest } from './exclusion-pass-observer.ts';
 import {
   DEFAULT_PAGE_GEOMETRY,
@@ -214,14 +211,14 @@ import { replaceLayoutSession } from './layout-session.ts';
 import { furnitureForSection, layoutMultiSectionDocument } from './multi-section-layout.ts';
 import { hostedStoryFlowDeps, layoutTextboxStory } from './textbox-story-layout.ts';
 import { inlineDrawingFlow } from './inline-textbox-flow.ts';
+import { convergeExclusionLayout } from './exclusion-layout-steps.ts';
+import { drainLayoutSteps, type LayoutSteps } from './layout-steps.ts';
 import {
-  layoutBlocksWithColumnBalance,
+  layoutBlocksWithColumnBalanceSteps,
   type BlockLayoutOptions as ColumnBalanceBlockLayoutOptions,
   type BlockLayoutResult,
 } from './column-balance-layout.ts';
 
-/** Extra full-document layouts after the reflow pass budget to detect a stable 2-cycle. */
-const MAX_DRAWING_EXCLUSION_STABILIZATION_PASSES = 2;
 export {
   createLayoutSession,
   type LayoutSession,
@@ -236,7 +233,7 @@ export type { SemanticLayoutOptions } from './semantic-layout-options.ts';
 import type { PreparedBlock, SectionPrepass } from './section-prepass-types.ts';
 export type { SectionPrepass } from './section-prepass-types.ts';
 
-type BlockLayoutOptions = ColumnBalanceBlockLayoutOptions<SemanticLayoutOptions> & {
+export type BlockLayoutOptions = ColumnBalanceBlockLayoutOptions<SemanticLayoutOptions> & {
   readonly disabledParagraphFrameIds?: ReadonlySet<string>;
   readonly paragraphFrameFallbackRound?: number;
   /** Set by the one retry of `layoutBlocksWithGeometry`: hidden furniture zones yield. */
@@ -291,6 +288,20 @@ export function layoutSemanticDocument(
   revision: number,
   options: SemanticLayoutOptions
 ): SemanticLayout {
+  return drainLayoutSteps(layoutSemanticDocumentSteps(part, revision, options));
+}
+
+/**
+ * {@link layoutSemanticDocument}, pausing inside long tables of a single-section body without
+ * notes; see `layout-steps.ts`. Other documents lay out as one step.
+ *
+ * @internal
+ */
+export function* layoutSemanticDocumentSteps(
+  part: OoxmlPart,
+  revision: number,
+  options: SemanticLayoutOptions
+): LayoutSteps<SemanticLayout> {
   // ONE revision projection for both. Section block ranges index this exact list; using a
   // different display mode or author predicate maps filtered blocks to the wrong geometry.
   const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
@@ -339,7 +350,9 @@ export function layoutSemanticDocument(
   const refFields = resolveBodyRefFields(part, blocks, sections, optionsWithLists);
   const optionsForBody = refFields === null ? optionsWithLists : { ...optionsWithLists, refFields };
 
-  const runBody = (opts: SemanticLayoutOptions): SemanticLayout => {
+  const runBody = (opts: SemanticLayoutOptions): SemanticLayout =>
+    drainLayoutSteps(runBodySteps(opts));
+  function* runBodySteps(opts: SemanticLayoutOptions): LayoutSteps<SemanticLayout> {
     if (sections.length > 1) {
       return layoutMultiSectionDocument(blocks, sections, revision, opts, layoutBlocksWithGeometry);
     }
@@ -349,7 +362,7 @@ export function layoutSemanticDocument(
       opts.geometry ?? (section ? geometryOfSection(section.properties) : DEFAULT_PAGE_GEOMETRY);
     const furniture = furnitureForSection(opts, 0, sections.length) ?? opts.furniture;
     const sectionNumbering = section?.properties.pageNumbering;
-    const laid = layoutBlocksWithGeometry(blocks, revision, {
+    const laid = yield* layoutBlocksWithGeometrySteps(blocks, revision, {
       ...opts,
       geometry,
       furniture,
@@ -386,7 +399,7 @@ export function layoutSemanticDocument(
       opts.session.previous = finalized;
     }
     return finalized;
-  };
+  }
   const finish = (layout: SemanticLayout): SemanticLayout => {
     let projected = layout;
     if (layout.displayMode !== displayMode) {
@@ -416,7 +429,7 @@ export function layoutSemanticDocument(
       options.session.notes = null;
       options.session.notePageBottomReserves = null;
     }
-    return finish(layoutWithCharacterHeaders(part, optionsForBody, runBody));
+    return finish(yield* layoutWithCharacterHeadersSteps(part, optionsForBody, runBodySteps));
   }
 
   // Notes inherit the body's projector seams and document properties (link, field link, doc
@@ -435,11 +448,11 @@ export function layoutSemanticDocument(
   );
 }
 
-function layoutBlocksPass(
+function* layoutBlocksPass(
   bodies: readonly OoxmlElement[],
   revision: number,
   options: BlockLayoutOptions
-): BlockLayoutResult {
+): LayoutSteps<BlockLayoutResult> {
   const geometry = options.geometry;
   const keyFor = options.cache?.keyFor?.bind(options.cache) ?? paragraphLayoutKey;
   const contentWidthForReflow = geometry.width - geometry.margin.left - geometry.margin.right;
@@ -447,198 +460,17 @@ function layoutBlocksPass(
     options.sectionColumns ?? DEFAULT_SECTION_PROPERTIES.columns,
     contentWidthForReflow
   );
-  if (
-    (options.inlineDrawingLayout ||
-      frameWrap.hasParagraphFrames(bodies, options.styleCascade) ||
-      tableWrap.hasFloatingTables(
-        bodies,
-        contentWidthForReflow,
-        options.styleCascade,
-        options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
-        options.revisionAuthorFilter,
-        options.compatibilityMode
-      )) &&
-    options.drawingExclusionPass === undefined &&
-    !options.drawingExclusionConverged
-  ) {
-    const sourceOrderOf = (drawingNodeId: string): number | undefined => {
-      const projectedId =
-        options.inlineDrawingLayout?.projectionForAtom?.(drawingNodeId)?.drawingNodeId ??
-        drawingNodeId;
-      return options.drawingSourceOrder?.get(projectedId);
-    };
-    const exclusionColumnLayout = Object.freeze({
-      columnCount: columns.count,
-      columnGapPt: columns.gaps[0] ?? 0,
-      contentWidth: contentWidthForReflow,
-      columnLefts: columns.lefts,
-      columnWidths: columns.widths,
-    });
-    const collectZones = (pages: readonly PageRecord[], memoized = false) => {
-      const drawingZones = !options.inlineDrawingLayout
-        ? new Map<number, readonly ExclusionZone[]>()
-        : memoized
-          ? collectExclusionZonesByPageMemoized(
-              pages,
-              options.inlineDrawingLayout,
-              options.drawingLayoutEpoch,
-              contentWidthForReflow,
-              options.drawingSourceOrder,
-              exclusionColumnLayout
-            )
-          : collectExclusionZonesByPage(
-              pages,
-              options.inlineDrawingLayout,
-              contentWidthForReflow,
-              sourceOrderOf,
-              exclusionColumnLayout
-            );
-      return frameWrap.addParagraphFrameExclusions(
-        pages,
-        tableWrap.addFloatingTableExclusions(pages, drawingZones, exclusionColumnLayout),
-        exclusionColumnLayout
-      );
-    };
-    let zonesByPage: ReadonlyMap<number, readonly ExclusionZone[]> = new Map();
-    let result: BlockLayoutResult | null = null;
-    let converged = false;
-    const exclusionPasses = createDrawingExclusionPasses(
-      bodies,
-      options.inlineDrawingLayout,
-      MAX_DRAWING_EXCLUSION_REFLOW_PASSES,
-      options.compatibilityMode
-    );
-    const layoutExclusionCandidate = (candidateOptions: BlockLayoutOptions): BlockLayoutResult => {
-      noteExclusionLayoutPass();
-      return layoutBlocksWithGeometry(bodies, revision, candidateOptions);
-    };
-    const fallbackUnplaceableFrames = (candidate: BlockLayoutResult): BlockLayoutResult | null => {
-      const ids = frameWrap.unplaceableParagraphFrameIds(candidate.pages);
-      if (ids.size === 0) return null;
-      // IDs only accumulate. After three admission rounds, ordinary flow handles all
-      // remaining frames, bounding recursive retries even with changing page reserves.
-      const round = options.paragraphFrameFallbackRound ?? 0;
-      const disabled = new Set(options.disabledParagraphFrameIds);
-      for (const id of round >= 3
-        ? frameWrap.unplaceableParagraphFrameIds(candidate.pages, true)
-        : ids)
-        disabled.add(id);
-      const coldSession = options.session ? createLayoutSession() : undefined;
-      const fallback = layoutBlocksWithGeometry(bodies, revision, {
-        ...options,
-        session: coldSession,
-        disabledParagraphFrameIds: disabled,
-        paragraphFrameFallbackRound: round + 1,
-      });
-      if (options.session && coldSession) replaceLayoutSession(options.session, coldSession);
-      return fallback;
-    };
-    const previousPages = options.session?.previous?.pages;
-    if (previousPages) {
-      zonesByPage = collectZones(previousPages, true);
-      result = layoutExclusionCandidate({
-        ...options,
-        drawingExclusionPass: 0,
-        drawingExclusionZonesByPage: zonesByPage,
-      });
-      const fallback = fallbackUnplaceableFrames(result);
-      if (fallback) return fallback;
-      // A pass that hands the previous pages back BY IDENTITY was laid under `zonesByPage`
-      // and re-collecting from the same page records under the same inputs reproduces the
-      // same zones — the equality below is true by construction. Every no-change section of
-      // a multi-section document takes this path on every keystroke.
-      if (result.pages === previousPages) return result;
-      const nextZones = collectZones(result.pages, true);
-      if (exclusionMapsEqual(zonesByPage, nextZones)) return result;
-      zonesByPage = new Map(nextZones);
-      exclusionPasses.remember(nextZones);
-    }
-    // The common document has an image-layout port but no exclusion-producing anchors. Build
-    // pass zero with a disposable session so that, when its collected zone map is empty, that
-    // very pass is publishable and can seed the caller's incremental state. Previously the
-    // engine retained this complete probe while constructing an identical final layout.
-    const publishCandidate = (
-      candidate: BlockLayoutResult,
-      candidateSession: LayoutSession | undefined
-    ): BlockLayoutResult => {
-      if (options.session && candidateSession)
-        replaceLayoutSession(options.session, candidateSession);
-      return candidate;
-    };
-    const publishConverged = (
-      zones: ReadonlyMap<number, readonly ExclusionZone[]>
-    ): BlockLayoutResult => {
-      // The caller's session still owns pre-relay pages; resuming it could replay the seeded
-      // geometry. Build the converged result cold, then replace the session atomically.
-      const candidateSession = options.session ? createLayoutSession() : undefined;
-      return publishCandidate(
-        layoutExclusionCandidate({
-          ...options,
-          session: candidateSession,
-          drawingExclusionConverged: true,
-          drawingExclusionZonesByPage: zones,
-        }),
-        candidateSession
-      );
-    };
-    for (let pass = 0; pass < exclusionPasses.maxPasses; pass += 1) {
-      const candidateSession = options.session ? createLayoutSession() : undefined;
-      result = layoutExclusionCandidate({
-        ...options,
-        session: candidateSession,
-        drawingExclusionPass: exclusionPasses.passIndex(pass),
-        drawingExclusionZonesByPage: zonesByPage,
-      });
-      const fallback = fallbackUnplaceableFrames(result);
-      if (fallback) return fallback;
-      const nextZones = collectZones(result.pages);
-      if (nextZones.size === 0) {
-        // A candidate laid under seeded zones cannot publish merely because it collected none.
-        if (pass === 0 && zonesByPage.size === 0) {
-          return publishCandidate(result, candidateSession);
-        }
-        return publishConverged(nextZones);
-      }
-      const transition = exclusionPasses.advance(zonesByPage, nextZones);
-      if (transition === 'stable') return publishCandidate(result, candidateSession);
-      zonesByPage = new Map(nextZones);
-      if (transition === 'cycle') {
-        converged = true;
-        break;
-      }
-    }
-    if (!converged) {
-      for (
-        let stab = 0;
-        stab < MAX_DRAWING_EXCLUSION_STABILIZATION_PASSES && !converged;
-        stab += 1
-      ) {
-        const candidateSession = options.session ? createLayoutSession() : undefined;
-        result = layoutExclusionCandidate({
-          ...options,
-          session: candidateSession,
-          drawingExclusionPass: exclusionPasses.maxPasses + stab,
-          drawingExclusionZonesByPage: zonesByPage,
-        });
-        const fallback = fallbackUnplaceableFrames(result);
-        if (fallback) return fallback;
-        const nextZones = collectZones(result.pages);
-        const transition = exclusionPasses.advance(zonesByPage, nextZones, true);
-        if (transition === 'stable') return publishCandidate(result, candidateSession);
-        zonesByPage = new Map(nextZones);
-        if (transition === 'cycle') {
-          converged = true;
-          break;
-        }
-      }
-    }
-    if (!converged) {
-      throw new DrawingExclusionConvergenceError(
-        `wrap exclusion reflow did not converge within ${exclusionPasses.maxPasses} passes`
-      );
-    }
-    return publishConverged(zonesByPage);
-  }
+  // Drawings, frames and floating tables reflow under the zones they produce; that loop
+  // lays the blocks out again, so it owns the result when it applies.
+  const exclusions = yield* convergeExclusionLayout(
+    bodies,
+    revision,
+    options,
+    columns,
+    contentWidthForReflow,
+    layoutBlocksWithGeometrySteps
+  );
+  if (exclusions) return exclusions;
 
   const measurer = options.measurer;
   const cache = options.cache;
@@ -1883,7 +1715,18 @@ function layoutBlocksPass(
     positionTextTable = false,
     next?: number,
     positionShiftX = 0
-  ): boolean => {
+  ): boolean =>
+    drainLayoutSteps(
+      layoutTableInFlowSteps(table, anchorY, positionTextTable, next, positionShiftX)
+    );
+  /** {@link layoutTableInFlow}, pausing between table rows. */
+  function* layoutTableInFlowSteps(
+    table: OoxmlElement,
+    anchorY = cursorY,
+    positionTextTable = false,
+    next?: number,
+    positionShiftX = 0
+  ): LayoutSteps<boolean> {
     const savedCursorY = cursorY;
     // The paginator owns the cursor. The adapter syncs it around each story-flow advance.
     const flow: TableFlowCursor = {
@@ -1928,10 +1771,10 @@ function layoutBlocksPass(
       followingKeepOpening: (room) =>
         next === undefined ? undefined : keepChains.opening(next, room),
     };
-    const result = paginateTableInFlow(table, flow);
+    const result = yield* paginateTableInFlowSteps(table, flow);
     cursorY = result.outOfFlow ? savedCursorY : flow.cursorY;
     return result.outOfFlow;
-  };
+  }
 
   publishPositionedTablesForPage = (): void =>
     tableFloat.publishPositionedTablesOnPage(
@@ -2142,7 +1985,7 @@ function layoutBlocksPass(
       }
       collectingCellBreakKeys.begin();
       try {
-        const outOfFlow = layoutTableInFlow(entry.table, cursorY, false, index + 1);
+        const outOfFlow = yield* layoutTableInFlowSteps(entry.table, cursorY, false, index + 1);
         if (!outOfFlow) previousSpaceAfter = 0;
         firstParagraphOfSection = false;
         registerTableCellBreakKeys(entry.table, collectingCellBreakKeys.keys());
@@ -3011,13 +2854,21 @@ function layoutBlocksWithGeometry(
   revision: number,
   options: BlockLayoutOptions
 ): BlockLayoutResult {
+  return drainLayoutSteps(layoutBlocksWithGeometrySteps(bodies, revision, options));
+}
+
+function* layoutBlocksWithGeometrySteps(
+  bodies: readonly OoxmlElement[],
+  revision: number,
+  options: BlockLayoutOptions
+): LayoutSteps<BlockLayoutResult> {
   try {
-    return layoutBlocksWithColumnBalance(bodies, revision, options, layoutBlocksPass);
+    return yield* layoutBlocksWithColumnBalanceSteps(bodies, revision, options, layoutBlocksPass);
   } catch (error) {
     // One cold retry without hidden furniture zones; see `refusalYieldsHiddenFurniture`.
     if (!refusalYieldsHiddenFurniture(error, options)) throw error;
     const coldSession = options.session ? createLayoutSession() : undefined;
-    const result = layoutBlocksWithColumnBalance(
+    const result = yield* layoutBlocksWithColumnBalanceSteps(
       bodies,
       revision,
       {

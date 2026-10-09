@@ -4,7 +4,7 @@
 // fits here by construction. The next row was not placed on this page before the change. It
 // still starts the next page when it fits a page but not the room below the grown row, its
 // own bottom edge cannot fit either, and it cannot split there. That is the row-move rule
-// `paginateTableInFlow` applies first, evaluated with the same probes at the new cursor. Every
+// `paginateTableInFlowSteps` applies first, evaluated with the same probes at the new cursor. Every
 // other rule there only adds moves. Once the row moves, the next page starts from the same
 // state as before, so every later row keeps its page, top and height.
 //

@@ -53,6 +53,7 @@ import { budgetsHaveHeadroom, withBudgetProof } from './table-budget-proof.ts';
 import { planOutOfCellFloats } from './table-out-of-cell-floats.ts';
 import { tableFloatClearance } from './table-float-collision.ts';
 import type { TableRowFragmentRecord } from './semantic-records.ts';
+import { TABLE_ROWS_PER_STEP, type LayoutSteps } from './layout-steps.ts';
 
 import type { TableFlowCursor, TableFlowPlacementResult } from './table-flow-cursor.ts';
 export type { TableFlowCursor, TableFlowPlacementResult } from './table-flow-cursor.ts';
@@ -71,12 +72,12 @@ const POSITIONED_TABLE_LAYOUT_BOTTOM_PT = Number.MAX_SAFE_INTEGER / 1024;
  * Contiguous leading `w:tblHeader` rows form one atomic repeated group: preflighted and
  * placed together, moved whole when the remainder is too short, re-emitted complete atop
  * each continuation page where the pending row can advance, and treated as ordinary rows
- * when the authored group itself exceeds a fresh content page.
+ * when the authored group itself exceeds a fresh content page. Pauses between rows (steps).
  */
-export function paginateTableInFlow(
+export function* paginateTableInFlowSteps(
   table: OoxmlElement,
   flow: TableFlowCursor
-): TableFlowPlacementResult {
+): LayoutSteps<TableFlowPlacementResult> {
   const {
     columnWidth,
     columnLeft,
@@ -525,6 +526,7 @@ export function paginateTableInFlow(
   };
 
   for (const [bodyRowIndex, authoredRow] of bodyRows.entries()) {
+    if (bodyRowIndex > 0 && bodyRowIndex % TABLE_ROWS_PER_STEP === 0) yield;
     const row = carry.rowAt(bodyRowIndex, authoredRow);
     if (initialHeaderGroupDegraded && bodyRowIndex >= headerRows.length) repeatsEnabled = true;
     const forceBreak = forceNextFragment;

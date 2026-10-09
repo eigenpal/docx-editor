@@ -1,6 +1,6 @@
 // Reusing the repeated header group's plan and rows across pages of one table pagination.
 //
-// `paginateTableInFlow` repeats the leading header rows on every continuation page. For each
+// `paginateTableInFlowSteps` repeats the leading header rows on every continuation page. For each
 // repeat it builds a header plan at the group's top and places every header row there. Within
 // one pagination the structure, the header rows, the deps object and the row probe are fixed,
 // so two repeats at the same top and table edge are the same work. Only the page differs, and

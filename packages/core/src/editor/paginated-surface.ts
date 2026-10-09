@@ -51,7 +51,8 @@ import {
   writeRejectionReason,
 } from './command-protection.ts';
 import { registerSurfaceMeasurement } from './surface-measurement.ts';
-import { registerProgressiveOpen } from './surface-progressive-open.ts';
+import { startOpeningSlices } from './surface-progressive-open.ts';
+import { drainLayoutSteps, type LayoutSteps } from '../layout/layout-steps.ts';
 import { createReviewOrderIndex } from './surface-review-order.ts';
 import { bodyBlockCountOf } from '../layout/body-block-limit.ts';
 import {
@@ -242,7 +243,7 @@ import {
 import { createBrowserPaintImageUrlPort } from './browser-paint-image-url-port.ts';
 import { createInlineDrawingLayoutBundle } from '../layout/inline-drawing-source.ts';
 import {
-  layoutDocumentView,
+  layoutDocumentViewSteps,
   type LayoutDocumentViewOptions,
 } from '../layout/document-layout-coordinator.ts';
 import { createSurfaceCaret } from './surface-caret.ts';
@@ -345,8 +346,6 @@ type ScaleMutableSurface = PaginatedSurface & {
 
 /** Body blocks a sliced opening lays out at mount, before its first yield. */
 const PROGRESSIVE_OPEN_FIRST_BLOCKS = 64;
-/** The work a sliced opening aims to do per slice, in milliseconds. */
-const PROGRESSIVE_OPEN_SLICE_MS = 40;
 
 /**
  * Mount a paginated surface over DOCX bytes.
@@ -1042,6 +1041,8 @@ export function mountPaginatedSurface(
   };
 
   /** The body block limit of an opening still in slices; null once a full layout ran. */
+  /** Finishes a paused opening prefix pass; see `startOpeningSlices`. */
+  let finishOpeningPass = (): void => undefined;
   let openingBlockLimit: number | null = runtimeOptions.progressiveOpen
     ? PROGRESSIVE_OPEN_FIRST_BLOCKS
     : null;
@@ -1315,6 +1316,16 @@ export function mountPaginatedSurface(
     context?: LayoutDocumentContext,
     bodyBlockLimit?: number
   ): SemanticLayout {
+    finishOpeningPass();
+    return drainLayoutSteps(layoutDocumentSteps(revision, scope, context, bodyBlockLimit));
+  }
+
+  function* layoutDocumentSteps(
+    revision: number,
+    scope?: LayoutScope,
+    context?: LayoutDocumentContext,
+    bodyBlockLimit?: number
+  ): LayoutSteps<SemanticLayout> {
     const activeAuthorFilter = context ? context.authorFilter : revisionFilter();
     const activeLayoutSession = context?.layoutSession ?? layoutSession;
     const activeFurnitureSource = context?.furnitureSource ?? furnitureSource;
@@ -1322,7 +1333,7 @@ export function mountPaginatedSurface(
     // Any full layout of the live session completes an opening still in slices.
     if (!context && bodyBlockLimit === undefined) openingBlockLimit = null;
     drawingBundle.sync(session);
-    return layoutDocumentView({
+    return yield* layoutDocumentViewSteps({
       view: session,
       revision,
       measurer,
@@ -6240,41 +6251,24 @@ export function mountPaginatedSurface(
     }
   );
   registerRefreshComposition(surface, () => selectionSync.isComposing());
-  let openingGrowth = PROGRESSIVE_OPEN_FIRST_BLOCKS;
-  /** One opening slice of about `budgetMs`; true once the full layout is published. */
-  function continueOpening(budgetMs: number): boolean {
-    const deadline = now() + budgetMs;
-    while (openingBlockLimit !== null && !destroyed) {
-      const total = bodyBlockCountOf(layoutSession);
-      if (total !== undefined && openingBlockLimit >= total) {
-        // Nothing left to cut: the normal full layout, resumed from the last slice.
+  finishOpeningPass = startOpeningSlices(
+    surface,
+    container,
+    {
+      now,
+      destroyed: () => destroyed,
+      limit: () => openingBlockLimit,
+      setLimit: (limit) => (openingBlockLimit = limit),
+      bodyBlockCount: () => bodyBlockCountOf(layoutSession),
+      prefixPass: (limit) =>
+        layoutDocumentSteps(session.packageRevision(), undefined, undefined, limit),
+      finish: () => {
         scheduler.invalidateAll(session.packageRevision(), 'opening');
         scheduler.flush();
         openingBlockLimit = null;
-        return true;
-      }
-      const began = now();
-      openingBlockLimit += openingGrowth;
-      layoutDocument(session.packageRevision(), undefined, undefined, openingBlockLimit);
-      // Size the next slice from this one's cost per block.
-      const msPerBlock = Math.max(now() - began, 1) / openingGrowth;
-      openingGrowth = Math.min(
-        4096,
-        Math.max(16, Math.round(PROGRESSIVE_OPEN_SLICE_MS / msPerBlock))
-      );
-      if (now() >= deadline) return false;
-    }
-    return true;
-  }
-  // A mounted document still opening is marked, so the loading overlay shows it muted.
-  container.removeAttribute('data-docx-opening-preview');
-  if (openingBlockLimit !== null) {
-    container.setAttribute('data-docx-opening-preview', '');
-    registerProgressiveOpen(surface, (budgetMs) => {
-      const done = continueOpening(budgetMs);
-      if (done) container.removeAttribute('data-docx-opening-preview');
-      return done;
-    });
-  }
+      },
+    },
+    PROGRESSIVE_OPEN_FIRST_BLOCKS
+  );
   return { ok: true, surface };
 }
