@@ -166,8 +166,12 @@ describe('deferred open of a large document', () => {
     expect(editor.snapshot().pageSetup).toEqual(oldPageSetup);
     expect(editor.getPageSetup()).toBeNull();
 
-    await until(() => container.textContent?.includes('large document body') === true);
-    expect(editor.snapshot().isOpening).toBe(false);
+    // The text shows under the opening preview first; wait for the open to finish.
+    await until(
+      () =>
+        container.textContent?.includes('large document body') === true &&
+        !editor.snapshot().isOpening
+    );
     expect(editor.snapshot().pageSetup).toEqual(editor.getPageSetup());
     editor.destroy();
   });

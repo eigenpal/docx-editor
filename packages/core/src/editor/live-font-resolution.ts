@@ -30,10 +30,13 @@ export function liveFontFamilies(
 export function createLiveFontResolution(
   read: () => { generation: number; families: () => readonly string[]; dynamic: boolean } | null,
   resolve: (families: readonly string[]) => Promise<void>
-): { schedule(initial?: boolean): void } {
+): {
+  /** Queue a resolution; `initial` runs it now and returns its work, if it started any. */
+  schedule(initial?: boolean): Promise<void> | undefined;
+} {
   let current: { generation: number; requested: Set<string>; running: boolean } | undefined;
   let queued = false;
-  const pump = (): void => {
+  const pump = (): Promise<void> | undefined => {
     queued = false;
     const state = read();
     if (!state) return;
@@ -49,16 +52,15 @@ export function createLiveFontResolution(
     active.running = true;
     // Failed families stay attempted until the next document load. A failing provider
     // must not retry on every keystroke. resolve owns error reporting and degradation.
-    void resolve(families).finally(() => {
+    const work = resolve(families);
+    void work.finally(() => {
       active.running = false;
       if (current === active) schedule();
     });
+    return work;
   };
-  const schedule = (initial = false): void => {
-    if (initial) {
-      pump();
-      return;
-    }
+  const schedule = (initial = false): Promise<void> | undefined => {
+    if (initial) return pump();
     if (queued) return;
     queued = true;
     queueMicrotask(pump);

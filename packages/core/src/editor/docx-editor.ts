@@ -258,7 +258,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let deferredRefreshBytes: Uint8Array | null = null;
   /** The opening document's session between the prepare and mount tasks, for font work. */
   let preparedFontSession: TreeDocxSessionView | null = null;
-  let fontWork: Promise<void> | null = null;
   let mountedSeq = -1;
   const stillOpening = () =>
     preparedFontSession !== null || (!!surface && preparedOpen.stillOpening(surface));
@@ -299,11 +298,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     prepare: (bytes) => {
       const opened = preparedOpen.prepareOpen(bytes, reviewModelOption(modules, reportDiagnostic));
       // Fonts resolved now are laid out once, by the mount, not a second time after it.
+      // Their whole-document family scan runs in a task of its own, after this parse.
       if (!opened.ok || deferredRefreshBytes === bytes) return;
       preparedFontSession = opened.session;
-      fontWork = null;
-      liveFonts.schedule(true);
-      return fontWork ?? undefined;
+      const current = () => preparedFontSession === opened.session;
+      return preparedOpen.openSteps(opened.session, current, () => liveFonts.schedule(true));
     },
     scheduled: () => {
       bump();
@@ -415,7 +414,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
     async (families) => {
       const target = preparedFontSession ? { session: preparedFontSession } : surface;
-      if (target) await (fontWork = resolveDocumentFonts(loadSeq, target, families));
+      if (target) await resolveDocumentFonts(loadSeq, target, families);
     }
   );
   let fontsResolving = false;

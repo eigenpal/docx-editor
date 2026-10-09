@@ -20,7 +20,10 @@ const nextTask = () => new Promise((resolve) => setTimeout(resolve, 0));
 const frame = () => new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
 
 function recorder(
-  options: { readonly failPrepare?: boolean; readonly work?: () => Promise<unknown> } = {}
+  options: {
+    readonly failPrepare?: boolean;
+    readonly work?: () => Promise<unknown> | (() => Promise<unknown>);
+  } = {}
 ) {
   const events: string[] = [];
   const scheduler = createOpenScheduler({
@@ -155,6 +158,35 @@ describe('prepare work the mount waits for', () => {
     await new Promise((resolve) => setTimeout(resolve, PREPARED_WORK_WAIT_MS + 50));
     expect(events).toEqual(['scheduled', 'prepare', 'mount']);
   });
+
+  test('a follow-up step runs in its own task, and the wait starts after it', async () => {
+    // The facade runs its font scan as a follow-up step after the parse. A scan that blocks
+    // for longer than the wait must still leave the mount waiting for the work it starts.
+    let settle: () => void = () => {};
+    const { events, scheduler } = recorder({
+      work: () => () => {
+        events.push('scan');
+        const until = performance.now() + PREPARED_WORK_WAIT_MS + 100;
+        while (performance.now() < until) {
+          // The scan.
+        }
+        return new Promise<void>((resolve) => (settle = resolve));
+      },
+    });
+    scheduler.schedule(new Uint8Array(1));
+    await frame();
+    await nextTask();
+    expect(events).toEqual(['scheduled', 'prepare']);
+    await nextTask();
+    expect(events).toEqual(['scheduled', 'prepare', 'scan']);
+    await nextTask();
+    await nextTask();
+    expect(events).toEqual(['scheduled', 'prepare', 'scan']);
+    settle();
+    await nextTask();
+    await nextTask();
+    expect(events).toEqual(['scheduled', 'prepare', 'scan', 'mount']);
+  }, 10_000);
 
   test('cancel while waiting means the settled work mounts nothing', async () => {
     let settle: () => void = () => {};

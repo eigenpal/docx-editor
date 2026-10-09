@@ -22,12 +22,38 @@ const cache = new WeakMap<
   }
 >();
 
+/** Each session's East Asian scanner, so a warm-up and the full read share its cache. */
+const scanners = new WeakMap<
+  TreeDocxSessionView,
+  ReturnType<typeof createEastAsianLanguageFontScanner>
+>();
+
+function scannerOf(session: TreeDocxSessionView) {
+  let scanner = scanners.get(session);
+  if (!scanner) scanners.set(session, (scanner = createEastAsianLanguageFontScanner()));
+  return scanner;
+}
+
+/**
+ * Scan `blocks`, a run of body blocks, into the subtree caches that
+ * {@link resolverGlyphFontFamilies} reads. The full read after a warm-up over the whole body
+ * finds every block cached, so a caller can spread the first scan over several tasks.
+ */
+export function warmResolverGlyphFontFamilies(
+  session: TreeDocxSessionView,
+  blocks: readonly OoxmlElement[]
+): void {
+  scannerOf(session)(blocks, session.stylesRoot(), session.documentThemeFonts());
+  symbolFieldFontFamilies(blocks);
+  numberingFontInputs(blocks);
+}
+
 /** Rendered faces absent from declarations use the resolver's reserved share. */
 export function resolverGlyphFontFamilies(session: TreeDocxSessionView): readonly string[] {
   const revision = session.packageRevision();
   const cached = cache.get(session);
   if (cached?.revision === revision) return cached.families;
-  const eastAsianFonts = cached?.eastAsianFonts ?? createEastAsianLanguageFontScanner();
+  const eastAsianFonts = cached?.eastAsianFonts ?? scannerOf(session);
   const roots = session.storyParts().map((part) => part.root);
   const stylesRoot = session.stylesRoot();
   const numberingRoot = session.numberingRoot();

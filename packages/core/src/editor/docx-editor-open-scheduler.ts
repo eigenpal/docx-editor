@@ -73,6 +73,10 @@ function zipContentExceeds(bytes: Uint8Array, limit: number): boolean {
  */
 export const PREPARED_WORK_WAIT_MS = 2000;
 
+/** What one prepare step leaves: nothing, work to wait for, or the next step. */
+type PrepareResult = void | Promise<unknown> | PrepareStep;
+type PrepareStep = () => void | Promise<unknown> | PrepareStep;
+
 /** What the facade hands the scheduler; both close over facade-owned state. */
 export interface OpenSchedulerHooks {
   /** The real synchronous mount (`mountBytes`). */
@@ -85,9 +89,11 @@ export interface OpenSchedulerHooks {
    *
    * A returned promise is work the mount would rather start after, such as font resolution
    * that would otherwise lay the document out a second time. The mount waits for it, but
-   * never longer than {@link PREPARED_WORK_WAIT_MS}.
+   * never longer than {@link PREPARED_WORK_WAIT_MS}. A returned function is more work for a
+   * task of its own, such as a whole-document scan; its result is what the mount waits for,
+   * and the wait starts only once it returns.
    */
-  readonly prepare?: (bytes: Uint8Array) => void | Promise<unknown>;
+  readonly prepare?: (bytes: Uint8Array) => PrepareResult;
   /**
    * Called when a mount is scheduled, and again when a sliced open finishes — the facade
    * bumps and emits here, because `isOpening` moved.
@@ -175,18 +181,26 @@ export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
     schedule(bytes) {
       let timer: ReturnType<typeof setTimeout> | null = null;
       let fallback: ReturnType<typeof setTimeout> | null = null;
-      let prepared = hooks.prepare === undefined;
+      /** The next prepare step, each in a task of its own; null once preparing is done. */
+      let step: PrepareStep | null = hooks.prepare ? () => hooks.prepare!(bytes) : null;
       let cancelled = false;
       let mounted = false;
       const run = () => {
         if (cancelled) return;
-        if (!prepared) {
-          prepared = true;
-          let work: void | Promise<unknown> = undefined;
+        if (step) {
+          const current = step;
+          step = null;
+          let work: PrepareResult = undefined;
           try {
-            work = hooks.prepare?.(bytes);
+            work = current();
           } catch {
             // The mount opens the bytes again and reports the failure itself.
+          }
+          if (typeof work === 'function') {
+            step = work;
+            // A message task, not a timer: a chain of nested timers waits 4 ms between steps.
+            queueTask(run);
+            return;
           }
           if (!work) {
             // The mount gets its own task, so input and paint can run in between.
