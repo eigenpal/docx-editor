@@ -20,9 +20,16 @@ const COMMENTS_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/rela
 const EXTENDED_REL = 'http://schemas.microsoft.com/office/2011/relationships/commentsExtended';
 const DATE = 'w:date="2026-01-02T03:04:05Z"';
 
-function comment(id: string, author: string, paraId: string, text: string): string {
+function comment(
+  id: string,
+  author: string,
+  paraId: string,
+  text: string,
+  initials?: string
+): string {
+  const initialsAttr = initials === undefined ? '' : ` w:initials="${initials}"`;
   return (
-    `<w:comment w:id="${id}" w:author="${author}" ${DATE}>` +
+    `<w:comment w:id="${id}" w:author="${author}"${initialsAttr} ${DATE}>` +
     `<w:p w14:paraId="${paraId}"><w:r><w:t>${text}</w:t></w:r></w:p></w:comment>`
   );
 }
@@ -63,7 +70,8 @@ export const BALLOON_SOURCE = zipSync({
   ),
   'word/comments.xml': strToU8(
     `<w:comments xmlns:w="${W}" xmlns:w14="${W14}">` +
-      comment('7', 'Ada Lovelace', 'A0000001', 'Check this.') +
+      // Ten-character initials from the file: the marker shows only the first three.
+      comment('7', 'Ada Lovelace', 'A0000001', 'Check this.', 'ADALOVELAC') +
       comment('8', 'Grace Hopper', 'A0000002', 'Agreed.') +
       comment('9', 'Grace Hopper', 'A0000003', 'Done.') +
       '</w:comments>'
@@ -175,7 +183,7 @@ export async function checkCommentMarkers(
   expect(markers).toHaveLength(2);
   const [open, closed] = markers as [HTMLElement, HTMLElement];
   expect(open.dataset.marker).toBe('initials');
-  expect(q(open, '.docx-review__badge-initials')?.textContent).toBe('AL');
+  expect(q(open, '.docx-review__badge-initials')?.textContent).toBe('ADA');
   expect(q(open, '[data-testid="review-badge-count"]')?.textContent).toBe('1');
   expect(open.getAttribute('aria-label')).toContain('Replies: 1');
   expect(q(open, '[data-testid="review-badge"]')?.hasAttribute('data-resolved')).toBe(false);
