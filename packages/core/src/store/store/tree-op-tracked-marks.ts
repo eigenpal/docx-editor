@@ -22,6 +22,7 @@ import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { TEXT_DEPS, fromEdit } from './tree-op-nodes.ts';
 import { build, childrenOf, isWmlNamed, revisionAttributes } from './tree-op-tracked.ts';
 import { sameEditingMoment } from './tree-op-tracked-adjacency.ts';
+import { isInertMarker } from './revision-marker-content.ts';
 import type { RevisionAttributionInput, TreeOpEffect, TreeOpResult } from './tree-op-validate.ts';
 
 /**
@@ -222,7 +223,14 @@ function adjacentParagraphMark(
   if (!parent) return null;
   const siblings = parent.children;
   const at = siblings.findIndex((child) => child.id === paragraph.id);
-  for (const neighbour of [siblings[at - 1], siblings[at + 1]]) {
+  // Position markers between two paragraphs, such as a bookmark end, do not separate them:
+  // one deletion over both stays one decision.
+  const neighbourAt = (step: number): OoxmlNode | undefined => {
+    let index = at + step;
+    while (index >= 0 && index < siblings.length && isInertMarker(siblings[index]!)) index += step;
+    return siblings[index];
+  };
+  for (const neighbour of [neighbourAt(-1), neighbourAt(1)]) {
     if (!neighbour || neighbour.kind !== 'paragraph') continue;
     const properties = childrenOf(neighbour).find((child) => child.kind === 'paragraphProperties');
     const rPr = properties

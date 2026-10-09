@@ -368,3 +368,26 @@ test('a tracked deletion over 8000 paragraphs stays fast', () => {
   expect(performance.now() - started).toBeLessThan(15_000);
   expect(savedMainXml(host).match(/<w:rPr><w:del /g)).toHaveLength(count - 1);
 }, 120_000);
+
+test('a tracked deletion over 4000 paragraphs separated by bookmarks stays one decision and fast', () => {
+  const count = 4000;
+  const body = Array.from(
+    { length: count },
+    (_, i) =>
+      p(`Paragraph ${i}`) +
+      `<w:bookmarkStart w:id="${i}" w:name="b${i}"/><w:bookmarkEnd w:id="${i}"/>`
+  ).join('');
+  const host = open(docx(body));
+  const { body: story } = roots(host);
+  const paragraphs = paragraphsOf(host, story);
+  const started = performance.now();
+  run(host, [deleteBetween(paragraphs, [0, 0], [count - 1, 0])]);
+  const elapsed = performance.now() - started;
+  const markIds = new Set(
+    [...savedMainXml(host).matchAll(/<w:rPr><w:del [^>]*w:id="(\d+)"/g)].map((m) => m[1])
+  );
+  // One shared mark id: the marks join across the bookmarks, so the id walk happens once.
+  expect(markIds.size).toBe(1);
+  // About 4.5 s here. One id walk per mark took 54 s.
+  expect(elapsed).toBeLessThan(30_000);
+}, 120_000);

@@ -365,3 +365,74 @@ test('after a paragraph deletion, the next paragraph rejects a deletion at its s
     r.dispose();
   }
 });
+
+const bookmark = (id: number) =>
+  `<w:bookmarkStart w:id="${id}" w:name="b${id}"/><w:bookmarkEnd w:id="${id}"/>`;
+
+async function decideFirst(bytes: Uint8Array, action: 'accept' | 'reject') {
+  const reopened = await DocxEditor.createServer(bytes);
+  try {
+    return await reopened.run(async (c) => {
+      const revisions = c.document.body.revisions;
+      revisions.load('items');
+      await c.sync();
+      revisions.items[0]![action]();
+      await c.sync();
+      revisions.load('items');
+      c.document.body.load('text');
+      await c.sync();
+      return { left: revisions.items.length, text: c.document.body.text };
+    });
+  } finally {
+    reopened.dispose();
+  }
+}
+
+test('position markers between deleted paragraphs keep one review decision', async () => {
+  const r = await open(docx(p('A') + bookmark(5) + p('B') + '<w:bookmarkEnd w:id="7"/>' + p('C')));
+  try {
+    await deleteParagraphs(r, [0, 1]);
+    expect(await revisionCount(r)).toBe(1);
+    const bytes = await r.save();
+    expect(await decideFirst(bytes, 'accept')).toEqual({ left: 0, text: 'C' });
+    expect(await decideFirst(bytes, 'reject')).toEqual({ left: 0, text: 'A\rB\rC' });
+  } finally {
+    r.dispose();
+  }
+});
+
+test('a file deletion with separate ids across a position marker reviews as one decision', async () => {
+  const del = (id: number, text: string) =>
+    `<w:del w:id="${id}" w:author="Reviewer" w:date="2026-01-01T00:00:00Z"><w:r><w:delText>${text}</w:delText></w:r></w:del>`;
+  const mark = (id: number) =>
+    `<w:pPr><w:rPr><w:del w:id="${id}" w:author="Reviewer" w:date="2026-01-01T00:00:00Z"/></w:rPr></w:pPr>`;
+  const body =
+    `<w:p>${mark(1)}${del(0, 'A')}</w:p>` +
+    bookmark(9) +
+    `<w:p>${mark(3)}${del(2, 'B')}</w:p>` +
+    p('C');
+  const r = await open(docx(body));
+  try {
+    expect(await revisionCount(r)).toBe(1);
+    const bytes = await r.save();
+    expect(await decideFirst(bytes, 'accept')).toEqual({ left: 0, text: 'C' });
+  } finally {
+    r.dispose();
+  }
+});
+
+test('the own-deletion refusal applies across a position marker', async () => {
+  const r = await open(
+    docx(p('First clause.') + bookmark(5) + p('Second clause.') + p('Third clause.'))
+  );
+  try {
+    await deleteParagraphs(r, [0]);
+    await expectRefused(
+      r,
+      (c) => c.document.body.search('Second').getFirst().delete(),
+      'NotImplemented'
+    );
+  } finally {
+    r.dispose();
+  }
+});
