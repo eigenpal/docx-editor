@@ -8,7 +8,7 @@ import { DocxEditor, useDocxEditor } from '@docx-editor.dev/react';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { exampleText as t } from '../../shared/example-text';
 import { reviewModule } from '@docx-editor.dev/pro';
-import { ReviewSettings, storedReviewPane } from './ReviewSettings';
+import { EXAMPLE_REVIEW_PANE, ReviewSettings, storedReviewPane } from './ReviewSettings';
 
 // The review pane settings belong to the review module.
 const MODULES = [reviewModule()];
@@ -27,14 +27,16 @@ afterEach(() => {
   else localStorage.setItem(KEY, previous);
 });
 
-test('storedReviewPane keeps valid saved settings and drops invalid ones', () => {
-  expect(storedReviewPane()).toBeUndefined();
+test('storedReviewPane starts closed and keeps only valid saved settings', () => {
+  expect(storedReviewPane()).toBe(EXAMPLE_REVIEW_PANE);
+  expect(EXAMPLE_REVIEW_PANE.opening).toBe('manual');
+  expect(EXAMPLE_REVIEW_PANE.commentMarkers).toBe('initials');
   localStorage.setItem(KEY, JSON.stringify({ commentMarkers: 'icon', stray: 'x' }));
-  expect(storedReviewPane()?.commentMarkers).toBe('icon');
+  expect(storedReviewPane()).toMatchObject({ commentMarkers: 'icon', opening: 'manual' });
   localStorage.setItem(KEY, JSON.stringify({ commentMarkers: 'sticker' }));
-  expect(storedReviewPane()).toBeUndefined();
+  expect(storedReviewPane()).toBe(EXAMPLE_REVIEW_PANE);
   localStorage.setItem(KEY, '{not json');
-  expect(storedReviewPane()).toBeUndefined();
+  expect(storedReviewPane()).toBe(EXAMPLE_REVIEW_PANE);
 });
 
 function mount() {
@@ -83,8 +85,14 @@ test('the panel applies a setting, saves it, and Escape returns focus to the gea
   view.unmount();
 });
 
-test('reset restores the defaults and forgets the saved settings', async () => {
-  localStorage.setItem(KEY, JSON.stringify({ overflow: 'scroll' }));
+test('the example starts with the pane closed when nothing is saved', () => {
+  const { view, editor } = mount();
+  expect(editor()?.snapshot().reviewPane.opening).toBe('manual');
+  view.unmount();
+});
+
+test('reset restores the example defaults and forgets the saved settings', async () => {
+  localStorage.setItem(KEY, JSON.stringify({ overflow: 'scroll', opening: 'auto' }));
   const { view, controls, editor } = mount();
   expect(editor()?.snapshot().reviewPane.overflow).toBe('scroll');
 
@@ -94,7 +102,7 @@ test('reset restores the defaults and forgets the saved settings', async () => {
   await act(async () => {
     fireEvent.click(controls.getByRole('button', { name: t('reviewSettings.reset') }));
   });
-  expect(editor()?.snapshot().reviewPane.overflow).toBe('float');
+  expect(editor()?.snapshot().reviewPane).toMatchObject({ overflow: 'float', opening: 'manual' });
   expect(localStorage.getItem(KEY)).toBeNull();
   view.unmount();
 });

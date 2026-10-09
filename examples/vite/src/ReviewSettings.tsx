@@ -3,7 +3,8 @@
 // Every control writes through `editor.setReviewPaneOptions()` and reads back from
 // `snapshot.reviewPane`, so the panel shows what the editor uses, not a copy of it. The
 // settings are view state of this editor: nothing is written into the document. The panel
-// keeps the choice in this browser's storage, and `storedReviewPane()` hands it to
+// starts with the pane closed (`EXAMPLE_REVIEW_PANE`), keeps the choice in this browser's
+// storage, and `storedReviewPane()` hands it to
 // `reviewModule({ pane })` so the next visit starts with it.
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useDocxEditor, useEditorState } from '@docx-editor.dev/react';
@@ -19,22 +20,28 @@ import './review-settings.css';
 
 const STORAGE_KEY = 'docx-editor-demo.review-pane';
 
-/** The saved settings, validated, or `undefined` when none are saved or they are not valid. */
-export function storedReviewPane(): ReviewPaneOptions | undefined {
+/**
+ * The example's own starting settings: the pane stays closed, so comments show as miniature
+ * markers in the margin until the reader opens one. The library default opens the pane.
+ */
+export const EXAMPLE_REVIEW_PANE: ResolvedReviewPane = resolveReviewPane({ opening: 'manual' });
+
+/** The saved settings over the example's defaults. Invalid saved settings are ignored. */
+export function storedReviewPane(): ResolvedReviewPane {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return undefined;
+    if (!raw) return EXAMPLE_REVIEW_PANE;
     const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return undefined;
+    if (!parsed || typeof parsed !== 'object') return EXAMPLE_REVIEW_PANE;
     const source = parsed as Record<string, unknown>;
     const options: Record<string, unknown> = {};
     // Copy the known fields only: a stale or edited entry must not reach the editor.
     for (const key of Object.keys(DEFAULT_REVIEW_PANE)) {
       if (Object.hasOwn(source, key)) options[key] = source[key];
     }
-    return resolveReviewPane(options as ReviewPaneOptions);
+    return resolveReviewPane(options as ReviewPaneOptions, EXAMPLE_REVIEW_PANE);
   } catch {
-    return undefined;
+    return EXAMPLE_REVIEW_PANE;
   }
 }
 
@@ -137,8 +144,7 @@ export function ReviewSettings() {
 
   // A new editor instance starts from the module's settings; give it the saved ones too.
   useEffect(() => {
-    const saved = storedReviewPane();
-    if (editor && saved) editor.setReviewPaneOptions(saved);
+    if (editor) editor.setReviewPaneOptions(storedReviewPane());
   }, [editor]);
 
   // Opening moves focus to the first group's selected option.
@@ -257,7 +263,7 @@ export function ReviewSettings() {
             <button
               type="button"
               className="demo-settings__reset"
-              onClick={() => apply(DEFAULT_REVIEW_PANE, false)}
+              onClick={() => apply(EXAMPLE_REVIEW_PANE, false)}
             >
               {t('reviewSettings.reset')}
             </button>

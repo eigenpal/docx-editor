@@ -64,10 +64,10 @@ import {
  * e2e/fixtures/sdt-custom-tag-original.docx to see one). Both accept `{ licenseKey }` —
  * optional while licensing is honor-system.
  */
-const SAVED_REVIEW_PANE = storedReviewPane();
 const PRO_MODULES = [
-  // The review display settings saved by the header's settings panel, if any.
-  reviewModule(SAVED_REVIEW_PANE ? { pane: SAVED_REVIEW_PANE } : {}),
+  // The example starts with the pane closed, so comments show as margin miniatures; the
+  // header's settings panel saves other choices over that.
+  reviewModule({ pane: storedReviewPane() }),
   customNodesModule({
     nodes: [DEMO_CITATION],
     // A payload comes from a file the sender wrote, so a mismatch is an ordinary property of an
