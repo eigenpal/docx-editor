@@ -560,9 +560,10 @@ test('textbox caret paints inside its content layer and returns to body after ed
     surface.focus();
     const match = editor.findMatches('boxed needle')[0]!;
     expect(surface.setActiveScope(match.scope!)).toBe(true);
+    // Offset 3 sits inside a word, away from any line edge.
     surface.setSelection({
-      anchor: { paragraphId: match.blockId, offset: 6 },
-      head: { paragraphId: match.blockId, offset: 6 },
+      anchor: { paragraphId: match.blockId, offset: 3 },
+      head: { paragraphId: match.blockId, offset: 3 },
     });
     const caret = container.querySelector<HTMLElement>('[data-docx-caret]')!;
     const content = container.querySelector<HTMLElement>(
