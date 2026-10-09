@@ -51,11 +51,7 @@ import {
   type IgnoredContentTypes,
   type OverrideRecord,
 } from './content-types.ts';
-import {
-  serializeOoxmlPart,
-  type OoxmlPart,
-  type OoxmlReadRejection,
-} from './ooxml-tree.ts';
+import { serializeOoxmlPart, type OoxmlPart, type OoxmlReadRejection } from './ooxml-tree.ts';
 import { captureXmlPartRoot } from './canonical-primitive-lower.ts';
 import { commentExportPackage } from './comment-export-cleanup.ts';
 

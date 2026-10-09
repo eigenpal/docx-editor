@@ -29,7 +29,6 @@ import { continuedPageZones, continuedWrapFlags } from './continued-page-zones.t
 import {
   furnitureDrawingExclusionsForPage,
   hasFurnitureDrawingExclusions,
-  refusalYieldsHiddenFurniture,
 } from './furniture-drawing-exclusion.ts';
 import { tocLinkRanges, tocLinkStyleToken } from './toc-link-formatting.ts';
 import { tocCodeRanges } from './field-code-toc.ts';
@@ -206,15 +205,15 @@ import { limitBodyBlocks } from './body-block-limit.ts';
 import { refTokenForTableBlock } from './field-ref.ts';
 import { createListFirstLineMetrics, markerLineStart, publishListMarker } from './list-marker.ts';
 import { FlowCheckpointOwner, flowCheckpointsMatch } from './flow-checkpoint.ts';
-import { createLayoutSession, type FlowCheckpoint, type LayoutSession } from './layout-session.ts';
-import { replaceLayoutSession } from './layout-session.ts';
+import type { FlowCheckpoint, LayoutSession } from './layout-session.ts';
 import { furnitureForSection, layoutMultiSectionDocument } from './multi-section-layout.ts';
 import { hostedStoryFlowDeps, layoutTextboxStory } from './textbox-story-layout.ts';
 import { inlineDrawingFlow } from './inline-textbox-flow.ts';
 import { convergeExclusionLayout } from './exclusion-layout-steps.ts';
+import { withInterimLayout } from './interim-layout.ts';
+import { layoutWithFurnitureRetry } from './furniture-retry-layout.ts';
 import { drainLayoutSteps, type LayoutSteps } from './layout-steps.ts';
 import {
-  layoutBlocksWithColumnBalanceSteps,
   type BlockLayoutOptions as ColumnBalanceBlockLayoutOptions,
   type BlockLayoutResult,
 } from './column-balance-layout.ts';
@@ -362,17 +361,25 @@ export function* layoutSemanticDocumentSteps(
       opts.geometry ?? (section ? geometryOfSection(section.properties) : DEFAULT_PAGE_GEOMETRY);
     const furniture = furnitureForSection(opts, 0, sections.length) ?? opts.furniture;
     const sectionNumbering = section?.properties.pageNumbering;
-    const laid = yield* layoutBlocksWithGeometrySteps(blocks, revision, {
-      ...opts,
-      geometry,
-      furniture,
-      paragraphLineUnitPt: sectionLineGridPt(section?.properties),
-      sectionColumns: section?.properties.columns ?? DEFAULT_SECTION_PROPERTIES.columns,
-      ...(section?.properties.pageBorders
-        ? { sectionPageBorders: section.properties.pageBorders }
-        : {}),
-      ...(sectionNumbering?.fmt ? { bodyPageNumberFormat: sectionNumbering.fmt } : {}),
-    });
+    const interim = {
+      revision,
+      numbering: sectionNumbering,
+      listItems: optionsWithLists.listItems,
+    };
+    const laid = yield* withInterimLayout(
+      layoutBlocksWithGeometrySteps(blocks, revision, {
+        ...opts,
+        geometry,
+        furniture,
+        paragraphLineUnitPt: sectionLineGridPt(section?.properties),
+        sectionColumns: section?.properties.columns ?? DEFAULT_SECTION_PROPERTIES.columns,
+        ...(section?.properties.pageBorders
+          ? { sectionPageBorders: section.properties.pageBorders }
+          : {}),
+        ...(sectionNumbering?.fmt ? { bodyPageNumberFormat: sectionNumbering.fmt } : {}),
+      }),
+      { ...interim, measurer: options.measurer }
+    );
     const numbering = sectionNumbering;
     // Carry boundary metadata through field annotation so a no-change resume still early-exits
     // in `attachContentControlBoundaries` instead of allocating a fresh `pages` array.
@@ -1870,7 +1877,13 @@ function* layoutBlocksPass(
   let convergedAt = prepared.length;
   /** Whole pages the convergence tail moved by; reused checkpoints shift with it. */
   let convergedPageDelta = 0;
+  let reportedPages = 0;
   for (let index = startIndex; index < prepared.length; index += 1) {
+    // A live pass reports each completed page, so a host can show them before it ends.
+    if (session && pages.length > reportedPages) {
+      reportedPages = pages.length;
+      yield { pages };
+    }
     const entry = prepareBlock(bodies[index]!, columnWidth());
 
     // The flow as it stands BEFORE this block: what a later pass resumes from.
@@ -2864,31 +2877,12 @@ function layoutBlocksWithGeometry(
   return drainLayoutSteps(layoutBlocksWithGeometrySteps(bodies, revision, options));
 }
 
-function* layoutBlocksWithGeometrySteps(
+function layoutBlocksWithGeometrySteps(
   bodies: readonly OoxmlElement[],
   revision: number,
   options: BlockLayoutOptions
 ): LayoutSteps<BlockLayoutResult> {
-  try {
-    return yield* layoutBlocksWithColumnBalanceSteps(bodies, revision, options, layoutBlocksPass);
-  } catch (error) {
-    // One cold retry without hidden furniture zones; see `refusalYieldsHiddenFurniture`.
-    if (!refusalYieldsHiddenFurniture(error, options)) throw error;
-    const coldSession = options.session ? createLayoutSession() : undefined;
-    const result = yield* layoutBlocksWithColumnBalanceSteps(
-      bodies,
-      revision,
-      {
-        ...options,
-        session: coldSession,
-        producer: framedTokenJoin([options.producer ?? '', 'hidden-furniture-yields']),
-        yieldHiddenFurnitureZones: true,
-      },
-      layoutBlocksPass
-    );
-    if (options.session && coldSession) replaceLayoutSession(options.session, coldSession);
-    return result;
-  }
+  return layoutWithFurnitureRetry(bodies, revision, options, layoutBlocksPass);
 }
 
 export { createFixedMeasurer } from './fixed-measurer.ts';

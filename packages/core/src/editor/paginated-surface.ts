@@ -52,6 +52,7 @@ import {
 } from './command-protection.ts';
 import { registerSurfaceMeasurement } from './surface-measurement.ts';
 import { startOpeningSlices } from './surface-progressive-open.ts';
+import { createDeferredLayout } from './surface-deferred-layout.ts';
 import { drainLayoutSteps, type LayoutSteps } from '../layout/layout-steps.ts';
 import { createReviewOrderIndex } from './surface-review-order.ts';
 import { bodyBlockCountOf } from '../layout/body-block-limit.ts';
@@ -1043,6 +1044,22 @@ export function mountPaginatedSurface(
   /** The body block limit of an opening still in slices; null once a full layout ran. */
   /** Finishes a paused opening prefix pass; see `startOpeningSlices`. */
   let finishOpeningPass = (): void => undefined;
+  // The pages after the screen finish after the commit; see `surface-deferred-layout.ts`.
+  const deferredLayout = createDeferredLayout({
+    now,
+    pageAfterView: () => {
+      const visible = visiblePages();
+      return visible && visible.size > 0 ? Math.max(...visible) + 1 : undefined;
+    },
+    current: () => currentLayout,
+    revision: () => session.packageRevision(),
+    publish: (layout) => publishLayout(layout),
+    // A pass replaces the session's fields and never mutates them, so a shallow copy restores it.
+    snapshot: () => {
+      const saved = { ...layoutSession };
+      return () => void Object.assign(layoutSession, saved);
+    },
+  });
   let openingBlockLimit: number | null = runtimeOptions.progressiveOpen
     ? PROGRESSIVE_OPEN_FIRST_BLOCKS
     : null;
@@ -1317,6 +1334,7 @@ export function mountPaginatedSurface(
     bodyBlockLimit?: number
   ): SemanticLayout {
     finishOpeningPass();
+    deferredLayout.finish();
     return drainLayoutSteps(layoutDocumentSteps(revision, scope, context, bodyBlockLimit));
   }
 
@@ -1578,7 +1596,10 @@ export function mountPaginatedSurface(
     // layout after the first comes through here rather than through `layoutOnce`.
     run: (scope: LayoutScope) => {
       const began = now();
-      const layout = layoutDocument(scope.revision, scope);
+      finishOpeningPass();
+      deferredLayout.abandon();
+      const steps = layoutDocumentSteps(scope.revision, scope);
+      const layout = deferredLayout.run(steps, scope.revision);
       lastLayoutMs = now() - began;
       return layout;
     },
@@ -1605,21 +1626,22 @@ export function mountPaginatedSurface(
       const handle = setTimeout(run, 0);
       return () => clearTimeout(handle);
     },
-    publish: (layout) => {
-      // Release the previous layout BEFORE the new one replaces it: the roster cache held
-      // it by strong reference, and a 200-page graph kept alive beside the live one is tens
-      // of megabytes of retained records. `layout: null` means "recompute on the next read"
-      // while keeping the map itself, which that read compares against to decide whether
-      // the author set actually moved.
-      // The review queue is released with it, for the same reason and by the same rule.
-      reviewAuthors.releaseLayout();
-      currentLayout = layout;
-      // Repaint from HERE, so a commit that never went through this surface — undo, or
-      // another editor sharing the store — still reaches the screen. Otherwise the painted
-      // pages keep showing a revision the model has already left.
-      renderPublishedLayout();
-    },
+    publish: (layout) => publishLayout(layout),
   });
+  function publishLayout(layout: SemanticLayout): void {
+    // Release the previous layout BEFORE the new one replaces it: the roster cache held
+    // it by strong reference, and a 200-page graph kept alive beside the live one is tens
+    // of megabytes of retained records. `layout: null` means "recompute on the next read"
+    // while keeping the map itself, which that read compares against to decide whether
+    // the author set actually moved.
+    // The review queue is released with it, for the same reason and by the same rule.
+    reviewAuthors.releaseLayout();
+    currentLayout = layout;
+    // Repaint from HERE, so a commit that never went through this surface — undo, or
+    // another editor sharing the store — still reaches the screen. Otherwise the painted
+    // pages keep showing a revision the model has already left.
+    renderPublishedLayout();
+  }
 
   // A settled image resource must reach the screen on its own — nothing else may ever
   // touch the document (a letterhead the user only reads). The flush is queued, not
@@ -5663,6 +5685,7 @@ export function mountPaginatedSurface(
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      deferredLayout.cancel();
       // Typed-but-unflushed text lands before teardown, so a detach-then-save
       // flow keeps the last keystrokes — all the way to a paint and its state
       // report: the final commit's `onChange` used to come from the synchronous
