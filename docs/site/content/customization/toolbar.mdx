@@ -1,6 +1,6 @@
 ---
 title: 'Toolbar'
-description: 'Choose controls, replace icons, and connect your own buttons.'
+description: 'Customize the DOCX editor toolbar with named controls, command slots, application actions, groups, and responsive overflow.'
 category: 'Customization'
 ---
 
@@ -11,6 +11,88 @@ Set `preset={false}` to choose the complete arrangement. Use `useEditorCommand(s
 Keep the caret when a toolbar button receives a mouse press. Call `preventDefault()` for buttons, but skip inputs, selects, and text areas. Hiding a button does not remove its API operation.
 
 <CustomizationDemo topic="toolbar" />
+
+## Toolbar configuration reference
+
+The DOCX editor toolbar supports both targeted overrides and complete application arrangements. Keep engine-owned actions connected through named parts or command hooks.
+
+| Configuration | How to use it |
+| --- | --- |
+| One control | Pass `className`, `icon`, or `hidden` to its named part. |
+| A different element | Use `asChild` on a part that supports it. Forward its attributes and events. |
+| One registered slot | Use `Toolbar.Slot` with `slotId`. |
+| A built-in group | Use `Toolbar.Group` with its registered `id`. Add children or set `hidden`. |
+| An application group | Choose another `id`, then set its label, position, and overflow behavior. |
+| A complete arrangement | Set `preset={false}` and compose all visible controls. |
+| Save behavior | Pass `onSave` to `Toolbar`. The handler decides where saved bytes go. |
+| Labels | Pass `t`, or use the active `LocaleProvider` catalog. |
+| Narrow widths | Keep `overflow` enabled, or set `overflow={false}` to allow wrapping. |
+
+Hiding a control changes the interface. It does not disable the same operation in other controls or keyboard commands. Use editor mode and supported protection settings to control editing permission.
+
+### Registered groups and slots
+
+These identifiers come from the shared chrome registry. They identify controls; they do not guarantee that every operation works in every document or mode. A registered operation can remain disabled with the engine's refusal reason. The preset toolbar chooses its visible groups from this registry.
+
+| Group identifier | Slot identifiers |
+| --- | --- |
+| `history` | `history.undo`, `history.redo` |
+| `zoom` | `zoom.level` |
+| `styles` | `styles.style` |
+| `font` | `font.family`, `font.size` |
+| `text` | `text.bold`, `text.italic`, `text.underline`, `text.strike`, `text.color`, `text.highlight`, `text.link` |
+| `script` | `script.super`, `script.sub` |
+| `alignment` | `alignment.left`, `alignment.center`, `alignment.right`, `alignment.justify` |
+| `direction` | `direction.ltr`, `direction.rtl` |
+| `list` | `list.bullet`, `list.numbered`, `list.outdent`, `list.indent`, `list.lineSpacing` |
+| `format` | `format.painter`, `format.clear` |
+| `review` | `review.revisionMarkup`, `review.simpleMarkup`, `review.allMarkup`, `review.noMarkup`, `review.original`, `review.previousChange`, `review.nextChange`, `review.acceptAllChanges`, `review.rejectAllChanges`, `review.paragraphMarks`, `review.protectDocument`, `review.comments`, `review.addComment`, `review.authors`, `review.editingMode` |
+| `contentControl` | `contentControl.showAll`, `contentControl.formFill`, `contentControl.inspector`, `contentControl.remove` |
+| `image` | `image.insert`, `image.properties`, `image.wrap`, `image.altText` |
+| `table` | `table.insert`, `table.borderTarget`, `table.borderColor`, `table.borderStyle`, `table.borderWidth`, `table.cellFill` |
+| `paragraph` | `paragraph.dialog` |
+| `file` | `file.open`, `file.save`, `file.exportMarkdown`, `file.exportPdf`, `file.print`, `file.pageSetup` |
+| `insert` | `insert.textBox`, `insert.footnote`, `insert.endnote`, `insert.pageNumber`, `insert.totalPages`, `insert.sectionPages`, `insert.pageXofY`, `insert.pageBreak`, `insert.sectionBreakNextPage`, `insert.sectionBreakContinuous`, `insert.toc` |
+
+The table controls appear as contextual controls when the selection enters a table. Use named value controls for fonts, colors, styles, image wrapping, and table properties. An ordinary button cannot collect the values those operations need. Use file menu parts for open, export, and print actions with application handlers.
+
+### Application group options
+
+| Prop | Use |
+| --- | --- |
+| `id` | A built-in group identifier or your application group identifier. |
+| `label` | Resolved accessible name and overflow heading. Takes priority over `labelKey`. |
+| `labelKey` | Catalog key for your application group's accessible name and heading. |
+| `after` | Places your group after another group. Applies to application groups. |
+| `priority` | Lower numbers move to the overflow menu first. |
+| `pinned` | Keeps your group on the toolbar at every width. |
+| `hidden` | Removes the group from the toolbar and overflow menu. |
+| `overflowContent` | Supplies the group's content inside the overflow menu. |
+| `className` | Styles the group wrapper. |
+
+Application groups without a priority move before built-in groups. Built-in groups keep their registered labels and collapse rules. Loose application children do not move into overflow. Put them inside a group when they must adapt to width. Avoid pinning more controls than a narrow viewport can hold.
+
+### Application action options
+
+`Toolbar.Action` supplies the toolbar's button styling and selection protection for your application's operation.
+
+| Prop | Use |
+| --- | --- |
+| `label` | Required accessible name and tooltip. Use a resolved application label. |
+| `icon`, `children` | Supplies visible content. |
+| `onSelect` | Runs your application action. |
+| `active` | Sets `aria-pressed` and the active state. |
+| `disabled`, `disabledReason` | Disables the action and explains the reason. |
+| `asChild` | Applies behavior to one custom child element. |
+| `className` | Styles the action. |
+
+### Custom picker parts
+
+`FontFamily` and `StylePicker` provide `Trigger`, `Content`, and `Item` parts. Their items take `value`, which identifies the font family or paragraph style. Use their hooks when you need a different picker design.
+
+`useFontFamily()` returns `value`, `options`, `isEnabled`, and `setValue`. `useParagraphStyle()` returns the same members with document paragraph styles as options. A `null` value can mean a mixed selection. Do not display it as a selected document value.
+
+Use `useEditorCommand` for command controls. It returns `execute`, `isActive`, `isEnabled`, and `disabledReason`. The engine checks the command before execution. Display a refusal reason when a command becomes unavailable. Preserve the document selection on pointer presses, as the example explains.
 
 ## React and Vue reference
 

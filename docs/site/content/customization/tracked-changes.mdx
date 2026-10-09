@@ -1,6 +1,6 @@
 ---
 title: 'Tracked changes'
-description: 'Choose a review sidebar or tracked change balloons, then customize colors, marks, and review controls.'
+description: 'Customize DOCX editor tracked changes: review sidebar, tracked change balloons, author colors, text marks, and review controls.'
 category: 'Customization'
 ---
 
@@ -114,7 +114,7 @@ With `revisionsIn: 'balloons'`, the review pane lists comments only. Each tracke
 
 Moving the caret into a change does not open its tracked change balloon. The tracked change balloon shows the author, the date, and the changed words. It lists replies, has a reply field, and has **Accept** and **Reject** buttons. A deletion followed by an insertion from the same author appears as one replacement.
 
-Escape, typing in the document, or a click elsewhere on the page closes the tracked change balloon. A tracked change balloon that **Next Change** opens takes the keyboard focus, so the user can press Tab to reach **Accept** and **Reject**. Balloons open only in **All Markup**.
+Escape, typing in the document, or a click elsewhere on the page closes the tracked change balloon. A tracked change balloon that **Next Change** opens takes the keyboard focus, so the user can press Tab to reach **Accept** and **Reject**. Tracked change balloons open only in **All Markup**.
 
 With tracked change balloons, a document that has tracked changes and no comments does not open the pane. Switching to `'balloons'` closes an open pane that has nothing left to list.
 
@@ -261,7 +261,7 @@ export function ReviewDisplaySwitch() {
         onMouseDown={keepCaret}
         onClick={() => showChangesIn('balloons')}
       >
-        Changes in balloons
+        Tracked change balloons
       </button>
       <button
         type="button"
@@ -314,7 +314,7 @@ function showMarkers(next: CommentMarkerStyle) {
       @mousedown.prevent
       @click="showChangesIn('balloons')"
     >
-      Changes in balloons
+      Tracked change balloons
     </button>
     <button
       type="button"
@@ -387,6 +387,76 @@ Use `ColorByChangeType` to color unmatched insertions and deletions by kind. Aut
 Viewer preferences stay outside the DOCX file and collaboration state. `trackFormatting` also controls future formatting revisions. Keep text marks so color is not the only indicator.
 
 <CustomizationDemo topic="tracked-changes" />
+
+### Markup option reference
+
+Use these viewer preferences to customize tracked changes in your DOCX editor. Each text category accepts `mark`, `color`, and `background`.
+
+| Category     | Default mark          | Default color | Default background |
+| ------------ | --------------------- | ------------- | ------------------ |
+| `insertions` | `underline`           | `byAuthor`    | `none`             |
+| `deletions`  | `strikethrough`       | `byAuthor`    | `none`             |
+| `movedFrom`  | `doubleStrikethrough` | `green`       | `none`             |
+| `movedTo`    | `doubleUnderline`     | `green`       | `none`             |
+| `formatting` | `none`                | `byAuthor`    | `none`             |
+
+Text marks accept `none`, `colorOnly`, `bold`, `italic`, `underline`, `doubleUnderline`, `strikethrough`, and `doubleStrikethrough`. Deletion and moved-from marks also accept `hidden`, `caret`, and `pound`. A hidden deletion remains a pending change. It still needs an accessible review action.
+
+Colors accept `auto`, `byAuthor`, or a named markup color. Backgrounds accept `none`, `byAuthor`, or a named markup color. Named colors are `black`, `blue`, `turquoise`, `green`, `pink`, `red`, `yellow`, `white`, `darkBlue`, `teal`, `darkGreen`, `violet`, `darkRed`, `darkYellow`, `gray50`, `gray25`, `lightBlue`, `lightYellow`, `lightOrange`, `lightPurple`, `lightGreen`, and `gray`.
+
+| Option | Values and defaults |
+| --- | --- |
+| `changedLines.mark` | `none`, `leftBorder`, `rightBorder`, or `outsideBorder`. Default: `outsideBorder`. |
+| `changedLines.color` | `auto`, `byAuthor`, or a named color. Default: `auto`. |
+| `cells.inserted` | `none`, `byAuthor`, or a named color. Default: `lightBlue`. |
+| `cells.deleted` | Same color choices. Default: `pink`. |
+| `cells.merged` | Same color choices. Default: `lightYellow`. |
+| `cells.split` | Same color choices. Default: `lightOrange`. |
+| `trackMoves` | Boolean. Default: `true`; `false` uses deletion and insertion presentation for move marks. |
+| `trackFormatting` | Boolean. Default: `true`; also controls the creation of future formatting revisions. |
+
+The markup setting does not make an unsupported tracked operation available. Keep the engine's refusal behavior for unsupported edits.
+
+### Controlled and runtime settings
+
+Pass `revisionMarkup` to `Root` when application state controls the complete viewer configuration. Save proposed changes from `onRevisionMarkupChange` back into that prop. The callback also receives changes proposed by the markup dialog or API. Without that prop, the editor keeps its own preferences.
+
+`setRevisionMarkup` merges omitted fields with the existing preferences. Controlled prop reconciliation resolves omitted values from the defaults. Choose one configuration owner to prevent application renders from reversing user changes.
+
+Review display modes include `simple-markup`, `all-markup`, `no-markup`, and `original`. A display mode changes the view. It does not accept or reject a tracked change. Use the review controls to make document decisions.
+
+### Author declaration reference
+
+`DocxEditor.AuthorStyle` matches an exact author name in the document. Its changes apply while the declaration is mounted. Removing the declaration restores the remaining author presentation.
+
+| Prop               | Use                                              |
+| ------------------ | ------------------------------------------------ |
+| `author`           | Exact author name to match.                      |
+| `color`            | Document mark color and review interface accent. |
+| `background`       | Resting tracked text background.                 |
+| `activeBackground` | Active tracked change range background.          |
+| `spanClassName`    | Application class on painted tracked text spans. |
+| `avatarUrl`        | Application-approved author avatar URL.          |
+
+### Revision CSS property reference
+
+| Properties | Use |
+| --- | --- |
+| `--doc-revision-insertion`, `--doc-revision-deletion` | Change-type colors under `ColorByChangeType`. |
+| `--doc-revision-insertion-wash`, `--doc-revision-deletion-wash` | Resting tracked text backgrounds. |
+| `--doc-revision-insertion-active-bg`, `--doc-revision-insertion-active-border` | Active insertion highlight. |
+| `--doc-revision-deletion-active-bg`, `--doc-revision-deletion-active-border` | Active deletion highlight. |
+| `--doc-revision-other-active-bg` | Active formatting or structural change highlight. |
+| `--doc-revision-format`, `--doc-revision-format-wash` | Formatting change presentation. |
+| `--doc-revision-insertion-decoration-style` | Underline style, such as `solid` or `dotted`. |
+| `--doc-revision-insertion-decoration-thickness` | Underline thickness. Default: `0.06em`. |
+| `--doc-revision-insertion-underline-offset` | Underline distance. Default: `0.15em`. |
+| `--doc-review-change-bar`, `--doc-review-change-bar-width` | Standard change bar color and width. Default width: `1px`. |
+| `--doc-review-change-bar-simple`, `--doc-review-change-bar-simple-width` | Simple markup bar color and width. Default width: `2px`. |
+| `--doc-review-author-0` through `--doc-review-author-7` | Shared author palette. |
+| `--doc-revision-color-<name>` | On-screen value for a named markup color. |
+
+CSS properties affect the on-screen editor. They do not replace the exporter's named print colors.
 
 ### React and Vue markup reference
 

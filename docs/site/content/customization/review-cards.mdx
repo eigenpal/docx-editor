@@ -1,6 +1,6 @@
 ---
 title: 'Comments and review cards'
-description: 'Style comments, change cards, markers, and review actions.'
+description: 'Customize DOCX editor comment boxes and review cards with named parts, author styling, reply controls, and custom templates.'
 category: 'Customization'
 ---
 
@@ -13,6 +13,81 @@ Use `useReviewAuthor()` for the resolved author color and avatar. To choose betw
 To list comments only and open each tracked change in a tracked change balloon at its text, set `revisionsIn: 'balloons'` instead of a filter. A comments-only `filter` hides revision cards and gives no other route to revision decisions. For more information, see [Tracked changes](/docs/2.x/customization/tracked-changes#choose-where-tracked-changes-appear).
 
 <CustomizationDemo topic="review-cards" />
+
+## Comment and review card options
+
+Customize the DOCX editor review column separately from its comment boxes and tracked change cards. The review module keeps document state. These components control its presentation.
+
+### Review column configuration
+
+| Prop                | Default or use                                                      |
+| ------------------- | ------------------------------------------------------------------- |
+| `className`         | Styles the review column.                                           |
+| `card.className`    | Adds a class to every card.                                         |
+| `preset`            | `true`; use `false` to compose the column yourself.                 |
+| `stack`             | `true`; prevents cards from overlapping.                            |
+| `gap`               | Pixel distance between stacked cards.                               |
+| `filter`            | Chooses which review items this column shows.                       |
+| `structural`        | `true`; keeps structural decisions in the sidebar.                  |
+| `formatting`        | `false`; formatting with page anchors uses tracked change balloons. |
+| `furniture`         | Adds application content at the column's start while it is open.    |
+| `t`                 | Resolves review labels.                                             |
+| `hidden`, `asChild` | Controls the column part's rendering.                               |
+
+The column owns the spacing between stacked cards. Use `gap` instead of adding card margins. When `stack={false}`, cards stay at their raw text anchors. Filtering the column does not resolve, delete, accept, or reject an item. Keep every required review decision reachable through another surface when you hide it here.
+
+### Named review parts
+
+| Part                          | What you can customize                               |
+| ----------------------------- | ---------------------------------------------------- |
+| `List`                        | Item rendering and complete card templates.          |
+| `Card`                        | Card wrapper, shape, background, and custom element. |
+| `Avatar`, `Author`, `Time`    | Author identity and metadata presentation.           |
+| `Summary`                     | Comment text or tracked change summary presentation. |
+| `Accept`, `Reject`            | Tracked change decision controls.                    |
+| `Resolve`, `Reopen`, `Delete` | Comment thread actions.                              |
+| `Replies`                     | Existing replies.                                    |
+| `Reply`                       | Reply input and submission controls.                 |
+| `Draft`                       | Comment draft input and submission controls.         |
+| `AddComment`                  | Opens a comment draft from the review column.        |
+| `Empty`                       | Empty review state.                                  |
+| `Markers`                     | Collapsed review markers and per-item icons.         |
+| `Balloon`                     | Built-in tracked change balloon class or visibility. |
+
+Standard review parts accept `className`, `hidden`, `asChild`, and children where supported. Action parts also accept `icon`. `Markers` accepts `className`, `hidden`, and an icon or an item-dependent icon callback. Its geometry props come from the review column. Keep those supplied values in an override. `Balloon` accepts only `className` and `hidden`. Use the tracked changes guide for a complete replacement.
+
+### Card states and CSS properties
+
+Select your own card class with these attributes. Presence attributes use selectors such as `[data-active]`, rather than `[data-active="true"]`.
+
+| Attribute                 | Meaning                                               |
+| ------------------------- | ----------------------------------------------------- |
+| `data-kind`               | Comment, custom item, or tracked change kind.         |
+| `data-active`             | The active review item.                               |
+| `data-resolved`           | A resolved comment thread.                            |
+| `data-resolved-miniature` | The built-in collapsed resolved comment presentation. |
+| `data-review-author`      | Author name.                                          |
+| `data-review-author-slot` | Assigned author color slot.                           |
+| `data-node-name`          | Custom document node type on a custom review card.    |
+
+| CSS property | Use |
+| --- | --- |
+| `--doc-card` | Resting card surface. |
+| `--doc-review-card-active-bg` | Active card surface. |
+| `--doc-card-shadow`, `--doc-card-shadow-strong` | Resting and stronger card shadows. |
+| `--doc-review-author-0` through `--doc-review-author-7` | Author palette shared with document marks. |
+| `--doc-review-avatar-ink` | Initials on filled author avatars. |
+| `--doc-comment-bg`, `--doc-comment-border` | Resting comment range highlight. |
+| `--doc-comment-active-bg`, `--doc-comment-active-border` | Active comment range highlight. |
+| `--doc-comment-resolved-active-bg`, `--doc-comment-resolved-active-border` | Active resolved comment range highlight. |
+
+Author declarations can set a specific author's color and avatar. Use [Tracked changes](/docs/2.x/customization/tracked-changes#set-author-colors-and-avatars) for the shared author configuration.
+
+### Complete custom comment boxes
+
+Use `List` item rendering for a complete custom card template. Keep the `Card` context around parts that read the current item. Use `useReviewItem` inside that context to read the selected item's view. Use `useReviewAuthor(item.author)` for its author presentation.
+
+Keep actions connected to review state and engine capability checks. A custom comment box must still show failed submissions and unavailable actions. Preserve reply input focus during typing. Preserve document selection when an action only opens interface controls. Resolved built-in comment cards support a compact presentation and an expanded thread. Replacing the whole card also replaces that presentation, so implement the states your application needs.
 
 ## React and Vue reference
 

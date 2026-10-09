@@ -1,6 +1,6 @@
 ---
 title: 'Dialogs'
-description: 'Replace dialog parts while keeping validation, focus, and draft state.'
+description: 'Customize DOCX editor dialogs and popups with named parts, application renderers, draft state, validation, and CSS tokens.'
 category: 'Customization'
 ---
 
@@ -13,6 +13,72 @@ Keep a title, error region, Apply action, and Cancel action. Draft hooks provide
 Popup entries cover page setup, paragraph settings, links, fields, content controls, revision markup, export, and print feedback.
 
 <CustomizationDemo topic="dialogs" />
+
+## Dialog and popup configuration reference
+
+Use the DOCX editor popup registry to choose automatic renderers. Use named dialog parts to change presentation while retaining the existing draft controller.
+
+### Popup registry keys
+
+| Key                      | Surface                                                       |
+| ------------------------ | ------------------------------------------------------------- |
+| `pageSetup`              | Page dimensions, orientation, margins, and application scope. |
+| `paragraph`              | Paragraph formatting, indentation, spacing, and tabs.         |
+| `revisionMarkup`         | Tracked change viewer preferences.                            |
+| `textFormField`          | Legacy text form field properties.                            |
+| `invalidTextFormField`   | Feedback for an invalid text form field value.                |
+| `imageProperties`        | Image dimensions and related properties.                      |
+| `imageAltText`           | Image alternative text.                                       |
+| `noteProperties`         | Footnote or endnote properties.                               |
+| `notePreview`            | Note preview.                                                 |
+| `notesContextMenu`       | Note actions.                                                 |
+| `contentControlWidget`   | Content control input UI.                                     |
+| `contentControlCheckbox` | Application renderer for checkbox presses.                    |
+| `contentControlPicture`  | Application renderer for picture presses.                     |
+| `hyperlink`              | Hyperlink popup.                                              |
+| `contentControl`         | Content control inspector.                                    |
+| `equation`               | Equation popup.                                               |
+| `contextMenu`            | Document context menu.                                        |
+| `export`                 | Export progress and errors.                                   |
+| `print`                  | Print progress and errors.                                    |
+
+A `false` entry disables automatic rendering for that key. It does not disable the underlying operation. For export and print, the operation still runs without its progress surface. When you replace an input popup, provide a usable application path for its operation.
+
+The composed editor explicitly owns hyperlink, content control, equation, and context menu surfaces unless the registry configures them. The packaged editor supplies defaults for those surfaces. An explicit popup entry takes priority over packaged shortcut props.
+
+### Dialog parts and draft state
+
+Standard composed dialogs expose `Header`, `Title`, `Body`, `Footer`, `Field`, `Error`, `Apply`, and `Cancel`. The revision markup dialog also exposes `Reset`. Use the specific dialog's exported types to find its valid field names.
+
+| Configuration                 | How it works                                                   |
+| ----------------------------- | -------------------------------------------------------------- |
+| Root `className`, `style`     | Styles the dialog surface.                                     |
+| Root `preset`                 | Defaults to `true`; `false` renders your supplied arrangement. |
+| Part `className`, `style`     | Adds presentation overrides to a named part.                   |
+| Part `hidden`                 | Removes that part from the arrangement.                        |
+| Part `asChild`                | Applies the part's wiring to one custom child.                 |
+| `Field name`                  | Identifies the field to replace or hide.                       |
+| Part accessibility attributes | Adds `id`, `title`, and `aria-label` where supported.          |
+| Part `data-*` attributes      | Adds application identification attributes.                    |
+
+The default part's command wiring takes priority over conflicting props. Custom child components must forward supplied attributes, events, and references. Keep Apply, Cancel, errors, and accessible titles in a complete custom arrangement.
+
+The dialog controller exposes `values`, `setValue`, `errors`, `isEnabled`, `apply`, and `cancel`. Apply validates and commits the draft. Cancel discards it. The paragraph controller also reports mixed values. The revision markup controller provides `reset`. Use the controller for custom inputs instead of writing directly on each keystroke.
+
+### Page setup fields
+
+| Field                                                    | Value                         |
+| -------------------------------------------------------- | ----------------------------- |
+| `pageWidth`, `pageHeight`                                | Numeric dimensions in inches. |
+| `orientation`                                            | `portrait` or `landscape`.    |
+| `marginTop`, `marginBottom`, `marginLeft`, `marginRight` | Numeric margins in inches.    |
+| `scope`                                                  | `document` or `section`.      |
+
+Retain the controller's unit conversion and validation when you replace these inputs. Use [Appearance](/docs/2.x/customization/appearance#size-typography-and-layer-reference) for dialog typography, padding, radius, and gap properties.
+
+### Popup lifetime
+
+Keep the renderer's supplied session and close props when you wrap a popup. A session can end when the document loads, the editor detaches, or another session replaces it. Check a session's cancellation signal before an asynchronous action applies its result. Do not retain a draft controller after its dialog closes. The built-in dialog surface manages focus trapping and restores focus when it closes. A separate application modal must preserve those behaviors.
 
 ## React and Vue reference
 
@@ -106,9 +172,13 @@ Create the wrapper in React. Forward the supplied props to retain the editor ses
 
 ```tsx
 import { DocxEditor, definePopup } from '@docx-editor.dev/react';
-import type { DocxEditorPageSetupDialogProps, DocxEditorPopups } from '@docx-editor.dev/react';
+import type {
+  DocxEditorPageSetupDialogProps,
+  DocxEditorPopups,
+  DocxEditorRootProps,
+} from '@docx-editor.dev/react';
 
-function ContractPageSetup(props: DocxEditorPageSetupDialogProps) {
+export function ContractPageSetup(props: DocxEditorPageSetupDialogProps) {
   return (
     <DocxEditor.PageSetupDialog {...props}>
       <DocxEditor.PageSetupDialog.Title>Contract page setup</DocxEditor.PageSetupDialog.Title>
@@ -125,8 +195,22 @@ const popups: DocxEditorPopups = {
   pageSetup: definePopup(ContractPageSetup),
 };
 
-// Pass this map to the Root in the reference composition.
-<DocxEditor.Root document={bytes} fonts={fonts} popups={popups} />;
+export function ContractDialogEditor({
+  bytes,
+  fonts,
+}: {
+  bytes: Uint8Array;
+  fonts: DocxEditorRootProps['fonts'];
+}) {
+  return (
+    <DocxEditor.Root document={bytes} fonts={fonts} popups={popups}>
+      <DocxEditor.Menu />
+      <DocxEditor.Viewport style={{ height: 520 }}>
+        <DocxEditor.Content />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  );
+}
 ```
 
 </Framework>

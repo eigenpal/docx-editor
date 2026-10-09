@@ -83,7 +83,7 @@ const { document: template } = useDocxSource('/templates/brand.docx');
 
 The style dropdown lists paragraph styles from the document. Applying a style uses its fonts, colors, spacing, and configured `next` style. When `next` selects a body style, pressing Enter after a heading starts a body paragraph.
 
-Set `w:qFormat` to include a style in the dropdown. Use `w:semiHidden` or `w:hidden` to exclude it.
+The picker lists paragraph styles without filtering `w:qFormat`, `w:semiHidden`, or `w:hidden`. Use a custom picker to restrict the displayed options.
 
 ## Tables
 

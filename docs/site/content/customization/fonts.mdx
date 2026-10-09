@@ -1,6 +1,6 @@
 ---
 title: 'Fonts'
-description: 'Supply font bytes for measurement and expose font controls.'
+description: 'Configure DOCX editor fonts with validated font bytes, substitutions, on-demand loading, and React and Vue font pickers.'
 category: 'Customization'
 ---
 
@@ -13,6 +13,76 @@ The contract preview uses packaged fonts. Select text and use the font picker to
 Embedded DOCX fonts load automatically. Font names from the document do not authorize remote font requests.
 
 <CustomizationDemo topic="fonts" />
+
+## Font configuration reference
+
+The DOCX editor needs font bytes for text shaping and page layout. Choose the supplied font sources, selectable families, substitutions, and loading behavior.
+
+| Input to `Root.fonts` | Use |
+| --- | --- |
+| `FontConfigurationFragment` | Supplies font sources, substitutions, or selectable families. |
+| `FontConfiguration` | Supplies a complete configuration with defaults and limits. |
+| `FontResolver` | Loads application-approved faces after document font requests become known. |
+
+### Configuration fields
+
+| Field | What you can customize |
+| --- | --- |
+| `sources` | Validated font bytes and their exact family, weight, and style descriptors. |
+| `supportedFamilies` | Selectable provider families. Listing a family performs no fetch. |
+| `substitutions` | Maps a requested face to a supplied substitute face. |
+| `defaultFont` | Family and `sizeHalfPoints` for text with no font declaration. Default: Calibri, `22` half-points. |
+| `language` | BCP-47 language tag for language-sensitive text shaping. |
+| `epoch` | Identifies the configured font byte set. |
+| `maxFontBytes` | Per-face admission limit. Lower it to restrict accepted font resources. |
+
+Use `composeFontConfiguration` to combine font origins. Earlier sources take priority for the same family, weight, and style. A directly supplied face takes priority over a substitution for that face. The composition freezes its configuration and arrays.
+
+### URL loading options
+
+`loadFonts` returns admitted `sources` and typed `failures`. A failed source does not discard the other loaded faces. Cancellation rejects the loading operation through `signal.reason`.
+
+| Option                | Use                                                                     |
+| --------------------- | ----------------------------------------------------------------------- |
+| `sources[].url`       | An explicit application-selected font URL.                              |
+| `sources[].family`    | The font family supplied by those bytes.                                |
+| `sources[].weight`    | Integer from `1` through `1000`.                                        |
+| `sources[].style`     | `normal` or `italic`.                                                   |
+| `sources[].hash`      | Optional expected `sha256:` content hash. Mismatched bytes are refused. |
+| `sources[].faceIndex` | Font collection face index. Defaults to `0`.                            |
+| `cacheName`           | Cache API bucket. Defaults to `docx-editor-fonts`.                      |
+| `fetcher`             | Application fetch implementation. Defaults to global `fetch`.           |
+| `maxFontBytes`        | Per-source byte limit. Defaults to the engine's hard limit.             |
+| `signal`              | Cancels the request and its network operations.                         |
+
+The failure reasons are `networkError`, `httpError`, `hashMismatch`, `overLimit`, `emptyResponse`, `invalidRequest`, and `malformed`. Display useful feedback from the failure list before the application starts editing. A cache entry undergoes content validation before use.
+
+### Local bytes and on-demand loading
+
+Use `createFontSource` when you already hold bytes from a file input, bundle, or application storage. It accepts a face descriptor and returns either a source or a typed failure. It also accepts `faceIndex`, an application `id`, and `maxFontBytes` where specified by its types.
+
+A `FontResolver` receives requested `families`, `defaultFamily`, an optional cancellation `signal`, and optional `resolvedFaces`. Use `resolvedFaces` to avoid loading faces supplied by an earlier origin. Return a configuration, fragment, or `undefined` when the resolver covers none of the requested fonts. The editor calls the resolver after loading a document and when editing requests another family.
+
+Use an application-owned family lookup to select remote assets. Do not turn document font names directly into network URLs. A network-backed resolver makes document opening fetch the assets your application approves.
+
+### Font picker customization
+
+Use `Toolbar.FontFamily` for the default picker. Use its `Trigger`, `Content`, and `Item` parts to change the picker layout. Each item uses its family name as `value`. Use `useFontFamily()` for a complete application picker.
+
+| Hook member        | Meaning                                                           |
+| ------------------ | ----------------------------------------------------------------- |
+| `value`            | Current family, or `null` for mixed values or no document.        |
+| `options`          | Validated, deduplicated, sorted configured and document families. |
+| `isEnabled`        | Whether the engine allows the font operation.                     |
+| `setValue(family)` | Applies a permitted font family change.                           |
+
+A selectable family does not prove that its bytes are loaded. The font catalog includes standard and document-declared choices. Use your loading configuration to provide those faces and their regular, bold, italic, and bold italic variants.
+
+### Layout and loading limits
+
+Embedded document fonts enter the font pipeline automatically when usable. Opening a document does not automatically fetch remote font declarations. A CSS `@font-face` rule changes browser rendering but does not supply the shaping pipeline with bytes. Missing font coverage can change line breaks and page layout. Use `onFontError` for initialization failures and the loader's failure list for individual URL failures.
+
+Keep the font configuration's identity stable after editing starts. Changing `Root.fonts` creates another editor instance and resets selection and undo history. Use a stable on-demand resolver when users must choose fonts during editing.
 
 ## React and Vue reference
 
@@ -205,6 +275,70 @@ onUnmounted(() => {
 </FrameworkTabs>
 
 Use `useFonts()` with `packagedFonts()` to load the packaged families. `fonts` identity changes remount a Root. Load a stable configuration before editing starts.
+
+## Build an application picker
+
+Mount this picker inside `DocxEditor.Root` with the document surface. The hook reads the loaded document and checks whether the selection supports a change. A native select retains its normal keyboard and focus behavior.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { useFontFamily } from '@docx-editor.dev/react';
+
+export function ContractFontPicker() {
+  const { value, options, isEnabled, setValue } = useFontFamily();
+  return (
+    <label>
+      Font family
+      <select
+        aria-label="Font family"
+        disabled={!isEnabled}
+        value={value ?? ''}
+        onChange={(event) => setValue(event.currentTarget.value)}
+      >
+        <option value="" disabled>
+          Mixed or default
+        </option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { useFontFamily } from '@docx-editor.dev/vue';
+
+const { value, options, isEnabled, setValue } = useFontFamily();
+function onChange(event: Event) {
+  setValue((event.target as HTMLSelectElement).value);
+}
+</script>
+
+<template>
+  <label>
+    Font family
+    <select aria-label="Font family" :disabled="!isEnabled" :value="value ?? ''" @change="onChange">
+      <option value="" disabled>Mixed or default</option>
+      <option v-for="option in options" :key="option" :value="option">
+        {{ option }}
+      </option>
+    </select>
+  </label>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
 
 ## More control
 

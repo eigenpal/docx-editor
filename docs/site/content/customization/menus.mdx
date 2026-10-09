@@ -1,6 +1,6 @@
 ---
 title: 'Menus'
-description: 'Choose file menu and context menu actions.'
+description: 'Customize DOCX editor menus, context menu actions, file handlers, labels, keyboard behavior, and application commands.'
 category: 'Customization'
 ---
 
@@ -11,6 +11,55 @@ Use `ContextMenu.Slot` with a `slotId`, such as `format.clear`, for a packaged c
 Context changes determine which commands the editor enables. A hidden control does not block the corresponding operation.
 
 <CustomizationDemo topic="menus" />
+
+## Menu configuration reference
+
+Customize the DOCX editor menu bar and context menu independently. Both use the same command state and menu row components.
+
+| Surface | Options |
+| --- | --- |
+| `DocxEditor.Menu` | `className`, `t`, `preset`, `overflow`, and child menus. |
+| File operations | `fileName`, `onOpen`, `onOpenFile`, `onSave`, and `exporters`. |
+| Page setup | `onPageSetup` opens application UI when `popups.pageSetup` is absent. |
+| Application support | `onReportIssue` replaces the support action; `reportIssue={false}` removes it. |
+| `DocxEditor.ContextMenu` | `className`, `t`, `preset`, `disabled`, and `onOpenChange`. |
+| Registered actions | `Menu.Item` or `ContextMenu.Slot` with `slotId`. |
+| Application actions | A custom row with your label, handler, and disabled state. |
+| Sections | `Group`, `Separator`, and `Submenu` parts. |
+
+Set context menu `disabled` to restore the browser context menu. Set `preset={false}` to render your chosen menu arrangement. A named menu child replaces its menu in place. Other child menus append to the bar. The built-in menus are `File`, `Format`, `Insert`, `Review`, and `Help`.
+
+### File operation behavior
+
+| Setting | Default behavior or application responsibility |
+| --- | --- |
+| `onOpen` | Opens a file picker when omitted. An override supplies the complete open action. |
+| `onOpenFile` | Receives the file before the default open action loads its bytes. |
+| `onSave` | Saves and downloads the DOCX file when omitted from the menu bar. |
+| `fileName` | Sets the default download name without the file extension. |
+| `exporters` | Supplies Markdown and PDF conversion handlers. Print uses the PDF handler. |
+| `onReportIssue` | Supply your application's support action when you embed the editor. |
+
+Changing menu labels does not change converter behavior. A missing export handler produces an error when the user requests that conversion. Hiding export progress through `popups.export` does not cancel conversion.
+
+### Menu part options
+
+| Part | Options and use |
+| --- | --- |
+| `Menu.Entry` | Generic menu with `id`, `label` or `labelKey`, `icon`, `hidden`, `preset`, and children. |
+| Named menu | `className`, `hidden`, `preset`, and children customize a built-in menu. |
+| `Menu.Item` | `slotId`, `labelKey`, `shortcutKey`, `className`, and `hidden`. Uses engine command state. |
+| `Menu.Row` | `icon`, `shortcut`, `disabled`, `title`, `active`, `selected`, `onSelect`, `className`, and children. |
+| `Menu.Group` | `label` or `labelKey`, `className`, `hidden`, and children. |
+| `Menu.Submenu` | `label` or `labelKey`, `paths`, `className`, and children. |
+| `Menu.Separator` | `className`. |
+| Context menu command part | `icon`, `labelKey`, `shortcutKey`, `className`, and `hidden`. |
+
+Use `title` to explain why a menu row is disabled. Use `shortcut` only when your application or the editor handles that shortcut. The context menu includes selection, clipboard, table, and table-of-contents actions where the engine allows them. Browser clipboard access can refuse Paste. Keep the supplied refusal feedback.
+
+### Keyboard and selection behavior
+
+The built-in menus manage keyboard navigation, Escape, dismissal, and selection protection. A custom row inside a menu retains that menu behavior. If you build a separate menu from hooks, implement accessible keyboard navigation and focus restoration. Keep engine refusal checks for operations that edit the document.
 
 ## React and Vue reference
 

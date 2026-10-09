@@ -1,16 +1,65 @@
 ---
 title: 'Language and locale'
-description: 'Set editor labels and regional formatting independently.'
+description: 'Localize your DOCX editor with translation catalogs, custom interface labels, regional date input, and React and Vue providers.'
 category: 'Customization'
 ---
 
 Use `i18n` for interface labels and `locale` for regional formatting. Changing labels does not translate document text.
 
-Import a shipped catalog from `@docx-editor.dev/i18n`. Pass a partial catalog to override selected labels. Missing values fall back to English.
+Import a shipped catalog from `@docx-editor.dev/i18n`. Pass a partial catalog to override selected labels. Missing values retain the inherited catalog, which defaults to English.
 
 The live selector changes packaged toolbar labels. The contract text and application labels stay in English.
 
 <CustomizationDemo topic="language" />
+
+## DOCX editor language options
+
+Set interface translation and document locale separately. Neither setting translates the document's text.
+
+| Configuration | Scope |
+| --- | --- |
+| `LocaleProvider i18n` | Shared editor interface catalog. |
+| Packaged editor `i18n` | Interface catalog for the packaged editor. |
+| `Root.locale` | Regional date input and engine-generated labels. Default: `en-US`. |
+| `Root.translate` | Live drawing and form-control label resolver. |
+| `Root.tableInteractionLabel` | Table row and column insertion labels. |
+| Toolbar, menu, context menu, and review `t` | Label resolver for that interface region. |
+| Application labels | Your application's own translation catalog. |
+
+### Shipped locale catalogs
+
+Import only the catalogs your application uses from `@docx-editor.dev/i18n`. The `locales` record includes every catalog and therefore includes them all in the bundle.
+
+| Export | Locale             |
+| ------ | ------------------ |
+| `en`   | English            |
+| `de`   | German             |
+| `es`   | Spanish            |
+| `fr`   | French             |
+| `he`   | Hebrew             |
+| `hi`   | Hindi              |
+| `id`   | Indonesian         |
+| `ja`   | Japanese           |
+| `pl`   | Polish             |
+| `ptBR` | Portuguese, Brazil |
+| `tr`   | Turkish            |
+| `zhCN` | Simplified Chinese |
+
+Community catalogs can contain untranslated entries. Missing values and `null` values retain the inherited translation. At the top-level provider, the inherited catalog is English. Nested providers can override selected labels without resetting the outer provider's language.
+
+### Partial catalogs and custom labels
+
+Use the `Translations` type for a partial catalog. Keep the existing nested key structure and placeholder names. Set `_lang` when your custom catalog needs language-specific plural rules. The catalog formatter supports named placeholders and its supported plural message syntax.
+
+`useTranslation()` returns `t` and `catalogue` in both adapters. Use `t` with a typed `TranslationKey` and explicit placeholder values. Keep labels such as an application's approval action in the application catalog. `Toolbar.Action.label` takes resolved text, rather than a catalog key. A host group's literal `label` takes priority over `labelKey`.
+
+If a region's `t` overrides every label, return a useful string for every key it receives. Do not return the key itself as a visible translation. Use the active catalog as a fallback for keys your application does not override.
+
+### Live updates and document direction
+
+Changes to `Root.locale` apply to subsequent edits without replacing the editor instance. Existing stored date formats remain unchanged. Changes to `Root.translate` update generated labels without replacing the instance. Keep document bytes and font configuration stable when you change interface language.
+
+Interface language does not set paragraph direction. Use document formatting and the left-to-right or right-to-left controls for paragraph direction. Keep language-sensitive font shaping in the font configuration's `language` field. Use date fields and form controls to verify regional input behavior in your application.
 
 ## React and Vue reference
 
@@ -96,6 +145,59 @@ const modules = [reviewModule()];
         </DocxEditor.Viewport>
       </DocxEditor.Root>
     </div>
+  </LocaleProvider>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+## Override labels in one region
+
+Mount this toolbar inside your editor root. The nested provider changes two labels and retains the outer provider's other translations. Use the same approach for a menu or review region.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import type { Translations } from '@docx-editor.dev/i18n';
+import { DocxEditor, LocaleProvider } from '@docx-editor.dev/react';
+
+const labels: Translations = {
+  formattingBar: { bold: 'Bold text', italic: 'Italic text' },
+};
+
+export function ContractToolbar() {
+  return (
+    <LocaleProvider i18n={labels}>
+      <DocxEditor.Toolbar preset={false}>
+        <DocxEditor.Toolbar.Bold />
+        <DocxEditor.Toolbar.Italic />
+      </DocxEditor.Toolbar>
+    </LocaleProvider>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import type { Translations } from '@docx-editor.dev/i18n';
+import { DocxEditor, LocaleProvider } from '@docx-editor.dev/vue';
+
+const labels: Translations = {
+  formattingBar: { bold: 'Bold text', italic: 'Italic text' },
+};
+</script>
+
+<template>
+  <LocaleProvider :i18n="labels">
+    <DocxEditor.Toolbar :preset="false">
+      <DocxEditor.Toolbar.Bold />
+      <DocxEditor.Toolbar.Italic />
+    </DocxEditor.Toolbar>
   </LocaleProvider>
 </template>
 ```
