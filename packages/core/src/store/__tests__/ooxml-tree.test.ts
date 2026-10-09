@@ -162,6 +162,20 @@ describe('canonical typed OOXML tree', () => {
     }
   });
 
+  test('a long attribute list finds duplicates in linear time', () => {
+    // File input sets the attribute count. A pairwise scan of 50,000 names took seconds.
+    const names = Array.from({ length: 50_000 }, (_, index) => `a${index}="x"`).join(' ');
+    const started = performance.now();
+    expect(readOoxmlPart(`<x ${names}/>`, metadata).ok).toBe(true);
+    // Two prefixes for one namespace: a duplicate only the expanded-name check sees.
+    const duplicate = `<x xmlns:a="urn:same" xmlns:b="urn:same" ${names} a:id="1" b:id="2"/>`;
+    expect(readOoxmlPart(duplicate, metadata)).toMatchObject({
+      ok: false,
+      reason: 'duplicate-expanded-attribute',
+    });
+    expect(performance.now() - started).toBeLessThan(2_000);
+  });
+
   test('a rejected name stays rejected on every read', () => {
     // The shared name table stores only names that passed, so a bad name is checked again.
     for (let read = 0; read < 2; read += 1) {

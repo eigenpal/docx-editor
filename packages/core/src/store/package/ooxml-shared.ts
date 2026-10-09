@@ -96,6 +96,37 @@ export function splitQNameShared(authoredName: string): ExpandedName {
   return name;
 }
 
+/** Attribute lists shorter than this find duplicates by a scan instead of a set. */
+const SCANNED_ATTRIBUTES = 8;
+
+/**
+ * Throw when `attributes` already holds the expanded name. Most lists are short, and a scan
+ * beats a set and a key string per element. A long list (file input is untrusted) switches to
+ * a set kept in `state`, so the whole check stays linear.
+ */
+export function rejectDuplicateAttribute(
+  attributes: readonly { readonly namespaceUri: string; readonly localName: string }[],
+  namespaceUri: string,
+  localName: string,
+  state: { seen: Set<string> | undefined }
+): void {
+  if (attributes.length < SCANNED_ATTRIBUTES) {
+    for (const earlier of attributes) {
+      if (earlier.localName === localName && earlier.namespaceUri === namespaceUri)
+        throw new TreeReadError('duplicate-expanded-attribute');
+    }
+    return;
+  }
+  if (!state.seen) {
+    state.seen = new Set();
+    for (const earlier of attributes)
+      state.seen.add(expandedKey(earlier.namespaceUri, earlier.localName));
+  }
+  const key = expandedKey(namespaceUri, localName);
+  if (state.seen.has(key)) throw new TreeReadError('duplicate-expanded-attribute');
+  state.seen.add(key);
+}
+
 export function expandedKey(namespaceUri: string, localName: string): string {
   return `${namespaceUri}\u0000${localName}`;
 }

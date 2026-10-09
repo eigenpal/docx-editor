@@ -23,6 +23,7 @@ import {
   WP_NAMESPACE_URI,
   PIC_NAMESPACE_URI,
   knownKindAllowsWmlVal,
+  rejectDuplicateAttribute,
   splitQNameShared,
   validKnownKind,
   validateQNameAttributeValues,
@@ -1676,6 +1677,7 @@ function resolveAttributes(
   readonly hasWmlVal: boolean;
 } {
   const attributes: OoxmlAttribute[] = [];
+  const duplicates = { seen: undefined as Set<string> | undefined };
   let compatibleWithKnownNode = true;
   let hasWmlVal = false;
   // `for...in`: the attribute record has no prototype, and this runs for every element.
@@ -1689,11 +1691,7 @@ function resolveAttributes(
       if (!bindings.has(name.prefix)) throw new TreeReadError('undeclared-prefix');
       if (name.prefix === 'xmlns') throw new TreeReadError('invalid-namespace');
     }
-    // Element attribute lists are short; a scan beats a set and a key string per element.
-    for (const earlier of attributes) {
-      if (earlier.localName === name.localName && earlier.namespaceUri === namespaceUri)
-        throw new TreeReadError('duplicate-expanded-attribute');
-    }
+    rejectDuplicateAttribute(attributes, namespaceUri, name.localName, duplicates);
     if (namespaceUri === XML_NAMESPACE_URI && name.localName === 'space') {
       if (name.prefix === 'xml' && (value === 'default' || value === 'preserve')) {
         attributes.push({
