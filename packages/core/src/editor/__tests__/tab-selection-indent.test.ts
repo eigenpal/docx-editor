@@ -13,7 +13,8 @@ import { createKeyDownHandler } from '../surface-input.ts';
 import { directParagraphProperties } from '../surface-formatting.ts';
 import { INDENT_STEP_TWIPS, nextLeftIndent, tabIndentFor } from '../surface-indent-step.ts';
 import { MAX_PARAGRAPH_INDENT_TWIPS } from '../../layout/paragraph-indent.ts';
-import { mount as mountFixture } from './paginated-surface-fixtures.ts';
+import { mountPaginatedSurface } from '../paginated-surface.ts';
+import { mount as mountFixture, trackedDocx } from './paginated-surface-fixtures.ts';
 
 const mounted: PaginatedSurface[] = [];
 afterEach(() => {
@@ -163,6 +164,19 @@ describe('Tab over a selection', () => {
   });
 });
 
+describe('the document tab grid', () => {
+  test('Tab indents the first line by the default tab stop', () => {
+    const bytes = trackedDocx('<w:defaultTabStop w:val="708"/>');
+    const opened = mountPaginatedSurface(document.createElement('div'), bytes, { scale: 1 });
+    if (!opened.ok) throw new Error(opened.reason);
+    const surface = opened.surface;
+    mounted.push(surface);
+    const ids = press(surface, [0, 0], [0, 7]);
+    expect(indentOf(surface, ids[0]!).firstLine).toBe('708');
+    expect(xml(surface)).toContain('tracked');
+  });
+});
+
 describe('Shift+Tab over a selection', () => {
   test('reverses two Tab presses, the left indent first and then the first line', () => {
     const surface = mount(THREE);
@@ -174,6 +188,16 @@ describe('Shift+Tab over a selection', () => {
     press(surface, [0, 0], [0, 16], true);
     expect(indentOf(surface, ids[0]!).firstLine ?? '0').toBe('0');
     expect(xml(surface)).toContain('Alpha beta gamma');
+  });
+
+  test('steps the leading indent of a right-to-left paragraph back before its first line', () => {
+    const surface = mount(
+      paragraph('Right to left', '<w:pPr><w:bidi/><w:ind w:left="720" w:firstLine="720"/></w:pPr>')
+    );
+    const ids = press(surface, [0, 0], [0, 13], true);
+    expect(indentOf(surface, ids[0]!)).toMatchObject({ left: '0', firstLine: '720' });
+    press(surface, [0, 0], [0, 13], true);
+    expect(indentOf(surface, ids[0]!).firstLine ?? '0').toBe('0');
   });
 
   test('leaves a last paragraph touched only at its start alone, as Tab does', () => {
@@ -190,41 +214,49 @@ describe('Shift+Tab over a selection', () => {
 
 describe('tabIndentFor', () => {
   const at = (paragraphId: string, offset: number) => ({ paragraphId, offset });
-  const reads = (left = 0, firstLine = 0, start = 0) => ({
-    paragraphStart: () => start,
-    indent: () => ({ left, firstLine }),
+  const reads = (start = 0, firstLine = 0, paragraphStart = 0) => ({
+    paragraphStart: () => paragraphStart,
+    indent: () => ({ start, firstLine }),
   });
 
   test('answers null for a caret and for a selection inside one paragraph', () => {
     const caret = { from: at('a', 0), to: at('a', 0) };
     const inside = { from: at('a', 2), to: at('a', 4) };
-    expect(tabIndentFor(caret, ['a'], reads(), 'increase')).toBeNull();
-    expect(tabIndentFor(inside, ['a'], reads(), 'increase')).toBeNull();
+    expect(tabIndentFor(caret, ['a'], reads(), 'increase', 720)).toBeNull();
+    expect(tabIndentFor(inside, ['a'], reads(), 'increase', 720)).toBeNull();
   });
 
   test('drops a last paragraph that is touched only at its start', () => {
     const toC = { from: at('a', 3), to: at('c', 0) };
     const toB = { from: at('a', 3), to: at('b', 0) };
-    expect(tabIndentFor(toC, ['a', 'b', 'c'], reads(), 'increase')).toEqual({
+    expect(tabIndentFor(toC, ['a', 'b', 'c'], reads(), 'increase', 720)).toEqual({
       write: 'stepLeft',
       paragraphs: ['a', 'b'],
     });
-    expect(tabIndentFor(toB, ['a', 'b'], reads(), 'increase')).toBeNull();
+    expect(tabIndentFor(toB, ['a', 'b'], reads(), 'increase', 720)).toBeNull();
   });
 
   test('a hanging or wide first line steps the left indent instead', () => {
     const range = { from: at('a', 0), to: at('a', 2) };
     for (const firstLine of [-360, 800]) {
-      expect(tabIndentFor(range, ['a'], reads(0, firstLine), 'increase')).toEqual({
+      expect(tabIndentFor(range, ['a'], reads(0, firstLine), 'increase', 720)).toEqual({
         write: 'stepLeft',
         paragraphs: ['a'],
       });
     }
   });
 
+  test('an end before the first painted offset of the last paragraph drops it', () => {
+    const range = { from: at('a', 0), to: at('b', 3) };
+    expect(tabIndentFor(range, ['a', 'b'], reads(0, 0, 3), 'increase', 720)).toEqual({
+      write: 'setFirstLine',
+      paragraphs: ['a'],
+    });
+  });
+
   test('a start before the first painted offset is the paragraph start', () => {
     const range = { from: at('a', 3), to: at('a', 6) };
-    expect(tabIndentFor(range, ['a'], reads(0, 0, 3), 'increase')).toEqual({
+    expect(tabIndentFor(range, ['a'], reads(0, 0, 3), 'increase', 720)).toEqual({
       write: 'setFirstLine',
       paragraphs: ['a'],
     });
@@ -232,8 +264,10 @@ describe('tabIndentFor', () => {
 
   test('Shift+Tab clears the first line only once the left indent is gone', () => {
     const range = { from: at('a', 0), to: at('a', 2) };
-    expect(tabIndentFor(range, ['a'], reads(720, 720), 'decrease')?.write).toBe('stepLeft');
-    expect(tabIndentFor(range, ['a'], reads(0, 720), 'decrease')?.write).toBe('clearFirstLine');
+    expect(tabIndentFor(range, ['a'], reads(720, 720), 'decrease', 720)?.write).toBe('stepLeft');
+    expect(tabIndentFor(range, ['a'], reads(0, 720), 'decrease', 720)?.write).toBe(
+      'clearFirstLine'
+    );
   });
 
   test('a step never passes the margin or the bound, and never moves backwards', () => {

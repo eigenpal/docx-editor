@@ -22,6 +22,8 @@ import { sectionAnchorParagraphFor, sectionIndexForCaret } from './section-scope
 import { isTableNested } from '../store/store/tree-op-section-address.ts';
 import type { ListMarkerRecord } from '@docx-editor.dev/core/layout';
 import { markerHolding } from '../layout/line-segments.ts';
+import { defaultTabIntervalFromSettings } from '../layout/paragraph-tabs.ts';
+import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
 import { paragraphTabStopsOf } from './surface-formatting.ts';
 import {
   lineSpacingAttributes,
@@ -432,7 +434,11 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
   }
 
   /** Increase/Decrease Indent over `touched`: a list level, or one tab stop of left indent. */
-  function stepIndent(touched: readonly string[], direction: 'increase' | 'decrease'): boolean {
+  function stepIndent(
+    touched: readonly string[],
+    direction: 'increase' | 'decrease',
+    size = INDENT_STEP_TWIPS
+  ): boolean {
     const step = direction === 'increase' ? 1 : -1;
     const ops: TreeDocOp[] = [];
     for (const paragraphId of touched) {
@@ -461,7 +467,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       // but it is written as the paragraph's own formatting, merged over the paragraph's
       // own `w:pPr` — an op whose base is the cascade is refused (`directParagraphProperties`).
       const current = leftIndentTwipsOf(properties);
-      const next = nextLeftIndent(current, step);
+      const next = nextLeftIndent(current, step, size);
       if (next === current) continue;
       const direct = directParagraphProperties(storyPart(), paragraphId);
       // Only the paragraph's OWN `w:ind` attributes are carried over: `w:ind` cascades
@@ -696,6 +702,8 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       const touched = rectangleCells() === null ? targetParagraphs() : null;
       if (touched === null) return false;
       const layout = currentLayout.value;
+      // Tab moves by the document's default tab stop, the grid its tab characters land on.
+      const step = Math.round(defaultTabIntervalFromSettings(session.settingsRoot()) * 20);
       const tab = tabIndentFor(
         range,
         touched,
@@ -703,23 +711,21 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
           paragraphStart: (paragraphId) => firstPaintedOffset(layout, paragraphId),
           indent: (paragraphId) => {
             const entry = paragraphIndentOf(layout, paragraphId);
-            if (!entry) return { left: 0, firstLine: 0 };
-            return {
-              left: Math.round(entry.indent.left * 20),
-              firstLine: signedFirstLine(entry.indent),
-            };
+            if (!entry) return { start: 0, firstLine: 0 };
+            // Layout sides are physical; the leading side of a right-to-left paragraph is its right.
+            const rtl = paragraphIsRtl(paragraphPropertiesOf(layout, paragraphId));
+            const start = rtl ? entry.indent.right : entry.indent.left;
+            return { start: Math.round(start * 20), firstLine: signedFirstLine(entry.indent) };
           },
         },
-        direction
+        direction,
+        step
       );
       if (tab === null) return false;
       // Handled even when the write is refused or changes nothing: the fallback would type a
       // tab over the selection, and a refused indent must never become a deletion.
-      if (tab.write === 'stepLeft') stepIndent(tab.paragraphs, direction);
-      else
-        writeIndent(tab.paragraphs, {
-          firstLine: tab.write === 'setFirstLine' ? INDENT_STEP_TWIPS : 0,
-        });
+      if (tab.write === 'stepLeft') stepIndent(tab.paragraphs, direction, step);
+      else writeIndent(tab.paragraphs, { firstLine: tab.write === 'setFirstLine' ? step : 0 });
       return true;
     },
 

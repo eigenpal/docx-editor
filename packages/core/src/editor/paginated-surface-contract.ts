@@ -200,7 +200,7 @@ export interface PaginatedSurface {
    *
    * A selection over two or more paragraphs steps the left indent of each one. A selection
    * in one paragraph that starts at the paragraph start, whole or partial, works on the
-   * first line: Tab sets a first-line indent of one tab stop, or steps the left indent when
+   * first line: Tab sets a first-line indent of one default tab stop (`w:defaultTabStop`), or steps the left indent when
    * the first line already has that indent or more, or a hanging indent. Shift+Tab steps the
    * left indent back first, then clears the first-line indent.
    *

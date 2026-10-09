@@ -19,8 +19,8 @@ export const INDENT_STEP_TWIPS = 720;
  * never moves the other way: an authored value past the bound, or a negative one, stays put
  * rather than jumping to the bound.
  */
-export function nextLeftIndent(current: number, step: number): number {
-  const next = current + step * INDENT_STEP_TWIPS;
+export function nextLeftIndent(current: number, step: number, size = INDENT_STEP_TWIPS): number {
+  const next = current + step * size;
   return step > 0
     ? Math.max(current, Math.min(MAX_PARAGRAPH_INDENT_TWIPS, next))
     : Math.min(current, Math.max(0, next));
@@ -64,8 +64,11 @@ export interface TabIndent {
 export interface TabIndentReads {
   /** The first offset the paragraph paints. Hidden leading content is not a start. */
   paragraphStart(paragraphId: string): number;
-  /** Resolved indent in twips; `firstLine` is signed, negative when hanging. */
-  indent(paragraphId: string): { readonly left: number; readonly firstLine: number };
+  /**
+   * Resolved indent in twips. `start` is the logical leading side, `w:left` or `w:start`,
+   * also in a right-to-left paragraph. `firstLine` is signed, negative when hanging.
+   */
+  indent(paragraphId: string): { readonly start: number; readonly firstLine: number };
 }
 
 /**
@@ -75,33 +78,36 @@ export interface TabIndentReads {
  *
  * - A selection over two or more paragraphs steps the left indent of all of them.
  * - A selection in one paragraph that starts at the paragraph start, whole or partial,
- *   works on the first line. Tab sets a first-line indent of one step. When the first line
- *   already has one step or more, or a hanging indent, Tab steps the left indent instead.
+ *   works on the first line. Tab sets a first-line indent of one `step`, the document's
+ *   default tab stop. When the first line already has one step or more, or a hanging
+ *   indent, Tab steps the left indent instead.
  *   Shift+Tab reverses that: it steps the left indent back first, then clears the
  *   first-line indent.
  * - A caret, or a selection in one paragraph that starts inside the text, answers `null`.
  *
  * `touched` is every paragraph from the range start to the range end, in order. A range
- * that ends at offset 0 of the next paragraph selects only the paragraph mark, so that
- * last paragraph does not count.
+ * that ends at the start of the next paragraph (its first painted offset or before) selects
+ * only the paragraph mark, so that last paragraph does not count.
  */
 export function tabIndentFor(
   range: { readonly from: SemanticPosition; readonly to: SemanticPosition },
   touched: readonly string[],
   reads: TabIndentReads,
-  direction: 'increase' | 'decrease'
+  direction: 'increase' | 'decrease',
+  step: number
 ): TabIndent | null {
   const { from, to } = range;
   if (from.paragraphId === to.paragraphId && from.offset === to.offset) return null;
-  const paragraphs = touched.length > 1 && to.offset === 0 ? touched.slice(0, -1) : touched;
+  const markOnly = touched.length > 1 && to.offset <= reads.paragraphStart(to.paragraphId);
+  const paragraphs = markOnly ? touched.slice(0, -1) : touched;
   if (paragraphs.length > 1) return { write: 'stepLeft', paragraphs };
   if (from.offset > reads.paragraphStart(from.paragraphId)) return null;
-  const { left, firstLine } = reads.indent(from.paragraphId);
+  const { start, firstLine } = reads.indent(from.paragraphId);
   if (direction === 'increase') {
-    const opensFirstLine = firstLine >= 0 && firstLine < INDENT_STEP_TWIPS;
+    const opensFirstLine = firstLine >= 0 && firstLine < step;
     return { write: opensFirstLine ? 'setFirstLine' : 'stepLeft', paragraphs };
   }
-  return { write: left <= 0 && firstLine > 0 ? 'clearFirstLine' : 'stepLeft', paragraphs };
+  return { write: start <= 0 && firstLine > 0 ? 'clearFirstLine' : 'stepLeft', paragraphs };
 }
 
 /**
