@@ -416,6 +416,10 @@
     {
       "uid": "Word.Body#bookmarks",
       "reason": "Implemented by DocxEditor's object model as a story-scoped discovery accessor over the same BookmarkCollection that Word exposes on Range. Upstream has no Body#bookmarks member to select for exact conformance, while putting this collection on Document would falsely imply aggregation across the main body, headers, footers and notes. Each Body answers only the bookmarks declared in that body's own story."
+    },
+    {
+      "uid": "Word.Paragraph#readingOrder",
+      "reason": "Implemented by DocxEditor's object model as an addition: Office.js has no paragraph direction member on Paragraph or ParagraphFormat, in the pinned declarations or in the preview declarations. The name follows the desktop object model's ParagraphFormat.ReadingOrder, and the values follow Word.SectionDirection ('LeftToRight', 'RightToLeft'). Reads answer only the paragraph's own w:bidi and return 'Unknown' where the paragraph states none, so a direction set by a style is not resolved. Writes state w:bidi on the paragraph, write the explicit off value for 'LeftToRight', and keep w:jc as authored. With change tracking on, a write records a paragraph property revision."
     }
   ],
   "divergences": [

@@ -103,9 +103,32 @@ Justified paragraphs in compatibility mode 15 or later can compress ordinary spa
 
 ### Right-to-left paragraphs
 
-`Paragraph.alignment` reads and writes the stored `w:jc` value. In a right-to-left paragraph, `Left` selects the leading edge at the right margin. `Right` selects the trailing edge at the left margin. Alignment does not change paragraph direction.
+`Paragraph.readingOrder` sets and reads the base direction of a paragraph. Office.js has no paragraph direction member, so `readingOrder` is a DocxEditor addition. Its values follow `Word.SectionDirection`: `LeftToRight` and `RightToLeft`.
 
-The document automation API does not expose a paragraph direction property. For browser editor commands, see [Right-to-left text](/docs/2.x/guides/right-to-left).
+The following example makes the first paragraph right to left, then reads the direction back:
+
+```ts
+await runtime.run(async (context) => {
+  const paragraph = context.document.body.paragraphs.getFirst();
+  paragraph.readingOrder = 'RightToLeft';
+  paragraph.insertText('שלום עולם', 'Replace');
+  await context.sync();
+
+  paragraph.load('readingOrder');
+  await context.sync();
+  console.log(paragraph.readingOrder); // 'RightToLeft'
+});
+```
+
+A read returns the direction that the paragraph states itself. If the paragraph states no direction, the read returns `Unknown`, because its paragraph style can still make it right to left. The runtime rejects `Unknown` on writes with `InvalidArgument`.
+
+A `RightToLeft` write adds `<w:bidi/>` to the paragraph. A `LeftToRight` write adds `<w:bidi w:val="0"/>`, so the paragraph is left to right even when its style is right to left. The direction shares one paragraph-property write with `alignment`, the indents, and the spacing in the same sync. A load that you queue in the same sync as a write returns the value from before the write; load the property in a later sync.
+
+With `document.changeTrackingMode` set to `TrackMineOnly`, a direction write records a paragraph property revision. Accepting it keeps the new direction; rejecting it restores the previous paragraph properties.
+
+`Paragraph.alignment` reads and writes the stored `w:jc` value. In a right-to-left paragraph, `Left` selects the leading edge at the right margin. `Right` selects the trailing edge at the left margin. Alignment does not change paragraph direction, and a `readingOrder` write keeps `w:jc` as authored.
+
+Text direction inside a paragraph is a run property. A `readingOrder` write does not add `w:rtl` to the runs. For browser editor commands, see [Right-to-left text](/docs/2.x/guides/right-to-left).
 
 ## Apply an existing style
 

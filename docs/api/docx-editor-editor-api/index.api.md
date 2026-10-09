@@ -1059,6 +1059,8 @@ export class Paragraph extends ModelObject implements PromisedItem {
     protected onLoad(request: ResolvedLoadOptions): void;
     // @internal
     static promised(context: RequestContext, label: string, nullable: boolean): Paragraph;
+    get readingOrder(): ParagraphReadingOrder;
+    set readingOrder(value: ParagraphReadingOrder);
     get rightIndent(): number;
     set rightIndent(value: number);
     get shapes(): ShapeCollection;
@@ -1101,6 +1103,9 @@ export class ParagraphCollection extends ItemCollection<Paragraph> {
 
 // @public
 export type ParagraphInsertTextLocation = Extract<RangeInsertTextLocation, 'Replace' | 'Start' | 'End'>;
+
+// @public
+export type ParagraphReadingOrder = 'Unknown' | 'LeftToRight' | 'RightToLeft';
 
 // @public
 class Range_2 extends ModelObject implements PromisedItem {

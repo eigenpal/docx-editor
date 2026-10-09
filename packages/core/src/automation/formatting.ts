@@ -56,6 +56,13 @@ const MAX_HALF_POINTS = 1999;
 export type AutomationAlignment = 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
 
 /**
+ * A paragraph's base direction (`w:bidi`) as this protocol publishes it. `Unknown` is the read
+ * answer for a paragraph that states no direction of its own: its style may still make it
+ * right-to-left, and this lane does not resolve the cascade.
+ */
+export type AutomationReadingOrder = 'Unknown' | 'LeftToRight' | 'RightToLeft';
+
+/**
  * What a range agrees about its characters' formatting.
  *
  * `null` means "no agreed value": the runs disagree, or none of them authors the property. The
@@ -110,6 +117,7 @@ export interface AutomationParagraphFormatRead {
   readonly spaceBefore: number | null;
   readonly spaceAfter: number | null;
   readonly widowControl: boolean | null;
+  readonly readingOrder: AutomationReadingOrder;
 }
 
 /**
@@ -136,6 +144,12 @@ export interface AutomationParagraphFormatWrite {
   readonly spaceBefore?: number;
   readonly spaceAfter?: number;
   readonly widowControl?: boolean;
+  /**
+   * `RightToLeft` authors `<w:bidi/>`. `LeftToRight` authors `<w:bidi w:val="0"/>`, the explicit
+   * off value, because only that wins over a right-to-left style this lane does not resolve.
+   * `Unknown` is a read answer and is refused.
+   */
+  readonly readingOrder?: AutomationReadingOrder;
 }
 
 /** Why a formatting value could not be authored. Named so a caller learns the field. */
@@ -282,6 +296,18 @@ const JC_BY_ALIGNMENT: Readonly<Record<string, string>> = Object.freeze({
   Justified: 'both',
 });
 
+/**
+ * The paragraph's own `w:bidi`, read with the on/off values the layout honours: no value, `1`,
+ * `true` and `on` are right-to-left, and every other value is left-to-right.
+ */
+function readingOrderOf(properties: OoxmlElement | undefined): AutomationReadingOrder {
+  const bidi = namedChild(properties, 'bidi');
+  if (!bidi) return 'Unknown';
+  const value = attributeOf(bidi, 'val');
+  if (value === null) return 'RightToLeft';
+  return ['1', 'true', 'on'].includes(value) ? 'RightToLeft' : 'LeftToRight';
+}
+
 function alignmentOf(properties: OoxmlElement | undefined): AutomationAlignment {
   const value = attributeOf(namedChild(properties, 'jc'), 'val');
   if (value === null) return 'Unknown';
@@ -317,6 +343,7 @@ export function paragraphFormatRead(
     spaceBefore: pointsFromTwips(attributeOf(spacing, 'before')),
     spaceAfter: pointsFromTwips(attributeOf(spacing, 'after')),
     widowControl: onOff(namedChild(pPr, 'widowControl')),
+    readingOrder: readingOrderOf(pPr),
   };
 }
 
@@ -512,6 +539,13 @@ export function paragraphFormatProperties(
       localName: 'widowControl',
       ...(request.widowControl ? {} : { attributes: { val: '0' } }),
     });
+  }
+
+  if (request.readingOrder !== undefined) {
+    if (request.readingOrder === 'RightToLeft') properties.push({ localName: 'bidi' });
+    else if (request.readingOrder === 'LeftToRight')
+      properties.push({ localName: 'bidi', attributes: { val: '0' } });
+    else return { ok: false, detail: `readingOrder: ${String(request.readingOrder)}` };
   }
 
   if (properties.length === 0) return { ok: false, detail: 'no formatting was asked for' };

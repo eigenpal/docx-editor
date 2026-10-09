@@ -57,6 +57,15 @@ export type ParagraphAlignment =
   | 'Justified';
 
 /**
+ * A paragraph's base direction, as {@link Paragraph.readingOrder} reads and writes it.
+ *
+ * `Unknown` is a read answer only: the paragraph states no direction of its own.
+ *
+ * @public
+ */
+export type ParagraphReadingOrder = 'Unknown' | 'LeftToRight' | 'RightToLeft';
+
+/**
  * One paragraph: what it says, what it is, and the ways it can be changed.
  *
  * Identity is the document's own. {@link Paragraph.uniqueLocalId} is the `w14:paraId` the file
@@ -166,6 +175,30 @@ export class Paragraph extends ModelObject implements PromisedItem {
 
   set alignment(value: ParagraphAlignment) {
     this.#authorFormat('alignment', requireAlignment(value, `${this.path.label}.alignment`));
+  }
+
+  /**
+   * The paragraph's base direction: `LeftToRight`, `RightToLeft`, or `Unknown` where the
+   * paragraph states none of its own.
+   *
+   * A DocxEditor addition: Office.js has no paragraph direction member. The values follow
+   * `Word.SectionDirection`. `Unknown` rather than `LeftToRight`, because the paragraph style may
+   * still make the paragraph right-to-left, and this read does not resolve the style cascade.
+   *
+   * A write states the direction on the paragraph itself. `LeftToRight` writes the explicit
+   * off value, so it also wins over a right-to-left style. The write keeps `alignment` as
+   * authored: in a right-to-left paragraph, `Left` and `Right` name the start and end edges.
+   * With change tracking on, the write is recorded as a paragraph formatting revision.
+   */
+  get readingOrder(): ParagraphReadingOrder {
+    return this.loadedProperty<ParagraphReadingOrder>('readingOrder');
+  }
+
+  set readingOrder(value: ParagraphReadingOrder) {
+    this.#authorFormat(
+      'readingOrder',
+      requireReadingOrder(value, `${this.path.label}.readingOrder`)
+    );
   }
 
   /** Points. Negative for a hanging indent — the first line starting left of the rest. */
@@ -503,6 +536,7 @@ const FORMAT_FIELDS = [
   'lineSpacing',
   'spaceBefore',
   'spaceAfter',
+  'readingOrder',
 ] as const;
 
 type FormatField = (typeof FORMAT_FIELDS)[number];
@@ -525,6 +559,14 @@ function requireAlignment(value: unknown, target: string): ParagraphAlignment {
     fail({ code: 'InvalidArgument', target });
   }
   return value as ParagraphAlignment;
+}
+
+/** A direction a write may name. `Unknown` is a read answer, so a write of it is refused. */
+function requireReadingOrder(value: unknown, target: string): ParagraphReadingOrder {
+  if (value !== 'LeftToRight' && value !== 'RightToLeft') {
+    fail({ code: 'InvalidArgument', target });
+  }
+  return value;
 }
 
 function requirePoints(value: unknown, target: string): number {
