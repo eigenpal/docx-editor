@@ -96,3 +96,12 @@ test('a script run smaller than its text leaves the line alone', () => {
   expect(line!.baseline).toBeCloseTo(12 * 0.9, 5);
   expect(line!.box.height).toBeCloseTo(12 * 1.15, 5);
 });
+
+test('auto multiple spacing scales a raised line without its position offset', () => {
+  // 12pt text and a 14pt run raised 4.5pt: the line is 17.1pt above and 3pt below the
+  // baseline. 1.5 spacing adds half of the 14pt run's own 16.1pt line, not half of 20.1pt.
+  const spacing = '<w:spacing w:before="0" w:after="0" w:line="360" w:lineRule="auto"/>';
+  const raised = '<w:r><w:rPr><w:position w:val="9"/><w:sz w:val="28"/></w:rPr><w:t>R</w:t></w:r>';
+  const [line] = lines(`<w:p><w:pPr>${spacing}</w:pPr>${run('Text')}${raised}</w:p>`);
+  expect(line!.box.height).toBeCloseTo(14 * 0.9 + 4.5 + 12 * 0.25 + (14 * 1.15) / 2, 5);
+});

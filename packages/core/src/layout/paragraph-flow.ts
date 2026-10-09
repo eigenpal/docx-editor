@@ -17,6 +17,7 @@ import {
 import { spaceShrinkWordTail } from './space-shrink-word-tail.ts';
 import { wordFollowsOnlyTabs } from './leading-tab-word.ts';
 import { growScriptLineMetrics } from './paragraph-mark-metrics.ts';
+import { spacedLine } from './positioned-run-spacing.ts';
 import { markRunPropertiesWithoutCharacterStyle } from './paragraph-mark-run.ts';
 import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
 import {
@@ -64,7 +65,7 @@ import {
   TAB_LEADER_GLYPH,
   type ResolvedTabStops,
 } from './paragraph-tabs.ts';
-import { SINGLE_LINE_SPACING, applyLineSpacing } from './paragraph-style.ts';
+import { SINGLE_LINE_SPACING } from './paragraph-style.ts';
 import {
   DEFAULT_RUN_STYLE,
   displayText,
@@ -911,7 +912,7 @@ export function breakParagraph(
           pageBreaksIgnored
         )
       : naturalHeight;
-    const spaced = applyLineSpacing(lineSpacing, spacingBase, line.baseline);
+    const spaced = spacedLine(lineSpacing, spacingBase, line.baseline, line.spans, measurer);
     if (!scalesTextBandOnly) line.baseline = spaced.baseline;
     const floored = firstLine && lineSpacing.rule !== 'exact' ? markerBaselineFloor : 0;
     const markerFloor = Math.max(0, floored - line.baseline);
