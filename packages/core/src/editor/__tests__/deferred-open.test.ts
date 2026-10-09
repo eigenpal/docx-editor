@@ -3,7 +3,7 @@
 // What these tests pin down: a document past the yield threshold mounts behind
 // `requestAnimationFrame` + a task, and `snapshot().isOpening` is true for exactly that
 // window while `isLoading` stays false (the gate-safe flag must not flicker); the
-// previous document stays mounted under the window; `save`/`exec` inside the window
+// previous document is released when the new one starts opening; `save`/`exec` inside the window
 // flush the scheduled mount instead of refusing; detach hands the scheduled document to
 // the next attach; destroy cancels it; and a SMALL document keeps the synchronous path,
 // because every existing synchronous caller depends on it.
@@ -143,7 +143,7 @@ describe('deferred open of a large document', () => {
     editor.destroy();
   });
 
-  test('load() over a mounted document keeps the old pages through the window', async () => {
+  test('load() over a mounted document releases the old one at once', async () => {
     const container = document.createElement('div');
     const editor = createDocxEditor({ container, document: SMALL });
     let selectionEvents = 0;
@@ -152,9 +152,12 @@ describe('deferred open of a large document', () => {
     });
 
     editor.load(LARGE);
-    // The old document is still what is on screen; the overlay state says why.
+    // The old document is gone at once: no stale pages, chrome state or memory under the
+    // loading screen. The overlay state says what is happening.
     expect(editor.snapshot().isOpening).toBe(true);
-    expect(container.textContent).toContain('small document body');
+    expect(editor.snapshot().isLoading).toBe(false);
+    expect(editor.surface).toBeNull();
+    expect(container.textContent).not.toContain('small document body');
     // Scheduling emitted, so a subscribed host re-reads and shows its overlay.
     expect(selectionEvents).toBeGreaterThan(0);
 

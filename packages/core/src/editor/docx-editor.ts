@@ -800,10 +800,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         scroller.scrollLeft = 0;
       }
     }
-    // A big document into a live container yields one painted frame first. Detached
-    // loads only stash bytes; the later `attach` decides whether the mount earns a yield.
-    if (!immediate && container && openScheduler.shouldYield(bytes)) openScheduler.schedule(bytes);
-    else mountBytes(bytes);
+    // A big live open yields a frame first and drops the old document now: no stale chrome.
+    if (!immediate && container && openScheduler.shouldYield(bytes)) {
+      teardownSurface();
+      openScheduler.schedule(bytes);
+    } else mountBytes(bytes);
   }
 
   function reportFontError(error: EditorFontError): void {
@@ -871,8 +872,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const explicit: FontConfigurationBase | undefined =
         typeof configured === 'function' ? normalizeFontResolverResult(raw) : raw;
       // Awaiting handed control back: this load may have been superseded (or the editor
-      // destroyed) while the resolver ran, and installing its answer would overwrite a
-      // newer document's fonts.
+      // destroyed) while the resolver ran; installing its answer would overwrite newer fonts.
       if (destroyed || seq !== loadSeq) {
         if (seq === loadSeq) fontsResolving = false;
         return;
