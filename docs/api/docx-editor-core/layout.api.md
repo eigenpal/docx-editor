@@ -1026,6 +1026,7 @@ export interface FieldAtomMarker {
         readonly picture?: string;
     };
     readonly pageRef?: PageRefFieldProjection;
+    readonly resultEnd?: number;
     readonly resultStart?: number;
 }
 
