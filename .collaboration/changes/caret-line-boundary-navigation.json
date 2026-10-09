@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Home on a wrapped line skipped its first character, End stopped before trailing spaces or at a visual edge, and a caret placed at a wrap showed at the end of the upper line.",
+  "after": "Home and End use logical line edges. A caret placed at a wrap shows at the start of the next line, and End or a click past the line end keeps the upper line as local affinity.",
+  "reason": "Line affinity stays local to each editor. It adds no shared field or document operation, and remote edits keep it.",
+  "tests": [
+    "packages/core/src/layout/__tests__/caret-line-boundary-navigation.test.ts",
+    "packages/core/src/editor/__tests__/surface-caret-line-boundary.test.ts",
+    "packages/pro/src/collaboration/__tests__/caret-line-boundary-affinity.test.ts"
+  ],
+  "changeset": "caret-line-boundary-navigation",
+  "migration": null
+}

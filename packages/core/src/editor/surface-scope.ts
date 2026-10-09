@@ -5,6 +5,7 @@
 // formatting / IME / undo path at that story — never a parallel reduced editor.
 
 import {
+  caretAt,
   caretStopsForBlocks,
   documentOrder,
   moveCaret,
@@ -389,8 +390,15 @@ export function navigateInActiveScope(
   desiredX: number | null,
   active: HeaderFooterScopeBinding | null,
   noteScopeId?: string | null,
-  measurer?: TextMeasurer
-): { position: SemanticPosition; desiredX: number | null; pageIndex?: number } | null {
+  measurer?: TextMeasurer,
+  lineId?: string
+): {
+  position: SemanticPosition;
+  desiredX: number | null;
+  pageIndex?: number;
+  /** The caret on the line the motion chose, when its offset also starts the next line. */
+  caret?: CaretGeometry;
+} | null {
   const storyStops = active
     ? activeStoryCaretStops(layout, active, measurer)
     : noteScopeId
@@ -399,9 +407,17 @@ export function navigateInActiveScope(
   const moved = moveCaret(layout, position, command, desiredX, {
     ...(measurer ? { measurer } : {}),
     ...(storyStops ? { stops: storyStops } : {}),
+    ...(lineId !== undefined ? { lineId } : {}),
   });
   if (!moved) return null;
-  if (!storyStops) return moved;
+  if (!storyStops) {
+    if (moved.lineId === undefined) return moved;
+    const caret = caretAt(layout, moved.position, {
+      ...(measurer ? { measurer } : {}),
+      preferredLineId: moved.lineId,
+    });
+    return { position: moved.position, desiredX: moved.desiredX, ...(caret ? { caret } : {}) };
+  }
   // Prefer an exact stop match so continuation-page geometry carries its pageIndex through
   // word/line gestures that rebuild the position without returning the stop itself.
   const stop = storyStops.find(

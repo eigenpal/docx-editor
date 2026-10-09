@@ -244,16 +244,18 @@ describe('a trailing hard break opens a line to type on', () => {
     expect(caret.x).toBe(second.box.x);
   });
 
-  test('a SOFT wrap still answers with the first line — the offset is genuinely shared', () => {
-    // The rule is scoped to hard breaks on purpose: at a wrap point both answers are
-    // defensible and the end of the visual line is the conventional one.
+  test('a SOFT wrap answers with the line that starts there, unless a line is preferred', () => {
+    // Typing at the shared offset lands on the next line, so the caret shows there. The end
+    // of the first line is the same offset with that line's affinity (End, a click past it).
     const words = Array.from({ length: 60 }, (_, index) => `w${index}`).join(' ');
     const layout = lay(`<w:p><w:r><w:t>${words}</w:t></w:r></w:p>`);
     const fragment = paragraphs(layout)[0]!;
     expect(fragment.lines.length).toBeGreaterThan(1);
     const boundary = fragment.lines[0]!.range.end;
-    const caret = caretAt(layout, { paragraphId: fragment.paragraphId, offset: boundary })!;
-    expect(caret.lineId).toBe(fragment.lines[0]!.id);
+    const position = { paragraphId: fragment.paragraphId, offset: boundary };
+    expect(caretAt(layout, position)!.lineId).toBe(fragment.lines[1]!.id);
+    const upper = fragment.lines[0]!.id;
+    expect(caretAt(layout, position, { preferredLineId: upper })!.lineId).toBe(upper);
   });
 });
 

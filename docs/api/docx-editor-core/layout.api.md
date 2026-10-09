@@ -2036,11 +2036,13 @@ export function mergeListIndent(levelIndent: NumberingLevelIndent, inherited: re
 // @public
 export function moveCaret(layout: SemanticLayout, position: SemanticPosition, command: NavigationCommand, desiredX?: number | null, options?: MoveCaretOptions): {
     desiredX: number | null;
+    lineId?: string;
     position: SemanticPosition;
 } | null;
 
 // @public
 export interface MoveCaretOptions {
+    readonly lineId?: string;
     // (undocumented)
     readonly measurer?: TextMeasurer;
     readonly stops?: readonly CaretGeometry[];

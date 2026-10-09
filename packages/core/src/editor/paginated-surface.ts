@@ -4787,7 +4787,8 @@ export function mountPaginatedSurface(
         desiredX,
         hfScope?.getActive() ?? null,
         noteScopeId(),
-        measurer
+        measurer,
+        selectionSync.selectionLineId()
       );
       if (!moved) return;
       const tocIds = tocParagraphIds();
@@ -4863,7 +4864,7 @@ export function mountPaginatedSurface(
       const next = extend ? target : absorbPlaceholderControls(currentLayout, target);
       const absorbed = !extend && !selectionsEqual(next, target);
       const before = selection;
-      setSelection(next, true, absorbed ? 'none' : 'head');
+      setSelection(next, true, absorbed ? 'none' : 'head', absorbed ? undefined : moved.caret);
       // Landed, like every other reveal here: a form field holding an invalid value refuses
       // the write and pins the caret where the reader has to fix it.
       if (absorbed && (selection !== before || selectionsEqual(selection, next))) {
