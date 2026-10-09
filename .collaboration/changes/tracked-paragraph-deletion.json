@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Tracked deletion across paragraphs refused in collaboration. A tracked deletion replaced its runs, so text a peer typed concurrently in those runs was lost. A paragraph whose w:pPr concurrent edits moved after a run, or duplicated, put both replicas in an error state.",
+  "after": "Tracked deletion across paragraphs and tracked paragraph deletion work in collaboration. The runs a splice replaces record the products as one split text partition, so concurrent typing follows the struck or remaining text. Every replica shows a paragraph's w:pPr first and the mark's w:rPr in schema position, hides later duplicates, preferring the w:pPr that carries a paragraph-mark revision, and maps local edits back to shared positions. Stamping a paragraph mark keeps the existing w:pPr and w:rPr nodes.",
+  "reason": "No stored field or update changes meaning. The writer records split text aliases with the existing representation, which released readers already resolve. The ordering rule is applied when reading shared state and writes nothing. For the shapes it orders, released readers refuse the paragraph and report an error, so no working released behavior changes. Editing a mark in place uses ordinary child splices that released readers apply.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-tracked-paragraph-deletion.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-tracked-paragraph-deletion.test.ts",
+    "packages/core/src/automation/__tests__/tracked-paragraph-deletion.test.ts"
+  ],
+  "changeset": "tracked-paragraph-deletion",
+  "migration": null
+}

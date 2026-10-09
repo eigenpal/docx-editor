@@ -94,21 +94,32 @@ export function applyParagraphMarkRevision(
   const otherProperties = rPrRest.filter((child) => !isMarkRevision(child));
   // `ins` before `del`, per the group's own order.
   const marks = kind === 'ins' ? [mark, ...siblingMark] : [...siblingMark, mark];
-  const rPr = build(mint(), 'runProperties', 'rPr', [], [...marks, ...otherProperties]);
+  // The existing containers keep their ids. A fresh `w:pPr` reads, to a collaborating
+  // replica, as removing the old one, and a peer's concurrent property edit inside the old one
+  // then lands in a container that no longer exists.
+  const rPr = build(
+    previousRPr?.id ?? mint(),
+    'runProperties',
+    'rPr',
+    previousRPr && previousRPr.kind !== 'textValue' ? previousRPr.attributes : [],
+    [...marks, ...otherProperties]
+  );
   const pPrRest = properties
     ? childrenOf(properties).filter((child) => !isWmlNamed(child, 'rPr'))
     : [];
   // `CT_PPr` puts `w:rPr` AFTER the base properties — only `w:sectPr` and `w:pPrChange` may
   // follow it — so an existing `w:jc` stays in front. Placing `w:rPr` first looked tidier and
   // produced a `w:pPr` the tree invariants reject, which is the invariant reading the schema
-  // correctly. A FRESH id, because the rebuilt container is a new node.
+  // correctly.
   const trailing = pPrRest.filter(isTrailingParagraphProperty);
   const leading = pPrRest.filter((child) => !isTrailingParagraphProperty(child));
-  const pPr = build(mint(), 'paragraphProperties', 'pPr', properties ? properties.attributes : [], [
-    ...leading,
-    rPr,
-    ...trailing,
-  ]);
+  const pPr = build(
+    properties?.id ?? mint(),
+    'paragraphProperties',
+    'pPr',
+    properties ? properties.attributes : [],
+    [...leading, rPr, ...trailing]
+  );
 
   return fromEdit(replaceChildren(part, paragraph.id, [pPr, ...rest], options), effect);
 }

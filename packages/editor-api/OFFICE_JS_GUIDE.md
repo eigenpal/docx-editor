@@ -182,6 +182,7 @@ await runtime.run(async (context) => {
 | Insert before or after a range | `range.insertText(text, 'Before')` or `'After'` |
 | Replace a range | `range.insertText(text, 'Replace')` |
 | Delete range content | `range.delete()` or `range.clear()` |
+| Propose removing a paragraph | `paragraph.delete()` |
 | Read the current mode | `document.load('changeTrackingMode')`, then sync and read the property |
 | Make an intentional permanent edit | Explicitly set `changeTrackingMode = 'Off'` |
 
@@ -189,14 +190,15 @@ await runtime.run(async (context) => {
 
 | Tracked edit | Supported behavior |
 | --- | --- |
-| Range text | Insert, replace, or delete text; adjacent sibling paragraphs work outside collaboration |
+| Range text | Insert, replace, or delete text; deletions can span adjacent sibling paragraphs, and replacements across paragraphs work outside collaboration |
+| Paragraph deletion | `paragraph.delete()` records the text and the paragraph mark as deletions; accept removes the paragraph |
 | Font and paragraphs | Track font, paragraph-format, and paragraph-style edits as property revisions |
 | Paragraph insertion | Track inserted text and paragraph marks |
 | Lists | Track creation, membership, and level changes; configure newly proposed definitions |
 | Tables | Track complete insertion, cell values, row additions, and partial row deletions |
 | Content controls | Wrap nonempty ordinary text in `PlainText`, `RichText`, or `DatePicker` controls outside collaboration |
 
-Tracked range edits refuse table and wrapper boundaries. Collaborative tracked range edits must remain within one paragraph. Targets that touch foreign pending revisions refuse. Continuation can extend the runtime author's text and paragraph proposals. Simple fields with nested fields or other result containers refuse tracked deletion and replacement. Direct result runs remain supported.
+Tracked range edits refuse table and wrapper boundaries. In collaboration, a tracked replacement must remain within one paragraph. A tracked paragraph deletion fails with `NotSupported` for the last paragraph of a story, table cell, or content control, a paragraph directly before a table or block content control, a paragraph whose mark ends a section, a paragraph with an inline content control, and a paragraph that a complex field crosses. It fails with `NotImplemented` when the paragraph has pending revisions or the next paragraph starts with another author's pending change. One refusal refuses the whole sync. Text that another participant types into struck text joins the proposed deletion: reject restores it, and accept removes it with no separate revision. Targets that touch foreign pending revisions refuse. Continuation can extend the runtime author's text and paragraph proposals. Simple fields with nested fields or other result containers refuse tracked deletion and replacement. Direct result runs remain supported.
 
 An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require permanent edits. Tracked table and cell value replacement refuse in collaboration. Row deletion suggestions must leave a row without a pending deletion. Pending row or cell structure revisions refuse tracked row deletion with `NotImplemented`.
 

@@ -6,9 +6,75 @@ import type { PlannedOperation } from './plan.ts';
 import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
 import type { AutomationErrorCode } from './protocol.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
-import { resolveSpanRef, storyOfSpanRef, spanValue, type ResolvedRange } from './spans.ts';
-import { parentNodeOf } from '../store/package/ooxml-edit.ts';
+import {
+  resolveParagraphHandle,
+  resolveSpanRef,
+  storyOfSpanRef,
+  spanValue,
+  type ResolvedRange,
+} from './spans.ts';
 import { proposalInputError, proposalRevisionError } from './proposals.ts';
+import { markStrikeRefusal, nextSiblingParagraph } from './tracked-paragraph-marks.ts';
+
+/**
+ * The proposal a tracked text or paragraph edit makes, or the refusal that ends it.
+ *
+ * Deleting a paragraph strikes its text and its paragraph mark. That is a deletion up to the
+ * start of the next paragraph, so it needs a next paragraph in the same container. The last
+ * paragraph of a story, table cell, or content control has no mark a reviewer can remove.
+ */
+export function trackedProposalOf(
+  operation: AutomationOperation,
+  author: string,
+  handles: AutomationHandleTable,
+  packageReads: AutomationPackageReads
+): AutomationOperation | PlannedOperation {
+  if (operation.op === 'insertText')
+    return {
+      op: 'proposeInsertion',
+      span: { start: operation.at, end: operation.at },
+      text: operation.text,
+      where: 'Before',
+      author,
+    };
+  if (operation.op === 'replaceSpan')
+    return { op: 'proposeReplacement', span: operation.span, text: operation.text, author };
+  if (operation.op !== 'deleteParagraph') return operation;
+  const paragraph = resolveParagraphHandle(operation.paragraph, handles, packageReads);
+  if (!paragraph.ok)
+    return {
+      ok: false,
+      error: {
+        code: paragraph.code,
+        message: 'that handle does not name a paragraph',
+        detail: paragraph.detail,
+      },
+    };
+  const { story, paragraphId, index } = paragraph.value;
+  const reads = packageReads.story(story);
+  const nextId = reads?.paragraphIds[index + 1];
+  if (
+    !reads ||
+    nextId === undefined ||
+    nextSiblingParagraph(reads.part, paragraphId)?.id !== nextId
+  )
+    return {
+      ok: false,
+      error: {
+        code: 'unsupported-capability',
+        message: 'a tracked paragraph deletion needs a next paragraph in the same container',
+        detail: 'paragraph',
+      },
+    };
+  return {
+    op: 'proposeDeletion',
+    span: {
+      start: { paragraph: operation.paragraph, offset: 0 },
+      end: { paragraph: handles.paragraph(nextId, story), offset: 0 },
+    },
+    author,
+  };
+}
 
 export function planProposal(
   operation: Extract<
@@ -43,7 +109,10 @@ export function planProposal(
   if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
   const range = resolved.value;
   if (range && tracked && !insertion && range.start.paragraphId !== range.end.paragraphId) {
-    if (!trackedRangeReplacement)
+    // A deletion strikes text and paragraph marks in place, so concurrent typing in those
+    // paragraphs follows the struck runs. A replacement also writes new text at the first
+    // paragraph's end, which this owner cannot place against concurrent insertions.
+    if (!trackedRangeReplacement && !deletion && operation.text !== '')
       return refuse(
         'unsupported-capability',
         'tracked paragraph-range replacement is unsupported in collaboration',
@@ -55,12 +124,10 @@ export function planProposal(
     const firstIndex = reads.indexOf(range.start.paragraphId);
     const lastIndex = reads.indexOf(range.end.paragraphId);
     const ids = reads.paragraphIds.slice(firstIndex, lastIndex + 1);
-    const parent = parentNodeOf(reads.part, ids[0]!);
-    const positions = ids.map((id) => parent?.children.findIndex((node) => node.id === id) ?? -1);
+    // Position markers, such as a bookmark end between two paragraphs, do not separate them.
     if (
-      !parent ||
-      positions.some(
-        (position, index) => position < 0 || (index > 0 && position !== positions[index - 1]! + 1)
+      ids.some(
+        (id, index) => index > 0 && nextSiblingParagraph(reads.part, ids[index - 1]!)?.id !== id
       )
     )
       return refuse(
@@ -75,9 +142,14 @@ export function planProposal(
       const start = index === 0 ? range.start.offset : 0;
       const end =
         index === ids.length - 1 ? range.end.offset : (reads.rawText(paragraphId) ?? '').length;
-      const error = proposalRevisionError(reads, paragraphId, start, end);
+      const error =
+        proposalRevisionError(reads, paragraphId, start, end) ??
+        (index < ids.length - 1 ? markStrikeRefusal(reads.part, paragraphId) : null);
       if (error) return { ok: false, error };
-      const conflict = claim(reads, paragraphId);
+      // A range that ends at a paragraph's start writes nothing there, so deleting adjacent
+      // paragraphs in one batch does not claim the next one twice.
+      const writes = end > start || index < ids.length - 1;
+      const conflict = writes ? claim(reads, paragraphId) : null;
       if (conflict) return conflict;
       if (end > start) ops.push({ op: 'deleteText', paragraphId, start, end, revision });
       if (index < ids.length - 1)

@@ -319,9 +319,22 @@ export class Paragraph extends ModelObject implements PromisedItem {
     }));
   }
 
-  /** Remove this paragraph and everything in it. */
+  /**
+   * Remove this paragraph and everything in it.
+   *
+   * With `document.changeTrackingMode = 'TrackMineOnly'`, this records a tracked deletion of the
+   * paragraph's text and its paragraph mark. Accepting it removes the paragraph; rejecting it
+   * restores the paragraph.
+   *
+   * A tracked deletion refuses with `NotSupported` for the last paragraph of a story, table
+   * cell, or content control; a paragraph directly before a table or block content control; a
+   * paragraph whose mark ends a section; a paragraph with an inline content control; and a
+   * paragraph that a complex field crosses. It refuses with `NotImplemented` when the paragraph
+   * has pending revisions, or the next paragraph starts with another author's pending change.
+   * A refusal refuses the whole sync.
+   */
   delete(): void {
-    this.command('delete', () => ({ op: 'deleteParagraph', paragraph: this.#handle() }));
+    this.commandDiscarding('delete', () => ({ op: 'deleteParagraph', paragraph: this.#handle() }));
   }
 
   /** Write text over this paragraph or at either edge of it. Answers the written text's range. */

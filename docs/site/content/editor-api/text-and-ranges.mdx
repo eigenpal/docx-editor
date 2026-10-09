@@ -124,12 +124,12 @@ The runtime rejects overlapping edits and batches that combine text edits with f
 | --- | --- |
 | `Body.clear()` | Clears supported story content and leaves one empty paragraph |
 | `Paragraph.clear()` | Clears paragraph content while retaining the paragraph |
-| `Paragraph.delete()` | Deletes the addressed paragraph |
+| `Paragraph.delete()` | Deletes the addressed paragraph, or proposes its deletion while tracking |
 | `Range.clear()` or `Range.delete()` | Deletes the addressed range content |
 
 If a body has no paragraphs, `clear()` fails with `InvalidArgument`. These methods do not flatten protected or unsupported structures to force an edit. Cross-cell boundaries, pending revisions, and preserved structures can cause atomic refusal. Read the target again before choosing another edit.
 
-Structural edits sharing a paragraph can conflict within one sync. Separate dependent edits and reconsider their targets after each successful transaction. For tracked replacements or deletions, use [Tracked changes](/docs/2.x/editor-api/revisions). Tracked range edits support adjacent sibling paragraphs outside collaboration, including paragraphs within one cell. Table and wrapper boundaries refuse. Collaborative tracked range edits must remain within one paragraph. Whole-body replacement and paragraph deletion remain unsupported while tracking.
+Structural edits sharing a paragraph can conflict within one sync. Separate dependent edits and reconsider their targets after each successful transaction. For tracked replacements or deletions, use [Tracked changes](/docs/2.x/editor-api/revisions). Tracked range edits support adjacent sibling paragraphs, including paragraphs within one cell. Table and wrapper boundaries refuse. In collaboration, tracked replacements must remain within one paragraph. Whole-body replacement remains unsupported while tracking. For tracked paragraph deletion, see [Propose removing paragraphs](/docs/2.x/editor-api/revisions#propose-removing-paragraphs).
 
 ## Reach other document objects
 
