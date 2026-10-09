@@ -6,9 +6,10 @@
 import { openTreeSession, type OpenTreeSessionResult } from '@docx-editor.dev/core/binding';
 import type { ReviewModuleContribution } from '../contracts/modules.ts';
 import type { TreeDocxSessionView } from '../binding/tree-session-contract.ts';
-import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
+import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { findNode } from '@docx-editor.dev/core/store';
 import { warmResolverGlyphFontFamilies } from './resolver-glyph-font-families.ts';
+import { warmLayoutNodeDigests } from '../layout/layout-cache.ts';
 
 /** About how long one font warm-up step runs, in milliseconds. */
 const FONT_WARM_STEP_MS = 40;
@@ -53,11 +54,12 @@ type Step = () => void | Promise<unknown> | Step;
 
 /**
  * The prepare steps after the parse, each in a task of its own: scan `session`'s body for
- * font families about {@link FONT_WARM_STEP_MS} at a time, start the font work, then build
- * the reads the mount would otherwise build in its own task (the node index, the review
- * items). The last step returns the font work for the mount to wait on. A long document's
- * scan and reads took seconds in one task. Stops when `current()` no longer holds, because a
- * newer open replaced this one.
+ * font families about {@link FONT_WARM_STEP_MS} at a time, start the font work, digest the
+ * body for layout keys the same way (a table row by row), then build the reads the mount
+ * would otherwise build in its own task (the node index, the review items). The last step
+ * returns the font work for the mount to wait on. A long document's scan, hashing, and reads
+ * took seconds in one task. Stops when `current()` no longer holds, because a newer open
+ * replaced this one.
  */
 export function openSteps(
   session: TreeDocxSessionView,
@@ -66,7 +68,14 @@ export function openSteps(
 ): Step {
   const body = session.part().root.children.find((child) => child.kind === 'body');
   const blocks = body?.kind === 'body' ? (body.children as readonly OoxmlElement[]) : [];
-  let index = 0;
+  // A table's rows come before the table, so its own digest only joins theirs.
+  const digests: OoxmlNode[] = [];
+  for (const block of blocks) {
+    if (block.kind === 'table') for (const row of block.children) digests.push(row);
+    digests.push(block);
+  }
+  let scanned = 0;
+  let digested = 0;
   let fonts: void | Promise<unknown> = undefined;
   const reads: (() => void)[] = [
     () => void findNode(session.part(), ''),
@@ -74,14 +83,20 @@ export function openSteps(
   ];
   const step: Step = () => {
     if (!current()) return;
-    if (index < blocks.length) {
-      const deadline = performance.now() + FONT_WARM_STEP_MS;
-      while (index < blocks.length && performance.now() < deadline) {
-        warmResolverGlyphFontFamilies(session, blocks.slice(index, index + FONT_WARM_BATCH));
-        index += FONT_WARM_BATCH;
+    const deadline = performance.now() + FONT_WARM_STEP_MS;
+    if (scanned < blocks.length) {
+      while (scanned < blocks.length && performance.now() < deadline) {
+        warmResolverGlyphFontFamilies(session, blocks.slice(scanned, scanned + FONT_WARM_BATCH));
+        scanned += FONT_WARM_BATCH;
       }
-      if (index < blocks.length) return step;
-      fonts = startFonts();
+      if (scanned >= blocks.length) fonts = startFonts();
+      return step;
+    }
+    if (digested < digests.length) {
+      while (digested < digests.length && performance.now() < deadline) {
+        warmLayoutNodeDigests(digests.slice(digested, digested + FONT_WARM_BATCH));
+        digested += FONT_WARM_BATCH;
+      }
       return step;
     }
     const read = reads.shift();

@@ -217,10 +217,17 @@ interface LayoutKeyMemoScope {
   readonly paragraphKeys: LayoutKeyMemoMap<object, ParagraphKeyMemo>;
 }
 
+/**
+ * Content digests for live editing, shared by every live cache. A digest depends only on the
+ * node's own immutable content, so two caches can never disagree about one. Sharing lets an
+ * open compute them in short tasks before its first layout ({@link warmLayoutNodeDigests}).
+ */
+const liveNodeDigests = new WeakMap<object, string>();
+
 function createLayoutKeyMemoScope(retainAcrossPasses: boolean): LayoutKeyMemoScope {
   return retainAcrossPasses
     ? {
-        nodeDigests: new WeakMap<object, string>(),
+        nodeDigests: liveNodeDigests,
         paragraphKeys: new WeakMap<object, ParagraphKeyMemo>(),
       }
     : {
@@ -281,6 +288,16 @@ function nodeLayoutIdentity(node: OoxmlNode, scope: LayoutKeyMemoScope): string 
   const digest = layoutTokenDigest(computeNodeToken(node, scope));
   scope.nodeDigests.set(node, digest);
   return digest;
+}
+
+/**
+ * Digest `nodes` into the live digest memo, so a later layout pass keys them without hashing
+ * their content again. Hashing a long table's rows took about a second in the first pass.
+ */
+export function warmLayoutNodeDigests(nodes: readonly OoxmlNode[]): void {
+  for (const node of nodes) {
+    if (node.kind !== 'textValue') nodeLayoutIdentity(node, sharedLayoutKeyMemoScope);
+  }
 }
 
 /** An element whose children are all text values, or that has none. */

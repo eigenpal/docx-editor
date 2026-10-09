@@ -22,7 +22,11 @@ import {
   type PageGeometry,
 } from '../index.ts';
 import { sha256FontBytes } from '../../store/package/sha256.ts';
-import { layoutNodeTokenVisitTestRecorder, PARAGRAPH_KEY_INPUT_ROLES } from '../layout-cache.ts';
+import {
+  layoutNodeTokenVisitTestRecorder,
+  PARAGRAPH_KEY_INPUT_ROLES,
+  warmLayoutNodeDigests,
+} from '../layout-cache.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -213,6 +217,30 @@ describe('the cache is bounded and self-pruning (task 9.2)', () => {
       recorder.reset();
       expect(cache.keyFor!(inputs)).toBe(first);
       expect(recorder.nodeVisits).toBeGreaterThan(0);
+    } finally {
+      recorder.dispose();
+    }
+  });
+
+  test('a live cache keys a warmed node without reading its content again', () => {
+    // A large open digests the body in short tasks before its first layout pass. The live
+    // cache created at mount must read those digests, and its key must equal a cold one.
+    const text = '<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>warmed identity</w:t></w:r></w:p>';
+    const cold = load(text);
+    const warm = load(text);
+    const paragraphOf = (part: OoxmlPart) =>
+      part.root.children
+        .find((node) => node.kind === 'body')!
+        .children.find((node) => node.kind === 'paragraph')!;
+    const inputs = (paragraph: OoxmlNode) =>
+      ({ paragraph, properties: [], width: 100, producer: 'warm' }) as const;
+    const coldKey = createParagraphLayoutCache<never>().keyFor!(inputs(paragraphOf(cold)));
+    warmLayoutNodeDigests([paragraphOf(warm)]);
+    const recorder = layoutNodeTokenVisitTestRecorder();
+    try {
+      const warmKey = createParagraphLayoutCache<never>().keyFor!(inputs(paragraphOf(warm)));
+      expect(recorder.nodeVisits).toBe(0);
+      expect(warmKey).toEqual(coldKey);
     } finally {
       recorder.dispose();
     }
