@@ -142,16 +142,18 @@ describe('a table percentage above 100 extends the table past the text column', 
     expect(resolved.x).toBeCloseTo(-30, 6);
   });
 
-  test('a nested table extends past the cell that holds it', () => {
-    const outer =
+  test('a nested AutoFit or fixed table extends past the cell that holds it', () => {
+    const outer = (layout: string) =>
       '<w:tbl><w:tblPr><w:tblW w:w="6000" w:type="dxa"/><w:tblLayout w:type="fixed"/>' +
       '<w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>' +
       '</w:tblPr><w:tblGrid><w:gridCol w:w="6000"/></w:tblGrid><w:tr><w:tc><w:tcPr>' +
-      `<w:tcW w:w="6000" w:type="dxa"/></w:tcPr>${table()}<w:p/></w:tc></w:tr></w:tbl>`;
-    const cell = layOut(outer, 15).fragment.rows[0]!.cells[0]!;
-    const nested = shape(cell.blocks.find(isTable)!);
-    expect(nested.width).toBeCloseTo(450, 6);
-    expect(nested.lines).toEqual([1, 1]);
+      `<w:tcW w:w="6000" w:type="dxa"/></w:tcPr>${table({ layout })}<w:p/></w:tc></w:tr></w:tbl>`;
+    for (const layout of ['autofit', 'fixed']) {
+      const cell = layOut(outer(layout), 15).fragment.rows[0]!.cells[0]!;
+      const nested = shape(cell.blocks.find(isTable)!);
+      expect(nested.width).toBeCloseTo(450, 6);
+      expect(nested.lines).toEqual([1, 1]);
+    }
   });
 
   test('a right-to-left table extends from its leading edge', () => {
