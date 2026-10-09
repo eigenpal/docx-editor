@@ -14,7 +14,7 @@ import { twipsToPixels } from '../../lib/units';
 import { inject } from 'vue';
 import { ReviewRailContext, useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
-import { useReviewGutter } from '../review-gutter';
+import { useReviewGutter, visibleInlineEndReservation } from '../review-gutter';
 import {
   NAVIGATION_PANE_WIDTH,
   navigationPaneOverlays,
@@ -212,7 +212,12 @@ export function useNavigationPane(
   const overlay = computed(
     () =>
       openVal.value &&
-      navigationPaneOverlays(viewportWidth.value - inlineEndReservation.value, reservation.value)
+      navigationPaneOverlays(
+        // A scrolling review column counts only its visible marker strip.
+        viewportWidth.value -
+          visibleInlineEndReservation(reviewGutter.value, inlineEndReservation.value),
+        reservation.value
+      )
   );
 
   const shift = computed(() => {

@@ -60,6 +60,8 @@ const PAGE = 816;
 /** The closed review pane's marker strip on both edges. */
 const STRIP = 88;
 const VIEWPORT = 900;
+/** The width the scroll container reports; a test may narrow it. */
+let scrollerWidth = VIEWPORT;
 
 /** A rail with no UI: claims the gutter exactly the way `DocxEditor.Review` does. */
 function RailStub() {
@@ -85,7 +87,7 @@ beforeAll(() => {
   Object.defineProperty(target, 'clientWidth', {
     configurable: true,
     get(this: Element) {
-      if (this.classList?.contains('docx-editor__scroll-container')) return VIEWPORT;
+      if (this.classList?.contains('docx-editor__scroll-container')) return scrollerWidth;
       return originalClientWidth?.get ? (originalClientWidth.get.call(this) as number) : 0;
     },
   });
@@ -147,6 +149,16 @@ async function mountBothPanes(overflow: ReviewPaneOverflow) {
   return { editor: editor!, scroller, nav };
 }
 
+/** The stylesheet's padding rule, which the pane measures; these files load no CSS. */
+function withGutterPadding(): () => void {
+  const style = document.createElement('style');
+  style.textContent =
+    '.docx-editor__scroll-container { padding-inline-end: var(--docx-review-gutter); ' +
+    'padding-inline-start: var(--docx-review-gutter-start); }';
+  document.head.append(style);
+  return () => style.remove();
+}
+
 const px = (element: HTMLElement, name: string) =>
   Number.parseFloat(element.style.getPropertyValue(name)) || 0;
 
@@ -185,5 +197,31 @@ describe('overflow is scoped to the review pane', () => {
     await refit(editor);
     expect(editor.snapshot().reviewPaneOpen).toBe(false);
     expect(editor.getZoom()).toBe(open);
+  });
+});
+
+describe('the navigation pane beside a scrolling review column', () => {
+  test("'scroll' at 900px: only the visible marker strip counts, so the pane docks", async () => {
+    const removeStyle = withGutterPadding();
+    try {
+      const { scroller, nav } = await mountBothPanes('scroll');
+      expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('316px');
+      expect(nav.getAttribute('data-open')).toBe('true');
+      expect(nav.classList.contains('docx-nav--overlay')).toBe(false);
+    } finally {
+      removeStyle();
+    }
+  });
+
+  test("'scroll' on a truly narrow viewport still overlays the page", async () => {
+    const removeStyle = withGutterPadding();
+    scrollerWidth = 500;
+    try {
+      const { nav } = await mountBothPanes('scroll');
+      expect(nav.classList.contains('docx-nav--overlay')).toBe(true);
+    } finally {
+      scrollerWidth = VIEWPORT;
+      removeStyle();
+    }
   });
 });

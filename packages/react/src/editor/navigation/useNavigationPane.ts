@@ -16,7 +16,7 @@ import { ZOOM_MAX, ZOOM_MIN } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../../lib/units';
 import { ReviewRailContext, useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
-import { useReviewGutter } from '../review-gutter';
+import { useReviewGutter, visibleInlineEndReservation } from '../review-gutter';
 import {
   NAVIGATION_PANE_WIDTH,
   navigationPaneOverlays,
@@ -222,8 +222,9 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
 
   const reservation = navigationPaneReservation(paneWidth);
   // The review rail takes the inline-end padding, so the room beside the pane is the width
-  // left after it.
-  const overlay = open && navigationPaneOverlays(viewportWidth - inlineEndReservation, reservation);
+  // left after it. A scrolling review column counts only its visible marker strip.
+  const visibleEnd = visibleInlineEndReservation(reviewGutter, inlineEndReservation);
+  const overlay = open && navigationPaneOverlays(viewportWidth - visibleEnd, reservation);
 
   const shift = useMemo(() => {
     if (!open || overlay) return 0;

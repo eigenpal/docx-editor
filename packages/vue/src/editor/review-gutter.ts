@@ -49,6 +49,28 @@ const SCROLLING_COLUMN: ReviewGutter = {
 };
 
 /** Inputs for {@link reviewGutter}. @public */
+
+/**
+ * Whether the gutter is the `overflow: 'scroll'` column that did not fit: the full column
+ * stands at the end, but the viewport scrolls sideways to reach it, so only the marker strip
+ * is on screen beside the page.
+ */
+export function reviewGutterScrolls(gutter: ReviewGutter): boolean {
+  return (
+    gutter.inlineStart === SCROLLING_COLUMN.inlineStart &&
+    gutter.inlineEnd === SCROLLING_COLUMN.inlineEnd
+  );
+}
+
+/**
+ * The part of the measured inline-end padding that is on screen. Under a scrolling column
+ * the cards sit past the visible edge, so only the marker strip takes room beside the page.
+ */
+export function visibleInlineEndReservation(gutter: ReviewGutter, measured: number): number {
+  if (!reviewGutterScrolls(gutter)) return measured;
+  return Math.max(0, measured - (REVIEW_PANE_GUTTER - REVIEW_MARKERS_GUTTER));
+}
+
 export interface ReviewGutterInput {
   readonly open: boolean;
   readonly viewportWidth: number;
