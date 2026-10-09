@@ -107,4 +107,44 @@ describe('fieldResults on createDocxEditor', () => {
       mount({ fieldResults: 'live' as unknown as DocxEditorConfig['fieldResults'] })
     ).toThrow(TypeError);
   });
+
+  for (const [label, link] of [
+    [
+      'complex',
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+        '<w:r><w:instrText xml:space="preserve"> HYPERLINK "https://example.com" </w:instrText></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+        run('the ') +
+        run('site') +
+        '<w:r><w:fldChar w:fldCharType="end"/></w:r>',
+    ],
+    [
+      'simple',
+      `<w:fldSimple w:instr=' HYPERLINK "https://example.com" '>${run('the ')}${run('site')}</w:fldSimple>`,
+    ],
+  ] as const) {
+    test(`a click on an editable ${label} link result opens the link popover`, () => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const editor = createDocxEditor({
+        container,
+        document: docx(`<w:p>${run('See ')}${link}${run('.')}</w:p>`),
+        fieldResults: 'editable',
+      });
+      editors.push(editor);
+      const seen: (string | null)[] = [];
+      editor.setHyperlinkChrome({ onPopover: (activation) => seen.push(activation.link.href) });
+      caret(editor, 6);
+      const anchors = [...container.querySelectorAll<HTMLElement>('a.docx-hyperlink')];
+      expect(anchors.map((anchor) => anchor.textContent)).toEqual(['the site']);
+      const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+      anchors[0]!.querySelector('[data-start]')!.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(true);
+      expect(seen).toEqual(['https://example.com']);
+      // The display text stays editable in place.
+      caret(editor, 8);
+      editor.surface!.type('X');
+      expect(container.querySelector('a.docx-hyperlink')!.textContent).toBe('the Xsite');
+    });
+  }
 });

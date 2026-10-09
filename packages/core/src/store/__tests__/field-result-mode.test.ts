@@ -116,7 +116,7 @@ describe('editing a saved result', () => {
       });
       expect(text(deleted)).toBe(`ab ${result.slice(0, 1)}${result.slice(2)} cd`);
       const emptied = apply(part, { op: 'deleteText', paragraphId: id, start, end });
-      expect(text(emptied)).toBe('ab  cd');
+      expect(text(emptied)).toBe(`ab ${FIELD_ATOM_CHAR} cd`);
       expect(paragraphTextOf(emptied, id)).toBe(`ab ${FIELD_ATOM_CHAR} cd`);
 
       // A range with one end inside the result is refused, never half applied.
@@ -243,7 +243,7 @@ describe('result edges', () => {
           end: offset,
         });
       }
-      expect(text(edited)).toBe('ab  cd');
+      expect(text(edited)).toBe(`ab ${FIELD_ATOM_CHAR} cd`);
       expect(paragraphTextOf(edited, id)).toBe(`ab ${FIELD_ATOM_CHAR} cd`);
     });
   }

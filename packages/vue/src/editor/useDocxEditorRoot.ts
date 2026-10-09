@@ -5,6 +5,7 @@ import type {
   FieldResultsMode,
 } from '@docx-editor.dev/core/editor';
 import { formControlTranslateKey } from './form-control-translate';
+import { warnFieldResultsChanged } from './field-results-warning';
 import {
   computed,
   inject,
@@ -88,7 +89,7 @@ export interface DocxEditorRootProps {
   /**
    * How the reader edits saved field results. `'atomic'` (the default) keeps every field one
    * unit. `'editable'` allows typing, deletion, and selection inside the saved result of a
-   * DATE, MERGEFIELD, HYPERLINK, or similar field. Read when the editor is created. Refused
+   * DATE, MERGEFIELD, HYPERLINK, or similar field. Read once, when the editor is created: a later change is ignored, with a development warning. Refused
    * with a collaboration module.
    */
   fieldResults?: FieldResultsMode;
@@ -138,6 +139,8 @@ export function useDocxEditorRootOwner(
   translateResolver: ComputedRef<(key: string, params?: Record<string, string | number>) => string>;
 } {
   const editorRef = shallowRef<DocxEditorInstance | null>(null);
+  /** The `fieldResults` the current instance was created with. */
+  let createdFieldResults: DocxEditorRootProps['fieldResults'];
   const markupRevision = shallowRef(0);
   let applyingMarkup = false;
   const tick = shallowRef(0);
@@ -231,6 +234,7 @@ export function useDocxEditorRootOwner(
     if (typeof window === 'undefined') return;
     destroyEditor();
     const p = toValue(props);
+    createdFieldResults = p.fieldResults;
     const instance = createDocxEditor({
       ...(p.document !== undefined ? { document: p.document } : {}),
       ...(p.fonts ? { fonts: p.fonts } : {}),
@@ -383,6 +387,15 @@ export function useDocxEditorRootOwner(
     () => [editorRef.value, translateResolver.value] as const,
     ([editor, translate]) => {
       if (editor) editor.setTranslate(translate);
+    },
+    { flush: 'post' }
+  );
+
+  // Read once at creation; a later change is ignored and reported in development.
+  watch(
+    () => [editorRef.value, toValue(props).fieldResults] as const,
+    ([editor, fieldResults]) => {
+      if (editor) warnFieldResultsChanged(createdFieldResults, fieldResults);
     },
     { flush: 'post' }
   );

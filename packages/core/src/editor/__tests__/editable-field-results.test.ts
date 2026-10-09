@@ -14,6 +14,7 @@ import { paragraphTextOf, serializeOoxmlPart } from '@docx-editor.dev/core/store
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import type { PaginatedSurfaceOptions } from '../paginated-surface-contract.ts';
 import { COLLABORATION_FIELD_RESULTS_REFUSAL } from '../field-results-scope.ts';
+import { strFromU8, unzipSync } from 'fflate';
 import { docx } from './paginated-surface-fixtures.ts';
 
 const run = (text: string) => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
@@ -39,9 +40,16 @@ afterEach(() => {
 });
 
 function open(body: string, options: PaginatedSurfaceOptions = { fieldResults: 'editable' }) {
+  return openBytes(docx(body), options);
+}
+
+function openBytes(
+  bytes: Uint8Array,
+  options: PaginatedSurfaceOptions = { fieldResults: 'editable' }
+) {
   const container = document.createElement('div');
   document.body.append(container);
-  const result = mountPaginatedSurface(container, docx(body), { scale: 1, ...options });
+  const result = mountPaginatedSurface(container, bytes, { scale: 1, ...options });
   if (!result.ok) throw new Error(result.reason);
   const surface = result.surface;
   mounted.push({ surface, container });
@@ -234,12 +242,37 @@ describe('selection across a field boundary', () => {
   });
 });
 
+describe('a browser selection across a field boundary', () => {
+  test('a DOM selection from before the field into the result grows to the field end', async () => {
+    const host = open(paragraphWith(MERGE));
+    const spans = [...host.pages.querySelectorAll<HTMLElement>('[data-start]')].filter(
+      (span) => span.dataset.paragraphId === host.paragraphId
+    );
+    const before = spans.find((span) => span.dataset.start === '0')!;
+    const result = spans.find((span) => span.dataset.start === '3')!;
+    const textOf = (span: HTMLElement): Node => {
+      const walker = document.createTreeWalker(span, NodeFilter.SHOW_TEXT);
+      return walker.nextNode()!;
+    };
+    host.pages.dispatchEvent(new Event('selectstart', { bubbles: true, cancelable: true }));
+    await Promise.resolve();
+    const selection = document.getSelection()!;
+    selection.removeAllRanges();
+    const range = document.createRange();
+    range.setStart(textOf(before), 1);
+    range.setEnd(textOf(result), 2);
+    selection.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+    expect(host.offsets()).toEqual([1, 7]);
+  });
+});
+
 describe('the whole field and its result text', () => {
   test('deleting the result text selected by hand keeps an empty field', () => {
     const host = open(paragraphWith(MERGE));
     host.select(3, 7);
     host.surface.deleteBackward();
-    expect(host.text()).toBe('ab  cd');
+    expect(host.text()).toBe('ab \uFFFC cd');
     expect(host.xml()).toContain('MERGEFIELD');
     expect(resultTextOf(host.xml())).toBe('');
   });
@@ -277,6 +310,99 @@ describe('the whole field and its result text', () => {
     expect(deletion).toBeGreaterThan(-1);
     expect(deletion).toBeLessThan(xml.indexOf('w:fldCharType="begin"'));
     expect(xml).toContain('MERGEFIELD');
+  });
+});
+
+describe('typing over selected result text', () => {
+  for (const [label, from, to, result] of [
+    ['the first characters', 3, 5, 'Xme'],
+    ['the whole result', 3, 7, 'X'],
+    ['the last characters', 5, 7, 'NaX'],
+  ] as const) {
+    test(`replacing ${label} keeps the text in the result`, () => {
+      const host = open(paragraphWith(MERGE));
+      host.select(from, to);
+      host.surface.type('X');
+      expect(resultTextOf(host.xml())).toBe(result);
+      expect(host.xml()).toContain('MERGEFIELD');
+      host.surface.undo();
+      expect(resultTextOf(host.xml())).toBe('Name');
+    });
+  }
+
+  test('a tracked replacement of the result end stays in the result', () => {
+    const host = open(paragraphWith(MERGE), {
+      fieldResults: 'editable',
+      editingMode: 'suggest',
+      author: 'Reviewer',
+    });
+    host.select(5, 7);
+    host.surface.type('X');
+    const xml = host.xml();
+    const end = xml.indexOf('w:fldCharType="end"');
+    expect(xml.indexOf('<w:ins ')).toBeLessThan(end);
+    expect(xml.indexOf('<w:del ')).toBeLessThan(end);
+    expect(xml.indexOf('<w:ins ')).toBeGreaterThan(xml.indexOf('w:fldCharType="separate"'));
+  });
+});
+
+describe('an emptied saved result', () => {
+  test('is one unit the caret steps over, and typing lands beside it', () => {
+    const host = open(paragraphWith(MERGE));
+    host.select(3, 7);
+    host.surface.deleteBackward();
+    expect(host.text()).toBe('ab \uFFFC cd');
+    // Typing at the emptied field lands before it, as the reference does.
+    host.surface.type('Z');
+    expect(host.text()).toBe('ab Z\uFFFC cd');
+    expect(resultTextOf(host.xml())).toBe('');
+  });
+
+  test('Backspace after it removes the empty field', () => {
+    const host = open(paragraphWith(MERGE));
+    host.select(3, 7);
+    host.surface.deleteBackward();
+    host.caret(4);
+    host.surface.deleteBackward();
+    expect(host.xml()).not.toContain('MERGEFIELD');
+    expect(host.text()).toBe('ab  cd');
+  });
+
+  test('survives save and reopen, and stays reachable after it', async () => {
+    const host = open(paragraphWith(MERGE));
+    host.select(3, 7);
+    host.surface.deleteBackward();
+    const saved = await host.surface.save();
+    const reopened = openBytes(saved);
+    expect(reopened.text()).toBe('ab \uFFFC cd');
+    reopened.caret(4);
+    reopened.surface.type('Y');
+    expect(reopened.text()).toBe('ab \uFFFCY cd');
+    expect(reopened.xml()).toContain('MERGEFIELD');
+  });
+});
+
+describe('saved values', () => {
+  const DATE = complex(' DATE \\@ "yyyy-MM-dd" ', run('2020-01-02'));
+
+  test('a DATE field opens with its saved value', () => {
+    const host = open(paragraphWith(DATE));
+    expect(host.text()).toBe('ab 2020-01-02 cd');
+    const painted = [...host.pages.querySelectorAll<HTMLElement>('[data-field-result-start]')]
+      .map((span) => span.textContent)
+      .join('');
+    expect(painted).toBe('2020-01-02');
+  });
+
+  test('save keeps a manual edit and does not mark the field for update', () => {
+    const host = open(paragraphWith(DATE));
+    host.select(3, 7);
+    host.surface.type('1999');
+    const saved = host.surface.save();
+    const xml = strFromU8(unzipSync(saved)['word/document.xml']!);
+    expect(resultTextOf(xml)).toBe('1999-01-02');
+    expect(xml).not.toContain('w:dirty');
+    expect(openBytes(saved).text()).toBe('ab 1999-01-02 cd');
   });
 });
 

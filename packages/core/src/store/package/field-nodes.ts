@@ -545,7 +545,8 @@ function fieldTypeOf(instruction: string): string {
  * - `editable-result`: a FORMTEXT input, with its form behavior.
  * - `saved-result`: a field that shows its saved result; the result runs are ordinary text and
  *   the markers and instruction take no offsets.
- * - `atomic`: one unit. Also used for a saved-result field whose result holds another field.
+ * - `atomic`: one unit. Also used for a saved-result field whose result holds another field
+ *   or no text at all (an emptied result stays reachable as one unit).
  *
  * In the `atomic` mode (the default, see `field-result-mode.ts`) saved-result fields stay one
  * unit, so raw paragraph text is unchanged.
@@ -555,13 +556,15 @@ export function fieldResultAddressing(
   options: {
     readonly maxInstructionChars?: number;
     readonly nestedInResult?: boolean;
+    /** The field saves no result text: it stays one unit, which the caret can step over. */
+    readonly emptyResult?: boolean;
     readonly fieldResults?: FieldResultsMode;
   } = {}
 ): ParsedFieldSpan['addressing'] {
   const maxChars = options.maxInstructionChars ?? MAX_FIELD_INSTRUCTION_CHARS;
   if (isEditableFormTextInstruction(instruction, maxChars)) return 'editable-result';
   const mode = options.fieldResults ?? currentFieldResultsMode();
-  if (mode !== 'editable' || options.nestedInResult) return 'atomic';
+  if (mode !== 'editable' || options.nestedInResult || options.emptyResult) return 'atomic';
   if (instruction.length > maxChars) return 'atomic';
   return SAVED_RESULT_FIELD_TYPES.has(fieldTypeOf(instruction)) ? 'saved-result' : 'atomic';
 }
@@ -633,6 +636,19 @@ export function parsedFieldSpansOf(
         node.children.some((child) => visit(child, depth + 1)));
     return simple.children.some((child) => visit(child, 1));
   };
+  /** Whether a simple field's result holds any text a caret could stand in. */
+  const simpleHoldsText = (simple: OoxmlNode): boolean => {
+    if (simple.kind === 'textValue') return false;
+    const visit = (node: OoxmlNode, depth: number): boolean =>
+      node.kind === 'text' ||
+      node.kind === 'deletedText' ||
+      node.kind === 'tab' ||
+      node.kind === 'hardBreak' ||
+      (node.kind !== 'textValue' &&
+        depth < MAX_INLINE_CONTAINER_DEPTH &&
+        node.children.some((child) => visit(child, depth + 1)));
+    return simple.children.some((child) => visit(child, 1));
+  };
   collectFieldRunChildren(paragraph, flat);
   for (const entry of flat) {
     const child = entry.node;
@@ -647,6 +663,7 @@ export function parsedFieldSpansOf(
           fieldResultAddressing(fldSimpleInstr(child) ?? '', {
             maxInstructionChars,
             nestedInResult: fieldResults === 'editable' && simpleHoldsField(child),
+            emptyResult: fieldResults === 'editable' && !simpleHoldsText(child),
             fieldResults,
           }) === 'saved-result'
             ? 'saved-result'
@@ -815,6 +832,8 @@ export function parsedFieldSpansOf(
       addressing: fieldResultAddressing(effectiveInstruction, {
         maxInstructionChars,
         nestedInResult,
+        // No outer result run holds text: the emptied field is one unit again.
+        emptyResult: resultFormatRunIds.length === 0,
         fieldResults,
       }),
     });

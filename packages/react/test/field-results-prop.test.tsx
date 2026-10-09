@@ -75,4 +75,41 @@ describe('fieldResults prop', () => {
       });
     }
   }
+
+  test('a changed prop is ignored and warns once', async () => {
+    const warnings: unknown[] = [];
+    const original = console.warn;
+    console.warn = (...args: unknown[]) => warnings.push(args[0]);
+    try {
+      let instance: DocxEditorInstance | null = null;
+      const tree = (mode: FieldResultsMode) => (
+        <DocxEditorRoot
+          document={SOURCE}
+          fieldResults={mode}
+          onReady={(editor) => {
+            instance = editor as DocxEditorInstance;
+          }}
+        >
+          <DocxEditorViewport>
+            <DocxEditorContent />
+          </DocxEditorViewport>
+        </DocxEditorRoot>
+      );
+      let view: ReturnType<typeof render> | null = null;
+      await act(async () => {
+        view = render(tree('atomic'));
+      });
+      const first = instance!;
+      await act(async () => {
+        view!.rerender(tree('editable'));
+      });
+      expect(instance).toBe(first);
+      expect(typeInsideResult(first)).toBe('ab Name Xcd');
+      expect(warnings.some((message) => String(message).includes('fieldResults changed'))).toBe(
+        true
+      );
+    } finally {
+      console.warn = original;
+    }
+  });
 });

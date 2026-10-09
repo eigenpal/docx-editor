@@ -57,7 +57,7 @@ const editor = createDocxEditor({
 });
 ```
 
-In React and Vue, pass the same value as the `fieldResults` prop of `DocxEditor` or `DocxEditor.Root`. The editor reads the value when it is created.
+In React and Vue, pass the same value as the `fieldResults` prop of `DocxEditor` or `DocxEditor.Root`. The editor reads the value once, when it is created. A later change to the prop is ignored, and a development build logs a warning.
 
 This mode applies to fields that show their saved result: `DATE`, `TIME`, `CREATEDATE`, `SAVEDATE`, `PRINTDATE`, `MERGEFIELD`, `HYPERLINK`, `QUOTE`, `FILENAME`, `FILLIN`, and `SEQ`. Fields that the editor computes, such as `PAGE`, `NUMPAGES`, `REF`, `PAGEREF`, and `DOCPROPERTY`, stay one unit. A field whose saved result contains another field also stays one unit.
 
@@ -67,11 +67,11 @@ In this mode:
 - Text typed at the start or end of a result goes before or after the field.
 - Backspace after a field, or Delete before it, selects the whole field. Press the key again to remove the field.
 - A selection with one end inside a result and the other end outside grows to cover the whole field.
-- Deleting only the result text keeps the field with an empty result.
+- Deleting only the result text keeps the field with an empty result. The empty field is one unit: text typed beside it goes before or after it, and Backspace or Delete next to it removes it.
 - In suggesting mode, edits inside a result are tracked inside the result.
 - A `w:fldSimple` field becomes the equivalent complex field when you edit its result.
 
-The editor does not calculate new values for these fields, so a manual edit stays until another application updates the field. Updating a field replaces a manual edit, except for `HYPERLINK` display text and locked fields. `DATE` fields keep their saved value when a document opens.
+The editor has no update command for these fields and never calculates their values, so a manual edit stays in the editor and is saved as the field result. `DATE` and `TIME` fields show their saved value when a document opens. An edit does not mark the field for update (`w:dirty`). An application that updates fields later replaces a manual edit, except for `HYPERLINK` display text and locked fields.
 
 Collaboration sessions keep every field one unit. If you set `fieldResults: 'editable'` and register a collaboration module, `createDocxEditor` throws a `TypeError`.
 

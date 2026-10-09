@@ -16,6 +16,7 @@
 import { findNode, type OoxmlPart } from '@docx-editor.dev/core/store';
 import type { SemanticPosition, SemanticSelection } from '../layout/semantic-interaction.ts';
 import { savedResultRanges, type SavedResultRange } from '../store/store/field-result-edits.ts';
+import type { TreeDocOp } from '../store/store/tree-op-types.ts';
 import type { FieldResultsScope } from './field-results-scope.ts';
 
 /** The rules this module adds to; the legacy text-form interaction supplies them. */
@@ -28,6 +29,7 @@ interface FieldEdgeRules {
     stops: ReadonlySet<number>
   ): number;
   beforeSelect(next: SemanticSelection): SemanticSelection | null;
+  annotate(ops: readonly TreeDocOp[]): readonly TreeDocOp[];
 }
 
 export interface SavedFieldResultHost {
@@ -40,7 +42,11 @@ export interface SavedFieldResultHost {
   readonly compare: (a: SemanticPosition, b: SemanticPosition) => number;
 }
 
-/** Saved results with text, in document order. Empty results are one unit and take no rule. */
+/**
+ * Saved results in document order. A field whose result holds no text is addressed as one unit
+ * (`fieldResultAddressing`), so it is never in this list: the caret steps over it and ordinary
+ * Backspace and Delete remove it. The length filter only guards that rule.
+ */
 function rangesAt(host: SavedFieldResultHost, paragraphId: string): readonly SavedResultRange[] {
   const part = host.part(paragraphId);
   const paragraph = part ? findNode(part, paragraphId) : null;
@@ -83,6 +89,47 @@ export function grownSavedResultSelection(
   return anchor === next.anchor && head === next.head ? next : { anchor, head };
 }
 
+/**
+ * Keep text typed over a selection inside a saved result IN the result.
+ *
+ * Replacing a selection is a deletion plus an insertion at its start (or, in suggesting mode,
+ * at its end, after the struck text). When the replaced text touches the result's start or
+ * end, that insertion point becomes the result's edge, where typing lands outside the field.
+ * So such a replacement inserts FIRST, at the selection start while the result still holds
+ * text there (joined to the result runs with `bias: 'right'` at the result's start), and then
+ * deletes the replaced text after it. Revision attribution is added later, so a suggested
+ * replacement strikes the old text right after the new text, inside the result.
+ */
+export function savedResultReplacementOps(
+  host: Pick<SavedFieldResultHost, 'part'>,
+  ops: readonly TreeDocOp[]
+): readonly TreeDocOp[] {
+  if (ops.length !== 2) return ops;
+  const [deletion, insertion] = ops;
+  if (
+    deletion?.op !== 'deleteText' ||
+    insertion?.op !== 'insertText' ||
+    insertion.paragraphId !== deletion.paragraphId ||
+    deletion.start >= deletion.end ||
+    (insertion.offset !== deletion.start && insertion.offset !== deletion.end)
+  )
+    return ops;
+  const { start, end } = deletion;
+  const range = rangesAt(host as SavedFieldResultHost, deletion.paragraphId).find(
+    (candidate) => candidate.start <= start && end <= candidate.end
+  );
+  if (!range || (start !== range.start && end !== range.end)) return ops;
+  const length = insertion.text.length;
+  return [
+    {
+      ...insertion,
+      offset: start,
+      ...(start === range.start ? { bias: 'right' as const } : {}),
+    },
+    { ...deletion, start: start + length, end: end + length },
+  ];
+}
+
 /** `rules` with the saved-result edge rules in front. Identity in the `atomic` mode. */
 export function withSavedFieldResults<T extends FieldEdgeRules>(
   rules: T,
@@ -90,7 +137,7 @@ export function withSavedFieldResults<T extends FieldEdgeRules>(
   scope: FieldResultsScope
 ): T {
   if (scope.mode === 'atomic') return rules;
-  const { selectForDeletion, wordDeletionBoundary, beforeSelect } = rules;
+  const { selectForDeletion, wordDeletionBoundary, beforeSelect, annotate } = rules;
   /**
    * The whole field a deletion gesture selected. Its offsets are those of the result text, so
    * the editor remembers that the FIELD is selected: deleting it then removes the field and its
@@ -113,6 +160,13 @@ export function withSavedFieldResults<T extends FieldEdgeRules>(
     );
   };
   return Object.assign(rules, {
+    annotate: scope.wrap((ops: readonly TreeDocOp[]) =>
+      // A selected whole FIELD is replaced with its markers, not refilled.
+      annotate.call(
+        rules,
+        isSelectedField(host.selection()) ? ops : savedResultReplacementOps(host, ops)
+      )
+    ),
     selectForDeletion: scope.wrap((direction: 'backward' | 'forward'): boolean => {
       const range = host.writable() ? beside(direction === 'backward' ? -1 : 1) : undefined;
       if (!range) return selectForDeletion.call(rules, direction);

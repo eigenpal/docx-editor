@@ -48,7 +48,7 @@ describe('deleting exactly a saved result', () => {
         EDITABLE
       );
       if (!result.ok) throw Error(result.reason);
-      expect(paragraphTextOf(result.part, id, EDITABLE)).toBe('ab  cd');
+      expect(paragraphTextOf(result.part, id, EDITABLE)).toBe('ab \uFFFC cd');
       expect(serializeOoxmlPart(result.part)).toContain('MERGEFIELD');
     });
 
