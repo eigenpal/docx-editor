@@ -26,7 +26,7 @@ A collaboration deployment includes every program that reads or writes shared ro
 
 ### Understand the format value
 
-The 2.18.0 release uses `docx-collaboration:1.3.1.1`. The four numbers identify synchronization rules, shared storage structure, conflict-repair rules, and the editor's document model, in that order.
+The releases from 2.18.0 to 2.27.0 use `docx-collaboration:1.3.1.1`. Format `docx-collaboration:1.4.2.1` follows it. The four numbers identify synchronization rules, shared storage structure, conflict-repair rules, and the editor's document model, in that order.
 
 Treat the complete value as one compatibility identifier. Import it from the installed package; do not construct it yourself. Changing the stored value does not convert the data or make incompatible code safe to use.
 
@@ -63,7 +63,7 @@ The upgrade column describes moving from the previous stable release. Matching f
 
 ## Choose the upgrade path
 
-Upgrading from 2.17.0 to 2.18.0 requires a saved-room migration. Export with the compatible previous build, then follow [Upgrade saved rooms](#upgrade-saved-rooms).
+Upgrading from 2.17.0 to 2.18.0 requires a saved-room migration. Upgrading from 2.27.0 or earlier to a release with format `docx-collaboration:1.4.2.1` also requires one. In both cases, export with the compatible previous build, then follow [Upgrade saved rooms](#upgrade-saved-rooms).
 
 | Situation | What you do |
 | --- | --- |
@@ -228,7 +228,7 @@ A room in which participants changed one paragraph's properties at the same time
 `@docx-editor.dev/pro/collaboration` provides two functions for the new build. They take and return bytes, so they work with any storage:
 
 - `collaborationMigrationNeed(state)` returns `current`, `earlier-format`, or `later-format` for saved room state. Only an `earlier-format` room needs a migration. Never open or replace a `later-format` room with this build.
-- `migrateCollaborationRoom({ state, exported })` seeds a room in the current format from the export, and checks it against the export. The check compares every XML part: text, formatting, tables, sections, styles, numbering, tracked changes, comments, and notes. It ignores only what every save writes anew: the values of paragraph IDs and `w:id`, which a save can renumber, and revision IDs, which only need to be unique. A comment anchor, note reference, or bookmark must still name the same element. It also compares every media file and external link target. The new room keeps the earlier room's document ID, which its clients open it with.
+- `migrateCollaborationRoom({ state, exported })` seeds a room in the current format from the export, and checks it against the export. The check compares every XML part: text, formatting, tables, sections, styles, numbering, tracked changes, comments, and notes. It ignores only what every save writes anew: namespace declarations, the relationship parts, the values of paragraph IDs and `w:id`, which a save can renumber, and revision IDs, which only need to be unique. A comment anchor, note reference, or bookmark must still name the same element. It also compares every media file and external link target. The new room keeps the earlier room's document ID, which its clients open it with.
 
 Before you start, ask users with offline or unsynchronized edits to reconnect so that their edits reach the room. After the migration, the server refuses tabs of the earlier build, and edits that never reached the room do not transfer. For more information, see [Preserve offline work across upgrades](#preserve-offline-work-across-upgrades).
 
@@ -332,7 +332,7 @@ async function migrateRoom(roomId: string, dryRun: boolean) {
     return 'migrated';
   } catch (error) {
     if (!(error instanceof CollaborationSchemaError)) throw error;
-    console.error(roomId, error.code);
+    console.error(roomId, error.code, error.detail);
     return 'error';
   }
 }
@@ -359,19 +359,36 @@ The function returns one of these outcomes:
 | `no-export` | The room has no export. | Export it with the earlier build. |
 | `stale-export` | The room changed after its export. | Export it again. |
 | `later-format` | A later build wrote the room. | Serve it with that build. |
-| `error` | An input cannot be used. The room is unchanged. | For `not-initialized`, the state holds no document that a build can open: keep it with your backups, and leave the room out of the migration. For other codes, contact support. |
+| `error` | An input cannot be used. The room is unchanged. | Act on the error code, as the next table describes. |
+
+A thrown error carries one of these codes:
+
+| Code | Meaning | What you do |
+| --- | --- | --- |
+| `not-initialized` | The state holds no document that a build can open. | Keep the state with your backups, and remove the room from the set you migrate. |
+| `invalid-document-id` | The earlier room holds no usable document ID. | Pass the ID that the room's clients use as `documentId`. |
+| `invalid-baseline` | The bytes are not room state, or the export is not a DOCX. | Read the room and its export again. If the error stays, contact support. |
+| A limit code, such as `too-many-nodes` | The export is larger than a room can hold. | Contact support with the code. |
 
 The report lists differences in document order. Read the first one: when a paragraph is missing, every later paragraph also differs by position. `changedParts` names each XML part that differs.
 
 The report's `hidden` field counts paragraphs that the new room keeps but the editor cannot show or edit, and `hiddenAt` gives the first positions. They save back unchanged and do not fail the check. Review such rooms before people edit them again.
 
-`migrateCollaborationRoom` throws `CollaborationSchemaError` when an input cannot be used. The code `invalid-baseline` means the bytes are not room state or not a DOCX. A limit code, such as `too-many-nodes`, means the export is larger than a room can hold.
-
 #### Migrate rooms stored as update lists
 
 If your storage keeps a room as a list of updates, merge the list once before the export. Merge it with `Y.mergeUpdates` in the earlier build, and write the merged state back as the room's only update. Then export the room, and compute the digest over the stored merged state. The migration reads the same bytes, so the digests match. After the migration, replace the whole list with the migrated state.
 
-Migrate rooms one at a time, or in small batches. A migration holds a room's export and two copies of its state in memory.
+#### Plan the migration window
+
+Editing stops for the whole migration, so measure it on copies of your largest rooms first. A migration holds a room's export and two copies of its state in memory, and its time and memory grow with the number of paragraphs. On an Apple M4 Pro, one room took the following:
+
+| Document                                            | Time        | Added memory |
+| --------------------------------------------------- | ----------- | ------------ |
+| 340 paragraphs, with images                         | 0.8 seconds | 250 MiB      |
+| 2,644 paragraphs, with comments and tracked changes | 2.7 seconds | 1.1 GiB      |
+| 12,841 paragraphs on 521 pages                      | 9.9 seconds | 2.0 GiB      |
+
+Migrate rooms one at a time in each process, or in small batches that fit the memory you have.
 
 #### Roll back a migration
 
@@ -442,6 +459,8 @@ Before admitting production traffic, verify these outcomes in a test deployment:
 - An incompatible saved room is refused without being changed or deleted.
 - Offline work remains recoverable when a user returns after an upgrade.
 - Migrated rooms open with two clients, accept edits, and export the expected document.
+- `collaborationMigrationNeed` returns `current` for every saved room.
+- A tab of the earlier build is refused, and a tab of the new build that held the earlier room rejoins after `room-generation-changed`.
 
 ## Next steps
 

@@ -43,6 +43,10 @@ test.each([
     expect(error.message).toContain(
       'https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions'
     );
+    // A server that cannot open a saved room lands on the migration steps.
+    expect(error.message).toContain(
+      'https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions#upgrade-saved-rooms'
+    );
   }
 );
 

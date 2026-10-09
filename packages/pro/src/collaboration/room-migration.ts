@@ -218,7 +218,7 @@ export async function migrateCollaborationRoom(
 ): Promise<CollaborationMigration> {
   const earlier = withRoom(options.state, (room) => ({
     format: formatOf(room),
-    documentId: room.getMap(PACKAGE_META_KEY).get('documentId'),
+    documentId: documentIdOf(room),
   }));
   const need = needOf(earlier.format);
   if (need === 'current') return { ok: false, reason: 'current' };
@@ -254,6 +254,18 @@ function withRoom<T>(state: Uint8Array, read: (room: Y.Doc) => T): T {
     return read(room);
   } finally {
     room.destroy();
+  }
+}
+
+/**
+ * The room's document ID, or undefined when its metadata cannot hold one: an earlier room whose
+ * metadata is not a map then needs the ID passed as `documentId`.
+ */
+function documentIdOf(room: Y.Doc): unknown {
+  try {
+    return room.getMap(PACKAGE_META_KEY).get('documentId');
+  } catch {
+    return undefined;
   }
 }
 

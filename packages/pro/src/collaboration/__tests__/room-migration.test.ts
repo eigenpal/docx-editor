@@ -141,6 +141,16 @@ describe('migrating a saved room', () => {
     ).toEqual({ ok: false, reason: 'later-format' });
   });
 
+  test('a room with damaged metadata is refused with a stable code', async () => {
+    const room = new Y.Doc();
+    // Metadata of another shared type: no document ID, no format.
+    room.getArray('docx-package-meta-v1').push(['damaged']);
+    const state = Y.encodeStateAsUpdate(room);
+    room.destroy();
+    const exported = zipDocument('<w:p><w:r><w:t>Kept</w:t></w:r></w:p><w:sectPr/>');
+    await expect(migrateCollaborationRoom({ state, exported })).rejects.toThrow('not-initialized');
+  });
+
   test('unusable inputs throw stable codes', async () => {
     const exported = zipDocument('<w:p/><w:sectPr/>');
     await expect(

@@ -28,7 +28,7 @@ export class CollaborationSchemaError extends Error {
     const diagnostic = detail ? `${code}: ${detail}` : code;
     super(
       versionMismatch
-        ? `${diagnostic}\nCollaboration upgrade required. Save local changes and use a compatible app version, or upgrade the saved room. See ${COLLABORATION_UPGRADE_GUIDE_URL}`
+        ? `${diagnostic}\nCollaboration upgrade required. Save local changes and use a compatible app version, or upgrade the saved room. See ${COLLABORATION_UPGRADE_GUIDE_URL}#upgrade-saved-rooms`
         : diagnostic
     );
     this.name = 'CollaborationSchemaError';
