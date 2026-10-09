@@ -1105,7 +1105,7 @@ export class ParagraphCollection extends ItemCollection<Paragraph> {
 export type ParagraphInsertTextLocation = Extract<RangeInsertTextLocation, 'Replace' | 'Start' | 'End'>;
 
 // @public
-export type ParagraphReadingOrder = 'Unknown' | 'LeftToRight' | 'RightToLeft';
+export type ParagraphReadingOrder = 'LeftToRight' | 'RightToLeft';
 
 // @public
 class Range_2 extends ModelObject implements PromisedItem {

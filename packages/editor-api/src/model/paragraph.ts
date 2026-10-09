@@ -59,11 +59,9 @@ export type ParagraphAlignment =
 /**
  * A paragraph's base direction, as {@link Paragraph.readingOrder} reads and writes it.
  *
- * `Unknown` is a read answer only: the paragraph states no direction of its own.
- *
  * @public
  */
-export type ParagraphReadingOrder = 'Unknown' | 'LeftToRight' | 'RightToLeft';
+export type ParagraphReadingOrder = 'LeftToRight' | 'RightToLeft';
 
 /**
  * One paragraph: what it says, what it is, and the ways it can be changed.
@@ -178,17 +176,17 @@ export class Paragraph extends ModelObject implements PromisedItem {
   }
 
   /**
-   * The paragraph's base direction: `LeftToRight`, `RightToLeft`, or `Unknown` where the
-   * paragraph states none of its own.
+   * The direction the paragraph reads in: `LeftToRight` or `RightToLeft`.
    *
    * A DocxEditor addition: Office.js has no paragraph direction member. The values follow
-   * `Word.SectionDirection`. `Unknown` rather than `LeftToRight`, because the paragraph style may
-   * still make the paragraph right-to-left, and this read does not resolve the style cascade.
+   * `Word.SectionDirection`. The read resolves the paragraph's own `w:bidi`, then its style,
+   * an enclosing cell's table style, and the document defaults.
    *
-   * A write states the direction on the paragraph itself. `LeftToRight` writes the explicit
-   * off value, so it also wins over a right-to-left style. The write keeps `alignment` as
-   * authored: in a right-to-left paragraph, `Left` and `Right` name the start and end edges.
-   * With change tracking on, the write is recorded as a paragraph formatting revision.
+   * A write changes nothing when the paragraph already reads that way. Otherwise it removes the
+   * paragraph's own direction when that alone set the other one, or states the asked direction,
+   * which also overrides a style. The write keeps `alignment` as authored: in a right-to-left
+   * paragraph, `Left` and `Right` name the start and end edges. With change tracking on, a write
+   * that changes the direction is recorded as a paragraph formatting revision.
    */
   get readingOrder(): ParagraphReadingOrder {
     return this.loadedProperty<ParagraphReadingOrder>('readingOrder');
@@ -561,7 +559,7 @@ function requireAlignment(value: unknown, target: string): ParagraphAlignment {
   return value as ParagraphAlignment;
 }
 
-/** A direction a write may name. `Unknown` is a read answer, so a write of it is refused. */
+/** A direction a write may name. Any other value is refused before anything is sent. */
 function requireReadingOrder(value: unknown, target: string): ParagraphReadingOrder {
   if (value !== 'LeftToRight' && value !== 'RightToLeft') {
     fail({ code: 'InvalidArgument', target });

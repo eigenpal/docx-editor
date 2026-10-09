@@ -215,10 +215,10 @@ Office.js has no paragraph direction member. Use the DocxEditor addition `Paragr
 ```ts
 await runtime.run(async (context) => {
   const paragraphs = context.document.body.paragraphs;
-  paragraphs.load('items');
+  paragraphs.load({ select: 'items', top: 2 });
   await context.sync();
 
-  const targets = paragraphs.items.slice(0, 2);
+  const targets = paragraphs.items;
   for (const paragraph of targets) paragraph.readingOrder = 'RightToLeft';
   await context.sync();
 
@@ -228,7 +228,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-A read returns `Unknown` when the paragraph states no direction itself, even if its style sets one. Writes accept only `LeftToRight` and `RightToLeft`; other values fail with `InvalidArgument`. `LeftToRight` writes an explicit off value that overrides a right-to-left style. The write keeps `alignment` as authored: in a right-to-left paragraph, `Left` names the leading edge at the right margin. With `TrackMineOnly`, the write records a paragraph property revision.
+A read returns the direction that the paragraph reads in, after its style. Writes accept only `LeftToRight` and `RightToLeft`; other values fail with `InvalidArgument`. A write of the direction that the paragraph already has changes nothing, so you can write back what you read. The write keeps `alignment` as authored: in a right-to-left paragraph, `Left` names the leading edge at the right margin. With `TrackMineOnly`, the write records a paragraph property revision.
 
 ## Insert table rows
 

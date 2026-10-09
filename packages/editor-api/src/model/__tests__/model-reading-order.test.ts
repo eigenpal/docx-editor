@@ -5,9 +5,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // `Paragraph.readingOrder`: a paragraph's base direction, read and written through the object model.
 //
-// A DocxEditor addition, recorded in `compat/manifest.json` `additions`. The write states `w:bidi`
-// on the paragraph itself; the read answers only what the paragraph states, so a paragraph that
-// leaves its direction to its style reads `Unknown`.
+// A DocxEditor addition, recorded in `compat/manifest.json` `omissions`. The read answers the
+// direction the paragraph reads in after its style cascade. The write states `w:bidi` only where the
+// paragraph does not already read the asked way, so writing back what was read changes nothing.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -43,6 +43,15 @@ const SAMPLE = docx(
   RTL_STYLE
 );
 
+const INITIAL: ParagraphReadingOrder[] = [
+  'LeftToRight',
+  'LeftToRight',
+  'RightToLeft',
+  'LeftToRight',
+  // The paragraph states nothing; its style makes it right to left.
+  'RightToLeft',
+];
+
 function mainXml(bytes: Uint8Array): string {
   return strFromU8(unzipSync(bytes)['word/document.xml']!);
 }
@@ -72,6 +81,15 @@ async function setOrder(
   });
 }
 
+async function revisionCount(runtime: DocxEditorRuntime): Promise<number> {
+  return runtime.run(async (context) => {
+    const revisions = context.document.body.revisions;
+    revisions.load('items');
+    await context.sync();
+    return revisions.items.length;
+  });
+}
+
 function mount(bytes: Uint8Array = SAMPLE): DocxEditorInstance {
   const container = document.createElement('div');
   document.body.append(container);
@@ -80,18 +98,27 @@ function mount(bytes: Uint8Array = SAMPLE): DocxEditorInstance {
   return editor;
 }
 
-describe('Paragraph.readingOrder reads what the paragraph states', () => {
-  test('answers RightToLeft, LeftToRight, or Unknown when the paragraph states nothing', async () => {
+describe('Paragraph.readingOrder reads the direction the paragraph reads in', () => {
+  test('answers the paragraph’s own w:bidi, else its style’s', async () => {
     const runtime = await createServer(SAMPLE);
     try {
-      expect(await readOrders(runtime)).toEqual([
-        'Unknown',
-        'Unknown',
-        'RightToLeft',
-        'LeftToRight',
-        // The style makes this paragraph right-to-left, but the paragraph states nothing itself.
-        'Unknown',
-      ]);
+      expect(await readOrders(runtime)).toEqual(INITIAL);
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('resolves the document defaults and a based-on style chain', async () => {
+    const styles =
+      '<w:docDefaults><w:pPrDefault><w:pPr><w:bidi/></w:pPr></w:pPrDefault></w:docDefaults>' +
+      '<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style>' +
+      '<w:style w:type="paragraph" w:styleId="Ltr"><w:name w:val="Ltr"/><w:pPr><w:bidi w:val="0"/></w:pPr></w:style>' +
+      '<w:style w:type="paragraph" w:styleId="Child"><w:name w:val="Child"/><w:basedOn w:val="Ltr"/></w:style>';
+    const runtime = await createServer(
+      docx(para('Defaults') + para('Based on', '<w:pStyle w:val="Child"/>'), styles)
+    );
+    try {
+      expect(await readOrders(runtime)).toEqual(['RightToLeft', 'LeftToRight']);
     } finally {
       runtime.dispose();
     }
@@ -126,12 +153,12 @@ describe('Paragraph.readingOrder reads what the paragraph states', () => {
         expect(() => first.readingOrder).toThrow();
         first.load('readingOrder');
         await context.sync();
-        expect(first.readingOrder).toBe('Unknown');
+        expect(first.readingOrder).toBe('LeftToRight');
         first.readingOrder = 'RightToLeft';
         // The proxy keeps the loaded value until the write and a later read complete.
-        expect<ParagraphReadingOrder>(first.readingOrder).toBe('Unknown');
+        expect<ParagraphReadingOrder>(first.readingOrder).toBe('LeftToRight');
         await context.sync();
-        expect<ParagraphReadingOrder>(first.readingOrder).toBe('Unknown');
+        expect<ParagraphReadingOrder>(first.readingOrder).toBe('LeftToRight');
         first.load('readingOrder');
         await context.sync();
         expect(first.readingOrder).toBe('RightToLeft');
@@ -160,7 +187,65 @@ describe('Paragraph.readingOrder reads what the paragraph states', () => {
   });
 });
 
-describe('Paragraph.readingOrder writes w:bidi on the paragraph', () => {
+describe('Paragraph.readingOrder writes the smallest w:bidi change', () => {
+  test('the documented example runs as published', async () => {
+    // docs/site/content/editor-api/formatting.mdx, "Right-to-left paragraphs".
+    const runtime = await createServer(SAMPLE);
+    try {
+      const read = await runtime.run(async (context) => {
+        const paragraph = context.document.body.paragraphs.getFirst();
+        paragraph.readingOrder = 'RightToLeft';
+        await context.sync();
+
+        paragraph.load('readingOrder');
+        await context.sync();
+        return paragraph.readingOrder;
+      });
+      expect(read).toBe('RightToLeft');
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('the agent guide example runs as published', async () => {
+    // packages/editor-api/OFFICE_JS_GUIDE.md, "Set paragraph direction".
+    const runtime = await createServer(SAMPLE);
+    try {
+      const read = await runtime.run(async (context) => {
+        const paragraphs = context.document.body.paragraphs;
+        paragraphs.load({ select: 'items', top: 2 });
+        await context.sync();
+
+        const targets = paragraphs.items;
+        for (const paragraph of targets) paragraph.readingOrder = 'RightToLeft';
+        await context.sync();
+
+        for (const paragraph of targets) paragraph.load('readingOrder');
+        await context.sync();
+        return targets.map((paragraph) => paragraph.readingOrder);
+      });
+      expect(read).toEqual(['RightToLeft', 'RightToLeft']);
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('a direction the paragraph already reads in writes nothing, even with tracking on', async () => {
+    const runtime = await createServer(SAMPLE, { author: 'Agent' });
+    try {
+      const before = mainXml(await runtime.save());
+      await runtime.run(async (context) => {
+        context.document.changeTrackingMode = 'TrackMineOnly';
+        await context.sync();
+      });
+      for (const [index, value] of INITIAL.entries()) await setOrder(runtime, index, value);
+      expect(mainXml(await runtime.save())).toBe(before);
+      expect(await revisionCount(runtime)).toBe(0);
+    } finally {
+      runtime.dispose();
+    }
+  });
+
   test('RightToLeft writes w:bidi and keeps the other paragraph properties', async () => {
     const runtime = await createServer(SAMPLE);
     try {
@@ -173,18 +258,42 @@ describe('Paragraph.readingOrder writes w:bidi on the paragraph', () => {
     }
   });
 
-  test('LeftToRight writes the explicit off value, which wins over a right-to-left style', async () => {
+  test('a write removes the paragraph’s own w:bidi when that alone set the other direction', async () => {
+    const runtime = await createServer(SAMPLE);
+    try {
+      // Own `<w:bidi/>` over the left-to-right default.
+      await setOrder(runtime, 2, 'LeftToRight');
+      expect(mainXml(await runtime.save())).toMatch(/<w:p [^>]*><w:r><w:t>مرحبا<\/w:t>/);
+      expect((await readOrders(runtime))[2]).toBe('LeftToRight');
+    } finally {
+      runtime.dispose();
+    }
+    // Own off value over a right-to-left style.
+    const styled = await createServer(
+      docx(para('Styled', '<w:pStyle w:val="Rtl"/><w:bidi w:val="0"/>'), RTL_STYLE)
+    );
+    try {
+      await setOrder(styled, 0, 'RightToLeft');
+      expect(mainXml(await styled.save())).toContain('<w:pPr><w:pStyle w:val="Rtl"/></w:pPr>');
+      expect(await readOrders(styled)).toEqual(['RightToLeft']);
+    } finally {
+      styled.dispose();
+    }
+  });
+
+  test('LeftToRight writes the explicit off value only over a right-to-left style', async () => {
     const runtime = await createServer(SAMPLE);
     try {
       await setOrder(runtime, 4, 'LeftToRight');
-      await setOrder(runtime, 2, 'LeftToRight');
+      await setOrder(runtime, 0, 'LeftToRight');
       const xml = mainXml(await runtime.save());
       expect(xml).toContain('<w:pStyle w:val="Rtl"/><w:bidi w:val="0"/>');
-      expect(xml).not.toContain('<w:bidi/>');
+      // The off value the file already had, and the one over the style: none on paragraph one.
+      expect(xml.match(/<w:bidi w:val="0"\/>/g)).toHaveLength(2);
       expect(await readOrders(runtime)).toEqual([
-        'Unknown',
-        'Unknown',
         'LeftToRight',
+        'LeftToRight',
+        'RightToLeft',
         'LeftToRight',
         'LeftToRight',
       ]);
@@ -219,7 +328,7 @@ describe('Paragraph.readingOrder writes w:bidi on the paragraph', () => {
     }
   });
 
-  test('a write of Unknown or an invalid value is refused before anything is sent', async () => {
+  test('a write of any other value is refused before anything is sent', async () => {
     const runtime = await createServer(SAMPLE);
     try {
       const before = mainXml(await runtime.save());
@@ -248,7 +357,7 @@ describe('Paragraph.readingOrder writes w:bidi on the paragraph', () => {
       try {
         expect(await readOrders(reopened)).toEqual([
           'RightToLeft',
-          'Unknown',
+          'LeftToRight',
           'RightToLeft',
           'LeftToRight',
           'LeftToRight',
@@ -295,9 +404,8 @@ describe('Paragraph.readingOrder with change tracking on', () => {
       const xml = mainXml(await runtime.save());
       expect(xml.match(/<w:pPrChange\b/g)).toHaveLength(2);
       expect(xml).toMatch(/<w:pPr><w:bidi\/><w:pPrChange [^>]*w:author="Agent"[^>]*><w:pPr\/>/);
-      expect(xml).toMatch(
-        /<w:pPr><w:bidi w:val="0"\/><w:pPrChange [^>]*><w:pPr><w:bidi\/><\/w:pPr><\/w:pPrChange>/
-      );
+      // Own `<w:bidi/>` over the left-to-right default: the write removes it.
+      expect(xml).toMatch(/<w:pPr><w:pPrChange [^>]*><w:pPr><w:bidi\/><\/w:pPr><\/w:pPrChange>/);
       const kinds = await runtime.run(async (context) => {
         const revisions = context.document.body.revisions;
         revisions.load('items');
@@ -321,13 +429,7 @@ describe('Paragraph.readingOrder with change tracking on', () => {
           context.document.body.revisions.rejectAll();
           await context.sync();
         });
-        expect(await readOrders(rejected)).toEqual([
-          'Unknown',
-          'Unknown',
-          'RightToLeft',
-          'LeftToRight',
-          'Unknown',
-        ]);
+        expect(await readOrders(rejected)).toEqual(INITIAL);
         expect(mainXml(await rejected.save())).not.toContain('pPrChange');
       } finally {
         rejected.dispose();
@@ -338,10 +440,10 @@ describe('Paragraph.readingOrder with change tracking on', () => {
       });
       expect(await readOrders(runtime)).toEqual([
         'RightToLeft',
-        'Unknown',
         'LeftToRight',
         'LeftToRight',
-        'Unknown',
+        'LeftToRight',
+        'RightToLeft',
       ]);
       expect(mainXml(await runtime.save())).not.toContain('pPrChange');
     } finally {
@@ -369,6 +471,16 @@ describe('Paragraph.readingOrder in an open editor', () => {
         changes += 1;
       });
       await setOrder(runtime, 0, 'RightToLeft');
+      expect(changes).toBe(1);
+      // A value the paragraph already has is no edit and no undo step, for any paragraph property.
+      await setOrder(runtime, 2, 'RightToLeft');
+      await runtime.run(async (context) => {
+        const paragraphs = context.document.body.paragraphs;
+        paragraphs.load('items');
+        await context.sync();
+        paragraphs.items[1]!.alignment = 'Centered';
+        await context.sync();
+      });
       off();
       expect(changes).toBe(1);
       caretIn(0);
@@ -384,13 +496,7 @@ describe('Paragraph.readingOrder in an open editor', () => {
       expect(editor.exec({ type: 'undo' })).toMatchObject({ ok: true, changed: true });
       caretIn(0);
       expect(editor.snapshot().formatting?.direction).toBe('ltr');
-      expect(await readOrders(runtime)).toEqual([
-        'Unknown',
-        'Unknown',
-        'RightToLeft',
-        'LeftToRight',
-        'Unknown',
-      ]);
+      expect(await readOrders(runtime)).toEqual(INITIAL);
       expect(editor.exec({ type: 'redo' })).toMatchObject({ ok: true, changed: true });
       expect((await readOrders(runtime))[0]).toBe('RightToLeft');
     } finally {
@@ -407,6 +513,7 @@ describe('Paragraph.readingOrder in an open editor', () => {
       for (const runtime of [server, browser]) {
         await setOrder(runtime, 1, 'RightToLeft');
         await setOrder(runtime, 2, 'LeftToRight');
+        await setOrder(runtime, 4, 'LeftToRight');
       }
       expect(await readOrders(browser)).toEqual(await readOrders(server));
     } finally {

@@ -19,7 +19,7 @@ import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { canonicalOoxmlFingerprint, readOoxmlPackage } from '@docx-editor.dev/core/store';
 import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
 import { collaborationModule, reviewModule } from '../../index';
-import { createPeerHarness, zipDocument } from './document-peer-support';
+import { createPeerHarness, zipDocument, type Peer } from './document-peer-support';
 
 const registered = !GlobalRegistrator.isRegistered;
 if (registered) GlobalRegistrator.register();
@@ -32,12 +32,12 @@ const BODY =
   '<w:p><w:r><w:t>Second</w:t></w:r></w:p>';
 
 type Runtime = ReturnType<typeof DocxEditor.createBrowser>;
-type Order = 'Unknown' | 'LeftToRight' | 'RightToLeft';
+type Order = 'LeftToRight' | 'RightToLeft';
 
 async function room() {
   const harness = createPeerHarness('paragraph-direction-automation', { offlineEditing: true });
   const pair = await harness.pair(zipDocument(BODY));
-  const peers = [pair.alice, pair.bob].map((peer) => {
+  const mount = (peer: Peer) => {
     peer.detach();
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -48,14 +48,27 @@ async function room() {
     });
     return {
       ...peer,
+      peer,
       editor,
       runtime: DocxEditor.createBrowser(editor, { author: 'Writer' }),
       container,
     };
-  });
+  };
+  const unmount = (peer: ReturnType<typeof mount>) => {
+    peer.runtime.dispose();
+    peer.editor.destroy();
+    peer.container.remove();
+  };
+  const peers = [pair.alice, pair.bob].map(mount);
   return {
     pair,
     peers,
+    /** Close a peer's editor and session, then join again from the state it kept offline. */
+    async rejoin(index: number) {
+      const leaving = peers[index]!;
+      unmount(leaving);
+      peers[index] = mount(await harness.remount(leaving.peer));
+    },
     sync() {
       for (const peer of peers) peer.room.session.flushPendingJournals();
     },
@@ -63,11 +76,7 @@ async function room() {
       return Promise.all(peers.map(async (peer) => new Uint8Array(await peer.editor.save())));
     },
     close() {
-      for (const peer of peers) {
-        peer.runtime.dispose();
-        peer.editor.destroy();
-        peer.container.remove();
-      }
+      for (const peer of peers) unmount(peer);
       harness.cleanup();
     },
   };
@@ -156,9 +165,9 @@ test('deleting the paragraph while the other peer sets its direction converges',
     await setOrder(bob!.runtime, 'RightToLeft');
     r.pair.resume();
     r.sync();
-    const [left, right] = await Promise.all(r.peers.map((peer) => paragraphs(peer.runtime)));
-    expect(left).toEqual(right!);
-    await converged(r);
+    for (const peer of r.peers)
+      expect(await paragraphs(peer.runtime)).toEqual([{ text: 'Second', order: 'LeftToRight' }]);
+    expect(await converged(r)).not.toContain('w:bidi');
   } finally {
     r.close();
   }
@@ -191,7 +200,7 @@ test('a tracked direction change replicates while the other peer types, and reje
     for (const peer of r.peers) {
       expect((await paragraphs(peer.runtime))[0]).toEqual({
         text: 'שלום עולם!',
-        order: 'Unknown',
+        order: 'LeftToRight',
       });
     }
     const rejected = await converged(r);
@@ -213,7 +222,10 @@ test('undo and redo of a direction change replicate to the other peer', async ()
     expect((await paragraphs(bob!.runtime))[0]!.order).toBe('RightToLeft');
     expect(alice!.editor.exec({ type: 'undo' }).ok).toBe(true);
     r.sync();
-    expect((await paragraphs(bob!.runtime))[0]).toEqual({ text: 'שלום עולם.', order: 'Unknown' });
+    expect((await paragraphs(bob!.runtime))[0]).toEqual({
+      text: 'שלום עולם.',
+      order: 'LeftToRight',
+    });
     expect(alice!.editor.exec({ type: 'redo' }).ok).toBe(true);
     r.sync();
     expect((await paragraphs(bob!.runtime))[0]).toEqual({
@@ -230,7 +242,7 @@ test('offline edits on both peers converge on reconnect and survive save and reo
   const r = await room();
   try {
     const [alice, bob] = r.peers;
-    // Bob is offline: nothing he or Alice writes reaches the other until reconnect.
+    // Bob is offline: nothing he or Alice writes reaches the other until he reconnects.
     r.pair.pause();
     await setOrder(alice!.runtime, 'RightToLeft');
     await bob!.runtime.run(async (context) => {
@@ -241,6 +253,9 @@ test('offline edits on both peers converge on reconnect and survive save and reo
       items.items[0]!.insertText(' offline', 'End');
       await context.sync();
     });
+    // Bob closes his editor and session, then joins the room again from what he kept.
+    r.sync();
+    await r.rejoin(1);
     r.pair.resume();
     r.sync();
     const expected: { text: string; order: Order }[] = [

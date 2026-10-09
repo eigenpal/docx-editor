@@ -303,7 +303,7 @@ describe('reading a paragraph format', () => {
       spaceBefore: 12,
       spaceAfter: 6,
       widowControl: false,
-      readingOrder: 'Unknown',
+      readingOrder: 'LeftToRight',
     });
   });
 
@@ -321,7 +321,7 @@ describe('reading a paragraph format', () => {
       spaceBefore: null,
       spaceAfter: null,
       widowControl: null,
-      readingOrder: 'Unknown',
+      readingOrder: 'LeftToRight',
     });
   });
 });
@@ -390,7 +390,7 @@ describe('writing a paragraph format', () => {
       spaceBefore: 12,
       spaceAfter: 6,
       widowControl: false,
-      readingOrder: 'Unknown',
+      readingOrder: 'LeftToRight',
     });
   });
 
@@ -429,7 +429,7 @@ describe('writing a paragraph format', () => {
       expect(refusal(response)).toBe('unsupported-content');
     }
     expect(formatOf(host, spaced!)).toMatchObject({
-      readingOrder: 'Unknown',
+      readingOrder: 'LeftToRight',
       alignment: 'Centered',
     });
     for (const readingOrder of ['RightToLeft', 'LeftToRight'] as const) {

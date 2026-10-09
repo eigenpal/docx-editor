@@ -533,35 +533,35 @@
   },
   "Word.Paragraph#style": {
     "status": "partial",
-    "notes": "Writes a paragraph style by its display name from the document styles part. Unknown style names refuse; load before reading. Other paragraph properties are preserved."
+    "notes": "Writes a paragraph style by its display name from the document styles part. Unknown style names refuse; load before reading. Other paragraph properties are preserved. A load queued in the same sync as a write returns the value from before the write."
   },
   "Word.Paragraph#alignment": {
     "status": "partial",
-    "notes": "Writes Left, Centered, Right, or Justified. Mixed and Unknown describe reads and are refused on writes. Unspecified or mixed authored values can read as null or a mixed marker. Values are the stored w:jc: in a right-to-left paragraph, Left and Right name the leading and trailing edges, so Left sits at the right margin. Setting the DocxEditor addition Paragraph.readingOrder keeps w:jc as authored."
+    "notes": "Writes Left, Centered, Right, or Justified. Mixed and Unknown describe reads and are refused on writes. Unspecified or mixed authored values can read as null or a mixed marker. Values are the stored w:jc: in a right-to-left paragraph, Left and Right name the leading and trailing edges, so Left sits at the right margin. Setting the DocxEditor addition Paragraph.readingOrder keeps w:jc as authored. A load queued in the same sync as a write returns the value from before the write."
   },
   "Word.Paragraph#leftIndent": {
     "status": "partial",
-    "notes": "Writes paragraph leftIndent in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions."
+    "notes": "Writes paragraph leftIndent in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions. A load queued in the same sync as a write returns the value from before the write."
   },
   "Word.Paragraph#rightIndent": {
     "status": "partial",
-    "notes": "Writes paragraph rightIndent in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions."
+    "notes": "Writes paragraph rightIndent in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions. A load queued in the same sync as a write returns the value from before the write."
   },
   "Word.Paragraph#firstLineIndent": {
     "status": "partial",
-    "notes": "Writes paragraph firstLineIndent in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions."
+    "notes": "Writes paragraph firstLineIndent in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions. A load queued in the same sync as a write returns the value from before the write."
   },
   "Word.Paragraph#lineSpacing": {
     "status": "partial",
-    "notes": "Writes paragraph lineSpacing in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions."
+    "notes": "Writes paragraph lineSpacing in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions. A load queued in the same sync as a write returns the value from before the write."
   },
   "Word.Paragraph#spaceBefore": {
     "status": "partial",
-    "notes": "Writes paragraph spaceBefore in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions."
+    "notes": "Writes paragraph spaceBefore in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions. A load queued in the same sync as a write returns the value from before the write."
   },
   "Word.Paragraph#spaceAfter": {
     "status": "partial",
-    "notes": "Writes paragraph spaceAfter in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions."
+    "notes": "Writes paragraph spaceAfter in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions. A load queued in the same sync as a write returns the value from before the write."
   },
   "Word.Comment#resolved": {
     "status": "partial",

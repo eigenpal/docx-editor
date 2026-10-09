@@ -1120,13 +1120,15 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     return {
       ok: true,
       kind: 'command',
-      ops: [
-        {
-          op: 'setParagraphProperties',
-          paragraphId: paragraph.paragraphId,
-          properties: properties.value,
-        },
-      ],
+      ops: properties.unchanged
+        ? []
+        : [
+            {
+              op: 'setParagraphProperties',
+              paragraphId: paragraph.paragraphId,
+              properties: properties.value,
+            },
+          ],
       story: reads.story,
       answer: () => APPLIED,
     };

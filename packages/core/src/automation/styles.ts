@@ -22,7 +22,9 @@ import { indexStyles, stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import { isValidXmlText } from '../store/package/sinks.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
-import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
+import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
+import { settingsPartOf } from '../store/package/note-properties.ts';
+import { paragraphInheritsRtl } from '../layout/paragraph-direction-inheritance.ts';
 import { namedChild, paragraphPropertiesNodeOf } from '../store/store/tree-op-nodes.ts';
 
 /** Longest style name a write may carry. Word's own limit is far below this. */
@@ -38,6 +40,11 @@ export interface AutomationStyleIndex {
   readonly defaultId: string | null;
   /** Whether the package has a styles part at all. */
   readonly present: boolean;
+  /**
+   * Whether the paragraph is right to left when its own `w:bidi` is ignored: document defaults,
+   * an enclosing cell's table style, and its paragraph style chain, as layout resolves them.
+   */
+  inheritsRtl(part: OoxmlPart, paragraph: OoxmlNode): boolean;
 }
 
 const NO_STYLES: AutomationStyleIndex = Object.freeze({
@@ -45,6 +52,8 @@ const NO_STYLES: AutomationStyleIndex = Object.freeze({
   idOf: () => null,
   defaultId: null,
   present: false,
+  // Defaults and styles both live in the styles part, so nothing is inherited without one.
+  inheritsRtl: () => false,
 });
 
 /**
@@ -71,11 +80,15 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
     }
     if (entry.isDefault && defaultId === null) defaultId = entry.styleId;
   }
+  const settings = settingsPartOf(pkg)?.root ?? null;
   return Object.freeze({
     nameOf: (styleId: string) => byId.get(styleId) ?? null,
     idOf: (name: string) => byName.get(name.trim().toLowerCase()) ?? null,
     defaultId,
     present: true,
+    // Cell styles resolve as the proposed document shows them, like automation's run writes.
+    inheritsRtl: (target: OoxmlPart, paragraph: OoxmlNode) =>
+      paragraphInheritsRtl(part.root, settings, target, paragraph, 'proposed'),
   });
 }
 
