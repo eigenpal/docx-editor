@@ -16,6 +16,7 @@ import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 
 const MAX_WIDTH_PT = 31_680 / 20;
 const EPSILON_PT = 0.001;
+const MAX_PERCENT_UNITS = 32_767;
 
 /** Reconcile the precision of legacy fiftieth-percent preferences with a verified twip grid. */
 export function legacyRoundedCellClaims(
@@ -85,7 +86,6 @@ export function legacyTableContentWidth(input: {
     input.cellSpacingPt !== 0 ||
     input.tableWidth.type !== 'pct' ||
     input.tableWidth.value <= 0 ||
-    input.tableWidth.value > 100 ||
     !Number.isFinite(contentWidthPt) ||
     contentWidthPt <= 0 ||
     contentWidthPt > MAX_WIDTH_PT ||
@@ -102,11 +102,13 @@ export function legacyTableContentWidth(input: {
   const layout = child(properties, 'tblLayout');
   const stated = (name: string) =>
     properties.children.some((node) => node.kind !== 'textValue' && node.localName === name);
+  // A percentage above 100 extends the same reference box past the text column.
   if (
     attr(width, 'type') !== 'pct' ||
     rawWidth === undefined ||
-    ((!/^\d{1,4}$/.test(rawWidth) || Number(rawWidth) > 5000) &&
-      (!/^\d{1,3}(?:\.\d+)?%$/.test(rawWidth) || Number(rawWidth.slice(0, -1)) > 100)) ||
+    ((!/^\d{1,5}$/.test(rawWidth) || Number(rawWidth) > MAX_PERCENT_UNITS) &&
+      (!/^\d{1,3}(?:\.\d+)?%$/.test(rawWidth) ||
+        Number(rawWidth.slice(0, -1)) * 50 > MAX_PERCENT_UNITS)) ||
     (stated('tblInd') &&
       (attr(indent, 'type') !== 'dxa' || readTwipsMeasure(attr(indent, 'w')) !== 0)) ||
     (stated('tblLayout') && attr(layout, 'type') !== 'autofit')
