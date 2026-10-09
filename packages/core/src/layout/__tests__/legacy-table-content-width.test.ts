@@ -92,31 +92,41 @@ describe('explicit legacy full-width content alignment', () => {
     }
   });
 
-  const controls: [string, string][] = [
+  // The reference box holds for every alignment, indent, layout and direction, whatever the
+  // authored grid states; the grid only reconciles fiftieth-percent rounding when it agrees.
+  const referenceShapes: [string, string][] = [
     ['fixed', fixture(properties.replace('autofit', 'fixed'))],
-    [
-      'automatic width',
-      fixture(properties.replace('type="pct" w:w="5000"', 'type="auto" w:w="0"')),
-    ],
     ['partial width', fixture(properties.replace('w:w="5000"', 'w:w="4500"'))],
-    ['clamped oversized percentage', fixture(properties.replace('w:w="5000"', 'w:w="999999"'))],
+    ['wrapped oversized percentage', fixture(properties.replace('w:w="5000"', 'w:w="999999"'))],
     ['positive indent', fixture(properties.replace('type="dxa" w:w="0"', 'type="dxa" w:w="120"'))],
     ['negative indent', fixture(properties.replace('type="dxa" w:w="0"', 'type="dxa" w:w="-120"'))],
     ['right', fixture(properties + '<w:jc w:val="right"/>')],
-    ['invalid alignment', fixture(properties + '<w:jc w:val="typo"/>')],
     ['RTL', fixture(properties + '<w:bidiVisual/>')],
-    ['floating', fixture(properties + '<w:tblpPr w:horzAnchor="text"/>')],
-    ['separated cells', fixture(properties + '<w:tblCellSpacing w:type="dxa" w:w="20"/>')],
     ['missing grid', fixture(properties, '')],
     ['different grid total', fixture(properties, grid.replace('3306', '3106'))],
     ['zero column', fixture(properties, grid.replace('910', '0'))],
     ['unbounded column', fixture(properties, grid.replace('910', '999999999'))],
     ['foreign grid attribute', fixture(properties, grid.replace('w:w="910"', 'foreign:w="910"'))],
-    ['foreign width element', fixture(properties.replace('w:tblW', 'foreign:tblW'))],
+  ];
+  for (const [name, xml] of referenceShapes) {
+    test(`${name} uses the content-aligned reference box`, () => {
+      const structure = read(xml);
+      expect(structure.legacyContentAlignment).toBe(true);
+      expect(structure.columnWidthsPt.every((width) => Number.isFinite(width) && width > 0)).toBe(
+        true
+      );
+    });
+  }
+
+  const controls: [string, string][] = [
     [
-      'foreign indent attribute',
-      fixture(properties.replace('type="dxa" w:w="0"', 'type="dxa" foreign:w="0"')),
+      'automatic width',
+      fixture(properties.replace('type="pct" w:w="5000"', 'type="auto" w:w="0"')),
     ],
+    ['invalid alignment', fixture(properties + '<w:jc w:val="typo"/>')],
+    ['floating', fixture(properties + '<w:tblpPr w:horzAnchor="text"/>')],
+    ['separated cells', fixture(properties + '<w:tblCellSpacing w:type="dxa" w:w="20"/>')],
+    ['foreign width element', fixture(properties.replace('w:tblW', 'foreign:tblW'))],
     ['duplicate width', fixture(properties + '<w:tblW w:type="pct" w:w="5000"/>')],
     [
       'varying outside margins',

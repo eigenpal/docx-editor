@@ -254,9 +254,12 @@ describe('a grid-confirmed legacy table above 100%', () => {
     });
   }
 
-  test('the grid confirms the nearest twip, not a different width', () => {
-    expect(structure(legacy('5209', '2309')).legacyContentAlignment).toBe(true);
-    expect(structure(legacy('5209', '2308')).legacyContentAlignment).toBeUndefined();
+  test('the reference box does not depend on the authored grid', () => {
+    for (const grid of ['2309', '2308', '1200', '4000']) {
+      const table = structure(legacy('5209', grid));
+      expect(table.legacyContentAlignment).toBe(true);
+      expect(table.columnWidthsPt[0]).toBeCloseTo(115.4, 1);
+    }
   });
 
   test('a left-aligned table aligns its content with the text column', () => {

@@ -81,6 +81,8 @@ import { readCellVerticalAlign, type CellVerticalAlign } from './table-cell-vert
 import { tableRowIsHeader } from './table-row-header-style.ts';
 import { cellIgnoresEndMark } from './table-cell-hide-mark.ts';
 import { legacyRoundedCellClaims, legacyTableContentWidth } from './legacy-table-content-width.ts';
+import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
+import { ruleAdjustedTableWidth } from './table-percent-rules.ts';
 import { legacyFixedTableContentOffset } from './legacy-fixed-table-content.ts';
 import { withLegacyTableSideRules } from './legacy-table-side-rules.ts';
 import { conditionalTypesFor, readTableLook } from './table-conditional-formats.ts';
@@ -873,7 +875,7 @@ function readTableStructureUncached(
     styleCellSpacingPt ??
     0;
 
-  const legacyWidth = legacyTableContentWidth({
+  const legacy = legacyTableContentWidth({
     table,
     propertyNodes: tableStyle.tablePropertyNodes,
     rows,
@@ -882,24 +884,27 @@ function readTableStructureUncached(
     compatibilityMode,
     depth,
     tableWidth,
-    layoutFixed,
-    alignment,
-    indentPt,
     cellSpacingPt,
     floating: float !== undefined,
   });
+  const legacyWidth = legacy?.widthPt;
+  // A nested table, and every table outside the legacy modes, adds its outer rule to the share.
+  const resolvedWidth =
+    legacy === undefined &&
+    (depth > 0 || !hasCompatibilityRule(compatibilityMode, 'legacyPercentTableContentWidth'))
+      ? ruleAdjustedTableWidth(tableWidth, contentWidthPt, tableBorders)
+      : tableWidth;
 
   const columnWidthsPt =
     columnWidthsOverridePt ??
     resolveColumnWidthsPt({
       gridCols,
-      claims:
-        legacyWidth === undefined
-          ? claims
-          : legacyRoundedCellClaims(claims, gridCols, (legacyWidth * tableWidth.value) / 100),
+      claims: legacy?.gridConfirmed
+        ? legacyRoundedCellClaims(claims, gridCols, (legacy.widthPt * tableWidth.value) / 100)
+        : claims,
       columnCount,
       contentWidthPt: legacyWidth ?? contentWidthPt,
-      tableWidth,
+      tableWidth: resolvedWidth,
       layoutFixed,
       // A hidden revision row can still account for part of the authored grid.
       hasOmittedRows,
