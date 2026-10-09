@@ -6,6 +6,7 @@
 // layout-owned note records. Endnotes reserve nothing on reference pages — they collect at
 // sectEnd / docEnd. Hostile counts and oscillation fail closed with named reasons.
 
+import { noteStoryOptions } from './note-story-options.ts';
 import {
   createNoteSeparatorCache,
   separatorLayoutOf,
@@ -57,7 +58,6 @@ import {
   type NoteLayoutFallbackReason,
   type NoteSeparatorLayout,
   type NoteStoryDrawings,
-  type LayoutNoteStoryOptions,
 } from './note-layout.ts';
 import { noteMarkKey, type NoteMarkContext } from './note-projection.ts';
 import { noteBodyGeometryChanged, resetNoteReserveSearch } from './note-body-geometry.ts';
@@ -225,6 +225,8 @@ export interface NotesLayoutInput {
   readonly styleCascade?: StyleCascadeTable;
   /** `numbering.xml`, so a `w:numPr` paragraph inside a note resolves a marker. */
   readonly numberingIndex?: import('./numbering-index.ts').NumberingIndex;
+  /** Per-section active line-grid pitch in points; note lines snap to their section's grid. */
+  readonly lineGridPitchBySection?: readonly (number | undefined)[];
   readonly defaultTabStopPt?: number;
   readonly compatibilityMode?: number;
   readonly displayMode?: RevisionDisplayMode;
@@ -629,29 +631,6 @@ function endnotePropsFor(input: NotesLayoutInput, sectionIndex: number): Resolve
     input.documentEndnoteProps
   );
 }
-function layoutOpts(input: NotesLayoutInput, noteMarks?: NoteMarkContext): LayoutNoteStoryOptions {
-  return {
-    measurer: input.measurer,
-    producer: input.producer,
-    displayMode: input.displayMode,
-    cache: input.cache,
-    styleCascade: input.styleCascade,
-    numberingIndex: input.numberingIndex,
-    defaultTabStopPt: input.defaultTabStopPt,
-    compatibilityMode: input.compatibilityMode,
-    revisionAuthorFilter: input.revisionAuthorFilter,
-    projectLink: input.projectLink,
-    projectLinkForPart: input.projectLinkForPart,
-    projectFieldLink: input.projectFieldLink,
-    showFieldCodes: input.showFieldCodes,
-    documentProperties: input.documentProperties,
-    refFields: input.refFields,
-    noteMarks,
-    drawingsForPart: input.drawingsForPart,
-    projectionTokenForParagraphForPart: input.projectionTokenForParagraphForPart,
-    projectionTokenForTableForPart: input.projectionTokenForTableForPart,
-  };
-}
 function effectiveNoteMarkStyle(
   noteKind: NoteKind,
   styleCascade: StyleCascadeTable | undefined
@@ -942,7 +921,7 @@ function buildFootnoteArea(
   const nextCarry: NoteCarryMap = new Map(continuationCarry);
   const pageRefs = refs.filter((ref) => ref.noteKind === 'footnote');
   const contentWidth = page.contentBox.width;
-  const opts = layoutOpts(input, noteMarks);
+  const opts = noteStoryOptions(input, noteMarks, pageRefs[0]?.sectionIndex ?? 0);
 
   const notes: NoteStoryRecord[] = [];
   let stackHeight = 0;
@@ -1612,7 +1591,11 @@ function buildEndnoteArea(
   }
 
   const contentWidth = page.contentBox.width;
-  const opts = layoutOpts(input, noteMarks);
+  const opts = noteStoryOptions(
+    input,
+    noteMarks,
+    refs[0]?.sectionIndex ?? Math.max(0, input.endnotePropsBySection.length - 1)
+  );
   const separatorKind = options?.separatorKind ?? 'separator';
   const notesPartFor = (kind: NoteKind) =>
     kind === 'footnote' ? input.footnotesPart : input.endnotesPart;
@@ -2126,7 +2109,6 @@ function computeFootnoteReservesWithPolicy(
   // notes reuse their story layouts until the memo (which pins the parts and inputs the
   // key omits) is replaced. See {@link NoteStoryLayoutCache}.
   const noteLayoutCache = noteStoryCacheFor(noteMarks);
-  const holdOutOpts = layoutOpts(input, noteMarks);
   const isPageBottomFootnoteRef = (ref: PageRefHit): boolean =>
     ref.noteKind === 'footnote' && !collectsAtEnd(footnotePropsFor(input, ref.sectionIndex).pos);
   // A document with no page-bottom footnote reference at all (footnote-free, or every
@@ -2154,6 +2136,7 @@ function computeFootnoteReservesWithPolicy(
     // Position from the first page-local ref's section; sect/doc-end refs do not govern it.
     const sectionIndex = pageBottomRefs[0]?.sectionIndex ?? 0;
     const props = footnotePropsFor(input, sectionIndex);
+    const holdOutOpts = noteStoryOptions(input, noteMarks, sectionIndex);
     const nextPage = layout.pages[pageAt + (layout.pages[pageAt + 1]?.parityBlank ? 2 : 1)];
     const usedReservePt = previousReserves ? (previousReserves.get(page.index) ?? 0) : undefined;
     // The reserve ceiling: the note column beside the minimum body band.

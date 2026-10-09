@@ -98,3 +98,21 @@ export function gridLineBox(
   const centring = (height - naturalHeight) / 2;
   return { height, baseline: naturalBaseline + centring, trailing: centring };
 }
+
+/**
+ * Snap the lines of a story paragraph that the box flow resolved as a cell paragraph.
+ *
+ * Note stories flow through the same box walk as table cells, which never snap without
+ * `w:adjustLineHeightInTable`. Their own paragraphs follow the section grid like body text, so
+ * the walk passes the pitch here for paragraphs outside any cell. Opt-outs still apply.
+ */
+export function withStoryLineGrid<
+  T extends {
+    readonly lineSpacing: ParagraphLineSpacing;
+    readonly props: readonly OoxmlProperty[];
+  },
+>(inputs: T, gridPitchPt: number | undefined): T {
+  if (gridPitchPt === undefined || inputs.lineSpacing.gridPitch !== undefined) return inputs;
+  const lineSpacing = withLineGrid(inputs.lineSpacing, inputs.props, gridPitchPt, false, false);
+  return lineSpacing === inputs.lineSpacing ? inputs : { ...inputs, lineSpacing };
+}

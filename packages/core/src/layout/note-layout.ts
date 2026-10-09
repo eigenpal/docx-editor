@@ -155,6 +155,11 @@ export interface LayoutNoteStoryOptions {
   readonly numberingIndex?: import('./numbering-index.ts').NumberingIndex;
   readonly defaultTabStopPt?: number;
   readonly compatibilityMode?: number;
+  /**
+   * The active line-grid pitch of the section that owns the note, in points. Note lines snap
+   * to it like body lines do; absent means no grid.
+   */
+  readonly lineGridPitchPt?: number;
   readonly displayMode?: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
   /**
@@ -326,6 +331,9 @@ export function layoutNoteStory(
     ...(options.refFields ? { refFields: options.refFields } : {}),
     displayMode,
     compatibilityMode: options.compatibilityMode,
+    ...(options.lineGridPitchPt !== undefined
+      ? { paragraphLineUnitPt: options.lineGridPitchPt, snapsStoryLines: true as const }
+      : {}),
     tableNestingOffset: 1,
     ...(options.defaultTabStopPt !== undefined
       ? { defaultTabStopPt: options.defaultTabStopPt }
@@ -410,7 +418,7 @@ export function layoutNoteCached(
   cache: NoteStoryLayoutCache | undefined
 ): NoteStoryLayout | null {
   if (!cache) return layoutNoteById(part, noteId, contentWidth, opts);
-  const key = `${part?.name ?? 'none'}\0${noteId}\0${contentWidth}`;
+  const key = `${part?.name ?? 'none'}\0${noteId}\0${contentWidth}\0${opts.lineGridPitchPt ?? ''}`;
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
   const laid = layoutNoteById(part, noteId, contentWidth, opts);
@@ -508,8 +516,10 @@ export function layoutNoteSeparator(
   const ruleStyle = defaultNoteSeparatorRuleStyle(noteKind, kind);
   const authored = findSeparatorNote(part, kind);
   if (authored) {
+    // Separators keep their unsnapped height: only note text follows the section grid.
     const laid = layoutNoteStory(authored, contentWidth, {
       ...options,
+      lineGridPitchPt: undefined,
       ...(part ? { ownerPartName: part.name } : {}),
     });
     if (laid) {
