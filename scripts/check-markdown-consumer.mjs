@@ -20,37 +20,49 @@ function run(command, args, cwd = consumer) {
   });
   if (result.status !== 0) throw new Error(`${command} exited with ${result.status}`);
 }
-// Every package is pinned, including `langsmith`, which `@langchain/core` brings in: its
-// 0.10.10 release ships declarations that do not type-check, and an unpinned install picks it.
+// The LangChain example from the integration docs runs only on request (`CHECK_LANGCHAIN=1`):
+// LangChain is not a dependency of any package here, and its releases must not decide
+// whether a change to this repository passes.
+const langchain = process.env.CHECK_LANGCHAIN === '1';
 run('npm', [
   'install',
   '--ignore-scripts',
   'next@16.3.4',
-  '@langchain/core@1.2.9',
-  '@langchain/textsplitters@1.0.1',
-  'langsmith@0.10.9',
+  // `langsmith` comes with `@langchain/core`; its 0.10.10 declarations do not type-check.
+  ...(langchain
+    ? ['@langchain/core@1.2.9', '@langchain/textsplitters@1.0.1', 'langsmith@0.10.9']
+    : []),
   '@types/node@22',
 ]);
+// The integration docs' LangChain example: page output as LangChain documents, split for
+// retrieval with each chunk's page kept for citations.
+const LANGCHAIN_EXAMPLE = `
+const documents = result.pages.map(page => new Document({
+  pageContent: page.markdown, metadata: { source: 'narrow-pages.docx', page: page.number },
+}));
+if (documents.length !== 15 || documents[14]?.metadata.page !== 15) throw new Error('Page metadata lost');
+const chunks = await new RecursiveCharacterTextSplitter({chunkSize: 80, chunkOverlap: 10}).splitDocuments(documents);
+if (chunks.length <= documents.length) throw new Error('Splitter did not create chunks');
+if (new Set(chunks.map(chunk => chunk.metadata.page)).size !== 15) throw new Error('Splitter lost pages');
+if (chunks.some(chunk => chunk.metadata.source !== 'narrow-pages.docx' || !chunk.metadata.page)) throw new Error('Splitter lost citation metadata');
+`;
 cpSync(fixture, path.join(consumer, 'narrow-pages.docx'));
 writeFileSync(
   path.join(consumer, 'markdown-node.mts'),
   `
 import { readFile } from 'node:fs/promises';
-import { Document } from '@langchain/core/documents';
-import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
+${langchain ? "import { Document } from '@langchain/core/documents';" : ''}
+${langchain ? "import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';" : ''}
 import { exportMarkdown } from '@docx-editor.dev/docx-to-markdown';
 const docxBytes = await readFile('narrow-pages.docx');
 const result = await exportMarkdown(docxBytes);
 console.log(result.markdown);
-const documents = result.pages.map(page => new Document({
-  pageContent: page.markdown, metadata: { source: 'narrow-pages.docx', page: page.number },
-}));
-if (documents.length !== 15 || documents[14]?.metadata.page !== 15) throw new Error('Page metadata lost');
+if (result.pages.length !== 15) throw new Error('Pages lost');
+if (result.pages.some((page, index) => page.number !== index + 1 || !page.markdown)) {
+  throw new Error('Page numbers or text lost');
+}
 if (result.warnings.length) throw new Error(JSON.stringify(result.warnings));
-const chunks = await new RecursiveCharacterTextSplitter({chunkSize: 80, chunkOverlap: 10}).splitDocuments(documents);
-if (chunks.length <= documents.length) throw new Error('Splitter did not create chunks');
-if (new Set(chunks.map(chunk => chunk.metadata.page)).size !== 15) throw new Error('Splitter lost pages');
-if (chunks.some(chunk => chunk.metadata.source !== 'narrow-pages.docx' || !chunk.metadata.page)) throw new Error('Splitter lost citation metadata');
+${langchain ? LANGCHAIN_EXAMPLE : ''}
 `
 );
 writeFileSync(
