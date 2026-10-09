@@ -112,6 +112,12 @@ export const paragraphFormat = z
       .optional(),
     spaceBefore: z.number().finite().optional(),
     spaceAfter: z.number().finite().optional(),
+    readingOrder: z
+      .enum(['LeftToRight', 'RightToLeft'])
+      .describe(
+        'Paragraph base direction. Use RightToLeft for Arabic, Hebrew, and other right-to-left paragraphs.'
+      )
+      .optional(),
   })
   .strict();
 // Each change carries one property. Models must not invent defaults for unrelated properties.
