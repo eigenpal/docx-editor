@@ -165,29 +165,29 @@ export function nodeIndexTestRecorder(): {
 function nodeIndexFor(root: OoxmlElement): PartIndex {
   const cached = partIndexes.get(root);
   if (cached) return cached;
-  nodeIndexBuilder(root)(Infinity);
+  nodeIndexBuilder(root)(() => false);
   return partIndexes.get(root)!;
 }
 
 /**
- * Build `root`'s node index in steps of about `budgetMs` each, in document order. A step
- * answers true once the index is installed, or when another read installed it first. A long
- * part's index took about a second in one task, so a large open builds it in short ones.
+ * Build `root`'s node index in steps, in document order. A step runs until `stop()` answers
+ * true (asked every thousand nodes; the store lane has no clock), and answers true once the
+ * index is installed, or when another read installed it first. A long part's index took about
+ * a second in one task, so a large open builds it in short ones.
  */
-export function nodeIndexSteps(root: OoxmlElement): (budgetMs: number) => boolean {
+export function nodeIndexSteps(root: OoxmlElement): (stop: () => boolean) => boolean {
   const build = nodeIndexBuilder(root);
-  return (budgetMs) => partIndexes.has(root) || build(budgetMs);
+  return (stop) => partIndexes.has(root) || build(stop);
 }
 
-function nodeIndexBuilder(root: OoxmlElement): (budgetMs: number) => boolean {
+function nodeIndexBuilder(root: OoxmlElement): (stop: () => boolean) => boolean {
   const nodes = new Map<string, OoxmlNode>();
   const parents = new Map<string, string>();
   let uniqueIds = true;
   // Parallel stacks, children pushed in reverse: the same order a recursive walk visits.
   const pending: OoxmlNode[] = [root];
   const pendingParents: (string | null)[] = [null];
-  return (budgetMs) => {
-    const deadline = budgetMs === Infinity ? Infinity : performance.now() + budgetMs;
+  return (stop) => {
     let visits = 0;
     while (pending.length > 0) {
       const node = pending.pop()!;
@@ -203,7 +203,7 @@ function nodeIndexBuilder(root: OoxmlElement): (budgetMs: number) => boolean {
           pendingParents.push(node.id);
         }
       }
-      if ((++visits & 1023) === 0 && performance.now() >= deadline) return false;
+      if ((++visits & 1023) === 0 && stop()) return false;
     }
     nodeIndexCompleteBuilds += 1;
     const mintState = mintStates.get(root) ?? { frontier: 0 };

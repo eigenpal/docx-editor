@@ -296,8 +296,8 @@ describe('node index built in steps', () => {
     const stepped = load(texts);
     const step = nodeIndexSteps(stepped.root);
     let steps = 0;
-    while (!step(0)) steps += 1;
-    // A zero budget stops after each block of visits, so the build took many steps.
+    while (!step(() => true)) steps += 1;
+    // Stopping at every check builds a thousand nodes per step, so the build took many steps.
     expect(steps).toBeGreaterThan(1);
     const truth = walk(stepped);
     expect([...collectNodeIds(stepped)]).toEqual([...truth.nodes.keys()]);
@@ -310,13 +310,13 @@ describe('node index built in steps', () => {
   test('a read in between builds the index at once and ends the steps', () => {
     const part = load(Array.from({ length: 2_000 }, (_, index) => `p${index}`));
     const step = nodeIndexSteps(part.root);
-    expect(step(0)).toBe(false);
+    expect(step(() => true)).toBe(false);
     const recorder = nodeIndexTestRecorder();
     recorder.reset();
     const paragraph = walk(part).nodes.values().next().value!;
     expect(findNode(part, paragraph.id)).toBe(paragraph);
     expect(recorder.completeBuilds).toBe(1);
-    expect(step(0)).toBe(true);
+    expect(step(() => true)).toBe(true);
     expect(recorder.completeBuilds).toBe(1);
   });
 });

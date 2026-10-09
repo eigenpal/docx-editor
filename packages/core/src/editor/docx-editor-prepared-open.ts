@@ -109,7 +109,10 @@ export function openSteps(
   const indexStep = nodeIndexSteps(session.part().root);
   // Each read answers true once done; the node index takes several steps on a long part.
   const reads: (() => boolean)[] = [
-    () => indexStep(FONT_WARM_STEP_MS),
+    () => {
+      const deadline = performance.now() + FONT_WARM_STEP_MS;
+      return indexStep(() => performance.now() >= deadline);
+    },
     () => {
       session.reviewItems();
       return true;
