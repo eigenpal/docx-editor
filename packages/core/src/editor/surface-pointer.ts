@@ -29,6 +29,7 @@ import {
   deletedTextBoundaries,
   paragraphTextFromLayout,
   type SemanticPosition,
+  type CaretGeometry,
   type SemanticSelection,
 } from '../layout/semantic-interaction.ts';
 import { wordRangeAt } from './surface-selection-ops.ts';
@@ -90,7 +91,7 @@ export interface PointerHost {
   layout(): SemanticLayout;
   measurer(): TextMeasurer | undefined;
   selection(): SemanticSelection;
-  setSelection(next: SemanticSelection): void;
+  setSelection(next: SemanticSelection, caret?: CaretGeometry): void;
   cellSelection(): CellSelection | null;
   setCellSelection(next: CellSelection | null): void;
   focus(): void;
@@ -198,6 +199,7 @@ interface PositionRange {
 
 interface Gesture {
   readonly pointerId: number;
+  caret?: CaretGeometry;
   readonly granularity: Granularity;
   /** What the press itself selected — a caret, a word, or a paragraph. */
   readonly anchorRange: PositionRange;
@@ -699,8 +701,10 @@ export function createPointerController(
     )
       return;
     if (extendCells(active, hit)) return;
+    active.caret = hit.caret;
     host.setSelection(
-      extend(host.layout(), active.anchorRange, hit.position, active.granularity, hit)
+      extend(host.layout(), active.anchorRange, hit.position, active.granularity, hit),
+      hit.caret
     );
   }
 
@@ -1050,6 +1054,7 @@ export function createPointerController(
       gesture = {
         pointerId: event.pointerId,
         granularity,
+        caret: hit.caret,
         anchorRange: { from: current.anchor, to: current.anchor },
         anchorCell: hit.cell,
         cellDragging: false,
@@ -1064,7 +1069,8 @@ export function createPointerController(
             hit.position,
             granularity,
             hit
-          )
+          ),
+          hit.caret
         )
       );
     } else {
@@ -1072,6 +1078,7 @@ export function createPointerController(
       gesture = {
         pointerId: event.pointerId,
         granularity,
+        caret: hit.caret,
         anchorRange,
         anchorCell: hit.cell,
         cellDragging: false,
@@ -1080,7 +1087,8 @@ export function createPointerController(
       };
       publish(() =>
         host.setSelection(
-          absorbPlaceholderControls(layout, { anchor: anchorRange.from, head: anchorRange.to })
+          absorbPlaceholderControls(layout, { anchor: anchorRange.from, head: anchorRange.to }),
+          hit.caret
         )
       );
     }
@@ -1123,7 +1131,7 @@ export function createPointerController(
     // the text range it stands in for.
     const cells = host.cellSelection();
     if (cells) host.setCellSelection(cells);
-    else host.setSelection(host.selection());
+    else host.setSelection(host.selection(), active.caret);
     // Only a real RELEASE settles the selection. `pointercancel` is the browser taking the
     // gesture away — a system touch gesture, a device change — and the range under the
     // pointer at that moment is not one the user chose. Reporting it settled let an armed

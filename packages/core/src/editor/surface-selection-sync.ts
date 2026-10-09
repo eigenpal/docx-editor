@@ -13,7 +13,11 @@
 // from the DOM is which CHARACTERS were gestured over, never where they are.
 
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import type { SemanticSelection } from '@docx-editor.dev/core/layout';
+import type {
+  SemanticSelection,
+  CaretGeometry,
+  CaretAtOptions,
+} from '@docx-editor.dev/core/layout';
 import type { TreeDocOp } from '@docx-editor.dev/core/store';
 import {
   applySelectionToDom,
@@ -216,6 +220,10 @@ export interface SurfaceSelectionSync {
    * scroll-follow need this page or they jump to the authored copy on page 0.
    */
   selectionPageIndex(): number | undefined;
+  selectionLineId(): string | undefined;
+  caretPreference(preferredPageIndex?: number): CaretAtOptions;
+  /** Keep pointer geometry local; model positions and collaboration selections stay unchanged. */
+  notePointerCaret(caret?: CaretGeometry): void;
 }
 
 export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): SurfaceSelectionSync {
@@ -231,6 +239,18 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    * the first built one — usually page 0.
    */
   let lastSelectionPageIndex: number | undefined;
+  let pointerCaret: CaretGeometry | undefined;
+
+  function selectionLineId(): string | undefined {
+    const { anchor, head } = deps.selection();
+    return pointerCaret &&
+      anchor.paragraphId === head.paragraphId &&
+      anchor.offset === head.offset &&
+      pointerCaret.position.paragraphId === head.paragraphId &&
+      pointerCaret.position.offset === head.offset
+      ? pointerCaret.lineId
+      : undefined;
+  }
 
   function rememberSelectionPage(domSelection: Selection | null): void {
     const page =
@@ -511,12 +531,11 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     userSelectionGesture = false;
     const native = document.getSelection();
     const preferredPageIndex = preferredSelectionPage(native);
-    const wrote = applySelectionToDom(
-      pagesLayer,
-      next,
-      native,
-      preferredPageIndex !== undefined ? { preferredPageIndex } : undefined
-    );
+    const preferredLineId = selectionLineId();
+    const wrote = applySelectionToDom(pagesLayer, next, native, {
+      ...(preferredPageIndex !== undefined ? { preferredPageIndex } : {}),
+      ...(preferredLineId !== undefined ? { preferredLineId } : {}),
+    });
     if (wrote) rememberSelectionPage(native);
     // A REFUSED write is not a baseline. `applySelectionToDom` answers false when either
     // endpoint has no painted place to land — a caret in a paragraph that painted no spans,
@@ -588,6 +607,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
 
     noteModelMoved() {
       modelMoved = true;
+      pointerCaret = undefined;
     },
 
     noteSelectionSettled() {
@@ -716,6 +736,18 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     },
 
     selectionPageIndex: () => lastSelectionPageIndex,
+    selectionLineId,
+    caretPreference(preferredPageIndex = lastSelectionPageIndex) {
+      const preferredLineId = selectionLineId();
+      return {
+        ...(preferredPageIndex !== undefined ? { preferredPageIndex } : {}),
+        ...(preferredLineId !== undefined ? { preferredLineId } : {}),
+      };
+    },
+    notePointerCaret(caret) {
+      pointerCaret = caret;
+      if (caret) lastSelectionPageIndex = caret.pageIndex;
+    },
     destroy() {
       pagesLayer.removeEventListener('pointerdown', noteUserSelectionGesture, true);
       pagesLayer.removeEventListener('selectstart', noteUserSelectionGesture, true);
