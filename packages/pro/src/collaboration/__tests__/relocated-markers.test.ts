@@ -47,10 +47,10 @@ function bookmark(id: string, markerId: string, name: string): OoxmlElement {
 function setup() {
   const doc = new Y.Doc();
   const nodes = doc.getMap<Y.Map<unknown>>('nodes');
-  const put = (id: string, kind: string, localName: string) => {
+  const put = (id: string, kind: string, localName: string, namespaceId = 'w') => {
     const record = new Y.Map<unknown>();
     nodes.set(id, record);
-    record.set(NODE_SHELL_FIELD, packNodeShell(kind, 'w', localName, 'w'));
+    record.set(NODE_SHELL_FIELD, packNodeShell(kind, namespaceId, localName, 'w'));
     return record;
   };
   const source = {
@@ -128,4 +128,14 @@ test('only position markers read as relocated copies, and the split index leaves
   const products = (index as unknown as { runsBySplitOrigin: Map<string, Set<string>> })
     .runsBySplitOrigin;
   expect([...(products.get('origin') ?? [])]).toEqual(['run']);
+});
+
+test('a generic marker name counts only in the WordprocessingML namespace', () => {
+  const { doc, nodes, put } = setup();
+  doc.transact(() => {
+    put('wml', 'generic', 'permStart');
+    put('foreign', 'generic', 'permStart', 'n0123456789abcdef');
+  });
+  expect(relocatedMarkerRecord(nodes.get('wml'))).toBe(true);
+  expect(relocatedMarkerRecord(nodes.get('foreign'))).toBe(false);
 });

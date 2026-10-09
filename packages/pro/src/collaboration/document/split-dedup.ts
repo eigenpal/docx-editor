@@ -67,10 +67,11 @@ export class SplitDedupIndex {
   }
 
   indexExisting(id: LogicalId): void {
-    // A relocated position marker shares the lineage fields but is never a split loser.
-    if (relocatedMarkerRecord(this.nodes.get(id))) return;
-    const root = nodeRecordSplitLineage(this.nodes.get(id));
+    const record = this.nodes.get(id);
+    const root = nodeRecordSplitLineage(record);
     if (root === null || root === id) return;
+    // A relocated position marker shares the lineage fields but is never a split loser.
+    if (relocatedMarkerRecord(record)) return;
     this.invalidate();
     const runs = this.runsBySplitOrigin.get(root) ?? new Set<LogicalId>();
     runs.add(id);
