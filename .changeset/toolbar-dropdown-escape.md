@@ -3,4 +3,4 @@
 '@docx-editor.dev/vue': patch
 ---
 
-Close the alignment, line-spacing, and table toolbar dropdowns when you press Escape in the document. Fixes #1151
+Close toolbar dropdowns, pickers, and the More panel when you press Escape in the document, and keep Escape in your own inputs working. Fixes #1151

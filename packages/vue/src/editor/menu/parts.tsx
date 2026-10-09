@@ -225,20 +225,19 @@ export const MenuGroup = defineComponent({
 // Slot-driven row
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Props for `DocxEditor.Menu.Item`: one chrome slot as a menu row. @public */
-export type MenuItemProps = MenuItemBaseProps &
-  (
-    | {
-        /** The chrome slot this row drives (`'text.bold'`, `'insert.pageBreak'`, …). */
-        slotId: ChromeSlotId;
-        slot?: never;
-      }
-    | {
-        /** @deprecated Use `slotId`. Still read in this release, with a development warning. */
-        slot: ChromeSlotId;
-        slotId?: never;
-      }
-  );
+/**
+ * Props for `DocxEditor.Menu.Item`: one chrome slot as a menu row. Set `slotId`. A row with
+ * neither `slotId` nor the deprecated `slot` renders nothing, with a development warning.
+ * An interface, so a host can extend it.
+ *
+ * @public
+ */
+export interface MenuItemProps extends MenuItemBaseProps {
+  /** The chrome slot this row drives (`'text.bold'`, `'insert.pageBreak'`, …). */
+  slotId?: ChromeSlotId;
+  /** @deprecated Use `slotId`. Still read in this release, with a development warning. */
+  slot?: ChromeSlotId;
+}
 
 /** The props every `Menu.Item` takes besides the slot it names. @public */
 export interface MenuItemBaseProps {

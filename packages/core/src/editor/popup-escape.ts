@@ -78,8 +78,7 @@ export function listenForPopupEscape(options: PopupEscapeOptions): () => void {
       options.chromeRoot?.(),
       ...(options.editorElements?.() ?? []),
     ];
-    const own =
-      fromInside || owners.some((element) => element != null && path.includes(element));
+    const own = fromInside || owners.some((element) => element != null && path.includes(element));
     options.close(fromInside);
     if (!own) return;
     event.preventDefault();

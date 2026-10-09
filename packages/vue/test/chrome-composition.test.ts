@@ -163,6 +163,36 @@ describe('DocxEditorToolbar composition', () => {
     view.unmount();
   });
 
+  test('Toolbar.Button takes slotId, and the deprecated slot still works with a warning', async () => {
+    const original = console.warn;
+    const messages: string[] = [];
+    console.warn = (message: unknown) => {
+      messages.push(String(message));
+    };
+    try {
+      const view = mountEditorTree(() =>
+        h(
+          DocxEditorToolbar,
+          { preset: false, overflow: false },
+          {
+            default: () => [
+              h(DocxEditorToolbar.Button, { slotId: 'format.painter' }),
+              h(DocxEditorToolbar.Button, { slot: 'history.undo' }),
+            ],
+          }
+        )
+      );
+      await flush();
+      expect(view.container.querySelector('button[data-slot="format.painter"]')).not.toBeNull();
+      expect(view.container.querySelector('button[data-slot="history.undo"]')).not.toBeNull();
+      expect(messages.some((text) => text.includes('slot="history.undo"'))).toBe(true);
+      expect(messages.some((text) => text.includes('slot="format.painter"'))).toBe(false);
+      view.unmount();
+    } finally {
+      console.warn = original;
+    }
+  });
+
   test('Escape from a host input closes the editing-mode menu and keeps its default', async () => {
     const view = mountEditorTree(() => h(DocxEditorToolbar), POPUP_ESCAPE_SOURCE);
     await flush();

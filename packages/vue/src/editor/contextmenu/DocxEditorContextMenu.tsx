@@ -36,6 +36,7 @@ import {
   menuItemSlotIdOfVNode,
 } from '../menu/parts';
 import { warnUnmatchedHiddenRow } from '../menu/menu-warnings';
+import { contextMenuRowId } from './row-alias';
 import { ContextMenuContext, type ContextMenuAnchor } from './contextmenu-context';
 import {
   ContextMenuCopy,
@@ -456,7 +457,7 @@ export const DocxEditorContextMenu = defineComponent({
                 children: restChildren,
                 preset: props.preset,
                 keyOfEntry: (entry) => entry.id,
-                keyOfChild: rowOfChild,
+                keyOfChild: (child) => contextMenuRowId(rowOfChild(child)),
                 renderEntry: (entry) =>
                   entry.kind === 'separator' ? <MenuSeparator /> : entry.render(),
                 onUnmatched: (id, vnode) => {

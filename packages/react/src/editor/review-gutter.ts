@@ -96,7 +96,6 @@ const SCROLLING_COLUMN: ReviewGutter = {
   inlineEnd: REVIEW_PANE_GUTTER,
 };
 
-
 /**
  * Whether the gutter is the `overflow: 'scroll'` column that did not fit: the full column
  * stands at the end, but the viewport scrolls sideways to reach it, so only the marker strip

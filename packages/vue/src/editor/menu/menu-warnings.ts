@@ -37,3 +37,16 @@ export function warnMissingSlotId(): void {
 export function warnMissingSubmenuLabel(): void {
   menuDevWarning('A Menu.Submenu has neither label nor labelKey, so its row has no name.');
 }
+
+/** A `Toolbar.Button` named by the deprecated `slot` prop instead of `slotId`. */
+export function warnDeprecatedButtonSlot(slot: string): void {
+  menuDevWarning(
+    `Toolbar.Button takes the slot id as slotId. slot="${slot}" still works in this ` +
+      `release; write slotId="${slot}".`
+  );
+}
+
+/** A `Toolbar.Button` with neither `slotId` nor `slot`, so it renders nothing. */
+export function warnMissingButtonSlot(): void {
+  menuDevWarning('A Toolbar.Button has no slotId, so it renders nothing.');
+}

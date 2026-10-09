@@ -30,6 +30,7 @@ import {
 } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
 import { warnUnmatchedHiddenRow } from '../menu/menu-warnings';
+import { contextMenuRowId } from './row-alias';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import { ReviewRailContext, useDocxEditor } from '../context';
 import { useAddCommentState } from '../toolbar/add-comment-state';
@@ -565,7 +566,7 @@ export function DocxEditorContextMenu({
                 children: Children.toArray(children).filter((child) => !startPlacedChild(child)),
                 preset,
                 keyOfEntry: (entry) => entry.id,
-                keyOfChild: rowOfChild,
+                keyOfChild: (child) => contextMenuRowId(rowOfChild(child)),
                 renderEntry: (entry) =>
                   entry.kind === 'separator' ? <MenuSeparator /> : entry.render(),
                 onUnmatched: (id, element) => {

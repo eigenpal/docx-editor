@@ -12,6 +12,7 @@ import { useEditorCommand } from '../useEditorCommand';
 import { usePlatformShortcut } from '../usePlatformShortcut';
 import { useToolbarLabel } from './toolbar-context';
 import { Slot } from './Slot';
+import { warnDeprecatedButtonSlot, warnMissingButtonSlot } from '../menu/menu-warnings';
 
 /** The registry control behind one slot id, for its labelKey and icon paths. */
 export function chromeControlForSlot(slotId: ChromeSlotId): ChromeControl | null {
@@ -40,9 +41,29 @@ export function guardToolbarMousedown(event: MouseEvent): void {
   event.preventDefault();
 }
 
+/** The slot a toolbar button names: `slotId`, else the deprecated `slot`. @internal */
+export function toolbarButtonSlotId(props: {
+  readonly slotId?: ChromeSlotId | undefined;
+  readonly slot?: ChromeSlotId | undefined;
+}): ChromeSlotId | undefined {
+  if (props.slotId) return props.slotId;
+  if (props.slot) {
+    warnDeprecatedButtonSlot(props.slot);
+    return props.slot;
+  }
+  warnMissingButtonSlot();
+  return undefined;
+}
+
 /** @public */
 export interface ToolbarButtonProps {
-  slot: ChromeSlotId;
+  /**
+   * The chrome slot this button drives (`'text.bold'`, `'history.undo'`, ...). A button with
+   * neither `slotId` nor the deprecated `slot` renders nothing, with a development warning.
+   */
+  slotId?: ChromeSlotId;
+  /** @deprecated Use `slotId`. Still read in this release, with a development warning. */
+  slot?: ChromeSlotId;
   icon?: DocxEditorChildren;
   asChild?: boolean;
   class?: string;
@@ -60,7 +81,8 @@ export interface ToolbarButtonProps {
 export const ToolbarButton = defineComponent({
   name: 'ToolbarButton',
   props: {
-    slot: { type: String as PropType<ChromeSlotId>, required: true },
+    slotId: { type: String as PropType<ChromeSlotId>, default: undefined },
+    slot: { type: String as PropType<ChromeSlotId>, default: undefined },
     icon: { type: Object as PropType<VNode>, default: undefined },
     asChild: { type: Boolean, default: undefined },
     class: { type: String, default: undefined },
@@ -70,22 +92,24 @@ export const ToolbarButton = defineComponent({
   setup(props, { slots }) {
     const label = useToolbarLabel();
     const shortcut = usePlatformShortcut();
-    const command = useEditorCommand(computed(() => props.slot) as unknown as ChromeSlotId);
+    const slotId = computed(() => toolbarButtonSlotId(props) ?? ('' as ChromeSlotId));
+    const command = useEditorCommand(slotId as unknown as ChromeSlotId);
     return () => {
-      if (props.hidden) return null;
-      const control = chromeControlForSlot(props.slot);
+      const slot = slotId.value;
+      if (props.hidden || !slot) return null;
+      const control = chromeControlForSlot(slot);
       // A registry label is tooltip-shaped and often NAMES its chord ("Bold (Ctrl+B)"). The
       // catalogue can only state one spelling, and the engine's accelerator is Ctrl OR Cmd —
       // so the printed name is corrected for this keyboard rather than translated twice.
-      const text = shortcut(label(control?.labelKey ?? props.slot));
+      const text = shortcut(label(control?.labelKey ?? slot));
       // `aria-pressed` only where pressed-ness is meaningful. The rule is the ENGINE's,
       // because it is not derivable from the command table alone — see `chromeSlotIsToggle`.
-      const isToggle = chromeSlotIsToggle(props.slot);
+      const isToggle = chromeSlotIsToggle(slot);
       const shared = {
         onClick: () => command.execute(),
         onMousedown: guardToolbarMousedown,
         disabled: !command.isEnabled.value,
-        'data-slot': props.slot,
+        'data-slot': slot,
         class: mergeHostClass('docx-toolbar__button', props.class, props.className),
         ...(command.isActive.value ? { 'data-active': '' } : {}),
         ...(!command.isEnabled.value ? { 'data-disabled': '' } : {}),

@@ -180,7 +180,7 @@ function iconPart(slot: ChromeSlotId): PartLike {
       name: `ToolbarIconPart_${slot.replace(/\./g, '_')}`,
       props: { hidden: { type: Boolean, default: undefined } },
       setup(props) {
-        return () => h(ToolbarButton, { slot, hidden: props.hidden });
+        return () => h(ToolbarButton, { slotId: slot, hidden: props.hidden });
       },
     });
     iconPartCache.set(slot, part);
@@ -229,7 +229,8 @@ function slotOfChild(child: VNode): ArrangementKey | null {
     return typeof slotId === 'string' ? (slotId as ArrangementKey) : null;
   }
   if (typeof type === 'object' && type !== null && 'docxToolbarPart' in type) {
-    const slotProp = child.props?.slot;
+    // A template passes the prop as `slot-id`, a render function as `slotId`.
+    const slotProp = child.props?.slotId ?? child.props?.['slot-id'] ?? child.props?.slot;
     if (typeof slotProp === 'string') return slotProp as ArrangementKey;
   }
   return null;

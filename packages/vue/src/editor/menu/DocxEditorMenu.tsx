@@ -280,7 +280,9 @@ const DocxEditorMenuRoot = defineComponent({
         ? () => {
             restoreExportFocus(rootRef.value);
             // The frame goes inside the editor, so a host's modal dialog does not make it inert.
-            void printState.execute(editorInstanceScope(rootRef.value) ?? rootRef.value ?? undefined);
+            void printState.execute(
+              editorInstanceScope(rootRef.value) ?? rootRef.value ?? undefined
+            );
           }
         : undefined
     );

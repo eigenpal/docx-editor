@@ -48,8 +48,6 @@ const SCROLLING_COLUMN: ReviewGutter = {
   inlineEnd: REVIEW_PANE_GUTTER,
 };
 
-/** Inputs for {@link reviewGutter}. @public */
-
 /**
  * Whether the gutter is the `overflow: 'scroll'` column that did not fit: the full column
  * stands at the end, but the viewport scrolls sideways to reach it, so only the marker strip
@@ -71,6 +69,7 @@ export function visibleInlineEndReservation(gutter: ReviewGutter, measured: numb
   return Math.max(0, measured - (REVIEW_PANE_GUTTER - REVIEW_MARKERS_GUTTER));
 }
 
+/** Inputs for {@link reviewGutter}. @public */
 export interface ReviewGutterInput {
   readonly open: boolean;
   readonly viewportWidth: number;

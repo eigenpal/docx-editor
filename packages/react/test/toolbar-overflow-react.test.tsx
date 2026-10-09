@@ -5,7 +5,7 @@ import './dom-setup.ts';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import type { ReactNode } from 'react';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
@@ -447,7 +447,9 @@ describe('toolbar overflow integration', () => {
       (view.getByLabelText('More') as HTMLButtonElement).click();
     });
     const panel = view.getByTestId('toolbar-overflow-panel');
-    const dropdown = panel.querySelector<HTMLButtonElement>('[data-slot="alignment"] [aria-haspopup]');
+    const dropdown = panel.querySelector<HTMLButtonElement>(
+      '[data-slot="alignment"] [aria-haspopup]'
+    );
     expect(dropdown).not.toBeNull();
     await act(async () => {
       dropdown!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
@@ -706,5 +708,55 @@ describe('toolbar overflow integration', () => {
         /@media \(max-width: 768px\)\s*\{[\s\S]*?\.docx-editor \[role='toolbar'\]\s*\{[^}]+\}/
       )?.[0] ?? '';
     expect(mobileToolbarRule).not.toContain('overflow');
+  });
+});
+
+describe('toolbar parts outside the More panel', () => {
+  test('Toolbar.Button takes slotId, and the deprecated slot still works with a warning', () => {
+    const warn = mock(() => {});
+    const original = console.warn;
+    console.warn = warn;
+    try {
+      const { view } = mountToolbar(
+        <DocxEditorToolbar preset={false} overflow={false}>
+          <DocxEditorToolbar.Button slotId="format.painter" />
+          <DocxEditorToolbar.Button slot="history.undo" />
+        </DocxEditorToolbar>
+      );
+      expect(view.container.querySelector('button[data-slot="format.painter"]')).not.toBeNull();
+      expect(view.container.querySelector('button[data-slot="history.undo"]')).not.toBeNull();
+      const messages = warn.mock.calls.map((call) => String((call as unknown[])[0]));
+      expect(messages.some((text) => text.includes('slot="history.undo"'))).toBe(true);
+      expect(messages.some((text) => text.includes('slot="format.painter"'))).toBe(false);
+    } finally {
+      console.warn = original;
+    }
+  });
+
+  test('Escape from a host input closes the editing-mode menu and keeps its default', () => {
+    const { view } = mountToolbar(<DocxEditorToolbar />);
+    const host = document.createElement('input');
+    document.body.append(host);
+    try {
+      const trigger = view.container.querySelector<HTMLButtonElement>(
+        '[data-testid="editing-mode-trigger"]'
+      )!;
+      act(() => {
+        trigger.click();
+      });
+      expect(trigger.getAttribute('aria-expanded')).toBe('true');
+      const escape = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+      });
+      act(() => {
+        host.dispatchEvent(escape);
+      });
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+      expect(escape.defaultPrevented).toBe(false);
+    } finally {
+      host.remove();
+    }
   });
 });

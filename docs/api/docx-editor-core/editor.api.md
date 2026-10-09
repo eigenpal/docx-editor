@@ -1926,6 +1926,9 @@ export function layoutPointsToCssPixels(points: number, paintScale: number): num
 // @internal
 export function listenForPopupEscape(options: PopupEscapeOptions): () => void;
 
+// @internal
+export function listenForPopupFocusLeave(options: PopupFocusLeaveOptions): () => void;
+
 // @public
 export function loadFonts(request: LoadFontsRequest): Promise<LoadFontsResult>;
 
@@ -2548,6 +2551,7 @@ export interface PopupChromeRegistrationOptions {
 
 // @internal
 export interface PopupEscapeOptions {
+    readonly chromeRoot?: () => Element | null | undefined;
     readonly close: (fromInside: boolean) => void;
     readonly contains: (node: Node) => boolean;
     readonly editorElements?: () => readonly (Element | null | undefined)[];

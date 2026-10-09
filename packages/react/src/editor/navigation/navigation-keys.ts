@@ -135,7 +135,8 @@ export function inertBehindPane(pane: Element, viewport: Element): () => void {
   if (viewport.contains(pane)) {
     let node: Element = pane;
     while (node !== viewport && node.parentElement) {
-      for (const sibling of node.parentElement.children) if (sibling !== node) covered.push(sibling);
+      for (const sibling of node.parentElement.children)
+        if (sibling !== node) covered.push(sibling);
       node = node.parentElement;
     }
   } else {

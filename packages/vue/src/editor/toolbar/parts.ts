@@ -51,7 +51,7 @@ function definePart(slot: ChromeSlotId) {
       icon: { type: Object as PropType<VNode>, default: undefined },
     },
     setup(props, { slots }) {
-      return () => h(ToolbarButton, { slot, ...props }, slots);
+      return () => h(ToolbarButton, { slotId: slot, ...props }, slots);
     },
   });
   (Part as unknown as ToolbarPartComponent).docxSlot = slot;

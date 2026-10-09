@@ -36,9 +36,9 @@ const PAIRS = [
     byteIdentical: [
       'docx-editor-ref-callback.ts',
       'editor/contextmenu/contextmenu-icons.ts',
+      'editor/contextmenu/row-alias.ts',
       'editor/deferred-notifier.ts',
       'editor/document-presence.ts',
-      'editor/editor-scope.ts',
       'editor/header-footer-units.ts',
       'editor/images/normalizeImageFile.ts',
       'editor/loading-snapshot.ts',

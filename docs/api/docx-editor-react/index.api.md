@@ -1949,13 +1949,11 @@ export interface MenuItemBaseProps {
 }
 
 // @public
-export type MenuItemProps = MenuItemBaseProps & ({
-    slot?: never;
-    slotId: ChromeSlotId;
-} | {
-    slot: ChromeSlotId;
-    slotId?: never;
-});
+export interface MenuItemProps extends MenuItemBaseProps {
+    // @deprecated (undocumented)
+    slot?: ChromeSlotId;
+    slotId?: ChromeSlotId;
+}
 
 // @public
 export interface MenuPartComponent {
@@ -2028,14 +2026,11 @@ export interface MenuSubmenuBaseProps {
     paths?: readonly string[] | null;
 }
 
-// @public (undocumented)
-export type MenuSubmenuProps = MenuSubmenuBaseProps & ({
+// @public
+export interface MenuSubmenuProps extends MenuSubmenuBaseProps {
     label?: string;
-    labelKey: string;
-} | {
-    label: string;
     labelKey?: string;
-});
+}
 
 // @public
 export interface MenuTableGridProps {
@@ -2629,7 +2624,9 @@ export interface ToolbarButtonProps {
     className?: string;
     hidden?: boolean;
     icon?: DocxEditorChildren;
-    slot: ChromeSlotId;
+    // @deprecated (undocumented)
+    slot?: ChromeSlotId;
+    slotId?: ChromeSlotId;
 }
 
 export { ToolbarCommandState }

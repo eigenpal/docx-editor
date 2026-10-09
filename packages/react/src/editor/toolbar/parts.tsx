@@ -61,7 +61,7 @@ export interface ToolbarSlotPartComponent {
 }
 
 function definePart(slot: ChromeSlotId): ToolbarPartComponent {
-  const Part = (props: ToolbarPartProps) => <ToolbarButton slot={slot} {...props} />;
+  const Part = (props: ToolbarPartProps) => <ToolbarButton slotId={slot} {...props} />;
   return Object.assign(Part, { docxSlot: slot });
 }
 

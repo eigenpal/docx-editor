@@ -221,7 +221,7 @@ const iconPartCache = new Map<ChromeSlotId, PartLike>();
 function iconPart(slot: ChromeSlotId): PartLike {
   let part = iconPartCache.get(slot);
   if (!part) {
-    part = (props: { hidden?: boolean }) => <ToolbarButton slot={slot} {...props} />;
+    part = (props: { hidden?: boolean }) => <ToolbarButton slotId={slot} {...props} />;
     iconPartCache.set(slot, part);
   }
   return part;
@@ -280,7 +280,8 @@ function slotOfChild(child: ReactNode): ArrangementKey | null {
     return typeof slotId === 'string' ? (slotId as ArrangementKey) : null;
   }
   if (type.docxToolbarPart === true) {
-    const slot = (child.props as { slot?: unknown }).slot;
+    const props = child.props as { slotId?: unknown; slot?: unknown };
+    const slot = props.slotId ?? props.slot;
     if (typeof slot === 'string') return slot as ArrangementKey;
   }
   return null;

@@ -111,3 +111,36 @@ test('a slot override with no slotId warns that it renders nothing', async () =>
   );
   expect(messages.some((text) => text.includes('has no slotId'))).toBe(true);
 });
+
+test('the deprecated review.comments id still hides the Add comment row, with a warning', async () => {
+  const { result, messages } = await capturingWarnings(() =>
+    open(() => [h(DocxEditorContextMenu.Slot, { slotId: 'review.comments', hidden: true })])
+  );
+  expect(row(result, 'review.addComment')).toBeNull();
+  // The override matched the packaged row, so it is not reported as matching nothing.
+  expect(messages.some((text) => text.includes('now "review.addComment"'))).toBe(true);
+  expect(messages.some((text) => text.includes('no packaged row'))).toBe(false);
+});
+
+test('a replacement under the deprecated review.comments id takes the row in place', async () => {
+  const HostCommentRow = Object.assign(
+    defineComponent({
+      setup: () => () =>
+        h(
+          'button',
+          { type: 'button', role: 'menuitem', 'data-testid': 'host-comment-row' },
+          'Discuss'
+        ),
+    }),
+    { docxRow: 'review.comments' }
+  );
+  const view = await open(() => [h(HostCommentRow)]);
+  const menu = view.container.querySelector('[role="menu"]')!;
+  const host = menu.querySelector('[data-testid="host-comment-row"]');
+  expect(host).not.toBeNull();
+  expect(row(view, 'review.addComment')).toBeNull();
+  // In place: right after the link row, not appended after the last row.
+  const link = row(view, 'text.link')!;
+  const rows = [...menu.querySelectorAll('[data-slot], [data-testid="host-comment-row"]')];
+  expect(rows.indexOf(host!)).toBe(rows.indexOf(link) + 1);
+});

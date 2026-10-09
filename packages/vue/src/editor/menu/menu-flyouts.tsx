@@ -11,25 +11,21 @@ import { focusBy, focusEdge, panelItems } from './menu-keyboard';
 import { MenuItem } from './parts';
 import { TableSizeGrid } from '../toolbar/TableSizeGrid';
 
-/** Props for `DocxEditor.Menu.Submenu`. @public */
 /** How close a floating panel may come to the window edge, in px. */
 const EDGE_INSET = 8;
 
-export type MenuSubmenuProps = MenuSubmenuBaseProps &
-  (
-    | {
-        /** i18n key of the parent row's label. */
-        labelKey: string;
-        /** Literal parent row label, already resolved. Wins over `labelKey`. */
-        label?: string;
-      }
-    | {
-        /** i18n key of the parent row's label. */
-        labelKey?: string;
-        /** Literal parent row label, already resolved. Wins over `labelKey`. */
-        label: string;
-      }
-  );
+/**
+ * Props for `DocxEditor.Menu.Submenu`. Set `labelKey` or `label`. A submenu with neither has
+ * no name, with a development warning. An interface, so a host can extend it.
+ *
+ * @public
+ */
+export interface MenuSubmenuProps extends MenuSubmenuBaseProps {
+  /** i18n key of the parent row's label. */
+  labelKey?: string;
+  /** Literal parent row label, already resolved. Wins over `labelKey`. */
+  label?: string;
+}
 
 /** The props every `Menu.Submenu` takes besides its label. @public */
 export interface MenuSubmenuBaseProps {
