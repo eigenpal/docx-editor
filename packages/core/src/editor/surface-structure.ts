@@ -38,6 +38,7 @@ import { createListStyleWrites } from './surface-list-style.ts';
 import {
   INDENT_STEP_TWIPS,
   layoutTabIndentReads,
+  selectsOnlyPlaceholder,
   leftIndentTwipsOf,
   nextLeftIndent,
   tabIndentFor,
@@ -693,11 +694,12 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
 
     indentWithTab(direction) {
       const range = orderedRange();
+      if (selectsOnlyPlaceholder(currentLayout.value, range)) return false;
       const touched = targetParagraphs(range);
       if (touched === null) return false;
       // Tab moves by the document's default tab stop, the grid its tab characters land on.
       const step = Math.round(defaultTabIntervalFromSettings(session.settingsRoot()) * 20);
-      const reads = layoutTabIndentReads(currentLayout.value, storyPart());
+      const reads = layoutTabIndentReads(currentLayout.value, storyPart(), orderOf());
       // A cell rectangle is a set of whole paragraphs, never text to type over.
       const tab =
         rectangleCells() === null
@@ -707,7 +709,8 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       // Handled even when the write is refused or changes nothing: the fallback would type a
       // tab over the selection, and a refused indent must never become a deletion.
       if (tab.write === 'stepLeft') stepIndent(tab.paragraphs, direction, step);
-      else writeIndent(tab.paragraphs, { firstLine: tab.write === 'setFirstLine' ? step : 0 });
+      // Clearing drops the direct value, so a first-line indent from the style comes back.
+      else writeIndent(tab.paragraphs, { firstLine: tab.write === 'setFirstLine' ? step : null });
       return true;
     },
 

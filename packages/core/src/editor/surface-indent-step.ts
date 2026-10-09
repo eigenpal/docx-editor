@@ -14,6 +14,7 @@ import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { paragraphIndentOf, paragraphPropertiesOf, signedFirstLine } from './surface-formatting.ts';
 import { firstEditableNoteOffset } from './surface-note-ops.ts';
+import { placeholderSelectionRange } from './surface-pointer.ts';
 
 /** Word's Increase/Decrease Indent step: one default tab stop. */
 export const INDENT_STEP_TWIPS = 720;
@@ -68,8 +69,12 @@ export interface TabIndent {
 export interface TabIndentReads {
   /** The first offset the paragraph paints. Hidden leading content is not a start. */
   paragraphStart(paragraphId: string): number;
-  /** Whether the paragraph paints no content at all, so its start is also its end. */
-  paintsNothing(paragraphId: string): boolean;
+  /**
+   * Whether the paragraph paints nothing AND ends the story. A range that reaches the
+   * story's empty last paragraph (Select All) selects it whole; an empty paragraph inside
+   * the story is reached only at its start.
+   */
+  emptyStoryEnd(paragraphId: string): boolean;
   /**
    * Resolved indent in twips. `start` is the logical leading side, `w:left` or `w:start`,
    * also in a right-to-left paragraph. `firstLine` is signed, negative when hanging.
@@ -105,10 +110,9 @@ export function tabIndentFor(
 ): TabIndent | null {
   const { from, to } = range;
   if (from.paragraphId === to.paragraphId && from.offset === to.offset) return null;
-  // An empty last paragraph is selected whole by a range that reaches it.
   const markOnly =
     touched.length > 1 &&
-    !reads.paintsNothing(to.paragraphId) &&
+    !reads.emptyStoryEnd(to.paragraphId) &&
     to.offset <= reads.paragraphStart(to.paragraphId);
   const paragraphs = markOnly ? touched.slice(0, -1) : touched;
   if (paragraphs.length > 1) return { write: 'stepLeft', paragraphs };
@@ -153,9 +157,14 @@ export function firstPaintedOffset(layout: SemanticLayout, paragraphId: string):
 }
 
 /** {@link TabIndentReads} over a published layout and the story part that holds the paragraphs. */
-export function layoutTabIndentReads(layout: SemanticLayout, part: OoxmlPart): TabIndentReads {
+export function layoutTabIndentReads(
+  layout: SemanticLayout,
+  part: OoxmlPart,
+  order: readonly string[]
+): TabIndentReads {
   return {
-    paintsNothing: (paragraphId) => firstPaintedOffset(layout, paragraphId) === null,
+    emptyStoryEnd: (paragraphId) =>
+      order[order.length - 1] === paragraphId && firstPaintedOffset(layout, paragraphId) === null,
     paragraphStart(paragraphId) {
       const painted = firstPaintedOffset(layout, paragraphId) ?? 0;
       if (painted < 0) return painted;
@@ -172,4 +181,24 @@ export function layoutTabIndentReads(layout: SemanticLayout, part: OoxmlPart): T
       return { start: Math.round(start * 20), firstLine: signedFirstLine(entry.indent) };
     },
   };
+}
+
+/**
+ * Whether a range is exactly one placeholder content control. Clicking into a control that
+ * shows its placeholder selects the placeholder, but the user sees a caret in an empty
+ * field, so Tab types there like a caret does.
+ */
+export function selectsOnlyPlaceholder(
+  layout: SemanticLayout,
+  range: { readonly from: SemanticPosition; readonly to: SemanticPosition }
+): boolean {
+  const same = (a: SemanticPosition, b: SemanticPosition) =>
+    a.paragraphId === b.paragraphId && a.offset === b.offset;
+  return (layout.contentControls ?? []).some((control) => {
+    if (!control.placeholder) return false;
+    const placeholder = placeholderSelectionRange(layout, control);
+    return (
+      placeholder !== null && same(placeholder.from, range.from) && same(placeholder.to, range.to)
+    );
+  });
 }

@@ -15,6 +15,7 @@ import { directParagraphProperties } from '../surface-formatting.ts';
 import { INDENT_STEP_TWIPS, nextLeftIndent, tabIndentFor } from '../surface-indent-step.ts';
 import { MAX_PARAGRAPH_INDENT_TWIPS } from '../../layout/paragraph-indent.ts';
 import { mountPaginatedSurface } from '../paginated-surface.ts';
+import { placeholderSelectionRange } from '../surface-pointer.ts';
 import {
   mount as mountFixture,
   selectCellRectangle,
@@ -246,6 +247,20 @@ describe('paragraph starts that are not offset 0', () => {
     expect(indentOf(surface, ids[0]!).firstLine).toBe('720');
   });
 
+  test('a selected placeholder control at the paragraph start takes a tab, as a caret does', () => {
+    const surface = mount(
+      '<w:p><w:sdt><w:sdtPr><w:showingPlcHdr/><w:text/></w:sdtPr>' +
+        '<w:sdtContent><w:r><w:t>Click here</w:t></w:r></w:sdtContent></w:sdt>' +
+        '<w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>'
+    );
+    const layout = surface.layout();
+    const control = layout.contentControls?.find((candidate) => candidate.placeholder);
+    const range = control ? placeholderSelectionRange(layout, control) : null;
+    if (!range) throw new Error('no placeholder range');
+    surface.setSelection({ anchor: range.from, head: range.to });
+    expect(surface.indentWithTab('increase')).toBe(false);
+  });
+
   test('a paragraph that continues a run-in heading line has no start of its own', () => {
     const surface = mount(
       '<w:p><w:pPr><w:rPr><w:vanish/><w:specVanish/></w:rPr></w:pPr><w:r><w:t>Heading</w:t></w:r></w:p>' +
@@ -272,6 +287,13 @@ describe('selections that reach the next paragraph only at its start', () => {
     expect(indentOf(surface, ids[0]!).left).toBe('720');
     expect(indentOf(surface, ids[1]!).left).toBe('720');
     expect(indentOf(surface, ids[0]!).firstLine).toBeUndefined();
+  });
+
+  test('an empty paragraph inside the story is reached only at its start', () => {
+    const surface = mount(paragraph('Alpha') + '<w:p/>' + paragraph('Omega'));
+    const ids = press(surface, [0, 0], [1, 0]);
+    expect(indentOf(surface, ids[0]!).firstLine).toBe('720');
+    expect(indentOf(surface, ids[1]!)).toEqual({});
   });
 
   test('Tab over a cell rectangle indents the cells and keeps their text', () => {
@@ -320,6 +342,14 @@ describe('Shift+Tab over a selection', () => {
     expect(indentOf(surface, ids[0]!).firstLine ?? '0').toBe('0');
   });
 
+  test('clears the direct first-line value rather than writing zero', () => {
+    const surface = mount(paragraph('Alpha beta gamma'));
+    const ids = press(surface, [0, 0], [0, 16]);
+    press(surface, [0, 0], [0, 16], true);
+    expect(indentOf(surface, ids[0]!).firstLine).toBeUndefined();
+    expect(indentOf(surface, ids[0]!).hanging).toBeUndefined();
+  });
+
   test('leaves a last paragraph touched only at its start alone, as Tab does', () => {
     const indented = '<w:pPr><w:ind w:left="720"/></w:pPr>';
     const surface = mount(
@@ -336,7 +366,7 @@ describe('tabIndentFor', () => {
   const at = (paragraphId: string, offset: number) => ({ paragraphId, offset });
   const reads = (start = 0, firstLine = 0, paragraphStart = 0) => ({
     paragraphStart: () => paragraphStart,
-    paintsNothing: () => false,
+    emptyStoryEnd: () => false,
     indent: () => ({ start, firstLine }),
   });
 
