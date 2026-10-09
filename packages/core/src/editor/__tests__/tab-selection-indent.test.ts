@@ -11,7 +11,8 @@ import { zipSync, strToU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import { createKeyDownHandler } from '../surface-input.ts';
 import { directParagraphProperties } from '../surface-formatting.ts';
-import { firstLineTwipsOf, tabIndentFor } from '../surface-tab-indent.ts';
+import { INDENT_STEP_TWIPS, nextLeftIndent, tabIndentFor } from '../surface-indent-step.ts';
+import { MAX_PARAGRAPH_INDENT_TWIPS } from '../../layout/paragraph-indent.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -89,9 +90,7 @@ describe('Tab over a selection', () => {
     const ids = pressTab(surface, [0, 0], [0, 16]);
     expect(bodyText(surface)).toContain('Alpha beta gamma');
     expect(hasTab(surface)).toBe(false);
-    expect(firstLineTwipsOf([{ localName: 'ind', attributes: indentOf(surface, ids[0]!) }])).toBe(
-      720
-    );
+    expect(indentOf(surface, ids[0]!)).toMatchObject({ firstLine: '720' });
     expect(indentOf(surface, ids[1]!)).toEqual({});
   });
 
@@ -143,6 +142,15 @@ describe('Tab over a selection', () => {
     expect(indentOf(surface, ids[0]!)).toEqual({});
   });
 
+  test('a hanging-indent paragraph keeps its hanging indent and moves one step', () => {
+    const surface = mount(
+      paragraph('Hanging entry', '<w:pPr><w:ind w:left="720" w:hanging="720"/></w:pPr>')
+    );
+    const ids = pressTab(surface, [0, 0], [0, 13]);
+    expect(indentOf(surface, ids[0]!)).toMatchObject({ left: '1440', hanging: '720' });
+    expect(bodyText(surface)).toContain('Hanging entry');
+  });
+
   test('one undo step restores the paragraph', () => {
     const surface = mount(THREE);
     const ids = pressTab(surface, [0, 6], [1, 3]);
@@ -169,10 +177,20 @@ describe('tabIndentFor', () => {
     expect(tabIndentFor({ from: at('a', 3), to: at('b', 0) }, ['a', 'b'], none, 720)).toBeNull();
   });
 
-  test('reads a non-zero hanging indent over a first-line one', () => {
-    expect(firstLineTwipsOf([{ localName: 'ind', attributes: { hanging: '360' } }])).toBe(-360);
-    expect(
-      firstLineTwipsOf([{ localName: 'ind', attributes: { firstLine: '720', hanging: '0' } }])
-    ).toBe(720);
+  test('a hanging or wide first line steps the left indent instead', () => {
+    const hanging = () => -360;
+    const wide = () => 800;
+    for (const firstLine of [hanging, wide]) {
+      expect(tabIndentFor({ from: at('a', 0), to: at('a', 2) }, ['a'], firstLine, 720)).toEqual({
+        kind: 'left',
+        paragraphs: ['a'],
+      });
+    }
+  });
+
+  test('a step never passes the margin or the layout bound', () => {
+    expect(nextLeftIndent(0, -1)).toBe(0);
+    expect(nextLeftIndent(MAX_PARAGRAPH_INDENT_TWIPS - 10, 1)).toBe(MAX_PARAGRAPH_INDENT_TWIPS);
+    expect(nextLeftIndent(720, 1)).toBe(720 + INDENT_STEP_TWIPS);
   });
 });

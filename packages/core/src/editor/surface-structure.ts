@@ -7,7 +7,7 @@
 // composition root.
 
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import { readTwipsMeasure, type TreeDocOp, type StoryScope } from '@docx-editor.dev/core/store';
+import type { TreeDocOp, StoryScope } from '@docx-editor.dev/core/store';
 import {
   enumerateDocumentSections,
   paragraphsInCells,
@@ -31,10 +31,17 @@ import {
 import {
   directParagraphProperties,
   mergedProperties,
+  paragraphIndentOf,
   paragraphPropertiesOf,
+  signedFirstLine,
 } from './surface-formatting.ts';
 import { createListStyleWrites } from './surface-list-style.ts';
-import { firstLineTwipsOf, tabIndentFor } from './surface-tab-indent.ts';
+import {
+  INDENT_STEP_TWIPS,
+  leftIndentTwipsOf,
+  nextLeftIndent,
+  tabIndentFor,
+} from './surface-indent-step.ts';
 import { directionalParagraphEntry } from './paragraph-direction-writes.ts';
 import type {
   PaginatedSurface,
@@ -326,8 +333,6 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     return order.slice(firstIndex, lastIndex + 1);
   }
 
-  /** Word's Increase/Decrease Indent step: one default tab stop. */
-  const INDENT_STEP_TWIPS = 720;
   /** `w:ilvl` is 0..8 (ECMA-376 17.9.24). */
   const MAX_LIST_LEVEL = 8;
 
@@ -425,34 +430,6 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     return declared && deps.numberingLevelExists(marker.numId, level);
   }
 
-  /**
-   * `w:ind/@left` in twips, zero when nothing states it.
-   *
-   * Resolved across the whole list rather than picked out of it: this reads a CASCADE, whose
-   * entries run lowest precedence first, so taking the first `w:ind` answered the style's
-   * indent for a paragraph that had already been indented past it — and Increase Indent then
-   * rewrote the same one step forever.
-   *
-   * Resolved PER LEVEL, not per attribute, which is where `cascadedParagraphAttributes` is
-   * the wrong tool: `w:left` and `w:start` are two SPELLINGS OF ONE SETTING (transitional and
-   * ISO Strict), so flattening both into one bag and preferring `left` answers whichever
-   * level happened to use that word. A paragraph spelling it `w:start` over a style spelling
-   * it `w:left` then stepped BACKWARDS on Increase Indent. This is the rule `paragraphIndent`
-   * already applies, and the two must agree or the ruler and the button disagree.
-   */
-  function leftIndentTwipsOf(
-    properties: readonly { localName: string; attributes?: Readonly<Record<string, string>> }[]
-  ): number {
-    let raw: string | undefined;
-    for (const property of properties) {
-      if (property.localName !== 'ind') continue;
-      const stated = property.attributes?.left ?? property.attributes?.start;
-      if (stated !== undefined) raw = stated;
-    }
-    const twips = readTwipsMeasure(raw);
-    return twips === null || Math.abs(twips) > 9_999_999 ? 0 : twips;
-  }
-
   /** Increase/Decrease Indent over `touched`: a list level, or one tab stop of left indent. */
   function stepIndent(touched: readonly string[], direction: 'increase' | 'decrease'): boolean {
     const step = direction === 'increase' ? 1 : -1;
@@ -483,7 +460,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       // but it is written as the paragraph's own formatting, merged over the paragraph's
       // own `w:pPr` — an op whose base is the cascade is refused (`directParagraphProperties`).
       const current = leftIndentTwipsOf(properties);
-      const next = Math.max(0, current + step * INDENT_STEP_TWIPS);
+      const next = nextLeftIndent(current, step);
       if (next === current) continue;
       const direct = directParagraphProperties(storyPart(), paragraphId);
       // Only the paragraph's OWN `w:ind` attributes are carried over: `w:ind` cascades
@@ -691,7 +668,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
           return next >= 0 && next <= MAX_LIST_LEVEL;
         }
         const current = leftIndentTwipsOf(paragraphPropertiesOf(currentLayout.value, paragraphId));
-        return Math.max(0, current + step * INDENT_STEP_TWIPS) !== current;
+        return nextLeftIndent(current, step) !== current;
       });
     },
 
@@ -717,16 +694,19 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       const tab = tabIndentFor(
         orderedRange(),
         touched,
-        (paragraphId) => firstLineTwipsOf(paragraphPropertiesOf(currentLayout.value, paragraphId)),
+        (paragraphId) => {
+          const entry = paragraphIndentOf(currentLayout.value, paragraphId);
+          return entry ? signedFirstLine(entry.indent) : 0;
+        },
         INDENT_STEP_TWIPS
       );
       if (tab === null) return false;
-      // Handled even when nothing moves (an indent already at its limit): falling back to
-      // a tab character would replace the selected text.
-      if (tab.kind === 'firstLine') writeIndent(tab.paragraphs, { firstLine: INDENT_STEP_TWIPS });
-      else stepIndent(tab.paragraphs, 'increase');
-      return true;
+      // A refused or empty write answers false, so the keymap types a tab as it did before.
+      return tab.kind === 'firstLine'
+        ? writeIndent(tab.paragraphs, { firstLine: INDENT_STEP_TWIPS })
+        : stepIndent(tab.paragraphs, 'increase');
     },
+
     setParagraphFormat(update) {
       const touched = targetParagraphs();
       if (touched === null || touched.length === 0) return false;

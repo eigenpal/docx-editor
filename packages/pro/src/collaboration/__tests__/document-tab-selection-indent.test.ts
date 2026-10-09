@@ -24,7 +24,7 @@ import { zipDocument } from './document-peer-support.ts';
 const p = (text: string) => `<w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 const fixture = zipDocument(p('Alpha beta') + p('Second line') + p('Tail'));
 
-async function peer(name: string, host?: { ydoc: Y.Doc }) {
+async function peer(name: string, host?: { ydoc: Y.Doc }, bytes: Uint8Array = fixture) {
   const ydoc = new Y.Doc();
   const awareness = new Awareness(ydoc);
   if (host) Y.applyUpdate(ydoc, Y.encodeStateAsUpdate(host.ydoc));
@@ -33,7 +33,7 @@ async function peer(name: string, host?: { ydoc: Y.Doc }) {
     awareness,
     documentId: 'tab-selection-indent',
     identity: { actorId: name, name },
-    bootstrap: host ? { kind: 'join' } : { kind: 'create', document: fixture },
+    bootstrap: host ? { kind: 'join' } : { kind: 'create', document: bytes },
   });
   const container = document.createElement('div');
   document.body.append(container);
@@ -138,6 +138,11 @@ test('a first-line indent from Tab converges with a remote deletion in the parag
   expect(after).not.toContain('beta');
   expect(indents(after)).toEqual([expect.stringContaining('w:firstLine="720"')]);
 
-  const reopened = readOoxmlPackage(new Uint8Array(await a.editor.save()));
-  expect(reopened.ok).toBe(true);
+  // Save and reopen keeps the indent.
+  const reopened = await peer('Carol', undefined, new Uint8Array(await a.editor.save()));
+  const saved = readOoxmlPackage(new Uint8Array(await reopened.editor.save()));
+  if (!saved.ok) throw new Error(saved.reason);
+  const main = serializeOoxmlPart(saved.package.parts.get(saved.package.mainDocumentPart)!);
+  expect(main).toContain('Alpha');
+  expect(indents(main)).toEqual([expect.stringContaining('w:firstLine="720"')]);
 });
