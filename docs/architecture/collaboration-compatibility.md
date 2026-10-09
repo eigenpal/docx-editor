@@ -177,7 +177,7 @@ Keep records after Changesets consumes their release notes. If a decision has al
 
 ### Remove or rename a listed test
 
-A merged record cannot change, and the check refuses a record whose listed test is missing. To remove or rename a test that an earlier record lists, add a new record that supersedes it:
+A merged record cannot change, and the check refuses a record whose listed test is missing. To remove or rename a test that a merged record lists, add a new record that supersedes it. For a renamed or replaced test, name the replacement:
 
 ```sh
 bun run collaboration:change --id retire-old-smoke --impact no-impact \
@@ -185,6 +185,14 @@ bun run collaboration:change --id retire-old-smoke --impact no-impact \
   --supersedes "e2e/old.smoke.spec.ts=>packages/core/src/editor/__tests__/new.test.ts" \
   --supersedes-reason "The unit test covers the same behavior in CI."
 ```
+
+For a test with no replacement, omit `=>NEW` and give a category with `--supersedes-category`:
+
+| Category          | Use it when                                                     |
+| ----------------- | --------------------------------------------------------------- |
+| `duplicate`       | Another existing test already covers the same behavior.         |
+| `feature-removed` | The behavior the test covered no longer exists.                 |
+| `moved-to-unit`   | Unit tests that you name in this record's `tests` now cover it. |
 
 The helper writes a `supersedesTests` entry for each path:
 
@@ -198,13 +206,17 @@ The helper writes a `supersedesTests` entry for each path:
 ]
 ```
 
-The check then accepts the missing test in the earlier record. It enforces these rules:
+An entry without `by` carries `"reasonCategory"` instead. The check then accepts the missing test in the merged record. It enforces these rules:
 
-- `path` is a test that another record lists, and the file is gone.
-- `by`, when present, names the replacement test, and the file exists. Omit `by` for a removal.
+- `path` is a test that a merged record lists, and the file is gone. A merged record is one in the PR base. A change cannot list a missing test and supersede it in the same PR.
+- `by` names the replacement test, and the file exists. Without `by`, `reasonCategory` is one of the categories in the table.
 - `reason` explains why the test is no longer needed.
-- Only a record added at the same time or later than the listing record can supersede its test. A new record cannot list a test that an older record already superseded.
+- A record that is not merged must list tests that exist, including a test that a merged record already superseded.
 - A record cannot list and supersede the same test.
+
+When the check reports a missing test in a merged record, its message includes the `collaboration:change` command to run.
+
+A release check validates only the records added since the last published release. It does not check released records again, so a test that a released record lists can be superseded without an error from that record.
 
 ### Document a migration
 

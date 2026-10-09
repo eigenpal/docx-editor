@@ -4,9 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { compareVersions, formatOf, versions } from './common.mjs';
 import {
-  isSupersededTest,
+  missingTestMessage,
   relevant,
   validateRecord,
+  validateRecordSet,
   validateSupersedes,
   validateVersionChange,
 } from './policy.mjs';
@@ -110,6 +111,7 @@ describe('compatibility classification', () => {
 
 describe('superseded tests', () => {
   const retired = 'e2e/retired.smoke.spec.ts';
+  const lister = { ...record, tests: [...record.tests, retired] };
   const retirement = {
     ...record,
     supersedesTests: [
@@ -120,30 +122,47 @@ describe('superseded tests', () => {
       },
     ],
   };
+  const set = (...pairs: [string, Record<string, unknown>][]) =>
+    pairs.map(([file, value]) => ({ file, record: value }));
 
-  test('a later record may retire a missing test that an earlier record lists', () => {
-    const lister = { file: 'old.json', order: 1 };
-    const supersessions = [{ path: retired, file: 'new.json', order: 2 }];
-    expect(isSupersededTest(retired, lister, supersessions)).toBe(true);
-    const listed = { ...record, tests: [...record.tests, retired] };
-    expect(() =>
-      validateRecord(listed, 'old.json', (test) => isSupersededTest(test, lister, supersessions))
-    ).not.toThrow();
-    // Without a supersession the missing test still fails the record.
-    expect(() => validateRecord(listed, 'old.json')).toThrow('missing test');
-  });
-
-  test('an older record, or the listing record itself, cannot retire a test', () => {
-    const lister = { file: 'new.json', order: 2 };
-    expect(isSupersededTest(retired, lister, [{ path: retired, file: 'old.json', order: 1 }])).toBe(
-      false
-    );
-    expect(isSupersededTest(retired, lister, [{ path: retired, file: 'new.json', order: 2 }])).toBe(
-      false
+  test('a new record supersedes a missing test that a merged record lists', () => {
+    const entries = set(['merged.json', lister], ['new.json', retirement]);
+    expect(() => validateRecordSet(entries, new Set(['merged.json']))).not.toThrow();
+    // After the change merges, both records are merged and the pair still passes.
+    expect(() => validateRecordSet(entries, new Set(['merged.json', 'new.json']))).not.toThrow();
+    // Without the superseding record, the merged record's missing test fails.
+    expect(() => validateRecordSet(set(['merged.json', lister]), new Set(['merged.json']))).toThrow(
+      'missing test'
     );
   });
 
-  test('a retirement names a removed test, an existing replacement, and a reason', () => {
+  test('a change cannot list a missing test and supersede it itself', () => {
+    const entries = set(['a.json', lister], ['b.json', retirement]);
+    expect(() => validateRecordSet(entries, new Set(), ['a.json'])).toThrow(
+      'must list tests that exist'
+    );
+    expect(() => validateRecordSet(entries, new Set(), ['b.json'])).toThrow(
+      'which no merged record lists'
+    );
+  });
+
+  test('a new record cannot list a test that a merged record already superseded', () => {
+    const entries = set(['retired.json', retirement], ['new.json', lister]);
+    expect(() => validateRecordSet(entries, new Set(['retired.json']), ['new.json'])).toThrow(
+      'must list tests that exist'
+    );
+  });
+
+  test('the missing-test error says how to supersede the test', () => {
+    const message = missingTestMessage('merged.json', retired, true);
+    expect(message).toContain('bun run collaboration:change');
+    expect(message).toContain(`--supersedes "${retired}=><replacement test>"`);
+    expect(message).toContain('--supersedes-category duplicate|feature-removed|moved-to-unit');
+    expect(message).not.toContain('no earlier record lists');
+    expect(missingTestMessage('new.json', retired, false)).toContain('must list tests that exist');
+  });
+
+  test('a retirement names a removed test, a replacement or a category, and a reason', () => {
     expect(() => validateSupersedes(retirement, 'test')).not.toThrow();
     expect(() => validateRecord(retirement, 'test')).not.toThrow();
     const entry = retirement.supersedesTests[0]!;
@@ -151,6 +170,15 @@ describe('superseded tests', () => {
       ...record,
       supersedesTests: [{ ...entry, ...change }],
     });
+    expect(() =>
+      validateSupersedes(withEntry({ by: undefined, reasonCategory: 'moved-to-unit' }), 'test')
+    ).not.toThrow();
+    expect(() => validateSupersedes(withEntry({ by: undefined }), 'test')).toThrow(
+      'needs a replacement test (by) or a reasonCategory'
+    );
+    expect(() =>
+      validateSupersedes(withEntry({ by: undefined, reasonCategory: 'obsolete' }), 'test')
+    ).toThrow('reasonCategory must be one of');
     expect(() =>
       validateSupersedes(withEntry({ path: 'scripts/collaboration/policy.test.ts' }), 'test')
     ).toThrow('still exists');
@@ -173,15 +201,21 @@ describe('superseded tests', () => {
     ).toThrow('cannot list and supersede');
   });
 
-  test('the change helper reads OLD[=>NEW] entries with one reason', () => {
+  test('the change helper reads OLD[=>NEW] entries with one reason and category', () => {
     expect(
-      supersededEntries('e2e/a.spec.ts, e2e/b.spec.ts=>packages/b.test.ts', 'Covered elsewhere.')
+      supersededEntries(
+        'e2e/a.spec.ts, e2e/b.spec.ts=>packages/b.test.ts',
+        'Covered elsewhere.',
+        'duplicate'
+      )
     ).toEqual([
-      { path: 'e2e/a.spec.ts', reason: 'Covered elsewhere.' },
+      { path: 'e2e/a.spec.ts', reasonCategory: 'duplicate', reason: 'Covered elsewhere.' },
       { path: 'e2e/b.spec.ts', by: 'packages/b.test.ts', reason: 'Covered elsewhere.' },
     ]);
-    expect(supersededEntries('', undefined)).toEqual([]);
-    expect(() => supersededEntries('e2e/a.spec.ts', undefined)).toThrow('--supersedes-reason');
+    expect(supersededEntries('', undefined, undefined)).toEqual([]);
+    expect(() => supersededEntries('e2e/a.spec.ts', undefined, undefined)).toThrow(
+      '--supersedes-reason'
+    );
   });
 });
 

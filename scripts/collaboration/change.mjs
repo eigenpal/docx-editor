@@ -8,14 +8,19 @@ import { validateRecord } from './policy.mjs';
  * `--supersedes OLD[=>NEW],...` as `supersedesTests` entries: each retires a test an earlier
  * record lists, optionally naming the test that replaces it.
  */
-export function supersededEntries(value, reason) {
+export function supersededEntries(value, reason, category) {
   const entries = value
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean)
     .map((item) => {
       const [path, by] = item.split('=>').map((part) => part.trim());
-      return { path, ...(by ? { by } : {}), reason };
+      return {
+        path,
+        ...(by ? { by } : {}),
+        ...(!by && category ? { reasonCategory: category } : {}),
+        reason,
+      };
     });
   if (entries.length && !reason)
     throw new Error('Explain the retired tests with --supersedes-reason');
@@ -57,7 +62,8 @@ export async function createChange() {
     );
     const supersedesTests = supersededEntries(
       option('supersedes') ?? '',
-      option('supersedes-reason')
+      option('supersedes-reason'),
+      option('supersedes-category')
     );
     const record = {
       impact,
@@ -71,7 +77,7 @@ export async function createChange() {
       migration,
     };
     const path = `.collaboration/changes/${id}.json`;
-    validateRecord(record, path);
+    validateRecord(record, path, { merged: false });
     if (existsSync(resolve(ROOT, path)) || existsSync(resolve(ROOT, `.changeset/${id}.md`)))
       throw new Error('Identifier already exists');
     if (summary) {
