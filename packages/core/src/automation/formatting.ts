@@ -301,15 +301,18 @@ const JC_BY_ALIGNMENT: Readonly<Record<string, string>> = Object.freeze({
 });
 
 /**
- * The paragraph's own `w:bidi`, read with the on/off values the layout honours: no value, `1`,
- * `true` and `on` are right to left, and every other value is left to right. `null` when the
+ * The paragraph's own `w:bidi`, read as the layout reads it: the LAST one wins, and no value, `1`,
+ * `true` and `on` are right to left while every other value is left to right. `null` when the
  * paragraph states none.
  */
 function ownRtl(properties: OoxmlElement | undefined): boolean | null {
-  const bidi = namedChild(properties, 'bidi');
-  if (!bidi) return null;
-  const value = attributeOf(bidi, 'val');
-  return value === null || ['1', 'true', 'on'].includes(value);
+  let rtl: boolean | null = null;
+  for (const child of properties?.children ?? []) {
+    if (child.kind === 'textValue' || child.localName !== 'bidi') continue;
+    const value = attributeOf(child, 'val');
+    rtl = value === null || ['1', 'true', 'on'].includes(value);
+  }
+  return rtl;
 }
 
 function alignmentOf(properties: OoxmlElement | undefined): AutomationAlignment {

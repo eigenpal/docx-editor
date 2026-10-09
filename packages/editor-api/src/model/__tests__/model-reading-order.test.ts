@@ -124,6 +124,22 @@ describe('Paragraph.readingOrder reads the direction the paragraph reads in', ()
     }
   });
 
+  test('reads the last of several w:bidi elements, as layout does', async () => {
+    const runtime = await createServer(
+      docx(
+        para('Twice', '<w:bidi w:val="0"/><w:bidi/>') +
+          para('Again', '<w:bidi/><w:bidi w:val="0"/>')
+      )
+    );
+    try {
+      expect(await readOrders(runtime)).toEqual(['RightToLeft', 'LeftToRight']);
+      await setOrder(runtime, 0, 'LeftToRight');
+      expect(await readOrders(runtime)).toEqual(['LeftToRight', 'LeftToRight']);
+    } finally {
+      runtime.dispose();
+    }
+  });
+
   test('reads the on and off values the layout honours', async () => {
     const values = ['1', 'true', 'on', '0', 'false', 'off', 'none', 'unexpected'];
     const runtime = await createServer(

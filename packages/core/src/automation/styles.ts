@@ -55,15 +55,23 @@ export interface AutomationStyleIndex {
 const NUMBERING_REL =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering';
 
-/** The numbering part's root through the main document relationship, else the default path. */
+/**
+ * The numbering part's root, chosen as the editor session chooses the one it paints with: the
+ * main document's FIRST numbering relationship, else the default path.
+ */
 function numberingRootOf(pkg: OoxmlPackage): OoxmlElement | null {
-  for (const record of pkg.relationships.get(pkg.mainDocumentPart) ?? []) {
-    if (record.type !== NUMBERING_REL) continue;
+  const record = (pkg.relationships.get(pkg.mainDocumentPart) ?? []).find(
+    (relationship) => relationship.type === NUMBERING_REL
+  );
+  let part: OoxmlPart | undefined;
+  if (record) {
     const resolved = resolveRelationship(record);
-    if (resolved.mode !== 'Internal' || !resolved.target.ok) continue;
-    return pkg.parts.get(resolved.target.partName)?.root ?? null;
+    if (resolved.mode === 'Internal' && resolved.target.ok) {
+      part = pkg.parts.get(resolved.target.partName);
+    }
   }
-  return pkg.parts.get('/word/numbering.xml')?.root ?? null;
+  part ??= pkg.parts.get('/word/numbering.xml');
+  return part?.root ?? null;
 }
 
 /**
