@@ -21,8 +21,11 @@ import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import type {
   Editor,
   ReviewActivationOptions,
+  ScrollPlacement,
   ReviewItemPlacement,
   ReviewItemQuery,
+  ReviewItemRevealEvent,
+  ReviewItemRevealSource,
 } from '@docx-editor.dev/core/contracts/editor';
 import { notificationYieldsToTask, useDocxEditor } from '@docx-editor.dev/react';
 import { adoptReviewItems, type ReviewAdoptOptions } from '../review/review-item-author.ts';
@@ -71,7 +74,9 @@ export type ReviewItemView = ReviewItemPlacement;
  * Re-exported here so a host taking this hook can name what it passes without reaching past
  * the adapter into the engine's contract module.
  */
-export type { ReviewActivationOptions };
+export type { ReviewActivationOptions, ScrollPlacement };
+/** The payload of the editor's `reviewItemReveal` event. The engine's own type, unchanged. */
+export type { ReviewItemRevealEvent, ReviewItemRevealSource };
 
 function reviewAuthorFilterKey(editor: Editor): string {
   const snapshot = (
@@ -90,8 +95,17 @@ function reviewAuthorFilterKey(editor: Editor): string {
 export interface UseReviewReturn {
   /** Every pending decision in the document, in reading order. */
   readonly items: readonly ReviewItemView[];
-  /** The item the caret is in, or null. */
+  /** The CARET-ACTIVE item: the one the caret is in, or null. */
   readonly activeKey: string | null;
+  /**
+   * The key of the ACTIVATED item: the one {@link setActive}, Next Change, or Previous Change
+   * made active, while the caret stays in it. `null` when only a caret move made an item
+   * active. {@link activeKey} is the caret-active item instead: the one the caret is in,
+   * however it got there. The key follows this hook's query, so a paired replacement reports
+   * the pair's key under `pairReplacements: true`. The same value as the editor's
+   * `getActivatedReviewItemKey(query)`, read on every selection change.
+   */
+  readonly activatedKey: string | null;
   /**
    * Card to document: puts the caret at the start of the item's range and scrolls to it. Nothing is selected; the open item draws its own highlight.
    *
@@ -104,6 +118,19 @@ export interface UseReviewReturn {
    * `options.reveal` picks where the item lands, or turns the engine's scroll off entirely
    * for a host whose own list already drives it. Default is centred when it has to travel,
    * still when it is already on screen.
+   *
+   * With `{ announce: true }`, a call that lands fires the editor's `reviewItemReveal` event
+   * with `source: 'host'`, also when the item was already active. The packaged review UI then
+   * opens the item's balloon, or opens a closed pane at its card when the pane's `opening`
+   * setting is `'auto'`. Without it, the call fires no event. A `null` key closes the card.
+   *
+   * @example
+   * ```tsx
+   * const { setActive } = useReview();
+   * useEditorEvent('reviewItemReveal', ({ key, source }) => openMyCard(key, source));
+   * setActive(key); // fires nothing
+   * setActive(key, { announce: true }); // fires 'reviewItemReveal'
+   * ```
    */
   readonly setActive: (key: string | null, options?: ReviewActivationOptions) => boolean;
   /**
@@ -240,6 +267,25 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
   );
 
   const activeKey = useMemo(() => items.find((entry) => entry.isActive)?.key ?? null, [items]);
+  // Read on every selection change, not on the deferred review tick: a balloon decides in the
+  // same frame whether the item was opened on purpose.
+  const subscribeSelection = useCallback(
+    (notify: () => void) => {
+      if (!editor) return () => undefined;
+      const offSelection = editor.on('selectionChange', notify);
+      const offChange = editor.on('change', notify);
+      return () => {
+        offSelection();
+        offChange();
+      };
+    },
+    [editor]
+  );
+  const activatedKey = useSyncExternalStore(
+    subscribeSelection,
+    () => (editor ? editor.getActivatedReviewItemKey(query) : null),
+    () => null
+  );
 
   const setActive = useCallback(
     (key: string | null, options?: ReviewActivationOptions): boolean => {
@@ -351,6 +397,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
     () => ({
       items,
       activeKey,
+      activatedKey,
       setActive,
       accept,
       reject,
@@ -376,6 +423,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
     [
       items,
       activeKey,
+      activatedKey,
       setActive,
       accept,
       reject,

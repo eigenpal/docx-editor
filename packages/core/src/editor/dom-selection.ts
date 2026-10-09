@@ -436,8 +436,50 @@ export function domSelectionTouchesPages(root: Element, domSelection: Selection 
 function domPointFromPosition(
   root: Element,
   position: SemanticPosition,
-  preferredPageIndex?: number
+  preferredPageIndex?: number,
+  preferredLineId?: string
 ): { node: Node; offset: number } | null {
+  if (preferredLineId !== undefined) {
+    for (const searchRoot of spanSearchRoots(root, preferredPageIndex)) {
+      const selector: string = CSS_STRING_UNSAFE.test(preferredLineId)
+        ? '[data-line-id]'
+        : `[data-line-id="${preferredLineId}"]`;
+      for (const line of searchRoot.querySelectorAll<HTMLElement>(selector)) {
+        if (line.dataset.lineId !== preferredLineId) continue;
+        const fields = [
+          ...line.querySelectorAll<HTMLElement>('[data-docx-field][data-start]'),
+        ].filter((field) => {
+          const identity = identityOf(field);
+          return (
+            identity?.paragraphId === position.paragraphId &&
+            (identity.start === position.offset || identity.end === position.offset)
+          );
+        });
+        const opening = fields.find((field) => identityOf(field)?.start === position.offset);
+        const ending = [...paragraphSpansAndSpacers(line, position.paragraphId).spans]
+          .reverse()
+          .find((span) => {
+            const identity = identityOf(span);
+            return (
+              identity?.end === position.offset &&
+              fields.some((field) => {
+                const range = identityOf(field);
+                return range?.start === identity.start && range.end === identity.end;
+              })
+            );
+          });
+        const field = opening ?? ending;
+        if (field?.parentNode) {
+          return {
+            node: field.parentNode,
+            offset: [...field.parentNode.childNodes].indexOf(field) + (opening ? 0 : 1),
+          };
+        }
+        const point = domPointFromPositionIn(line, position);
+        if (point) return point;
+      }
+    }
+  }
   for (const searchRoot of spanSearchRoots(root, preferredPageIndex)) {
     const point = domPointFromPositionIn(searchRoot, position);
     if (point) return point;
@@ -600,13 +642,15 @@ export function applySelectionToDom(
   root: Element,
   selection: SemanticSelection,
   domSelection: Selection | null,
-  options?: { readonly preferredPageIndex?: number }
+  options?: { readonly preferredPageIndex?: number; readonly preferredLineId?: string }
 ): boolean {
   if (!domSelection) return false;
   const preferredPageIndex =
     options?.preferredPageIndex ?? pageIndexOfNode(domSelection.anchorNode, root);
-  const anchor = domPointFromPosition(root, selection.anchor, preferredPageIndex);
-  const head = domPointFromPosition(root, selection.head, preferredPageIndex);
+  const collapsed = selectionsEqual(selection, { anchor: selection.head, head: selection.head });
+  const preferredLineId = collapsed ? options?.preferredLineId : undefined;
+  const anchor = domPointFromPosition(root, selection.anchor, preferredPageIndex, preferredLineId);
+  const head = domPointFromPosition(root, selection.head, preferredPageIndex, preferredLineId);
   if (!anchor || !head) return false;
   const current = semanticSelectionFromDom(root, domSelection);
   // Already correct: re-setting it would collapse an in-progress drag and fight the user.
@@ -614,7 +658,17 @@ export function applySelectionToDom(
   // those offsets on every page, and leaving the native range on page 0 is the bug.
   if (current && selectionsEqual(current, selection)) {
     const currentPage = pageIndexOfNode(domSelection.anchorNode, root);
-    if (preferredPageIndex === undefined || currentPage === preferredPageIndex) return true;
+    const focusElement =
+      domSelection.focusNode?.nodeType === Node.ELEMENT_NODE
+        ? (domSelection.focusNode as Element)
+        : domSelection.focusNode?.parentElement;
+    const currentLine = (focusElement?.closest('[data-line-id]') as HTMLElement | null)?.dataset
+      .lineId;
+    if (
+      (preferredPageIndex === undefined || currentPage === preferredPageIndex) &&
+      (preferredLineId === undefined || currentLine === preferredLineId)
+    )
+      return true;
   }
   try {
     // `setBaseAndExtent` keeps the anchor/head ORDER, which is what shift-arrow extends

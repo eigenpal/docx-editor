@@ -119,7 +119,8 @@ export function planProposal(
     start,
     end,
     tracked && insertion ? operation.author.trim() : undefined,
-    insertion && start === (story.value.rawText(paragraphId) ?? '').length
+    insertion && start === (story.value.rawText(paragraphId) ?? '').length,
+    tracked && !insertion && end > start ? operation.author.trim() : undefined
   );
   if (revisionError) return { ok: false, error: revisionError };
   if (!deletion) {

@@ -29,10 +29,11 @@ import {
   useState,
 } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
+import { warnUnmatchedHiddenRow } from '../menu/menu-warnings';
+import { contextMenuRowId } from './row-alias';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import { ReviewRailContext, useDocxEditor } from '../context';
-import { useEditorState } from '../useEditorState';
-import type { EditorSnapshot } from '@docx-editor.dev/core';
+import { useAddCommentState } from '../toolbar/add-comment-state';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
@@ -43,7 +44,15 @@ import {
   type MenuContextValue,
 } from '../menu/menu-context';
 import { focusBy, focusEdge, panelItems } from '../menu/menu-keyboard';
-import { MenuGroup, MenuItem, MenuRow, MenuSeparator, MenuSubmenu } from '../menu/parts';
+import {
+  MenuGroup,
+  MenuItem,
+  MenuRow,
+  MenuSeparator,
+  MenuSubmenu,
+  menuItemSlotId,
+  type MenuItemProps,
+} from '../menu/parts';
 import { ContextMenuContext, type ContextMenuAnchor } from './contextmenu-context';
 import {
   ContextMenuCopy,
@@ -94,36 +103,27 @@ export interface DocxEditorContextMenuProps {
   children?: DocxEditorChildren;
 }
 
-/** Viewing refuses every review write, comment authoring included. */
-const selectDocumentReadOnly = (snapshot: EditorSnapshot): boolean =>
-  snapshot.editingMode === 'viewing';
-
 /** The packaged set, in order. Separators are positional, so they are part of the list. */
 type DefaultEntry =
   | { readonly kind: 'row'; readonly id: string; readonly render: () => ReactElement }
   | { readonly kind: 'separator'; readonly id: string };
 
 function ContextMenuAddComment() {
-  const editor = useDocxEditor();
   const rail = useContext(ReviewRailContext);
   const menu = useMenuContext();
   const label = useMenuLabel();
-  const gate = editor?.can({ type: 'toggleReviewPane' });
-  // `toggleReviewPane` is deliberately NON-mutating, so it stays `ok` in viewing — and this
-  // row, which writes a comment, rode on it and showed up fully enabled. It then closed the
-  // menu and wrote nothing, because the rail refuses a draft on a read-only document.
-  const readOnly = useEditorState(selectDocumentReadOnly);
-  const disabled =
-    !gate?.ok || readOnly || (rail?.mounted ?? 0) === 0 || editor?.getSelectionPlacement() === null;
-  const control = chromeControlForSlot('review.comments');
+  // The same slot as `Toolbar.AddComment`, so enabled state and its reason have one source:
+  // `toolbarCommandState`. The row needs a mounted review rail to open the draft, so without
+  // one it is left out, whatever the engine answers.
+  const { isEnabled, reason } = useAddCommentState(label);
+  if ((rail?.mounted ?? 0) === 0) return null;
+  const control = chromeControlForSlot('review.addComment');
   return (
     <MenuRow
       icon={chromeIcon(control?.paths)}
-      slot="review.comments"
-      disabled={disabled}
-      title={
-        gate && !gate.ok ? gate.reason : readOnly ? label('editingMode.viewingHint') : undefined
-      }
+      slot="review.addComment"
+      disabled={!isEnabled}
+      title={reason ?? undefined}
       onSelect={() => {
         if (!rail?.requestCommentDraft()) return;
         menu.setOpenMenu(null);
@@ -183,12 +183,12 @@ const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
     render: () => (
       // No shortcut column: the catalogue has no plain "Ctrl+K" key, and inventing one
       // here would put a literal English keystroke in a row every locale renders.
-      <MenuItem slot="text.link" labelKey="formattingBar.insertLink" />
+      <MenuItem slotId="text.link" labelKey="formattingBar.insertLink" />
     ),
   },
   {
     kind: 'row',
-    id: 'review.comments',
+    id: 'review.addComment',
     render: () => <ContextMenuAddComment />,
   },
 ];
@@ -281,8 +281,8 @@ function rowOfChild(child: ReactNode): string | null {
   if (typeof type.docxRow === 'string') return type.docxRow;
   if (typeof type.docxSlot === 'string') return type.docxSlot;
   if (type.docxMenuRow === true) {
-    const slot = (child.props as { slot?: unknown }).slot;
-    if (typeof slot === 'string') return slot;
+    const slot = menuItemSlotId(child.props as MenuItemProps);
+    if (slot) return slot;
   }
   return null;
 }
@@ -566,9 +566,13 @@ export function DocxEditorContextMenu({
                 children: Children.toArray(children).filter((child) => !startPlacedChild(child)),
                 preset,
                 keyOfEntry: (entry) => entry.id,
-                keyOfChild: rowOfChild,
+                keyOfChild: (child) => contextMenuRowId(rowOfChild(child)),
                 renderEntry: (entry) =>
                   entry.kind === 'separator' ? <MenuSeparator /> : entry.render(),
+                onUnmatched: (id, element) => {
+                  // An unmatched override is the host's own row, unless it is hidden.
+                  if ((element.props as { hidden?: unknown }).hidden) warnUnmatchedHiddenRow(id);
+                },
               })}
             </div>
           </ContextMenuContext.Provider>
@@ -603,7 +607,7 @@ export interface DocxEditorContextMenuNamespace {
   readonly RefreshTocPageNumbers: typeof ContextMenuRefreshTocPageNumbers;
   /** A host-owned row: no slot, no command, the host's own label and action. */
   readonly Item: typeof ContextMenuItem;
-  /** Any chrome slot as a live row (`<ContextMenu.Slot slot="text.bold" />`). */
+  /** Any chrome slot as a live row (`<ContextMenu.Slot slotId="text.bold" />`). */
   readonly Slot: typeof MenuItem;
   /** Bare row presentation, for a host building something the parts do not cover. */
   readonly Row: typeof MenuRow;

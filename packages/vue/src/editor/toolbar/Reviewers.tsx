@@ -9,6 +9,7 @@ import { useEditorState } from '../useEditorState';
 import { useReviewAuthors } from '../useReviewAuthors';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
+import { usePopupEscape } from './usePopupEscape';
 
 const selectHiddenAuthors = (snapshot: EditorSnapshot): readonly string[] =>
   snapshot.hiddenReviewAuthors ?? [];
@@ -50,20 +51,21 @@ export const ToolbarReviewers = Object.assign(
             if (rootRef.value?.contains(event.target as Node)) return;
             open.value = false;
           };
-          const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key !== 'Escape') return;
-            event.preventDefault();
-            open.value = false;
-            void nextTick(() => triggerRef.value?.focus());
-          };
           document.addEventListener('mousedown', onMouseDown, true);
-          document.addEventListener('keydown', onKeyDown);
           onCleanup(() => {
             document.removeEventListener('mousedown', onMouseDown, true);
-            document.removeEventListener('keydown', onKeyDown);
           });
         },
         { flush: 'post' }
+      );
+      // Escape through the shared rule: a host input keeps its own Escape.
+      usePopupEscape(
+        () => open.value,
+        rootRef,
+        (fromInside) => {
+          open.value = false;
+          if (fromInside) void nextTick(() => triggerRef.value?.focus());
+        }
       );
 
       const onMenuKeyDown = (event: KeyboardEvent) => {

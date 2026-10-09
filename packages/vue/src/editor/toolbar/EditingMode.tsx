@@ -11,6 +11,7 @@ import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, guardToolbarMousedown } from './ToolbarButton';
+import { usePopupEscape } from './usePopupEscape';
 import type { ToolbarSlotPartComponent } from './parts';
 
 const selectMode = (snapshot: EditorSnapshot): DocumentEditingMode =>
@@ -122,18 +123,20 @@ export const ToolbarEditingMode = defineComponent({
         if (root && event.target instanceof Node && root.contains(event.target)) return;
         open.value = false;
       };
-      const onKeyDown = (event: KeyboardEvent) => {
-        if (event.key !== 'Escape') return;
-        event.preventDefault();
-        open.value = false;
-      };
       document.addEventListener('mousedown', onMouseDown, true);
-      document.addEventListener('keydown', onKeyDown);
       onCleanup(() => {
         document.removeEventListener('mousedown', onMouseDown, true);
-        document.removeEventListener('keydown', onKeyDown);
       });
     });
+    // Escape through the shared rule: a host input keeps its own Escape.
+    usePopupEscape(
+      () => open.value,
+      rootRef,
+      (fromInside) => {
+        open.value = false;
+        if (fromInside) rootRef.value?.querySelector<HTMLElement>('[aria-haspopup]')?.focus();
+      }
+    );
 
     const onMenuKeyDown = (event: KeyboardEvent) => {
       const items = [...(menuRef.value?.querySelectorAll<HTMLButtonElement>(MENU_ITEMS) ?? [])];

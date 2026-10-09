@@ -1,3 +1,4 @@
+import { editorInstanceScope } from '@docx-editor.dev/core/editor';
 import { DocxEditorExportDialog } from '../DocxEditorExportDialog';
 import { DocxEditorPrintDialog } from '../DocxEditorPrintDialog';
 import { usePopupConfig } from '../popup-config';
@@ -44,14 +45,22 @@ import {
   type ChromeMenuId,
 } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
-import { editorScopeFor } from '../editor-scope';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 import { DocxEditorPageSetupDialog } from '../DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from '../DocxEditorParagraphDialog';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
-import { guardToolbarMousedown } from '../toolbar/ToolbarButton';
-import { MenuContext, type MenuContextValue, type MenuId } from './menu-context';
+import { chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
+import {
+  MENU_OVERFLOW_ID,
+  MenuContext,
+  MenuOverflowContext,
+  type MenuContextValue,
+  type MenuId,
+  type MenuOverflowValue,
+} from './menu-context';
+import { FIXED_ATTRIBUTE, useToolbarOverflow } from '../toolbar/useToolbarOverflow';
+import { MORE_PATHS } from '../toolbar/ToolbarOverflow';
 import { download, downloadName } from './download';
 import { barTriggers, restoreExportFocus } from './menu-keyboard';
 import {
@@ -59,7 +68,6 @@ import {
   MenuEntry,
   MenuFile,
   MenuFormat,
-  MenuHelp,
   MenuImageInsert,
   MenuInsert,
   MenuItem,
@@ -72,13 +80,14 @@ import {
   MenuPrint,
   MenuGroup,
   MenuSeparator,
-  MenuReportIssue,
   MenuSubmenu,
   MenuTableGrid,
   type MenuPartComponent,
 } from './parts';
+import { MenuHelp, MenuReportIssue } from './menu-help';
 import { useScopeClassName } from '../scope-context';
 import { MenuReview, MenuReviewers } from './Reviewers';
+import { usePopupEscape } from '../toolbar/usePopupEscape';
 
 /** The pinned part for each registry menu, so the default bar is derived, not hand-listed. */
 const MENU_PARTS: Record<ChromeMenuId, MenuPartComponent> = {
@@ -134,7 +143,45 @@ export interface DocxEditorMenuProps {
    * children override their menu in place, others append.
    */
   preset?: boolean;
+  /**
+   * What the bar does when its menus do not fit on one line. Default `true`: the bar stays
+   * one line, measures its menus, and moves the ones that do not fit, from the end, into
+   * one "⋯" menu, where each becomes a submenu with the same rows. `false` lets the bar
+   * wrap onto more lines instead.
+   *
+   * The bar must be able to shrink for this to work, so give it a bounded width (for
+   * example `min-width: 0` in a flex row). Host children that are not menus never move.
+   *
+   * @example
+   * ```tsx
+   * <DocxEditor.Menu overflow={false} />
+   * ```
+   */
+  overflow?: boolean;
   children?: DocxEditorChildren;
+}
+
+/**
+ * The id of any menu element, registry or host: a pinned part's `docxMenu`, or the generic
+ * `Menu`'s `id` prop. Null for anything that is not a menu, and for a hidden menu unless
+ * `includeHidden` is set.
+ */
+function anyMenuIdOfChild(child: ReactNode, includeHidden = false): string | null {
+  if (!isValidElement(child)) return null;
+  if (child.type === Fragment) {
+    const inner = Children.toArray((child.props as { children?: DocxEditorChildren }).children);
+    const ids = inner
+      .map((node) => anyMenuIdOfChild(node, includeHidden))
+      .filter((id): id is string => id !== null);
+    return ids.length === 1 ? ids[0]! : null;
+  }
+  const props = child.props as { id?: unknown; hidden?: unknown };
+  if (props.hidden === true && !includeHidden) return null;
+  const type = child.type as { docxMenu?: unknown };
+  if ((typeof type === 'function' || typeof type === 'object') && typeof type.docxMenu === 'string')
+    return type.docxMenu;
+  if (child.type === Menu && typeof props.id === 'string') return props.id;
+  return null;
 }
 
 const MENU_IDS = new Set<string>(CHROME_MENUS.map((menu) => menu.id));
@@ -192,6 +239,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
     onReportIssue,
     reportIssue,
     preset = true,
+    overflow: overflowEnabled = true,
     children,
   } = props;
   const editor = useDocxEditor();
@@ -223,16 +271,20 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       if (root && event.target instanceof Node && root.contains(event.target)) return;
       setOpenMenu(null);
     };
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') setOpenMenu(null);
-    };
     document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
     };
   }, [openMenu]);
+  // Escape from outside the bar, such as the pages, goes through the shared rule, and a host
+  // input keeps its own Escape. Keys inside the bar stay with the menus' own handlers, which
+  // close one submenu at a time and return focus to the trigger.
+  usePopupEscape(
+    openMenu !== null,
+    rootRef,
+    () => setOpenMenu(null),
+    (event) => event.target instanceof Node && rootRef.current?.contains(event.target) === true
+  );
 
   // Opening a menu also claims the tab stop, so Escape has a trigger to return to and a
   // later Tab leaves from where the user actually was.
@@ -281,7 +333,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
         ? () => {
             restoreExportFocus(rootRef.current);
             // The frame goes inside the editor, so a host's modal dialog does not make it inert.
-            void executePrint(editorScopeFor(rootRef.current) ?? rootRef.current ?? undefined);
+            void executePrint(editorInstanceScope(rootRef.current) ?? rootRef.current ?? undefined);
           }
         : undefined,
     [editor, printActive, executePrint]
@@ -307,12 +359,12 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       // an unrelated field, and two mounted editors both answer one keypress. The shortcut
       // belongs to the editor the user is actually in: the chrome, the painted surface, or
       // anything else under this instance's root.
-      // `editorScopeFor` finds the instance container — the `.docx-editor` that holds the
+      // `editorInstanceScope` finds the instance container — the `.docx-editor` that holds the
       // painted pages, NOT the bar's own self-emitted styling root — so one containment
       // test covers the bar AND the document. A composition with no such container falls
       // back to the bar's own subtree, which is narrow but never wrong.
       const target = event.target as Node | null;
-      const scope = editorScopeFor(rootRef.current) ?? rootRef.current;
+      const scope = editorInstanceScope(rootRef.current) ?? rootRef.current;
       if (!target || !scope?.contains(target)) return;
       if (print) {
         // Checked first: on some layouts the P key types a character other than "p".
@@ -383,36 +435,90 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
     ]
   );
 
+  // The menus in bar order, which is also what can move into the "⋯" menu.
+  const kids = Children.toArray(children);
+  const menuIds: string[] = [];
+  if (preset) {
+    const replaced = new Map(kids.map((child) => [menuOfChild(child), child] as const));
+    for (const menu of CHROME_MENUS) {
+      const override = replaced.get(menu.id);
+      if (override === undefined || anyMenuIdOfChild(override) !== null) menuIds.push(menu.id);
+    }
+    for (const child of kids) {
+      if (menuOfChild(child) !== null) continue;
+      const id = anyMenuIdOfChild(child);
+      if (id !== null) menuIds.push(id);
+    }
+  } else {
+    for (const child of kids) {
+      const id = anyMenuIdOfChild(child);
+      if (id !== null) menuIds.push(id);
+    }
+  }
+  // The end of the bar leaves first: Help, then Review, and so on toward File.
+  const collapseIds = [...menuIds].reverse();
+  const { attach, overflow } = useToolbarOverflow(overflowEnabled, menuIds, collapseIds);
+  const overflowValue = useMemo<MenuOverflowValue>(
+    () => ({ measuring: overflowEnabled, overflow, inMore: false }),
+    [overflowEnabled, overflow]
+  );
+  const moreValue = useMemo<MenuOverflowValue>(
+    () => ({ measuring: false, overflow, inMore: true }),
+    [overflow]
+  );
+
+  // Host children that are not menus stay in the bar at every width. They are wrapped so the
+  // fit counts their width, and they never render a second time inside the "⋯" menu.
+  const isMenu = (child: ReactNode) => anyMenuIdOfChild(child, true) !== null;
+  const hostBlock = (nodes: ReactNode[], key: string) => (
+    <div key={key} role="none" className="docx-menubar__host" {...{ [FIXED_ATTRIBUTE]: '' }}>
+      {nodes}
+    </div>
+  );
+  // `menus` is what the "⋯" menu renders: menus only, never host children.
+  let menus: ReactNode[];
   let content: ReactNode;
   if (!preset) {
-    content = children;
+    menus = kids.filter(isMenu);
+    // Wrapped only while the bar measures: a wrapping bar renders the host's markup as is.
+    content = overflowEnabled
+      ? kids.map((child, index) => (isMenu(child) ? child : hostBlock([child], `host-${index}`)))
+      : children;
   } else {
     const overrides = new Map<ChromeMenuId, ReactElement>();
     const appended: ReactNode[] = [];
-    for (const child of Children.toArray(children)) {
+    for (const child of kids) {
       const id = menuOfChild(child);
       // Last override for a menu wins, matching how later props win in a spread.
       if (id) overrides.set(id, child as ReactElement);
       else appended.push(child);
     }
+    menus = [
+      ...CHROME_MENUS.map((menu) => {
+        const override = overrides.get(menu.id);
+        if (override) return <Fragment key={menu.id}>{override}</Fragment>;
+        const Part = MENU_PARTS[menu.id];
+        return <Part key={menu.id} />;
+      }),
+      ...appended.filter(isMenu),
+    ];
+    const hosts = appended.filter((child) => !isMenu(child));
     content = (
       <>
-        {CHROME_MENUS.map((menu) => {
-          const override = overrides.get(menu.id);
-          if (override) return <Fragment key={menu.id}>{override}</Fragment>;
-          const Part = MENU_PARTS[menu.id];
-          return <Part key={menu.id} />;
-        })}
-        {appended}
+        {menus}
+        {hosts.length > 0 ? hostBlock(hosts, 'host') : null}
       </>
     );
   }
+
+  const moreLabel = t?.('formattingBar.more') ?? catalogT('formattingBar.more' as TranslationKey);
 
   return (
     <MenuContext.Provider value={context}>
       <div
         ref={(node) => {
           rootRef.current = node;
+          attach(node);
           // Seed the tab stop on the first RENDERED menu rather than on the registry's
           // first: a bar whose File menu was hidden would otherwise have its only tab stop
           // on an element that does not exist, and be unreachable by keyboard.
@@ -429,6 +535,8 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
           catalogT('titleBar.menuBarAriaLabel' as TranslationKey)
         }
         data-testid="docx-menubar"
+        // One line when the bar measures itself; the stylesheet reads this.
+        {...(overflowEnabled ? { 'data-overflow': '' } : {})}
         // `docx-editor` self-emitted so a composed menu bar is styled outside the packaged
         // wrapper, as `DocxEditorLoading` and `DocxEditorViewport` already do.
         className={`${scopeClassName}docx-menubar${className ? ` ${className}` : ''}`}
@@ -455,7 +563,19 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
           if (openMenu !== null) setOpenMenu(id);
         }}
       >
-        {content}
+        <MenuOverflowContext.Provider value={overflowValue}>
+          {content}
+          {overflow.size > 0 ? (
+            <Menu
+              id={MENU_OVERFLOW_ID}
+              label={moreLabel}
+              icon={chromeIcon(MORE_PATHS)}
+              preset={false}
+            >
+              <MenuOverflowContext.Provider value={moreValue}>{menus}</MenuOverflowContext.Provider>
+            </Menu>
+          ) : null}
+        </MenuOverflowContext.Provider>
       </div>
       <DialogPortal>
         {exportState.visible && popups?.export !== false ? (

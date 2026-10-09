@@ -108,7 +108,7 @@ for (const heading of editor.getOutline()) {
 }
 ```
 
-`scrollToBlock()` puts the heading near the top of the viewport. If a header, footer, or note is open for editing, the editor returns to the body first. Block IDs belong to the open document. After you load another document, read the outline again.
+`scrollToBlock()` puts the heading near the top of the viewport. To place it differently, pass `{ block: 'center' }`, `{ block: 'centerIfNeeded' }`, or `{ block: 'nearest' }`. The editor refuses an unknown placement and returns `false`. If a header, footer, or note is open for editing, the editor returns to the body first. Block IDs belong to the open document. After you load another document, read the outline again.
 
 ## Scroll to a paragraph reference
 
@@ -324,9 +324,9 @@ The **Find** tab highlights every match while it is open. It uses a second color
 ```
 
 <Callout>
-  <kbd>Ctrl</kbd>+<kbd>F</kbd> and <kbd>Cmd</kbd>+<kbd>F</kbd> open the browser's search by default,
-  so a page that embeds the editor keeps its own search. To open **Find** with the shortcut instead,
-  see [Open Find with Ctrl+F](#open-find-with-ctrlf).
+  While focus is in the editor, <kbd>Ctrl</kbd>+<kbd>F</kbd> (<kbd>Cmd</kbd>+<kbd>F</kbd> on macOS)
+  opens **Find**. Elsewhere on the page, the shortcut opens the browser's search. For more
+  information, see [Open Find with Ctrl+F](#open-find-with-ctrlf).
 </Callout>
 
 ### Search from code
@@ -419,33 +419,48 @@ Viewing mode permits body search navigation and programmatic selection. It keeps
 
 ### Open Find with Ctrl+F
 
-The editor doesn't handle <kbd>Ctrl</kbd>+<kbd>F</kbd> or <kbd>Cmd</kbd>+<kbd>F</kbd>, so a page that embeds it keeps browser search. To open **Find** with the shortcut, control the pane:
+`DocxEditor.Navigation` handles <kbd>Cmd</kbd>+<kbd>F</kbd> on macOS and <kbd>Ctrl</kbd>+<kbd>F</kbd> on other platforms. Only the platform's own key counts: on macOS, <kbd>Ctrl</kbd>+<kbd>F</kbd> keeps its text meaning and moves the cursor forward one character. The shortcut opens the pane on the **Find** tab and focuses the query field. If the pane is already open, the shortcut focuses the query field again. The pane button names the shortcut in its tooltip.
+
+The pane handles the shortcut only while focus is in the same editor: the pages, the pane, or chrome inside the editor's container. Elsewhere on the page, and in another editor on the same page, the browser's search opens. A toolbar or menu bar that you mount outside a shared container counts only while one editor is on the page.
+
+A controlled pane receives `onTabChange('find')` and `onOpenChange(true)`. Focus moves into the pane if your state opens it in the same update. If your state doesn't open it, the request lapses, and a later open leaves focus where it is.
+
+To leave the shortcut to the browser everywhere, set `findShortcut` to `false`. The pane button then doesn't name the shortcut. Set it on the packaged editor's `navigation` prop, or on a composed pane:
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
-import { useEffect, useState } from 'react';
-import { DocxEditor } from '@docx-editor.dev/react';
+// The packaged editor.
+<DocxEditor document={file} navigation={{ findShortcut: false }} />
 
-function NavigationWithFindShortcut() {
-  const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<'headings' | 'find'>('headings');
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
-        event.preventDefault();
-        setOpen(true);
-        setTab('find');
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
-
-  return (
-    <DocxEditor.Navigation open={open} onOpenChange={setOpen} tab={tab} onTabChange={setTab} />
-  );
-}
+// A composed pane.
+<DocxEditor.Navigation findShortcut={false} />
 ```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<template>
+  <!-- The packaged editor. -->
+  <DocxEditor :document="file" :navigation="{ findShortcut: false }" />
+
+  <!-- A composed pane. -->
+  <DocxEditorNavigation :find-shortcut="false" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+### Pane focus
+
+When the pane opens from its button or from the shortcut, focus moves into the pane. On **Find**, the query field receives focus. On **Headings**, the current heading receives focus. If no heading is current, the first heading or the filter field receives focus.
+
+<kbd>Esc</kbd> and the close button close the pane. Focus returns to the element that had focus when
+the shortcut opened the pane, without scrolling the document. If that element was in the document,
+the caret returns to its place. Otherwise, focus returns to the pane button.
 
 ## Highlight text ranges
 

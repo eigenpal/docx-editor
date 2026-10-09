@@ -144,3 +144,122 @@ test('an inline textbox paints its fill and text on the line instead of a placeh
   expect(stream.slice(fillAt, fillAt + 80)).toMatch(/ 144 36 re f/);
   expect(stream.indexOf(' Tm ', fillAt)).toBeGreaterThan(fillAt);
 });
+
+const WPG = 'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup';
+
+/** A text box member at `x` EMU across a 0.5in-high group, `cx` EMU wide, zero insets. */
+function member(x: number, cx: number, content: string, xfrm = ''): string {
+  return (
+    `<wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm${xfrm}><a:off x="${x}" y="0"/>` +
+    `<a:ext cx="${cx}" cy="457200"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>` +
+    `</wps:spPr><wps:txbx><w:txbxContent>${content}</w:txbxContent></wps:txbx>` +
+    '<wps:bodyPr lIns="0" tIns="0" rIns="0" bIns="0"/></wps:wsp>'
+  );
+}
+
+/** A 2in x 0.5in group at (1in, 1in) holding `members`. */
+function groupDrawing(members: string): string {
+  return (
+    `<w:drawing ${NS} xmlns:wpg="${WPG}"><wp:anchor distT="0" distB="0" distL="0" distR="0"` +
+    ' simplePos="0" relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1">' +
+    '<wp:simplePos x="0" y="0"/>' +
+    '<wp:positionH relativeFrom="page"><wp:posOffset>914400</wp:posOffset></wp:positionH>' +
+    '<wp:positionV relativeFrom="page"><wp:posOffset>914400</wp:posOffset></wp:positionV>' +
+    '<wp:extent cx="1828800" cy="457200"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/>' +
+    `<wp:docPr id="1" name="G"/><a:graphic><a:graphicData uri="${WPG}"><wpg:wgp>` +
+    '<wpg:cNvGrpSpPr/><wpg:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1828800" cy="457200"/>' +
+    '<a:chOff x="0" y="0"/><a:chExt cx="1828800" cy="457200"/></a:xfrm></wpg:grpSpPr>' +
+    `${members}</wpg:wgp></a:graphicData></a:graphic></wp:anchor></w:drawing>`
+  );
+}
+
+test('a group exports the text of its text box member inside the group', async () => {
+  // The member starts 0.5in in and is 1.5in wide.
+  const { result, stream, text } = await exported(
+    `<w:p><w:r>${groupDrawing(member(457200, 1371600, paragraph('Grouped')))}</w:r></w:p>${paragraph('Body')}`
+  );
+  expect(result.diagnostics.filter((entry) => entry.code === 'drawing')).toEqual([]);
+  expect(text).toContain('Grouped');
+  // Clipped to the group's 144pt x 36pt bounds at (72pt, 72pt) on the 792pt page, then to
+  // the member's 108pt content box at 108pt.
+  const clipAt = stream.indexOf('72 684 144 36 re W n');
+  expect(clipAt).toBeGreaterThan(-1);
+  const memberAt = stream.indexOf('108 684 108 36 re W n', clipAt);
+  expect(memberAt).toBeGreaterThan(clipAt);
+  expect(stream.indexOf(' Tm ', memberAt)).toBeGreaterThan(memberAt);
+});
+
+test('each group member clips its own text, so a long word stays out of its neighbor', async () => {
+  // Two 1in members side by side; the first holds a word far wider than 1in.
+  const { stream, text } = await exported(
+    `<w:p><w:r>${groupDrawing(
+      member(0, 914400, paragraph('Overlongunbreakablewordthatoverflows')) +
+        member(914400, 914400, paragraph('Right'))
+    )}</w:r></w:p>`
+  );
+  expect(text).toContain('Right');
+  const first = stream.indexOf('72 684 72 36 re W n');
+  const second = stream.indexOf('144 684 72 36 re W n');
+  expect(first).toBeGreaterThan(-1);
+  expect(second).toBeGreaterThan(first);
+  // The first member's glyphs sit inside its own clip, which closes before the second opens.
+  const firstGlyphs = stream.indexOf(' Tm ', first);
+  expect(firstGlyphs).toBeGreaterThan(first);
+  expect(firstGlyphs).toBeLessThan(second);
+  expect(stream.lastIndexOf('Q', second)).toBeGreaterThan(firstGlyphs);
+});
+
+test('a rotated group member turns its text about the member center', async () => {
+  const { stream, text } = await exported(
+    `<w:p><w:r>${groupDrawing(member(457200, 914400, paragraph('Turned'), ' rot="5400000"'))}</w:r></w:p>`
+  );
+  expect(text).toContain('Turned');
+  // A quarter turn clockwise about the member center (144pt, 702pt in PDF space).
+  expect(stream).toContain('0 -1 1 0 -558 846 cm');
+});
+
+test('a turned table cell inside a rotated member turns inside the member clip', async () => {
+  const table =
+    '<w:tbl><w:tblPr><w:tblW w:w="1000" w:type="dxa"/></w:tblPr>' +
+    '<w:tblGrid><w:gridCol w:w="1000"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:val="600"/></w:trPr>' +
+    '<w:tc><w:tcPr><w:tcW w:w="1000" w:type="dxa"/><w:textDirection w:val="btLr"/></w:tcPr>' +
+    `${paragraph('Cell')}</w:tc></w:tr></w:tbl>${paragraph('')}`;
+  const { stream, text } = await exported(
+    `<w:p><w:r>${groupDrawing(member(457200, 914400, table, ' rot="5400000"'))}</w:r></w:p>`
+  );
+  expect(text).toContain('Cell');
+  const turn = stream.indexOf('0 -1 1 0 -558 846 cm');
+  expect(turn).toBeGreaterThan(-1);
+  // The member clip follows the member turn; the cell's own turn and its glyphs come after
+  // both and before the member's clip closes, not in the page's text stream.
+  const memberClip = stream.indexOf('W n', turn);
+  const cellTurn = stream.indexOf(' cm', memberClip);
+  const glyphs = stream.indexOf(' Tm ', cellTurn);
+  expect(memberClip).toBeGreaterThan(turn);
+  expect(cellTurn).toBeGreaterThan(memberClip);
+  expect(glyphs).toBeGreaterThan(cellTurn);
+  expect(stream.indexOf(' Tm ')).toBe(glyphs);
+});
+
+test('a turned table cell inside a standalone text box turns inside the box clip', async () => {
+  const table =
+    '<w:tbl><w:tblPr><w:tblW w:w="1000" w:type="dxa"/></w:tblPr>' +
+    '<w:tblGrid><w:gridCol w:w="1000"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:val="600"/></w:trPr>' +
+    '<w:tc><w:tcPr><w:tcW w:w="1000" w:type="dxa"/><w:textDirection w:val="btLr"/></w:tcPr>' +
+    `${paragraph('Cell')}</w:tc></w:tr></w:tbl>${paragraph('')}`;
+  const { stream, text } = await exported(`<w:p><w:r>${textbox(table, false)}</w:r></w:p>`);
+  expect(text).toContain('Cell');
+  // The box's content clip (144pt x 36pt at 72pt, 72pt), then the cell's own turn, then its
+  // glyphs: the turned cell paints inside the box, never in the page's text stream.
+  const boxClip = stream.indexOf('72 684 144 36 re W n');
+  expect(boxClip).toBeGreaterThan(-1);
+  const cellTurn = stream.indexOf(' cm', boxClip);
+  expect(cellTurn).toBeGreaterThan(boxClip);
+  // A quarter turn: the matrix starts `0 1 -1 0` or `0 -1 1 0`.
+  expect(stream.slice(stream.lastIndexOf('\n', cellTurn) + 1, cellTurn)).toMatch(
+    /^0 (-1 1|1 -1) 0 /
+  );
+  const glyphs = stream.indexOf(' Tm ', cellTurn);
+  expect(glyphs).toBeGreaterThan(cellTurn);
+  expect(stream.indexOf(' Tm ')).toBe(glyphs);
+});

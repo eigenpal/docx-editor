@@ -102,7 +102,8 @@
     "formatPainter": "מברשת עיצוב",
     "formatPainterShortcut": "מברשת עיצוב (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "הצג מעברי פסקה",
-    "label": "פקדי עיצוב"
+    "label": "פקדי עיצוב",
+    "addComment": "הוסף תגובה"
   },
   "alignment": {
     "alignLeft": "יישור לשמאל",
@@ -674,6 +675,7 @@
     },
     "openAriaLabel": "פתח ניווט",
     "openTitle": "ניווט",
+    "openShortcutTitle": "ניווט ({shortcut})",
     "tabs": {
       "find": "חיפוש",
       "headings": "כותרות"
@@ -773,7 +775,11 @@
     "noMarkup": "ללא סימונים",
     "original": "מקורי",
     "protectDocument": "הגן על המסמך עבור טפסים",
-    "simpleMarkup": "סימון פשוט"
+    "simpleMarkup": "סימון פשוט",
+    "replyCount": "תשובות: {count}",
+    "trackedChange": "שינוי במעקב",
+    "changeAnnouncement": "{change} מאת {author}: {text}",
+    "replyTargetResolved": "השינוי נפתר, ולכן התשובה לא פורסמה."
   },
   "imageAltText": {
     "description": "תיאור",

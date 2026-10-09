@@ -176,6 +176,11 @@ export class RequestContext {
       let remaining = actions.filter((action) => !action.nullableLoad?.isNull);
       const hasWrites = actions.some((action) => action.sort === 'write');
       let pinnedRevision: number | undefined;
+      // What a refusal reports as `expectedRevision`: the revision this context last read at,
+      // and only for a batch that writes. Revisions pinned internally (dependency phases,
+      // resource preparation) are not reported.
+      const reportedRevision =
+        hasWrites && this.#readRevision !== null ? this.#readRevision : undefined;
       const blocked = (action: QueuedAction): boolean =>
         action.dependencies?.some((path) => !path.isAddressable) ?? false;
       // Read prerequisites never publish edits. Every phase and the final transaction use
@@ -188,7 +193,7 @@ export class RequestContext {
         const ready = remaining.filter((action) => action.sort === 'read' && !blocked(action));
         if (ready.length === 0)
           fail({ code: 'InvalidObjectPath', target: remaining.find(blocked)?.label });
-        await this.#dispatch(ready, pinnedRevision);
+        await this.#dispatch(ready, pinnedRevision, reportedRevision);
         const sent = new Set(ready);
         remaining = remaining.filter((action) => !sent.has(action) && !action.nullableLoad?.isNull);
       }
@@ -196,7 +201,7 @@ export class RequestContext {
         const expected =
           pinnedRevision ??
           (hasWrites && this.#readRevision !== null ? this.#readRevision : undefined);
-        await this.#dispatch(remaining, expected);
+        await this.#dispatch(remaining, expected, reportedRevision);
       }
     } finally {
       for (const action of actions) action.dispose?.();
@@ -204,7 +209,11 @@ export class RequestContext {
     }
   }
 
-  async #dispatch(actions: readonly QueuedAction[], expectedRevision?: number): Promise<void> {
+  async #dispatch(
+    actions: readonly QueuedAction[],
+    expectedRevision: number | undefined,
+    reportedRevision: number | undefined
+  ): Promise<void> {
     const planned = planBatch(actions);
     const request: AutomationBatchRequest = {
       operations: planned.operations,
@@ -219,13 +228,13 @@ export class RequestContext {
       };
       await this.#session.host.prepare(pinned);
       const response = this.#session.host.execute(pinned);
-      if (!response.ok) throw batchFailure(response, actions, pinned.expectedRevision);
+      if (!response.ok) throw batchFailure(response, actions, reportedRevision);
       settleBatch(actions, response);
       this.#readRevision = response.revision;
       return;
     }
     const response = this.#session.host.execute(request);
-    if (!response.ok) throw batchFailure(response, actions, expectedRevision);
+    if (!response.ok) throw batchFailure(response, actions, reportedRevision);
     settleBatch(actions, response);
     if (planned.hasRead || planned.hasWrite) this.#readRevision = response.revision;
   }

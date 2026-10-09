@@ -102,7 +102,8 @@
     "formatPainter": "फ़ॉर्मेट पेंटर",
     "formatPainterShortcut": "फ़ॉर्मेट पेंटर (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "अनुच्छेद विराम दिखाएँ",
-    "label": "स्वरूपण नियंत्रण"
+    "label": "स्वरूपण नियंत्रण",
+    "addComment": "टिप्पणी जोड़ें"
   },
   "alignment": {
     "alignLeft": "बाएं संरेखित करें",
@@ -674,6 +675,7 @@
     },
     "openAriaLabel": "नेविगेशन खोलें",
     "openTitle": "नेविगेशन",
+    "openShortcutTitle": "नेविगेशन ({shortcut})",
     "tabs": {
       "find": "ढूँढें",
       "headings": "शीर्षक"
@@ -773,7 +775,11 @@
     "noMarkup": "कोई मार्कअप नहीं",
     "original": "मूल",
     "protectDocument": "फ़ॉर्म भरने के लिए दस्तावेज़ सुरक्षित करें",
-    "simpleMarkup": "सरल मार्कअप"
+    "simpleMarkup": "सरल मार्कअप",
+    "replyCount": "उत्तर: {count}",
+    "trackedChange": "ट्रैक किया गया परिवर्तन",
+    "changeAnnouncement": "{author} द्वारा {change}: {text}",
+    "replyTargetResolved": "परिवर्तन हल हो गया था, इसलिए उत्तर पोस्ट नहीं किया गया।"
   },
   "imageAltText": {
     "description": "विवरण",

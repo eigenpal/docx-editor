@@ -18,20 +18,22 @@ Use the named part for controls that collect a value or open UI, such as `FontCo
 <Framework value="react">
 
 ```tsx
-<DocxEditor.Toolbar.Button slot="format.painter" />
+<DocxEditor.Toolbar.Button slotId="format.painter" />
 ```
 
 </Framework>
 <Framework value="vue">
 
 ```vue
-<DocxEditorToolbar.Button slot="format.painter" />
+<DocxEditorToolbar.Button slot-id="format.painter" />
 ```
 
 </Framework>
 </FrameworkTabs>
 
-Use `Action` for a host-owned action without a registry slot. Use `Separator` only for layout. The `Button`, `Action`, and `Separator` helpers don't add slot IDs.
+`Toolbar.Button`, `Menu.Item`, and `ContextMenu.Slot` take the slot ID as `slotId` (`slot-id` in Vue templates). The `slot` prop is deprecated. It still works and logs a development warning.
+
+Use `Action` for a host-owned action without a registry slot. Use `Separator` only for layout. Use `Group` to add controls to the preset toolbar as a group that collapses into the **More** panel, and `Slot` to replace one slot with your own content. The `Button`, `Action`, `Separator`, `Group`, and `Slot` helpers don't add slot IDs.
 
 ## History, zoom, styles, and font
 
@@ -89,7 +91,8 @@ Comments and reviewer filtering require the Pro review module. Content-control s
 
 | Slot | Packaged surface | Toolbar part | Purpose |
 | --- | --- | --- | --- |
-| `review.comments` | Default toolbar | `Comments` | Open comments and changes |
+| `review.comments` | Default toolbar | `Comments` | Show or hide the comments and changes pane |
+| `review.addComment` | Context menu | `AddComment` | Start a comment draft on the selection in the review rail |
 | `review.paragraphMarks` | Review menu | — | Show paragraph-break marks |
 | `review.protectDocument` | Review menu | — | Toggle document protection |
 | `review.simpleMarkup` | Review menu | — | Show the proposed result with change bars |
@@ -118,7 +121,7 @@ The toolbar shows image controls when you select an image. It shows table border
 | `image.properties` | Image context | `ImageProperties` | Open image properties |
 | `image.wrap` | Image context | `ImageWrap` | Choose text wrapping |
 | `image.altText` | Image context | `ImageAltText` | Edit alternative text |
-| `table.insert` | Insert menu | `TableInsert` | Insert a table |
+| `table.insert` | Insert menu | `TableInsert` | Insert a table of the size picked in a 6×6 grid |
 | `table.borderTarget` | Table context | `TableBorderTarget` | Choose which borders to affect |
 | `table.borderColor` | Table context | `TableBorderColor` | Choose and apply border color |
 | `table.borderStyle` | Table context | `TableBorderStyle` | Choose border style |

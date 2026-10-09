@@ -46,9 +46,16 @@ function commentBodyTextOf(comment: CommentRecord, display: boolean): string {
   return parts.join('');
 }
 
-/** Author initials for an avatar, from `@w:initials` or the name. */
+/** The most initials an avatar or marker shows. `@w:initials` comes from the file, unbounded. */
+const MAX_INITIALS = 3;
+
+/**
+ * Author initials for an avatar, from `@w:initials` or the name, at most three characters.
+ * Characters are code points, so a surrogate pair is never split.
+ */
 export function commentInitials(comment: CommentRecord): string {
-  if (comment.initials && comment.initials.trim().length > 0) return comment.initials.trim();
+  const declared = comment.initials?.trim();
+  if (declared) return Array.from(declared).slice(0, MAX_INITIALS).join('');
   const words = comment.author.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return '?';
   return words

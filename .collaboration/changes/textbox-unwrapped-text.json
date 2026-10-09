@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Text boxes with wrapping turned off broke their text at the box edge, often one character per line.",
+  "after": "Each paragraph in such a text box stays on one line, and the box takes the width of its widest line.",
+  "reason": "The projection reads an existing wrap attribute and layout sizes the box from it. Shared document content, operations, and the collaboration format do not change.",
+  "tests": [
+    "packages/core/src/layout/__tests__/textbox-unwrapped-layout.test.ts",
+    "packages/core/src/layout/__tests__/legacy-vml-textbox-layout.test.ts"
+  ],
+  "changeset": "header-drawing-fidelity",
+  "migration": null
+}

@@ -16,9 +16,10 @@ import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { ReviewRailContext, useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';
-import { useReviewGutter } from './review-gutter';
+import { REVIEW_MARKERS_GUTTER, useReviewGutter } from './review-gutter';
 import { zoomLevelForShortcut } from './zoom-levels';
 import { ScopedByAncestorContext, useScopeClassName } from './scope-context';
+import { InsideViewportContext } from './viewport-context';
 
 const selectPaneOpen = (snapshot: EditorSnapshot): boolean => snapshot.reviewPaneOpen ?? true;
 /** Fit modes must not animate nav padding: intermediate widths chase the page forever. */
@@ -111,6 +112,9 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
             ? {
                 ['--docx-review-gutter' as string]: `${reviewGutter.inlineEnd}px`,
                 ['--docx-review-gutter-start' as string]: `${reviewGutter.inlineStart}px`,
+                // What a closed pane reserves on both edges. Under `overflow: 'scroll'`
+                // the fit subtracts this in both pane states, so the page keeps one size.
+                ['--docx-review-strip' as string]: `${2 * REVIEW_MARKERS_GUTTER}px`,
               }
             : {}),
         } as CSSProperties
@@ -120,7 +124,9 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
           wrapper above us, or this element, which scoped itself just now. Say
           so, or parts inside repeat the class under `chrome={false}` and in the
           Root + Viewport composition path. */}
-      <ScopedByAncestorContext.Provider value={true}>{children}</ScopedByAncestorContext.Provider>
+      <ScopedByAncestorContext.Provider value={true}>
+        <InsideViewportContext.Provider value={true}>{children}</InsideViewportContext.Provider>
+      </ScopedByAncestorContext.Provider>
     </div>
   );
 }

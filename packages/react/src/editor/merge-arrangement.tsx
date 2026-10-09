@@ -54,6 +54,8 @@ export interface MergeArrangementInput<Entry> {
   readonly renderEntry: (entry: Entry, index: number, children?: ReactNode) => DocxEditorChildren;
   /** Nested registry entries use the same slot overrides as their parent panel. */
   readonly childrenOfEntry?: (entry: Entry) => readonly Entry[] | undefined;
+  /** Told of each keyed child that names no entry; it still renders after the default set. */
+  readonly onUnmatched?: (key: string, element: ReactElement) => void;
 }
 
 /**
@@ -73,6 +75,7 @@ export function mergeArrangement<Entry>({
   keyOfChild,
   renderEntry,
   childrenOfEntry,
+  onUnmatched,
 }: MergeArrangementInput<Entry>): ReactNode {
   if (!preset) return children;
   const overrides = new Map<string, ReactElement>();
@@ -96,7 +99,10 @@ export function mergeArrangement<Entry>({
   const base = renderEntries(entries);
   const unmatched = [...overrides.entries()]
     .filter(([key]) => !known.has(key))
-    .map(([key, element]) => <Fragment key={key}>{element}</Fragment>);
+    .map(([key, element]) => {
+      onUnmatched?.(key, element);
+      return <Fragment key={key}>{element}</Fragment>;
+    });
   return (
     <>
       {base}

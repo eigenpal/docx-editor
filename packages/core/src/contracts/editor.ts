@@ -1,4 +1,5 @@
 import type { ResolvedRevisionMarkup } from './revision-markup.ts';
+import type { ResolvedReviewPane } from './review-pane.ts';
 /**
  * `@docx-editor.dev/core/contracts/editor` — the `Editor` contract adapters are written against.
  *
@@ -12,12 +13,13 @@ import type { ResolvedRevisionMarkup } from './revision-markup.ts';
 import type { ZoomMode } from './editor-zoom.ts';
 export type { ZoomFitTarget, ZoomMode } from './editor-zoom.ts';
 import type { EditorEvents } from './editor-events.ts';
-import type { EditorAnchorNavigation } from './editor-anchor.ts';
+import type { EditorAnchorNavigation, ScrollToAnchorOptions } from './editor-anchor.ts';
 export type {
   AnchorHighlightAnimation,
   AnchorHighlightOptions,
   ClearAnchorHighlightOptions,
   EditorAnchorNavigation,
+  ScrollPlacement,
   ScrollToAnchorOptions,
 } from './editor-anchor.ts';
 import type { EditorHighlights } from './editor-highlights.ts';
@@ -29,7 +31,26 @@ export type {
   HighlightRect,
   HighlightResult,
 } from './editor-highlights.ts';
-export type { DocumentChange, EditorEvents } from './editor-events.ts';
+import type { EditorReviewHits } from './editor-review-hits.ts';
+import type { ReviewItemQuery } from './editor-review-query.ts';
+export type { ReviewItemQuery } from './editor-review-query.ts';
+import type { ReviewActivationOptions } from './review-activation.ts';
+export type { ReviewActivationOptions } from './review-activation.ts';
+import type { ReviewItemPlacement } from './editor-review-placement.ts';
+export type {
+  ReviewCommentPlacement,
+  ReviewCustomPlacement,
+  ReviewItemPlacement,
+  ReviewItemPlacementBase,
+  ReviewRevisionPlacement,
+} from './editor-review-placement.ts';
+export type { EditorReviewHits, ReviewItemHit } from './editor-review-hits.ts';
+export type {
+  DocumentChange,
+  EditorEvents,
+  ReviewItemRevealEvent,
+  ReviewItemRevealSource,
+} from './editor-events.ts';
 import type {
   DocumentEditingMode,
   ResolveReviewChangesOptions,
@@ -52,8 +73,6 @@ export type {
 // Type-only, so the adapters reach the review vocabulary through THIS contract rather than
 // naming the store lane, which they are not allowed to import.
 import type {
-  ReviewCommentItem,
-  ReviewCustomItem,
   ReviewItem,
   ReviewRevisionItem,
   ReviewRevisionKind,
@@ -315,7 +334,7 @@ export type CanResult = { ok: true } | { ok: false; code: ExecErrorCode; reason:
  * const bytesOut = await editor.save();
  * ```
  */
-export interface Editor extends EditorAnchorNavigation, EditorHighlights {
+export interface Editor extends EditorAnchorNavigation, EditorHighlights, EditorReviewHits {
   /**
    * Load a new document (DOCX bytes, `'blank'`, or a handle), replacing the current one.
    *
@@ -624,8 +643,38 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights {
    * {@link setReviewActivationExclusions}), for a custom node without `reviewCard`, and when
    * the story it lives in will not open — and a host walking a queue with next/previous
    * controls has no other way to learn that a step did nothing. Consult {@link ReviewItemPlacement.activatable} to avoid asking.
+   *
+   * With `options.announce: true`, a call that lands fires `reviewItemReveal` with
+   * `source: 'host'`, also when the item was already active, so the packaged review UI opens
+   * the item's balloon or card. By default it fires nothing. A `null` key fires nothing.
    */
   setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult;
+
+  /**
+   * The key of the ACTIVATED review item: the one {@link setActiveReviewItem}, Next Change, or
+   * Previous Change made active, while the caret stays in it.
+   *
+   * Two ideas of "active" exist. The caret-active item is the one the caret is in, however it
+   * got there: `isActive` on the placements {@link getReviewItems} returns, and `activeKey` in
+   * `useReview()`. The activated item is narrower: only an explicit activation sets it, so a
+   * caret that merely lands in a change leaves this `null`. Open a balloon or card for the
+   * activated item, and highlight the caret-active one.
+   *
+   * Pass the query you read items with, so the key matches theirs: with
+   * `pairReplacements: true`, a paired replacement reports the pair's key; without it, the
+   * key of the half the caret is in. The value changes with the selection, so read it again
+   * on `selectionChange`.
+   *
+   * @example
+   * ```ts
+   * const query = { pairReplacements: true };
+   * editor.on('selectionChange', () => {
+   *   const activated = editor.getActivatedReviewItemKey(query);
+   *   if (activated !== null) showMyCard(activated);
+   * });
+   * ```
+   */
+  getActivatedReviewItemKey(query?: ReviewItemQuery): string | null;
 
   /**
    * Revision kinds the caret must never activate, or null for none.
@@ -721,7 +770,12 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights {
    * the host has no scroll container — a caller can tell "not found" from "scrolled".
    */
   scrollToPage(pageNumber: number): boolean;
-  scrollToBlock(blockId: string): boolean;
+  /**
+   * `options` takes the {@link ScrollToAnchorOptions} fields. `block` defaults to `'start'`
+   * here (`scrollToAnchor` defaults to `'centerIfNeeded'`), `behavior` to `'instant'`, and
+   * `offsetPx` to 24. An invalid option also returns false, and nothing scrolls.
+   */
+  scrollToBlock(blockId: string, options?: ScrollToAnchorOptions): boolean;
   // scrollToAnchor, highlightAnchor, and clearAnchorHighlight: see EditorAnchorNavigation.
 
   getZoom(): number;
@@ -825,144 +879,6 @@ export type TrackedChangePredicate = (revision: ReviewRevisionItem) => boolean;
 
 /** How revisions excluded by a tracked-changes predicate project into the view. */
 export type TrackedChangeFilterMode = 'accept' | 'reject';
-
-/**
- * Narrows what `getReviewItems` returns.
- *
- * Both fields exist to keep the review rail cheap: filtering revision kinds is how a host hides
- * structural cards it has no UI for, and `placement: false` skips the layout pass entirely when
- * only metadata is wanted.
- */
-export interface ReviewItemQuery {
-  readonly excludeRevisionKinds?: readonly ReviewRevisionKind[];
-  /** When false, skip layout geometry; metadata is unchanged and anchors are null. Default true. */
-  readonly placement?: boolean;
-}
-
-/**
- * What every review card carries, whatever kind of decision it represents.
- *
- * Presentation-ready by design: author, initials, date and text are derived by the ENGINE,
- * because deriving them means walking runs and reading `w15:commentsEx`. An adapter doing that
- * walk would put document derivation in the host and would have to be written once per
- * framework.
- */
-export interface ReviewItemPlacementBase {
-  /** Stable and unique per decision within this editor instance. */
-  readonly key: string;
-  /** The engine's own id for the comment, the revision, or the custom node. */
-  readonly id: string;
-  readonly author: string;
-  /** Initials for an avatar: `@w:initials` when the file carries one, else from the name. */
-  readonly initials: string;
-  /** `@w:date`, absent when the file omits it — Word does when date stamping is off. */
-  readonly date?: string;
-  /**
-   * The comment's body, the words the revision covers, or the custom card's detail.
-   *
-   * PLAIN TEXT, and it must be rendered as text: a `.docx` is a zip of XML an attacker
-   * controls end to end, so this string is untrusted and never markup.
-   */
-  readonly text: string;
-  /**
-   * Replies to this item, in document order.
-   *
-   * Comments AND revisions carry them: OOXML gives `w:ins` and `w:del` no body, so replying
-   * to a tracked change writes a comment over the change's own range, and the reply belongs
-   * inside the card for the change rather than beside it.
-   */
-  readonly replyIds: readonly string[];
-  /**
-   * True when the engine cannot resolve this kind structurally, so accept and reject must
-   * not be offered. A card offering a button the engine will refuse is worse than one that
-   * explains why it cannot.
-   */
-  readonly readOnly: boolean;
-  /**
-   * Whether {@link Editor.setActiveReviewItem} would take this key.
-   *
-   * False for an item with no resolvable range, for a custom node without `reviewCard`
-   * (`carded: false`), and for a revision kind the host's rail excluded through
-   * {@link Editor.setReviewActivationExclusions} — the queue still LISTS
-   * those, because `getReviewItems` answers "what does this document hold" rather than "what
-   * may be clicked", and a host filtering the two apart needs to be told which is which. A
-   * card drawn for an item that cannot be activated is a card that does nothing when clicked.
-   */
-  readonly activatable: boolean;
-  /** Document-space Y of the anchor, or null when the item has no resolvable range. */
-  readonly anchorY: number | null;
-  readonly pageIndex: number | null;
-  readonly isActive: boolean;
-}
-
-/**
- * How activating a review item places it in the viewport.
- *
- * @public
- */
-export interface ReviewActivationOptions {
-  /**
-   * Where the item lands, or `false` to open it without scrolling at all.
-   *
-   * Default `'centerIfNeeded'`: silent while the item is already on screen, centred when it
-   * has to travel. `'nearest'` scrolls the minimum instead, which parks the item flush
-   * against the edge it came in from; `'start'` puts it near the top, the way a jump to a
-   * heading reads. `false` is for a host whose own list already drives the scroll and does
-   * not want the engine competing with it.
-   *
-   * It governs the reveal of the ITEM. An item in a header, a footer or a note also opens
-   * that story, and opening one always brings its band into view — a story the reader cannot
-   * see is one they cannot read the change in, which is the whole point of activating it.
-   */
-  readonly reveal?: 'start' | 'center' | 'centerIfNeeded' | 'nearest' | false;
-}
-
-/** A comment thread's card. @public */
-export interface ReviewCommentPlacement extends ReviewItemPlacementBase {
-  readonly kind: 'comment';
-  /** Whether `w15:commentsEx` marks the thread done. */
-  readonly resolved: boolean;
-  /** The comment this replies to, absent at the top of a thread. */
-  readonly parentId?: string;
-  /**
-   * The REVISION this comment answers, absent unless it does.
-   *
-   * A surface listing top-level cards must skip these as well as the ones with a
-   * {@link parentId}: the card is rendered inside the change it answers, and a rail that
-   * only checked `parentId` drew the reply twice.
-   */
-  readonly parentRevisionId?: string;
-  readonly item: ReviewCommentItem;
-}
-
-/** A tracked change's card. @public */
-export interface ReviewRevisionPlacement extends ReviewItemPlacementBase {
-  readonly kind: 'revision';
-  /** Which decision this is. */
-  readonly revisionKind: ReviewRevisionKind;
-  /**
-   * The words a custom replacement decision removes when {@link revisionKind} is `'replace'`.
-   * The built-in reader exposes separate deletion and insertion cards.
-   */
-  readonly replacedText?: string;
-  readonly item: ReviewRevisionItem;
-}
-
-/** A custom node's card (`defineCustomNode` with a `reviewCard` hook). @public */
-export interface ReviewCustomPlacement extends ReviewItemPlacementBase {
-  readonly kind: 'custom';
-  readonly item: ReviewCustomItem;
-}
-
-/**
- * A DISCRIMINATED union on {@link ReviewItemPlacementBase.kind}: narrowing the kind
- * narrows `item` and the kind-specific fields with it, so a consumer never writes the
- * `placement.kind === 'custom' && placement.item.kind === 'custom'` double check.
- */
-export type ReviewItemPlacement =
-  | ReviewCommentPlacement
-  | ReviewRevisionPlacement
-  | ReviewCustomPlacement;
 
 import type {
   TableBorderEdgeTarget,
@@ -1616,6 +1532,13 @@ export interface EditorSnapshot {
    * value-equal snapshot correctly refuses to re-render.
    */
   readonly reviewPaneOpen?: boolean;
+  /**
+   * The review pane settings in force: every field of `ReviewPaneOptions`, such as when the
+   * pane opens by itself and what it does when its card column does not fit. Change them with
+   * `setReviewPaneOptions`. Never saved. Always
+   * set: an editor without a review module reports `DEFAULT_REVIEW_PANE`.
+   */
+  readonly reviewPane: ResolvedReviewPane;
   /** Whether Show/Hide paragraph marks is enabled. */
   readonly showParagraphMarks?: boolean;
   /** The document's `w:documentProtection`, as the file states it; null with no document. */

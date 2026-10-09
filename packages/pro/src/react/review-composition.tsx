@@ -55,3 +55,30 @@ export function cloneReviewCard(
     className: `${rootClassName}${ownClassName ? ` ${ownClassName}` : ''}`,
   });
 }
+
+/** A card template: element children, or a render prop over the item. */
+export type ReviewCardTemplate<Item> = ReactNode | ((item: Item) => ReactNode);
+
+/**
+ * Resolve the card template for a card the rail renders OUTSIDE the list.
+ *
+ * The compact rail floats one card beside the marker strip. That card must use the same
+ * template the list uses, or the host's part overrides and extra children vanish whenever
+ * the gutter is narrow. The root forwards its own children to the List only when the List
+ * part supplies none, so the same precedence applies here. `hidden` reports a hidden List
+ * part, which renders no card anywhere.
+ */
+export function listCardTemplate<Item>(
+  rootRest: ReviewCardTemplate<Item>,
+  listPart: ReactNode
+): { template: ReviewCardTemplate<Item>; fromList: boolean; hidden: boolean } {
+  if (!isValidElement<{ children?: ReviewCardTemplate<Item>; hidden?: boolean }>(listPart)) {
+    return { template: rootRest, fromList: false, hidden: false };
+  }
+  const { children, hidden } = listPart.props;
+  return {
+    template: children === undefined ? rootRest : children,
+    fromList: children !== undefined,
+    hidden: hidden === true,
+  };
+}

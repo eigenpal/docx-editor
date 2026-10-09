@@ -49,7 +49,11 @@ import {
   type ExclusionZone,
 } from './drawing-exclusion.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
-import { forEachStoryDrawing, forEachStoryParagraphFragment } from './semantic-record-queries.ts';
+import {
+  forEachStoryDrawing,
+  forEachStoryParagraphFragment,
+  ownedTextboxStories,
+} from './semantic-record-queries.ts';
 import { withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
 import type { NumberingIndex } from './numbering-index.ts';
 import { hostedStoryFlowDeps, layoutTextboxStory } from './textbox-story-layout.ts';
@@ -63,8 +67,22 @@ import type {
 import type { StyleCascadeTable } from './style-cascade.ts';
 import { storyBlocks } from './story-roots.ts';
 import { positionLegacyFooterPageFrame } from './legacy-footer-page-frame.ts';
-import { placeFloatingStoryTables, splitFloatingStoryTables } from './hf-floating-tables.ts';
+import {
+  footerLiftAboveTables,
+  placeFloatingStoryTables,
+  splitFloatingStoryTables,
+} from './hf-floating-tables.ts';
+import { withoutFloatingTableZones } from './table-float-overlap.ts';
 import { placeHeaderPageFrame, readHeaderPageFrame } from './header-page-frame.ts';
+
+/**
+ * How many times a footer grows upward when text wrapped beside a page-framed table runs past
+ * the sheet. Each growth moves the top edge up by the overflow and wraps again; a narrower
+ * passage can add a line each time, so the growth is bounded rather than iterated to a fixed
+ * point. Three covers a wrap that adds a line per pass for the passages a footer table leaves;
+ * past that, the text is lifted above every table it meets, which always fits the sheet.
+ */
+const FOOTER_GROWTH_PASSES = 3;
 
 /**
  * Distinct PAGE-dependent contexts retained before LRU eviction.
@@ -452,6 +470,8 @@ export function layoutHeaderFooterStory(
       : undefined;
 
     let exclusionZones: readonly ExclusionZone[] = Object.freeze([]);
+    // The zones of the story's own floating tables, which every flow pass wraps around.
+    let tableZones: readonly ExclusionZone[] = Object.freeze([]);
     let flow!: { readonly blocks: BlockFragmentRecord[]; readonly bottom: number };
     // A floating table needs the page geometry to find its anchor. Without it, it stays in flow.
     const floatingGeometry =
@@ -488,6 +508,7 @@ export function layoutHeaderFooterStory(
       ...(inputs?.projectionTokenForTable
         ? { projectionTokenForTable: inputs.projectionTokenForTable }
         : {}),
+      ...(tableZones.length > 0 ? { pageExclusionZones: () => exclusionZones } : {}),
     });
     // Before mode 15 Word runs header and footer text outside tables under their own logos;
     // the cells read it through `CellAnchorScope.anchorsWrapText`.
@@ -532,20 +553,21 @@ export function layoutHeaderFooterStory(
     });
 
     const flowStory = (source: typeof flowBlocks, firstLine: number): void => {
-      exclusionZones = Object.freeze([]);
+      exclusionZones = tableZones;
       if (inlineDrawingLayout) {
         let converged = false;
         for (let pass = 0; pass < MAX_DRAWING_EXCLUSION_REFLOW_PASSES; pass += 1) {
           pendingAnchoredDrawings.splice(0, pendingAnchoredDrawings.length);
           lineCounter = firstLine;
           flow = flowBlocksInBox(source, 0, Math.max(1, contentWidth), 0, 0, drawingDeps(collect));
-          const nextZones = collectExclusionZonesFromDrawings(
+          const drawingZones = collectExclusionZonesFromDrawings(
             pendingAnchoredDrawings,
             inlineDrawingLayout,
             0,
             contentWidth
           );
-          if (nextZones.length === 0) {
+          const nextZones = tableZones.length ? [...tableZones, ...drawingZones] : drawingZones;
+          if (drawingZones.length === 0) {
             converged = true;
             exclusionZones = nextZones;
             break;
@@ -630,19 +652,29 @@ export function layoutHeaderFooterStory(
     } else flowStory(flowBlocks, 0);
 
     if (floatingGeometry) {
-      // A footer's top edge depends on its own flow height, which the floating tables leave.
-      const storyTop =
-        effectiveCtx?.storyTop ??
-        (part.root.localName === 'ftr'
-          ? floatingGeometry.pageHeight - floatingGeometry.storyDistance! - flow.bottom
-          : floatingGeometry.storyDistance!);
-      const frames = { ...floatingGeometry, contentWidth, storyTop };
-      flow = {
-        blocks: placeFloatingStoryTables(
-          flow.blocks,
-          flow.bottom,
+      const anchors = flow;
+      // A footer's bottom edge is fixed and its top rises with its height. The tables resolve
+      // once, against the flow before wrapping, so they stay where the text wraps around them.
+      // The page furniture hands a footer the top its last height implies (`sheet bottom -
+      // distance - flowHeight`) and repeats until the height settles; without it, the top
+      // follows the unwrapped flow. The height reported below is the distance from that top to
+      // the fixed bottom edge, so a handed top that already holds a lift reproduces it.
+      const footerBottom =
+        part.root.localName === 'ftr' && floatingGeometry.storyDistance !== undefined
+          ? floatingGeometry.pageHeight - floatingGeometry.storyDistance
+          : undefined;
+      let storyTop =
+        footerBottom !== undefined
+          ? (effectiveCtx?.storyTop ?? footerBottom - anchors.bottom)
+          : (effectiveCtx?.storyTop ?? floatingGeometry.storyDistance!);
+      const placeTables = () =>
+        placeFloatingStoryTables(
+          anchors.blocks,
+          anchors.bottom,
           floatingSplit.floating,
-          frames,
+          { ...floatingGeometry, contentWidth, storyTop },
+          anchorsWrapText,
+          // A table never wraps around its own zone, or another table's.
           (table, left, top, placed) =>
             flowBlocksInBox(
               [table],
@@ -650,10 +682,45 @@ export function layoutHeaderFooterStory(
               left + Math.max(1, contentWidth),
               top,
               0,
-              inlineDrawingLayout ? drawingDeps(placed ? collect : () => {}) : plainDeps()
+              withoutFloatingTableZones(
+                inlineDrawingLayout ? drawingDeps(placed ? collect : () => {}) : plainDeps()
+              )
             ).blocks
-        ),
-        bottom: flow.bottom,
+        );
+      let tables = placeTables();
+      // A page-framed footer table keeps its page position, so the footer's top edge is fixed
+      // first: at its natural top, or raised so the text ends where the table starts. Text
+      // the table pushes down may run past the footer's bottom edge, never past the sheet's.
+      const framedFooter = footerBottom !== undefined && tables.pageFramed;
+      const liftAbove = (pageBottom: number) => {
+        const lift = footerLiftAboveTables(tables, anchors.bottom, pageBottom);
+        if (lift <= 0) return false;
+        storyTop -= lift;
+        tables = placeTables();
+        return true;
+      };
+      if (framedFooter) liftAbove(floatingGeometry.pageHeight - storyTop);
+      // The placement reads only the unwrapped flow, so one wrapped pass settles it. Placing
+      // again after that pass publishes the drawings inside the tables once.
+      const wrapTables = () => {
+        tableZones = tables.zones;
+        flowStory(flowBlocks, 0);
+        tables = placeTables();
+      };
+      if (tables.zones.length) wrapTables();
+      // Text wrapped beside a narrow table can grow past its natural height and the sheet.
+      // The footer then grows upward by that height, a bounded number of times, and as a last
+      // resort its text rises above every table it meets.
+      const offSheet = () => storyTop + flow.bottom > floatingGeometry.pageHeight + 0.01;
+      for (let pass = 0; framedFooter && pass < FOOTER_GROWTH_PASSES && offSheet(); pass++) {
+        storyTop = Math.min(storyTop, footerBottom - flow.bottom);
+        tables = placeTables();
+        wrapTables();
+      }
+      if (framedFooter && offSheet() && liftAbove(Number.NEGATIVE_INFINITY)) wrapTables();
+      flow = {
+        blocks: [...flow.blocks, ...tables.tables],
+        bottom: framedFooter ? footerBottom - storyTop : flow.bottom,
       };
     }
     flow = positionLegacyFooterPageFrame(
@@ -858,8 +925,9 @@ export function storyDrawingResourceToken(story: HeaderFooterStoryLayout): strin
   const tokens: string[] = [];
   forEachStoryDrawing(story, (drawing) => {
     tokens.push(drawingResourceLayoutToken(drawing.resource));
-    if (drawing.textboxStory?.clippedResourceToken) {
-      tokens.push(`clip:${drawing.textboxStory.clippedResourceToken}`);
+    for (const owned of ownedTextboxStories(drawing)) {
+      const clipped = owned.story.clippedResourceToken;
+      if (clipped) tokens.push(`clip:${clipped}`);
     }
   });
   // Empty for the overwhelmingly common story with no pictures, so the context string for a

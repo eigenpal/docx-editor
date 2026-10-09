@@ -8,22 +8,23 @@ export {
   MenuEntry,
   MenuGroup,
   MenuItem,
-  MenuReportIssue,
   MenuRow,
   MenuSeparator,
   MenuSubmenu,
   MenuTableGrid,
   type MenuActionProps,
   type MenuGroupProps,
+  type MenuItemBaseProps,
   type MenuItemProps,
   type MenuPartComponent,
   type MenuProps,
-  type MenuReportIssueProps,
   type MenuRowProps,
   type MenuSeparatorProps,
+  type MenuSubmenuBaseProps,
   type MenuSubmenuProps,
   type MenuTableGridProps,
 } from './parts';
+export { MenuReportIssue, type MenuReportIssueProps } from './menu-help';
 export type { MenuId } from './menu-context';
 export { MenuReview, MenuReviewers, type MenuReviewersProps } from './Reviewers';
 

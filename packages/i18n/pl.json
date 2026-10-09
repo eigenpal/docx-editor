@@ -102,7 +102,8 @@
     "formatPainter": "Malarz formatów",
     "formatPainterShortcut": "Malarz formatów (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "Pokaż znaki akapitu",
-    "label": "Elementy sterujące formatowaniem"
+    "label": "Elementy sterujące formatowaniem",
+    "addComment": "Dodaj komentarz"
   },
   "alignment": {
     "alignLeft": "Wyrównaj do lewej",
@@ -674,6 +675,7 @@
     },
     "openAriaLabel": "Otwórz nawigację",
     "openTitle": "Nawigacja",
+    "openShortcutTitle": "Nawigacja ({shortcut})",
     "tabs": {
       "find": "Znajdź",
       "headings": "Nagłówki"
@@ -773,7 +775,11 @@
     "noMarkup": "Bez adiustacji",
     "original": "Oryginał",
     "protectDocument": "Chroń dokument dla formularzy",
-    "simpleMarkup": "Prosta adiustacja"
+    "simpleMarkup": "Prosta adiustacja",
+    "replyCount": "Odpowiedzi: {count}",
+    "trackedChange": "Śledzona zmiana",
+    "changeAnnouncement": "{change} – {author}: {text}",
+    "replyTargetResolved": "Zmiana została rozwiązana, więc odpowiedź nie została opublikowana."
   },
   "imageAltText": {
     "description": "Opis",

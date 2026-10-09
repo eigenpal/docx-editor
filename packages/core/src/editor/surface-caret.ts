@@ -67,6 +67,8 @@ export interface SurfaceCaretInput {
    * Prefer this sheet when the same paragraph paints on multiple pages (open shared HF).
    */
   readonly preferredPageIndex?: number;
+  /** The visual line chosen by the most recent pointer gesture. */
+  readonly preferredLineId?: string;
   /** Host for an open header/footer or note whose caret geometry is story-relative. */
   readonly scopedHost?: HTMLElement | null;
   /** Distinguishes stable placement keys for the two scoped story kinds. */
@@ -181,6 +183,7 @@ export function createSurfaceCaret(
       scopedHostKind,
       scopedOrigin,
       preferredPageIndex,
+      preferredLineId,
       measurer,
       typingStyle,
     } = read();
@@ -196,6 +199,7 @@ export function createSurfaceCaret(
     let geometry = caretAt(layout, selection.head, {
       ...(measurer ? { measurer } : {}),
       ...(preferredPageIndex !== undefined ? { preferredPageIndex } : {}),
+      ...(preferredLineId !== undefined ? { preferredLineId } : {}),
     });
     if (!geometry || !Number.isInteger(geometry.pageIndex)) {
       hide();

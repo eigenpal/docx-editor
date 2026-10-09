@@ -110,6 +110,34 @@ export {
   type ToolbarCommandState,
 } from './toolbar-commands.ts';
 export { editorCommandKey } from './command-key.ts';
+export {
+  arrangeToolbarGroups,
+  collapseOrder,
+  sameOverflow,
+  toolbarGroupPriority,
+  toolbarOverflowGroups,
+  toolbarPanelPlacement,
+  toolbarPopupLeft,
+  TOOLBAR_COLLAPSE_ORDER,
+  TOOLBAR_OVERFLOW_HYSTERESIS,
+  TOOLBAR_PANEL_EDGE_MARGIN,
+  TOOLBAR_PINNED_GROUPS,
+  type ToolbarFitInput,
+  type ToolbarHostGroupPlacement,
+  type ToolbarPanelPlacement,
+} from './toolbar-fit.ts';
+export {
+  barRoomWidth,
+  collapsibleGroupCost,
+  controlsOverflow,
+  readAvailableWidth,
+  readColumnGap,
+  readInlineMargins,
+  separatorLeadingCost,
+  trailingGapCost,
+  type BarRoomInput,
+} from './toolbar-measure.ts';
+export { chordLetter } from './chord-letter.ts';
 export { tableCommandState } from './docx-editor-derive.ts';
 export {
   applyTableChromePick,
@@ -243,8 +271,18 @@ export {
   ZOOM_MAX,
   ZOOM_MIN,
   resolveZoomMode,
+  REVIEW_MARKERS_GUTTER_PX,
+  reviewPaneEntitledZoom,
   sameZoomMode,
 } from './zoom-fit.ts';
+export {
+  editorInstanceScope,
+  hasOpenNestedPopup,
+  listenForPopupEscape,
+  listenForPopupFocusLeave,
+  type PopupEscapeOptions,
+  type PopupFocusLeaveOptions,
+} from './popup-escape.ts';
 export {
   computeImageResizeResult,
   createImageOverlayScrollPort,
@@ -462,6 +500,8 @@ export type {
   HighlightRange,
   HighlightRect,
   HighlightResult,
+  ReviewItemHit,
+  ScrollPlacement,
   ScrollToAnchorOptions,
 } from '../contracts/editor.ts';
 
@@ -475,6 +515,20 @@ export type {
 export { runChromePrint, ChromePrintError, isChromePrintShortcut } from './chrome-print.ts';
 export type { ChromePrintErrorCode, ChromePrintJob, ChromePrintOptions } from './chrome-print.ts';
 
+export {
+  DEFAULT_REVIEW_PANE,
+  resolveReviewPane,
+  reviewPaneListsItem,
+} from '../contracts/review-pane.ts';
+export type {
+  CommentMarkerStyle,
+  ResolvedReviewPane,
+  ReviewPaneItemFields,
+  ReviewPaneOpening,
+  ReviewPaneOptions,
+  ReviewPaneOverflow,
+  RevisionDisplay,
+} from '../contracts/review-pane.ts';
 export {
   DEFAULT_REVISION_MARKUP,
   REVISION_MARKUP_COLORS,

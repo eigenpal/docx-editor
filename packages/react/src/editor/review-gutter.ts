@@ -1,6 +1,7 @@
 // The gutter the review rail reserves beside the page, and no more.
 //
-// THE RULE: the reservation is BINARY and, when the column cannot be afforded, SYMMETRIC.
+// THE RULE: the column is either fully reserved or not reserved at all, and, under the
+// default `overflow: 'float'`, a column that cannot be afforded becomes SYMMETRIC.
 // The page stack centres itself in the scroller's padding box, so padding one edge by P
 // shifts the sheet left by P/2 — pleasant on a wide window, where the sheet and its card
 // column read as one centred pair, and wrong on a narrow one, where any one-sided
@@ -11,10 +12,15 @@
 //
 //   - Affordable (the viewport holds the page at its entitled width, the full column,
 //     and a little clearance): the column stands and the pair centres, as it always has.
-//   - Not affordable: the SAME marker strip is reserved on BOTH edges, so the sheet sits
-//     dead-centre and the strip still guarantees room for the markers and the
-//     add-comment affordance beside the page. Cards then overlay the right gap and the
-//     ordinary horizontal scroll reaches whatever sticks out.
+//   - Not affordable, `overflow: 'float'`: the SAME marker strip is reserved on BOTH
+//     edges, so the sheet sits dead-centre and the strip still guarantees room for the
+//     markers and the add-comment affordance beside the page. The open card floats over
+//     the page.
+//   - Not affordable, `overflow: 'scroll'`: the full column stays at the end and the
+//     page's clearance is reserved at the start. The fit measures the viewport less the
+//     closed pane's strip in both states, so the page keeps ONE size whether the pane is
+//     open or closed, and the viewport scrolls sideways to reach the cards.
+//   - Closed: the marker strip on both edges, whichever overflow is set.
 //
 // THE PAGE'S WIDTH IN THAT ARITHMETIC IS ITS ENTITLEMENT, NOT ITS PAINT. Under a fit the
 // painted width follows the padded box, so a threshold computed from it chases itself:
@@ -23,7 +29,11 @@
 // at the fixed zoom in force — is independent of the padding, so the mode settles in one
 // pass. A fit with NO cap has no entitlement to measure against — it fills whatever box
 // it is given — so the full column stands and the page absorbs it, exactly as it always
-// has.
+// has. Under the review pane's `overflow: 'shrinkPage'`, a fit is entitled to its FLOOR instead:
+// the column stands whenever any scale the fit may take leaves room for it, and the fit
+// then paints at the largest such scale inside the padded box. The floor is still a
+// property of the mode, not of the padding, so this too settles in one pass. Core's
+// `reviewPaneEntitledZoom` owns that rule for both adapters.
 //
 // ONE value, three consumers. The scroll container pads by it, the horizontal ruler
 // mirrors it to stay over the page, and the vertical ruler subtracts it to decide
@@ -32,7 +42,7 @@
 
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/editor';
-import { ZOOM_MAX } from '@docx-editor.dev/core/editor';
+import { REVIEW_MARKERS_GUTTER_PX, reviewPaneEntitledZoom } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../lib/units';
 import { ReviewRailContext } from './context';
 import { useEditorState } from './useEditorState';
@@ -45,7 +55,7 @@ import {
 export const REVIEW_PANE_GUTTER = 316;
 
 /** The marker strip: anchors and the add-comment button, no cards. */
-export const REVIEW_MARKERS_GUTTER = 44;
+export const REVIEW_MARKERS_GUTTER = REVIEW_MARKERS_GUTTER_PX;
 
 /**
  * Breathing room the page keeps on EACH side for the full column to count as affordable.
@@ -76,6 +86,37 @@ const BALANCED_STRIP: ReviewGutter = {
 /** No rail mounted: nothing reserved anywhere. */
 const NO_GUTTER: ReviewGutter = { inlineStart: 0, inlineEnd: 0 };
 
+/**
+ * `overflow: 'scroll'` when the column does not fit: the full column at the end, and the
+ * page's clearance at the start, so the sheet does not sit flush against the viewport edge
+ * while the viewport scrolls sideways to the cards.
+ */
+const SCROLLING_COLUMN: ReviewGutter = {
+  inlineStart: REVIEW_GUTTER_PAGE_CLEARANCE,
+  inlineEnd: REVIEW_PANE_GUTTER,
+};
+
+/**
+ * Whether the gutter is the `overflow: 'scroll'` column that did not fit: the full column
+ * stands at the end, but the viewport scrolls sideways to reach it, so only the marker strip
+ * is on screen beside the page.
+ */
+export function reviewGutterScrolls(gutter: ReviewGutter): boolean {
+  return (
+    gutter.inlineStart === SCROLLING_COLUMN.inlineStart &&
+    gutter.inlineEnd === SCROLLING_COLUMN.inlineEnd
+  );
+}
+
+/**
+ * The part of the measured inline-end padding that is on screen. Under a scrolling column
+ * the cards sit past the visible edge, so only the marker strip takes room beside the page.
+ */
+export function visibleInlineEndReservation(gutter: ReviewGutter, measured: number): number {
+  if (!reviewGutterScrolls(gutter)) return measured;
+  return Math.max(0, measured - (REVIEW_PANE_GUTTER - REVIEW_MARKERS_GUTTER));
+}
+
 export interface ReviewGutterInput {
   /** Whether the pane is showing its cards (`snapshot.reviewPaneOpen`). */
   readonly open: boolean;
@@ -97,6 +138,12 @@ export interface ReviewGutterInput {
    * entitlement to measure the leftover against. The full column stands.
    */
   readonly docked?: boolean;
+  /**
+   * `overflow: 'scroll'`: the full column stands even when it does not fit. The page
+   * keeps the one size it has with the pane closed, and the viewport scrolls sideways to
+   * reach the cards.
+   */
+  readonly scroll?: boolean;
 }
 
 /**
@@ -114,6 +161,7 @@ export function reviewGutter({
   pageWidthPx,
   inlineStartReservation = 0,
   docked = false,
+  scroll = false,
 }: ReviewGutterInput): ReviewGutter {
   if (!open) return BALANCED_STRIP;
   if (docked) return FULL_COLUMN;
@@ -124,7 +172,8 @@ export function reviewGutter({
       ? inlineStartReservation
       : 0;
   const leftover = viewportWidth - start - pageWidthPx - 2 * REVIEW_GUTTER_PAGE_CLEARANCE;
-  return leftover >= REVIEW_PANE_GUTTER ? FULL_COLUMN : BALANCED_STRIP;
+  if (leftover >= REVIEW_PANE_GUTTER) return FULL_COLUMN;
+  return scroll ? SCROLLING_COLUMN : BALANCED_STRIP;
 }
 
 interface GutterGeometry {
@@ -132,12 +181,14 @@ interface GutterGeometry {
   readonly reviewPaneOpen: boolean;
   /**
    * The zoom the page is entitled to, whatever it paints at right now: a fit's own cap
-   * (`'auto'` caps at 1), or the fixed scale in force. Reading the LIVE zoom instead
+   * (`'auto'` caps at 1), a fit's floor under `overflow: 'shrinkPage'`, or the fixed scale in force. Reading the LIVE zoom instead
    * re-creates the feedback loop the module comment describes — under a fit the live
    * zoom already includes whatever this gutter reserved last frame. `null` marks an
    * uncapped fit, which has no entitlement to measure against.
    */
   readonly entitledZoom: number | null;
+  /** `overflow: 'scroll'` is in force. */
+  readonly scroll: boolean;
 }
 
 const selectGutterGeometry = (snapshot: EditorSnapshot): GutterGeometry => {
@@ -145,17 +196,14 @@ const selectGutterGeometry = (snapshot: EditorSnapshot): GutterGeometry => {
   return {
     pageSetup: snapshot.pageSetup ?? null,
     reviewPaneOpen: snapshot.reviewPaneOpen ?? true,
-    entitledZoom:
-      mode?.type === 'fit'
-        ? mode.maxZoom !== undefined && mode.maxZoom < ZOOM_MAX
-          ? mode.maxZoom
-          : null
-        : snapshot.zoom,
+    entitledZoom: reviewPaneEntitledZoom(mode, snapshot.zoom, snapshot.reviewPane.overflow),
+    scroll: snapshot.reviewPane.overflow === 'scroll',
   };
 };
 
 const sameGutterGeometry = (a: GutterGeometry, b: GutterGeometry) =>
   a.reviewPaneOpen === b.reviewPaneOpen &&
+  a.scroll === b.scroll &&
   a.entitledZoom === b.entitledZoom &&
   a.pageSetup?.pageWidthTwips === b.pageSetup?.pageWidthTwips;
 
@@ -190,7 +238,7 @@ export function useViewportClientWidth(): number | null {
  * measured `reviewGutter` pair otherwise. The one source for the scroll container's
  * paddings and both rulers.
  *
- * The result is reference-stable — the pure function answers with one of three shared
+ * The result is reference-stable — the pure function answers with one of four shared
  * constants — and the hook stores THAT, never the raw width: a resize sweeps through
  * hundreds of widths that all resolve to the same constant, and holding the width as
  * state re-rendered every consumer (the review rail among them) once per pixel. Storing
@@ -201,7 +249,7 @@ export function useReviewGutter(): ReviewGutter {
   // The SNAPSHOT, not the review hook — this needs a boolean and the page's width, not
   // the queue. And no gutter at all unless a rail is mounted to occupy it.
   const rail = useContext(ReviewRailContext);
-  const { pageSetup, reviewPaneOpen, entitledZoom } = useEditorState(
+  const { pageSetup, reviewPaneOpen, entitledZoom, scroll } = useEditorState(
     selectGutterGeometry,
     sameGutterGeometry
   );
@@ -230,9 +278,10 @@ export function useReviewGutter(): ReviewGutter {
             : twipsToPixels(pageWidthTwips) * entitledZoom,
         inlineStartReservation: navigationReservation,
         docked: entitledZoom === null,
+        scroll,
       });
     },
-    [mounted, reviewPaneOpen, pageWidthTwips, entitledZoom, navigationReservation]
+    [mounted, reviewPaneOpen, pageWidthTwips, entitledZoom, navigationReservation, scroll]
   );
 
   const [gutter, setGutter] = useState<ReviewGutter>(() =>

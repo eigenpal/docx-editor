@@ -135,7 +135,8 @@
     "commentsAndChanges": "コメントと変更履歴",
     "more": "その他",
     "unavailableInPreview": "このプレビュー版では使用できません",
-    "paragraphMarks": "段落記号の表示"
+    "paragraphMarks": "段落記号の表示",
+    "addComment": "コメントを追加"
   },
   "alignment": {
     "alignLeft": "左揃え",
@@ -468,6 +469,7 @@
     "title": "ナビゲーション",
     "openAriaLabel": "ナビゲーションを開く",
     "openTitle": "ナビゲーション",
+    "openShortcutTitle": "ナビゲーション ({shortcut})",
     "closeAriaLabel": "ナビゲーションを閉じる",
     "closeTitle": "ナビゲーションを閉じる",
     "tabs": {
@@ -867,7 +869,11 @@
     "showResolvedComment": "解決済みのコメントを表示",
     "replaced": "置換",
     "replacedWith": "→",
-    "commentRefused": "コメントを追加できませんでした"
+    "commentRefused": "コメントを追加できませんでした",
+    "replyCount": "返信: {count}",
+    "trackedChange": "変更履歴",
+    "changeAnnouncement": "{author} による{change}: {text}",
+    "replyTargetResolved": "変更は解決済みのため、返信は投稿されませんでした。"
   },
   "textFormField": {
     "title": "テキスト フォーム フィールドのオプション",

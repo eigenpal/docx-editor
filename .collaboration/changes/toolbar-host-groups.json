@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The preset toolbar renders host children in one fixed block, and the menu bar wraps when its menus do not fit.",
+  "after": "Host groups collapse into the More panel, slots take custom content, the menu bar collapses menus into one menu, and the table control inserts a picked size.",
+  "reason": "The change is adapter chrome only. It dispatches the existing insertTable command and the existing comment-draft request. No stored field, operation, snapshot, or protocol message changes.",
+  "tests": [],
+  "changeset": "toolbar-host-groups",
+  "migration": null
+}

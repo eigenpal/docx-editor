@@ -1,4 +1,5 @@
 import type { RevisionMarkupDialogSession } from './revision-markup.ts';
+import type { ReviewPaneOptions } from './review-pane.ts';
 /**
  * `@docx-editor.dev/core/contracts/modules` — the `EditorModule` seam.
  *
@@ -89,6 +90,10 @@ export interface ReviewModuleContribution {
    * The module enables the listed review projections.
    */
   readonly displayModes: readonly ReviewDisplayMode[];
+  /**
+   * The review pane settings the editor starts with. `setReviewPaneOptions` changes them later.
+   */
+  readonly pane?: ReviewPaneOptions;
   /** The review queue derivation. */
   readonly collectReviewItems: CollectReviewItems;
   /**

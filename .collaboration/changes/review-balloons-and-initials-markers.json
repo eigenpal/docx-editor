@@ -1,0 +1,23 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The review rail listed comments and tracked changes as cards, and collapsed comment markers drew the comment icon. Only format and structural changes opened a page balloon. A review column that did not fit beside the page collapsed to a marker strip, and an open review or navigation pane shrank a capped fit.",
+  "after": "Review pane settings revisionsIn, commentMarkers, and overflow ('float', 'shrinkPage', or 'scroll') choose whether tracked changes are rail cards or page balloons, how collapsed comment markers look, and whether a review column that does not fit keeps the page size and scrolls sideways. The overflow setting applies to the review pane only; the navigation pane stays docked and takes its room beside the page in every mode. getActivatedReviewItemKey and useReview().activatedKey read whether the active review item was opened explicitly. A change balloon follows its text after repaints, and keeps a reply draft with a notice when another participant resolves the change. The comment reply box draws as a compact reply line.",
+  "reason": "All review pane settings are local view state of one editor instance, never written to the document or shared with other participants; overflow changes only the local scroller padding and fit measurement. getActivatedReviewItemKey is a read. Accept, reject, and reply from the balloon call the existing acceptReviewItem, rejectReviewItem, and replyToReviewItem paths, which two-participant tests cover for synchronization, undo, redo, rejoin, and concurrent edits. A two-participant test covers a remote accept and a remote reject while a balloon is open.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-revision-markup.test.ts",
+    "packages/pro/src/__tests__/review-balloons.test.tsx",
+    "packages/pro/src/__tests__/review-balloons-vue.test.ts",
+    "packages/pro/src/__tests__/review-replacement-pairs.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-replacement-times.test.ts",
+    "packages/core/src/editor/__tests__/zoom-controller.test.ts",
+    "packages/react/test/review-gutter-integration.test.tsx",
+    "packages/pro/src/collaboration/__tests__/balloon-remote-resolve.test.tsx",
+    "packages/pro/src/__tests__/review-balloon-geometry.test.ts",
+    "packages/pro/src/__tests__/review-module.test.ts",
+    "packages/react/test/review-overflow-navigation.test.tsx",
+    "packages/vue/test/review-overflow-navigation.test.ts"
+  ],
+  "changeset": "review-balloons-and-initials-markers",
+  "migration": null
+}

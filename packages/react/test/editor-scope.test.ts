@@ -1,4 +1,4 @@
-// `editorScopeFor`: the instance scope, distinct from the styling scope.
+// `editorInstanceScope`: the instance scope, distinct from the styling scope.
 //
 // The chrome parts self-emit `.docx-editor` (styling), so a bare `closest('.docx-editor')` from
 // inside the toolbar or menu bar matches the part's own root — which contains no pages —
@@ -7,9 +7,9 @@
 
 // MUST be first: happy-dom registration happens on import.
 import './dom-setup.ts';
+import { editorInstanceScope } from '@docx-editor.dev/core/editor';
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { editorScopeFor } from '../src/editor/editor-scope';
 
 function el(className: string, parent: Element): HTMLElement {
   const node = document.createElement('div');
@@ -22,7 +22,7 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-describe('editorScopeFor', () => {
+describe('editorInstanceScope', () => {
   test('climbs past a self-scoped chrome root to the instance container', () => {
     // The packaged arrangement: wrapper(.docx-editor) > [toolbar(.docx-editor), viewport(.docx-editor) > pages]
     const wrapper = el('docx-editor', document.body);
@@ -32,16 +32,16 @@ describe('editorScopeFor', () => {
     el('docx-pages', viewport);
 
     // From inside the toolbar: NOT the toolbar's own styling root — the wrapper.
-    expect(editorScopeFor(button)).toBe(wrapper);
-    expect(editorScopeFor(toolbar)).toBe(wrapper);
+    expect(editorInstanceScope(button)).toBe(wrapper);
+    expect(editorInstanceScope(toolbar)).toBe(wrapper);
     // From inside the viewport the viewport itself qualifies; it contains the pages.
-    expect(editorScopeFor(viewport)).toBe(viewport);
+    expect(editorInstanceScope(viewport)).toBe(viewport);
   });
 
   test('a bare composition with no instance container resolves to null', () => {
     const toolbar = el('docx-editor docx-toolbar', document.body);
     const button = el('docx-toolbar__button', toolbar);
-    expect(editorScopeFor(button)).toBeNull();
-    expect(editorScopeFor(null)).toBeNull();
+    expect(editorInstanceScope(button)).toBeNull();
+    expect(editorInstanceScope(null)).toBeNull();
   });
 });

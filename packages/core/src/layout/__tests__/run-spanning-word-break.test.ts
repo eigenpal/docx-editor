@@ -122,11 +122,12 @@ describe('a word split across runs stays whole', () => {
         return [text, first.box.x, last.box.x + last.box.width];
       });
 
-    // The word is wider than both passages, so it fills the far one, as in one run. The
-    // part in the first run is not left before the float.
+    // The word is wider than both passages, so it moves below the float whole, as in one
+    // run. The part in the first run is not left before the float.
     const split = layout(`${run('aa')}${run('bbb')}`);
     expect(placement(split)).toEqual(placement(layout(run('aabbb'))));
-    expect(placement(split)[0]).toEqual(['aab', 42, 60]);
+    expect(placement(split)[0]).toEqual(['aabbb', 0, 30]);
+    expect(split[0]!.exclusionSkipBefore).toBe(100);
   });
 
   test('a tab in its own run is a break opportunity for the text after it', () => {

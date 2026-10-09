@@ -28,11 +28,16 @@ import {
   type VNode,
   type VNodeArrayChildren,
 } from 'vue';
-import type { DocxEditorInstance, ReviewAuthorInfo } from '@docx-editor.dev/core/editor';
+import {
+  reviewPaneListsItem,
+  type DocxEditorInstance,
+  type ReviewAuthorInfo,
+} from '@docx-editor.dev/core/editor';
 import type { ReviewRevisionKind, SelectionPin } from '@docx-editor.dev/core/contracts/editor';
 import {
   ReviewRailContext,
   useDocxEditor,
+  useEditorEvent,
   useEditorState,
   useReviewAuthors,
   useReviewGutter,
@@ -42,7 +47,12 @@ import {
 } from '@docx-editor.dev/vue';
 import { useReviewWithRevision, type ReviewItemView, type UseReviewReturn } from './useReview.ts';
 import { provideEditorRenderRevision, useEditorRenderRevision } from './useEditorRenderRevision.ts';
-import { cloneReviewCard, partitionReviewChildren } from './review-composition.ts';
+import {
+  cloneReviewCard,
+  listCardTemplate,
+  partitionReviewChildren,
+  slotNodes,
+} from './review-composition.ts';
 import { hasFormattingBalloon } from './review-balloon-anchor.ts';
 import {
   COLLAPSE_DISPLACEMENT_PX,
@@ -53,13 +63,17 @@ import {
   DEFAULT_CARD_HEIGHT,
   INITIAL_METRICS,
   NO_PLACEMENT_REVIEW_QUERY,
+  PAIRED_REVIEW_QUERY,
   RAIL_GUTTER,
   RAIL_OVERSCAN,
   guardMousedown,
   idsOf,
   isThreadedReply,
+  selectCommentMarkers,
   selectDocumentAbsent,
   selectDocumentReadOnly,
+  selectPaneOpening,
+  selectRevisionsIn,
   type RailMetrics,
 } from './review-shared.ts';
 import {
@@ -116,6 +130,7 @@ function buildReviewActions(hook: UseReviewReturn, list: readonly ReviewItemView
   return {
     items: list,
     activeKey: hook.activeKey.value,
+    activatedKey: hook.activatedKey.value,
     setActive: hook.setActive,
     accept: hook.accept,
     reject: hook.reject,
@@ -160,6 +175,9 @@ const ReviewRoot = defineComponent({
     const editorRef = useDocxEditor();
     const documentAbsent = useEditorState(selectDocumentAbsent);
     const readOnly = useEditorState(selectDocumentReadOnly);
+    // Viewer preferences, live: `setRevisionMarkup` re-renders the rail with the new layout.
+    const revisionsIn = useEditorState(selectRevisionsIn);
+    const commentMarkers = useEditorState(selectCommentMarkers);
     const editorRevision = useEditorRenderRevision();
 
     const excludeRevisionKinds = computed((): readonly ReviewRevisionKind[] | undefined => {
@@ -187,7 +205,11 @@ const ReviewRoot = defineComponent({
     });
 
     provideEditorRenderRevision(editorRevision);
-    const allReview = useReviewWithRevision(NO_PLACEMENT_REVIEW_QUERY, editorRevision);
+    // `revisionsIn: 'balloons'` reads replacement pairs so a typed-over range is one decision.
+    const allReview = useReviewWithRevision(
+      () => (revisionsIn.value === 'balloons' ? PAIRED_REVIEW_QUERY : NO_PLACEMENT_REVIEW_QUERY),
+      editorRevision
+    );
     const reviewHook = useReviewWithRevision(() => railQuery.value, editorRevision);
     const { t: bundled } = useTranslation();
     const label = (key: string, params?: Record<string, string | number>) =>
@@ -230,13 +252,32 @@ const ReviewRoot = defineComponent({
     );
     const expanded = computed(() => open.value && !compact.value);
 
+    // The engine's rule, applied before this rail's own filters. The engine decides whether the
+    // pane opens from the same rule over every item, so the rail lists what the engine counts,
+    // less what `structural`, `formatting`, and `filter` hide. `railQuery` removes the reply
+    // link of a comment on a hidden change, but the balloon still draws that reply under the
+    // change, so the rule reads the link from the unfiltered read.
+    const unfilteredById = computed(() =>
+      revisionsIn.value === 'balloons'
+        ? new Map(allReview.items.value.map((entry) => [entry.id, entry]))
+        : null
+    );
     const items = computed(() =>
       reviewHook.items.value.filter(
         (entry) =>
+          reviewPaneListsItem(revisionsIn.value, unfilteredById.value?.get(entry.id) ?? entry) &&
           (props.formatting || !hasFormattingBalloon(entry)) &&
           (!props.filter || props.filter(entry))
       )
     );
+    // A revealed card opens a closed pane, as a click on its marker does, unless the pane's
+    // `opening` setting leaves that to the host. A change that the balloon serves is not in
+    // `items`, so the balloon opens it instead.
+    const paneOpening = useEditorState(selectPaneOpening);
+    useEditorEvent('reviewItemReveal', ({ key }) => {
+      if (props.hidden || paneOpening.value === 'manual') return;
+      if (items.value.some((entry) => entry.key === key)) reviewHook.setPaneOpen(true);
+    });
     const expandedResolvedKey = ref<string | null>(null);
     watch(
       items,
@@ -608,6 +649,8 @@ const ReviewRoot = defineComponent({
         setExpandedResolvedKey: (key) => {
           expandedResolvedKey.value = key;
         },
+        commentMarkers: commentMarkers.value,
+        revisionsIn: revisionsIn.value,
       };
     };
     const railValue = shallowRef<ReviewRailValue>(currentRailValue());
@@ -694,19 +737,30 @@ const ReviewRoot = defineComponent({
             : scrollWindow.value !== null
               ? scrollWindow.value.top + RAIL_OVERSCAN + 24
               : null;
-      const listParts = partitionReviewChildren(rootRest, 'list');
+      // The same card template the List renders: a host's List part (its item slot, its
+      // `Card` part, or part overrides plus extra children) must reach the floating card
+      // too, or compact silently swaps in the packaged parts the host hid or replaced. With
+      // no List template the root's children stand in, as they do for the implicit List.
+      const fromList = listCardTemplate(rootParts.List);
+      const itemSlot = fromList ? fromList.item : slots.item;
+      const listParts = partitionReviewChildren(
+        fromList ? slotNodes(fromList.default?.()) : rootRest,
+        'list'
+      );
       const compactCardInner =
-        activeRoot && slots.item
-          ? slots.item({ item: activeRoot })
-          : listParts.parts.Card
-            ? cloneReviewCard(listParts.parts.Card, props.card?.className)
-            : props.preset
-              ? h(
-                  ReviewCard,
-                  props.card?.className ? { className: props.card.className } : {},
-                  () => listParts.rest
-                )
-              : null;
+        fromList?.hidden || !activeRoot
+          ? null
+          : itemSlot
+            ? itemSlot({ item: activeRoot })
+            : listParts.parts.Card
+              ? cloneReviewCard(listParts.parts.Card, props.card?.className)
+              : props.preset || fromList
+                ? h(
+                    ReviewCard,
+                    props.card?.className ? { className: props.card.className } : {},
+                    () => listParts.rest
+                  )
+                : null;
       const compactCard =
         activeRoot &&
         compactTop !== null &&
@@ -817,6 +871,7 @@ const ReviewRoot = defineComponent({
 export { useReviewItem };
 export type {
   ReviewActionProps,
+  ReviewBalloonProps,
   ReviewMarkersProps,
   ReviewPartProps,
   ReviewProps,

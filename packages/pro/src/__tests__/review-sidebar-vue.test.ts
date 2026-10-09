@@ -32,9 +32,7 @@ import { DocxEditorAuthorStyle } from '../../../vue/src/editor/DocxEditorAuthorS
 import { useReviewRailRegistry } from '../../../vue/src/editor/context.ts';
 import { useReviewOf, type ReviewItemView } from '../vue/useReview.ts';
 
-afterEach(() => {
-  document.body.innerHTML = '';
-});
+afterEach(() => document.body.replaceChildren());
 
 describe('DocxEditorReview (Vue)', () => {
   test('updates Vue cards after a full-data tracked-change predicate changes', async () => {
@@ -577,7 +575,7 @@ describe('DocxEditorReview (Vue)', () => {
     }
   });
 
-  test('collapses resolved comments to a green-tick miniature until clicked', async () => {
+  test('collapses resolved comments to a check-badge miniature until clicked', async () => {
     const mounted = mountReview(COMMENTED_SOURCE);
     try {
       await flush();
@@ -597,8 +595,8 @@ describe('DocxEditorReview (Vue)', () => {
         '[data-testid="review-card"]'
       ) as HTMLDetailsElement;
       expect(details.open).toBe(false);
-      expect(details.querySelector('.docx-review__resolved-comment')).not.toBeNull();
-      expect(details.querySelector('.docx-review__resolved-tick')).not.toBeNull();
+      // The default `commentMarkers: 'initials'` draws the miniature as the quiet check badge.
+      expect(details.querySelector('[data-testid="review-badge"][data-resolved]')).not.toBeNull();
 
       (details.querySelector('.docx-review__resolved-toggle') as HTMLElement).dispatchEvent(
         new MouseEvent('click', { bubbles: true })
@@ -621,7 +619,7 @@ describe('DocxEditorReview (Vue)', () => {
       expect(
         mounted.container
           .querySelector('[data-testid="review-marker"]')
-          ?.querySelector('.docx-review__resolved-icon')
+          ?.querySelector('[data-testid="review-badge"][data-resolved]')
       ).not.toBeNull();
       (mounted.container.querySelector('[data-testid="review-marker"]') as HTMLElement).click();
       await flush();
@@ -914,6 +912,7 @@ describe('useReviewOf (Vue)', () => {
     const editor = {
       getReviewRevision: () => revision,
       getEditingMode: () => 'editing',
+      getActivatedReviewItemKey: () => null,
       getReviewItems: () => {
         itemReads++;
         return [];

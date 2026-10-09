@@ -1,6 +1,6 @@
+import { editorInstanceScope } from '@docx-editor.dev/core/editor';
 import { h, toValue, watch, type MaybeRefOrGetter, type Ref, type VNode } from 'vue';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
-import { editorScopeFor } from '../editor-scope';
 import { useTranslation } from '../../i18n';
 import { focusBy, focusEdge } from '../menu/menu-keyboard';
 import { useStableDocxId } from '../../lib/stable-id';
@@ -8,26 +8,8 @@ import { guardToolbarMousedown } from './ToolbarButton';
 
 /** Return focus to the painted pages layer after a table colour dialog applies. */
 export function restoreToolbarDocumentFocus(from: HTMLElement | null): void {
-  const root = editorScopeFor(from) ?? from?.ownerDocument?.body;
+  const root = editorInstanceScope(from) ?? from?.ownerDocument?.body;
   root?.querySelector<HTMLElement>('.docx-pages')?.focus();
-}
-
-/** Outside mousedown closes a toolbar popup. */
-export function useDropdownClose(
-  open: Ref<boolean>,
-  setOpen: (open: boolean) => void,
-  rootRef: Ref<HTMLElement | null>
-): void {
-  watch(open, (isOpen, _, onCleanup) => {
-    if (!isOpen) return;
-    const onMouseDown = (event: MouseEvent) => {
-      const root = rootRef.value;
-      if (root && event.target instanceof Node && root.contains(event.target)) return;
-      setOpen(false);
-    };
-    document.addEventListener('mousedown', onMouseDown);
-    onCleanup(() => document.removeEventListener('mousedown', onMouseDown));
-  });
 }
 
 /** Props for a focusable disabled toolbar trigger with an announced reason. */
@@ -101,6 +83,7 @@ export function useTableMenuKeyboard(
       queueMicrotask(focusInitial);
 
       const onKeyDown = (event: KeyboardEvent) => {
+        if (event.defaultPrevented || event.isComposing || event.keyCode === 229) return;
         const list = items();
         if (event.key === 'Escape') {
           event.preventDefault();

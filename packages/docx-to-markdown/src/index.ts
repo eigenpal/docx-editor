@@ -118,6 +118,7 @@ export type {
   DrawingHorizontalReferenceFrame,
   DrawingTransform,
   DrawingVerticalReferenceFrame,
+  GroupTextboxStoryRecord,
   ImageWrapTarget,
   InlineDrawingRecord,
   LayoutBox,

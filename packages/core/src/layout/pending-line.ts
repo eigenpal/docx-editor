@@ -6,7 +6,7 @@ import { baselineShiftPtOf, type ResolvedRunStyle } from './run-style.ts';
 import { isIdeographicForLineBreak, lastCodePointOf } from './cjk-line-break.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
 import type { StyleSpanRecord } from './semantic-records.ts';
-import type { InlineDrawingRecord } from './drawing-layout.ts';
+import { clipInlineDrawingRecordVertically, type InlineDrawingRecord } from './drawing-layout.ts';
 import { topAndBottomSkipBeforeLine, type ExclusionZone } from './drawing-exclusion.ts';
 import type { ModelRange } from './field-pieces.ts';
 import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
@@ -50,6 +50,11 @@ export interface PendingLine {
   deletedRanges?: readonly ModelRange[];
   /** Vertical gap inserted before this line to clear a drawing exclusion band. */
   exclusionSkipBefore?: number;
+  /**
+   * The line follows a text wrapping break that clears floating objects (`w:br w:clear`).
+   * Placement keeps its skip even on a line before the paragraph's first anchor.
+   */
+  breakClearance?: true;
   /** Clearance inherited by an empty anchor paragraph from other drawing bands. */
   anchorClearanceBefore?: number;
   /**
@@ -83,6 +88,44 @@ export function growLineMetrics(
   const descent = Math.max(line.height - line.baseline, metrics.height - metrics.baseline);
   line.baseline = Math.max(line.baseline, metrics.baseline);
   line.height = line.baseline + descent;
+}
+
+/** The character at a model offset among a paragraph's pieces, if a piece holds it. */
+function characterAt(
+  pieces: readonly { readonly start: number; readonly text: string }[],
+  offset: number
+): string | undefined {
+  for (const piece of pieces) {
+    if (offset >= piece.start && offset < piece.start + piece.text.length) {
+      return piece.text[offset - piece.start];
+    }
+  }
+  return undefined;
+}
+
+/** Zero-width format characters: they take no room in a passage. */
+const ZERO_WIDTH_OPENER = /^[\u200b-\u200f\u2060\ufeff]$/u;
+
+/**
+ * Whether a line that opens at `offset` has already been admitted to the passage it stands
+ * in, so a segment too wide for that passage is broken there by character rather than moved
+ * below the floats.
+ *
+ * Two cases, both observed in reference renders: the line opens with a zero-width character,
+ * which fits any passage and so admits it; or the line continues a segment that the line
+ * before cut by character because it did not fit. The line breaker reports that cut as
+ * `continuesCutSegment`; the text alone cannot tell it, since a line also ends legally after
+ * a CJK character, a slash, or a dash. In both cases, an oversized glyph overflows beside the
+ * float on the next line instead of opening below it.
+ */
+export function admittedToNarrowPassage(
+  pieces: readonly { readonly start: number; readonly text: string }[],
+  offset: number,
+  continuesCutSegment: boolean
+): boolean {
+  const opening = characterAt(pieces, offset);
+  if (opening !== undefined && ZERO_WIDTH_OPENER.test(opening)) return true;
+  return continuesCutSegment;
 }
 
 /** Whether page breaks, and nothing else, precede `offset` among a paragraph's pieces. */
@@ -378,6 +421,7 @@ export function frozenLine(line: PendingLine): PendingLine {
     ...(line.spaceShrink ? { spaceShrink: true } : {}),
     ...(line.deletedRanges ? { deletedRanges: Object.freeze(line.deletedRanges) } : {}),
     ...(line.exclusionSkipBefore ? { exclusionSkipBefore: line.exclusionSkipBefore } : {}),
+    ...(line.breakClearance ? { breakClearance: true } : {}),
     ...(line.anchorClearanceBefore !== undefined
       ? { anchorClearanceBefore: line.anchorClearanceBefore }
       : {}),
@@ -465,4 +509,14 @@ export function markPendingLineWrapAdvances(line: PendingLine): void {
 export function growPendingLineDrawingExtent(line: PendingLine): void {
   for (const drawing of line.drawings)
     line.height = Math.max(line.height, drawing.y + drawing.height + drawing.distB);
+}
+
+/** Clip each inline drawing that reaches above its line's top to paint from that top down. */
+export function clipLineDrawingsAtTop(line: PendingLine): void {
+  for (let index = 0; index < line.drawings.length; index += 1) {
+    const drawing = line.drawings[index]!;
+    const bounds = drawing.paintBounds;
+    if (bounds.y >= -0.001) continue;
+    line.drawings[index] = clipInlineDrawingRecordVertically(drawing, 0, bounds.y + bounds.height);
+  }
 }

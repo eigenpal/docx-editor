@@ -14,20 +14,44 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 
 import { createRevisionMarkupDialog } from './revision-markup-dialog';
-import type { EditorModule } from '@docx-editor.dev/core/editor';
+import {
+  resolveReviewPane,
+  type EditorModule,
+  type ReviewPaneOptions,
+} from '@docx-editor.dev/core/editor';
 import { collectReviewItems, revisionItemsOfParagraph } from './review-model.ts';
 import { rememberLicenseKey, type ProLicenseOptions } from '../license.ts';
 
+export type {
+  CommentMarkerStyle,
+  ResolvedReviewPane,
+  ReviewPaneOpening,
+  ReviewPaneOptions,
+  ReviewPaneOverflow,
+  RevisionDisplay,
+} from '@docx-editor.dev/core/editor';
+
 /**
- * How {@link reviewModule} is configured. Carries only the licence key today, so
- * `reviewModule()` with no argument is the ordinary call.
+ * How {@link reviewModule} is configured. Every field is optional, so `reviewModule()`
+ * with no argument is the ordinary call.
  *
  * @public
  */
-export interface ReviewModuleOptions extends ProLicenseOptions {}
+export interface ReviewModuleOptions extends ProLicenseOptions {
+  /**
+   * The review pane settings the editor starts with. Change them later with
+   * `editor.setReviewPaneOptions()`, and read them from `snapshot.reviewPane`. Pass
+   * `{ opening: 'manual' }` when the host shows review items its own way, for example in
+   * balloons or margin markers, and opens the pane only on demand. An unknown field or
+   * value throws a `TypeError`.
+   */
+  readonly pane?: ReviewPaneOptions;
+}
 
 /** Build the review module. Construction never validates the key and never touches the network. */
 export function reviewModule(options: ReviewModuleOptions = {}): EditorModule {
+  // Validate now, so a misspelled setting fails where the host wrote it.
+  const pane = options.pane === undefined ? undefined : { ...resolveReviewPane(options.pane) };
   rememberLicenseKey(options.licenseKey);
   return {
     id: 'review',
@@ -36,6 +60,7 @@ export function reviewModule(options: ReviewModuleOptions = {}): EditorModule {
       displayModes: ['all-markup', 'simple-markup', 'proposed', 'original'],
       collectReviewItems,
       revisionItemsOfParagraph,
+      ...(pane ? { pane } : {}),
     },
   };
 }

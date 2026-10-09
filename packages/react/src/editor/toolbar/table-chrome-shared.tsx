@@ -2,35 +2,17 @@ import type { ReactNode } from 'react';
 // Shared a11y and keyboard helpers for contextual table toolbar compounds.
 
 import { useEffect, useId, type RefObject } from 'react';
+import { editorInstanceScope } from '@docx-editor.dev/core/editor';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../../i18n';
-import { editorScopeFor } from '../editor-scope';
 import { focusBy, focusEdge } from '../menu/menu-keyboard';
 import { guardToolbarMousedown } from './ToolbarButton';
 
 /** Return focus to the painted pages layer after a table colour dialog applies. */
 export function restoreToolbarDocumentFocus(from: HTMLElement | null): void {
   // NOT a bare `closest('.docx-editor')`: the toolbar's own root self-emits that class.
-  const root = editorScopeFor(from) ?? from?.ownerDocument?.body;
+  const root = editorInstanceScope(from) ?? from?.ownerDocument?.body;
   root?.querySelector<HTMLElement>('.docx-pages')?.focus();
-}
-
-/** Outside mousedown closes a toolbar popup. */
-export function useDropdownClose(
-  open: boolean,
-  setOpen: (open: boolean) => void,
-  rootRef: RefObject<HTMLElement | null>
-): void {
-  useEffect(() => {
-    if (!open) return undefined;
-    const onMouseDown = (event: globalThis.MouseEvent) => {
-      const root = rootRef.current;
-      if (root && event.target instanceof Node && root.contains(event.target)) return;
-      setOpen(false);
-    };
-    document.addEventListener('mousedown', onMouseDown);
-    return () => document.removeEventListener('mousedown', onMouseDown);
-  }, [open, setOpen, rootRef]);
 }
 
 /** Props for a focusable disabled toolbar trigger with an announced reason. */
@@ -104,6 +86,7 @@ export function useTableMenuKeyboard(
     queueMicrotask(focusInitial);
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || event.keyCode === 229) return;
       const list = items();
       if (event.key === 'Escape') {
         event.preventDefault();

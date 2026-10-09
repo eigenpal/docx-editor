@@ -158,7 +158,9 @@ test('column-origin changes invalidate local wrapping without changing paragraph
     expect(targetLines.map((line) => line.spans.map((span) => span.text).join('')).join('')).toBe(
       text
     );
-    expect(targetLines[0]!.spans[0]!.box.x).toBe(100);
+    // The 20pt passage of the narrow layout cannot hold the opening word, which moves below
+    // the table to the column's origin; the 40pt passage of the wider one holds it.
+    expect(targetLines[0]!.spans[0]!.box.x).toBe(revision === 1 ? 100 : 60);
     starts.push(targetLines[0]!.range.end);
   }
   expect(starts[0]).not.toBe(starts[1]);

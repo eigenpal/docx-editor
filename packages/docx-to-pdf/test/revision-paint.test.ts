@@ -267,13 +267,19 @@ test.each([
       revisionMarkup: { cells: { [cellKind]: 'yellow' }, changedLines: { mark: 'none' } },
     });
     expect(await commands(shaded.bytes)).toContain('1 1 0 rg');
+    // Text marks off, so only the cell shading can differ from a plain row.
+    const unmarked = {
+      insertions: { mark: 'none' },
+      deletions: { mark: 'none' },
+      changedLines: { mark: 'none' },
+    } as const;
     const unshaded = await exportPdf(input, {
       ...options,
-      revisionMarkup: { cells: { [cellKind]: 'none' }, changedLines: { mark: 'none' } },
+      revisionMarkup: { ...unmarked, cells: { [cellKind]: 'none' } },
     });
     const plain = await exportPdf(docx(row('')), {
       ...options,
-      revisionMarkup: { changedLines: { mark: 'none' } },
+      revisionMarkup: unmarked,
     });
     expect(await commands(unshaded.bytes)).toBe(await commands(plain.bytes));
   }
@@ -393,4 +399,188 @@ test('move fallback uses insertion background in PDF', async () => {
     },
   });
   expect(await commands(result.bytes)).toContain('1 1 0 rg');
+});
+
+const trackedRow = (revision: string, text = 'Cell') =>
+  `<w:tbl><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid><w:tr>${revision}<w:tc><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`;
+const rowMark = (kind: 'ins' | 'del') =>
+  `<w:trPr><w:${kind} w:id="9" w:author="Reviewer"/></w:trPr>`;
+const markedSettings = {
+  insertions: { mark: 'underline', color: 'blue' },
+  deletions: { mark: 'strikethrough', color: 'red' },
+  cells: { inserted: 'none', deleted: 'none' },
+  changedLines: { mark: 'none' },
+} as const;
+
+test.each([
+  ['del', '1 0 0 rg'],
+  ['ins', '0 0 1 rg'],
+] as const)(
+  'text in a tracked %s row takes the row revision mark and color',
+  async (kind, colorOperator) => {
+    const options = { displayMode: 'all-markup', useSystemFonts: false } as const;
+    // Strict: a tracked row is a presented revision, not an unsupported one.
+    const tracked = await exportPdf(docx(trackedRow(rowMark(kind))), {
+      ...options,
+      revisionMarkup: markedSettings,
+    });
+    const plain = await exportPdf(docx(trackedRow('')), {
+      ...options,
+      revisionMarkup: markedSettings,
+    });
+    expect(await commands(tracked.bytes)).toContain(colorOperator);
+    expect(await commands(plain.bytes)).not.toContain(colorOperator);
+  }
+);
+
+test('a deleted row keeps a nested inserted row visibly deleted', async () => {
+  const nested = `<w:tbl><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr>${rowMark('del')}<w:tc>${trackedRow(
+    rowMark('ins'),
+    'Inner'
+  )}<w:p/></w:tc></w:tr></w:tbl>`;
+  const result = await exportPdf(docx(nested), {
+    displayMode: 'all-markup',
+    useSystemFonts: false,
+    revisionMarkup: markedSettings,
+  });
+  const stream = await commands(result.bytes);
+  expect(stream).toContain('1 0 0 rg');
+  expect(stream).not.toContain('0 0 1 rg');
+});
+
+test('a tracked row marks its text without configured markup settings', async () => {
+  // Strict: the row is a presented revision even without configured markup settings.
+  const options = { displayMode: 'all-markup', useSystemFonts: false } as const;
+  const tracked = await exportPdf(docx(trackedRow(rowMark('del'))), options);
+  const plain = await exportPdf(docx(trackedRow('')), options);
+  expect(await commands(tracked.bytes)).not.toBe(await commands(plain.bytes));
+});
+
+test('proposed and original views do not mark rows they resolve', async () => {
+  for (const displayMode of ['proposed', 'original'] as const) {
+    const options = { displayMode, useSystemFonts: false, revisionMarkup: markedSettings } as const;
+    const kept = await exportPdf(
+      docx(trackedRow(rowMark(displayMode === 'proposed' ? 'ins' : 'del'))),
+      options
+    );
+    const plain = await exportPdf(docx(trackedRow('')), options);
+    expect(await commands(kept.bytes)).toBe(await commands(plain.bytes));
+  }
+});
+
+/** Filled rectangles thinner than 3 pt: the strike and underline lines, as `[x, y, w, h]`. */
+function lineRects(stream: string): number[][] {
+  return [...stream.matchAll(/(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) re f/g)]
+    .map((match) => match.slice(1, 5).map(Number))
+    .filter(([, , , height]) => Math.abs(height!) < 3);
+}
+
+/** Baselines of every text line, from its `Tm` operator. */
+function baselines(stream: string): number[] {
+  return [...stream.matchAll(/[\d.-]+ [\d.-]+ [\d.-]+ [\d.-]+ ([\d.-]+) ([\d.-]+) Tm/g)].map(
+    (match) => Number(match[2])
+  );
+}
+
+test.each([
+  ['del', 'above'],
+  ['ins', 'below'],
+] as const)('a tracked %s row draws its line %s the text baseline', async (kind, side) => {
+  const options = {
+    displayMode: 'all-markup',
+    useSystemFonts: false,
+    revisionMarkup: markedSettings,
+  } as const;
+  const tracked = await commands((await exportPdf(docx(trackedRow(rowMark(kind))), options)).bytes);
+  const plain = await commands((await exportPdf(docx(trackedRow('')), options)).bytes);
+  const known = new Set(lineRects(plain).map((rect) => rect.join(' ')));
+  const added = lineRects(tracked).filter((rect) => !known.has(rect.join(' ')));
+  // One line under or through the one line of text.
+  expect(added).toHaveLength(1);
+  const [, y, width] = added[0]!;
+  expect(width!).toBeGreaterThan(0);
+  const baseline = baselines(tracked)[0]!;
+  if (side === 'above') expect(y!).toBeGreaterThan(baseline);
+  else expect(y!).toBeLessThan(baseline);
+});
+
+test('a repeated header row stays unmarked across a page break inside a tracked row', async () => {
+  const lines = Array.from(
+    { length: 70 },
+    (_, index) => `<w:p><w:r><w:t>Line${index}</w:t></w:r></w:p>`
+  ).join('');
+  const table = (revision: string) =>
+    '<w:tbl><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>' +
+    '<w:tr><w:trPr><w:tblHeader/></w:trPr><w:tc><w:p><w:r><w:t>Head</w:t></w:r></w:p></w:tc></w:tr>' +
+    `<w:tr>${revision}<w:tc>${lines}</w:tc></w:tr></w:tbl><w:p/>`;
+  const options = {
+    displayMode: 'all-markup',
+    useSystemFonts: false,
+    revisionMarkup: markedSettings,
+  } as const;
+  const trackedResult = await exportPdf(docx(table(rowMark('ins'))), options);
+  const plainResult = await exportPdf(docx(table('')), options);
+  const document = await PDFDocument.load(trackedResult.bytes);
+  // The tracked row splits, so the header repeats on the next page.
+  expect(document.getPageCount()).toBeGreaterThan(1);
+  const tracked = await commands(trackedResult.bytes);
+  const plain = await commands(plainResult.bytes);
+  // The header paints once per page: it repeats after the break.
+  expect(baselines(tracked)).toHaveLength(70 + document.getPageCount());
+  // Every line of the tracked row is underlined, on both pages; the header rows are not.
+  expect(lineRects(tracked).length - lineRects(plain).length).toBe(70);
+});
+
+const SHAPE_NS =
+  'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"' +
+  ' xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"' +
+  ' xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"';
+
+/** A page-anchored 3in x 1in text box holding `content`. */
+const textboxWith = (content: string) =>
+  `<w:p><w:r><w:drawing ${SHAPE_NS}><wp:anchor distT="0" distB="0" distL="0" distR="0"` +
+  ' simplePos="0" relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1">' +
+  '<wp:simplePos x="0" y="0"/>' +
+  '<wp:positionH relativeFrom="page"><wp:posOffset>914400</wp:posOffset></wp:positionH>' +
+  '<wp:positionV relativeFrom="page"><wp:posOffset>914400</wp:posOffset></wp:positionV>' +
+  '<wp:extent cx="2743200" cy="914400"/><wp:effectExtent l="0" t="0" r="0" b="0"/>' +
+  '<wp:wrapNone/><wp:docPr id="1" name="Box"/>' +
+  '<a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">' +
+  '<wps:wsp><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="2743200" cy="914400"/></a:xfrm>' +
+  '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></wps:spPr>' +
+  `<wps:txbx><w:txbxContent>${content}<w:p/></w:txbxContent></wps:txbx>` +
+  '<wps:bodyPr lIns="0" tIns="0" rIns="0" bIns="0"/></wps:wsp></a:graphicData></a:graphic>' +
+  '</wp:anchor></w:drawing></w:r></w:p>';
+
+test('text in a tracked row inside a text box takes the row revision mark', async () => {
+  const options = {
+    displayMode: 'all-markup',
+    useSystemFonts: false,
+    revisionMarkup: markedSettings,
+  } as const;
+  const tracked = await exportPdf(docx(textboxWith(trackedRow(rowMark('ins')))), options);
+  const plain = await exportPdf(docx(textboxWith(trackedRow(''))), options);
+  expect(await commands(tracked.bytes)).toContain('0 0 1 rg');
+  expect(await commands(plain.bytes)).not.toContain('0 0 1 rg');
+  expect(tracked.diagnostics.map((entry) => entry.code)).not.toContain('review-presentation');
+});
+
+test('cell-only authors in a text box retain distinct PDF colors', async () => {
+  const cell = (author: string, id: number) =>
+    `<w:tc><w:tcPr><w:cellIns w:id="${id}" w:author="${author}"/></w:tcPr><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc>`;
+  const result = await exportPdf(
+    docx(
+      textboxWith(
+        `<w:tbl><w:tblGrid><w:gridCol w:w="1500"/><w:gridCol w:w="1500"/></w:tblGrid><w:tr>${cell('First', 1)}${cell('Second', 2)}</w:tr></w:tbl>`
+      )
+    ),
+    {
+      displayMode: 'all-markup',
+      useSystemFonts: false,
+      revisionMarkup: { cells: { inserted: 'byAuthor' }, changedLines: { mark: 'none' } },
+    }
+  );
+  const stream = await commands(result.bytes);
+  expect(stream).toContain('0.752941 0.223529 0.168627 rg');
+  expect(stream).toContain('0.121569 0.435294 0.698039 rg');
 });

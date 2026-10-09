@@ -1,6 +1,6 @@
 import { ref, shallowRef, watch, type ShallowRef } from 'vue';
 import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/editor';
-import { ZOOM_MAX } from '@docx-editor.dev/core/editor';
+import { REVIEW_MARKERS_GUTTER_PX, reviewPaneEntitledZoom } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../lib/units';
 import { useReviewRailRegistry } from './context';
 import { useEditorState } from './useEditorState';
@@ -14,7 +14,13 @@ import { scopeDispose } from './scope-dispose';
 export const REVIEW_PANE_GUTTER = 316;
 
 /** Reservation for markers and the add-comment button. @public */
-export const REVIEW_MARKERS_GUTTER = 44;
+export const REVIEW_MARKERS_GUTTER = REVIEW_MARKERS_GUTTER_PX;
+
+// The column is either fully reserved or not at all. Not affordable, `overflow: 'float'`
+// mirrors the marker strip onto both edges so the page centres; `overflow: 'scroll'`
+// keeps the full column and the page's start clearance, the page keeps one size whether
+// the pane is open or closed, and the viewport scrolls sideways.
+// A closed pane reserves the mirrored strip either way. The React twin documents the rule.
 
 /** Page-edge clearance required before the full column stands. @public */
 export const REVIEW_GUTTER_PAGE_CLEARANCE = 24;
@@ -32,6 +38,37 @@ const BALANCED_STRIP: ReviewGutter = {
 };
 const NO_GUTTER: ReviewGutter = { inlineStart: 0, inlineEnd: 0 };
 
+/**
+ * `overflow: 'scroll'` when the column does not fit: the full column at the end, and the
+ * page's clearance at the start, so the sheet does not sit flush against the viewport edge
+ * while the viewport scrolls sideways to the cards.
+ */
+const SCROLLING_COLUMN: ReviewGutter = {
+  inlineStart: REVIEW_GUTTER_PAGE_CLEARANCE,
+  inlineEnd: REVIEW_PANE_GUTTER,
+};
+
+/**
+ * Whether the gutter is the `overflow: 'scroll'` column that did not fit: the full column
+ * stands at the end, but the viewport scrolls sideways to reach it, so only the marker strip
+ * is on screen beside the page.
+ */
+export function reviewGutterScrolls(gutter: ReviewGutter): boolean {
+  return (
+    gutter.inlineStart === SCROLLING_COLUMN.inlineStart &&
+    gutter.inlineEnd === SCROLLING_COLUMN.inlineEnd
+  );
+}
+
+/**
+ * The part of the measured inline-end padding that is on screen. Under a scrolling column
+ * the cards sit past the visible edge, so only the marker strip takes room beside the page.
+ */
+export function visibleInlineEndReservation(gutter: ReviewGutter, measured: number): number {
+  if (!reviewGutterScrolls(gutter)) return measured;
+  return Math.max(0, measured - (REVIEW_PANE_GUTTER - REVIEW_MARKERS_GUTTER));
+}
+
 /** Inputs for {@link reviewGutter}. @public */
 export interface ReviewGutterInput {
   readonly open: boolean;
@@ -39,6 +76,8 @@ export interface ReviewGutterInput {
   readonly pageWidthPx: number;
   readonly inlineStartReservation?: number;
   readonly docked?: boolean;
+  /** `overflow: 'scroll'`: the full column stands even when it does not fit. */
+  readonly scroll?: boolean;
 }
 
 /** Returns the inline-edge reservations for the current rail geometry. @public */
@@ -48,6 +87,7 @@ export function reviewGutter({
   pageWidthPx,
   inlineStartReservation = 0,
   docked = false,
+  scroll = false,
 }: ReviewGutterInput): ReviewGutter {
   if (!open) return BALANCED_STRIP;
   if (docked) return FULL_COLUMN;
@@ -58,13 +98,15 @@ export function reviewGutter({
       ? inlineStartReservation
       : 0;
   const leftover = viewportWidth - start - pageWidthPx - 2 * REVIEW_GUTTER_PAGE_CLEARANCE;
-  return leftover >= REVIEW_PANE_GUTTER ? FULL_COLUMN : BALANCED_STRIP;
+  if (leftover >= REVIEW_PANE_GUTTER) return FULL_COLUMN;
+  return scroll ? SCROLLING_COLUMN : BALANCED_STRIP;
 }
 
 interface GutterGeometry {
   readonly pageSetup: PageSetup | null;
   readonly reviewPaneOpen: boolean;
   readonly entitledZoom: number | null;
+  readonly scroll: boolean;
 }
 
 const selectGutterGeometry = (snapshot: EditorSnapshot): GutterGeometry => {
@@ -72,17 +114,14 @@ const selectGutterGeometry = (snapshot: EditorSnapshot): GutterGeometry => {
   return {
     pageSetup: snapshot.pageSetup ?? null,
     reviewPaneOpen: snapshot.reviewPaneOpen ?? true,
-    entitledZoom:
-      mode?.type === 'fit'
-        ? mode.maxZoom !== undefined && mode.maxZoom < ZOOM_MAX
-          ? mode.maxZoom
-          : null
-        : snapshot.zoom,
+    entitledZoom: reviewPaneEntitledZoom(mode, snapshot.zoom, snapshot.reviewPane.overflow),
+    scroll: snapshot.reviewPane.overflow === 'scroll',
   };
 };
 
 const sameGutterGeometry = (a: GutterGeometry, b: GutterGeometry) =>
   a.reviewPaneOpen === b.reviewPaneOpen &&
+  a.scroll === b.scroll &&
   a.entitledZoom === b.entitledZoom &&
   a.pageSetup?.pageWidthTwips === b.pageSetup?.pageWidthTwips;
 
@@ -137,6 +176,7 @@ export function useReviewGutter(): ShallowRef<ReviewGutter> {
               : twipsToPixels(pageWidthTwips) * current.entitledZoom,
           inlineStartReservation: startReservation,
           docked: current.entitledZoom === null,
+          scroll: current.scroll,
         });
       };
       const sync = () => {

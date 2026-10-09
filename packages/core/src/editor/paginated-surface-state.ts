@@ -9,6 +9,7 @@ import type { ContentControlSurfaceState } from './surface-content-control-contr
 import type { FormatPainterSurfaceState } from './surface-format-painter-contract.ts';
 import type { PaginatedSurfacePerf } from './surface-perf-contract.ts';
 import type { IndentFormatting } from '../contracts/types.ts';
+import type { ScrollPlacement } from '../contracts/editor-anchor.ts';
 import type {
   ParagraphDisagreements,
   ParagraphFlags,
@@ -94,7 +95,7 @@ export interface RevealOptions {
    * centred when it has to move, so the reader lands looking AT the thing rather than at
    * the bottom line of the window. Default `'start'`.
    */
-  readonly block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest';
+  readonly block?: ScrollPlacement;
   /** Padding above the target, in CSS pixels. Default 24. */
   readonly offsetPx?: number;
   readonly behavior?: ScrollBehavior;

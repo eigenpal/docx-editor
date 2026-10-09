@@ -180,10 +180,10 @@ describe('empty anchor paragraph pagination', () => {
     expect(paragraph.box.y).toBe(100);
     expect(following.y).toBe(paragraph.box.y);
   });
-  test('a plain empty paragraph does not add clearance without an anchor', () => {
+  test('a plain empty paragraph moves below a rectangle that leaves no passage', () => {
     const layout = render(`<w:p>${anchor(72, 100)}</w:p><w:p/>`);
-    const first = paragraphFragmentsOf(layout.pages[0]!)[0]!;
-    expect(paragraphFragmentsOf(layout.pages[0]!)[1]!.box.y).toBe(first.box.height);
+    // The 550pt rectangle covers the whole column from the top margin, 100pt down.
+    expect(paragraphFragmentsOf(layout.pages[0]!)[1]!.box.y).toBe(100);
   });
   test('an empty paragraph can stay beside a narrow rectangle', () => {
     const layout = render(`<w:p>${anchor(72, 100, 'page', 100)}</w:p><w:p/>`);

@@ -330,6 +330,33 @@ const messages = {
   'consumerApi.captureHint': 'Capture a snapshot to inspect plain editor state.',
   'consumerApi.events': 'Recent events',
   'consumerApi.noEvents': 'No events are available.',
+  'reviewSettings.open': 'Review settings',
+  'reviewSettings.title': 'Review display',
+  'reviewSettings.subtitle': 'How comments and tracked changes appear. Saved in this browser.',
+  'reviewSettings.close': 'Close review settings',
+  'reviewSettings.reset': 'Reset to defaults',
+  'reviewSettings.revisionsIn': 'Tracked changes',
+  'reviewSettings.revisionsInHelp': 'Where a tracked change opens.',
+  'reviewSettings.revisionsIn.pane': 'In the pane',
+  'reviewSettings.revisionsIn.balloons': 'In balloons',
+  'reviewSettings.commentMarkers': 'Comment markers',
+  'reviewSettings.commentMarkersHelp':
+    'How a comment looks in the margin while the pane is closed.',
+  'reviewSettings.commentMarkers.initials': 'Initials',
+  'reviewSettings.commentMarkers.icon': 'Icon',
+  'reviewSettings.opening': 'Pane opening',
+  'reviewSettings.openingHelp': 'Whether the pane opens when a document with comments loads.',
+  'reviewSettings.opening.auto': 'Automatic',
+  'reviewSettings.opening.manual': 'Manual',
+  'reviewSettings.overflow': 'When the pane does not fit',
+  'reviewSettings.overflow.float': 'Float',
+  'reviewSettings.overflow.shrinkPage': 'Shrink page',
+  'reviewSettings.overflow.scroll': 'Scroll',
+  'reviewSettings.overflowHelp.float':
+    'The pane becomes a strip of markers. The open card floats over the page.',
+  'reviewSettings.overflowHelp.shrinkPage': 'The page shrinks so that the cards fit beside it.',
+  'reviewSettings.overflowHelp.scroll':
+    'The page keeps its size. Scroll sideways to see the cards.',
   'toolbar.exportPdfServerUnavailable':
     'PDF export is unavailable. Configure a Node.js server with @docx-editor.dev/docx-to-pdf.',
 } as const;

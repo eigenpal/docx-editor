@@ -10,6 +10,17 @@
 // the width the page will actually paint at.
 
 import type { ZoomMode } from '../contracts/editor.ts';
+import type { ReviewPaneOverflow } from '../contracts/review-pane.ts';
+
+/**
+ * The review pane's marker strip on one page edge, in CSS px: the markers and the
+ * add-comment button. The adapters' review gutters and the zoom fit share this value.
+ *
+ * Shared adapter glue, not for hosts.
+ *
+ * @internal
+ */
+export const REVIEW_MARKERS_GUTTER_PX = 44;
 
 /** The narrowest scale the editor contract accepts. One definition, every user. */
 export const ZOOM_MIN = 0.1;
@@ -104,6 +115,43 @@ export function sameZoomMode(a: ZoomMode, b: ZoomMode): boolean {
   // change on every render and took the observer, the refit and every consumer's re-render
   // with it. `fitZoom` treats a non-finite bound as absent, so the two really are one mode.
   return a.fit === b.fit && Object.is(a.minZoom, b.minZoom) && Object.is(a.maxZoom, b.maxZoom);
+}
+
+/**
+ * The scale the page is ENTITLED to when the review rail decides whether its full card
+ * column fits beside the page, or `null` when the page has no entitlement to measure.
+ *
+ * The rail must never measure the LIVE zoom under a fit: that zoom already includes the
+ * room the rail reserved last frame, so a threshold computed from it chases itself. The
+ * entitlement depends only on the mode (and on the held scale for a fixed mode), so the
+ * rail settles in one pass.
+ *
+ * - A fixed mode is entitled to the scale in force.
+ * - A fit with the review pane's `overflow: 'shrinkPage'` is entitled to its lower bound: the column stands
+ *   whenever ANY scale the fit may take leaves room for it, and the fit then paints at
+ *   the largest of those inside the padded box.
+ * - A capped fit is entitled to its cap.
+ * - An uncapped fit returns `null`: it fills whatever box it is given, so the full column
+ *   always stands.
+ *
+ * Shared adapter glue for the review gutter, not for hosts.
+ *
+ * @internal
+ */
+export function reviewPaneEntitledZoom(
+  mode: ZoomMode | undefined,
+  zoom: number,
+  overflow: ReviewPaneOverflow = 'float'
+): number | null {
+  if (mode?.type !== 'fit') return zoom;
+  if (overflow === 'shrinkPage') {
+    // The fit's lower bound. `fitZoom` lets that bound win when it exceeds the cap, so the
+    // entitlement is the lower bound in every case.
+    return mode.minZoom !== undefined && Number.isFinite(mode.minZoom)
+      ? clampToRange(mode.minZoom)
+      : ZOOM_MIN;
+  }
+  return mode.maxZoom !== undefined && mode.maxZoom < ZOOM_MAX ? mode.maxZoom : null;
 }
 
 /** Whether a mode makes the engine track the viewport rather than hold a number. */

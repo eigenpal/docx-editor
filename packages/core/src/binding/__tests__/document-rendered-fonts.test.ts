@@ -272,13 +272,13 @@ describe('collectRenderedFontFamilies', () => {
         styles: styles(
           `<w:style w:type="paragraph" w:default="1" w:styleId="Normal">` +
             '<w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos"/></w:rPr></w:style>' +
-            // The default CHARACTER style stands in for absent rStyle too.
+            // The default CHARACTER style stands in for absent rStyle too, and is nearer.
             `<w:style w:type="character" w:default="1" w:styleId="DPF">` +
             '<w:rPr><w:rFonts w:ascii="Consolas"/></w:rPr></w:style>'
         ),
       })
     );
-    expect(session.renderedFontFamilies()).toEqual(['Aptos', 'Consolas']);
+    expect(session.renderedFontFamilies()).toEqual(['Consolas']);
   });
 
   test('a text-bearing table brings its tblStyle chain and conditional formats', () => {
@@ -370,7 +370,8 @@ describe('collectRenderedFontFamilies', () => {
         styles: styles(styleWithFont('character', 'FootnoteReference', 'Georgia')),
       })
     );
-    expect(session.renderedFontFamilies()).toEqual(['Georgia', 'Marker Face']);
+    // The run's own face is nearer than its character style, so Georgia draws nothing.
+    expect(session.renderedFontFamilies()).toEqual(['Marker Face']);
   });
 
   test('a duplicated styleId resolves to the LAST definition, matching layout', () => {
@@ -437,5 +438,64 @@ describe('collectRenderedFontFamilies', () => {
       })
     );
     expect(session.renderedFontFamilies()).toEqual(['Georgia']);
+  });
+
+  test('a family a nearer level overrides is not reported', () => {
+    const session = open(
+      docx({
+        body:
+          '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr>' +
+          run('Calibri', 'Heading in body face') +
+          '</w:p>',
+        styles: styles(
+          styleWithFont('paragraph', 'Heading1', 'Calibri Light') +
+            `<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/></w:rPr></w:rPrDefault></w:docDefaults>`
+        ),
+      })
+    );
+    expect(session.renderedFontFamilies()).toEqual(['Calibri']);
+  });
+
+  test('a style face reaches runs with no face of their own, nearest level first', () => {
+    const session = open(
+      docx({
+        body:
+          '<w:p><w:pPr><w:pStyle w:val="Quote"/></w:pPr><w:r><w:t>quoted</w:t></w:r></w:p>' +
+          '<w:tbl><w:tblPr><w:tblStyle w:val="Grid"/></w:tblPr><w:tr><w:tc>' +
+          '<w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>',
+        styles: styles(
+          styleWithFont('paragraph', 'Quote', 'Georgia') +
+            styleWithFont('table', 'Grid', 'Verdana') +
+            // A default paragraph style with no face lets the table's face through.
+            `<w:style w:type="paragraph" w:default="1" w:styleId="Normal"/>`
+        ),
+      })
+    );
+    expect(session.renderedFontFamilies()).toEqual(['Georgia', 'Verdana']);
+  });
+
+  test('East Asian faces count only for text with East Asian characters', () => {
+    const eastAsianStyles = styles(
+      `<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="MS Mincho"/></w:rPr></w:rPrDefault></w:docDefaults>` +
+        `<w:style w:type="paragraph" w:styleId="Heading1"><w:rPr><w:rFonts w:eastAsia="Yu Gothic Light"/></w:rPr></w:style>`
+    );
+    const latin = open(
+      docx({
+        body:
+          '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Latin only</w:t></w:r></w:p>' +
+          '<w:p><w:r><w:rPr><w:rFonts w:eastAsia="Yu Mincho"/></w:rPr><w:t>Body</w:t></w:r></w:p>',
+        styles: eastAsianStyles,
+      })
+    );
+    expect(latin.renderedFontFamilies()).toEqual(['Calibri']);
+    const mixed = open(
+      docx({
+        body:
+          '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>見出し</w:t></w:r></w:p>' +
+          '<w:p><w:r><w:t>本文</w:t></w:r></w:p>',
+        styles: eastAsianStyles,
+      })
+    );
+    expect(mixed.renderedFontFamilies()).toEqual(['Calibri', 'MS Mincho', 'Yu Gothic Light']);
   });
 });

@@ -25,5 +25,7 @@ export function textboxLayoutToken(story: NonNullable<DrawingProjection['textbox
     story.fillHex ?? '',
     story.strokeHex ?? '',
     String(story.strokeWidthEmu),
+    // Appended only when set, so wrapped boxes keep their existing tokens.
+    ...(story.noWrap ? ['nowrap'] : []),
   ]);
 }

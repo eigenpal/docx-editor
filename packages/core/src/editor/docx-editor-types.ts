@@ -2,6 +2,7 @@ import type {
   RevisionMarkupOptions,
   RevisionMarkupChromeHandlers,
 } from '../contracts/revision-markup.ts';
+import type { ReviewPaneOptions } from '../contracts/review-pane.ts';
 import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
 import type {
   PopupChromeRegistrationOptions,
@@ -19,6 +20,7 @@ import type {
   DocumentSource,
   Editor,
   EditorFontError,
+  ExecResult,
   FontConfiguration,
   Unsubscribe,
   ZoomMode,
@@ -390,6 +392,26 @@ export interface DocxEditorInstance extends Editor {
    * Invalid settings throw TypeError without changing the previous settings.
    */
   setRevisionMarkup(options: RevisionMarkupOptions): void;
+  /**
+   * Change the review pane settings: every field of `ReviewPaneOptions`, such as when the
+   * pane opens by itself and what it does when its card column does not fit. An omitted
+   * field keeps its value. Read the settings in force
+   * from `snapshot().reviewPane`. They stay in force across `load()` and are never saved into
+   * the document. This sets how the pane behaves; to open or close the pane itself, use
+   * `useReview().setPaneOpen` or the `toggleReviewPane` command.
+   *
+   * Returns `changed: false` on success, like every view-only call, because `changed` answers
+   * for the document; to detect a settings change, compare the `snapshot().reviewPane`
+   * reference, which changes only when a setting changes. Refused with `unsupported` when no review module is registered, and
+   * with `invalidArgs` for an unknown field or value. A refusal changes nothing.
+   *
+   * @example
+   * ```ts
+   * const result = editor.setReviewPaneOptions({ opening: 'manual', overflow: 'shrinkPage' });
+   * if (!result.ok) console.warn(result.reason);
+   * ```
+   */
+  setReviewPaneOptions(options: ReviewPaneOptions): ExecResult;
   /**
    * Mount into `el`. If the instance holds pending document bytes (created without a
    * container, or previously detached), they mount now — under the shaped measurer when

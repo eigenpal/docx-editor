@@ -55,6 +55,8 @@ export function chopOversizedWord(
     readonly measureText: (text: string) => number;
     readonly appendPrefix: (prefix: OversizedWordPrefix) => void;
     readonly closeLine: () => void;
+    /** Closes a line that ends inside the word, after a cut. Defaults to `closeLine`. */
+    readonly closeCutLine?: () => void;
     readonly overflowTolerancePt: number;
     /** Keep the leading fragment with the preceding text when their seam is protected. */
     readonly keepWithPrevious?: boolean;
@@ -136,7 +138,7 @@ export function chopOversizedWord(
       modelStart: modelStart + utf16From,
       width: options.measureText(prefixText),
     });
-    options.closeLine();
+    (options.closeCutLine ?? options.closeLine)();
     brokeLine = true;
     graphemeFrom = fitTo;
     utf16From = utf16To;

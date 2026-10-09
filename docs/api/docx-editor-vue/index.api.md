@@ -13,6 +13,7 @@ import { CHROME_GROUPS } from '@docx-editor.dev/core/editor';
 import { CHROME_MENUS } from '@docx-editor.dev/core/editor';
 import { ChromeExportFormat } from '@docx-editor.dev/core/editor';
 import { ChromeExportHandlers } from '@docx-editor.dev/core/editor';
+import { ChromeGroupId } from '@docx-editor.dev/core/editor';
 import { ChromeMenu } from '@docx-editor.dev/core/editor';
 import { ChromeMenuEntry } from '@docx-editor.dev/core/editor';
 import { ChromeMenuId } from '@docx-editor.dev/core/editor';
@@ -3042,6 +3043,7 @@ export interface DocxEditorMenuProps {
     onReportIssue?: () => void;
     // (undocumented)
     onSave?: () => void;
+    overflow?: boolean;
     // (undocumented)
     preset?: boolean;
     // (undocumented)
@@ -3151,10 +3153,10 @@ export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
     children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
+    findShortcut?: boolean;
     searchHighlight?: DocumentSearchHighlight;
     // (undocumented)
     style?: CSSProperties;
-    // (undocumented)
     t?: (key: string, params?: Record<string, string | number>) => string;
     // (undocumented)
     toggle?: boolean | NavigationPartProps;
@@ -3406,7 +3408,7 @@ export interface DocxEditorNotesContextMenuProps {
     y: number;
 }
 
-// @public (undocumented)
+// @public
 export const DocxEditorPageNumber: vue.DefineComponent<vue.ExtractPropTypes<{
     className: {
         default: undefined;
@@ -3754,7 +3756,6 @@ export interface DocxEditorProps {
     menu?: boolean | DocxEditorMenuProps;
     mode?: EditorMode;
     modules?: readonly EditorModule[];
-    // (undocumented)
     navigation?: boolean | DocxEditorNavigationProps;
     // (undocumented)
     popups?: DocxEditorPopups;
@@ -4164,12 +4165,28 @@ export interface DocxEditorTextFormFieldDialogProps extends DialogCustomizationP
 // @public (undocumented)
 export const DocxEditorToolbar: DocxEditorToolbarNamespace;
 
+// @public
+export interface DocxEditorToolbarGroupProps {
+    after?: ChromeGroupId | (string & {});
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+    id: ChromeGroupId | (string & {});
+    label?: string;
+    labelKey?: string;
+    overflowContent?: () => DocxEditorChildren;
+    pinned?: boolean;
+    priority?: number;
+}
+
 // @public (undocumented)
 export interface DocxEditorToolbarNamespace {
     // (undocumented)
     (props: DocxEditorToolbarProps): VNode;
     // (undocumented)
     readonly Action: typeof ToolbarAction;
+    readonly AddComment: typeof ToolbarAddComment;
     // (undocumented)
     readonly AlignCenter: ToolbarPartComponent;
     // (undocumented)
@@ -4206,6 +4223,7 @@ export interface DocxEditorToolbarNamespace {
     readonly FontFamily: typeof FontFamily;
     // (undocumented)
     readonly FontSize: ToolbarSlotPartComponent;
+    readonly Group: typeof ToolbarHostGroup;
     // (undocumented)
     readonly Highlight: ToolbarColorSplitComponent;
     // (undocumented)
@@ -4240,6 +4258,7 @@ export interface DocxEditorToolbarNamespace {
     readonly Save: ToolbarSlotPartComponent;
     // (undocumented)
     readonly Separator: typeof ToolbarSeparator;
+    readonly Slot: typeof ToolbarSlot;
     // (undocumented)
     readonly Strike: ToolbarPartComponent;
     // (undocumented)
@@ -4282,6 +4301,14 @@ export interface DocxEditorToolbarProps {
     preset?: boolean;
     // (undocumented)
     t?: ToolbarTranslate;
+}
+
+// @public
+export interface DocxEditorToolbarSlotProps {
+    children?: DocxEditorChildren;
+    hidden?: boolean;
+    overflowContent?: () => DocxEditorChildren;
+    slotId: ChromeSlotId;
 }
 
 // @public (undocumented)
@@ -4987,13 +5014,19 @@ export interface MenuGroupProps {
 export type MenuId = ChromeMenuId | (string & {});
 
 // @public
-export interface MenuItemProps {
+export interface MenuItemBaseProps {
     // (undocumented)
     className?: string;
     hidden?: boolean;
     labelKey?: string;
     shortcutKey?: string;
-    slot: ChromeSlotId;
+}
+
+// @public
+export interface MenuItemProps extends MenuItemBaseProps {
+    // @deprecated (undocumented)
+    slot?: ChromeSlotId;
+    slotId?: ChromeSlotId;
 }
 
 // @public
@@ -5059,14 +5092,19 @@ export interface MenuSeparatorProps {
     className?: string;
 }
 
-// @public (undocumented)
-export interface MenuSubmenuProps {
+// @public
+export interface MenuSubmenuBaseProps {
     // (undocumented)
     children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
-    labelKey: string;
     paths?: readonly string[] | null;
+}
+
+// @public
+export interface MenuSubmenuProps extends MenuSubmenuBaseProps {
+    label?: string;
+    labelKey?: string;
 }
 
 // @public
@@ -5083,6 +5121,9 @@ export const NAVIGATION_PANE_GAP = 16;
 
 // @public
 export const NAVIGATION_PANE_INSET = 32;
+
+// @public
+export const NAVIGATION_PANE_MIN_PAGE_ROOM = 320;
 
 // @public
 export const NAVIGATION_PANE_WIDTH = 280;
@@ -5182,6 +5223,9 @@ export const NavigationHeadings: vue.DefineComponent<vue.ExtractPropTypes<{
     className: string;
     style: CSSProperties;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export function navigationPaneOverlays(viewportWidth: number, reservation: number): boolean;
 
 // @public
 export function navigationPaneReservation(paneWidth?: number): number;
@@ -5841,6 +5885,7 @@ export interface ReviewGutterInput {
     readonly open: boolean;
     // (undocumented)
     readonly pageWidthPx: number;
+    readonly scroll?: boolean;
     // (undocumented)
     readonly viewportWidth: number;
 }
@@ -6162,12 +6207,12 @@ export interface ToolbarButtonProps {
     class?: string;
     // (undocumented)
     className?: string;
-    // (undocumented)
     hidden?: boolean;
     // (undocumented)
     icon?: DocxEditorChildren;
-    // (undocumented)
-    slot: ChromeSlotId;
+    // @deprecated (undocumented)
+    slot?: ChromeSlotId;
+    slotId?: ChromeSlotId;
 }
 
 export { ToolbarCommandState }
@@ -6416,7 +6461,6 @@ export interface ToolbarSlotPartProps {
     class?: string;
     // (undocumented)
     className?: string;
-    // (undocumented)
     hidden?: boolean;
 }
 
@@ -6729,6 +6773,7 @@ export interface UseNavigationPaneOptions {
 export interface UseNavigationPaneResult {
     // (undocumented)
     readonly open: ComputedRef<boolean>;
+    readonly overlay: ComputedRef<boolean>;
     // (undocumented)
     readonly paneWidth: ComputedRef<number>;
     // (undocumented)

@@ -22,9 +22,11 @@ import type {
   ExecResult,
   ReviewItem,
   ReviewItemPlacement,
+  ReviewItemQuery,
   ReviewRevisionItem,
   ReviewRevisionPlacement,
 } from '../contracts/editor.ts';
+import type { ReviewItemRevealEvent } from '../contracts/editor-events.ts';
 import type { StoryScope, TreeDocOp } from '../store/index.ts';
 import {
   deepParagraphOrderOfPart,
@@ -34,6 +36,11 @@ import {
 } from '../store/index.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { PRO_REVIEW_REASON } from './opening-editing-mode.ts';
+import {
+  findReviewPlacement,
+  isReplacementPairKey,
+  resolutionKeysOf,
+} from './review-replacement-pairs.ts';
 
 /** Why `setActiveReviewItem` refused an item that `activatable` reports false for. */
 export function reviewActivationRefusal(item: ReviewItem): string {
@@ -50,10 +57,12 @@ interface ReviewCommandDependencies {
   enabled(): boolean;
   destroyed(): boolean;
   viewing(): boolean;
-  placements(): readonly ReviewItemPlacement[];
+  placements(query?: ReviewItemQuery): readonly ReviewItemPlacement[];
   visible(): readonly ReviewItem[];
   scope(item: ReviewItem): StoryScope;
+  /** Activates without announcing: only the caller knows whether the activation reveals. */
   activate(key: string | null, allowExcludedFormat?: boolean): ExecResult;
+  reveal(event: ReviewItemRevealEvent): void;
   setDisplayMode(mode: ReviewDisplayMode): void;
 }
 
@@ -114,8 +123,24 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
   /** The parts a bulk review command reaches, with the keys it selects in each. */
   const selection = (command: { scope?: 'visible' | 'document'; keys?: readonly string[] }) => {
     const items = all();
+    // A paired replacement's key selects both of its halves. The paired queue is read once,
+    // however many pair keys the command names.
+    let pairs: ReadonlyMap<string, ReviewItemPlacement> | undefined;
+    const pairOf = (key: string) => {
+      pairs ??= new Map(
+        deps
+          .placements({ placement: false, pairReplacements: true })
+          .filter((entry) => isReplacementPairKey(entry.key))
+          .map((entry) => [entry.key, entry])
+      );
+      return pairs.get(key);
+    };
     const selected = new Set(
-      command.keys ??
+      command.keys?.flatMap((key) => {
+        if (!isReplacementPairKey(key)) return [key];
+        const pair = pairOf(key);
+        return pair ? resolutionKeysOf(pair.item) : [key];
+      }) ??
         (command.scope === 'document' ? items : deps.visible())
           .filter((item) => item.kind === 'revision')
           .map(reviewItemKey)
@@ -407,7 +432,7 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     );
     if (protectedWrite) return protectedWrite;
     deps.surface()!.flushPendingInput();
-    const item = deps.placements().find((entry) => entry.key === key)?.item;
+    const item = findReviewPlacement(deps.placements, key)?.item;
     if (!item || item.kind !== 'revision')
       return { ok: false, code: 'notFound', reason: 'no revision with that key' };
     if (item.readOnly)
@@ -488,7 +513,14 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
           ? nextFromCaret(items, surface, step)
           : (active + step + items.length) % items.length;
       const target = items[index]!;
-      return deps.activate(target.key, !target.activatable && target.revisionKind === 'format');
+      const result = deps.activate(
+        target.key,
+        !target.activatable && target.revisionKind === 'format'
+      );
+      // Every landing reveals, the active item included: a lone change navigates to itself,
+      // and its closed card must open again.
+      if (result.ok) deps.reveal({ key: target.key, source: 'navigate' });
+      return result;
     }
     if (command.type !== 'resolveAllReviewChanges') return null;
     const { groups, partOps, result } = bulkPlan(command);
@@ -557,7 +589,7 @@ function resolutionOps(
     ordinaryMoveRanges(part.root).length > 0 ||
     (item.revisionKind === 'format' && revisionSiteNodeIdsOf(item).length > 1)
   ) {
-    return [...planRevisionBatch(part, action, [reviewItemKey(item)]).ops];
+    return [...planRevisionBatch(part, action, resolutionKeysOf(item)).ops];
   }
   const nodeIds = new Set(revisionSiteNodeIdsOf(item));
   const operations = new Map<

@@ -135,7 +135,8 @@
     "commentsAndChanges": "Comentarios y cambios",
     "more": "Más",
     "unavailableInPreview": "No disponible en esta versión preliminar",
-    "paragraphMarks": "Mostrar marcas de párrafo"
+    "paragraphMarks": "Mostrar marcas de párrafo",
+    "addComment": "Añadir comentario"
   },
   "alignment": {
     "alignLeft": "Alinear a la izquierda",
@@ -468,6 +469,7 @@
     "title": "Navegación",
     "openAriaLabel": "Abrir navegación",
     "openTitle": "Navegación",
+    "openShortcutTitle": "Navegación ({shortcut})",
     "closeAriaLabel": "Cerrar navegación",
     "closeTitle": "Cerrar navegación",
     "tabs": {
@@ -867,7 +869,11 @@
     "showResolvedComment": "Mostrar comentario resuelto",
     "replaced": "Reemplazado",
     "replacedWith": "por",
-    "commentRefused": "No se pudo añadir el comentario"
+    "commentRefused": "No se pudo añadir el comentario",
+    "replyCount": "Respuestas: {count}",
+    "trackedChange": "Cambio con seguimiento",
+    "changeAnnouncement": "{change} de {author}: {text}",
+    "replyTargetResolved": "El cambio se resolvió, por lo que la respuesta no se publicó."
   },
   "textFormField": {
     "title": "Opciones del campo de formulario de texto",

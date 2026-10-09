@@ -39,13 +39,13 @@ const PICTURE_MEMBER =
 const TEXTBOX_MEMBER =
   '<wps:wsp><wps:cNvSpPr txBox="1"/><wps:spPr><a:xfrm><a:off x="889000" y="0"/>' +
   '<a:ext cx="2540000" cy="762000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
-  '</wps:spPr><wps:txbx><w:txbxContent><w:p><w:r><w:t>Group label</w:t></w:r></w:p>' +
+  '<a:effectLst><a:outerShdw dist="38100"/></a:effectLst></wps:spPr><wps:txbx><w:txbxContent><w:p><w:r><w:t>Group label</w:t></w:r></w:p>' +
   '</w:txbxContent></wps:txbx><wps:bodyPr/></wps:wsp>';
 
 interface Group {
   readonly top: number;
   readonly height: number;
-  /** A picture-only group paints; a picture beside a text box cannot. */
+  /** A picture-only group paints; a picture beside a shadowed text box cannot. */
   readonly visible: boolean;
 }
 

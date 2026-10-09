@@ -166,12 +166,22 @@ export function textAt(response: AutomationBatchResponse, index: number): string
   return result.value.text;
 }
 
+/**
+ * The span's position without the host's `readAt` stamp, which `automation-stale-spans.test.ts`
+ * covers. Tests here compare where a span is; the stamp says when it was read.
+ */
+function positionOf(span: AutomationSpan): AutomationSpan {
+  const { readAt: _start, ...start } = span.start;
+  const { readAt: _end, ...end } = span.end;
+  return { start, end };
+}
+
 export function spanAt(response: AutomationBatchResponse, index: number): AutomationSpan {
   const result = response.results[index];
   if (result?.status !== 'ok' || result.value.kind !== 'span') {
     throw new Error(`expected a span at ${index}: ${describe(response, index)}`);
   }
-  return result.value.span;
+  return positionOf(result.value.span);
 }
 
 export function spansAt(
@@ -182,7 +192,7 @@ export function spansAt(
   if (result?.status !== 'ok' || result.value.kind !== 'spans') {
     throw new Error(`expected spans at ${index}: ${describe(response, index)}`);
   }
-  return result.value.spans;
+  return result.value.spans.map(positionOf);
 }
 
 export function errorAt(response: AutomationBatchResponse, index: number): string {

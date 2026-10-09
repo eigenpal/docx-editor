@@ -21,6 +21,23 @@ export interface ReviewActionProps extends ReviewPartProps {
   icon?: VNode | string;
 }
 
+/**
+ * Props for `DocxEditorReview.Balloon`, the balloon that opens a review item at its text:
+ * each tracked change under `revisionsIn: 'balloons'`, and format and structural changes in
+ * every mode.
+ *
+ * @public
+ */
+export interface ReviewBalloonProps {
+  /** A class added to the balloon element. */
+  className?: string;
+  /**
+   * Remove the built-in balloon, for example to render your own. Format and structural
+   * change balloons go with it.
+   */
+  hidden?: boolean;
+}
+
 /** @public */
 export interface ReviewMarkersProps extends ReviewPartProps {
   scale?: number;
@@ -49,6 +66,7 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children' | 'hidden'
 export interface ReviewActions {
   readonly items: readonly ReviewItemView[];
   readonly activeKey: string | null;
+  readonly activatedKey: string | null;
   setActive(key: string | null, options?: ReviewActivationOptions): boolean;
   accept(item: ReviewItemView): boolean;
   reject(item: ReviewItemView): boolean;

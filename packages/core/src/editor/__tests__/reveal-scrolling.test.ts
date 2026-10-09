@@ -105,6 +105,80 @@ describe('scrollToPage / scrollToBlock actually scroll', () => {
     editor.destroy();
   });
 
+  test('a block can be centred instead of put near the top', () => {
+    const { editor, scroller } = mount();
+    const ids = editor.surface!.session.paragraphIds();
+    const target = ids[ids.length - 1]!;
+    expect(editor.scrollToBlock(target)).toBe(true);
+    const atStart = scroller.scrollTop;
+    scroller.scrollTop = 0;
+    expect(editor.scrollToBlock(target, { block: 'center' })).toBe(true);
+    // Centring a line in a 600px viewport scrolls less than putting it near the top.
+    expect(scroller.scrollTop).toBeGreaterThan(0);
+    expect(scroller.scrollTop).toBeLessThan(atStart);
+    editor.destroy();
+  });
+
+  test("'nearest' scrolls the minimum, and less than 'start' or 'center'", () => {
+    const { editor, scroller } = mount();
+    const ids = editor.surface!.session.paragraphIds();
+    const target = ids[ids.length - 1]!;
+    expect(editor.scrollToBlock(target, { block: 'center' })).toBe(true);
+    const atCenter = scroller.scrollTop;
+    scroller.scrollTop = 0;
+    expect(editor.scrollToBlock(target, { block: 'nearest' })).toBe(true);
+    const atNearest = scroller.scrollTop;
+    // From above, the minimum scroll parks the line at the bottom edge.
+    expect(atNearest).toBeGreaterThan(0);
+    expect(atNearest).toBeLessThan(atCenter);
+    // Already in view: 'nearest' does not move.
+    expect(editor.scrollToBlock(target, { block: 'nearest' })).toBe(true);
+    expect(scroller.scrollTop).toBe(atNearest);
+    editor.destroy();
+  });
+
+  test("'centerIfNeeded' keeps a visible block still and centres one off screen", () => {
+    const { editor, scroller } = mount();
+    const ids = editor.surface!.session.paragraphIds();
+    const target = ids[ids.length - 1]!;
+    expect(editor.scrollToBlock(target, { block: 'center' })).toBe(true);
+    const atCenter = scroller.scrollTop;
+    scroller.scrollTop = 0;
+    expect(editor.scrollToBlock(target, { block: 'centerIfNeeded' })).toBe(true);
+    expect(scroller.scrollTop).toBe(atCenter);
+    // On screen now, so a second call leaves the viewport where it is.
+    scroller.scrollTop = atCenter + 40;
+    expect(editor.scrollToBlock(target, { block: 'centerIfNeeded' })).toBe(true);
+    expect(scroller.scrollTop).toBe(atCenter + 40);
+    editor.destroy();
+  });
+
+  test('offsetPx moves a start placement, and invalid scroll options are refused', () => {
+    const { editor, scroller } = mount();
+    const ids = editor.surface!.session.paragraphIds();
+    const target = ids[ids.length - 1]!;
+    expect(editor.scrollToBlock(target)).toBe(true);
+    const atDefault = scroller.scrollTop;
+    scroller.scrollTop = 0;
+    expect(editor.scrollToBlock(target, { offsetPx: 124 })).toBe(true);
+    expect(scroller.scrollTop).toBe(atDefault - 100);
+    scroller.scrollTop = 0;
+    const badBehavior = { behavior: 'slow' } as unknown as { behavior: 'smooth' };
+    expect(editor.scrollToBlock(target, badBehavior)).toBe(false);
+    expect(editor.scrollToBlock(target, { offsetPx: -1 })).toBe(false);
+    expect(scroller.scrollTop).toBe(0);
+    editor.destroy();
+  });
+
+  test('an unknown placement is refused rather than read as the default', () => {
+    const { editor, scroller } = mount();
+    const ids = editor.surface!.session.paragraphIds();
+    const options = { block: 'middle' } as unknown as { block: 'center' };
+    expect(editor.scrollToBlock(ids[ids.length - 1]!, options)).toBe(false);
+    expect(scroller.scrollTop).toBe(0);
+    editor.destroy();
+  });
+
   test('an unknown block is refused, so a caller can tell "no such target" from "done"', () => {
     const { editor } = mount();
     expect(editor.scrollToBlock('no-such-paragraph')).toBe(false);
