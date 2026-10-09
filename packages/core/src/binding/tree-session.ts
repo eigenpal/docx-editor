@@ -42,6 +42,7 @@ import {
   TreePackageStore,
   readEmbeddedFonts,
   readOoxmlPackage,
+  type OoxmlPackageResult,
   resolveHeaderFooterParts,
   resolveHeaderFooterResolutionBySection,
   resolveRelationship,
@@ -188,7 +189,19 @@ export function openTreeSession(
   bytes: Uint8Array,
   options: OpenTreeSessionOptions = {}
 ): OpenTreeSessionResult {
-  const loaded = readOoxmlPackage(bytes);
+  return openTreeSessionFromPackage(readOoxmlPackage(bytes), options);
+}
+
+/**
+ * {@link openTreeSession} over a package read already, so a large open can read it in short
+ * tasks (`readOoxmlPackageSteps`) and open the session after.
+ *
+ * @internal
+ */
+export function openTreeSessionFromPackage(
+  loaded: OoxmlPackageResult,
+  options: OpenTreeSessionOptions = {}
+): OpenTreeSessionResult {
   if (!loaded.ok) {
     return {
       ok: false,

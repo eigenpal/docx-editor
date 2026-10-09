@@ -310,17 +310,33 @@ const parser = new XMLParser({
   jPath: false,
 });
 
-/** Read XML into an ordered tree, refusing DTDs/entities and bounding size. */
+/** What the whole-part checks leave a read: the element budget, or a rejection. */
+export type XmlChecked =
+  | { readonly ok: true; readonly maxElements: number }
+  | { readonly ok: false; readonly reason: XmlRejection };
+
 /**
- * Read XML at the trust boundary: bounded, entity-free, and fidelity-preserving.
+ * The bounded checks `readXml` runs over a whole part before parsing: limits, size, forbidden
+ * constructs, element count, and depth. Well-formedness is {@link validateWholeXml}.
  *
- * Pre-rejects DTDs and entity constructs, disables expansion and value coercion, and keeps child
- * order, attributes, whitespace and raw lexical form — everything a lossless re-emit needs.
+ * @internal Split out so a long part can run them in tasks of their own.
  */
-export function readXml(
+export function preflightXml(
   xml: string,
   limits: XmlLimits = { maxBytes: XML_HARD_MAX_BYTES }
-): XmlResult {
+): XmlChecked {
+  const steps = preflightXmlSteps(xml, limits);
+  for (;;) {
+    const next = steps.next();
+    if (next.done) return next.value;
+  }
+}
+
+/** @internal {@link preflightXml}, yielding between its whole-part scans. */
+export function* preflightXmlSteps(
+  xml: string,
+  limits: XmlLimits = { maxBytes: XML_HARD_MAX_BYTES }
+): Generator<void, XmlChecked> {
   if (
     !validLimit(limits.maxBytes) ||
     (limits.maxElements !== undefined && !validLimit(limits.maxElements))
@@ -334,12 +350,78 @@ export function readXml(
   if (exceedsUtf8Bytes(xml, maxBytes)) return { ok: false, reason: 'too-large' };
   const forbidden = preflightForbiddenXml(xml);
   if (forbidden) return { ok: false, reason: forbidden };
+  yield;
   const preflight = preflightElementCount(xml, maxElements);
   if (preflight) return { ok: false, reason: preflight };
+  yield;
   const depthPreflight = preflightDepth(xml);
   if (depthPreflight) return { ok: false, reason: depthPreflight };
-  if (XMLValidator.validate(xml) !== true) return { ok: false, reason: 'parse-error' };
+  return { ok: true, maxElements };
+}
 
+/** @internal Whether the whole part is well-formed, as `readXml` decides it. */
+export function validateWholeXml(xml: string): boolean {
+  return XMLValidator.validate(xml) === true;
+}
+
+/** An element budget shared by every fragment of one part. */
+export interface XmlElementBudget {
+  count: number;
+  readonly maxElements: number;
+}
+
+/** Read XML into an ordered tree, refusing DTDs/entities and bounding size. */
+/**
+ * Read XML at the trust boundary: bounded, entity-free, and fidelity-preserving.
+ *
+ * Pre-rejects DTDs and entity constructs, disables expansion and value coercion, and keeps child
+ * order, attributes, whitespace and raw lexical form — everything a lossless re-emit needs.
+ */
+export function readXml(
+  xml: string,
+  limits: XmlLimits = { maxBytes: XML_HARD_MAX_BYTES }
+): XmlResult {
+  const checked = preflightXml(xml, limits);
+  if (!checked.ok) return checked;
+  if (!validateWholeXml(xml)) return { ok: false, reason: 'parse-error' };
+  return parseChecked(xml, 0, { count: 0, maxElements: checked.maxElements }, false);
+}
+
+/**
+ * Parse one run of sibling content from a part that already passed {@link preflightXml} and
+ * {@link validateWholeXml} whole, at `depth`, against the part's shared `budget`. The run
+ * must be a balanced content sequence; it is read inside a neutral wrapper element.
+ *
+ * @internal For reading a long part in tasks of its own.
+ */
+export function readXmlFragment(
+  fragment: string,
+  depth: number,
+  budget: XmlElementBudget
+): XmlResult {
+  const wrapped = `<r>${fragment}</r>`;
+  // The parser builds a tree from an unbalanced run without complaint, so a cut in the wrong
+  // place must fail here rather than read as different content.
+  if (XMLValidator.validate(wrapped) !== true) return { ok: false, reason: 'parse-error' };
+  return parseChecked(wrapped, depth, budget, true);
+}
+
+/**
+ * Parse a whole document that already passed {@link preflightXml} and {@link validateWholeXml}
+ * (or a document assembled from such a part), against `budget`.
+ *
+ * @internal For reading a long part in tasks of its own.
+ */
+export function readCheckedXml(xml: string, budget: XmlElementBudget): XmlResult {
+  return parseChecked(xml, 0, budget, false);
+}
+
+function parseChecked(
+  xml: string,
+  depth: number,
+  budget: XmlElementBudget,
+  wrapped: boolean
+): XmlResult {
   let raw: unknown;
   try {
     raw = parser.parse(xml);
@@ -347,10 +429,13 @@ export function readXml(
     return { ok: false, reason: 'parse-error' };
   }
   try {
-    return {
-      ok: true,
-      nodes: convert(raw as FxpNode[], 0, { count: 0, maxElements }),
-    };
+    let items = raw as FxpNode[];
+    if (wrapped) {
+      const wrapper = items.length === 1 ? items[0]!['r'] : undefined;
+      if (!Array.isArray(wrapper)) return { ok: false, reason: 'parse-error' };
+      items = wrapper as FxpNode[];
+    }
+    return { ok: true, nodes: convert(items, depth, budget) };
   } catch (e) {
     return {
       ok: false,
@@ -386,11 +471,7 @@ function cdataText(value: unknown): string {
     .join('');
 }
 
-function convert(
-  items: FxpNode[],
-  depth: number,
-  budget: { count: number; maxElements: number }
-): XmlNode[] {
+function convert(items: FxpNode[], depth: number, budget: XmlElementBudget): XmlNode[] {
   if (depth > MAX_DEPTH) throw new DepthError();
   const out: XmlNode[] = [];
   for (const item of items) {

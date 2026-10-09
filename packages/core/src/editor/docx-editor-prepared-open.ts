@@ -4,6 +4,8 @@
 // mounts must never share one. An entry whose mount never comes dies with its bytes.
 
 import { openTreeSession, type OpenTreeSessionResult } from '@docx-editor.dev/core/binding';
+import { openTreeSessionFromPackage } from '../binding/tree-session.ts';
+import { readOoxmlPackageSteps } from '../store/package/ooxml-package.ts';
 import type { ReviewModuleContribution } from '../contracts/modules.ts';
 import type { TreeDocxSessionView } from '../binding/tree-session-contract.ts';
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
@@ -34,6 +36,35 @@ export function prepareOpen(
   );
   prepared.set(bytes, opened);
   return opened;
+}
+
+/**
+ * {@link prepareOpen} in steps of about {@link FONT_WARM_STEP_MS}: the package is read in
+ * short tasks (a long part reads in many), then the session opens and `then` decides the
+ * steps after it. A large document parsed in one task for seconds.
+ */
+export function prepareOpenSteps(
+  bytes: Uint8Array,
+  review: { readonly reviewModel?: ReviewModuleContribution },
+  then: (opened: OpenTreeSessionResult) => ReturnType<Step>
+): Step {
+  const reader = readOoxmlPackageSteps(bytes);
+  const step: Step = () => {
+    const deadline = performance.now() + FONT_WARM_STEP_MS;
+    for (;;) {
+      const next = reader.next();
+      if (next.done) {
+        const opened = openTreeSessionFromPackage(
+          next.value,
+          review.reviewModel ? { reviewModel: review.reviewModel } : {}
+        );
+        prepared.set(bytes, opened);
+        return then(opened);
+      }
+      if (performance.now() >= deadline) return step;
+    }
+  };
+  return step;
 }
 
 /**

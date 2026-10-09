@@ -295,15 +295,19 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const openScheduler = createOpenScheduler({
     mount: (bytes) => mountBytes(bytes),
     continueOpen: (budgetMs) => !surface || preparedOpen.continueOpen(surface, budgetMs),
-    prepare: (bytes) => {
-      const opened = preparedOpen.prepareOpen(bytes, reviewModelOption(modules, reportDiagnostic));
-      // Fonts resolved now are laid out once, by the mount, not a second time after it.
-      // Their whole-document family scan runs in a task of its own, after this parse.
-      if (!opened.ok || deferredRefreshBytes === bytes) return;
-      preparedFontSession = opened.session;
-      const current = () => preparedFontSession === opened.session;
-      return preparedOpen.openSteps(opened.session, current, () => liveFonts.schedule(true));
-    },
+    // The package reads in short tasks. Fonts resolved before the mount are laid out once, by
+    // the mount, not a second time after it; their family scan also runs in short tasks.
+    prepare: (bytes) =>
+      preparedOpen.prepareOpenSteps(
+        bytes,
+        reviewModelOption(modules, reportDiagnostic),
+        (opened) => {
+          if (!opened.ok || deferredRefreshBytes === bytes) return;
+          preparedFontSession = opened.session;
+          const current = () => preparedFontSession === opened.session;
+          return preparedOpen.openSteps(opened.session, current, () => liveFonts.schedule(true));
+        }
+      ),
     scheduled: () => {
       bump();
       emitSelectionChange();

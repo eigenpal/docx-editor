@@ -19,6 +19,7 @@
 // (treated as absent) unless it decides the type of a part the document needs.
 
 import { textboxFallbackExportPackage } from './textbox-fallback-export.ts';
+import { readOoxmlPartSteps } from './ooxml-part-steps.ts';
 import {
   readZip,
   writeZip,
@@ -51,7 +52,6 @@ import {
   type OverrideRecord,
 } from './content-types.ts';
 import {
-  readOoxmlPart,
   serializeOoxmlPart,
   type OoxmlPart,
   type OoxmlReadRejection,
@@ -421,8 +421,27 @@ export function readOoxmlPackage(
   bytes: Uint8Array,
   limits: OoxmlPackageLimits = {}
 ): OoxmlPackageResult {
+  const steps = readOoxmlPackageSteps(bytes, limits);
+  for (;;) {
+    const next = steps.next();
+    if (next.done) return next.value;
+  }
+}
+
+/**
+ * {@link readOoxmlPackage}, yielding between units of work: after the unzip, and inside a
+ * long XML part (see `ooxml-part-steps.ts`). A caller that stops between yields gives the page
+ * a turn while a large document reads; the answer is the same either way.
+ *
+ * @internal
+ */
+export function* readOoxmlPackageSteps(
+  bytes: Uint8Array,
+  limits: OoxmlPackageLimits = {}
+): Generator<void, OoxmlPackageResult> {
   packageReadCount += 1;
   const zip = readZip(bytes, limits.zip ?? DEFAULT_ZIP_LIMITS);
+  yield;
   if (!zip.ok)
     return {
       ok: false,
@@ -564,7 +583,11 @@ export function readOoxmlPackage(
     }
     const decoded = decodeXmlBytes(data, limits.xml);
     if (!decoded.ok) return { ok: false, reason: decoded.reason, detail: partName };
-    const read = readOoxmlPart(decoded.xml, { name: normalized.partName, contentType }, limits.xml);
+    const read = yield* readOoxmlPartSteps(
+      decoded.xml,
+      { name: normalized.partName, contentType },
+      limits.xml
+    );
     if (!read.ok) return { ok: false, reason: read.reason, detail: partName };
     parts.set(normalized.partName, read.part);
   }

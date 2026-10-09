@@ -6,6 +6,12 @@
 // re-exported from here, so importers keep one module to reach for.
 
 import { readXml, type XmlLimits, type XmlNode, type XmlRejection } from './xml-reader.ts';
+import { noteKindCompatible } from './ooxml-note-kinds.ts';
+import {
+  BLANK_TEXT,
+  canonicalLegacyChildren,
+  XML_INDENTATION_TEXT,
+} from './ooxml-text-children.ts';
 import { isXmlNCName } from './qname.ts';
 import { candidateSdtKind } from './ooxml-sdt.ts';
 import {
@@ -1607,7 +1613,12 @@ function wmlKindFor(localName: string, parentLocalName: string | undefined): Kno
   return KNOWN_WML_ELEMENTS[localName] ?? 'generic';
 }
 
-function deepFreezeNode(node: OoxmlNode): OoxmlNode {
+/**
+ * @internal Freeze `node` and everything under it. A frozen node is skipped whole: reads
+ * freeze bottom-up, so its subtree is frozen already.
+ */
+export function deepFreezeNode(node: OoxmlNode): OoxmlNode {
+  if (Object.isFrozen(node)) return node;
   if (node.kind === 'textValue') return Object.freeze(node);
   // Equal attribute lists are shared across elements, so most are frozen already.
   if (!Object.isFrozen(node.attributes)) {
@@ -1766,55 +1777,29 @@ function preserveGovernsChildren(kind: KnownKind | 'generic'): boolean {
   return kind === 'generic' || WML_TEXT_KINDS.has(kind) || DRAWING_TEXT_KINDS.has(kind);
 }
 
-/** Text that is insignificant between children when no `xml:space="preserve"` is in scope. */
-const BLANK_TEXT = /^\s*$/;
-
 /**
- * Text that is indentation under an inherited `xml:space="preserve"`: XML whitespace only
- * (`S` in XML 1.0). `\s` also matches U+00A0, U+3000 and U+FEFF, which are authored
- * characters here; any of them keeps every text node and the generic fallback.
+ * One element's read state between opening it and closing it over its children.
+ *
+ * @internal The stepped part read converts the body's children in tasks of their own between
+ * {@link openElement} and {@link closeElement}; the one-shot read does all three at once.
  */
-const XML_INDENTATION_TEXT = /^[ \t\r\n]*$/;
-
-function canonicalLegacyChildren(
-  children: readonly XmlNode[],
-  preserve: boolean,
-  isWmlText: boolean,
-  blank: RegExp = BLANK_TEXT
-): readonly XmlNode[] {
-  // Whitespace stripping and adjacent-text merging only apply to TEXT children; the
-  // structural bulk of a part has none, and skipping the filter/merge allocation there
-  // is a measurable parse win on long documents.
-  if (!children.some((child) => child.type === 'text')) return children;
-  const hasElement = children.some((child) => child.type === 'element');
-  const hasNonWhitespaceText = children.some(
-    (child) => child.type === 'text' && !blank.test(child.value)
-  );
-  const retained = children.filter(
-    (child) =>
-      child.type === 'element' ||
-      preserve ||
-      isWmlText ||
-      !hasElement ||
-      hasNonWhitespaceText ||
-      !blank.test(child.value)
-  );
-  const merged: XmlNode[] = [];
-  for (const child of retained) {
-    const previous = merged[merged.length - 1];
-    if (child.type === 'text' && previous?.type === 'text') {
-      merged[merged.length - 1] = {
-        type: 'text',
-        value: previous.value + child.value,
-      };
-    } else {
-      merged.push(child);
-    }
-  }
-  return merged;
+export interface OpenedElement {
+  readonly metadata: OoxmlReadMetadata;
+  readonly partName: string;
+  readonly path: string;
+  readonly name: ReturnType<typeof resolveElementName>;
+  readonly declarations: ReturnType<typeof namespaceDeclarations>;
+  readonly resolvedAttributes: ReturnType<typeof resolveAttributes>;
+  readonly attributes: readonly OoxmlAttribute[];
+  readonly preserve: boolean;
+  readonly candidateKind: KnownKind | 'generic';
+  readonly childParent: DrawingParentContext;
+  readonly parent: DrawingParentContext | undefined;
+  readonly retainedChildren: readonly XmlNode[];
 }
 
-function convertElement(
+/** @internal Names, attributes, scope and candidate kind of `element`, before its children. */
+export function openElement(
   element: LegacyElement,
   metadata: OoxmlReadMetadata,
   inherited: ReadonlyMap<string, string>,
@@ -1824,7 +1809,7 @@ function convertElement(
   parentWmlLocalName?: string,
   parentCandidate: KnownKind | 'generic' | undefined = undefined,
   parent?: DrawingParentContext
-): OoxmlElement {
+): OpenedElement {
   const declarations = namespaceDeclarations(element, inherited);
   const name = resolveElementName(element.name, declarations.bindings);
   const resolvedAttributes = resolveAttributes(element, declarations.bindings);
@@ -1871,26 +1856,69 @@ function convertElement(
     localName: name.localName,
     attributes,
   };
-  const children = retainedChildren.map((child, index): OoxmlNode => {
-    const childPath = `${path}.${index}`;
-    if (child.type === 'text')
-      return {
-        id: `${partName}#${childPath}`,
-        kind: 'textValue',
-        value: child.value,
-      };
-    return convertElement(
-      child,
-      metadata,
-      declarations.bindings,
-      partName,
-      childPath,
-      preserve,
-      childParent.wmlLocalName,
-      childParent.kind === 'generic' ? undefined : (childParent.kind as KnownKind),
-      childParent
-    );
-  });
+  return {
+    metadata,
+    partName,
+    path,
+    name,
+    declarations,
+    resolvedAttributes,
+    attributes,
+    preserve,
+    candidateKind,
+    childParent,
+    parent,
+    retainedChildren,
+  };
+}
+
+/** @internal {@link openElement} for `child`, the `index`th retained child of `opened`. */
+export function openChildOf(
+  opened: OpenedElement,
+  child: LegacyElement,
+  index: number
+): OpenedElement {
+  const { childParent } = opened;
+  return openElement(
+    child,
+    opened.metadata,
+    opened.declarations.bindings,
+    opened.partName,
+    `${opened.path}.${index}`,
+    opened.preserve,
+    childParent.wmlLocalName,
+    childParent.kind === 'generic' ? undefined : (childParent.kind as KnownKind),
+    childParent
+  );
+}
+
+/** @internal The read of `child`, the `index`th retained child of `opened`. */
+export function convertChildOf(opened: OpenedElement, child: XmlNode, index: number): OoxmlNode {
+  if (child.type === 'text')
+    return {
+      id: `${opened.partName}#${opened.path}.${index}`,
+      kind: 'textValue',
+      value: child.value,
+    };
+  const own = openChildOf(opened, child, index);
+  return closeElement(
+    own,
+    own.retainedChildren.map((grandchild, at) => convertChildOf(own, grandchild, at))
+  );
+}
+
+/** @internal The kind checks and the node of `opened`, over its converted children. */
+export function closeElement(opened: OpenedElement, children: readonly OoxmlNode[]): OoxmlElement {
+  const {
+    partName,
+    path,
+    name,
+    declarations,
+    resolvedAttributes,
+    attributes,
+    candidateKind,
+    parent,
+  } = opened;
   const attributesOk =
     resolvedAttributes.compatibleWithKnownNode &&
     (!resolvedAttributes.hasWmlVal ||
@@ -1934,68 +1962,27 @@ function convertElement(
   } as OoxmlElement;
 }
 
-/** Extra gates for typed note vocabulary — illegal id/type demotes fail-open. */
-function noteKindCompatible(
-  kind: KnownKind | 'generic',
-  localName: string,
-  attributes: readonly OoxmlAttribute[]
-): boolean {
-  if (
-    kind !== 'note' &&
-    kind !== 'noteReference' &&
-    kind !== 'noteRef' &&
-    kind !== 'separator' &&
-    kind !== 'continuationSeparator' &&
-    kind !== 'footnotes' &&
-    kind !== 'endnotes'
-  ) {
-    return true;
-  }
+function convertElement(
+  element: LegacyElement,
+  metadata: OoxmlReadMetadata,
+  inherited: ReadonlyMap<string, string>,
+  partName: string,
+  path: string,
+  inheritedPreserve: boolean
+): OoxmlElement {
+  const opened = openElement(element, metadata, inherited, partName, path, inheritedPreserve);
+  return closeElement(
+    opened,
+    opened.retainedChildren.map((child, index) => convertChildOf(opened, child, index))
+  );
+}
 
-  const attr = (local: string): string | undefined => {
-    for (const entry of attributes) {
-      if (entry.localName !== local) continue;
-      if (entry.namespaceUri === WML_NAMESPACE_URI || entry.namespaceUri === '') return entry.value;
-    }
-    return undefined;
-  };
-
-  if (kind === 'note') {
-    if (localName !== 'footnote' && localName !== 'endnote') return false;
-    const id = attr('id');
-    if (id === undefined || !/^-?\d{1,10}$/.test(id)) return false;
-    const n = Number(id);
-    if (!Number.isInteger(n) || n < -0x80000000 || n > 0x7fffffff) return false;
-    const type = attr('type');
-    if (
-      type !== undefined &&
-      type !== 'normal' &&
-      type !== 'separator' &&
-      type !== 'continuationSeparator' &&
-      type !== 'continuationNotice'
-    ) {
-      return false;
-    }
-    return true;
-  }
-
-  if (kind === 'noteReference') {
-    if (localName !== 'footnoteReference' && localName !== 'endnoteReference') return false;
-    const id = attr('id');
-    if (id === undefined || !/^-?\d{1,10}$/.test(id)) return false;
-    const n = Number(id);
-    return Number.isInteger(n) && n >= -0x80000000 && n <= 0x7fffffff;
-  }
-
-  if (kind === 'noteRef') {
-    return localName === 'footnoteRef' || localName === 'endnoteRef';
-  }
-
-  if (kind === 'separator') return localName === 'separator';
-  if (kind === 'continuationSeparator') return localName === 'continuationSeparator';
-  if (kind === 'footnotes') return localName === 'footnotes';
-  if (kind === 'endnotes') return localName === 'endnotes';
-  return true;
+/** @internal The prefixes every part's root inherits. */
+export function rootBindings(): Map<string, string> {
+  return new Map([
+    ['xml', XML_NAMESPACE_URI],
+    ['xmlns', XMLNS_NAMESPACE_URI],
+  ]);
 }
 
 /**
@@ -2017,17 +2004,7 @@ export function readOoxmlPart(
   if (roots.length !== 1) return { ok: false, reason: 'multiple-roots' };
   try {
     const root = deepFreezeNode(
-      convertElement(
-        roots[0],
-        new OoxmlReadMetadata(),
-        new Map([
-          ['xml', XML_NAMESPACE_URI],
-          ['xmlns', XMLNS_NAMESPACE_URI],
-        ]),
-        metadata.name,
-        '0',
-        false
-      )
+      convertElement(roots[0], new OoxmlReadMetadata(), rootBindings(), metadata.name, '0', false)
     ) as OoxmlElement;
     return {
       ok: true,
