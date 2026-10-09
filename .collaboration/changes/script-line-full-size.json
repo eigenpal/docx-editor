@@ -6,7 +6,8 @@
   "reason": "Only line geometry changes. Document nodes, text offsets, operations, snapshots, and transport messages stay the same.",
   "tests": [
     "packages/core/src/layout/__tests__/script-line-full-size.test.ts",
-    "packages/core/src/layout/__tests__/table-cell-end-mark.test.ts"
+    "packages/core/src/layout/__tests__/table-cell-end-mark.test.ts",
+    "packages/core/src/layout/__tests__/shifted-run-line-metrics.test.ts"
   ],
   "changeset": "script-line-full-size",
   "migration": null
