@@ -40,8 +40,9 @@ const resolvers = new WeakMap<object, WeakMap<object, WeakMap<object, Resolver>>
 /**
  * A read-only `w:pPr` view that names `styleId` as its paragraph style.
  *
- * Only the cascade reads it, and the cascade reads child names and attributes. It lets a write
- * that also changes the style resolve the direction the paragraph will have, not the one it had.
+ * Only the cascade reads it, and the cascade reads child names and attributes. It has no real node
+ * id, so it must never reach the store, an op, or a journal. It lets a write that also changes the
+ * style resolve the direction the paragraph will have, not the one it had.
  */
 function withParagraphStyle(pPr: OoxmlNode | undefined, styleId: string): OoxmlNode {
   const kept =
