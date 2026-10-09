@@ -26,6 +26,7 @@ import {
   chromeSlotIsToggle,
   hasOpenNestedPopup,
   listenForPopupEscape,
+  listenForPopupFocusLeave,
   type ChromeSlotId,
 } from '@docx-editor.dev/core/editor';
 import { useNavigationViewportElement } from '../navigation/navigation-layout';
@@ -178,20 +179,27 @@ export function ToolbarOverflow({ sections, className }: ToolbarOverflowProps) {
     // Escape in the capture phase, ahead of the surface: a click opens the panel with focus
     // left in the pages, and the surface would spend the key on its own mode first. An open
     // nested popup (a table menu, a picker) takes this Escape, and the panel stays open.
+    const contains = (node: Node) =>
+      rootRef.current?.contains(node) === true || panelRef.current?.contains(node) === true;
     const stopEscape = root
       ? listenForPopupEscape({
           popup: root,
-          contains: (node) =>
-            rootRef.current?.contains(node) === true || panelRef.current?.contains(node) === true,
+          contains,
+          chromeRoot: () => rootRef.current?.closest('.docx-editor'),
           editorElements: () => [viewportRef.current],
           skip: () => hasOpenNestedPopup(panelRef.current),
           close,
         })
       : undefined;
+    // Focus that leaves the panel, such as Ctrl+F into the find field, closes it.
+    const stopFocus = root
+      ? listenForPopupFocusLeave({ popup: root, contains, close: () => setOpen(false) })
+      : undefined;
     document.addEventListener('mousedown', onPointerDown, true);
     return () => {
       document.removeEventListener('mousedown', onPointerDown, true);
       stopEscape?.();
+      stopFocus?.();
     };
   }, [open, close]);
 

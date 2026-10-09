@@ -11,6 +11,7 @@ import { useEditorState } from '../useEditorState';
 import { useReviewAuthors } from '../useReviewAuthors';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
+import { usePopupEscape } from './usePopupEscape';
 
 const selectHiddenAuthors = (snapshot: EditorSnapshot): readonly string[] =>
   snapshot.hiddenReviewAuthors ?? [];
@@ -44,19 +45,16 @@ export function ToolbarReviewers({ className, hidden, icon }: ToolbarReviewersPr
       if (rootRef.current?.contains(event.target as Node)) return;
       setOpen(false);
     };
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      setOpen(false);
-      triggerRef.current?.focus();
-    };
     document.addEventListener('mousedown', onMouseDown, true);
-    document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('mousedown', onMouseDown, true);
-      document.removeEventListener('keydown', onKeyDown);
     };
   }, [open]);
+  // Escape through the shared rule: a host input keeps its own Escape.
+  usePopupEscape(open, rootRef, (fromInside) => {
+    setOpen(false);
+    if (fromInside) triggerRef.current?.focus();
+  });
 
   const onMenuKeyDown = useCallback((event: React.KeyboardEvent): void => {
     const items = [

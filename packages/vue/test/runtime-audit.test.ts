@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/rules-of-hooks -- Vue composables in defineComponent setup */
 
 import './dom-setup.ts';
+import { editorInstanceScope } from '@docx-editor.dev/core/editor';
 
 import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { createApp, createSSRApp, h, nextTick, ref } from 'vue';
@@ -10,7 +11,6 @@ import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
 import { DocxEditorNotesChrome } from '../src/editor/DocxEditorNotes';
-import { editorScopeFor } from '../src/editor/editor-scope';
 import { DocxEditorNavigation } from '../src/editor/navigation/DocxEditorNavigation';
 import { DocxEditorToolbar, ToolbarAction, ToolbarSeparator } from '../src/editor/toolbar';
 import {
@@ -340,8 +340,8 @@ describe('scoped notes DOM lookup', () => {
     expect(pagesRoots.length).toBe(2);
     const firstChrome = container.querySelector('.editor-one [data-docx-notes-chrome]');
     const secondChrome = container.querySelector('.editor-two [data-docx-notes-chrome]');
-    expect(editorScopeFor(firstChrome)).toBe(container.querySelector('.editor-one'));
-    expect(editorScopeFor(secondChrome)).toBe(container.querySelector('.editor-two'));
+    expect(editorInstanceScope(firstChrome)).toBe(container.querySelector('.editor-one'));
+    expect(editorInstanceScope(secondChrome)).toBe(container.querySelector('.editor-two'));
     expect(editors).toHaveLength(2);
     const scopeSpies = editors.map((editor) => spyOn(editor, 'setActiveScope'));
     const firstReference = document.createElement('button');

@@ -163,6 +163,72 @@ describe('DocxEditorToolbar composition', () => {
     view.unmount();
   });
 
+  test('Escape from a host input closes the editing-mode menu and keeps its default', async () => {
+    const view = mountEditorTree(() => h(DocxEditorToolbar), POPUP_ESCAPE_SOURCE);
+    await flush();
+    const host = document.createElement('input');
+    document.body.append(host);
+    try {
+      const trigger = view.container.querySelector<HTMLButtonElement>(
+        '[data-testid="editing-mode-trigger"]'
+      )!;
+      trigger.click();
+      await flush();
+      expect(trigger.getAttribute('aria-expanded')).toBe('true');
+      const escape = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+      });
+      host.dispatchEvent(escape);
+      await flush();
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+      expect(escape.defaultPrevented).toBe(false);
+    } finally {
+      host.remove();
+      view.unmount();
+    }
+  });
+
+  test('a dropdown inside More takes the first Escape, and the panel the second', async () => {
+    globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
+    const view = mountEditorTree(() => h(DocxEditorToolbar), POPUP_ESCAPE_SOURCE);
+    await flush();
+    const toolbar = view.container.querySelector<HTMLElement>('[data-testid="docx-toolbar"]')!;
+    Object.defineProperty(toolbar, 'clientWidth', { configurable: true, get: () => 280 });
+    for (const group of toolbar.querySelectorAll<HTMLElement>('[data-toolbar-group]')) {
+      Object.defineProperty(group, 'offsetWidth', { configurable: true, get: () => 90 });
+    }
+    for (const observer of [...MockResizeObserver.instances]) observer.flush();
+    await flush();
+    toolbar.querySelector<HTMLButtonElement>('[data-slot="toolbar.more"]')!.click();
+    await flush();
+    const panelOpen = () =>
+      view.container.querySelector('[data-testid="toolbar-overflow-panel"]') !== null;
+    const panel = view.container.querySelector('[data-testid="toolbar-overflow-panel"]')!;
+    const dropdown = panel.querySelector<HTMLButtonElement>(
+      '[data-slot="alignment"] [aria-haspopup]'
+    )!;
+    expect(dropdown).not.toBeNull();
+    dropdown.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    dropdown.click();
+    await flush();
+    expect(dropdown.getAttribute('aria-expanded')).toBe('true');
+    const pages = view.container.querySelector<HTMLElement>('.docx-pages')!;
+    const escape = async () => {
+      pages.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+      );
+      await flush();
+    };
+    await escape();
+    expect(dropdown.getAttribute('aria-expanded')).toBe('false');
+    expect(panelOpen()).toBe(true);
+    await escape();
+    expect(panelOpen()).toBe(false);
+    view.unmount();
+  });
+
   test('collapses contextual table chrome before ordinary formatting groups', async () => {
     globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
     const view = mountEditorTree(() => h(DocxEditorToolbar), SOURCE_WITH_TABLE);

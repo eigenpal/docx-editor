@@ -8,10 +8,19 @@
 //
 // THE RULE, shared by both adapters: while the popup is open, listen on its ownerDocument
 // in the CAPTURE phase. On Escape (never mid-composition), close the popup. When the key
-// comes from inside this editor (the popup, the instance's `.docx-editor` container, or
-// its viewport), also prevent the default and stop propagation, so the surface does not
-// spend the same key on its mode. When the key comes from elsewhere (a host input, a host
-// dialog, another editor), close the popup and let the key go on untouched.
+// comes from inside this editor (the popup, the chrome root that holds it, the instance's
+// `.docx-editor` container, or its viewport), also prevent the default and stop
+// propagation, so the surface does not spend the same key on its mode. When the key comes
+// from elsewhere (a host input, a host dialog, another editor), close the popup and let the
+// key go on untouched. Ownership reads the event's composed path, so a popup inside a
+// shadow root still recognises its own keys.
+//
+// NESTED POPUPS: listeners on one node run in the order they were added, so an outer panel
+// hears Escape before a dropdown opened inside it. The panel passes `skip` with
+// `hasOpenNestedPopup`, the dropdown closes, and the next Escape closes the panel.
+//
+// FOCUS: a popup also closes when focus moves somewhere outside it and outside the pages,
+// such as the find field or a host input. See `listenForPopupFocusLeave`.
 
 /** How {@link listenForPopupEscape} decides and acts. @internal */
 export interface PopupEscapeOptions {
@@ -21,6 +30,11 @@ export interface PopupEscapeOptions {
   readonly contains: (node: Node) => boolean;
   /** Elements of this editor beyond its `.docx-editor` container, such as the viewport. */
   readonly editorElements?: () => readonly (Element | null | undefined)[];
+  /**
+   * The chrome root that holds the popup, such as the toolbar or the menu bar. It scopes
+   * itself with its own `.docx-editor` class, and a key from it counts as this editor's.
+   */
+  readonly chromeRoot?: () => Element | null | undefined;
   /** Return true to leave this Escape to someone else (an input that owns the key). */
   readonly skip?: (event: KeyboardEvent) => boolean;
   /** Close the popup. `fromInside` is true when the key came from inside the popup. */
@@ -55,14 +69,17 @@ export function listenForPopupEscape(options: PopupEscapeOptions): () => void {
   const onKeyDown = (event: KeyboardEvent): void => {
     if (event.key !== 'Escape' || event.isComposing || event.keyCode === 229) return;
     if (options.skip?.(event)) return;
-    const target = event.target instanceof Node ? event.target : null;
+    const path = event.composedPath();
+    const origin = path[0] ?? event.target;
+    const target = origin instanceof Node ? origin : null;
     const fromInside = target !== null && options.contains(target);
+    const owners = [
+      editorInstanceScope(options.popup),
+      options.chromeRoot?.(),
+      ...(options.editorElements?.() ?? []),
+    ];
     const own =
-      fromInside ||
-      (target !== null &&
-        [editorInstanceScope(options.popup), ...(options.editorElements?.() ?? [])].some(
-          (element) => element?.contains(target) === true
-        ));
+      fromInside || owners.some((element) => element != null && path.includes(element));
     options.close(fromInside);
     if (!own) return;
     event.preventDefault();
@@ -83,4 +100,34 @@ const NESTED_POPUP = '[aria-expanded="true"], [role="menu"], [role="listbox"], [
  */
 export function hasOpenNestedPopup(panel: Element | null): boolean {
   return panel?.querySelector(NESTED_POPUP) != null;
+}
+
+/** How {@link listenForPopupFocusLeave} decides. @internal */
+export interface PopupFocusLeaveOptions {
+  /** The popup's root. Its `ownerDocument` receives the listener. */
+  readonly popup: HTMLElement;
+  /** Whether a node belongs to the popup (its trigger, list, or a separate panel). */
+  readonly contains: (node: Node) => boolean;
+  /** Close the popup. */
+  readonly close: () => void;
+}
+
+/**
+ * Close an open popup when focus moves outside it, for example to the find field after
+ * Ctrl+F or to a host input. Focus that lands in the painted pages keeps the popup open:
+ * a toolbar click leaves the caret there while the popup is open. Returns the disposer.
+ *
+ * @internal
+ */
+export function listenForPopupFocusLeave(options: PopupFocusLeaveOptions): () => void {
+  const owner = options.popup.ownerDocument;
+  const onFocusIn = (event: FocusEvent): void => {
+    const origin = event.composedPath()[0] ?? event.target;
+    if (!(origin instanceof Node) || options.contains(origin)) return;
+    const element = origin instanceof Element ? origin : origin.parentElement;
+    if (element?.closest('.docx-pages')) return;
+    options.close();
+  };
+  owner.addEventListener('focusin', onFocusIn, true);
+  return () => owner.removeEventListener('focusin', onFocusIn, true);
 }

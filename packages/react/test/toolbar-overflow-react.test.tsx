@@ -437,6 +437,38 @@ describe('toolbar overflow integration', () => {
     nested.remove();
   });
 
+  test('a dropdown inside More takes the first Escape, and the panel the second', async () => {
+    installResizeObserverMock();
+    const { view } = mountToolbar(
+      <DocxEditorToolbar t={(key) => (key === 'formattingBar.more' ? 'More' : key)} />
+    );
+    await collapseToolbar(view, { barWidth: 280 });
+    await act(async () => {
+      (view.getByLabelText('More') as HTMLButtonElement).click();
+    });
+    const panel = view.getByTestId('toolbar-overflow-panel');
+    const dropdown = panel.querySelector<HTMLButtonElement>('[data-slot="alignment"] [aria-haspopup]');
+    expect(dropdown).not.toBeNull();
+    await act(async () => {
+      dropdown!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      dropdown!.click();
+    });
+    expect(dropdown!.getAttribute('aria-expanded')).toBe('true');
+    const pages = view.container.querySelector<HTMLElement>('.docx-pages')!;
+    const escape = async () => {
+      await act(async () => {
+        pages.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+        );
+      });
+    };
+    await escape();
+    expect(dropdown!.getAttribute('aria-expanded')).toBe('false');
+    expect(view.queryByTestId('toolbar-overflow-panel')).not.toBeNull();
+    await escape();
+    expect(view.queryByTestId('toolbar-overflow-panel')).toBeNull();
+  });
+
   test('Escape closes the More dialog before the header scope or the format painter', async () => {
     installResizeObserverMock();
     const { view, editor } = mountToolbar(

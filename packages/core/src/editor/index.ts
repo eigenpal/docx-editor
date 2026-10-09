@@ -279,6 +279,7 @@ export {
   editorInstanceScope,
   hasOpenNestedPopup,
   listenForPopupEscape,
+  listenForPopupFocusLeave,
   type PopupEscapeOptions,
 } from './popup-escape.ts';
 export {

@@ -1,3 +1,4 @@
+import { editorInstanceScope } from '@docx-editor.dev/core/editor';
 import { DocxEditorExportDialog } from '../DocxEditorExportDialog';
 import { DocxEditorPrintDialog } from '../DocxEditorPrintDialog';
 import { usePopupConfig } from '../popup-config';
@@ -44,7 +45,6 @@ import {
   type ChromeMenuId,
 } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
-import { editorScopeFor } from '../editor-scope';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 import { DocxEditorPageSetupDialog } from '../DocxEditorPageSetup';
@@ -87,6 +87,7 @@ import {
 import { MenuHelp, MenuReportIssue } from './menu-help';
 import { useScopeClassName } from '../scope-context';
 import { MenuReview, MenuReviewers } from './Reviewers';
+import { usePopupEscape } from '../toolbar/usePopupEscape';
 
 /** The pinned part for each registry menu, so the default bar is derived, not hand-listed. */
 const MENU_PARTS: Record<ChromeMenuId, MenuPartComponent> = {
@@ -270,16 +271,20 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       if (root && event.target instanceof Node && root.contains(event.target)) return;
       setOpenMenu(null);
     };
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') setOpenMenu(null);
-    };
     document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
     };
   }, [openMenu]);
+  // Escape from outside the bar, such as the pages, goes through the shared rule, and a host
+  // input keeps its own Escape. Keys inside the bar stay with the menus' own handlers, which
+  // close one submenu at a time and return focus to the trigger.
+  usePopupEscape(
+    openMenu !== null,
+    rootRef,
+    () => setOpenMenu(null),
+    (event) => event.target instanceof Node && rootRef.current?.contains(event.target) === true
+  );
 
   // Opening a menu also claims the tab stop, so Escape has a trigger to return to and a
   // later Tab leaves from where the user actually was.
@@ -328,7 +333,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
         ? () => {
             restoreExportFocus(rootRef.current);
             // The frame goes inside the editor, so a host's modal dialog does not make it inert.
-            void executePrint(editorScopeFor(rootRef.current) ?? rootRef.current ?? undefined);
+            void executePrint(editorInstanceScope(rootRef.current) ?? rootRef.current ?? undefined);
           }
         : undefined,
     [editor, printActive, executePrint]
@@ -354,12 +359,12 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       // an unrelated field, and two mounted editors both answer one keypress. The shortcut
       // belongs to the editor the user is actually in: the chrome, the painted surface, or
       // anything else under this instance's root.
-      // `editorScopeFor` finds the instance container — the `.docx-editor` that holds the
+      // `editorInstanceScope` finds the instance container — the `.docx-editor` that holds the
       // painted pages, NOT the bar's own self-emitted styling root — so one containment
       // test covers the bar AND the document. A composition with no such container falls
       // back to the bar's own subtree, which is narrow but never wrong.
       const target = event.target as Node | null;
-      const scope = editorScopeFor(rootRef.current) ?? rootRef.current;
+      const scope = editorInstanceScope(rootRef.current) ?? rootRef.current;
       if (!target || !scope?.contains(target)) return;
       if (print) {
         // Checked first: on some layouts the P key types a character other than "p".

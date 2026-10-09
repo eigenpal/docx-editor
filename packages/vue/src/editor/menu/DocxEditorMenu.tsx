@@ -1,3 +1,4 @@
+import { editorInstanceScope } from '@docx-editor.dev/core/editor';
 import { DocxEditorExportDialog } from '../DocxEditorExportDialog';
 import { DocxEditorPrintDialog } from '../DocxEditorPrintDialog';
 import { usePopupConfig } from '../popup-config';
@@ -26,7 +27,6 @@ import {
   type ChromeMenuId,
 } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
-import { editorScopeFor } from '../editor-scope';
 import { useTranslation, type TranslationKey } from '../../i18n';
 import { DocxEditorPageSetupDialog } from '../DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from '../DocxEditorParagraphDialog';
@@ -69,6 +69,7 @@ import {
 import { MenuHelp, MenuReportIssue } from './menu-help';
 import { useScopeClassName } from '../scope-context';
 import { MenuReview, MenuReviewers } from './Reviewers';
+import { usePopupEscape } from '../toolbar/usePopupEscape';
 
 const MENU_PARTS: Record<ChromeMenuId, Component> = {
   file: MenuFile,
@@ -217,16 +218,21 @@ const DocxEditorMenuRoot = defineComponent({
         if (root && event.target instanceof Node && root.contains(event.target)) return;
         openMenu.value = null;
       };
-      const onKeyDown = (event: KeyboardEvent) => {
-        if (event.key === 'Escape') openMenu.value = null;
-      };
       document.addEventListener('mousedown', onPointerDown);
-      document.addEventListener('keydown', onKeyDown);
       onCleanup(() => {
         document.removeEventListener('mousedown', onPointerDown);
-        document.removeEventListener('keydown', onKeyDown);
       });
     });
+    // Escape from outside the bar, such as the pages, goes through the shared rule, and a
+    // host input keeps its own Escape. Keys inside the bar stay with the menus' handlers.
+    usePopupEscape(
+      () => openMenu.value !== null,
+      rootRef,
+      () => {
+        openMenu.value = null;
+      },
+      (event) => event.target instanceof Node && rootRef.value?.contains(event.target) === true
+    );
 
     const packagedOpen = () => fileInputRef.value?.click();
 
@@ -274,7 +280,7 @@ const DocxEditorMenuRoot = defineComponent({
         ? () => {
             restoreExportFocus(rootRef.value);
             // The frame goes inside the editor, so a host's modal dialog does not make it inert.
-            void printState.execute(editorScopeFor(rootRef.value) ?? rootRef.value ?? undefined);
+            void printState.execute(editorInstanceScope(rootRef.value) ?? rootRef.value ?? undefined);
           }
         : undefined
     );
@@ -297,7 +303,7 @@ const DocxEditorMenuRoot = defineComponent({
           const print = isChromePrintShortcut(event);
           if (key !== 's' && key !== 'o' && !print) return;
           const target = event.target as Node | null;
-          const scope = editorScopeFor(rootRef.value) ?? rootRef.value;
+          const scope = editorInstanceScope(rootRef.value) ?? rootRef.value;
           const root = rootRef.value;
           if (!target) return;
           const inScope = (scope?.contains(target) ?? false) || (root?.contains(target) ?? false);

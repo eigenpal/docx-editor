@@ -848,6 +848,29 @@ describe('the shaped parts', () => {
     ).toBe('suggesting');
   });
 
+  test('Escape from a host input closes the editing-mode menu and keeps its default', () => {
+    const { view } = mountToolbar(<DocxEditorToolbar />);
+    const host = document.createElement('input');
+    document.body.append(host);
+    try {
+      const trigger = view.container.querySelector<HTMLButtonElement>(
+        '[data-testid="editing-mode-trigger"]'
+      )!;
+      act(() => {
+        trigger.click();
+      });
+      expect(trigger.getAttribute('aria-expanded')).toBe('true');
+      const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      act(() => {
+        host.dispatchEvent(escape);
+      });
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+      expect(escape.defaultPrevented).toBe(false);
+    } finally {
+      host.remove();
+    }
+  });
+
   test('the style picker lists the DOCUMENT paragraph styles and a pick applies one', async () => {
     const styled = docx(
       '<w:p><w:r><w:t>hello</w:t></w:r></w:p>',

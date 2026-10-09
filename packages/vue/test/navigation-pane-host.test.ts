@@ -11,6 +11,7 @@ import { resolve } from 'node:path';
 import { h, nextTick, ref } from 'vue';
 import { zipSync, strToU8 } from 'fflate';
 import { DocxEditorNavigation } from '../src/editor/navigation';
+import { DocxEditorToolbar } from '../src/editor/toolbar';
 import {
   NAVIGATION_PANE_MIN_PAGE_ROOM,
   navigationPaneOverlays,
@@ -626,5 +627,40 @@ describe('page width', () => {
     expect(scroller.style.getPropertyValue('--docx-nav-shift')).toBe(
       `${navigationPaneReservation()}px`
     );
+  });
+});
+
+describe('an open toolbar popup and Ctrl/Cmd+F', () => {
+  test('moving focus into the find field closes the dropdown, so Escape reaches the pane', async () => {
+    const view = mountEditorTree(
+      () =>
+        h(
+          DocxEditorToolbar,
+          { preset: false, overflow: false },
+          { default: () => [h(DocxEditorToolbar.Alignment)] }
+        ),
+      SOURCE,
+      () => [h(DocxEditorNavigation)]
+    );
+    mounted.push(view);
+    await flush();
+    const scroller = q(view.container, '.docx-editor__scroll-container');
+    scroller.focus();
+    const trigger = q(view.container, '[data-slot="alignment"] [aria-haspopup]');
+    trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    trigger.click();
+    await flush();
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    await ctrlF(scroller);
+    await flush();
+    const input = q(view.container, '#docx-nav-panel-find .docx-nav__search-input');
+    expect(document.activeElement).toBe(input);
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    );
+    await flush();
+    expect(q(view.container, '.docx-nav').getAttribute('data-open')).toBe('false');
+    expect(document.activeElement).toBe(scroller);
   });
 });

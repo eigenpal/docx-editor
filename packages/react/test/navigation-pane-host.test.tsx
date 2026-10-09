@@ -23,6 +23,7 @@ import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorNavigation } from '../src/editor/navigation/DocxEditorNavigation.tsx';
+import { DocxEditorToolbar } from '../src/editor/toolbar/index.ts';
 import { inertBehindPane } from '../src/editor/navigation/navigation-keys.ts';
 import type { NavigationTab } from '../src/editor/navigation/useNavigationPane.ts';
 import {
@@ -648,5 +649,40 @@ describe('page width', () => {
     expect(scroller.style.getPropertyValue('--docx-nav-shift')).toBe(
       `${navigationPaneReservation()}px`
     );
+  });
+});
+
+describe('an open toolbar popup and Ctrl/Cmd+F', () => {
+  test('moving focus into the find field closes the dropdown, so Escape reaches the pane', async () => {
+    const { container } = render(
+      <DocxEditorRoot document={SOURCE}>
+        <DocxEditorToolbar preset={false} overflow={false}>
+          <DocxEditorToolbar.Alignment />
+        </DocxEditorToolbar>
+        <DocxEditorViewport>
+          <DocxEditorNavigation />
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    await settle();
+    const scroller = q(container, '.docx-editor__scroll-container');
+    scroller.focus();
+    const trigger = q(container, '[data-slot="alignment"] [aria-haspopup]');
+    act(() => {
+      trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      trigger.click();
+    });
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    ctrlF(scroller);
+    const input = q(container, '#docx-nav-panel-find .docx-nav__search-input');
+    expect(document.activeElement).toBe(input);
+    await settle();
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    act(() => {
+      fireEvent.keyDown(input, { key: 'Escape' });
+    });
+    expect(q(container, '.docx-nav').getAttribute('data-open')).toBe('false');
+    expect(document.activeElement).toBe(scroller);
   });
 });
