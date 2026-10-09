@@ -34,6 +34,7 @@ import {
   paragraphPropertiesOf,
 } from './surface-formatting.ts';
 import { createListStyleWrites } from './surface-list-style.ts';
+import { firstLineTwipsOf, tabIndentFor } from './surface-tab-indent.ts';
 import { directionalParagraphEntry } from './paragraph-direction-writes.ts';
 import type {
   PaginatedSurface,
@@ -145,6 +146,7 @@ type StructureMethods = Pick<
   | 'isListActive'
   | 'toggleList'
   | 'adjustIndent'
+  | 'indentWithTab'
   | 'setIndent'
   | 'setParagraphFormat'
   | 'canAdjustIndent'
@@ -451,6 +453,94 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     return twips === null || Math.abs(twips) > 9_999_999 ? 0 : twips;
   }
 
+  /** Increase/Decrease Indent over `touched`: a list level, or one tab stop of left indent. */
+  function stepIndent(touched: readonly string[], direction: 'increase' | 'decrease'): boolean {
+    const step = direction === 'increase' ? 1 : -1;
+    const ops: TreeDocOp[] = [];
+    for (const paragraphId of touched) {
+      const properties = paragraphPropertiesOf(currentLayout.value, paragraphId);
+      const marker = markerOf(paragraphId);
+      const level = marker?.level ?? null;
+      if (marker && level !== null) {
+        // A list item DEMOTES rather than shifting: `w:ilvl` is what picks the level's
+        // format out of numbering.xml, so the marker changes with the indent the way
+        // Word's Tab does. Nine levels exist (17.9.24); the ends are no-ops, not errors.
+        // A level the definition does not declare is DECLARED first — Word's own move,
+        // cycling its stock bullets and number formats by depth. The declaration lands
+        // outside the transaction, like `toggleList`'s `ensureListDefinition`: if the
+        // commit then fails, the extra level is unreferenced and harmless.
+        const next = level + step;
+        if (next < 0 || next > MAX_LIST_LEVEL) continue;
+        if (!ensureListLevel(marker, next)) continue;
+        ops.push({
+          op: 'setListLevel',
+          paragraphId,
+          level: next,
+        });
+        continue;
+      }
+      // The step moves from the EFFECTIVE indent (what the user sees, cascade included),
+      // but it is written as the paragraph's own formatting, merged over the paragraph's
+      // own `w:pPr` — an op whose base is the cascade is refused (`directParagraphProperties`).
+      const current = leftIndentTwipsOf(properties);
+      const next = Math.max(0, current + step * INDENT_STEP_TWIPS);
+      if (next === current) continue;
+      const direct = directParagraphProperties(storyPart(), paragraphId);
+      // Only the paragraph's OWN `w:ind` attributes are carried over: `w:ind` cascades
+      // attribute by attribute (17.3.1.12), so an inherited hanging survives untouched
+      // rather than being restated here.
+      const existing = direct.find((property) => property.localName === 'ind');
+      ops.push({
+        op: 'setParagraphProperties',
+        paragraphId,
+        properties: mergedProperties(direct, {
+          localName: 'ind',
+          // Zero is written rather than dropped: an authored `w:ind` may inherit a
+          // non-zero left from its style, and removing the attribute would let that
+          // come back instead of taking the outdent.
+          attributes: leftIndentAttributes(existing?.attributes, String(next)),
+        }),
+      });
+    }
+    if (ops.length === 0) return false;
+    return commitOverTarget(() => applyOps(ops, selectionMark()));
+  }
+
+  /** Exact indent values over `touched`; see `setIndent` for the field rules. */
+  function writeIndent(
+    touched: readonly string[],
+    update: Parameters<PaginatedSurface['setIndent']>[0]
+  ): boolean {
+    const ops: TreeDocOp[] = [];
+    for (const paragraphId of touched) {
+      // Merged over the paragraph's OWN `w:ind`, never the cascade the layout publishes:
+      // an op whose base is the cascade is refused, and `w:ind` carries four independent
+      // settings in one element, so naming one field must leave the others as authored.
+      const direct = directParagraphProperties(storyPart(), paragraphId);
+      const authored = direct.find((property) => property.localName === 'ind')?.attributes ?? {};
+      let attributes: Record<string, string> = { ...authored };
+      if (update.left !== undefined) {
+        attributes = writeIndentSide(attributes, 'left', 'start', update.left);
+      }
+      if (update.right !== undefined) {
+        attributes = writeIndentSide(attributes, 'right', 'end', update.right);
+      }
+      if (update.firstLine !== undefined) {
+        attributes = writeFirstLine(attributes, update.firstLine);
+      }
+      ops.push({
+        op: 'setParagraphProperties',
+        paragraphId,
+        properties: mergedProperties(direct, {
+          localName: 'ind',
+          ...(Object.keys(attributes).length > 0 ? { attributes } : {}),
+        }),
+      });
+    }
+    if (ops.length === 0) return false;
+    return commitOverTarget(() => applyOps(ops, selectionMark()));
+  }
+
   return {
     // The three inline units below REPLACE a selection, so they land at the plan's
     // `replaceAt`: in suggesting mode a deletion keeps the characters it strikes, and an
@@ -607,56 +697,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
 
     adjustIndent(direction) {
       const touched = targetParagraphs();
-      if (touched === null) return false;
-      const step = direction === 'increase' ? 1 : -1;
-      const ops: TreeDocOp[] = [];
-      for (const paragraphId of touched) {
-        const properties = paragraphPropertiesOf(currentLayout.value, paragraphId);
-        const marker = markerOf(paragraphId);
-        const level = marker?.level ?? null;
-        if (marker && level !== null) {
-          // A list item DEMOTES rather than shifting: `w:ilvl` is what picks the level's
-          // format out of numbering.xml, so the marker changes with the indent the way
-          // Word's Tab does. Nine levels exist (17.9.24); the ends are no-ops, not errors.
-          // A level the definition does not declare is DECLARED first — Word's own move,
-          // cycling its stock bullets and number formats by depth. The declaration lands
-          // outside the transaction, like `toggleList`'s `ensureListDefinition`: if the
-          // commit then fails, the extra level is unreferenced and harmless.
-          const next = level + step;
-          if (next < 0 || next > MAX_LIST_LEVEL) continue;
-          if (!ensureListLevel(marker, next)) continue;
-          ops.push({
-            op: 'setListLevel',
-            paragraphId,
-            level: next,
-          });
-          continue;
-        }
-        // The step moves from the EFFECTIVE indent (what the user sees, cascade included),
-        // but it is written as the paragraph's own formatting, merged over the paragraph's
-        // own `w:pPr` — an op whose base is the cascade is refused (`directParagraphProperties`).
-        const current = leftIndentTwipsOf(properties);
-        const next = Math.max(0, current + step * INDENT_STEP_TWIPS);
-        if (next === current) continue;
-        const direct = directParagraphProperties(storyPart(), paragraphId);
-        // Only the paragraph's OWN `w:ind` attributes are carried over: `w:ind` cascades
-        // attribute by attribute (17.3.1.12), so an inherited hanging survives untouched
-        // rather than being restated here.
-        const existing = direct.find((property) => property.localName === 'ind');
-        ops.push({
-          op: 'setParagraphProperties',
-          paragraphId,
-          properties: mergedProperties(direct, {
-            localName: 'ind',
-            // Zero is written rather than dropped: an authored `w:ind` may inherit a
-            // non-zero left from its style, and removing the attribute would let that
-            // come back instead of taking the outdent.
-            attributes: leftIndentAttributes(existing?.attributes, String(next)),
-          }),
-        });
-      }
-      if (ops.length === 0) return false;
-      return commitOverTarget(() => applyOps(ops, selectionMark()));
+      return touched !== null && stepIndent(touched, direction);
     },
 
     setIndent(update) {
@@ -666,37 +707,26 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       // the body order meant a header paragraph was never in it, so a ruler drag inside an
       // open header or footer resolved to -1 and returned false — silently doing nothing.
       const touched = targetParagraphs();
-      if (touched === null) return false;
-      const ops: TreeDocOp[] = [];
-      for (const paragraphId of touched) {
-        // Merged over the paragraph's OWN `w:ind`, never the cascade the layout publishes:
-        // an op whose base is the cascade is refused, and `w:ind` carries four independent
-        // settings in one element, so naming one field must leave the others as authored.
-        const direct = directParagraphProperties(storyPart(), paragraphId);
-        const authored = direct.find((property) => property.localName === 'ind')?.attributes ?? {};
-        let attributes: Record<string, string> = { ...authored };
-        if (update.left !== undefined) {
-          attributes = writeIndentSide(attributes, 'left', 'start', update.left);
-        }
-        if (update.right !== undefined) {
-          attributes = writeIndentSide(attributes, 'right', 'end', update.right);
-        }
-        if (update.firstLine !== undefined) {
-          attributes = writeFirstLine(attributes, update.firstLine);
-        }
-        ops.push({
-          op: 'setParagraphProperties',
-          paragraphId,
-          properties: mergedProperties(direct, {
-            localName: 'ind',
-            ...(Object.keys(attributes).length > 0 ? { attributes } : {}),
-          }),
-        });
-      }
-      if (ops.length === 0) return false;
-      return commitOverTarget(() => applyOps(ops, selectionMark()));
+      return touched !== null && writeIndent(touched, update);
     },
 
+    indentWithTab() {
+      // A rectangle is a set of cells, not a run of paragraphs, so Tab keeps its own lane.
+      const touched = rectangleCells() === null ? targetParagraphs() : null;
+      if (touched === null) return false;
+      const tab = tabIndentFor(
+        orderedRange(),
+        touched,
+        (paragraphId) => firstLineTwipsOf(paragraphPropertiesOf(currentLayout.value, paragraphId)),
+        INDENT_STEP_TWIPS
+      );
+      if (tab === null) return false;
+      // Handled even when nothing moves (an indent already at its limit): falling back to
+      // a tab character would replace the selected text.
+      if (tab.kind === 'firstLine') writeIndent(tab.paragraphs, { firstLine: INDENT_STEP_TWIPS });
+      else stepIndent(tab.paragraphs, 'increase');
+      return true;
+    },
     setParagraphFormat(update) {
       const touched = targetParagraphs();
       if (touched === null || touched.length === 0) return false;

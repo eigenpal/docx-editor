@@ -195,6 +195,17 @@ export interface PaginatedSurface {
    */
   adjustIndent(direction: 'increase' | 'decrease'): boolean;
   /**
+   * Tab over a selection of whole paragraphs, outside a list: indent them and keep the text.
+   *
+   * A selection over two or more paragraphs steps the left indent of each one. A selection
+   * in one paragraph that starts at the paragraph start sets a first-line indent of one
+   * tab stop, or steps the left indent when the first line is already indented that far.
+   *
+   * Answers false for a caret, a selection that starts inside the text, and a cell
+   * rectangle. There Tab types a tab character, which replaces the selection.
+   */
+  indentWithTab(): boolean;
+  /**
    * Set indent to exact values on every paragraph the selection touches — what a ruler
    * drag and an indent spinner both need, where {@link adjustIndent} only steps.
    *

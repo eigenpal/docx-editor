@@ -277,13 +277,13 @@ export function createKeyDownHandler(
         }
       }
       // In a LIST, Tab demotes and Shift+Tab promotes — the list level, so the marker
-      // changes with it. Outside one, Tab is a tab character and Shift+Tab outdents,
-      // which is what Word does.
+      // changes with it. Outside one, Shift+Tab outdents. Tab indents a selection of whole
+      // paragraphs and keeps the text; anywhere else it types a tab character.
       if (surface.isListParagraph()) {
         surface.adjustIndent(event.shiftKey ? 'decrease' : 'increase');
       } else if (event.shiftKey) {
         surface.adjustIndent('decrease');
-      } else {
+      } else if (!surface.indentWithTab()) {
         surface.insertTab();
       }
       event.preventDefault();
