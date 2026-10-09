@@ -1,3 +1,4 @@
+import type { FieldResultsMode } from './field-result-mode.ts';
 import { bindConflictingPrefixes } from './edit-namespace-scope.ts';
 // Atomic canonical-tree edit primitives (typed-ooxml-paragraph-editor task 4.5).
 //
@@ -72,6 +73,11 @@ export interface EditOptions {
    * transaction gets: every applier falls back to its own walk of the part.
    */
   readonly trackedRevisionIds?: TransactionRevisionIds;
+  /**
+   * How the op addresses saved field results (`field-result-mode.ts`). Absent keeps the mode
+   * of the enclosing store call, which is `atomic` outside any editable transaction.
+   */
+  readonly fieldResults?: FieldResultsMode;
 }
 
 /**

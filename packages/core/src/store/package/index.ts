@@ -281,6 +281,7 @@ export {
   type AtomicFieldSpan,
   type FldCharType,
 } from './field-nodes.ts';
+export type { FieldResultsMode } from './field-result-mode.ts';
 export {
   TOC_MAX_BOOKMARKS_PER_REFRESH,
   TOC_MAX_ENTRIES,

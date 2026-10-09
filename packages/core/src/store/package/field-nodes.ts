@@ -13,6 +13,7 @@
 // visible/addressable so content never disappears.
 
 import { inlineCharacterTextOf } from './hyphen-text.ts';
+import { currentFieldResultsMode, type FieldResultsMode } from './field-result-mode.ts';
 import {
   contentControlContentChildren,
   isContentControl,
@@ -417,7 +418,7 @@ export interface AtomicFieldSpan {
 
 /** A closed field and the addressing policy its instruction gives its result. */
 export interface ParsedFieldSpan extends AtomicFieldSpan {
-  readonly addressing: 'atomic' | 'editable-result';
+  readonly addressing: 'atomic' | 'editable-result' | 'saved-result';
 }
 
 /** One field-machine entry from the shared paragraph-inline flatten. @internal */
@@ -513,6 +514,58 @@ export const MAX_FIELD_INSTRUCTION_CHARS = 4096;
 /** Maximum supported nesting for complex fields inside one paragraph. */
 export const MAX_FIELD_NESTING = 4;
 
+/**
+ * Field types whose painted result IS the saved result: the engine never computes a new value
+ * for them, so the reader can edit the result text in place. Every other type paints a value
+ * the engine computes (page numbers, references, document properties, symbols) and stays one
+ * unit, because an edit would not show.
+ */
+const SAVED_RESULT_FIELD_TYPES: ReadonlySet<string> = new Set([
+  'CREATEDATE',
+  'DATE',
+  'FILENAME',
+  'FILLIN',
+  'HYPERLINK',
+  'MERGEFIELD',
+  'PRINTDATE',
+  'QUOTE',
+  'SAVEDATE',
+  'SEQ',
+  'TIME',
+]);
+
+/** The field type named by an instruction: its first word, upper-cased. */
+function fieldTypeOf(instruction: string): string {
+  return /^\s*([A-Za-z]+)/.exec(instruction)?.[1]?.toUpperCase() ?? '';
+}
+
+/**
+ * How a closed complex field's result is addressed.
+ *
+ * - `editable-result`: a FORMTEXT input, with its form behavior.
+ * - `saved-result`: a field that shows its saved result; the result runs are ordinary text and
+ *   the markers and instruction take no offsets.
+ * - `atomic`: one unit. Also used for a saved-result field whose result holds another field.
+ *
+ * In the `atomic` mode (the default, see `field-result-mode.ts`) saved-result fields stay one
+ * unit, so raw paragraph text is unchanged.
+ */
+export function fieldResultAddressing(
+  instruction: string,
+  options: {
+    readonly maxInstructionChars?: number;
+    readonly nestedInResult?: boolean;
+    readonly fieldResults?: FieldResultsMode;
+  } = {}
+): ParsedFieldSpan['addressing'] {
+  const maxChars = options.maxInstructionChars ?? MAX_FIELD_INSTRUCTION_CHARS;
+  if (isEditableFormTextInstruction(instruction, maxChars)) return 'editable-result';
+  const mode = options.fieldResults ?? currentFieldResultsMode();
+  if (mode !== 'editable' || options.nestedInResult) return 'atomic';
+  if (instruction.length > maxChars) return 'atomic';
+  return SAVED_RESULT_FIELD_TYPES.has(fieldTypeOf(instruction)) ? 'saved-result' : 'atomic';
+}
+
 /** Whether a bounded instruction denotes Word's editable legacy text-form input. */
 export function isEditableFormTextInstruction(
   raw: string,
@@ -539,8 +592,13 @@ export function isEditableFormTextInstruction(
  */
 export function parsedFieldSpansOf(
   paragraph: OoxmlParagraphNode,
-  options?: { readonly maxNesting?: number; readonly maxInstructionChars?: number }
+  options?: {
+    readonly maxNesting?: number;
+    readonly maxInstructionChars?: number;
+    readonly fieldResults?: FieldResultsMode;
+  }
 ): readonly ParsedFieldSpan[] {
+  const fieldResults = options?.fieldResults ?? currentFieldResultsMode();
   const maxNesting = options?.maxNesting ?? MAX_FIELD_NESTING;
   const maxInstructionChars = options?.maxInstructionChars ?? MAX_FIELD_INSTRUCTION_CHARS;
   const spans: ParsedFieldSpan[] = [];
@@ -564,6 +622,17 @@ export function parsedFieldSpansOf(
     return ids;
   };
 
+  /** A result holding another field keeps the simple field one unit, as for complex ones. */
+  const simpleHoldsField = (simple: OoxmlNode): boolean => {
+    if (simple.kind === 'textValue') return false;
+    const visit = (node: OoxmlNode, depth: number): boolean =>
+      node.kind !== 'textValue' &&
+      depth < MAX_INLINE_CONTAINER_DEPTH &&
+      (isFldSimple(node) ||
+        isFldChar(node, 'begin') ||
+        node.children.some((child) => visit(child, depth + 1)));
+    return simple.children.some((child) => visit(child, 1));
+  };
   collectFieldRunChildren(paragraph, flat);
   for (const entry of flat) {
     const child = entry.node;
@@ -574,7 +643,14 @@ export function parsedFieldSpansOf(
         runId: '',
         removeNodeIds: [child.id],
         formatRunIds: formatRunIdsOfSimple(child),
-        addressing: 'atomic',
+        addressing:
+          fieldResultAddressing(fldSimpleInstr(child) ?? '', {
+            maxInstructionChars,
+            nestedInResult: simpleHoldsField(child),
+            fieldResults,
+          }) === 'saved-result'
+            ? 'saved-result'
+            : 'atomic',
       });
     }
   }
@@ -608,12 +684,15 @@ export function parsedFieldSpansOf(
     const seenFormatRuns = new Set<string>();
     let separateRunId: string | undefined;
     let endIndex = -1;
+    /** A field nested in the RESULT keeps the outer field one unit (see `fieldResultAddressing`). */
+    let nestedInResult = false;
 
     for (let j = i; j < flat.length; j += 1) {
       const entry = flat[j]!;
       const node = entry.node;
 
       if (isFldChar(node, 'begin')) {
+        if (nesting >= 1 && phase === 'result') nestedInResult = true;
         nesting += 1;
         if (nesting > maxNesting) nestingOverflow = true;
         removeIds.push(node.id);
@@ -733,9 +812,11 @@ export function parsedFieldSpansOf(
       runId: current.runId,
       removeNodeIds: [...new Set(removeIds)],
       formatRunIds,
-      addressing: isEditableFormTextInstruction(effectiveInstruction, maxInstructionChars)
-        ? 'editable-result'
-        : 'atomic',
+      addressing: fieldResultAddressing(effectiveInstruction, {
+        maxInstructionChars,
+        nestedInResult,
+        fieldResults,
+      }),
     });
     i = endIndex + 1;
   }
@@ -746,7 +827,11 @@ export function parsedFieldSpansOf(
 /** Collect only fields whose cached result is one atomic model unit. */
 export function atomicFieldSpansOf(
   paragraph: OoxmlParagraphNode,
-  options?: { readonly maxNesting?: number; readonly maxInstructionChars?: number }
+  options?: {
+    readonly maxNesting?: number;
+    readonly maxInstructionChars?: number;
+    readonly fieldResults?: FieldResultsMode;
+  }
 ): readonly AtomicFieldSpan[] {
   return parsedFieldSpansOf(paragraph, options).filter((span) => span.addressing === 'atomic');
 }

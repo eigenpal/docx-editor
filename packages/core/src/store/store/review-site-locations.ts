@@ -4,6 +4,7 @@
 // "where is this node" seam: this module owns the site index, its per-paragraph and
 // per-row memos, and the tracked-row anchors; the queue asks it for ranges.
 
+import { currentFieldResultsMode, FieldResultsModeMemo } from '../package/field-result-mode.ts';
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { paragraphOffsetIndex, transientParagraphOffsetIndex } from './tree-op-segments.ts';
 import { createRecentRootCache } from './recent-root-cache.ts';
@@ -44,7 +45,9 @@ function locateSitesWithPolicy(
   // automation read — asks for the same one. Rebuilding it merged 80k+ entries per call on
   // a long document. The instance is SHARED, so the return type is ReadonlyMap: a caller
   // mutating it would poison every later reader of this root, undo included.
-  const merged = retainAcrossReads ? locatedSitesCache.get(part.root) : undefined;
+  const merged = retainAcrossReads
+    ? locatedSitesCaches[currentFieldResultsMode()].get(part.root)
+    : undefined;
   if (merged) return merged;
   const located = new Map<string, SiteLocation>();
   const walkParagraph = (paragraph: OoxmlParagraphNode): void => {
@@ -100,7 +103,7 @@ function locateSitesWithPolicy(
     for (const child of node.children) anchorTrackedRows(child, depth + 1);
   };
   anchorTrackedRows(part.root, 0);
-  if (retainAcrossReads) locatedSitesCache.set(part.root, located);
+  if (retainAcrossReads) locatedSitesCaches[currentFieldResultsMode()].set(part.root, located);
   return located;
 }
 
@@ -174,7 +177,10 @@ function computeRowMarkerAnchors(row: OoxmlNode): readonly (readonly [string, Si
 const EMPTY_ROW_ANCHORS: readonly (readonly [string, SiteLocation])[] = [];
 
 /** Node id → paragraph-local offsets, memoized on the immutable paragraph node. */
-const paragraphLocationsCache = new WeakMap<OoxmlNode, ReadonlyMap<string, SiteLocation>>();
+const paragraphLocationsCache = new FieldResultsModeMemo<
+  OoxmlNode,
+  ReadonlyMap<string, SiteLocation>
+>();
 
 /**
  * The merged site index per part root, bounded to recent roots.
@@ -183,16 +189,19 @@ const paragraphLocationsCache = new WeakMap<OoxmlNode, ReadonlyMap<string, SiteL
  * keep one O(document) index alive per retained root. Per-NODE memos above are exempt —
  * unchanged nodes are shared across roots, so those caches stay O(document) in total.
  */
-const locatedSitesCache = createRecentRootCache<Map<string, SiteLocation>>(8);
+const locatedSitesCaches = {
+  atomic: createRecentRootCache<Map<string, SiteLocation>>(8),
+  editable: createRecentRootCache<Map<string, SiteLocation>>(8),
+};
 
 /** Marker anchors per immutable table, row, or cell. */
-const rowMarkerAnchorsCache = new WeakMap<
+const rowMarkerAnchorsCache = new FieldResultsModeMemo<
   OoxmlNode,
   readonly (readonly [string, SiteLocation])[]
 >();
 
 /** Row-marker anchors under one immutable paragraph (a textbox can hold a table). */
-const paragraphRowAnchorsCache = new WeakMap<
+const paragraphRowAnchorsCache = new FieldResultsModeMemo<
   OoxmlNode,
   readonly (readonly [string, SiteLocation])[]
 >();

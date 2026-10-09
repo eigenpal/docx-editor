@@ -1167,6 +1167,12 @@ export type TreeOpRejection =
    * caller learns the node would not have landed where they asked.
    */
   | 'indivisible-content'
+  /**
+   * The range has one end inside a field's editable saved result and the other outside it.
+   * Deleting it would leave the field's begin, separate, and end markers unbalanced, so it is
+   * refused. A range that covers the whole field removes the field.
+   */
+  | 'field-structure'
   | 'unknown-block'
   | 'not-a-block'
   | 'block-required'
