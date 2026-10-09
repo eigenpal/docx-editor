@@ -125,6 +125,24 @@ export function compatibilityProfileFromSettings(root: OoxmlElement | null): Com
     }
     firstCompat = false;
   }
+  // A mode declared directly under `w:settings`, outside `w:compat`, still sets the mode
+  // when `w:compat` declares none.
+  if (isSettings && modeDeclarations === 0) {
+    for (const option of root!.children) {
+      if (
+        option.kind === 'textValue' ||
+        option.namespaceUri !== WML_NAMESPACE_URI ||
+        option.localName !== 'compatSetting' ||
+        attribute(option, 'name') !== 'compatibilityMode' ||
+        attribute(option, 'uri') !== WORD_URI
+      )
+        continue;
+      modeDeclarations++;
+      const raw = attribute(option, 'val');
+      const value = raw !== undefined && /^\d{1,4}$/.test(raw) ? Number(raw) : undefined;
+      modeValue = value !== undefined && value >= 11 ? value : undefined;
+    }
+  }
   // Two declarations are ambiguous; do not invent a winner.
   if (modeDeclarations > 1) modeValue = undefined;
   const profile: CompatibilityProfile = {

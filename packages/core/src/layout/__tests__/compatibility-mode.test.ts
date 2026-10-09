@@ -34,10 +34,20 @@ test('projects every explicitly authored Word compatibility mode', () => {
   expect(compatibilityModeFromSettings(settings(''))).toBeUndefined();
 });
 
+test('a mode declared directly under settings applies when compat declares none', () => {
+  expect(compatibilityModeFromSettings(settings(setting('16')))).toBe(16);
+  expect(compatibilityModeFromSettings(settings(setting('14')))).toBe(14);
+  // A declaration inside compat wins over one outside it.
+  expect(
+    compatibilityModeFromSettings(settings(`${setting('16')}<w:compat>${setting('14')}</w:compat>`))
+  ).toBe(14);
+  // Two direct declarations are as ambiguous as two inside compat.
+  expect(compatibilityModeFromSettings(settings(setting('14') + setting('15')))).toBeUndefined();
+});
+
 test('requires the settings/compat path and expanded names, not a matching local name alone', () => {
   const valid = setting('14');
   const bodies = [
-    valid,
     `<x:compat>${valid}</x:compat>`,
     `<w:compat>${valid.replaceAll('w:compatSetting', 'x:compatSetting')}</w:compat>`,
     ...['name', 'uri', 'val'].map(
