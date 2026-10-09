@@ -73,8 +73,9 @@ describe('a click on a wrapped line edge keeps the clicked line', () => {
       const layout = layoutOf(`<w:p>${body}</w:p>`);
       const result = click(layout, 1, -2);
       expect(result.hitLine).toBe(1);
-      // The offset ends line 0 too, which is where it paints without the preference.
-      expect(result.canonicalLine).toBe(0);
+      // The offset ends line 0 too. Without a preference it shows at line 1's start, the
+      // line the click chose, so both answers agree here.
+      expect(result.canonicalLine).toBe(1);
       expect(result.preferredLine).toBe(1);
       expect(result.preferred!.x).toBeCloseTo(result.hit.caret.x);
     }
@@ -84,7 +85,11 @@ describe('a click on a wrapped line edge keeps the clicked line', () => {
     const layout = layoutOf(`<w:p>${text('aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii')}</w:p>`);
     const result = click(layout, 0, 125);
     expect(result.hitLine).toBe(0);
+    // The click lands after the wrap space, an offset that shows on line 1 by default; the
+    // preference is what keeps it on the clicked line.
+    expect(result.canonicalLine).toBe(1);
     expect(result.preferredLine).toBe(0);
+    expect(result.preferred!.x).toBeCloseTo(result.hit.caret.x);
   });
 
   test('the start edge of a right-to-left wrapped line is that line', () => {
@@ -94,7 +99,8 @@ describe('a click on a wrapped line edge keeps the clicked line', () => {
     );
     const result = click(layout, 1, 122);
     expect(result.hitLine).toBe(1);
-    expect(result.canonicalLine).toBe(0);
+    // The default for the shared offset is the line that starts there, as clicked.
+    expect(result.canonicalLine).toBe(1);
     expect(result.preferredLine).toBe(1);
     expect(result.preferred!.x).toBeCloseTo(result.hit.caret.x);
   });
