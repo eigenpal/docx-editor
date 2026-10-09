@@ -129,19 +129,27 @@ test('without a grid, a line still needs its whole box', () => {
   expect(plain(144.9)).toBeCloseTo(0, 3);
 });
 
-test('an auto multiple also hangs its extra and the lower centring space past the margin', () => {
-  // A 1.5 multiple scales the 31.2pt grid line to 46.8pt. The sixth band ends at
-  // 20.699 + 5 * 46.8 + 5.2505 + 20.699 = 280.6485pt.
-  const spaced = sixParagraphs('x', '<w:spacing w:line="360" w:lineRule="auto"/>');
-  expect(secondTableTop(layout(280.6, spaced))).toBeCloseTo(46.8, 3);
-  expect(secondTableTop(layout(280.65, spaced))).toBeCloseTo(0, 3);
+test('an auto multiple counts in pitches, and its glyphs fit like a single line', () => {
+  // Text that takes two pitches keeps them at 1.5 and double spacing.
+  for (const line of ['360', '480']) {
+    const spaced = sixParagraphs('x', `<w:spacing w:line="${line}" w:lineRule="auto"/>`);
+    expect(secondTableTop(layout(202.6, spaced))).toBeCloseTo(31.2, 3);
+    expect(secondTableTop(layout(202.65, spaced))).toBeCloseTo(0, 3);
+  }
+  // Triple spacing takes three pitches with the glyphs centred. The sixth band ends at
+  // 20.699 + 5 * 46.8 + (46.8 - 20.699) / 2 + 20.699 = 288.4485pt.
+  const triple = sixParagraphs('x', '<w:spacing w:line="720" w:lineRule="auto"/>');
+  expect(secondTableTop(layout(288.4, triple))).toBeCloseTo(46.8, 3);
+  expect(secondTableTop(layout(288.45, triple))).toBeCloseTo(0, 3);
 });
 
-for (const properties of [
-  '<w:spacing w:line="624" w:lineRule="exact"/>',
-  '<w:spacing w:line="624" w:lineRule="atLeast"/>',
-]) {
-  test('authored line spacing retains its full fit budget ' + properties, () => {
-    expect(secondTableTop(layout(203, sixParagraphs('', properties)))).toBeCloseTo(31.2, 3);
-  });
-}
+test('an atLeast value under the snapped line fits like a single line', () => {
+  const atLeast = sixParagraphs('', '<w:spacing w:line="480" w:lineRule="atLeast"/>');
+  expect(secondTableTop(layout(202.6, atLeast))).toBeCloseTo(31.2, 3);
+  expect(secondTableTop(layout(202.65, atLeast))).toBeCloseTo(0, 3);
+});
+
+test('exact line spacing retains its full fit budget', () => {
+  const exact = sixParagraphs('', '<w:spacing w:line="624" w:lineRule="exact"/>');
+  expect(secondTableTop(layout(203, exact))).toBeCloseTo(31.2, 3);
+});

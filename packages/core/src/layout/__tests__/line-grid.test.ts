@@ -115,29 +115,40 @@ describe('line box under an active line grid', () => {
     expect(applyLineSpacing(single, 18 + 1e-9, 14).height).toBe(18);
   });
 
-  test('an auto multiple scales the grid line and adds its extra below', () => {
+  test('an auto multiple counts in pitches and centres the glyphs in the whole box', () => {
     expect(applyLineSpacing({ ...single, value: 360 }, 14, 11.2)).toEqual({
       height: 27,
-      baseline: 13.2,
-      trailing: 9 + 2,
+      baseline: 11.2 + 6.5,
+      trailing: 6.5,
+    });
+    // Text that already takes two pitches keeps them at 1.5 and double; triple takes three.
+    expect(applyLineSpacing({ ...single, value: 360 }, 20, 16).height).toBe(36);
+    expect(applyLineSpacing({ ...single, value: 480 }, 20, 16).height).toBe(36);
+    expect(applyLineSpacing({ ...single, value: 720 }, 20, 16)).toEqual({
+      height: 54,
+      baseline: 16 + 17,
+      trailing: 17,
     });
     // Below single, the grid line is still the smallest line.
     expect(applyLineSpacing({ ...single, value: 120 }, 14, 11.2).height).toBe(18);
   });
 
-  test('atLeast keeps its own rule: no snapping', () => {
-    // Measured control: a 20pt atLeast line under an 18pt pitch is 20pt, not two pitches.
+  test('atLeast takes the snapped line unless its value is taller', () => {
+    // A 20pt atLeast line of 14pt text under an 18pt pitch is 20pt, not two pitches. The
+    // snapped line sits at the foot of the box, so the 2pt extra is above it.
     const atLeast = { rule: 'atLeast', gridPitch: 18 } as const;
     expect(applyLineSpacing({ ...atLeast, value: 20 }, 14, 11.2)).toEqual({
       height: 20,
-      baseline: 11.2 + 6,
-      trailing: 0,
+      baseline: 11.2 + 2 + 2,
+      trailing: 2,
     });
+    // A value at or below the snapped line takes the snapped line.
     expect(applyLineSpacing({ ...atLeast, value: 10 }, 14, 11.2)).toEqual({
-      height: 14,
-      baseline: 11.2,
-      trailing: 0,
+      height: 18,
+      baseline: 13.2,
+      trailing: 2,
     });
+    expect(applyLineSpacing({ ...atLeast, value: 24 }, 20, 16).height).toBe(36);
   });
 
   test('exact spacing never snaps', () => {
@@ -162,12 +173,12 @@ describe('which paragraphs snap', () => {
     expect(paragraphSnapsToLineGrid([snap('1'), snap('false')])).toBe(false);
   });
 
-  test('no pitch, exact or atLeast spacing, an opt-out and a plain cell leave spacing alone', () => {
+  test('no pitch, exact spacing, an opt-out and a plain cell leave spacing alone', () => {
     expect(withLineGrid(spacing, [], undefined, false, false)).toBe(spacing);
     const exact: ParagraphLineSpacing = { rule: 'exact', value: 15 };
     expect(withLineGrid(exact, [], 18, false, false)).toBe(exact);
     const atLeast: ParagraphLineSpacing = { rule: 'atLeast', value: 20 };
-    expect(withLineGrid(atLeast, [], 18, false, false)).toBe(atLeast);
+    expect(withLineGrid(atLeast, [], 18, false, false)).toEqual({ ...atLeast, gridPitch: 18 });
     expect(withLineGrid(spacing, [snap('0')], 18, false, false)).toBe(spacing);
     expect(withLineGrid(spacing, [], 18, true, false)).toBe(spacing);
     expect(withLineGrid(spacing, [], 18, true, true)).toEqual({ ...spacing, gridPitch: 18 });
@@ -232,7 +243,7 @@ describe('paragraph lines in layout', () => {
     ).toEqual([14, 14]);
   });
 
-  test('tall text snaps; exact and atLeast spacing keep their own height', () => {
+  test('tall text snaps; exact and taller atLeast spacing keep their own height', () => {
     const tall = '<w:rPr><w:sz w:val="36"/></w:rPr>';
     const body =
       `<w:p><w:r>${tall}<w:t>Tall</w:t></w:r></w:p>` +
@@ -245,7 +256,7 @@ describe('paragraph lines in layout', () => {
       bodyLineHeights(
         layoutSemanticDocument(documentPart(body), 1, { measurer, styleCascade: cascade() })
       )
-    ).toEqual([36, 15, 20, 14]);
+    ).toEqual([36, 15, 20, 18]);
   });
 
   test('a style opt-out is inherited and a direct setting overrides it', () => {
