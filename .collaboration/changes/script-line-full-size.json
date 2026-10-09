@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A line with a large superscript or subscript run grows only on the last line of its paragraph, and only below the baseline.",
+  "after": "A line with a large superscript or subscript run takes the run's full-size height above and below the baseline on every line.",
+  "reason": "Only line geometry changes. Document nodes, text offsets, operations, snapshots, and transport messages stay the same.",
+  "tests": [
+    "packages/core/src/layout/__tests__/script-line-full-size.test.ts",
+    "packages/core/src/layout/__tests__/table-cell-end-mark.test.ts"
+  ],
+  "changeset": "script-line-full-size",
+  "migration": null
+}
