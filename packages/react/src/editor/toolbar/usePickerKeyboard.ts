@@ -1,5 +1,5 @@
 import { useEffect, useRef, type RefObject } from 'react';
-import { listenForPopupEscape } from '@docx-editor.dev/core/editor';
+import { listenForPopupEscape, listenForPopupFocusLeave } from '@docx-editor.dev/core/editor';
 import { useNavigationViewportElement } from '../navigation/navigation-layout';
 
 /** Bind keyboard dismissal and option navigation to this mounted picker. */
@@ -60,6 +60,7 @@ function bindPickerKeyboard(
   const stopEscape = listenForPopupEscape({
     popup: root,
     contains: (node) => root.contains(node),
+    chromeRoot: () => root.closest('.docx-editor'),
     editorElements: () => [viewport()],
     // The editable size input owns its draft and its Escape.
     skip: (event) =>
@@ -71,11 +72,19 @@ function bindPickerKeyboard(
       close();
     },
   });
+  // Focus that moves elsewhere while focus stayed in the pages, such as Ctrl+F into the
+  // find field, closes the picker too. `focusout` alone never fires for a click-opened picker.
+  const stopFocus = listenForPopupFocusLeave({
+    popup: root,
+    contains: (node) => root.contains(node),
+    close,
+  });
   root.addEventListener('keydown', keydown);
   root.addEventListener('focusout', focusout);
   return () => {
     root.removeEventListener('keydown', keydown);
     root.removeEventListener('focusout', focusout);
     stopEscape();
+    stopFocus();
   };
 }

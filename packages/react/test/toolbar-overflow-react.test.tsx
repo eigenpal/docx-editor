@@ -471,6 +471,64 @@ describe('toolbar overflow integration', () => {
     expect(view.queryByTestId('toolbar-overflow-panel')).toBeNull();
   });
 
+  test('More stays open behind the paragraph dialog it opened, and focus comes back', async () => {
+    installResizeObserverMock();
+    const { view } = mountToolbar(
+      <DocxEditorToolbar t={(key) => (key === 'formattingBar.more' ? 'More' : key)} />
+    );
+    await collapseToolbar(view, { barWidth: 280 });
+    await act(async () => {
+      (view.getByLabelText('More') as HTMLButtonElement).click();
+    });
+    const panel = view.getByTestId('toolbar-overflow-panel');
+    const trigger = panel.querySelector<HTMLButtonElement>(
+      '[data-slot="list.lineSpacing"] [aria-haspopup]'
+    );
+    expect(trigger).not.toBeNull();
+    await act(async () => {
+      trigger!.click();
+    });
+    const options = panel.querySelector<HTMLButtonElement>('[data-slot="paragraph.dialog"]');
+    expect(options).not.toBeNull();
+    await act(async () => {
+      options!.click();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    const dialog = document.querySelector<HTMLElement>('[data-docx-dialog="paragraph"]');
+    expect(dialog).not.toBeNull();
+    // Focus entering the modal dialog does not close More, so the opener stays mounted.
+    expect(view.queryByTestId('toolbar-overflow-panel')).not.toBeNull();
+    await act(async () => {
+      dialog!.dispatchEvent(new Event('cancel', { cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(document.querySelector('[data-docx-dialog="paragraph"]')).toBeNull();
+    expect(trigger!.isConnected).toBe(true);
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  test('More closes when focus moves to a control outside it', async () => {
+    installResizeObserverMock();
+    const { view } = mountToolbar(
+      <DocxEditorToolbar t={(key) => (key === 'formattingBar.more' ? 'More' : key)} />
+    );
+    await collapseToolbar(view, { barWidth: 280 });
+    await act(async () => {
+      (view.getByLabelText('More') as HTMLButtonElement).click();
+    });
+    expect(view.queryByTestId('toolbar-overflow-panel')).not.toBeNull();
+    const host = document.createElement('input');
+    document.body.append(host);
+    try {
+      await act(async () => {
+        host.focus();
+      });
+      expect(view.queryByTestId('toolbar-overflow-panel')).toBeNull();
+    } finally {
+      host.remove();
+    }
+  });
+
   test('Escape closes the More dialog before the header scope or the format painter', async () => {
     installResizeObserverMock();
     const { view, editor } = mountToolbar(

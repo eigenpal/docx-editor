@@ -73,6 +73,8 @@ export function listenForPopupEscape(options: PopupEscapeOptions): () => void {
     const origin = path[0] ?? event.target;
     const target = origin instanceof Node ? origin : null;
     const fromInside = target !== null && options.contains(target);
+    // A modal dialog above the popup, which the popup may have opened, owns its own Escape.
+    if (!fromInside && inModalDialog(target)) return;
     const owners = [
       editorInstanceScope(options.popup),
       options.chromeRoot?.(),
@@ -86,6 +88,12 @@ export function listenForPopupEscape(options: PopupEscapeOptions): () => void {
   };
   owner.addEventListener('keydown', onKeyDown, true);
   return () => owner.removeEventListener('keydown', onKeyDown, true);
+}
+
+/** Whether `node` is inside a modal dialog. */
+function inModalDialog(node: Node | null): boolean {
+  const element = node instanceof Element ? node : (node?.parentElement ?? null);
+  return element?.closest('[aria-modal="true"]') != null;
 }
 
 /** What an open nested popup leaves in the panel: an expanded trigger or the popup itself. */
@@ -113,8 +121,10 @@ export interface PopupFocusLeaveOptions {
 
 /**
  * Close an open popup when focus moves outside it, for example to the find field after
- * Ctrl+F or to a host input. Focus that lands in the painted pages keeps the popup open:
- * a toolbar click leaves the caret there while the popup is open. Returns the disposer.
+ * Ctrl+F or to a host input. Two moves keep the popup open: focus that lands in the painted
+ * pages, because a toolbar click leaves the caret there while the popup is open, and focus
+ * that enters a modal dialog, because the popup may have opened it and the dialog returns
+ * focus to its opener when it closes. Returns the disposer.
  *
  * @internal
  */
@@ -124,7 +134,9 @@ export function listenForPopupFocusLeave(options: PopupFocusLeaveOptions): () =>
     const origin = event.composedPath()[0] ?? event.target;
     if (!(origin instanceof Node) || options.contains(origin)) return;
     const element = origin instanceof Element ? origin : origin.parentElement;
-    if (element?.closest('.docx-pages')) return;
+    // Focus that falls to <body> moves to no control, for example while a dialog unmounts.
+    if (element === null || element === owner.body || element === owner.documentElement) return;
+    if (element.closest('.docx-pages') || inModalDialog(element)) return;
     options.close();
   };
   owner.addEventListener('focusin', onFocusIn, true);

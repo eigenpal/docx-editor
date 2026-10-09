@@ -220,6 +220,59 @@ describe('DocxEditorToolbar composition', () => {
     }
   });
 
+  async function collapsedMore() {
+    globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
+    const view = mountEditorTree(() => h(DocxEditorToolbar), POPUP_ESCAPE_SOURCE);
+    await flush();
+    const toolbar = view.container.querySelector<HTMLElement>('[data-testid="docx-toolbar"]')!;
+    Object.defineProperty(toolbar, 'clientWidth', { configurable: true, get: () => 280 });
+    for (const group of toolbar.querySelectorAll<HTMLElement>('[data-toolbar-group]')) {
+      Object.defineProperty(group, 'offsetWidth', { configurable: true, get: () => 90 });
+    }
+    for (const observer of [...MockResizeObserver.instances]) observer.flush();
+    await flush();
+    toolbar.querySelector<HTMLButtonElement>('[data-slot="toolbar.more"]')!.click();
+    await flush();
+    const panel = () => view.container.querySelector('[data-testid="toolbar-overflow-panel"]');
+    return { view, panel };
+  }
+
+  test('More closes when focus moves to a control outside it', async () => {
+    const { view, panel } = await collapsedMore();
+    expect(panel()).not.toBeNull();
+    const host = document.createElement('input');
+    document.body.append(host);
+    try {
+      host.focus();
+      await flush();
+      expect(panel()).toBeNull();
+    } finally {
+      host.remove();
+      view.unmount();
+    }
+  });
+
+  test('More stays open behind the paragraph dialog it opened, and focus comes back', async () => {
+    const { view, panel } = await collapsedMore();
+    const trigger = panel()!.querySelector<HTMLButtonElement>(
+      '[data-slot="list.lineSpacing"] [aria-haspopup]'
+    )!;
+    expect(trigger).not.toBeNull();
+    trigger.click();
+    await flush();
+    panel()!.querySelector<HTMLButtonElement>('[data-slot="paragraph.dialog"]')!.click();
+    await flush();
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"]');
+    expect(dialog).not.toBeNull();
+    expect(panel()).not.toBeNull();
+    dialog!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await flush();
+    expect(document.querySelector('[role="dialog"][aria-modal="true"]')).toBeNull();
+    expect(trigger.isConnected).toBe(true);
+    expect(document.activeElement).toBe(trigger);
+    view.unmount();
+  });
+
   test('a dropdown inside More takes the first Escape, and the panel the second', async () => {
     globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
     const view = mountEditorTree(() => h(DocxEditorToolbar), POPUP_ESCAPE_SOURCE);

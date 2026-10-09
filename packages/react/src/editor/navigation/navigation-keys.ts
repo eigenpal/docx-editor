@@ -104,17 +104,17 @@ export function focusPaneEntry(element: HTMLElement): void {
   }
 }
 
-/** Focus the pane's first focusable control, or the pane itself. */
+/**
+ * Focus the entry of the pane's ACTIVE tab, the same target Ctrl+F and the disc use (see
+ * {@link paneEntryTarget}), or the pane itself. A heading in a hidden panel can never take
+ * focus, so the tab is read from the pane's selected tab.
+ */
 function focusIntoPane(pane: Element): void {
-  const target =
-    pane.querySelector<HTMLElement>(
-      '.docx-nav__heading--current, .docx-nav__heading, .docx-nav__search-input'
-    ) ??
-    pane.querySelector<HTMLElement>(
-      'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
-    );
+  const selected = pane.querySelector('[role="tab"][aria-selected="true"]');
+  const tab: NavigationTab = selected?.id === 'docx-nav-tab-find' ? 'find' : 'headings';
+  const target = paneEntryTarget(pane, tab);
   if (target) {
-    target.focus();
+    focusPaneEntry(target);
     return;
   }
   if (pane instanceof HTMLElement) {

@@ -672,7 +672,11 @@ describe('focus when the pane covers the page', () => {
     const pane = document.createElement('nav');
     const find = document.createElement('input');
     find.className = 'docx-nav__search-input';
-    pane.append(find);
+    // The headings panel with no headings yet: its filter field is the entry.
+    const panel = document.createElement('div');
+    panel.id = 'docx-nav-panel-headings';
+    panel.append(find);
+    pane.append(panel);
     const rail = document.createElement('div');
     const draft = document.createElement('textarea');
     rail.append(draft);
@@ -706,6 +710,65 @@ describe('focus when the pane covers the page', () => {
     } finally {
       viewport.remove();
       host.remove();
+    }
+  });
+});
+
+describe('the focus target when the pane covers the page', () => {
+  function paneFixture(tab: 'headings' | 'find') {
+    const viewport = document.createElement('div');
+    const pane = document.createElement('nav');
+    for (const value of ['headings', 'find']) {
+      const button = document.createElement('button');
+      button.setAttribute('role', 'tab');
+      button.id = `docx-nav-tab-${value}`;
+      button.setAttribute('aria-selected', String(value === tab));
+      pane.append(button);
+    }
+    const headings = document.createElement('div');
+    headings.id = 'docx-nav-panel-headings';
+    headings.hidden = tab !== 'headings';
+    const first = document.createElement('button');
+    first.className = 'docx-nav__heading';
+    const current = document.createElement('button');
+    current.className = 'docx-nav__heading docx-nav__heading--current';
+    headings.append(first, current);
+    const find = document.createElement('div');
+    find.id = 'docx-nav-panel-find';
+    find.hidden = tab !== 'find';
+    const input = document.createElement('input');
+    input.className = 'docx-nav__search-input';
+    find.append(input);
+    pane.append(headings, find);
+    const rail = document.createElement('div');
+    const draft = document.createElement('textarea');
+    rail.append(draft);
+    viewport.append(pane, rail);
+    document.body.append(viewport);
+    return { viewport, pane, current, input, draft };
+  }
+
+  test('with the Find tab active, focus goes to the query, not a hidden heading', () => {
+    const view = paneFixture('find');
+    try {
+      view.draft.focus();
+      const release = inertBehindPane(view.pane, view.viewport);
+      expect(document.activeElement).toBe(view.input);
+      release();
+    } finally {
+      view.viewport.remove();
+    }
+  });
+
+  test('with the Headings tab active, focus goes to the current heading', () => {
+    const view = paneFixture('headings');
+    try {
+      view.draft.focus();
+      const release = inertBehindPane(view.pane, view.viewport);
+      expect(document.activeElement).toBe(view.current);
+      release();
+    } finally {
+      view.viewport.remove();
     }
   });
 });

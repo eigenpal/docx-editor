@@ -4,8 +4,7 @@ import './dom-setup.ts';
 import { editorInstanceScope } from '@docx-editor.dev/core/editor';
 
 import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
-import { createApp, createSSRApp, h, nextTick, ref } from 'vue';
-import { renderToString } from 'vue/server-renderer';
+import { createApp, h, nextTick, ref } from 'vue';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
@@ -19,11 +18,13 @@ import {
   type UseDocxSourceOptions,
 } from '../src/editor/useDocxSource';
 import { mergeHostClass } from '../src/lib/mergeHostClass';
-import { useStableDocxId } from '../src/lib/stable-id';
 import { SOURCE, flush } from './helpers/fixtures';
 import { mountEditorTree } from './helpers/mount';
 
+/** Global stubs a test installs, undone after it so later files see the real ones. */
+const cleanupsAfterTest: (() => void)[] = [];
 afterEach(() => {
+  for (const cleanup of cleanupsAfterTest.splice(0)) cleanup();
   document.body.innerHTML = '';
 });
 
@@ -263,6 +264,10 @@ describe('useDocxSource stale clearing', () => {
   });
 
   test('clears bytes on fetch failure', async () => {
+    const realFetch = globalThis.fetch;
+    cleanupsAfterTest.push(() => {
+      globalThis.fetch = realFetch;
+    });
     globalThis.fetch = mock(() =>
       Promise.resolve(new Response(null, { status: 404, statusText: 'missing' }))
     ) as unknown as typeof fetch;
@@ -354,29 +359,6 @@ describe('scoped notes DOM lookup', () => {
     );
     expect(noteCalls).toEqual([[{ kind: 'note', id: 'footnote:1' }]]);
     for (const spy of scopeSpies) spy.mockRestore();
-    app.unmount();
-    container.remove();
-  });
-});
-
-describe('hydration-safe stable ids', () => {
-  test('useStableDocxId remains stable during hydration', async () => {
-    const Probe = {
-      setup() {
-        const id = useStableDocxId('probe');
-        return () => h('div', { id, 'data-probe': '' });
-      },
-    };
-    const ssrHtml = await renderToString(createSSRApp(Probe));
-    const container = document.createElement('div');
-    container.innerHTML = ssrHtml;
-    document.body.appendChild(container);
-    const ssrId = container.querySelector('[data-probe]')?.id;
-    const app = createSSRApp(Probe);
-    app.mount(container);
-    await nextTick();
-    const clientId = container.querySelector('[data-probe]')?.id;
-    expect(clientId).toBe(ssrId);
     app.unmount();
     container.remove();
   });

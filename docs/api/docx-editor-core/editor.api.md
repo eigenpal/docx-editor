@@ -2559,6 +2559,13 @@ export interface PopupEscapeOptions {
     readonly skip?: (event: KeyboardEvent) => boolean;
 }
 
+// @internal
+export interface PopupFocusLeaveOptions {
+    readonly close: () => void;
+    readonly contains: (node: Node) => boolean;
+    readonly popup: HTMLElement;
+}
+
 // @public
 export function positionContentControlPopup(panel: HTMLElement, anchor: HTMLElement): void;
 

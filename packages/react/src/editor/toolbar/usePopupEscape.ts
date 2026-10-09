@@ -1,9 +1,10 @@
 import { useEffect, useRef, type RefObject } from 'react';
-import { listenForPopupEscape } from '@docx-editor.dev/core/editor';
+import { listenForPopupEscape, listenForPopupFocusLeave } from '@docx-editor.dev/core/editor';
 import { useNavigationViewportElement } from '../navigation/navigation-layout';
 
 /**
- * Close an open chrome popup on Escape through core's `listenForPopupEscape`.
+ * Close an open chrome popup on Escape through core's `listenForPopupEscape`, and when focus
+ * moves outside it through `listenForPopupFocusLeave`.
  *
  * An Escape from this editor closes the popup and stops there. An Escape from a host input,
  * a host dialog, or another editor closes the popup and keeps its default behavior.
@@ -23,13 +24,23 @@ export function usePopupEscape(
   useEffect(() => {
     const root = rootRef.current;
     if (!open || !root) return undefined;
-    return listenForPopupEscape({
+    const contains = (node: Node) => root.contains(node);
+    const stopEscape = listenForPopupEscape({
       popup: root,
-      contains: (node) => root.contains(node),
+      contains,
       chromeRoot: () => root.closest('.docx-editor'),
       editorElements: () => [latest.current.viewport],
       skip: (event) => latest.current.skip?.(event) === true,
       close: (fromInside) => latest.current.close(fromInside),
     });
+    const stopFocus = listenForPopupFocusLeave({
+      popup: root,
+      contains,
+      close: () => latest.current.close(false),
+    });
+    return () => {
+      stopEscape();
+      stopFocus();
+    };
   }, [open, rootRef]);
 }
