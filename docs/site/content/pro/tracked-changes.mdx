@@ -413,6 +413,8 @@ The packaged balloons and review pane use the same event. With the `revisionsIn:
 | `getActivatedReviewItemKey(query?)` | The activated item's key under `query`, or `null`. |
 | `on('reviewItemReveal', handler)` | Each explicit reveal, as `{ key, pairKey, source }`. |
 
+If your own pane opens beside balloons, import `reviewPaneListsItem(revisionsIn, item)` from `@docx-editor.dev/core/editor` and apply it to items from an unfiltered `getReviewItems()` read, before your own filters, so that your pane lists the items the editor counts when it opens the pane.
+
 The packaged review rail can draw these balloons for you. See [Control the review pane](/docs/2.x/pro#control-the-review-pane).
 
 ## Adopt suggestions as your own

@@ -21,7 +21,9 @@ import {
   checkBalloonFollowsLayout,
   checkRevealOpensPane,
   checkRevealReopensBalloon,
+  checkReplyCards,
   checkStructuralCaret,
+  REPLY_SOURCE,
   ROW_SOURCE,
 } from './review-balloons-harness.ts';
 
@@ -92,6 +94,23 @@ describe('Vue review layout preferences', () => {
       mounted.unmount();
     }
   }, 20000);
+
+  for (const structural of [true, false]) {
+    test(`a reply to a change shows once, in its balloon (structural=${structural})`, async () => {
+      const mounted = mountReview(
+        REPLY_SOURCE,
+        { structural },
+        { author: 'Grace Hopper' },
+        { revisionsIn: 'balloons' }
+      );
+      try {
+        await ready(mounted);
+        await checkReplyCards(mounted.container, mounted.editor() as DocxEditorInstance, change);
+      } finally {
+        mounted.unmount();
+      }
+    }, 20000);
+  }
 
   test('switching revisionsIn live moves changes between the rail and balloons', async () => {
     const mounted = mountReview(BALLOON_SOURCE, {}, { author: 'Grace Hopper' });

@@ -272,19 +272,17 @@ export async function paint(
   // Runs in a tracked row carry no revision of their own; the row's applies to all of them.
   // Only All Markup shows revision marks; the resolved views have no tracked rows to mark.
   const rowRevisions = new Map<BlockFragmentRecord, RowRevision>();
-  // Text-box stories hold tracked rows too: a box's own story and each group member's.
-  if (layout.displayMode === 'all-markup') {
-    const tick = () => work.tick();
-    forEachSemanticStory(layout, (root) =>
-      indexRowRevisions(root.host.fragments, rowRevisions, tick)
-    );
+  // Every story's blocks: the root stories, then each text box story and group member story,
+  // which hold tables, tracked rows, and tracked cells too.
+  const forEachStoryBlocks = (visit: (blocks: readonly BlockFragmentRecord[]) => void): void => {
+    forEachSemanticStory(layout, (root) => visit(root.host.fragments));
     forEachSemanticDrawing(layout, ({ drawing }) => {
-      if (drawing.textboxStory)
-        indexRowRevisions(drawing.textboxStory.fragments, rowRevisions, tick);
-      for (const member of drawing.groupTextboxStories ?? [])
-        indexRowRevisions(member.story.fragments, rowRevisions, tick);
+      if (drawing.textboxStory) visit(drawing.textboxStory.fragments);
+      for (const member of drawing.groupTextboxStories ?? []) visit(member.story.fragments);
     });
-  }
+  };
+  if (layout.displayMode === 'all-markup')
+    forEachStoryBlocks((blocks) => indexRowRevisions(blocks, rowRevisions, () => work.tick()));
   // Match the visible document order before adding authors from resolved-away revisions.
   forEachSemanticSpan(layout, (visit) => {
     for (const revision of visit.span.revisions ?? []) addAuthor(revision.author);
@@ -305,7 +303,7 @@ export async function paint(
         }
     }
   };
-  forEachSemanticStory(layout, (root) => addCellAuthors(root.host.fragments));
+  forEachStoryBlocks(addCellAuthors);
   for (const artifact of layout.reviewArtifacts) {
     if (artifact.kind === 'tracked-change') addAuthor(artifact.author);
   }

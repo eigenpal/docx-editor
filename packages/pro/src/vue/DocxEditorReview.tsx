@@ -250,12 +250,21 @@ const ReviewRoot = defineComponent({
     );
     const expanded = computed(() => open.value && !compact.value);
 
+    // The engine's rule, applied before this rail's own filters. The engine decides whether the
+    // pane opens from the same rule over every item, so the rail lists what the engine counts,
+    // less what `structural`, `formatting`, and `filter` hide. `railQuery` removes the reply
+    // link of a comment on a hidden change, but the balloon still draws that reply under the
+    // change, so the rule reads the link from the unfiltered read.
+    const unfilteredById = computed(() =>
+      revisionsIn.value === 'balloons'
+        ? new Map(allReview.items.value.map((entry) => [entry.id, entry]))
+        : null
+    );
     const items = computed(() =>
       reviewHook.items.value.filter(
         (entry) =>
+          reviewPaneListsItem(revisionsIn.value, unfilteredById.value?.get(entry.id) ?? entry) &&
           (props.formatting || !hasFormattingBalloon(entry)) &&
-          // The engine's own rule, so the pane it opens is never empty.
-          reviewPaneListsItem(revisionsIn.value, entry) &&
           (!props.filter || props.filter(entry))
       )
     );

@@ -521,7 +521,7 @@ export {
 export type {
   CommentMarkerStyle,
   ResolvedReviewPane,
-  ReviewPaneItemKind,
+  ReviewPaneItemFields,
   ReviewPaneOpening,
   ReviewPaneOptions,
   ReviewPaneOverflow,

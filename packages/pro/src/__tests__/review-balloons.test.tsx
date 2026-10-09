@@ -26,7 +26,9 @@ import {
   checkBalloonFollowsLayout,
   checkRevealOpensPane,
   checkRevealReopensBalloon,
+  checkReplyCards,
   checkStructuralCaret,
+  REPLY_SOURCE,
   ROW_SOURCE,
 } from './review-balloons-harness.ts';
 
@@ -97,6 +99,22 @@ describe('React review layout preferences', () => {
       view.unmount();
     }
   });
+
+  for (const structural of [true, false]) {
+    test(`a reply to a change shows once, in its balloon (structural=${structural})`, async () => {
+      const { view, editor } = mount(
+        { revisionsIn: 'balloons' },
+        <DocxEditorReview structural={structural} />,
+        REPLY_SOURCE
+      );
+      try {
+        await change(() => {});
+        await checkReplyCards(view.container, editor(), change);
+      } finally {
+        view.unmount();
+      }
+    });
+  }
 
   test('an open balloon follows its change and stays inside the viewport', async () => {
     const { view, editor } = mount({ revisionsIn: 'balloons' });

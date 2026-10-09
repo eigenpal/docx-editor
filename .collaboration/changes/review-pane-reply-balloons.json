@@ -4,7 +4,11 @@
   "before": "With revisionsIn balloons, a comment that replies to a tracked change counted as a pane item, so a document with only such replies opened an empty review pane.",
   "after": "The pane-opening rule and the review rail share one exported rule that excludes tracked changes and their reply comments under balloons.",
   "reason": "Review pane settings and the open state are local view state of one editor instance. They are never saved or replicated. The change adds no shared state, operations, snapshot fields, or protocol messages.",
-  "tests": ["packages/pro/src/__tests__/review-module.test.ts"],
+  "tests": [
+    "packages/pro/src/__tests__/review-module.test.ts",
+    "packages/pro/src/__tests__/review-balloons.test.tsx",
+    "packages/pro/src/__tests__/review-balloons-vue.test.ts"
+  ],
   "changeset": "review-pane-reply-balloons",
   "migration": null
 }

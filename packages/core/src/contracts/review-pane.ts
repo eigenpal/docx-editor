@@ -7,6 +7,8 @@
 // initial values, `setReviewPaneOptions` changes them at runtime, and `snapshot.reviewPane` reads
 // them, so a toggle in host chrome re-renders like any other control.
 
+import type { ReviewItem } from '../store/store/review-items.ts';
+
 /**
  * When the review pane opens by itself.
  *
@@ -144,13 +146,14 @@ export function resolveReviewPane(
 }
 
 /**
- * The fields of a review item that decide whether the review pane lists it.
+ * The fields of a review item that decide whether the review pane lists it. A
+ * `ReviewItem` and a review item placement both have them.
  *
  * @public
  */
-export interface ReviewPaneItemKind {
-  /** `'revision'`, `'comment'`, or `'custom'`. */
-  readonly kind: string;
+export interface ReviewPaneItemFields {
+  /** The item kind. */
+  readonly kind: ReviewItem['kind'];
   /** For a comment, the tracked change it replies to. */
   readonly parentRevisionId?: string;
 }
@@ -159,15 +162,20 @@ export interface ReviewPaneItemKind {
  * Whether the review pane lists a card for `item` under `revisionsIn`.
  *
  * With `'balloons'`, a balloon at the text shows every tracked change and every comment
- * that replies to a tracked change, so the pane lists neither. The engine uses this rule to
- * decide whether the pane has anything to list, and the review pane uses it to choose its
- * cards, so the two always agree.
+ * that replies to a tracked change, so the pane lists neither. Give the item as an
+ * unfiltered `getReviewItems()` read returns it: a query that excludes revision kinds
+ * removes `parentRevisionId` from replies to the changes it drops.
+ *
+ * The engine applies this rule to every review item when it decides whether the pane opens
+ * by itself or closes after a settings change. A review pane must apply the same rule before
+ * its own filters, such as a hidden kind or a host filter. Those filters can hide every card,
+ * and then the pane that the engine opens is empty.
  *
  * @public
  */
 export function reviewPaneListsItem(
   revisionsIn: RevisionDisplay,
-  item: ReviewPaneItemKind
+  item: ReviewPaneItemFields
 ): boolean {
   if (revisionsIn === 'pane') return true;
   if (item.kind === 'revision') return false;

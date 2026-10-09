@@ -204,15 +204,26 @@ function ReviewRoot({
   const compact = open && gutter.inlineEnd > 0 && gutter.inlineEnd < REVIEW_PANE_GUTTER;
   const expanded = open && !compact;
 
+  // The engine's rule, applied before this rail's own filters. The engine decides whether the
+  // pane opens from the same rule over every item, so the rail lists what the engine counts,
+  // less what `structural`, `formatting`, and `filter` hide. `railQuery` removes the reply
+  // link of a comment on a hidden change, but the balloon still draws that reply under the
+  // change, so the rule reads the link from the unfiltered read.
+  const unfilteredById = useMemo(
+    () =>
+      revisionsIn === 'balloons'
+        ? new Map(allReview.items.map((entry) => [entry.id, entry]))
+        : null,
+    [allReview.items, revisionsIn]
+  );
   const items = useMemo(() => {
     return review.items.filter(
       (entry) =>
+        reviewPaneListsItem(revisionsIn, unfilteredById?.get(entry.id) ?? entry) &&
         (formatting || !hasFormattingBalloon(entry)) &&
-        // The engine's own rule, so the pane it opens is never empty.
-        reviewPaneListsItem(revisionsIn, entry) &&
         (!filter || filter(entry))
     );
-  }, [review.items, filter, formatting, revisionsIn]);
+  }, [review.items, filter, formatting, revisionsIn, unfilteredById]);
   // A revealed card opens a closed pane, as a click on its marker does, unless the pane's
   // `opening` setting leaves that to the host. A change that the balloon serves is not in
   // `items`, so the balloon opens it instead.

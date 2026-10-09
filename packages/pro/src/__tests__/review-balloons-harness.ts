@@ -105,6 +105,48 @@ export const ROW_SOURCE = zipSync({
   ),
 });
 
+/**
+ * A plain comment, a comment over exactly a tracked insertion, and a comment over exactly the
+ * text of a tracked row insertion. The last two reply to their changes.
+ */
+export const REPLY_SOURCE = zipSync({
+  '[Content_Types].xml': strToU8(
+    `<Types xmlns="${CT}">` +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' +
+      '</Types>'
+  ),
+  '_rels/.rels': strToU8(
+    `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+  ),
+  'word/document.xml': strToU8(
+    `<w:document xmlns:w="${W}"><w:body>` +
+      commented('7', 'Plain words') +
+      `<w:p><w:r><w:t xml:space="preserve">Kept </w:t></w:r><w:commentRangeStart w:id="5"/>` +
+      `<w:ins w:id="1" w:author="Ada Lovelace" ${DATE}><w:r><w:t>added</w:t></w:r></w:ins>` +
+      '<w:commentRangeEnd w:id="5"/><w:r><w:commentReference w:id="5"/></w:r></w:p>' +
+      '<w:tbl><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>' +
+      '<w:tr><w:tc><w:p><w:r><w:t>Kept row</w:t></w:r></w:p></w:tc></w:tr>' +
+      `<w:tr><w:trPr><w:ins w:id="40" w:author="Ada Lovelace" ${DATE}/></w:trPr>` +
+      '<w:tc><w:p><w:commentRangeStart w:id="6"/><w:r><w:t>Added row</w:t></w:r>' +
+      '<w:commentRangeEnd w:id="6"/><w:r><w:commentReference w:id="6"/></w:r></w:p></w:tc></w:tr>' +
+      '</w:tbl><w:p/></w:body></w:document>'
+  ),
+  'word/comments.xml': strToU8(
+    `<w:comments xmlns:w="${W}" xmlns:w14="${W14}">` +
+      comment('7', 'Ada Lovelace', 'B0000001', 'Plain note') +
+      comment('5', 'Grace Hopper', 'B0000002', 'On insert') +
+      comment('6', 'Grace Hopper', 'B0000003', 'On row') +
+      '</w:comments>'
+  ),
+  'word/_rels/document.xml.rels': strToU8(
+    `<Relationships xmlns="${REL}">` +
+      `<Relationship Id="rIdC" Type="${COMMENTS_REL}" Target="comments.xml"/>` +
+      '</Relationships>'
+  ),
+});
+
 type Change = (run: () => void) => Promise<void>;
 
 const q = (root: ParentNode, selector: string) => root.querySelector<HTMLElement>(selector);
@@ -495,5 +537,48 @@ export async function checkBalloonFollowsLayout(
     expect(left()).toBe(8);
   } finally {
     HTMLElement.prototype.getBoundingClientRect = original;
+  }
+}
+
+/**
+ * `revisionsIn: 'balloons'` on `REPLY_SOURCE`: the plain comment is the only card, and each
+ * reply to a change shows once, in its change's balloon. The rail may hide structural changes
+ * (`structural={false}`); the reply to the tracked row still shows once.
+ */
+export async function checkReplyCards(
+  container: HTMLElement,
+  editor: DocxEditorInstance,
+  change: Change
+): Promise<void> {
+  const items = editor.getReviewItems({ placement: false });
+  for (const text of ['On insert', 'On row']) {
+    const reply = items.find((item) => item.kind === 'comment' && item.text === text);
+    expect(reply?.kind === 'comment' && reply.parentRevisionId).toBeTruthy();
+  }
+  // The plain comment opens the pane on load.
+  expect(editor.isReviewPaneOpen()).toBe(true);
+  const cardTexts = () =>
+    all(container, '[data-testid="review-card"]').map((card) => card.textContent ?? '');
+  expect(cardTexts().filter((text) => text.includes('Plain note'))).toHaveLength(1);
+  expect(cardTexts().some((text) => text.includes('On insert'))).toBe(false);
+  expect(cardTexts().some((text) => text.includes('On row'))).toBe(false);
+
+  // Each change's balloon draws its reply, and nothing else draws it.
+  const shown = (text: string) =>
+    [
+      ...all(container, '[data-testid="review-card"]'),
+      ...all(container, '[data-testid="review-reply"]'),
+    ].filter((node) => node.textContent?.includes(text)).length;
+  for (const [text, site] of [
+    ['On insert', '[data-revision-kind="insert"][data-revision-id="1"]'],
+    ['On row', '.docx-table-row--revision'],
+  ] as const) {
+    await change(() => press(q(container, site)!));
+    const open = balloon(container);
+    expect(open).not.toBeNull();
+    expect(
+      all(open!, '[data-testid="review-reply"]').filter((node) => node.textContent?.includes(text))
+    ).toHaveLength(1);
+    expect(shown(text)).toBe(1);
   }
 }

@@ -564,3 +564,23 @@ test('text in a tracked row inside a text box takes the row revision mark', asyn
   expect(await commands(plain.bytes)).not.toContain('0 0 1 rg');
   expect(tracked.diagnostics.map((entry) => entry.code)).not.toContain('review-presentation');
 });
+
+test('cell-only authors in a text box retain distinct PDF colors', async () => {
+  const cell = (author: string, id: number) =>
+    `<w:tc><w:tcPr><w:cellIns w:id="${id}" w:author="${author}"/></w:tcPr><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc>`;
+  const result = await exportPdf(
+    docx(
+      textboxWith(
+        `<w:tbl><w:tblGrid><w:gridCol w:w="1500"/><w:gridCol w:w="1500"/></w:tblGrid><w:tr>${cell('First', 1)}${cell('Second', 2)}</w:tr></w:tbl>`
+      )
+    ),
+    {
+      displayMode: 'all-markup',
+      useSystemFonts: false,
+      revisionMarkup: { cells: { inserted: 'byAuthor' }, changedLines: { mark: 'none' } },
+    }
+  );
+  const stream = await commands(result.bytes);
+  expect(stream).toContain('0.752941 0.223529 0.168627 rg');
+  expect(stream).toContain('0.121569 0.435294 0.698039 rg');
+});
