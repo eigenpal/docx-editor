@@ -19,15 +19,15 @@ import { firstEditableNoteOffset } from './surface-note-ops.ts';
 export const INDENT_STEP_TWIPS = 720;
 
 /**
- * One indent step from `current`, never past the margin or the layout's indent bound. A step
- * never moves the other way: an authored value past the bound, or a negative one, stays put
- * rather than jumping to the bound.
+ * One indent step from `current`, never past the margin or the layout's indent bound. An
+ * increase never moves the other way: an authored value past the bound stays put rather
+ * than jumping back to the bound. A decrease stops at the margin, as it always has.
  */
 export function nextLeftIndent(current: number, step: number, size = INDENT_STEP_TWIPS): number {
   const next = current + step * size;
   return step > 0
     ? Math.max(current, Math.min(MAX_PARAGRAPH_INDENT_TWIPS, next))
-    : Math.min(current, Math.max(0, next));
+    : Math.max(0, next);
 }
 
 /**
@@ -91,7 +91,8 @@ export interface TabIndentReads {
  *
  * `touched` is every paragraph from the range start to the range end, in order. A range
  * that ends at the start of the next paragraph (its first painted offset or before) selects
- * only the paragraph mark, so that last paragraph does not count.
+ * only the paragraph mark, so that last paragraph does not count. The other paragraph
+ * commands keep that paragraph, as they always have.
  */
 export function tabIndentFor(
   range: { readonly from: SemanticPosition; readonly to: SemanticPosition },
@@ -138,6 +139,8 @@ export function firstPaintedOffset(layout: SemanticLayout, paragraphId: string):
       if (span.range.end > span.range.start) first = Math.min(first, span.range.start);
     }
     for (const drawing of segment.drawings) first = Math.min(first, drawing.start);
+    // Later lines hold later offsets; the first line that paints anything decides.
+    if (Number.isFinite(first)) break;
   }
   return Number.isFinite(first) ? first : 0;
 }

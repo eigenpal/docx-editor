@@ -15,7 +15,11 @@ import { directParagraphProperties } from '../surface-formatting.ts';
 import { INDENT_STEP_TWIPS, nextLeftIndent, tabIndentFor } from '../surface-indent-step.ts';
 import { MAX_PARAGRAPH_INDENT_TWIPS } from '../../layout/paragraph-indent.ts';
 import { mountPaginatedSurface } from '../paginated-surface.ts';
-import { mount as mountFixture, trackedDocx } from './paginated-surface-fixtures.ts';
+import {
+  mount as mountFixture,
+  selectCellRectangle,
+  trackedDocx,
+} from './paginated-surface-fixtures.ts';
 
 const mounted: PaginatedSurface[] = [];
 afterEach(() => {
@@ -240,6 +244,38 @@ describe('paragraph starts that are not offset 0', () => {
   });
 });
 
+describe('selections that reach the next paragraph only at its start', () => {
+  test('Tab over two paragraphs leaves a third reached only at its start alone', () => {
+    const surface = mount(THREE);
+    const ids = press(surface, [0, 3], [2, 0]);
+    expect(indentOf(surface, ids[0]!).left).toBe('720');
+    expect(indentOf(surface, ids[1]!).left).toBe('720');
+    expect(indentOf(surface, ids[2]!)).toEqual({});
+  });
+
+  test('Tab over a cell rectangle indents the cells and keeps their text', () => {
+    const cell = (text: string) => `<w:tc>${paragraph(text)}</w:tc>`;
+    const surface = mount(
+      `<w:tbl><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>` +
+        `<w:tr>${cell('Left')}${cell('Right')}</w:tr></w:tbl>` +
+        paragraph('After')
+    );
+    selectCellRectangle(surface, { row: 0, column: 0 }, { row: 0, column: 1 });
+    createKeyDownHandler(surface)({
+      key: 'Tab',
+      preventDefault: () => {},
+      shiftKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+    } as KeyboardEvent);
+    expect(xml(surface)).toContain('Left');
+    expect(xml(surface)).toContain('Right');
+    expect(hasTab(surface)).toBe(false);
+    expect(xml(surface).match(/w:left="720"/g)).toHaveLength(2);
+  });
+});
+
 describe('Shift+Tab over a selection', () => {
   test('reverses two Tab presses, the left indent first and then the first line', () => {
     const surface = mount(THREE);
@@ -289,7 +325,7 @@ describe('tabIndentFor', () => {
     expect(tabIndentFor(inside, ['a'], reads(), 'increase', 720)).toBeNull();
   });
 
-  test('drops a last paragraph that is touched only at its start', () => {
+  test('drops a last paragraph that is reached only at its start', () => {
     const toC = { from: at('a', 3), to: at('c', 0) };
     const toB = { from: at('a', 3), to: at('b', 0) };
     expect(tabIndentFor(toC, ['a', 'b', 'c'], reads(), 'increase', 720)).toEqual({
@@ -297,6 +333,11 @@ describe('tabIndentFor', () => {
       paragraphs: ['a', 'b'],
     });
     expect(tabIndentFor(toB, ['a', 'b'], reads(), 'increase', 720)).toBeNull();
+    const hiddenStart = { from: at('a', 0), to: at('b', 3) };
+    expect(tabIndentFor(hiddenStart, ['a', 'b'], reads(0, 0, 3), 'increase', 720)).toEqual({
+      write: 'setFirstLine',
+      paragraphs: ['a'],
+    });
   });
 
   test('a hanging or wide first line steps the left indent instead', () => {
@@ -307,14 +348,6 @@ describe('tabIndentFor', () => {
         paragraphs: ['a'],
       });
     }
-  });
-
-  test('an end before the first painted offset of the last paragraph drops it', () => {
-    const range = { from: at('a', 0), to: at('b', 3) };
-    expect(tabIndentFor(range, ['a', 'b'], reads(0, 0, 3), 'increase', 720)).toEqual({
-      write: 'setFirstLine',
-      paragraphs: ['a'],
-    });
   });
 
   test('a start before the first painted offset is the paragraph start', () => {
@@ -333,11 +366,11 @@ describe('tabIndentFor', () => {
     );
   });
 
-  test('a step never passes the margin or the bound, and never moves backwards', () => {
+  test('a step never passes the margin or the bound, and an increase never moves back', () => {
     expect(nextLeftIndent(0, -1)).toBe(0);
     expect(nextLeftIndent(MAX_PARAGRAPH_INDENT_TWIPS - 10, 1)).toBe(MAX_PARAGRAPH_INDENT_TWIPS);
     expect(nextLeftIndent(720, 1)).toBe(720 + INDENT_STEP_TWIPS);
     expect(nextLeftIndent(40_000, 1)).toBe(40_000);
-    expect(nextLeftIndent(-720, -1)).toBe(-720);
+    expect(nextLeftIndent(-720, -1)).toBe(0);
   });
 });

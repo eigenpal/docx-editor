@@ -198,16 +198,18 @@ export interface PaginatedSurface {
    * Tab (`increase`) or Shift+Tab (`decrease`) over a selection outside a list: change the
    * indent and keep the text.
    *
-   * A selection over two or more paragraphs steps the left indent of each one. A selection
-   * in one paragraph that starts at the paragraph start, whole or partial, works on the
-   * first line: Tab sets a first-line indent of one default tab stop (`w:defaultTabStop`), or steps the left indent when
-   * the first line already has that indent or more, or a hanging indent. Shift+Tab steps the
-   * left indent back first, then clears the first-line indent.
+   * A selection over two or more paragraphs, or a cell rectangle, steps the left indent of
+   * each paragraph. A selection in one paragraph that starts at the paragraph start, whole or
+   * partial, works on the first line: Tab sets a first-line indent of one default tab stop
+   * (`w:defaultTabStop`), or steps the left indent when the first line already has that
+   * indent or more, or a hanging indent. Shift+Tab steps the left indent back first, then
+   * clears the first-line indent. A paragraph the selection reaches only at its start is
+   * not touched by this rule.
    *
    * Answers true when the selection takes this rule, also when the write is refused or
-   * changes nothing, so the text is never replaced. Answers false for a caret, a selection
-   * in one paragraph that starts inside the text, and a cell rectangle; there Tab types a
-   * tab character and Shift+Tab steps the left indent.
+   * changes nothing, so the text is never replaced. Answers false for a caret and for a
+   * selection in one paragraph that starts inside the text; there Tab types a tab character
+   * and Shift+Tab steps the left indent.
    */
   indentWithTab(direction: 'increase' | 'decrease'): boolean;
   /**

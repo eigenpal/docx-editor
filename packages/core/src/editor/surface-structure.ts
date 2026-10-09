@@ -321,11 +321,11 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
    * nothing between them. Without one, the selection sweeps from its first paragraph to its
    * last, which is what Word does and what every one of these verbs did before.
    */
-  function targetParagraphs(): readonly string[] | null {
+  function targetParagraphs(range = orderedRange()): readonly string[] | null {
     if (rectangleCells() !== null) {
       return [...paragraphsInCells(currentLayout.value, rectangleCells()!)];
     }
-    const { from, to } = orderedRange();
+    const { from, to } = range;
     const order = orderOf();
     const firstIndex = order.indexOf(from.paragraphId);
     const lastIndex = order.indexOf(to.paragraphId);
@@ -693,15 +693,16 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
 
     indentWithTab(direction) {
       const range = orderedRange();
-      if (range.from.paragraphId === range.to.paragraphId && range.from.offset === range.to.offset)
-        return false;
-      // A rectangle is a set of cells, not a run of paragraphs, so Tab keeps its own lane.
-      const touched = rectangleCells() === null ? targetParagraphs() : null;
+      const touched = targetParagraphs(range);
       if (touched === null) return false;
       // Tab moves by the document's default tab stop, the grid its tab characters land on.
       const step = Math.round(defaultTabIntervalFromSettings(session.settingsRoot()) * 20);
       const reads = layoutTabIndentReads(currentLayout.value, storyPart());
-      const tab = tabIndentFor(range, touched, reads, direction, step);
+      // A cell rectangle is a set of whole paragraphs, never text to type over.
+      const tab =
+        rectangleCells() === null
+          ? tabIndentFor(range, touched, reads, direction, step)
+          : { write: 'stepLeft' as const, paragraphs: touched };
       if (tab === null) return false;
       // Handled even when the write is refused or changes nothing: the fallback would type a
       // tab over the selection, and a refused indent must never become a deletion.
