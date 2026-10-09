@@ -179,8 +179,8 @@ export class Paragraph extends ModelObject implements PromisedItem {
    * The direction the paragraph reads in: `LeftToRight` or `RightToLeft`.
    *
    * A DocxEditor addition: Office.js has no paragraph direction member. The values follow
-   * `Word.SectionDirection`. The read resolves the paragraph's own `w:bidi`, then its style,
-   * an enclosing cell's table style, and the document defaults.
+   * `Word.SectionDirection`. The read resolves the paragraph's own `w:bidi`, then its style, its
+   * list level, an enclosing cell's table style, and the document defaults, as the page shows them.
    *
    * A write changes nothing when the paragraph already reads that way. Otherwise it removes the
    * paragraph's own direction when that alone set the other one, or states the asked direction,

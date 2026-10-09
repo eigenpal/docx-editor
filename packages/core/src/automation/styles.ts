@@ -22,9 +22,13 @@ import { indexStyles, stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import { isValidXmlText } from '../store/package/sinks.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
-import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
+import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
-import { paragraphInheritsRtl } from '../layout/paragraph-direction-inheritance.ts';
+import { resolveRelationship } from '../store/package/relationships.ts';
+import {
+  paragraphInheritsRtl,
+  type DirectionSources,
+} from '../layout/paragraph-direction-inheritance.ts';
 import { namedChild, paragraphPropertiesNodeOf } from '../store/store/tree-op-nodes.ts';
 
 /** Longest style name a write may carry. Word's own limit is far below this. */
@@ -42,19 +46,25 @@ export interface AutomationStyleIndex {
   readonly present: boolean;
   /**
    * Whether the paragraph is right to left when its own `w:bidi` is ignored: document defaults,
-   * an enclosing cell's table style, and its paragraph style chain, as layout resolves them.
+   * an enclosing cell's table style, its paragraph style chain, and its numbering level, as
+   * layout resolves them. `styleId` resolves it as if it named that paragraph style.
    */
-  inheritsRtl(part: OoxmlPart, paragraph: OoxmlNode): boolean;
+  inheritsRtl(part: OoxmlPart, paragraph: OoxmlNode, styleId?: string): boolean;
 }
 
-const NO_STYLES: AutomationStyleIndex = Object.freeze({
-  nameOf: () => null,
-  idOf: () => null,
-  defaultId: null,
-  present: false,
-  // Defaults and styles both live in the styles part, so nothing is inherited without one.
-  inheritsRtl: () => false,
-});
+const NUMBERING_REL =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering';
+
+/** The numbering part's root through the main document relationship, else the default path. */
+function numberingRootOf(pkg: OoxmlPackage): OoxmlElement | null {
+  for (const record of pkg.relationships.get(pkg.mainDocumentPart) ?? []) {
+    if (record.type !== NUMBERING_REL) continue;
+    const resolved = resolveRelationship(record);
+    if (resolved.mode !== 'Internal' || !resolved.target.ok) continue;
+    return pkg.parts.get(resolved.target.partName)?.root ?? null;
+  }
+  return pkg.parts.get('/word/numbering.xml')?.root ?? null;
+}
 
 /**
  * Index the package's PARAGRAPH styles.
@@ -65,7 +75,23 @@ const NO_STYLES: AutomationStyleIndex = Object.freeze({
  */
 export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
   const part = stylesPartOf(pkg);
-  if (!part) return NO_STYLES;
+  const sources: DirectionSources = {
+    styles: part?.root ?? null,
+    settings: settingsPartOf(pkg)?.root ?? null,
+    numbering: numberingRootOf(pkg),
+  };
+  // Cell styles resolve as the proposed document shows them, like automation's run writes.
+  const inheritsRtl = (target: OoxmlPart, paragraph: OoxmlNode, styleId?: string) =>
+    paragraphInheritsRtl(sources, target, paragraph, 'proposed', styleId);
+  if (!part) {
+    return Object.freeze({
+      nameOf: () => null,
+      idOf: () => null,
+      defaultId: null,
+      present: false,
+      inheritsRtl,
+    });
+  }
   const byId = new Map<string, string | null>();
   const byName = new Map<string, string>();
   let defaultId: string | null = null;
@@ -80,15 +106,12 @@ export function styleIndex(pkg: OoxmlPackage): AutomationStyleIndex {
     }
     if (entry.isDefault && defaultId === null) defaultId = entry.styleId;
   }
-  const settings = settingsPartOf(pkg)?.root ?? null;
   return Object.freeze({
     nameOf: (styleId: string) => byId.get(styleId) ?? null,
     idOf: (name: string) => byName.get(name.trim().toLowerCase()) ?? null,
     defaultId,
     present: true,
-    // Cell styles resolve as the proposed document shows them, like automation's run writes.
-    inheritsRtl: (target: OoxmlPart, paragraph: OoxmlNode) =>
-      paragraphInheritsRtl(part.root, settings, target, paragraph, 'proposed'),
+    inheritsRtl,
   });
 }
 

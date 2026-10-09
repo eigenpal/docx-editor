@@ -471,9 +471,11 @@ export function paragraphFormatProperties(
   const pPr = paragraphPropertiesNodeOf(paragraph);
   const properties: OoxmlProperty[] = [];
 
+  let styleId: string | undefined;
   if (request.style !== undefined) {
     const resolved = styleIdFor(request.style, styles);
     if (!resolved.ok) return { ok: false, detail: resolved.detail };
+    styleId = resolved.styleId;
     properties.push({ localName: 'pStyle', attributes: { val: resolved.styleId } });
   }
 
@@ -555,7 +557,8 @@ export function paragraphFormatProperties(
       return { ok: false, detail: `readingOrder: ${String(request.readingOrder)}` };
     const wanted = request.readingOrder === 'RightToLeft';
     const own = ownRtl(pPr);
-    const inherited = styles.inheritsRtl(part, paragraph);
+    // Against the style this same write applies, so a style and a direction can share a sync.
+    const inherited = styles.inheritsRtl(part, paragraph, styleId);
     // The same rule as the editor's direction command: no write when the paragraph already reads
     // that way, and otherwise the smallest statement that makes it.
     if ((own ?? inherited) !== wanted) {

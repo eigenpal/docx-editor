@@ -119,7 +119,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-A read returns the direction that the paragraph reads in. The paragraph's own `w:bidi` wins. Otherwise the read resolves the paragraph style and its `basedOn` styles, the table style of an enclosing cell, and the document defaults. Other values fail on writes with `InvalidArgument`.
+A read returns the direction that the paragraph reads in. The paragraph's own `w:bidi` wins. Otherwise the read resolves the paragraph style and its `basedOn` styles, the paragraph's list level, the table style of an enclosing cell, and the document defaults, as the page shows them. A write that also sets `style` in the same sync resolves the direction against the new style. Other values fail on writes with `InvalidArgument`.
 
 A write changes nothing when the paragraph already reads in the requested direction. Otherwise, the write removes the paragraph's own `w:bidi` when that value alone set the other direction. In other cases, it adds `<w:bidi/>`, or `<w:bidi w:val="0"/>` when a style makes the paragraph right to left. So you can write back a direction that you read without changing the document. The direction shares one paragraph-property write with `alignment`, the indents, and the spacing in the same sync.
 

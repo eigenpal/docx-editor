@@ -13,7 +13,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { strFromU8, unzipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import {
   canonicalOoxmlFingerprint,
@@ -382,6 +382,104 @@ describe('Paragraph.readingOrder writes the smallest w:bidi change', () => {
       }
     } finally {
       runtime.dispose();
+    }
+  });
+});
+
+/** Add a numbering part whose level 0 states `w:bidi` in its own `w:pPr`. */
+function withRtlNumbering(bytes: Uint8Array): Uint8Array {
+  const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const files = unzipSync(bytes);
+  files['word/numbering.xml'] = strToU8(
+    `<w:numbering xmlns:w="${W}"><w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0">` +
+      '<w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/>' +
+      '<w:pPr><w:bidi/></w:pPr></w:lvl></w:abstractNum>' +
+      '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>'
+  );
+  files['[Content_Types].xml'] = strToU8(
+    strFromU8(files['[Content_Types].xml']!).replace(
+      '</Types>',
+      '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/></Types>'
+    )
+  );
+  files['word/_rels/document.xml.rels'] = strToU8(
+    strFromU8(files['word/_rels/document.xml.rels']!).replace(
+      '</Relationships>',
+      '<Relationship Id="rIdNumbering" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/></Relationships>'
+    )
+  );
+  return zipSync(files);
+}
+
+describe('Paragraph.readingOrder follows what layout paints', () => {
+  const NUM = '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>';
+
+  test('a numbering level that states w:bidi makes its paragraphs right to left', async () => {
+    const runtime = await createServer(
+      withRtlNumbering(docx(para('Item', NUM) + para('Own', `${NUM}<w:bidi/>`), RTL_STYLE))
+    );
+    try {
+      expect(await readOrders(runtime)).toEqual(['RightToLeft', 'RightToLeft']);
+      // Over a right-to-left level, left to right needs the explicit off value on both.
+      await setOrder(runtime, 0, 'LeftToRight');
+      await setOrder(runtime, 1, 'LeftToRight');
+      expect(mainXml(await runtime.save()).match(/<w:bidi w:val="0"\/>/g)).toHaveLength(2);
+      expect(await readOrders(runtime)).toEqual(['LeftToRight', 'LeftToRight']);
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('a style and a direction written in one sync resolve against the new style', async () => {
+    const runtime = await createServer(
+      docx(para('Plain') + para('Styled', '<w:pStyle w:val="Rtl"/>'), RTL_STYLE)
+    );
+    try {
+      await runtime.run(async (context) => {
+        const paragraphs = context.document.body.paragraphs;
+        paragraphs.load('items');
+        await context.sync();
+        paragraphs.items[0]!.style = 'Rtl';
+        paragraphs.items[0]!.readingOrder = 'LeftToRight';
+        paragraphs.items[1]!.style = 'Normal';
+        paragraphs.items[1]!.readingOrder = 'RightToLeft';
+        await context.sync();
+      });
+      expect(await readOrders(runtime)).toEqual(['LeftToRight', 'RightToLeft']);
+      const xml = mainXml(await runtime.save());
+      expect(xml).toContain('<w:pPr><w:pStyle w:val="Rtl"/><w:bidi w:val="0"/></w:pPr>');
+      expect(xml).toContain('<w:pPr><w:pStyle w:val="Normal"/><w:bidi/></w:pPr>');
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('the read agrees with the editor’s painted direction', async () => {
+    const bytes = withRtlNumbering(
+      docx(
+        para('Item', NUM) +
+          para('Styled', '<w:pStyle w:val="Rtl"/>') +
+          para('Plain') +
+          para('Own', '<w:bidi/>'),
+        RTL_STYLE
+      )
+    );
+    const editor = mount(bytes);
+    const runtime = createBrowser(editor);
+    try {
+      const ids = editor.surface!.session.paragraphIds();
+      const painted = ids.map((id) => {
+        editor.surface!.setSelection({
+          anchor: { paragraphId: id, offset: 1 },
+          head: { paragraphId: id, offset: 1 },
+        });
+        return editor.snapshot().formatting?.direction === 'rtl' ? 'RightToLeft' : 'LeftToRight';
+      });
+      expect(painted).toEqual(['RightToLeft', 'RightToLeft', 'LeftToRight', 'RightToLeft']);
+      expect(await readOrders(runtime)).toEqual(painted);
+    } finally {
+      runtime.dispose();
+      editor.destroy();
     }
   });
 });
