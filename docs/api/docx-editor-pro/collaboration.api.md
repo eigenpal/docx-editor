@@ -56,8 +56,22 @@ export type CollaborationMigration = {
     readonly state: Uint8Array;
 } | {
     readonly ok: false;
+    readonly reason: 'check-failed';
     readonly report: CollaborationMigrationReport;
+} | {
+    readonly ok: false;
+    readonly reason: 'current' | 'later-format';
 };
+
+// @public
+export type CollaborationMigrationCheck = 'paragraphs' | 'text' | 'formatting' | 'structure' | 'media' | 'links';
+
+// @public
+export interface CollaborationMigrationDifference extends CollaborationMigrationPosition {
+    readonly actual: string | null;
+    readonly expected: string | null;
+    readonly kind: 'text' | 'formatting' | 'missing' | 'added';
+}
 
 // @public
 export type CollaborationMigrationNeed = 'current' | 'earlier-format' | 'later-format';
@@ -66,23 +80,26 @@ export type CollaborationMigrationNeed = 'current' | 'earlier-format' | 'later-f
 export function collaborationMigrationNeed(state: Uint8Array): CollaborationMigrationNeed;
 
 // @public
-export interface CollaborationMigrationParagraph {
-    readonly shown: boolean;
-    readonly text: string;
+export interface CollaborationMigrationPosition {
+    readonly paragraph: number;
+    readonly part: string;
 }
 
 // @public
 export interface CollaborationMigrationReport {
-    readonly differences: readonly {
-        readonly actual: string | null;
-        readonly expected: string | null;
-        readonly paragraph: number;
-    }[];
+    readonly changedParts: readonly string[];
+    readonly differenceCount: number;
+    readonly differences: readonly CollaborationMigrationDifference[];
+    readonly documentId: string;
+    readonly failed: readonly CollaborationMigrationCheck[];
+    readonly from: string;
     readonly hidden: number;
+    readonly hiddenAt: readonly CollaborationMigrationPosition[];
     readonly missingLinks: readonly string[];
     readonly missingMedia: readonly string[];
     readonly ok: boolean;
     readonly paragraphs: number;
+    readonly to: string;
 }
 
 // @public
@@ -187,11 +204,13 @@ export interface DocumentCollaborationVersions {
 }
 
 // @public
-export function migrateCollaborationRoom(exported: Uint8Array, options: MigrateCollaborationRoomOptions): Promise<CollaborationMigration>;
+export function migrateCollaborationRoom(options: MigrateCollaborationRoomOptions): Promise<CollaborationMigration>;
 
 // @public
 export interface MigrateCollaborationRoomOptions {
-    readonly documentId: string;
+    readonly documentId?: string;
+    readonly exported: Uint8Array;
+    readonly state: Uint8Array;
 }
 
 // @public

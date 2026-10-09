@@ -82,11 +82,19 @@ export async function migrateStoredRooms(
         });
         continue;
       }
-      const migrated = await migrateCollaborationRoom(new Uint8Array(exported), {
-        documentId: room,
+      // The new room keeps the earlier room's document ID, which its clients open it with.
+      const migrated = await migrateCollaborationRoom({
+        state,
+        exported: new Uint8Array(exported),
       });
       if (!migrated.ok) {
-        results.push({ room, outcome: 'failed-check', report: migrated.report });
+        results.push(
+          migrated.reason === 'check-failed'
+            ? { room, outcome: 'failed-check', report: migrated.report }
+            : migrated.reason === 'current'
+              ? { room, outcome: 'current' }
+              : { room, outcome: 'later-format', detail: 'a later build wrote this room' }
+        );
         continue;
       }
       if (options.dryRun) {

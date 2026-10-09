@@ -568,6 +568,22 @@ const server = new Server({
 });
 ```
 
+Hocuspocus runs the hooks of its extensions before the server's own hooks. If an extension loads the saved state, such as `@hocuspocus/extension-database`, prepare the document in an extension that runs first. The following extension has a higher priority than the default of 100:
+
+```ts
+import type { Extension } from '@hocuspocus/server';
+import { prepareCollaborationServerDocument } from '@docx-editor.dev/pro/collaboration';
+
+export const prepareRoomDocument: Extension = {
+  priority: 1000,
+  async onLoadDocument({ document }) {
+    prepareCollaborationServerDocument(document);
+  },
+};
+```
+
+List it with your other extensions, for example `extensions: [prepareRoomDocument, database]`.
+
 A server that only relays updates, and holds no `Y.Doc`, needs no preparation.
 
 ## Compact rooms on a server
@@ -762,7 +778,7 @@ See [Collaboration versions and upgrades](/docs/2.x/pro/collaboration-versions) 
 
 ### Upgrade a persisted room
 
-When a release requires a room upgrade, export with the compatible previous build and create a fresh room from the verified DOCX. Keep local work and backups. Collaboration undo history starts afresh.
+When a release requires a room upgrade, export each room with the compatible previous build. With the new build, `migrateCollaborationRoom` seeds a room from the export and checks it before you replace the earlier room. Keep local work and backups. Collaboration undo history starts afresh.
 
 Follow [Upgrade saved rooms](/docs/2.x/pro/collaboration-versions#upgrade-saved-rooms) for the complete procedure, including offline edits and rollback.
 

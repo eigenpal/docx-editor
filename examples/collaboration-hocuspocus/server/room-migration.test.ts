@@ -56,7 +56,7 @@ afterEach(async () => {
 
 async function storedRooms(): Promise<Record<string, Uint8Array>> {
   directory = await mkdtemp(path.join(tmpdir(), 'room-migration-'));
-  const current = await migrateCollaborationRoom(EXPORT, { documentId: ROOMS.current });
+  const current = await migrateCollaborationRoom({ state: roomOfSchema(-1), exported: EXPORT });
   if (!current.ok) throw new Error('could not seed the current room');
   const states = {
     [ROOMS.earlier]: roomOfSchema(-1),
@@ -101,13 +101,14 @@ describe('migrating the rooms the server stores', () => {
     const earlier = results.find((result) => result.room === ROOMS.earlier)!;
     expect(earlier.outcome).toBe('migrated');
     if ('report' in earlier) {
-      expect(earlier.report).toEqual({
+      expect(earlier.report).toMatchObject({
         ok: true,
+        failed: [],
+        // The earlier room's own ID: its clients open the migrated room with it.
+        documentId: 'stored-room-1234567890abcdefg',
         paragraphs: 3,
         hidden: 0,
-        differences: [],
-        missingMedia: [],
-        missingLinks: [],
+        differenceCount: 0,
       });
     }
     expect(collaborationMigrationNeed(await stateOf(ROOMS.earlier))).toBe('current');

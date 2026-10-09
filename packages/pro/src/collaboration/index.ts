@@ -40,8 +40,10 @@ export {
   collaborationMigrationNeed,
   migrateCollaborationRoom,
   type CollaborationMigration,
+  type CollaborationMigrationCheck,
+  type CollaborationMigrationDifference,
+  type CollaborationMigrationPosition,
   type CollaborationMigrationNeed,
-  type CollaborationMigrationParagraph,
   type CollaborationMigrationReport,
   type MigrateCollaborationRoomOptions,
 } from './room-migration.ts';

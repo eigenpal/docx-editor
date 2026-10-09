@@ -147,7 +147,8 @@ for (const name of (await readdir(roomsDir)).filter((file) => file.endsWith('.yd
   if (need === 'later-format') problems.push('a later build wrote this room');
   if (need === 'current') {
     // The same format: no migration, and the room must serve as it is.
-    if (!(await editable(earlier, room))) problems.push('a participant cannot join it');
+    // The ID `earlier.mjs` gave every room.
+    if (!(await editable(earlier, 'upgrade-check'))) problems.push('a participant cannot join it');
     if (problems.length > 0) failed += 1;
     console.log(JSON.stringify({ room, path: 'current', problems }));
     continue;
@@ -166,9 +167,13 @@ for (const name of (await readdir(roomsDir)).filter((file) => file.endsWith('.yd
   const exported = exportedFirst;
   const doubled = doubledParagraphProperties(exported);
   if (doubled > 0) damaged += 1;
-  const migrated = await migrateCollaborationRoom(exported, { documentId: room });
+  const migrated = await migrateCollaborationRoom({ state: earlier, exported });
   if (!migrated.ok) {
-    problems.push(`check failed: ${JSON.stringify(migrated.report.differences.slice(0, 3))}`);
+    problems.push(
+      migrated.reason === 'check-failed'
+        ? `check failed: ${JSON.stringify(migrated.report.differences.slice(0, 3))}`
+        : `refused: ${migrated.reason}`
+    );
   } else {
     if (migrated.report.hidden > 0) {
       problems.push(`${migrated.report.hidden} paragraphs are not editable`);
@@ -176,7 +181,10 @@ for (const name of (await readdir(roomsDir)).filter((file) => file.endsWith('.yd
     if (collaborationMigrationNeed(migrated.state) !== 'current') {
       problems.push('the migrated room is not in the current format');
     }
-    if (!(await editable(migrated.state, room))) problems.push('a participant cannot join it');
+    // The earlier build's participants opened the room with this ID; the migration keeps it.
+    if (!(await editable(migrated.state, migrated.report.documentId))) {
+      problems.push('a participant cannot join it');
+    }
     await writeFile(path.join(roomsDir, name), migrated.state);
     await writeFile(path.join(roomsDir, `${room}.migrated`), '');
     migratedRooms += 1;
@@ -186,7 +194,7 @@ for (const name of (await readdir(roomsDir)).filter((file) => file.endsWith('.yd
     JSON.stringify({
       room,
       path: 'migrated',
-      paragraphs: migrated.report.paragraphs,
+      paragraphs: 'report' in migrated ? migrated.report.paragraphs : 0,
       doubledParagraphProperties: doubled,
       problems,
     })
