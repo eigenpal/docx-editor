@@ -68,27 +68,71 @@ describe('listenForPopupFocusLeave', () => {
     expect(closed).toBe(2);
   });
 
-  test('focus that enters a modal dialog keeps the popup open', () => {
-    const view = editorFixture();
+  function modal(marked: boolean) {
     const dialog = document.createElement('div');
     dialog.setAttribute('role', 'dialog');
     dialog.setAttribute('aria-modal', 'true');
+    if (marked) dialog.setAttribute('data-docx-dialog', 'paragraph');
     const field = document.createElement('input');
     dialog.append(field);
     document.body.append(dialog);
     cleanups.push(() => dialog.remove());
-    let closed = 0;
+    return field;
+  }
+
+  function countCloses(view: ReturnType<typeof editorFixture>) {
+    const state = { closed: 0 };
     cleanups.push(
       listenForPopupFocusLeave({
         popup: view.popup,
         contains: (node) => view.popup.contains(node),
         close: () => {
-          closed += 1;
+          state.closed += 1;
         },
       })
     );
+    return state;
+  }
+
+  test("focus that enters the editor's own modal dialog keeps the popup open", () => {
+    const view = editorFixture();
+    const field = modal(true);
+    const state = countCloses(view);
     field.focus();
-    expect(closed).toBe(0);
+    expect(state.closed).toBe(0);
+  });
+
+  test("focus that enters a host's modal dialog closes the popup", () => {
+    const view = editorFixture();
+    const field = modal(false);
+    const state = countCloses(view);
+    field.focus();
+    expect(state.closed).toBe(1);
+  });
+
+  test("focus in the editor's native showModal dialog keeps the popup open", () => {
+    const view = editorFixture();
+    const dialog = document.createElement('dialog');
+    dialog.setAttribute('data-docx-modal', '');
+    const field = document.createElement('input');
+    dialog.append(field);
+    document.body.append(dialog);
+    cleanups.push(() => dialog.remove());
+    const state = countCloses(view);
+    field.focus();
+    expect(state.closed).toBe(0);
+  });
+
+  test('a modal dialog inside the editor instance counts as its own', () => {
+    const view = editorFixture();
+    const dialog = document.createElement('div');
+    dialog.setAttribute('aria-modal', 'true');
+    const field = document.createElement('input');
+    dialog.append(field);
+    view.instance.append(dialog);
+    const state = countCloses(view);
+    field.focus();
+    expect(state.closed).toBe(0);
   });
 });
 
@@ -137,5 +181,34 @@ describe('listenForPopupEscape', () => {
     // starts at the inner button, which the popup's subtree holds through its host.
     expect(escape(inner).defaultPrevented).toBe(true);
     expect(closes.length).toBe(1);
+  });
+
+  test("Escape in a host's modal dialog closes the popup and keeps its default", () => {
+    const view = editorFixture();
+    const dialog = document.createElement('div');
+    dialog.setAttribute('aria-modal', 'true');
+    const field = document.createElement('input');
+    dialog.append(field);
+    document.body.append(dialog);
+    cleanups.push(() => dialog.remove());
+    const closes: boolean[] = [];
+    listen(view, closes);
+    expect(escape(field).defaultPrevented).toBe(false);
+    expect(closes).toEqual([false]);
+  });
+
+  test("Escape in the editor's own modal dialog is left to the dialog", () => {
+    const view = editorFixture();
+    const dialog = document.createElement('div');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.setAttribute('data-docx-dialog', 'paragraph');
+    const field = document.createElement('input');
+    dialog.append(field);
+    document.body.append(dialog);
+    cleanups.push(() => dialog.remove());
+    const closes: boolean[] = [];
+    listen(view, closes);
+    expect(escape(field).defaultPrevented).toBe(false);
+    expect(closes).toEqual([]);
   });
 });

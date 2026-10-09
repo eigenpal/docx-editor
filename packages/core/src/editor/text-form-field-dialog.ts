@@ -19,6 +19,8 @@ export function textFormFieldDialog(
   const panel = document.createElement('dialog');
   const text = textFormLabels(panel, t);
   panel.className = 'docx-text-form-dialog';
+  // An editor modal: an open toolbar popup stays open behind it (see popup-escape.ts).
+  panel.setAttribute('data-docx-modal', '');
   text(panel, 'textFormField.title', 'aria-label');
   const heading = document.createElement('h2');
   heading.className = 'docx-text-form-dialog__header';

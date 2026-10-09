@@ -112,7 +112,7 @@ export const ImageAltText = defineComponent({
       return (
         <div ref={rootRef} class="docx-toolbar__alt-text">
           {props.asChild ? (
-            <Slot {...shared}>{slots.default?.()}</Slot>
+            <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>
           ) : (
             <button {...shared}>{slots.default?.() ?? text}</button>
           )}

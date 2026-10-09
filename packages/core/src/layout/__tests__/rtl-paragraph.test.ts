@@ -150,7 +150,7 @@ test('RTL words cannot consume the fixed gap around a floating object', () => {
   expect(reordered.map((span) => span.box.width)).toEqual([30, 20, 20]);
 });
 
-test('clicking beyond a wrapped RTL line stays before its trailing space', () => {
+test('clicking beyond a wrapped RTL line lands after its trailing space on that line', () => {
   const result = layout('مرحبا عالم '.repeat(12));
   const line = linesOf(result)[0]!;
   const hit = hitTestPage(
@@ -161,7 +161,8 @@ test('clicking beyond a wrapped RTL line stays before its trailing space', () =>
   );
   expect(hit?.lineId).toBe(line.id);
   expect(hit?.position.offset).toBe(lineEndOffset(result, line));
-  expect(hit?.position.offset).toBeLessThan(line.range.end);
+  expect(hit?.position.offset).toBe(line.range.end);
+  expect(hit?.caret.lineId).toBe(line.id);
 });
 
 test('bidi itemization does not add breaks at nonbreaking spaces', () => {

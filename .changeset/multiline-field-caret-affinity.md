@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/core': patch
+'@docx-editor.dev/core': minor
 ---
 
-Keep a clicked field boundary on its visual line instead of moving to the first or last result line. Use the same preference for caret paint, the native selection, and scrolling. Preserve model offsets and saved document content. Add an optional preferredLineId to caretAt options, with normal fallback for stale preferences.
+A click at a line edge keeps the caret on the clicked line, in multi-line field results, wrapped text, right-to-left lines, and beside inline pictures. `caretAt` accepts an optional `preferredLineId` that selects which painted line shows a shared position.

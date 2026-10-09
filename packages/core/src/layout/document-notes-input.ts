@@ -20,7 +20,7 @@ import { collectNoteReferences, resolveNotesPart } from '../store/package/note-r
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import type { DocumentLinkProjectors } from './document-link-projector.ts';
 import { layoutHeaderFooterStory } from './hf-layout.ts';
-import { enumerateDocumentSectionsBounded } from './section-properties.ts';
+import { enumerateDocumentSectionsBounded, sectionLineGridPt } from './section-properties.ts';
 import type { NotesLayoutInput } from './note-pagination.ts';
 import { paragraphSectionNode } from './section-properties.ts';
 import { storyBlocks } from './story-roots.ts';
@@ -150,6 +150,9 @@ export function createDocumentNotesInput(
     cache: options.cache,
     styleCascade: options.styleCascade?.(),
     numberingIndex: options.numberingIndex?.(),
+    lineGridPitchBySection: enumeration.sections.map((section) =>
+      sectionLineGridPt(section.properties)
+    ),
     defaultTabStopPt: options.defaultTabStopPt,
     compatibilityMode: options.compatibilityMode,
     displayMode: options.displayMode,

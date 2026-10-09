@@ -52,7 +52,7 @@ const MenuReportIssueImpl = defineComponent({
           }}
           {...(props.className ? { className: props.className } : {})}
         >
-          {label('toolbar.reportIssue')}
+          {{ default: () => label('toolbar.reportIssue') }}
         </MenuRow>
       );
     };
@@ -96,8 +96,9 @@ const MenuHelpImpl = defineComponent({
       if (slots.default === undefined && reportIssue === false) return null;
       return (
         <Menu id="help" {...attrs}>
-          <MenuReportIssue />
-          {slots.default?.()}
+          {{
+            default: () => [<MenuReportIssue />, slots.default?.()],
+          }}
         </Menu>
       );
     };

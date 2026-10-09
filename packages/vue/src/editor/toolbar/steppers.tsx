@@ -177,55 +177,59 @@ export const ToolbarFontSize = defineComponent({
               apply(nextPreset(sizePt.value ?? 0, FONT_SIZE_PRESETS_PT, MAX_HALF_POINTS / 2))
             }
           >
-            <input
-              ref={inputRef}
-              type="text"
-              inputmode="decimal"
-              class="docx-toolbar__stepper-value docx-toolbar__stepper-value--boxed docx-toolbar__font-size-input"
-              value={shown}
-              disabled={!command.isEnabled.value}
-              role="combobox"
-              aria-expanded={open.value}
-              aria-haspopup="listbox"
-              aria-label={label('fontSize.label')}
-              aria-controls={open.value ? listId : undefined}
-              autocomplete="off"
-              onInput={(event: Event) => {
-                draft.value = (event.target as HTMLInputElement).value;
-                open.value = true;
-              }}
-              onFocus={(event: FocusEvent) => {
-                (event.target as HTMLInputElement).select();
-                open.value = true;
-              }}
-              onClick={() => {
-                open.value = true;
-              }}
-              onKeydown={(event: KeyboardEvent) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  commitDraft();
-                  dismiss(true);
-                } else if (event.key === 'Escape') {
-                  event.preventDefault();
-                  dismiss(true);
-                } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-                  event.preventDefault();
-                  open.value = true;
-                  if (sizePt.value !== null) {
-                    apply(
-                      event.key === 'ArrowDown'
-                        ? prevPreset(sizePt.value, FONT_SIZE_PRESETS_PT, MIN_HALF_POINTS / 2)
-                        : nextPreset(sizePt.value, FONT_SIZE_PRESETS_PT, MAX_HALF_POINTS / 2)
-                    );
-                  }
-                }
-              }}
-              onBlur={() => {
-                commitDraft();
-                draft.value = null;
-              }}
-            />
+            {{
+              default: () => (
+                <input
+                  ref={inputRef}
+                  type="text"
+                  inputmode="decimal"
+                  class="docx-toolbar__stepper-value docx-toolbar__stepper-value--boxed docx-toolbar__font-size-input"
+                  value={shown}
+                  disabled={!command.isEnabled.value}
+                  role="combobox"
+                  aria-expanded={open.value}
+                  aria-haspopup="listbox"
+                  aria-label={label('fontSize.label')}
+                  aria-controls={open.value ? listId : undefined}
+                  autocomplete="off"
+                  onInput={(event: Event) => {
+                    draft.value = (event.target as HTMLInputElement).value;
+                    open.value = true;
+                  }}
+                  onFocus={(event: FocusEvent) => {
+                    (event.target as HTMLInputElement).select();
+                    open.value = true;
+                  }}
+                  onClick={() => {
+                    open.value = true;
+                  }}
+                  onKeydown={(event: KeyboardEvent) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      commitDraft();
+                      dismiss(true);
+                    } else if (event.key === 'Escape') {
+                      event.preventDefault();
+                      dismiss(true);
+                    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                      event.preventDefault();
+                      open.value = true;
+                      if (sizePt.value !== null) {
+                        apply(
+                          event.key === 'ArrowDown'
+                            ? prevPreset(sizePt.value, FONT_SIZE_PRESETS_PT, MIN_HALF_POINTS / 2)
+                            : nextPreset(sizePt.value, FONT_SIZE_PRESETS_PT, MAX_HALF_POINTS / 2)
+                        );
+                      }
+                    }
+                  }}
+                  onBlur={() => {
+                    commitDraft();
+                    draft.value = null;
+                  }}
+                />
+              ),
+            }}
           </StepperShell>
           {open.value && command.isEnabled.value ? (
             <div
@@ -310,23 +314,27 @@ export const ToolbarZoom = defineComponent({
             onDecrease={zoomState.zoomOut}
             onIncrease={zoomState.zoomIn}
           >
-            <button
-              type="button"
-              class="docx-toolbar__stepper-value docx-toolbar__stepper-value--menu"
-              disabled={!editorRef.value}
-              aria-haspopup="listbox"
-              aria-expanded={open.value}
-              aria-label={`${label('zoom.zoomLevel')}: ${display}`}
-              onMousedown={guardToolbarMousedown}
-              onClick={() => {
-                open.value = !open.value;
-              }}
-            >
-              {display}
-              <span class="docx-toolbar__picker-caret" aria-hidden="true">
-                ▾
-              </span>
-            </button>
+            {{
+              default: () => (
+                <button
+                  type="button"
+                  class="docx-toolbar__stepper-value docx-toolbar__stepper-value--menu"
+                  disabled={!editorRef.value}
+                  aria-haspopup="listbox"
+                  aria-expanded={open.value}
+                  aria-label={`${label('zoom.zoomLevel')}: ${display}`}
+                  onMousedown={guardToolbarMousedown}
+                  onClick={() => {
+                    open.value = !open.value;
+                  }}
+                >
+                  {display}
+                  <span class="docx-toolbar__picker-caret" aria-hidden="true">
+                    ▾
+                  </span>
+                </button>
+              ),
+            }}
           </StepperShell>
           {open.value ? (
             <div
