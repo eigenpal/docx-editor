@@ -11,8 +11,7 @@
 // Run it with Node 22.18 or later: `node server/server.ts`. Node strips the types.
 // Hocuspocus v4 targets Node, not Bun.
 
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import path from 'node:path';
+import { mkdir, readFile } from 'node:fs/promises';
 import { Server } from '@hocuspocus/server';
 import {
   checkCollaborationRoomGeneration,
@@ -23,6 +22,7 @@ import {
 import * as Y from 'yjs';
 import { admissionError, authenticateDemoToken } from '../shared/admission.ts';
 import { loadStoredDemoDocument } from './stored-room.ts';
+import { DATA_DIR, ROOM_ID, roomFile, writeAtomically } from './room-files.ts';
 
 const PORT = Number(process.env.PORT ?? 1234);
 
@@ -33,28 +33,6 @@ const PORT = Number(process.env.PORT ?? 1234);
  * `onAuthenticate` below.
  */
 const TOKEN = process.env.COLLAB_TOKEN ?? 'demo-token';
-
-const DATA_DIR = path.join(import.meta.dirname, '.data');
-
-/**
- * The room id shape `@docx-editor.dev/pro` validates, repeated here.
- *
- * `documentName` is whatever the client asked for, so it is untrusted: it reaches a file path
- * below. This test admits no `.`, no `/`, and no `\`, which is what keeps a room out of a
- * directory the server did not choose.
- */
-const ROOM_ID = /^[A-Za-z0-9_-]{24,256}$/;
-
-function roomFile(documentName: string): string | null {
-  if (!ROOM_ID.test(documentName)) return null;
-  return path.join(DATA_DIR, `${documentName}.ydoc`);
-}
-
-/** Write through a temporary file, so a crash mid-write keeps the previous room state. */
-async function writeAtomically(file: string, bytes: Uint8Array): Promise<void> {
-  await writeFile(`${file}.tmp`, bytes);
-  await rename(`${file}.tmp`, file);
-}
 
 const server = new Server({
   port: PORT,

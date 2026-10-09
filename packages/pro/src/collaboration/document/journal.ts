@@ -5,6 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { projectedTextTarget } from './projected-text-target.ts';
 import { routeInlineEffects, type InlinePlan } from './paragraph-text-writer.ts';
+import { writeTypedInsert, type TypedInsert } from './paragraph-text-typing.ts';
 import {
   applyInlinePlan,
   deleteCopiesOfRemoved,
@@ -525,8 +526,22 @@ function mintedNodeCount(effects: readonly SharedEffect[]): number {
 export function applyPrimitiveJournal(
   registry: DocumentRegistry,
   given: CanonicalPrimitiveJournal,
-  routed?: InlinePlan | null
+  routed?: InlinePlan | null,
+  /** Typing the projection found it can write straight to its paragraph's text. */
+  typed?: TypedInsert
 ): ApplyJournalResult {
+  if (typed) {
+    let written = false;
+    registry.doc.transact(() => {
+      registry.noteWrite();
+      written = writeTypedInsert(registry, typed);
+    }, JOURNAL_ORIGIN);
+    // The text changed between planning and writing: nothing was written, so the editor's
+    // tree takes shared state back.
+    return written
+      ? { ok: true }
+      : { ok: false, code: 'invalid-bound', detail: 'typed text changed', transient: true };
+  }
   // A journal the projection did not route (one in shared coordinates already) is routed
   // here, so paragraph inline content always goes to shared text.
   let plan = routed;

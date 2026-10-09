@@ -16,7 +16,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // properties again, undo, and keep typing.
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import type { OoxmlNode, TreeDocOp } from '@docx-editor.dev/core/store';
+import { readOoxmlPackage, type OoxmlNode, type TreeDocOp } from '@docx-editor.dev/core/store';
+import { readCollaborationDocument } from '../document-read.ts';
 import { createPeerHarness, nodeText, zipDocument, type Peer } from './document-peer-support.ts';
 
 const harness = createPeerHarness('concurrent-paragraph-properties-room');
@@ -308,5 +309,41 @@ describe('concurrent singleton properties', () => {
     const run = paragraph(bob).children.find((child) => child.kind === 'run')!;
     const properties = run.kind === 'textValue' ? null : run.children[0]!;
     expect(properties ? childNames(properties) : []).toEqual(['b', 'b']);
+  });
+
+  test('a file with two w:pPr in one paragraph seeds a room that shows and edits it', async () => {
+    // A room damaged by concurrent property edits on an earlier format exports a paragraph
+    // with two `w:pPr`. Seeded again, that paragraph has to show, take edits, and save back.
+    const { alice, bob } = await harness.pair(
+      zipDocument(
+        '<w:p><w:r><w:t>Before</w:t></w:r></w:p>' +
+          '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:pPr><w:jc w:val="right"/></w:pPr>' +
+          '<w:r><w:t>Doubled</w:t></w:r></w:p>' +
+          '<w:p><w:r><w:t>After</w:t></w:r></w:p><w:sectPr/>'
+      )
+    );
+    expect(harness.paragraphIdAt(alice, 1)).toBeDefined();
+    harness.apply(alice, [
+      { op: 'insertText', paragraphId: harness.paragraphIdAt(alice, 1), offset: 0, text: 'Still ' },
+    ]);
+    expectHealthy(alice, bob);
+    harness.expectConverged(alice, bob);
+    expect([0, 1, 2].map((index) => nodeText(paragraph(bob, index)))).toEqual([
+      'Before',
+      'Still Doubled',
+      'After',
+    ]);
+    // The first `w:pPr` decides the alignment; the second is kept as it was.
+    expect(alignment(bob, 1)).toBe('center');
+    const saved = readOoxmlPackage(readCollaborationDocument(alice.ydoc));
+    if (!saved.ok) throw new Error(saved.reason);
+    const doubled = saved.package.parts.get(saved.package.mainDocumentPart)!.root.children[0]!;
+    if (doubled.kind === 'textValue') throw new Error('no body');
+    const exported = doubled.children[1]!;
+    if (exported.kind === 'textValue') throw new Error('no paragraph');
+    expect(exported.kind).toBe('paragraph');
+    expect(
+      exported.children.filter((child) => child.kind !== 'textValue' && child.localName === 'pPr')
+    ).toHaveLength(2);
   });
 });

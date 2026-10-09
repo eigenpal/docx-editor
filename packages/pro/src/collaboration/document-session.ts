@@ -12,7 +12,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * other, because a remote publication deliberately emits no journal.
  */
 
-import { projectJournalToShared } from './document/projected-journal.ts';
+import { projectTypingOrJournal } from './document/projected-journal.ts';
 import { editWaits } from './document/journal.ts';
 import { markRestoredText } from './document/paragraph-text-restore.ts';
 import { awaitingUpdates } from './document/yjs-items.ts';
@@ -538,7 +538,7 @@ class DocumentSession implements DocumentCollaborationSession {
     // Enforce admission here too, before minting identities or publishing document/blob data.
     if (!this.canWriteSharedState()) return;
     this.registry.inline.takeDrift();
-    const projected = projectJournalToShared(
+    const projected = projectTypingOrJournal(
       this.registry,
       this.identityMap.translate(journal),
       (id) => this.materializer.shownPartChildren(id)
@@ -566,7 +566,12 @@ class DocumentSession implements DocumentCollaborationSession {
           const published = putJournalBlobs(this.blobs, blobs.payloads);
           if (published !== null) return published;
         }
-        const result = applyPrimitiveJournal(this.registry, shared, projected.plan);
+        const result = applyPrimitiveJournal(
+          this.registry,
+          shared,
+          projected.plan,
+          projected.typed
+        );
         if (!result.ok) {
           transient = result.transient === true;
           return {

@@ -70,7 +70,17 @@ Preserve local and offline edits before reloading browser tabs. Upgrade the app,
 
 For saved rooms and offline work, follow the [collaboration upgrade guide](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions). Pause editing and preserve pending work before exporting with the compatible previous build. Verify the DOCX, then create a replacement room. Collaboration undo history starts afresh.
 
-This demo does not automatically migrate or delete incompatible rooms. Its sample app seeds rooms from `DOCUMENT_URL`; change that source to the verified DOCX for the replacement room. Keep the old room and its backups until you accept the migration.
+### Migrate saved rooms
+
+The server does not migrate rooms by itself. Two scripts move every saved room to the current collaboration format. Each script reads and writes `server/.data/`. Adapt them to your storage.
+
+1. Stop the server, so no participant edits a room during the migration.
+1. With the build that created the rooms, run `node server/export-rooms.ts`. It writes `<room>.migration.docx` beside each room. It uses only `readCollaborationDocument`, so it runs with an earlier build unchanged.
+1. With the new build, run `node server/migrate-rooms.ts --dry-run`. For each room, it seeds a new room from the export and checks that the new room holds the same paragraphs with the same text. It prints one line for each room and writes nothing.
+1. If every room passes, run `node server/migrate-rooms.ts`. It keeps each old state as `<room>.ydoc.previous` and writes the new state in its place. Rooms already in the current format stay as they are.
+1. Start the server with the new build.
+
+A room that fails the check is not changed, and the script exits with status 1. A line that reports paragraphs as not editable names text the new room keeps but the editor cannot show; check those rooms before you resume editing. Keep the backups until you accept the migration. Collaboration undo history starts afresh in a migrated room.
 
 ### Check admission and recovery
 
@@ -80,7 +90,7 @@ Run the example tests from the repository root:
 bun run --filter docx-editor-example-collaboration-hocuspocus test
 ```
 
-The tests exercise admission and saved-room refusal without starting a server. They cover matching, missing, older, future, and malformed version claims; incorrect secrets; and preservation of live state when a saved room is refused.
+The tests exercise admission, saved-room refusal, and room migration without starting a server. They cover matching, missing, older, future, and malformed version claims; incorrect secrets; preservation of live state when a saved room is refused; and a migration that keeps every paragraph of the export.
 
 Hocuspocus stores room snapshots. `readCollaborationDocument` exports a room to DOCX.
 

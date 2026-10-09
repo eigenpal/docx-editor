@@ -23,6 +23,7 @@ import {
 } from './singleton-children.ts';
 import { PACKAGE_NODES_KEY, NODE_TEXT_FIELD, makeTextRecord, type SharedRecord } from './schema.ts';
 import { splitWinnerOrder } from './split-dedup.ts';
+import { typedInsertOf, type TypedInsert } from './paragraph-text-typing.ts';
 import type { DocumentRegistry } from './registry.ts';
 import type { LogicalId } from './identity.ts';
 import { sharedEffect, type SharedEffect, type SharedNodeDescriptor } from './shared-effect.ts';
@@ -296,6 +297,22 @@ export interface ProjectedJournal {
   readonly ok: true;
   readonly journal: CanonicalPrimitiveJournal;
   readonly plan: InlinePlan | null;
+  /** Typing at one place, written straight to its paragraph's text (`typedInsertOf`). */
+  readonly typed?: TypedInsert;
+}
+
+/**
+ * A local journal in shared coordinates: typing at one place as the insert it writes
+ * (`typedInsertOf`), and any other journal projected (`projectJournalToShared`).
+ */
+export function projectTypingOrJournal(
+  registry: DocumentRegistry,
+  original: CanonicalPrimitiveJournal,
+  shownPartChildren?: (rootId: LogicalId) => readonly LogicalId[] | null
+): ProjectedJournal | ProjectionRefusal {
+  const typed = typedInsertOf(registry, original);
+  if (typed) return { ok: true, journal: { ...original, effects: [] }, plan: null, typed };
+  return projectJournalToShared(registry, original, shownPartChildren);
 }
 
 /**

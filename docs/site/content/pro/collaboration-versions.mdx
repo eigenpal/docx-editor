@@ -221,6 +221,10 @@ Format `docx-collaboration:1.4.2.1` stores each paragraph's text, runs, and char
 
 Participants with earlier formats store paragraphs differently and would show different documents, so the formats refuse to share a room. Follow [Upgrade saved rooms](#upgrade-saved-rooms) for each saved room. Export with the build that created the room, then seed a replacement room with the new build. Check paragraph and character formatting in the reopened export before you resume editing.
 
+A room in which participants changed one paragraph's properties at the same time can export that paragraph with two `w:pPr` elements. The new build reads such a paragraph with its first `w:pPr` and keeps the second unchanged, so the paragraph shows and saves in the replacement room.
+
+The Hocuspocus example includes two scripts that run this procedure for every room a server stores: one exports each room with the earlier build, and one seeds each replacement and checks that it holds the same paragraphs with the same text before it replaces the old state. For the steps, see [Migrate saved rooms](https://github.com/eigenpal/docx-editor/tree/main/examples/collaboration-hocuspocus#migrate-saved-rooms).
+
 ### Roll back an upgrade
 
 Before editing starts in the replacement room, you can restore the previous deployment and route users back to the original room.

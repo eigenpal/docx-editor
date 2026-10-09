@@ -208,6 +208,11 @@ export class IdentityIndex {
     return this.tables[kind].get(client)?.overlapping(start, end) ?? [];
   }
 
+  /** Whether any paragraph holds a moved or restored copy of a character of `client`. */
+  hasCopies(client: number): boolean {
+    return this.tables.move.has(client) || this.tables.restore.has(client);
+  }
+
   /** The paragraphs that hold one character as `kind`. */
   holdersOf(kind: RunKind, client: number, clock: number): LogicalId[] {
     return (this.tables[kind].get(client)?.overlapping(clock, clock + 1) ?? []).map(

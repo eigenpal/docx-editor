@@ -490,6 +490,8 @@ export class TextFollow {
     const parsed = parseClientClock(identity);
     if (!parsed) return null;
     const { client, clock } = parsed;
+    // Typing asks this of every character it was typed after; most clients have no copies.
+    if (!this.index.hasCopies(client)) return null;
     return (
       this.lastOf(this.index.holdersOf('move', client, clock)) ??
       this.lastOf(this.index.holdersOf('restore', client, clock))

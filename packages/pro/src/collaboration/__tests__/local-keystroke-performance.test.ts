@@ -42,8 +42,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 //      cost of ~0.05-0.25 ms, which is 1.7x-3.1x with nothing wrong — it has no headroom
 //      under 2x on any machine, and the term that moves between machines is the one in the
 //      numerator. The 200-page fixture commits in ~0.2-0.4 ms. With one shared text per
-//      paragraph, a local insert also rebuilds and rereads its paragraph's shared view, and
-//      the fixture reads 1.1x-1.6x in the best block and up to 2x in the others.
+//      paragraph, typing writes straight to its paragraph's text and rereads its identities,
+//      and the fixture reads 1.0x-1.4x in the best block and up to 1.7x in the others.
 //      The gate exists to catch an O(document) capture cost, and three paragraphs cannot
 //      show one: the prose ratio was gating noise it could not tell from a regression, and
 //      it failed three of three CI runs on main while the 200-page arm passed all three.
@@ -85,11 +85,12 @@ const BLOCK_ROUNDS = 8;
 const LEAK_EDITS = 400;
 const LONG_TEXT = 'abcdefghijklmnopqrstuvwxyz '.repeat(12);
 /**
- * The ceiling on the best block's ratio. The paragraph-text path measures 1.1x-1.6x locally
- * and has read 2.6x on a loaded CI runner, so a 2x ceiling failed by noise alone. The gate
- * exists to catch a cost that grows with the document, which reads 5x and more.
+ * The ceiling on the best block's ratio. Typing measures 1.0x-1.4x in the best block locally,
+ * and a loaded CI runner has read about 1.7 times the local figure, so 2x would fail by noise
+ * alone. The gate exists to catch a cost that grows with the document, which reads 5x and
+ * more.
  */
-const BUDGET_RATIO = 3;
+const BUDGET_RATIO = 2.5;
 
 function summarize(values: readonly number[]): {
   readonly minMs: number;
@@ -540,7 +541,7 @@ describe('local keystroke path with a replica attached', () => {
   });
 
   test(
-    '200-page fixture insert stays within 3x solo',
+    '200-page fixture insert stays within 2.5x solo',
     async () => {
       const fixture = resolve(
         import.meta.dir,
@@ -627,7 +628,7 @@ describe('local keystroke path with a replica attached', () => {
       //
       // This number was measured when lowering copied every id in the part into a Set on each
       // primitive, which cost O(document) per keystroke — 34,555 string hashes on this
-      // fixture. Attached now runs at about 1.5x-2x solo, so 18.6 ms would let a 10x regression
+      // fixture. Attached now runs at about 1.2x-1.6x solo, so 18.6 ms would let a 10x regression
       // through unnoticed. The ratio rule scales with the machine instead, which matters
       // because this file shares a CI runner with the rest of its shard: an absolute budget
       // silently becomes a different test on slower hardware.

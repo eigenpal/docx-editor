@@ -262,6 +262,20 @@ export class InlineIndex {
     };
   }
 
+  /**
+   * Whether a paragraph's text names an ID that shows tagged anywhere: one another text names
+   * too, or a shell ID a record already has. Such a paragraph shows other IDs than its text
+   * says, so an edit of it reads the whole paragraph.
+   */
+  sharesIds(paragraphId: LogicalId): boolean {
+    this.ensureBuilt();
+    for (const id of this.idsOf.get(paragraphId) ?? []) {
+      if ((this.holders.get(id)?.size ?? 0) > 1) return true;
+      if (!this.embeds.has(id) && this.nodes.has(id)) return true;
+    }
+    return false;
+  }
+
   /** Whether this ID names a registry node a paragraph's text embeds. */
   isEmbed(id: string): boolean {
     this.ensureBuilt();

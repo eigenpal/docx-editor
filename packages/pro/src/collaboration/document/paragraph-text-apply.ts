@@ -96,7 +96,7 @@ function groups<T>(items: readonly T[], key: (item: T) => string): T[][] {
  * The follow attribute for text typed at `position`: the copy right before it, or at the
  * start of the text the copy right after it. Null when no copy is next to it.
  */
-function followAnchorAt(identities: TextIdentities | null, position: number): string | null {
+export function followAnchorAt(identities: TextIdentities | null, position: number): string | null {
   if (!identities) return null;
   if (position > 0) {
     const left = identities.ids[position - 1];
@@ -111,7 +111,7 @@ function followAnchorAt(identities: TextIdentities | null, position: number): st
  * where text typed before a peer's move of them would also be. When a copy of one of them
  * shows, the text names the character it was typed after, so it stays.
  */
-function insertTyped(
+export function insertTyped(
   text: Y.Text,
   position: number,
   value: string,
@@ -167,7 +167,7 @@ function insertEmbedMarked(
 }
 
 /** Insert text that follows `anchor` wherever its anchor shows, and mark it so. */
-function insertFollowing(
+export function insertFollowing(
   text: Y.Text,
   position: number,
   value: string,
