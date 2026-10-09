@@ -92,39 +92,6 @@
   justify-content: flex-end;
 }
 
-/* The review layout switch: a compact select; its label is for screen readers. */
-.demo-review-layout {
-  display: inline-flex;
-  align-items: center;
-}
-
-.demo-review-layout__label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-
-/* Two selects do not fit beside the menu on a narrow window; the header keeps the menu. */
-@media (max-width: 1279px) {
-  .demo-review-layout {
-    display: none;
-  }
-}
-
-.demo-review-layout select {
-  max-width: 170px;
-  padding: 5px 8px;
-  border: 1px solid var(--doc-border);
-  border-radius: 6px;
-  background: var(--doc-surface);
-  color: var(--doc-text);
-  font: inherit;
-  font-size: 13px;
-}
-
 /* Title column: the editable name with the File / Format / Help row beneath. */
 .demo-header__title-block {
   flex: 1 1 auto;

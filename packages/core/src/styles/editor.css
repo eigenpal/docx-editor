@@ -5402,35 +5402,45 @@ a.docx-hyperlink:focus-visible {
 
 .docx-review__marker[data-marker='initials']:focus-visible {
   outline: 2px solid var(--doc-focus-ring);
-  outline-offset: 1px;
+  /* Outside the badge's 2px surface ring, so the focus ring stays visible. */
+  outline-offset: 3px;
 }
 
 .docx-review__badge {
   position: relative;
   display: inline-flex;
   box-sizing: border-box;
-  width: 26px;
+  min-width: 26px;
   height: 26px;
+  padding: 0 4px;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
   border-radius: 13px 13px 13px 3px;
   /* The full author colour, not the softened disc: see `--doc-review-avatar-ink`. */
   background: var(--doc-review-author-current, var(--doc-review-author-0));
-  box-shadow: 0 1px 2px var(--doc-shadow);
+  /* A ring in the surface colour lifts the miniature off the page edge and off a
+     neighbouring marker; the soft drop shadow gives it depth. */
+  box-shadow:
+    0 0 0 2px var(--doc-surface),
+    0 2px 6px -1px var(--doc-shadow);
   color: var(--doc-review-avatar-ink);
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1;
-  transition: transform 140ms var(--doc-motion-ease-out);
+  transition:
+    transform 160ms var(--doc-motion-ease-out),
+    box-shadow 160ms ease;
 }
 
-/* On a dark surface the darker author colours lose their edge; a hairline ring keeps it. */
+/* On a dark surface the darker author colours lose their edge; a hairline outside the ring
+   keeps it. */
 .docx-editor.dark .docx-review__badge:not([data-resolved]) {
   box-shadow:
-    0 0 0 1px var(--doc-border),
-    0 1px 2px var(--doc-shadow);
+    0 0 0 2px var(--doc-surface),
+    0 0 0 3px var(--doc-border),
+    0 2px 6px -1px var(--doc-shadow);
 }
 
 /* Resolved: quiet. Surface ground, muted ink, a hairline ring — present, not calling out. */
@@ -5461,7 +5471,8 @@ a.docx-hyperlink:focus-visible {
   border-radius: 999px;
   background: var(--doc-surface);
   box-shadow: 0 0 0 1px var(--doc-border);
-  color: var(--doc-text);
+  /* The count reads in the thread author's colour, so it belongs to its badge. */
+  color: var(--doc-review-author-current, var(--doc-text));
   font-size: 9px;
   font-weight: 600;
 }
@@ -5470,6 +5481,12 @@ a.docx-hyperlink:focus-visible {
   .docx-review__marker[data-marker='initials']:hover .docx-review__badge,
   .docx-review__resolved-toggle:hover .docx-review__badge {
     transform: translateY(-1px);
+  }
+
+  .docx-review__marker[data-marker='initials']:hover .docx-review__badge:not([data-resolved]) {
+    box-shadow:
+      0 0 0 2px var(--doc-surface),
+      0 4px 10px -2px var(--doc-shadow);
   }
 }
 

@@ -34,7 +34,7 @@ import { googleFonts } from '@docx-editor.dev/fonts/google';
 import { BrandLogo } from '../../shared/BrandLogo';
 import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
 import { SourceLink } from '../../shared/SourceLink';
-import { ReviewLayoutSwitch } from './ReviewLayoutSwitch';
+import { ReviewSettings, storedReviewPane } from './ReviewSettings';
 import { ThemeToggle } from './ThemeToggle';
 import { DrawingsE2eBridge } from './DrawingsE2eBridge';
 import { ReviewWritesE2eBridge } from './ReviewWritesE2eBridge';
@@ -64,8 +64,10 @@ import {
  * e2e/fixtures/sdt-custom-tag-original.docx to see one). Both accept `{ licenseKey }` —
  * optional while licensing is honor-system.
  */
+const SAVED_REVIEW_PANE = storedReviewPane();
 const PRO_MODULES = [
-  reviewModule(),
+  // The review display settings saved by the header's settings panel, if any.
+  reviewModule(SAVED_REVIEW_PANE ? { pane: SAVED_REVIEW_PANE } : {}),
   customNodesModule({
     nodes: [DEMO_CITATION],
     // A payload comes from a file the sender wrote, so a mismatch is an ordinary property of an
@@ -493,7 +495,7 @@ function EditorChrome({
 
         <div className="demo-header__right">
           <ThemeToggle value={colorMode} onChange={onColorModeChange} />
-          <ReviewLayoutSwitch />
+          <ReviewSettings />
           <DemoHeaderButton
             variant="primary"
             disabled={!editor || collaborating}
