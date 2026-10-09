@@ -1,3 +1,7 @@
+import {
+  syncLineDrawingBaselines,
+  repositionLineDrawings,
+} from './pending-line-drawing-baseline.ts';
 import { revisionMarkupHidesDrawing } from './revision-markup-projection.ts';
 import {
   cellTabReplayScope,
@@ -83,7 +87,6 @@ import {
   buildInlineDrawingRecord,
   inlineDrawingVerticalLayout,
   measureInlineDrawing,
-  repositionInlineDrawingsForBaseline,
   anchoredDrawingAtomsInParagraph,
   drawingModelOffsetsInParagraph,
   type InlineDrawingRecord,
@@ -833,28 +836,6 @@ export function breakParagraph(
     return { extentTopY: layout.extentTopY };
   };
 
-  const syncDrawingBaselinesBeforeSpacing = (): void => {
-    if (line.drawings.length === 0) return;
-    if (line.spans.every((span) => pageBreaksIgnored && span.text === PAGE_BREAK_CHAR)) {
-      line.baseline = Math.max(
-        line.baseline,
-        ...line.drawings.map((drawing) => drawing.y + drawing.height)
-      );
-    }
-    const repositioned = repositionInlineDrawingsForBaseline(line.drawings, line.baseline);
-    (line.drawings as InlineDrawingRecord[]).splice(0, line.drawings.length, ...repositioned);
-    line.baseline = Math.max(
-      line.baseline,
-      ...line.drawings.map((drawing) => drawing.y + drawing.height)
-    );
-  };
-
-  const repositionDrawingsToFinalBaseline = (): void => {
-    if (line.drawings.length === 0) return;
-    const repositioned = repositionInlineDrawingsForBaseline(line.drawings, line.baseline);
-    (line.drawings as InlineDrawingRecord[]).splice(0, line.drawings.length, ...repositioned);
-  };
-
   const closeLine = (options?: { readonly includeParagraphMark?: boolean }): void => {
     previousLineCut = false; // Only the oversized-word cut sets it again.
     placeLeadingIgnoredBreaks(line, pageBreaksIgnored);
@@ -885,7 +866,7 @@ export function breakParagraph(
       glyphBaseline += raised;
     }
     growRunBorderLineMetrics(line, measurer);
-    syncDrawingBaselinesBeforeSpacing();
+    syncLineDrawingBaselines(line, pageBreaksIgnored);
     growPendingLineDrawingExtent(line);
     // Apply paragraph line spacing once to the finished box.
     const naturalHeight = line.height;
@@ -937,7 +918,7 @@ export function breakParagraph(
     // Baseline shifts from line spacing must move inline drawings too, or authored distT/distB
     // and the text baseline drift apart. For `exact`, keep the authored box — tall drawings
     // clip/overflow per content-clip policy; auto/atLeast still grow to contain distB.
-    repositionDrawingsToFinalBaseline();
+    repositionLineDrawings(line);
     // A picture taller than a shortened line paints only below the line's top.
     if (removesTextBand) clipLineDrawingsAtTop(line);
     if (lineSpacing.rule !== 'exact') growPendingLineDrawingExtent(line);
@@ -945,6 +926,22 @@ export function breakParagraph(
       line.drawings.length === 0 && lineSpacing.rule !== 'exact'
         ? Math.max(0, spaced.trailing ?? spaced.height - naturalHeight)
         : drawingLineTrailing;
+    // An empty grid line fits when its glyph band fits. Keep its full advance.
+    // The bottom half-leading can extend beyond the page text edge.
+    if (
+      empty &&
+      rawPieces.length === 0 &&
+      lineSpacing.rule === 'auto' &&
+      lineSpacing.value === 240 &&
+      lineSpacing.gridPitch !== undefined &&
+      !pageBreaksIgnored &&
+      markerAscent === 0 &&
+      markerBaselineFloor === 0 &&
+      wrapAnchorStarts.size === 0 &&
+      topAndBottomAnchorStarts.size === 0
+    ) {
+      line.trailingSpacing += Math.max(0, spaced.height - naturalHeight) / 2;
+    }
     finalizeTopAndBottomClearance();
     commitBreakClearance();
     if (empty && (wrapAnchorStarts.size > 0 || topAndBottomAnchorStarts.size > 0))

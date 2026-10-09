@@ -1,0 +1,12 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "An empty body grid paragraph can move to the next page before its glyph band reaches the text edge.",
+  "after": "Single automatic grid paragraphs can retain bottom half-leading beyond the text edge.",
+  "reason": "Only pagination geometry changes. Document nodes, operations, room formats, and transport stay the same.",
+  "tests": [
+    "packages/core/src/layout/__tests__/empty-grid-page-fit.test.ts"
+  ],
+  "changeset": null,
+  "migration": null
+}
