@@ -37,7 +37,7 @@ export function nextLineStartsAt(
   line: LineRecord,
   offset: number
 ): boolean {
-  const lines = paragraphLinesIndex(layout).get(line.range.paragraphId) ?? [];
+  const lines = paragraphLinesFor(layout, line.range.paragraphId);
   const index = lines.findIndex((placed) => placed.line === line);
   const next = lines[index + 1]?.line;
   return index >= 0 && next !== undefined && next !== line && next.range.start === offset;
