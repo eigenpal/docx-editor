@@ -21,6 +21,7 @@ import { useEditorCommand } from '../useEditorCommand';
 import { usePlatformShortcut } from '../usePlatformShortcut';
 import { useToolbarLabel } from './toolbar-context';
 import { Slot } from './Slot';
+import { warnDeprecatedButtonSlot, warnMissingButtonSlot } from '../menu/menu-warnings';
 
 /** The registry control behind one slot id, for its labelKey and icon paths. */
 export function chromeControlForSlot(slotId: ChromeSlotId): ChromeControl | null {
@@ -54,17 +55,40 @@ export function guardToolbarMousedown(event: MouseEvent): void {
   event.preventDefault();
 }
 
+/** The slot a toolbar button names: `slotId`, else the deprecated `slot`. @internal */
+export function toolbarButtonSlotId(props: {
+  readonly slotId?: ChromeSlotId | undefined;
+  readonly slot?: ChromeSlotId | undefined;
+}): ChromeSlotId | undefined {
+  if (props.slotId) return props.slotId;
+  if (props.slot) {
+    warnDeprecatedButtonSlot(props.slot);
+    return props.slot;
+  }
+  warnMissingButtonSlot();
+  return undefined;
+}
+
 /** Props for `DocxEditorToolbar.Button`. @public */
 export interface ToolbarButtonProps {
-  /** The chrome slot this button drives (`'text.bold'`, `'history.undo'`, ...). */
-  slot: ChromeSlotId;
+  /**
+   * The chrome slot this button drives (`'text.bold'`, `'history.undo'`, ...). A button with
+   * neither `slotId` nor the deprecated `slot` renders nothing, with a development warning.
+   */
+  slotId?: ChromeSlotId;
+  /** @deprecated Use `slotId`. Still read in this release, with a development warning. */
+  slot?: ChromeSlotId;
   /** Icon override; falls back to `children`, then to the registry's icon paths. */
   icon?: DocxEditorChildren;
   /** Merge the button's behavior into the single child element instead of a <button>. */
   asChild?: boolean;
   className?: string;
   children?: DocxEditorChildren;
-  /** Render nothing — inside the default arrangement this removes the slot. */
+  /**
+   * Render nothing: inside the default arrangement this removes the slot in place. A named
+   * part is shorthand for the slot override, so `<Toolbar.Bold hidden />` is
+   * `<Toolbar.Slot slotId="text.bold" hidden />`.
+   */
   hidden?: boolean;
 }
 
@@ -76,11 +100,12 @@ export interface ToolbarButtonProps {
  * @public
  */
 export function ToolbarButton(props: ToolbarButtonProps) {
-  const { slot, icon, asChild, className, children, hidden } = props;
+  const { icon, asChild, className, children, hidden } = props;
+  const slot = toolbarButtonSlotId(props) ?? ('' as ChromeSlotId);
   const { execute, isActive, isEnabled, disabledReason, value } = useEditorCommand(slot);
   const label = useToolbarLabel();
   const shortcut = usePlatformShortcut();
-  if (hidden) return null;
+  if (hidden || !slot) return null;
 
   const control = chromeControlForSlot(slot);
   // A registry label is tooltip-shaped and often NAMES its chord ("Bold (Ctrl+B)"). The
@@ -121,6 +146,6 @@ export function ToolbarButton(props: ToolbarButtonProps) {
   );
 }
 
-// Part marker: the toolbar root recognizes a `<ToolbarButton slot="...">` child by
-// this static plus its `slot` prop (never by displayName, which minifies away).
+// Part marker: the toolbar root recognizes a `<ToolbarButton slotId="...">` child by
+// this static plus its `slotId` (or deprecated `slot`) prop (never by displayName, which minifies away).
 ToolbarButton.docxToolbarPart = true as const;

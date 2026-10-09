@@ -7,12 +7,13 @@ import {
   type VNode,
 } from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
-import { useTranslation, type TranslationKey } from '../../i18n';
+import { useFormControlTranslate } from '../form-control-translate';
 import { useScopeClassName } from '../scope-context';
 import { NavigationContext, type NavigationContextValue } from './navigation-context';
 import { NAVIGATION_PANE_INSET, navigationPaneReservation } from './navigation-geometry';
 import { useDocumentOutline } from './useDocumentOutline';
 import { useDocumentSearch, type DocumentSearchHighlight } from './useDocumentSearch';
+import { useNavigationFocus } from './useNavigationFocus';
 import { useNavigationPane, type UseNavigationPaneOptions } from './useNavigationPane';
 import type { NavigationPartProps } from './parts';
 import {
@@ -28,6 +29,10 @@ import {
 
 /** Props for `DocxEditor.Navigation`. @public */
 export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
+  /**
+   * Label resolver. Defaults to the `translate` given to `DocxEditorRoot`, and for keys it
+   * leaves unresolved, to the active locale catalogue.
+   */
   t?: (key: string, params?: Record<string, string | number>) => string;
   toggle?: boolean | NavigationPartProps;
   /**
@@ -36,6 +41,12 @@ export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
    * tab; another `useDocumentSearch` consumer can still request them.
    */
   searchHighlight?: DocumentSearchHighlight;
+  /**
+   * Whether Ctrl+F (Cmd+F on macOS) opens the pane on the Find tab. Defaults to `true`. The
+   * shortcut applies only while focus is in this editor, so the rest of the page keeps the
+   * browser's own search. Set `false` to leave the shortcut to the browser everywhere.
+   */
+  findShortcut?: boolean;
   className?: string;
   style?: CSSProperties;
   children?: DocxEditorChildren;
@@ -60,6 +71,7 @@ const DocxEditorNavigationImpl = defineComponent({
     t: { type: Function as PropType<DocxEditorNavigationProps['t']>, default: undefined },
     toggle: { type: [Boolean, Object] as PropType<boolean | NavigationPartProps>, default: true },
     searchHighlight: { type: String as PropType<DocumentSearchHighlight>, default: 'all' },
+    findShortcut: { type: Boolean, default: true },
     className: { type: String, default: undefined },
     style: { type: Object as PropType<CSSProperties>, default: undefined },
     paneWidth: { type: Number, default: undefined },
@@ -89,23 +101,26 @@ const DocxEditorNavigationImpl = defineComponent({
     const search = useDocumentSearch(() => ({
       highlight: pane.open.value && pane.tab.value === 'find' ? props.searchHighlight : 'none',
     }));
-    const { t: catalogT } = useTranslation();
+    // The host's resolver, else the one `DocxEditorRoot` was given, else the catalogue.
+    const rootT = useFormControlTranslate();
+    const focus = useNavigationFocus(pane, () => props.findShortcut);
     const value = computed(() => ({
       pane,
       outline,
       search,
-      t:
-        props.t ??
-        ((key: string, params?: Record<string, string | number>) =>
-          catalogT(key as TranslationKey, params)),
+      t: props.t ?? rootT,
+      intents: focus.intents,
+      findShortcut: props.findShortcut,
     }));
     provide(NavigationContext, value as unknown as NavigationContextValue);
     const width = computed(() => pane.paneWidth.value);
 
     return () => (
       <div
-        class={`${scope}docx-nav${pane.open.value ? ' docx-nav--open' : ''}${props.className ? ` ${props.className}` : ''}`}
+        ref={focus.rootRef}
+        class={`${scope}docx-nav${pane.open.value ? ' docx-nav--open' : ''}${pane.overlay.value ? ' docx-nav--overlay' : ''}${props.className ? ` ${props.className}` : ''}`}
         data-open={pane.open.value ? 'true' : 'false'}
+        onKeydown={focus.onKeyDown}
         style={{
           '--docx-nav-width': `${width.value}px`,
           '--docx-nav-inset': `${NAVIGATION_PANE_INSET}px`,

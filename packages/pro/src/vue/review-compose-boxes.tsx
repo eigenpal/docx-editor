@@ -11,6 +11,7 @@ import {
   onBeforeUnmount,
   onMounted,
   ref,
+  watch,
   type ComputedRef,
   type PropType,
 } from 'vue';
@@ -20,8 +21,15 @@ import type { ReviewRailValue } from './review-context.ts';
 import type { ReviewItemView } from './useReview.ts';
 import { useReviewStableId } from './stable-id.ts';
 import { useEditorRenderRevision } from './useEditorRenderRevision.ts';
-import { COMPACT_CARD_WIDTH, COMPOSE_KEY, guardMousedown, markPart } from './review-shared.ts';
+import {
+  COMPACT_CARD_WIDTH,
+  COMPOSE_KEY,
+  guardMousedown,
+  initialsOf,
+  markPart,
+} from './review-shared.ts';
 import { authorCardStyle } from './review-author-styles.ts';
+import { SEND_ICON, icon } from './review-icons.tsx';
 
 interface ComposePartDeps {
   readonly useRail: () => ComputedRef<ReviewRailValue>;
@@ -193,6 +201,156 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
     'Draft'
   );
 
+  /** Draft state and submission for one reply line, held by whichever part owns it. */
+  function useReplyDraft(entryRef: () => ReviewItemView | null) {
+    const rail = deps.useRail();
+    const editorRef = useDocxEditor();
+    const draft = ref('');
+    const refused = ref(false);
+    const submit = (root: ParentNode | null) => {
+      const entry = entryRef();
+      const { review, readOnly, byId } = rail.value;
+      const input = root?.querySelector<HTMLInputElement>('[data-testid="review-reply-input"]');
+      const text = (input?.value ?? draft.value).trim();
+      const live = entry ? (byId.get(entry.id) ?? entry) : null;
+      if (!live || readOnly || text.length === 0) return;
+      const landed =
+        editorRef.value?.replyToReviewItem(live.key, text).ok ?? review.reply(live, text);
+      refused.value = !landed;
+      if (landed) {
+        draft.value = '';
+        if (input) input.value = '';
+      }
+    };
+    return { draft, refused, submit };
+  }
+
+  /**
+   * The compact reply line the open card and the change balloon share: the configured
+   * author's avatar, a borderless field, Cancel only while there is text, and a round send
+   * button. Enter sends too.
+   */
+  function renderReplyLine(
+    state: ReturnType<typeof useReplyDraft>,
+    rail: ComputedRef<ReviewRailValue>,
+    t: (key: TranslationKey) => string,
+    fieldId: string,
+    options: { readonly className?: string; readonly onCancel?: () => void } = {}
+  ) {
+    const { readOnly, draftAuthor, draftAuthorInfo, draftAuthorSlot } = rail.value;
+    const { draft, refused, submit } = state;
+    const avatarUrl = draftAuthorInfo?.style?.avatarUrl;
+    const lineOf = (event: Event) =>
+      (event.currentTarget as HTMLElement).closest('.docx-review__reply-box');
+    return (
+      <div
+        class={`docx-review__reply-box${options.className ? ` ${options.className}` : ''}`}
+        data-reply-line=""
+      >
+        <label class="docx-editor-sr-only" for={fieldId}>
+          {t('comments.replyPlaceholder')}
+        </label>
+        {draftAuthor ? (
+          <span
+            class="docx-review__avatar docx-review__reply-avatar"
+            data-testid="review-reply-avatar"
+            aria-hidden="true"
+            style={authorCardStyle(draftAuthor, draftAuthorInfo, draftAuthorSlot)}
+          >
+            {avatarUrl ? (
+              <img
+                class="docx-review__avatar-img"
+                src={avatarUrl}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                referrerpolicy="no-referrer"
+              />
+            ) : (
+              initialsOf(draftAuthor)
+            )}
+          </span>
+        ) : null}
+        <input
+          id={fieldId}
+          data-testid="review-reply-input"
+          class="docx-review__input"
+          placeholder={t('comments.replyPlaceholder')}
+          readonly={readOnly}
+          {...(refused.value ? { 'aria-invalid': true, 'data-refused': '' } : {})}
+          onInput={(event) => {
+            if (readOnly) return;
+            refused.value = false;
+            draft.value = (event.target as HTMLInputElement).value;
+          }}
+          onClick={(event) => event.stopPropagation()}
+          onKeydown={(event) => {
+            // The first Escape clears a draft, so a stray key never loses it with the card or
+            // balloon. On an empty line it closes the card; in a balloon it bubbles to the
+            // balloon, which closes itself.
+            if (event.key === 'Escape' && !event.isComposing) {
+              if (draft.value.length > 0) {
+                event.preventDefault();
+                (event.currentTarget as HTMLInputElement).value = '';
+                draft.value = '';
+                refused.value = false;
+                return;
+              }
+              if (options.onCancel) {
+                event.preventDefault();
+                options.onCancel();
+                return;
+              }
+            }
+            if (readOnly || event.key !== 'Enter') return;
+            event.preventDefault();
+            submit(lineOf(event));
+          }}
+        />
+        {draft.value.length > 0 ? (
+          <button
+            type="button"
+            data-testid="review-reply-cancel"
+            class="docx-review__text-button"
+            onMousedown={guardMousedown}
+            onClick={(event) => {
+              event.stopPropagation();
+              const input = lineOf(event)?.querySelector<HTMLInputElement>(
+                '[data-testid="review-reply-input"]'
+              );
+              if (input) input.value = '';
+              draft.value = '';
+              refused.value = false;
+              options.onCancel?.();
+            }}
+          >
+            {t('common.cancel')}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          data-testid="review-reply-submit"
+          class="docx-review__send"
+          aria-label={t('review.reply')}
+          disabled={readOnly || draft.value.trim().length === 0}
+          title={readOnly ? t('editingMode.viewingHint') : t('review.reply')}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            submit(lineOf(event));
+          }}
+        >
+          {icon(SEND_ICON)}
+        </button>
+        {refused.value ? (
+          <span class="docx-review__refused" role="alert" data-testid="review-reply-refused">
+            {t('review.replyRefused')}
+          </span>
+        ) : null}
+      </div>
+    );
+  }
+
   const ReviewReply = markPart(
     defineComponent({
       name: 'ReviewReply',
@@ -204,27 +362,10 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
         const rail = deps.useRail();
         const entryRef = deps.useItem();
         const t = deps.useLabel();
-        const draft = ref('');
-        const refused = ref(false);
         const fieldId = useReviewStableId('reply');
         const editorRevision = useEditorRenderRevision();
-        const editorRef = useDocxEditor();
-
-        const submit = (root: ParentNode | null) => {
-          const entry = entryRef.value;
-          const { review, readOnly, byId } = rail.value;
-          const input = root?.querySelector<HTMLInputElement>('[data-testid="review-reply-input"]');
-          const text = (input?.value ?? draft.value).trim();
-          const live = entry ? (byId.get(entry.id) ?? entry) : null;
-          if (!live || readOnly || text.length === 0) return;
-          const landed =
-            editorRef.value?.replyToReviewItem(live.key, text).ok ?? review.reply(live, text);
-          refused.value = !landed;
-          if (landed) {
-            draft.value = '';
-            if (input) input.value = '';
-          }
-        };
+        // Held here, not in the line: the draft survives the card closing and reopening.
+        const state = useReplyDraft(() => entryRef.value);
 
         return () => {
           void editorRevision.value;
@@ -237,76 +378,58 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
           ) {
             return null;
           }
-          const { review, readOnly } = rail.value;
           const custom = slots.default?.();
           if (custom?.length) return custom;
-
-          return (
-            <div class={`docx-review__reply-box${props.className ? ` ${props.className}` : ''}`}>
-              <label class="docx-editor-sr-only" for={fieldId}>
-                {t('comments.replyPlaceholder')}
-              </label>
-              <input
-                id={fieldId}
-                data-testid="review-reply-input"
-                class="docx-review__input"
-                placeholder={t('comments.replyPlaceholder')}
-                readonly={readOnly}
-                {...(refused.value ? { 'aria-invalid': true, 'data-refused': '' } : {})}
-                onInput={(event) => {
-                  if (readOnly) return;
-                  refused.value = false;
-                  draft.value = (event.target as HTMLInputElement).value;
-                }}
-                onClick={(event) => event.stopPropagation()}
-                onKeydown={(event) => {
-                  if (readOnly || event.key !== 'Enter') return;
-                  event.preventDefault();
-                  submit((event.currentTarget as HTMLElement).closest('.docx-review__reply-box'));
-                }}
-              />
-              <div class="docx-review__reply-actions">
-                <button
-                  type="button"
-                  data-testid="review-reply-cancel"
-                  class="docx-review__text-button"
-                  onMousedown={guardMousedown}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    draft.value = '';
-                    refused.value = false;
-                    review.setActive(null);
-                  }}
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  type="button"
-                  data-testid="review-reply-submit"
-                  class="docx-review__submit"
-                  disabled={readOnly || draft.value.trim().length === 0}
-                  title={readOnly ? t('editingMode.viewingHint') : undefined}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    submit((event.currentTarget as HTMLElement).closest('.docx-review__reply-box'));
-                  }}
-                >
-                  {t('review.reply')}
-                </button>
-              </div>
-              {refused.value ? (
-                <span class="docx-review__refused" role="alert" data-testid="review-reply-refused">
-                  {t('review.replyRefused')}
-                </span>
-              ) : null}
-            </div>
-          );
+          return renderReplyLine(state, rail, t, fieldId, {
+            ...(props.className ? { className: props.className } : {}),
+            onCancel: () => rail.value.review.setActive(null),
+          });
         };
       },
     }),
     'Reply'
   );
 
-  return { ReviewDraft, ReviewReply };
+  /**
+   * The change balloon's reply line. Open whenever the balloon is; not a rail part.
+   *
+   * `orphaned` marks a change that was resolved, for example by another participant, while
+   * the reader was typing. The line keeps the text, posts nothing, and says why, so a draft
+   * is never dropped without notice. `onDraft` reports whether the line holds text.
+   */
+  const ReviewBalloonReply = defineComponent({
+    name: 'ReviewBalloonReply',
+    props: {
+      entry: { type: Object as PropType<ReviewItemView>, required: true },
+      orphaned: { type: Boolean, default: false },
+      onDraft: { type: Function as PropType<(hasText: boolean) => void>, default: undefined },
+    },
+    setup(props) {
+      const rail = deps.useRail();
+      const t = deps.useLabel();
+      const fieldId = useReviewStableId('balloon-reply');
+      const state = useReplyDraft(() => (props.orphaned ? null : props.entry));
+      watch(
+        () => state.draft.value.trim().length > 0,
+        (hasText) => props.onDraft?.(hasText),
+        { immediate: true }
+      );
+      return () => [
+        renderReplyLine(state, rail, t, fieldId),
+        props.orphaned
+          ? h(
+              'span',
+              {
+                class: 'docx-review__refused',
+                role: 'alert',
+                'data-testid': 'review-reply-orphaned',
+              },
+              t('review.replyTargetResolved')
+            )
+          : null,
+      ];
+    },
+  });
+
+  return { ReviewDraft, ReviewReply, ReviewBalloonReply };
 }

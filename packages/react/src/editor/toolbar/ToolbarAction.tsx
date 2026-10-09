@@ -22,6 +22,8 @@ import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { MouseEvent } from 'react';
 import { Slot } from './Slot';
 import { guardToolbarMousedown } from './ToolbarButton';
+import { useToolbarPlacement } from './ToolbarGroup';
+import { useToolbarOverflowClose } from './ToolbarOverflow';
 
 /** Props for `DocxEditorToolbar.Action`. @public */
 export interface ToolbarActionProps {
@@ -48,14 +50,40 @@ export interface ToolbarActionProps {
 /**
  * A host-owned toolbar action, styled and behaved like the packaged controls.
  *
- * Renders inside `<DocxEditor.Toolbar>` after the default arrangement (it drives no slot,
- * so it is an appended child), or anywhere under `preset={false}`.
+ * Inside `<DocxEditor.Toolbar>` it appends after the default arrangement and never
+ * collapses. Put it in a `Toolbar.Group` to have it collapse into the "⋯" panel, where it
+ * renders as a row with its icon and `label`. Under `preset={false}` it renders as written.
  *
  * @public
  */
 export function ToolbarAction(props: ToolbarActionProps) {
   const { label, icon, active, disabled, disabledReason, onSelect, asChild, className, children } =
     props;
+  const placement = useToolbarPlacement();
+  const close = useToolbarOverflowClose();
+  if (placement === 'panel' && !asChild) {
+    // A collapsed host group: the same row the panel's own commands use, icon and label.
+    return (
+      <button
+        type="button"
+        className={`docx-toolbar__more-command${className ? ` ${className}` : ''}`}
+        disabled={disabled}
+        {...(active ? { 'data-active': '' } : {})}
+        {...(active !== undefined ? { 'aria-pressed': active } : {})}
+        {...(disabled && disabledReason ? { title: disabledReason } : {})}
+        onMouseDown={(event) => guardToolbarMousedown(event)}
+        onClick={(event) => {
+          onSelect?.();
+          close(event.detail === 0);
+        }}
+      >
+        <span className="docx-toolbar__more-command-icon" aria-hidden="true">
+          {icon ?? children}
+        </span>
+        <span className="docx-toolbar__more-command-label">{label}</span>
+      </button>
+    );
+  }
   const shared = {
     type: 'button' as const,
     className: `docx-toolbar__button${className ? ` ${className}` : ''}`,

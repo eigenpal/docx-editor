@@ -87,6 +87,7 @@ export function legacyTextbox(root: OoxmlElement): LegacyTextbox | null | undefi
   if (!style) return null;
   for (const [key, value] of style) {
     if (key === 'mso-fit-shape-to-text' || key === 'mso-next-textbox') continue;
+    if (key === 'mso-wrap-style' && (value === 'none' || value === 'square')) continue;
     // Vertical text flow is not laid out; refuse it rather than paint it horizontally.
     if (key === 'layout-flow' && value === 'horizontal') continue;
     return null;
@@ -165,7 +166,10 @@ export function legacyTextboxStory(
   );
   const strokeWidth =
     Number.isFinite(weight) && weight >= 0 && weight <= MAX_STROKE_POINTS ? weight : 0.75;
-  const fitStyle = styleOf(box.textbox)?.get('mso-fit-shape-to-text');
+  const textboxStyle = styleOf(box.textbox);
+  const fitStyle = textboxStyle?.get('mso-fit-shape-to-text');
+  // The shape style carries the wrap mode; a text box style that repeats it agrees.
+  const noWrap = (textboxStyle?.get('mso-wrap-style') ?? style.get('mso-wrap-style')) === 'none';
   return Object.freeze({
     contentNodeId: box.content.id,
     content: box.content,
@@ -177,6 +181,7 @@ export function legacyTextboxStory(
     }),
     verticalAnchor: verticalAnchor(style.get('v-text-anchor')),
     autofit: fitStyle !== undefined && !off(fitStyle) ? 'shape' : 'none',
+    ...(noWrap ? { noWrap: true as const } : {}),
     fillHex: hex(fill),
     strokeHex: stroke && strokeWidth > 0 ? hex(stroke) : null,
     strokeWidthEmu: stroke && strokeWidth > 0 ? Math.round(strokeWidth * EMU_PER_POINT) : 0,

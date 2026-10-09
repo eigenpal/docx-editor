@@ -133,6 +133,7 @@
     "formatPainter": "Format painter",
     "formatPainterShortcut": "Format painter (Ctrl+Alt+C, Ctrl+Alt+V)",
     "commentsAndChanges": "Comments & Changes",
+    "addComment": "Add comment",
     "more": "More",
     "unavailableInPreview": "Not available in this preview build",
     "paragraphMarks": "Show paragraph breaks"
@@ -468,6 +469,7 @@
     "title": "Navigation",
     "openAriaLabel": "Open navigation",
     "openTitle": "Navigation",
+    "openShortcutTitle": "Navigation ({shortcut})",
     "closeAriaLabel": "Close navigation",
     "closeTitle": "Close navigation",
     "tabs": {
@@ -854,7 +856,11 @@
     "showResolvedComment": "Show resolved comment",
     "replaced": "Replaced",
     "replacedWith": "with",
-    "commentRefused": "Could not add the comment"
+    "commentRefused": "Could not add the comment",
+    "replyCount": "Replies: {count}",
+    "trackedChange": "Tracked change",
+    "changeAnnouncement": "{change} by {author}: {text}",
+    "replyTargetResolved": "The change was resolved, so the reply was not posted."
   },
   "textFormField": {
     "title": "Text Form Field Options",

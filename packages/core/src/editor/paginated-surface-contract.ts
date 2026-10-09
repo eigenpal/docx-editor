@@ -195,6 +195,25 @@ export interface PaginatedSurface {
    */
   adjustIndent(direction: 'increase' | 'decrease'): boolean;
   /**
+   * Tab (`increase`) or Shift+Tab (`decrease`) over a selection outside a list: change the
+   * indent and keep the text.
+   *
+   * A selection over two or more paragraphs, or a cell rectangle, steps the left indent of
+   * each paragraph. A selection in one paragraph that starts at the paragraph start, whole or
+   * partial, works on the first line: Tab sets a first-line indent of one default tab stop
+   * (`w:defaultTabStop`), or steps the left indent when the first line already has that
+   * indent or more, or a hanging indent. Shift+Tab clears a first-line indent that the
+   * paragraph states itself, so a style value applies again, and otherwise steps the left
+   * indent back. A paragraph the selection reaches only at its start is not touched by this
+   * rule, unless it is the empty last paragraph of the story.
+   *
+   * Answers true when the selection takes this rule, also when the write is refused or
+   * changes nothing, so the text is never replaced. Answers false for a caret and for a
+   * selection in one paragraph that starts inside the text; there Tab types a tab character
+   * and Shift+Tab steps the left indent.
+   */
+  indentWithTab(direction: 'increase' | 'decrease'): boolean;
+  /**
    * Set indent to exact values on every paragraph the selection touches — what a ruler
    * drag and an indent spinner both need, where {@link adjustIndent} only steps.
    *
@@ -522,6 +541,8 @@ export interface PaginatedSurface {
   setEditingMode(mode: SurfaceEditingMode): void;
   /** Set the ambient author after buffered text commits under the previous author. */
   setAuthor(author: string | undefined): void;
+  /** The ambient author tracked edits and review writes record, or undefined. */
+  author(): string | undefined;
   /** Replace localized drawing labels and repaint materialized pages. */
   setDrawingStrings(
     strings: import('../output/semantic-paint-drawings.ts').DrawingPaintStrings

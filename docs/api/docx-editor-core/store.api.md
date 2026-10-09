@@ -3398,6 +3398,9 @@ export interface PersistencePort {
 }
 
 // @internal
+export function planRevisionAuthorChange(part: OoxmlPart, revision: RevisionAttributionInput, keys?: readonly string[], scopeRoot?: OoxmlNode, authors?: readonly string[]): RevisionAuthorPlan;
+
+// @internal
 export function planRevisionBatch(part: OoxmlPart, action: 'accept' | 'reject', keys?: readonly string[], scopeRoot?: OoxmlNode): {
     ops: readonly TreeDocOp[];
     result: RevisionBatchResult;
@@ -3911,8 +3914,8 @@ export interface ReviewRevisionItem {
 // @public
 export type ReviewRevisionKind = 'insert' | 'delete'
 /**
-* A combined decision supplied by a custom review provider.
-* The built-in reader exposes text replacements as separate deletion and insertion decisions.
+* A combined deletion and insertion decision. The built-in reader lists them separately,
+* unless a review query asks to pair replacements or a custom review provider combines them.
 */
 | 'replace' | 'moveFrom' | 'moveTo'
 /** `w:rPrChange` / `w:pPrChange` — the words are unchanged, their formatting is not. */
@@ -3930,6 +3933,25 @@ export interface RevisionAddress {
     // (undocumented)
     readonly id: string;
 }
+
+// @public
+export interface RevisionAuthorEntry extends RevisionBatchEntry {
+    readonly previousAuthor: string;
+    readonly previousKey: string;
+}
+
+// @public
+export interface RevisionAuthorResult {
+    readonly skipped: readonly {
+        readonly key: string;
+        readonly reason: RevisionAuthorSkipReason;
+        readonly revision?: RevisionBatchEntry;
+    }[];
+    readonly updated: readonly RevisionAuthorEntry[];
+}
+
+// @public
+export type RevisionAuthorSkipReason = 'unknown-revision' | 'unsupported-revision';
 
 // @public
 export interface RevisionBatchEntry {
@@ -4422,7 +4444,7 @@ export interface TransportPort {
 }
 
 // @public
-export const TREE_DOC_OP_KINDS: readonly ["replaceStoryBlocks", "insertText", "deleteText", "setParagraphMarkRevision", "proposeParagraphMerge", "insertCommentMarker", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "insertTab", "insertHardBreak", "insertPageBreak", "insertPageField", "setFieldCode", "setListLevel", "setListNumbering", "setParagraphTabStops", "setParagraphMarkProperties", "splitParagraph", "splitParagraphMany", "joinParagraphs", "setRunProperties", "setParagraphProperties", "setSectionProperties", "setSectionMark", "insertHyperlink", "setHyperlinkTarget", "removeHyperlink", "setMathEquation", "removeMathEquation", "setContentControlValue", "removeContentControl", "insertInlineContentControl", "addRepeatingSectionItem", "removeRepeatingSectionItem", "deleteBlock", "insertTable", "insertTableRow", "deleteTableRow", "insertTableColumn", "deleteTableColumn", "setTableColumnWidths", "setTableRightEdgeWidth", "setTableRowHeight", "setTableProperties", "authorTable", "setTableCellBorders", "setTableCellFill", "setTableCellVerticalAlignment", "createHeaderFooter", "deleteHeaderFooter", "linkToPrevious", "unlinkFromPrevious", "setSectionFurnitureOptions", "setDocumentProtection", "insertNote", "deleteNote", "convertNote", "convertAllNotes", "setNoteProperties", "setContentControlProperties", "insertContentControl", "insertFragment", "insertDrawing", "replaceDrawingResource", "deleteDrawing", "resizeDrawing", "cropDrawing", "positionDrawing", "setDrawingWrap", "setDrawingMetadata", "setDrawingLocks", "transformDrawing", "insertToc", "replaceTocResult", "rewriteTocPageNumbers", "refreshFieldResults", "setTextFormFieldDefault", "commitTextFormField", "setLegacyCheckbox", "setLegacyDropdown", "insertBuildingBlock"];
+export const TREE_DOC_OP_KINDS: readonly ["replaceStoryBlocks", "insertText", "deleteText", "setParagraphMarkRevision", "proposeParagraphMerge", "insertCommentMarker", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "setRevisionAttribution", "insertTab", "insertHardBreak", "insertPageBreak", "insertPageField", "setFieldCode", "setListLevel", "setListNumbering", "setParagraphTabStops", "setParagraphMarkProperties", "splitParagraph", "splitParagraphMany", "joinParagraphs", "setRunProperties", "setParagraphProperties", "setSectionProperties", "setSectionMark", "insertHyperlink", "setHyperlinkTarget", "removeHyperlink", "setMathEquation", "removeMathEquation", "setContentControlValue", "removeContentControl", "insertInlineContentControl", "addRepeatingSectionItem", "removeRepeatingSectionItem", "deleteBlock", "insertTable", "insertTableRow", "deleteTableRow", "insertTableColumn", "deleteTableColumn", "setTableColumnWidths", "setTableRightEdgeWidth", "setTableRowHeight", "setTableProperties", "authorTable", "setTableCellBorders", "setTableCellFill", "setTableCellVerticalAlignment", "createHeaderFooter", "deleteHeaderFooter", "linkToPrevious", "unlinkFromPrevious", "setSectionFurnitureOptions", "setDocumentProtection", "insertNote", "deleteNote", "convertNote", "convertAllNotes", "setNoteProperties", "setContentControlProperties", "insertContentControl", "insertFragment", "insertDrawing", "replaceDrawingResource", "deleteDrawing", "resizeDrawing", "cropDrawing", "positionDrawing", "setDrawingWrap", "setDrawingMetadata", "setDrawingLocks", "transformDrawing", "insertToc", "replaceTocResult", "rewriteTocPageNumbers", "refreshFieldResults", "setTextFormFieldDefault", "commitTextFormField", "setLegacyCheckbox", "setLegacyDropdown", "insertBuildingBlock"];
 
 // @public
 export type TreeDocOp = SetFieldCodeOp | {
@@ -4474,6 +4496,13 @@ export type TreeDocOp = SetFieldCodeOp | {
     readonly op: 'acceptAllRevisions';
     readonly scopeRootId?: string;
     readonly siteNodeIds?: readonly string[];
+} | {
+    readonly op: 'setRevisionAttribution';
+    readonly revision: RevisionAttributionInput;
+    readonly sites: readonly {
+        readonly nodeId: string;
+        readonly renumber?: string;
+    }[];
 } | {
     readonly op: 'rejectAllRevisions';
     readonly scopeRootId?: string;

@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Toolbar popups stayed open when focus moved away, and the navigation pane counted a scrolling review column as visible room.",
+  "after": "Toolbar popups close when focus leaves them, and the navigation pane counts only the visible review strip.",
+  "reason": "Only local chrome behavior and pane geometry change. Shared nodes, text offsets, operations, and package serialization remain unchanged.",
+  "tests": [
+    "packages/react/test/navigation-pane-host.test.tsx",
+    "packages/vue/test/navigation-pane-host.test.ts",
+    "packages/react/test/review-overflow-navigation.test.tsx",
+    "packages/vue/test/review-overflow-navigation.test.ts"
+  ],
+  "changeset": "review-ui-integration",
+  "migration": null
+}

@@ -262,6 +262,16 @@ export type TreeDocOp =
       readonly scopeRootId?: string;
     }
   | {
+      /**
+       * Attribute pending revisions to another author, and optionally another date, without
+       * deciding them. `sites` name revision elements and move range starts. Sites sharing a
+       * `renumber` label take one fresh `w:id`, so the change cannot merge with another one.
+       */
+      readonly op: 'setRevisionAttribution';
+      readonly revision: RevisionAttributionInput;
+      readonly sites: readonly { readonly nodeId: string; readonly renumber?: string }[];
+    }
+  | {
       readonly op: 'rejectAllRevisions';
       /** Exact canonical sites selected by bulk preflight. */
       readonly siteNodeIds?: readonly string[];

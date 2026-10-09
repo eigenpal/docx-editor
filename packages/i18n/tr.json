@@ -102,7 +102,8 @@
     "formatPainter": "Biçim boyacısı",
     "formatPainterShortcut": "Biçim boyacısı (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "Paragraf sonlarını göster",
-    "label": "Biçimlendirme denetimleri"
+    "label": "Biçimlendirme denetimleri",
+    "addComment": "Açıklama ekle"
   },
   "alignment": {
     "alignLeft": "Sola hizala",
@@ -674,6 +675,7 @@
     },
     "openAriaLabel": "Gezintiyi aç",
     "openTitle": "Gezinti",
+    "openShortcutTitle": "Gezinti ({shortcut})",
     "tabs": {
       "find": "Bul",
       "headings": "Başlıklar"
@@ -773,7 +775,11 @@
     "noMarkup": "İşaretleme yok",
     "original": "Özgün",
     "protectDocument": "Belgeyi formlar için koru",
-    "simpleMarkup": "Basit işaretleme"
+    "simpleMarkup": "Basit işaretleme",
+    "replyCount": "Yanıtlar: {count}",
+    "trackedChange": "İzlenen değişiklik",
+    "changeAnnouncement": "{author} tarafından {change}: {text}",
+    "replyTargetResolved": "Değişiklik çözümlendiği için yanıt gönderilmedi."
   },
   "imageAltText": {
     "description": "Açıklama",

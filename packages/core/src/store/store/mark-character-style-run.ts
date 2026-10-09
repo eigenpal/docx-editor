@@ -95,6 +95,11 @@ export function emptyParagraphRunProperties(
     }
   }
   if (children.length === 0) return [];
+  // An empty run that carries exactly the mark's formatting is the face the paragraph was
+  // given, a new table row's seed run among them: keep all of it. Any other empty run keeps
+  // its formatting to itself, so typed text shows the face the toolbar reported for the mark.
+  const seeded = agreeingEmptyRunProperties(paragraph, mark);
+  if (seeded) return [withFreshIds(seeded, nextId)];
   return [
     {
       id: nextId(),
@@ -107,4 +112,79 @@ export function emptyParagraphRunProperties(
       children,
     } as unknown as OoxmlNode,
   ];
+}
+
+/**
+ * Not carried into new text: another author's pending format change belongs to the run it
+ * was proposed on, and hidden formatting would hide the words being typed.
+ */
+export const NOT_INHERITED: ReadonlySet<string> = new Set([
+  'ins',
+  'del',
+  'moveFrom',
+  'moveTo',
+  'rPrChange',
+  'vanish',
+  'specVanish',
+  'webHidden',
+]);
+
+/**
+ * One element as a canonical key: its namespace and name, every attribute (namespace, name,
+ * value, sorted), and its element children the same way, at every depth. Two properties agree
+ * only when all of it agrees: `w:rFonts` has no `w:val`, and `w:color w:themeColor`,
+ * `w:u w:color`, `w:lang w:eastAsia`, and `w:shd w:fill` differ beside an equal `w:val`.
+ */
+function elementKey(node: OoxmlNode): string {
+  if (node.kind === 'textValue') return '';
+  const attributes = node.attributes
+    .map((attribute) =>
+      JSON.stringify([attribute.namespaceUri, attribute.localName, attribute.value])
+    )
+    .sort();
+  const children = node.children
+    .filter((child) => child.kind !== 'textValue')
+    .map(elementKey)
+    .sort();
+  return JSON.stringify([node.namespaceUri, node.localName, attributes, children]);
+}
+
+/** A run-properties element's inherited children, as canonical keys. */
+function inheritedKeys(rPr: OoxmlNode): string[] {
+  if (rPr.kind === 'textValue') return [];
+  return rPr.children
+    .filter(
+      (child) =>
+        child.kind !== 'textValue' &&
+        child.namespaceUri === WML_NAMESPACE_URI &&
+        !NOT_INHERITED.has(child.localName)
+    )
+    .map(elementKey)
+    .sort();
+}
+
+/**
+ * The last run's `w:rPr`, without what new text never inherits, when it states exactly what
+ * the paragraph mark states: the same properties with the same attributes, nothing more or less.
+ */
+function agreeingEmptyRunProperties(
+  paragraph: OoxmlParagraphNode,
+  mark: OoxmlNode | undefined
+): OoxmlNode | undefined {
+  if (!mark || mark.kind === 'textValue') return undefined;
+  const runs = paragraph.children.filter((child) => child.kind === 'run');
+  const last = runs[runs.length - 1];
+  if (!last) return undefined;
+  const rPr = (last.children as readonly OoxmlNode[]).find(
+    (child) =>
+      child.kind !== 'textValue' &&
+      child.namespaceUri === WML_NAMESPACE_URI &&
+      child.localName === 'rPr'
+  );
+  if (!rPr || rPr.kind === 'textValue') return undefined;
+  if (JSON.stringify(inheritedKeys(rPr)) !== JSON.stringify(inheritedKeys(mark))) return undefined;
+  const kept = rPr.children.filter(
+    (child) => child.kind === 'textValue' || !NOT_INHERITED.has(child.localName)
+  );
+  return { ...rPr, children: kept } as OoxmlNode;
 }

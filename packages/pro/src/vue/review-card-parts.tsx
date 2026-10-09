@@ -20,6 +20,7 @@ import {
   REJECT_ICON,
   icon,
   resolvedCommentIcon,
+  reviewBadge,
 } from './review-icons.tsx';
 import { revisionItemLabel } from './review-labels.ts';
 import { ReviewActionSlot } from './review-action-slot.tsx';
@@ -36,6 +37,7 @@ import { ReviewReplyScope, useRail, useReviewItem, useReviewLabel } from './revi
 import { useReviewStableId } from './stable-id.ts';
 import type { ReviewItemView } from './useReview.ts';
 import { authorCardStyle, authorSlot } from './review-author-styles.ts';
+import { isCardControl, keepsPressFocus } from '../review/card-controls.ts';
 
 const { ReviewResolve, ReviewReopen } = createCommentResolutionParts({
   useRail,
@@ -43,7 +45,7 @@ const { ReviewResolve, ReviewReopen } = createCommentResolutionParts({
   useLabel: useReviewLabel,
 });
 
-export const { ReviewDraft, ReviewReply } = createReviewComposeParts({
+export const { ReviewDraft, ReviewReply, ReviewBalloonReply } = createReviewComposeParts({
   useRail,
   useItem: useReviewItem,
   useLabel: useReviewLabel,
@@ -356,6 +358,21 @@ export const ReviewDelete = markPart(
   'Delete'
 );
 
+/** A reply's own author hooks, so it draws in its author's colour inside another's card. */
+function replyAuthorAttributes(
+  author: string,
+  rail: ReturnType<typeof useRail>['value']
+): Record<string, unknown> {
+  if (!author) return {};
+  const info = rail.authorInfo.get(author);
+  const slot = rail.authorSlots.get(author) ?? 0;
+  return {
+    'data-review-author': author,
+    'data-review-author-slot': authorSlot(info, slot),
+    style: authorCardStyle(author, info, slot),
+  };
+}
+
 /** @public */
 export const ReviewReplies = markPart(
   defineComponent({
@@ -376,7 +393,12 @@ export const ReviewReplies = markPart(
           <ol class={`docx-review__replies${props.className ? ` ${props.className}` : ''}`}>
             {replies.map((reply) => (
               <ReviewReplyScope key={reply.key} entry={reply}>
-                <li class="docx-review__reply" data-testid="review-reply">
+                <li
+                  class="docx-review__reply"
+                  data-testid="review-reply"
+                  // Each reply draws in its OWN author's colour, not the thread's.
+                  {...replyAuthorAttributes(reply.author, rail.value)}
+                >
                   <div class="docx-review__head">
                     <ReviewAvatar />
                     <div class="docx-review__meta">
@@ -504,8 +526,14 @@ export const ReviewCard = markPart(
       return () => {
         const entry = entryRef.value;
         if (props.hidden || !entry) return null;
-        const { review, authorSlots, authorInfo, expandedResolvedKey, setExpandedResolvedKey } =
-          rail.value;
+        const {
+          review,
+          authorSlots,
+          authorInfo,
+          expandedResolvedKey,
+          setExpandedResolvedKey,
+          commentMarkers,
+        } = rail.value;
         const slot = authorSlots.get(entry.author) ?? 0;
         const resolvedCollapsible = !props.asChild && entry.kind === 'comment' && entry.resolved;
         const shared = {
@@ -533,19 +561,11 @@ export const ReviewCard = markPart(
           ...(!resolvedCollapsible
             ? {
                 onMousedown: (event: MouseEvent) => {
-                  if ((event.target as HTMLElement | null)?.closest('[data-review-selectable]')) {
-                    return;
-                  }
+                  if (keepsPressFocus(event.target)) return;
                   (event.currentTarget as HTMLElement).focus({ preventScroll: true });
                 },
                 onClick: (event: MouseEvent) => {
-                  if (
-                    (event.target as HTMLElement | null)?.closest(
-                      'button, input, textarea, .docx-review__reply-box, [data-review-selectable]'
-                    )
-                  ) {
-                    return;
-                  }
+                  if (isCardControl(event.target)) return;
                   if (!entry.isActive) review.setActive(entry.key);
                 },
                 onKeydown: (event: KeyboardEvent) => {
@@ -584,7 +604,7 @@ export const ReviewCard = markPart(
                 },
                 [
                   h('span', { class: 'docx-review__resolved-status' }, t('review.resolved')),
-                  resolvedCommentIcon(),
+                  commentMarkers === 'initials' ? reviewBadge('', 0, true) : resolvedCommentIcon(),
                 ]
               ),
               h(ReviewCardPreset, null, { default: () => slots.default?.() }),

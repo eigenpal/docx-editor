@@ -478,3 +478,108 @@ for (const action of ['accept', 'reject'] as const) {
     }
   });
 }
+
+describe('reviewItemReveal', () => {
+  const record = (editor: DocxEditorInstance) => {
+    const events: { key: string; source: string }[] = [];
+    editor.on('reviewItemReveal', (event) => events.push({ ...event }));
+    return events;
+  };
+
+  test('Next and Previous Change announce every landing', () => {
+    const editor = mountEditor(ins(1) + ins(2));
+    const keys = editor.getReviewItems().map((item) => item.key);
+    editor.setActiveReviewItem(keys[0]!, { announce: false });
+    const events = record(editor);
+    editor.exec({ type: 'navigateReviewChange', direction: 'next' });
+    editor.exec({ type: 'navigateReviewChange', direction: 'next' });
+    editor.exec({ type: 'navigateReviewChange', direction: 'previous' });
+    expect(events).toEqual([
+      { key: keys[1]!, source: 'navigate' },
+      { key: keys[0]!, source: 'navigate' },
+      { key: keys[1]!, source: 'navigate' },
+    ]);
+    editor.destroy();
+  });
+
+  test('a lone change navigates to itself and announces again', () => {
+    const editor = mountEditor(ins(1));
+    const [only] = editor.getReviewItems();
+    const events = record(editor);
+    editor.exec({ type: 'navigateReviewChange', direction: 'next' });
+    editor.setActiveReviewItem(null);
+    editor.exec({ type: 'navigateReviewChange', direction: 'next' });
+    editor.exec({ type: 'navigateReviewChange', direction: 'next' });
+    expect(events).toEqual([
+      { key: only!.key, source: 'navigate' },
+      { key: only!.key, source: 'navigate' },
+      { key: only!.key, source: 'navigate' },
+    ]);
+    editor.destroy();
+  });
+
+  test('caret moves, dismissals and refusals announce nothing', () => {
+    const editor = mountEditor(ins(1) + '<w:p><w:r><w:t>Plain</w:t></w:r></w:p>');
+    const events = record(editor);
+    const [changed, plain] = editor.surface!.session.paragraphIds();
+    for (const paragraphId of [changed!, plain!, changed!]) {
+      editor.surface!.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 1 },
+      });
+    }
+    expect(editor.getReviewItems().some((item) => item.isActive)).toBe(true);
+    editor.setActiveReviewItem(null);
+    expect(editor.setActiveReviewItem('missing').ok).toBe(false);
+    editor.setReviewActivationExclusions(['insert']);
+    expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(false);
+    expect(events).toEqual([]);
+    editor.destroy();
+  });
+
+  test('setActiveReviewItem announces as the host only with announce: true', () => {
+    const editor = mountEditor(ins(1) + ins(2));
+    const keys = editor.getReviewItems().map((item) => item.key);
+    const events = record(editor);
+    // The default stays silent, so a host call opens no balloon and no closed pane.
+    expect(editor.setActiveReviewItem(keys[0]!).ok).toBe(true);
+    expect(editor.setActiveReviewItem(keys[0]!, { announce: false }).ok).toBe(true);
+    expect(events).toEqual([]);
+    expect(editor.setActiveReviewItem(keys[1]!, { announce: true }).ok).toBe(true);
+    expect(editor.setActiveReviewItem(keys[1]!, { announce: true }).ok).toBe(true);
+    expect(editor.getReviewItems().find((item) => item.isActive)?.key).toBe(keys[1]);
+    expect(editor.getActivatedReviewItemKey()).toBe(keys[1]);
+    expect(events).toEqual([
+      { key: keys[1]!, source: 'host' },
+      { key: keys[1]!, source: 'host' },
+    ]);
+    editor.destroy();
+  });
+
+  test('re-keying the active change under a new author announces nothing', () => {
+    const editor = mountEditor(ins(1) + ins(2));
+    const [first] = editor.getReviewItems();
+    editor.setActiveReviewItem(first!.key);
+    const events = record(editor);
+    const result = editor.exec({
+      type: 'setReviewChangesAuthor',
+      author: 'Grace Hopper',
+      keys: [first!.key],
+    });
+    expect(result.ok).toBe(true);
+    expect(editor.getActivatedReviewItemKey()).not.toBe(first!.key);
+    expect(events).toEqual([]);
+    editor.destroy();
+  });
+
+  test('the payload is frozen', () => {
+    const editor = mountEditor(ins(1));
+    let payload: object | undefined;
+    editor.on('reviewItemReveal', (event) => {
+      payload = event;
+    });
+    editor.exec({ type: 'navigateReviewChange', direction: 'next' });
+    expect(Object.isFrozen(payload)).toBe(true);
+    editor.destroy();
+  });
+});

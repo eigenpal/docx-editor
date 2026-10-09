@@ -118,7 +118,7 @@ Dispose the runtime when you finish. Save browser edits through the owning edito
 - Load properties before reading them. Load a collection's `items`, sync, then load each item's properties.
 - Batch independent writes. Each `sync()` commits all queued writes or none; earlier successful syncs remain committed.
 - Sync after insertion before using the returned object.
-- After editing a paragraph, search again before editing another target there. Ranges retain their original offsets.
+- After editing a paragraph, search again before editing another target there. Ranges retain their original offsets, and a range whose text moved fails with `StaleDocument`.
 - Keep proxies inside `runtime.run()`, or explicitly track and adopt them across runs.
 - Handle errors by `code`. On `StaleDocument`, read again and reconsider the edit.
 

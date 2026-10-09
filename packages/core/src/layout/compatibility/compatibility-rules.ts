@@ -111,6 +111,10 @@ export const MODE_RULES = {
     'A page- or margin-positioned table that breaks ends its first fragment at the bottom margin, not the page edge',
     'ECMA-376 Part 1 §17.4.57 tblpPr'
   ),
+  pageBreakBeforeKeepsSpace: legacy(
+    'A paragraph with a page break before keeps its space before at the top of the new page. In modern modes only the first block of a section keeps it',
+    'ECMA-376 Part 1 §17.3.1.23 pageBreakBefore'
+  ),
   pageBreakLinesStretch: legacy(
     'A justified line that ends in a page or column break stretches to the measure, unless it is the last line of its paragraph',
     'ECMA-376 Part 1 §17.3.3.1 br'

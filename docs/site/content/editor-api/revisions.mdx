@@ -1,11 +1,11 @@
 ---
 title: 'Tracked changes'
-description: 'Create tracked text edits, inspect revisions by story, accept or reject changes, and handle unsupported review markup.'
+description: 'Create tracked text edits, inspect revisions by story, accept or reject changes, change their author, and handle unsupported review markup.'
 category: 'Editing API'
 order: 63
 ---
 
-Use `Document.changeTrackingMode` to create tracked text edits and `RevisionCollection` to review them. To accept or reject multiple changes, use `RevisionCollection.resolve()` for an API batch or the editor command for changes shown by a filter.
+Use `Document.changeTrackingMode` to create tracked text edits and `RevisionCollection` to review them. To accept or reject multiple changes, use `RevisionCollection.resolve()` for an API batch or the editor command for changes shown by a filter. To attribute pending changes to another author, use `RevisionCollection.setAuthor()` or the `setReviewChangesAuthor` editor command.
 
 Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
 
@@ -52,7 +52,7 @@ The runtime's tracking setting does not change the browser editor UI mode. Read 
 
 Tracked ranges refuse table and wrapper boundaries. Collaborative tracked ranges must remain within one paragraph. Targets that touch foreign pending revisions refuse. Insertions can continue the runtime author's text, paragraph, and formatting proposals.
 
-Appends can follow the author's pending deletion at the paragraph tail. Other deletion boundaries refuse. Structural and move revisions also block continuation.
+Appends can follow the author's pending deletion at the paragraph tail. Within one paragraph, a tracked replacement or deletion can start where the author's own pending inserted text ends, and it stays a separate decision. Other boundaries with the author's pending changes refuse: a deletion beside their deletion, or directly before their insertion, would review as one decision with it. A replacement or deletion that covers the author's pending text, or touches another author's change, also refuses. Structural and move revisions also block continuation.
 
 A pending row insertion or deletion blocks tracked text edits throughout that row, including nested tables. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require permanent edits. Tracked table and cell value replacement refuse in collaboration. See [Tables and cells](/docs/2.x/editor-api/tables#row-suggestions) for row deletion limits.
 
@@ -91,7 +91,7 @@ const pending = await runtime.run(async (context) => {
 });
 ```
 
-`Revision.date` is `Date | null`; narrow missing or invalid dates before using date methods. `Revision.type` uses the exported `RevisionType` vocabulary. `Revision.range` returns a range for the addressed revision. Resolve the range before reading or selecting its content. `RevisionCollection` exposes `items`, `resolve()`, `acceptAll()`, and `rejectAll()`; it has no first-item accessor.
+`Revision.date` is `Date | null`; narrow missing or invalid dates before using date methods. `Revision.type` uses the exported `RevisionType` vocabulary. `Revision.range` returns a range for the addressed revision. Resolve the range before reading or selecting its content. `RevisionCollection` exposes `items`, `resolve()`, `setAuthor()`, `acceptAll()`, and `rejectAll()`; it has no first-item accessor.
 
 ## Resolve a batch of changes
 
@@ -192,6 +192,124 @@ const result = editor.exec({
 To include all authors across supported stories, pass `scope: 'document'`. To require every selected change to resolve, pass `unsupported: 'fail'`. The defaults are `scope: 'visible'` and `unsupported: 'skip'`.
 
 The result has the same fields as an API batch; `remaining` counts pending decisions across the document, including hidden changes. If no eligible changes exist, `editor.can()` returns a refusal and `editor.exec()` adds no undo step.
+
+## Change the author of tracked changes
+
+A change can belong to a different person than the one who made it. For example, an agent proposes edits, and a reviewer adopts them while tracking stays on. Change the author to the reviewer. The changes stay pending, so another reviewer can still accept or reject them.
+
+`RevisionCollection.setAuthor(author, selection?, options?)` changes `w:author` on the selected changes in one story. Pass one of these as `selection`:
+
+- `{ authors }` selects every change those authors made.
+- An array of `Revision` objects selects those changes.
+- Nothing selects every change in the story, by every author.
+
+To also record a new date, pass `options.date`. Otherwise each change keeps its own date. For example, give the agent's changes to the reviewer:
+
+```ts
+await runtime.run(async (context) => {
+  const result = context.document.revisions.setAuthor(
+    'Ada Lovelace',
+    { authors: ['Contract agent'] },
+    { date: new Date() }
+  );
+  await context.sync();
+
+  console.log(result.value.updated.length, result.value.skipped);
+});
+```
+
+To select individual changes, load them first and pass the objects:
+
+```ts
+await runtime.run(async (context) => {
+  const revisions = context.document.revisions;
+  revisions.load('items');
+  await context.sync();
+  for (const revision of revisions.items) {
+    revision.load(['author', 'type']);
+  }
+  await context.sync();
+
+  const insertions = revisions.items.filter(
+    (item) => item.author === 'Contract agent' && item.type === 'Insert'
+  );
+  revisions.setAuthor('Ada Lovelace', insertions);
+  await context.sync();
+});
+```
+
+Omitting a selection includes structural changes, such as tracked rows, that `items` omits. It also takes the changes of human authors, so pass a selection when you mean only some authors. An empty array selects nothing.
+
+The revision objects you pass stay valid. After the sync, load `author` again to read the new value. Selection rules and transactions match `resolve()`. Browser writes require the Pro review module and an editable document.
+
+| Error code | Cause |
+| --- | --- |
+| `InvalidArgument` | A blank author, an invalid date or selection, or a revision object from another request context. `setAuthor()` throws before it queues anything. |
+| `ConflictingChanges` | `setAuthor()` shares its sync batch with another write. Keep it as the only write in its batch. |
+| `GeneralException` | Document protection refuses the change. |
+| `NotSupported` | A browser runtime has no Pro review module. |
+
+The result reports each selected change:
+
+| Field | Meaning |
+| --- | --- |
+| `updated` | Changes that have the new author. `key` and `author` describe each change after the update; `previousKey` and `previousAuthor` describe it before. |
+| `skipped` | Requested changes that kept their author, with a key and a reason. |
+
+| Skip reason            | Next step                                                        |
+| ---------------------- | ---------------------------------------------------------------- |
+| `unknown-revision`     | Reload the collection; the target no longer exists.              |
+| `unsupported-revision` | The change has no author to change, such as a table grid record. |
+
+Document protection for tracked changes refuses author changes, because that protection keeps each change attributed to the person who made it. Read-only and comments-only protection refuse it too.
+
+### Change authors in the editor
+
+To change the author of changes in the editor, run the `setReviewChangesAuthor` command. It selects changes by exact `keys`, or by `scope` narrowed by `authors`. These two selections exclude each other. `unsupported` works as it does in `resolveAllReviewChanges`. Without `author`, it records the editor's `author`, so a reviewer adopts the changes as their own. It runs in one undo step:
+
+```ts
+const result = editor.exec({
+  type: 'setReviewChangesAuthor',
+  authors: ['Contract agent'],
+  date: new Date().toISOString(),
+});
+if (result.ok) {
+  console.log(result.revisionAuthors);
+}
+```
+
+Without `keys`, the command selects the changes shown by the active filters, or every change with `scope: 'document'`. `authors` narrows that selection and matches `w:author` exactly. With the default `scope: 'visible'`, an author that a filter hides selects nothing, so pass `scope: 'document'` to include hidden authors. `date` is an ISO 8601 string, because editor commands carry plain data; `setAuthor()` and `adopt()` take a `Date`.
+
+To select changes by the `w:id` values your application stored, match them to the revision addresses of review items, and pass their keys:
+
+```ts
+const ids: readonly string[] = storedRevisionIds;
+const keys = editor
+  .getReviewItems({ placement: false })
+  .filter(
+    (entry) =>
+      entry.kind === 'revision' && entry.item.addresses.some((address) => ids.includes(address.id))
+  )
+  .map((entry) => entry.key);
+editor.exec({ type: 'setReviewChangesAuthor', keys });
+```
+
+A `w:id` can repeat in a document, so prefer keys while the document stays open.
+
+Review keys include the author and the date, so an updated change gets a new key. Use `revisionAuthors.updated` to map each `previousKey` to its new `key`. An active review card stays active. If every selected change already has the author and date, the command succeeds with `changed: false` and adds no undo step. In that case `previousKey` equals `key`.
+
+In React and Vue, `useReview().adopt(items)` runs this command for review items. See [Adopt suggestions as your own](/docs/2.x/pro/tracked-changes#adopt-suggestions-as-your-own).
+
+A refused command returns one of these codes and changes nothing:
+
+| Code | Cause |
+| --- | --- |
+| `invalidArgs` | A blank author, no author on the command or the editor, an invalid date, an invalid selection, or `keys` with `scope` or `authors`. |
+| `locked` | The document is open for viewing, or document protection refuses the change. |
+| `notFound` | No selected change exists. |
+| `unsupported` | No Pro review module, a selection of records with no author, or a skipped change with `unsupported: 'fail'`. |
+
+If a new author would give one change the identity of another pending change, the editor gives the changed revision a new `w:id`. The two changes stay separate decisions.
 
 ## Require every change to resolve
 

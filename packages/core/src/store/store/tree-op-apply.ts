@@ -56,6 +56,7 @@ import {
 import { wmlFreshNamespaceContextAt } from '../package/wml-namespace.ts';
 import { contentControlLevelOf } from '../package/content-control-nodes.ts';
 import { resolveRevisionOperation } from './tree-op-revisions.ts';
+import { applySetRevisionAttribution } from './revision-author-change.ts';
 import { applyInsertCommentMarker } from './tree-op-comments.ts';
 import { applyDeleteTracked } from './tree-op-tracked-delete.ts';
 import {
@@ -71,7 +72,7 @@ import {
 } from './tree-op-tracked-marks.ts';
 import {
   insideOwnInsertion,
-  ownProposedMark,
+  ownProposedParagraph,
   withPropertyChangeRecord,
 } from './tree-op-tracked-properties.ts';
 import { paragraphModelTextOf } from './paragraph-model-text.ts';
@@ -368,6 +369,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     }
     return { ok: true, part: resolved.part, effect: resolved.effect };
   }
+  if (op.op === 'setRevisionAttribution') return applySetRevisionAttribution(part, op, options);
   if (op.op === 'removeContentControl')
     return applyRemoveContentControl(part, op.controlId, options);
   if (op.op === 'setContentControlValue') {
@@ -578,7 +580,10 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
       // and mark writes apply: rejecting that `w:ins` runs the paragraph into the next one and
       // takes its properties with it, so a record of what they used to be decides nothing.
       const markProperties = namedChild(existing, 'rPr')?.children ?? [];
-      if (op.revision && !ownProposedMark(markProperties, op.revision.author)) {
+      if (
+        op.revision &&
+        !ownProposedParagraph(part, paragraph.id, markProperties, op.revision.author)
+      ) {
         children = withPropertyChangeRecord({
           container: 'paragraphProperties',
           prior,
@@ -949,8 +954,9 @@ function applyInsertContent(
 
   const runs = paragraph.children.filter((child) => child.kind === 'run');
   const last = runs[runs.length - 1];
-  // Runs that hold nothing do not give an empty paragraph its face; its mark does
-  // (`mark-character-style-run.ts`). The first content goes in a run of its own after them.
+  // An empty paragraph's face is its mark's character style and direction flags, or the face
+  // of an empty run that already carries them (`mark-character-style-run.ts`). The first
+  // content goes in a run of its own after the empty runs.
   const markStyled = last ? emptyParagraphRunProperties(paragraph, nextId) : [];
   if (last && markStyled.length > 0) {
     inserted = fromEdit(

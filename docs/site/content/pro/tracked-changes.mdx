@@ -281,6 +281,7 @@ React returns plain values from `useReview()`. Vue returns computed refs for `it
 | `items`                           | Pending decisions in reading order       |
 | `activeKey`, `setActive`          | Read or open an item                     |
 | `accept`, `reject`                | Resolve a revision                       |
+| `adopt`                           | Make revisions the reviewer's own        |
 | `resolve`, `reopen`               | Change comment thread state              |
 | `reply`                           | Add a reply                              |
 | `remove`                          | Delete a thread or discard a suggestion  |
@@ -319,16 +320,164 @@ A reply to a revision creates a comment over its range. Its `parentRevisionId` l
 
 `setActive` returns `false` when activation is excluded, no range exists, or the story cannot open.
 
+To open the item the way **Next Change** does, pass `{ announce: true }`. A call that succeeds then fires the editor's `reviewItemReveal` event, and the packaged review UI opens the item's balloon, or opens a closed pane at its card when the pane's `opening` setting is `'auto'`. Without `announce`, `setActive` fires no event.
+
 Use `useReviewOf(editor, query)` with an existing editor. React accepts `Editor | null`. Vue requires `Ref<Editor | null>` and accepts a reactive query.
 
 | Query or exclusion              | Effect                                                         |
 | ------------------------------- | -------------------------------------------------------------- |
 | `excludeRevisionKinds`          | Removes those kinds from returned `items`.                     |
 | `placement: false`              | Keeps metadata and sets placement fields to `null`.            |
+| `pairReplacements: true`        | Lists each replaced word run as one `'replace'` item.          |
 | `setReviewActivationExclusions` | Prevents caret-driven activation for hidden kinds.             |
 | `DocxEditorReview`              | Sets activation exclusions from `structural` and `formatting`. |
 
 A query filters returned data. It does not limit caret-driven activation.
+
+### Show a replacement as one item
+
+When an author selects words and types over them, the document records a deletion and an insertion. The review queue lists them as two items by default. To show one item for each such edit, pass `pairReplacements: true` in the query.
+
+```ts
+const { items, accept } = useReview({ pairReplacements: true });
+
+for (const entry of items) {
+  if (entry.kind === 'revision' && entry.revisionKind === 'replace') {
+    // entry.replacedText holds the deleted words; entry.text holds the inserted words.
+    console.log(`"${entry.replacedText}" -> "${entry.text}"`);
+  }
+}
+```
+
+A deletion and an insertion pair when all of these are true:
+
+- The insertion is the next revision in the queue after the deletion.
+- Both have the same author, nesting level, and `readOnly` value.
+- The deletion ends at the same paragraph and offset where the insertion starts.
+
+A pair acts as one item:
+
+- `acceptReviewItem(key)` and `rejectReviewItem(key)` resolve both halves in one transaction. One undo restores both.
+- `setActiveReviewItem(key)` opens the deletion. The pair reports `isActive` while the caret is in either half.
+- `replyToReviewItem(key, text)` writes a comment over the inserted words. Replies to either half list under the pair.
+- `getReviewItemRects(key)` returns the bands of both halves.
+
+The pair's `key` stays the same while both halves are pending. Key-based methods accept it with any query. The query removes kinds in `excludeRevisionKinds` before it pairs, so an excluded deletion or insertion never pairs. Add `'replace'` to `excludeRevisionKinds` to remove the pairs. The packaged `DocxEditorReview` rail lists the halves separately.
+
+### Find the item under a pointer
+
+If you draw your own balloons or margin markers, use `editor.getReviewItemsAt(clientX, clientY, query?)` to find the review items under a pointer. Each hit holds the `placement` that `getReviewItems()` returns and a `rect` in client coordinates. The `rect` is the item's band on the line under the pointer.
+
+The following example opens a card for the item under a click:
+
+```ts
+pages.addEventListener('click', (event) => {
+  const hits = editor.getReviewItemsAt(event.clientX, event.clientY);
+  const hit = hits.find(
+    ({ placement }) =>
+      placement.kind !== 'comment' ||
+      (placement.parentId === undefined && placement.parentRevisionId === undefined)
+  );
+  if (hit) openCard(hit.placement.key, hit.rect);
+});
+```
+
+An item hits when the character under the pointer is inside its range. The right half of the last character still hits. Hits list the narrowest range first. Replies share their thread's range, so they hit too. The test covers the body, tables, headers, footers, footnotes, and endnotes on painted pages. Ranges that cover no characters never hit.
+
+To anchor a balloon to an item without a pointer, call `editor.getReviewItemRects(key)`. It returns the item's bands on painted pages in client coordinates, or an empty array.
+
+To open your own balloon on navigation but not on a caret move, listen for the `reviewItemReveal` event. It fires each time **Next Change** or **Previous Change** lands on an item, and each time `setActiveReviewItem(key, { announce: true })` succeeds. It also fires when the item is already active, so a balloon that the reader closed opens again. The event does not fire for a caret move, a click in the page, a dismissal, a refused activation, or a call without `{ announce: true }`. It is a local view event, so edits from other participants in a collaboration session never fire it.
+
+The event's `key` is the item's key without `pairReplacements`. **Next Change** and **Previous Change** step through that queue, so for a replacement the key names its deletion or its insertion. When the item is a paired replacement or one half of one, the event also carries `pairKey`, the key that `getReviewItems({ pairReplacements: true })` gives the pair. If you list pairs, open `pairKey ?? key`.
+
+The following example opens a host balloon in React. In Vue, use `useEditorEvent` from `@docx-editor.dev/vue` with the same handler:
+
+```tsx
+import { useEditorEvent } from '@docx-editor.dev/react';
+
+useEditorEvent('reviewItemReveal', ({ key, source }) => {
+  // source is 'navigate' for Next Change and Previous Change,
+  // or 'host' for setActiveReviewItem() with announce: true.
+  openBalloon(key);
+});
+```
+
+The packaged balloons and review pane use the same event. With the `revisionsIn: 'balloons'` pane setting, the change balloon opens. With `revisionsIn: 'pane'`, a closed pane opens at the item's card, unless the `opening` pane setting is `'manual'`.
+
+`editor.getActivatedReviewItemKey(query)` returns the key of the activated item: the one that `setActiveReviewItem()`, **Next Change**, or **Previous Change** made active, while the caret stays in it. It returns `null` when only a caret move made an item active. The caret-active item is a separate idea: `isActive` on each placement, and `activeKey` in `useReview()`, name the item the caret is in, however it got there. Pass the query you read items with: with `pairReplacements: true`, a paired replacement reports the pair's key, so it matches `getReviewItems({ pairReplacements: true })`. Listen for `selectionChange` to read it again. `useReview()` returns the same value as `activatedKey`, for its own query.
+
+| Host API | Returns |
+| --- | --- |
+| `getReviewItemsAt(clientX, clientY, query?)` | The review items under a point, narrowest first. |
+| `getReviewItemRects(key)` | The item's bands on painted pages, in client coordinates. |
+| `getActivatedReviewItemKey(query?)` | The activated item's key under `query`, or `null`. |
+| `on('reviewItemReveal', handler)` | Each explicit reveal, as `{ key, pairKey, source }`. |
+
+If your own pane opens beside balloons, import `reviewPaneListsItem(revisionsIn, item)` from `@docx-editor.dev/core/editor` and apply it to items from an unfiltered `getReviewItems()` read, before your own filters, so that your pane lists the items the editor counts when it opens the pane.
+
+The packaged review rail can draw these balloons for you. See [Control the review pane](/docs/2.x/pro#control-the-review-pane).
+
+## Adopt suggestions as your own
+
+A reviewer can take over changes that someone else proposed, such as an agent's suggestions. The changes stay pending, but they record the reviewer as their author. Call `adopt(items)` from `useReview()`. It accepts one item or a list, ignores comment items, and changes every revision in one undo step. It records the editor's `author`.
+
+In React:
+
+```tsx
+import { useEditorState } from '@docx-editor.dev/react';
+import { useReview } from '@docx-editor.dev/pro/react';
+
+function AdoptSuggestions({ from }: { from: string }) {
+  const { items, adopt } = useReview();
+  const viewing = useEditorState((state) => state.editingMode === 'viewing');
+  const suggested = items.filter((item) => item.kind === 'revision' && item.author === from);
+
+  return (
+    <button
+      disabled={viewing || suggested.length === 0}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={() => adopt(suggested)}
+    >
+      Adopt {suggested.length} suggestions
+    </button>
+  );
+}
+```
+
+In Vue:
+
+```vue
+<script setup lang="ts">
+import { computed } from 'vue';
+import { useEditorState } from '@docx-editor.dev/vue';
+import { useReview } from '@docx-editor.dev/pro/vue';
+
+const props = defineProps<{ from: string }>();
+const { items, adopt } = useReview();
+const viewing = useEditorState((state) => state.editingMode === 'viewing');
+const suggested = computed(() =>
+  items.value.filter((item) => item.kind === 'revision' && item.author === props.from)
+);
+</script>
+
+<template>
+  <button
+    :disabled="viewing || suggested.length === 0"
+    @mousedown.prevent
+    @click="adopt(suggested)"
+  >
+    Adopt {{ suggested.length }} suggestions
+  </button>
+</template>
+```
+
+To adopt one change from a card, pass the item: `adopt(item)`. Pass options to record someone else or a new date:
+
+```ts
+adopt(item, { author: 'Ada Lovelace', date: new Date() });
+```
+
+`adopt` returns `false` and changes nothing when the list holds no revision, when no author is known, or when the editor refuses the write. Viewing mode and document protection refuse it. Review keys include the author, so each change gets a new `key`, and `items` updates on its own. For an author filter or the full result, run the `setReviewChangesAuthor` editor command. See [Change authors in the editor](/docs/2.x/editor-api/revisions#change-authors-in-the-editor).
 
 ## Filter by reviewer
 

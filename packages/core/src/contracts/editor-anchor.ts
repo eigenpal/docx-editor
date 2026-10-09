@@ -1,12 +1,30 @@
 import type { DocAnchor } from './types.ts';
 
 /**
+ * Where a scroll places its target in the viewport.
+ *
+ * - `'start'`: near the top, like a jump to a heading.
+ * - `'center'`: centred.
+ * - `'centerIfNeeded'`: still while the target is on screen, centred when it has to move.
+ * - `'nearest'`: the minimum scroll, which leaves the target at the edge it came in from.
+ *
+ * Each method that takes a placement states its own default.
+ *
+ * @public
+ */
+export type ScrollPlacement = 'start' | 'center' | 'centerIfNeeded' | 'nearest';
+
+/**
  * Scroll settings for {@link EditorAnchorNavigation.scrollToAnchor}. Every field is optional.
  * The fields match document refresh `NavigateToChangeOptions`. @public
  */
 export interface ScrollToAnchorOptions {
-  /** Target alignment. Default: centerIfNeeded, which keeps the viewport still for a visible target. */
-  readonly block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest';
+  /**
+   * Target placement. The default depends on the method: `scrollToAnchor` uses
+   * `'centerIfNeeded'`, which keeps the viewport still for a visible target, and
+   * `scrollToBlock` uses `'start'`.
+   */
+  readonly block?: ScrollPlacement;
   /** Default: instant. Reduced motion uses instant even when smooth is requested. */
   readonly behavior?: 'instant' | 'smooth';
   /** Edge padding for start/nearest placement, in CSS pixels. Default: 24. Finite and nonnegative. */

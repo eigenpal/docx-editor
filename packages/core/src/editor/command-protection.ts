@@ -21,6 +21,9 @@ export function registerFormFieldIdentity(
   formFieldIdentities.set(surface, read);
 }
 
+export const TRACKED_CHANGES_AUTHOR_REASON =
+  'this document is protected for tracked changes; their authors cannot change';
+
 export const FORMS_WRITE_REASON = 'this document is protected; only form fields can be filled';
 
 /** Called only for mutating commands. History restores complete, already admitted transactions. */
@@ -45,6 +48,9 @@ export function commandProtectionRefusal(
         protection.edit === 'comments' ? COMMENTS_PROTECTION_REASON : READ_ONLY_PROTECTION_REASON,
     };
   }
+  // Tracked-changes protection keeps every change attributed to the person who made it.
+  if (protection.edit === 'trackedChanges' && command.type === 'setReviewChangesAuthor')
+    return { ok: false, code: 'locked', reason: TRACKED_CHANGES_AUTHOR_REASON };
   if (protection.edit !== 'forms') return null;
   // Table commands check their complete planned ops, including explicit off-caret targets.
   if (isTableEditorCommand(command)) return null;
@@ -91,6 +97,7 @@ export function commandProtectionRefusal(
     case 'refreshToc':
     case 'replaceAllMatches':
     case 'resolveAllReviewChanges':
+    case 'setReviewChangesAuthor':
     case 'acceptRevision':
     case 'rejectRevision':
     case 'acceptAllRevisions':

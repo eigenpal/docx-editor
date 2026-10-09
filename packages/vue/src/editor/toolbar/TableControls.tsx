@@ -28,8 +28,8 @@ import { ToolbarSeparator } from './parts';
 import { Slot } from './Slot';
 import { ToolbarHexColorPickerBody } from './ColorSplit';
 import { useTableChromeProviderVisible, useTableChromeSlot } from './useTableChrome';
+import { useDropdownClose } from './useDropdownClose';
 import {
-  useDropdownClose,
   useTableChromeTriggerA11y,
   useTableDialogKeyboard,
   useTableMenuKeyboard,
@@ -155,7 +155,12 @@ function buildMenuCompound(slot: TableChromeSlotId, classBase: string, defaultLa
       const setOpen = (v: boolean) => {
         open.value = v;
       };
-      useDropdownClose(open, setOpen, rootRef);
+      useDropdownClose(
+        open,
+        setOpen,
+        rootRef,
+        () => Boolean(props.hidden) || !chrome.visible.value
+      );
 
       provide(CtxKey, {
         get open() {
@@ -534,7 +539,12 @@ function buildColorSplitCompound(
       const setLastHex = (v: string) => {
         lastHex.value = v;
       };
-      useDropdownClose(open, setOpen, rootRef);
+      useDropdownClose(
+        open,
+        setOpen,
+        rootRef,
+        () => Boolean(props.hidden) || !chrome.visible.value
+      );
       provide(CtxKey, {
         get open() {
           return open.value;

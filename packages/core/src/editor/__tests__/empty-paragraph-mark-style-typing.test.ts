@@ -108,6 +108,23 @@ function firstParagraphRuns(editor: DocxEditorInstance): string[][] {
     });
 }
 
+/** The attribute values of one `w:rPr` child in the first paragraph's last run. */
+function lastRunPropertyValues(editor: DocxEditorInstance, localName: string): string[] {
+  const root = editor.surface!.session.part().root;
+  const body = root.kind === 'textValue' ? null : root.children[0];
+  const paragraph = body && body.kind !== 'textValue' ? body.children[0] : null;
+  if (!paragraph || paragraph.kind === 'textValue') return [];
+  const run = paragraph.children.filter((child) => child.kind === 'run').at(-1);
+  if (!run || run.kind === 'textValue') return [];
+  const rPr = run.children.find((child) => child.kind === 'runProperties');
+  if (!rPr || rPr.kind === 'textValue') return [];
+  const property = rPr.children.find(
+    (child) => child.kind !== 'textValue' && child.localName === localName
+  );
+  if (!property || property.kind === 'textValue') return [];
+  return property.attributes.map((entry) => `${entry.localName}=${entry.value}`).sort();
+}
+
 describe('typing into an empty paragraph whose mark names a character style', () => {
   test('the typed text takes the face the toolbar showed; undo and redo keep it', () =>
     withEditor(`<w:p>${mark(BIG)}</w:p>${AFTER}`, (editor) => {
@@ -163,6 +180,33 @@ describe('typing into an empty paragraph whose mark names a character style', ()
       expect(editor.getSelectionFormatting()?.italic).toBe(false);
     }));
 
+  test('an empty run that states the mark’s style plus more lends none of the extra', () =>
+    withEditor(
+      `<w:p>${mark(BIG)}<w:r><w:rPr>${BIG}<w:i/></w:rPr></w:r></w:p>${AFTER}`,
+      (editor) => {
+        caretAt(editor, 0, 0);
+        expect(editor.getSelectionFormatting()?.italic).toBe(false);
+        editor.surface!.type('x');
+        // The typed text shows the face the toolbar reported before typing.
+        expect(firstParagraphRuns(editor).at(-1)).toEqual(['rStyle=Big']);
+        expect(editor.getSelectionFormatting()?.italic).toBe(false);
+        expect(face(editor)).toEqual([24, true]);
+      }
+    ));
+
+  test('an empty run that states exactly the mark’s face is the face typed text joins', () =>
+    withEditor(
+      `<w:p>${mark(`${BIG}<w:sz w:val="32"/>`)}<w:r><w:rPr>${BIG}<w:sz w:val="32"/><w:vanish/></w:rPr></w:r></w:p>${AFTER}`,
+      (editor) => {
+        caretAt(editor, 0, 0);
+        expect(face(editor)).toEqual([16, true]);
+        editor.surface!.type('x');
+        const runs = firstParagraphRuns(editor);
+        expect(runs.at(-1)).toEqual(['rStyle=Big', 'sz=32']);
+        expect(face(editor)).toEqual([16, true]);
+      }
+    ));
+
   test('the insertText command takes the style too', () =>
     withEditor(`<w:p>${mark(BIG)}</w:p>${AFTER}`, (editor) => {
       caretAt(editor, 0, 0);
@@ -178,4 +222,26 @@ describe('typing into an empty paragraph whose mark names a character style', ()
       expect(firstParagraphRuns(editor)).toEqual([[]]);
       expect(face(editor)).toEqual([12, false]);
     }));
+
+  test('an empty run whose East Asian language differs lends no language', () =>
+    withEditor(
+      `<w:p>${mark(`${BIG}<w:lang w:val="en-US" w:eastAsia="ja-JP"/>`)}` +
+        `<w:r><w:rPr>${BIG}<w:lang w:val="en-US" w:eastAsia="zh-CN"/></w:rPr></w:r></w:p>${AFTER}`,
+      (editor) => {
+        caretAt(editor, 0, 0);
+        editor.surface!.type('x');
+        expect(lastRunPropertyValues(editor, 'lang')).not.toContain('eastAsia=zh-CN');
+      }
+    ));
+
+  test('an empty run whose shading fill differs lends no shading', () =>
+    withEditor(
+      `<w:p>${mark(`${BIG}<w:shd w:val="clear" w:color="auto" w:fill="FF0000"/>`)}` +
+        `<w:r><w:rPr>${BIG}<w:shd w:val="clear" w:color="auto" w:fill="00FF00"/></w:rPr></w:r></w:p>${AFTER}`,
+      (editor) => {
+        caretAt(editor, 0, 0);
+        editor.surface!.type('x');
+        expect(lastRunPropertyValues(editor, 'shd')).not.toContain('fill=00FF00');
+      }
+    ));
 });

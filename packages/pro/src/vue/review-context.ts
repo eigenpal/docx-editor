@@ -24,7 +24,8 @@ import {
 } from 'vue';
 import type { ReviewAuthorInfo } from '@docx-editor.dev/vue';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
-import { useTranslation } from '@docx-editor.dev/vue';
+import type { CommentMarkerStyle, RevisionDisplay } from '@docx-editor.dev/core/editor';
+import { useReviewAuthors, useTranslation } from '@docx-editor.dev/vue';
 import type { ReviewActions } from './review-types.ts';
 import type { ReviewItemView } from './useReview.ts';
 
@@ -47,6 +48,10 @@ export interface ReviewRailValue {
   readonly endDraft: () => void;
   readonly expandedResolvedKey: string | null;
   readonly setExpandedResolvedKey: (key: string | null) => void;
+  /** The `commentMarkers` review pane setting: how a comment thread's margin marker looks. */
+  readonly commentMarkers: CommentMarkerStyle;
+  /** The `revisionsIn` review pane setting: tracked changes as rail cards or page balloons. */
+  readonly revisionsIn: RevisionDisplay;
 }
 
 export const ReviewContextKey: InjectionKey<ComputedRef<ReviewRailValue>> = Symbol('ReviewContext');
@@ -56,9 +61,11 @@ export const ReviewItemContextKey: InjectionKey<ComputedRef<ReviewItemView | nul
 const INERT_REVIEW: ReviewActions = {
   items: [],
   activeKey: null,
+  activatedKey: null,
   setActive: () => false,
   accept: () => false,
   reject: () => false,
+  adopt: () => false,
   resolve: () => false,
   reopen: () => false,
   commentResolutionDisabledReason: null,
@@ -89,6 +96,8 @@ const INERT_RAIL: ReviewRailValue = {
   endDraft: () => {},
   expandedResolvedKey: null,
   setExpandedResolvedKey: () => {},
+  commentMarkers: 'initials',
+  revisionsIn: 'pane',
 };
 
 /** @internal */
@@ -109,25 +118,45 @@ export function useReviewItem(): ComputedRef<ReviewItemView | null> {
 /**
  * Returns the resolved color, slot, and declared style for one review author.
  *
- * The result updates when the author or revision style declarations change.
+ * The result updates when the author or revision style declarations change. Outside the
+ * review rail it reads the editor's author roster.
  *
  * @public
  */
 export function useReviewAuthor(
   author: MaybeRefOrGetter<string | undefined>
 ): ComputedRef<ReviewAuthorInfo | undefined> {
-  const rail = useRail();
+  const rail = inject(ReviewContextKey, null);
+  // Inside the rail its own author map answers; only a caller outside it reads the roster.
+  const roster = rail ? null : useReviewAuthors();
   return computed(() => {
     const name = toValue(author);
-    return name === undefined ? undefined : rail.value.authorInfo.get(name);
+    if (name === undefined) return undefined;
+    return rail
+      ? rail.value.authorInfo.get(name)
+      : roster?.value.find((info) => info.author === name);
   });
 }
 
 /** @internal */
-export function useReviewLabel(): (key: TranslationKey) => string {
+/** Placeholder values for a review label, such as `{ count: 3 }` for `{count}`. */
+export type ReviewLabelParams = Readonly<Record<string, string | number>>;
+
+/** Fill `{name}` placeholders in a host-translated label, the way the catalogue's `t()` does. */
+function withParams(text: string, params: ReviewLabelParams | undefined): string {
+  if (!params) return text;
+  return text.replace(/\{(\w+)\}/g, (whole, name: string) =>
+    Object.hasOwn(params, name) ? String(params[name]) : whole
+  );
+}
+
+export function useReviewLabel(): (key: TranslationKey, params?: ReviewLabelParams) => string {
   const rail = useRail();
   const { t } = useTranslation();
-  return (key: TranslationKey) => rail.value.t?.(key) ?? t(key);
+  return (key: TranslationKey, params?: ReviewLabelParams) => {
+    const host = rail.value.t?.(key);
+    return host !== undefined ? withParams(host, params) : t(key, params);
+  };
 }
 
 function reviewItemRenderKey(item: ReviewItemView): string {

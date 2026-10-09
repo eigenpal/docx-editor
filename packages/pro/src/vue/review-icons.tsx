@@ -22,6 +22,38 @@ export const COMMENT_OUTLINE_ICON =
   'M880-80 720-240H160q-33 0-56.5-23.5T80-320v-480q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v720ZM160-320h594l46 45v-525H160v480Zm0 0v-480 480Z';
 export const ACCEPT_ICON = 'M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z';
 
+/** A paper plane: the reply line's send button. */
+export const SEND_ICON =
+  'M120-160v-640l760 320-760 320Zm80-120 474-200-474-200v140l240 60-240 60v140Zm0 0v-400 400Z';
+
+/**
+ * A comment thread's badge under `commentMarkers: 'initials'`: a speech bubble in the author's
+ * colour with their initials, or a quiet check once the thread is resolved, plus a reply
+ * count. Presentation only; the control around it carries the accessible label.
+ */
+export const reviewBadge = (initials: string, replies: number, resolved: boolean): VNode =>
+  h(
+    'span',
+    {
+      class: 'docx-review__badge',
+      'data-testid': 'review-badge',
+      ...(resolved ? { 'data-resolved': '' } : {}),
+      'aria-hidden': 'true',
+    },
+    [
+      resolved
+        ? icon(ACCEPT_ICON)
+        : h('span', { class: 'docx-review__badge-initials' }, initials || '?'),
+      replies > 0
+        ? h(
+            'span',
+            { class: 'docx-review__badge-count', 'data-testid': 'review-badge-count' },
+            replies > 9 ? '9+' : String(replies)
+          )
+        : null,
+    ]
+  );
+
 export const resolvedCommentIcon = (): VNode =>
   h('span', { class: 'docx-review__resolved-icon' }, [
     h('span', { class: 'docx-review__resolved-comment' }, [icon(COMMENT_OUTLINE_ICON)]),

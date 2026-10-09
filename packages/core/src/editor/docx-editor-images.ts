@@ -56,6 +56,16 @@ export type { ImageContext, SelectedImageState };
 
 type SelectedDrawingRecord = InlineDrawingRecord | AnchoredDrawingRecord;
 
+export {
+  computeMovedImagePosition,
+  computeResizedImageExtentEmu,
+  emuToOverlayPoints,
+  EMU_PER_POINT,
+  pointsToEmu,
+  type ImageResizeHandle,
+} from './image-overlay-geometry.ts';
+import type { ImageResizeHandle } from './image-overlay-geometry.ts';
+
 const IMAGE_ASYNC_COMMAND_TYPES = new Set(['insertImage', 'replaceImage']);
 const IMAGE_COMMAND_TYPES = new Set([
   'insertImage',
@@ -241,6 +251,10 @@ function wrapOf(record: SelectedDrawingRecord): ImageWrapTarget {
   return record.wrap;
 }
 
+/** Image commands reach pictures and text boxes; the overlay offers handles on the same gate. */
+const imageCommandsReach = (record: SelectedDrawingRecord): boolean =>
+  record.placeholderGraphicKind === null || !!record.textboxStory;
+
 /**
  * The selected image and what may be done to it, or null when nothing image-like is selected.
  *
@@ -249,7 +263,7 @@ function wrapOf(record: SelectedDrawingRecord): ImageWrapTarget {
 export function selectedImageStateOf(surface: PaginatedSurface | null): SelectedImageState | null {
   const record = resolveSelectedDrawingRecord(surface);
   if (!record) return null;
-  if (record.placeholderGraphicKind !== null && !record.textboxStory) return null;
+  if (!imageCommandsReach(record)) return null;
   const projection = surface ? projectDrawingForRecord(surface, record) : null;
   if (!projection) return null;
   if (projection.hidden || projection.locks.select) return null;
@@ -1035,17 +1049,11 @@ export async function executeImageCommand(
   return { ok: true, changed: result.change !== null };
 }
 
-/** Which of the eight resize handles a drag started from, by compass direction. */
-export type ImageResizeHandle = 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw';
-
 /** How far one arrow-key press nudges a selected image, in points. */
 export const IMAGE_OVERLAY_NUDGE_PT = 1;
 
 /** How far Shift+arrow nudges a selected image, in points. */
 export const IMAGE_OVERLAY_NUDGE_SHIFT_PT = 10;
-
-/** EMUs per point. DrawingML stores extents in EMU; layout works in points. */
-export const EMU_PER_POINT = 12_700;
 
 /**
  * One in-flight image drag: where it started, and everything needed to decide at commit time
@@ -1116,10 +1124,10 @@ export interface SelectedDrawingOverlayTarget {
 }
 
 function overlayCapabilityFlags(
-  _record: SelectedDrawingRecord,
+  record: SelectedDrawingRecord,
   projection: DrawingProjection | null
 ): Pick<SelectedDrawingOverlayTarget, 'canResize' | 'canMove' | 'aspectLocked'> {
-  if (!projection || projection.hidden || projection.locks.select) {
+  if (!projection || projection.hidden || projection.locks.select || !imageCommandsReach(record)) {
     return Object.freeze({ canResize: false, canMove: false, aspectLocked: true });
   }
   const caps = capabilityFlags(projection);
@@ -1191,91 +1199,6 @@ export function selectedDrawingOverlayTargetOf(
     anchorFrameOrigin,
     transform: record.transform,
     ...gated,
-  });
-}
-
-/** Points to EMU, rounded — EMUs are integral in the file. */
-export function pointsToEmu(points: number): number {
-  return Math.round(points * EMU_PER_POINT);
-}
-
-/** EMU to points. Unrounded, so overlay geometry keeps sub-point precision during a drag. */
-export function emuToOverlayPoints(emu: number): number {
-  return emu / EMU_PER_POINT;
-}
-
-/**
- * The extent a resize drag produces, in EMU.
- *
- * Computed from the drag's START extent rather than the previous frame's, so a drag that reverses
- * direction lands exactly where it began instead of accumulating rounding error.
- *
- * `preserveAspect` behaves the way Word's handles do: a corner handle scales by whichever axis
- * moved further, while an edge handle drives the other axis from the original ratio. Both axes
- * are floored at one point, so a drag past the opposite edge cannot invert the image.
- */
-export function computeResizedImageExtentEmu(
-  startWidthEmu: number,
-  startHeightEmu: number,
-  handle: ImageResizeHandle,
-  deltaWidthPt: number,
-  deltaHeightPt: number,
-  preserveAspect: boolean
-): { readonly cx: number; readonly cy: number } {
-  let widthPt = emuToOverlayPoints(startWidthEmu);
-  let heightPt = emuToOverlayPoints(startHeightEmu);
-  const aspect = widthPt / heightPt;
-  const horizontal = handle.includes('e') ? deltaWidthPt : handle.includes('w') ? -deltaWidthPt : 0;
-  const vertical = handle.includes('s') ? deltaHeightPt : handle.includes('n') ? -deltaHeightPt : 0;
-  widthPt = Math.max(1, widthPt + horizontal);
-  heightPt = Math.max(1, heightPt + vertical);
-  if (preserveAspect) {
-    const corner = handle.length === 2;
-    if (corner) {
-      const scale = Math.max(
-        widthPt / emuToOverlayPoints(startWidthEmu),
-        heightPt / emuToOverlayPoints(startHeightEmu)
-      );
-      widthPt = Math.max(1, emuToOverlayPoints(startWidthEmu) * scale);
-      heightPt = Math.max(1, widthPt / aspect);
-    } else if (handle === 'e' || handle === 'w') {
-      heightPt = Math.max(1, widthPt / aspect);
-    } else {
-      widthPt = Math.max(1, heightPt * aspect);
-    }
-  }
-  return Object.freeze({ cx: pointsToEmu(widthPt), cy: pointsToEmu(heightPt) });
-}
-
-/**
- * The position a move drag produces, preserving the anchoring the file already used.
- *
- * A `frame`-mode position keeps its `relativeToH`/`relativeToV` bases and only shifts the offsets
- * it actually had — writing an offset the file omitted would re-anchor the drawing to a different
- * reference and move it somewhere the drag never pointed.
- */
-export function computeMovedImagePosition(
-  start: DrawingPositionInput,
-  deltaXPt: number,
-  deltaYPt: number
-): DrawingPositionInput {
-  if (start.mode === 'simple') {
-    return Object.freeze({
-      mode: 'simple' as const,
-      horizontalEmu: (start.horizontalEmu ?? 0) + pointsToEmu(deltaXPt),
-      verticalEmu: (start.verticalEmu ?? 0) + pointsToEmu(deltaYPt),
-    });
-  }
-  return Object.freeze({
-    mode: 'frame' as const,
-    ...(start.horizontalEmu !== undefined
-      ? { horizontalEmu: start.horizontalEmu + pointsToEmu(deltaXPt) }
-      : {}),
-    ...(start.verticalEmu !== undefined
-      ? { verticalEmu: start.verticalEmu + pointsToEmu(deltaYPt) }
-      : {}),
-    ...(start.relativeToH !== undefined ? { relativeToH: start.relativeToH } : {}),
-    ...(start.relativeToV !== undefined ? { relativeToV: start.relativeToV } : {}),
   });
 }
 

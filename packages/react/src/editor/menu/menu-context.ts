@@ -71,6 +71,29 @@ export const MenuContext = createContext<MenuContextValue>({
   reportIssue: undefined,
 });
 
+/** The id of the "⋯" menu that holds the menus that do not fit. */
+export const MENU_OVERFLOW_ID = 'docx-menubar-more';
+
+/** Which menus moved into the "⋯" menu, and where the reading component renders. */
+export interface MenuOverflowValue {
+  /** Whether the bar measures its menus. Menus then mark themselves as collapsible. */
+  readonly measuring: boolean;
+  /** Ids of the menus that render inside the "⋯" menu instead of the bar. */
+  readonly overflow: ReadonlySet<string>;
+  /** True inside the "⋯" menu's panel, where a menu renders as a submenu row. */
+  readonly inMore: boolean;
+}
+
+export const MenuOverflowContext = createContext<MenuOverflowValue>({
+  measuring: false,
+  overflow: new Set<string>(),
+  inMore: false,
+});
+
+export function useMenuOverflow(): MenuOverflowValue {
+  return useContext(MenuOverflowContext);
+}
+
 export function useMenuContext(): MenuContextValue {
   return useContext(MenuContext);
 }

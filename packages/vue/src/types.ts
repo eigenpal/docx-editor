@@ -45,6 +45,12 @@ export interface DocxEditorProps {
   menu?: boolean | DocxEditorMenuProps;
   hyperlinkPopup?: boolean;
   contextMenu?: boolean | DocxEditorContextMenuProps;
+  /**
+   * The packaged navigation pane: `false` removes it, an object is
+   * `DocxEditorNavigationProps`. The pane captures Ctrl+F (Cmd+F on macOS) while focus is in
+   * this editor and opens Find; `:navigation="{ findShortcut: false }"` leaves the shortcut
+   * to the browser.
+   */
   navigation?: boolean | DocxEditorNavigationProps;
   rulers?: boolean;
   document?: DocumentSource;

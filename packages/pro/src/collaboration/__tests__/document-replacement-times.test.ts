@@ -351,3 +351,91 @@ for (const kind of ['ins', 'del'] as const) {
     });
   }
 }
+
+/** The one replacement a paired query lists for the fixture's deletion and insertion. */
+function pairCard(peer: Peer) {
+  const items = peer.editor.getReviewItems({ pairReplacements: true });
+  expect(items).toHaveLength(1);
+  const [pair] = items;
+  if (pair?.kind !== 'revision' || pair.revisionKind !== 'replace')
+    throw new Error('missing paired replacement');
+  return pair;
+}
+
+for (const [label, source] of [
+  ['different times', fixture],
+  ['matching times', matchingTime],
+  ['shared address', sharedAddress],
+] as const) {
+  for (const action of ['acceptReviewItem', 'rejectReviewItem'] as const) {
+    test(`${label}: ${action} of a paired replacement synchronizes, undoes, redoes, and reopens`, async () => {
+      const a = await peer('Alice', undefined, source);
+      const b = await peer('Bob', a);
+      let joined: Peer | undefined;
+      const text = action === 'acceptReviewItem' ? 'new tail' : 'old tail';
+      try {
+        expect(a.editor[action](pairCard(a).key).ok).toBe(true);
+        sync(a, b);
+        await converged(a, b);
+        expect(b.editor.getReviewItems()).toHaveLength(0);
+        expect(b.editor.surface!.session.bodyText()).toBe(text);
+        expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
+        sync(a, b);
+        await converged(a, b);
+        expect(b.editor.getReviewItems()).toHaveLength(2);
+        expect(pairCard(b).replacedText).toBe('old');
+        expect(a.editor.exec({ type: 'redo' }).ok).toBe(true);
+        sync(a, b);
+        await converged(a, b);
+        expect(b.editor.getReviewItems()).toHaveLength(0);
+        joined = await peer('Rejoined', b);
+        await converged(a, joined);
+        expect(joined.editor.surface!.session.bodyText()).toBe(text);
+      } finally {
+        joined?.close();
+        b.close();
+        a.close();
+      }
+    });
+  }
+}
+
+test('accepting a pair while a participant rejects its insertion converges', async () => {
+  const a = await peer('Alice');
+  const b = await peer('Bob', a);
+  try {
+    expect(a.editor.acceptReviewItem(pairCard(a).key).ok).toBe(true);
+    expect(b.editor.rejectReviewItem(card(b, 'insert').key).ok).toBe(true);
+    sync(a, b);
+    await converged(a, b);
+    expect(b.editor.getReviewItems()).toHaveLength(0);
+  } finally {
+    b.close();
+    a.close();
+  }
+});
+
+test('rejecting a pair while a participant edits its inserted words converges', async () => {
+  const a = await peer('Alice');
+  const b = await peer('Bob', a);
+  try {
+    expect(a.editor.rejectReviewItem(pairCard(a).key).ok).toBe(true);
+    await b.runtime.run(async (context) => {
+      const found = context.document.body.search('new');
+      found.load('items');
+      await context.sync();
+      found.items[0]!.insertText('changed', 'Replace');
+      await context.sync();
+    });
+    sync(a, b);
+    await converged(a, b);
+    expect(
+      b.editor
+        .getReviewItems()
+        .some((item) => item.kind === 'revision' && item.revisionKind === 'delete')
+    ).toBe(false);
+  } finally {
+    b.close();
+    a.close();
+  }
+});

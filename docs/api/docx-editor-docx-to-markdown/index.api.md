@@ -287,6 +287,14 @@ export interface FontSubstitution {
 export function forEachSemanticDrawing(layout: SemanticLayout, visit: (drawing: SemanticDrawingVisit) => void): void;
 
 // @public
+export interface GroupTextboxStoryRecord {
+    readonly box: LayoutBox;
+    readonly memberNodeId: string;
+    readonly rotationDegrees: number;
+    readonly story: TextboxStoryLayout;
+}
+
+// @public
 export const HARD_MAX_AGGREGATE_FONT_BYTES: number;
 
 // @public
@@ -398,6 +406,7 @@ export interface InlineDrawingRecord {
     // (undocumented)
     readonly geometry: DrawingGeometry;
     readonly groupPicture?: DrawingGroupPictureRecord;
+    readonly groupTextboxStories?: readonly GroupTextboxStoryRecord[];
     // (undocumented)
     readonly height: number;
     // (undocumented)
@@ -950,6 +959,7 @@ export interface TextboxStoryLayout {
         y: number;
     }>;
     readonly contentWidth: number;
+    readonly extentWidth?: number;
     readonly fallbackReason?: TextboxStoryFallbackReason;
     readonly fillHex: string | null;
     readonly flowHeight: number;

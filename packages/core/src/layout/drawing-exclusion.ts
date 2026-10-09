@@ -1,3 +1,5 @@
+import type { BodyAnchorFrameBase } from './body-flow-helpers.ts';
+import { resolveParagraphAnchorPosition } from './paragraph-anchor-position.ts';
 import { revisionMarkupHidesDrawing } from './revision-markup-projection.ts';
 // Anchored drawing exclusion zones and paint-layer ordering (typed-drawings-and-images task 9).
 //
@@ -34,6 +36,8 @@ import {
   wrapExclusionFromProjection,
 } from './drawing-wrap.ts';
 import type { LayoutBox } from './semantic-records.ts';
+import type { TextboxStoryLayouter } from './inline-textbox-flow.ts';
+import { textboxPlacementProjection } from './textbox-placement.ts';
 
 /** Paint layer relative to body text — not the OOXML wrap element. */
 export type DrawingPaintLayer = 'behind' | 'inFront';
@@ -72,6 +76,22 @@ export {
   travellingTopAndBottomSkip,
 } from './top-and-bottom-clearance.ts';
 
+/** The header or footer object a furniture exclusion zone comes from. */
+export interface FurnitureZoneSource {
+  readonly partName: string;
+  readonly kind: 'drawing' | 'table';
+  readonly nodeId: string;
+}
+
+/**
+ * One zone's identity across the zones of a page. A body zone is its drawing node; a furniture
+ * zone joins its part, kind, and node with U+0000, which no XML id can hold.
+ */
+export function exclusionZoneIdentity(zone: ExclusionZone): string {
+  const source = zone.furnitureSource;
+  return source ? `${source.partName}\0${source.kind}\0${source.nodeId}` : zone.drawingNodeId;
+}
+
 export interface ExclusionZone {
   /** Objects outside body drawing flow publish their exclusion directly instead of synthesizing it. */
   readonly sourceKind?: 'table' | 'frame' | 'furniture';
@@ -80,6 +100,12 @@ export interface ExclusionZone {
    * is not in the continued section, so the zone reaches every line and column there.
    */
   readonly earlierSection?: boolean;
+  /**
+   * The header or footer object a `furniture` zone comes from. Node ids are unique only within
+   * one part, so a furniture zone is identified by its part, its kind, and its node together
+   * (see {@link exclusionZoneIdentity}), never by a composed id string.
+   */
+  readonly furnitureSource?: FurnitureZoneSource;
   readonly drawingNodeId: string;
   readonly anchorParagraphId: string;
   /** UTF-16 model offset of the anchor atom — exclusions apply at/after this point in the paragraph. */
@@ -233,7 +259,7 @@ export function verticalBandOfExclusion(input: WrapExclusionInput): LayoutBox {
 }
 
 /** Vertical frames whose resolved origin does not depend on where the anchor flows. */
-function pageFramedVertically(frame: AnchoredDrawingRecord['verticalFrame']): boolean {
+export function pageFramedVertically(frame: AnchoredDrawingRecord['verticalFrame']): boolean {
   return frame !== 'paragraph' && frame !== 'line';
 }
 
@@ -450,9 +476,36 @@ export function filterExclusionZonesForParagraphOrder(
   );
 }
 
+/**
+ * Placed projections per layouter. Break synthesizes a paragraph's zones once per line, and
+ * one layouter serves one layout pass, so the unwrapped story lays out once per drawing.
+ */
+const placedByLayouter = new WeakMap<
+  TextboxStoryLayouter,
+  WeakMap<DrawingProjection, DrawingProjection>
+>();
+
+function placedTextboxProjection(
+  projection: DrawingProjection,
+  layoutTextboxStory: TextboxStoryLayouter | undefined
+): DrawingProjection {
+  if (!projection.textboxStory?.noWrap || !layoutTextboxStory) return projection;
+  let placed = placedByLayouter.get(layoutTextboxStory);
+  if (!placed) {
+    placed = new WeakMap();
+    placedByLayouter.set(layoutTextboxStory, placed);
+  }
+  let result = placed.get(projection);
+  if (!result) {
+    result = textboxPlacementProjection(projection, layoutTextboxStory(projection));
+    placed.set(projection, result);
+  }
+  return result;
+}
+
 /** Paragraph-local square/tight/through zones synthesized during break. */
 export function synthesizeParagraphWrapExclusionZones(options: {
-  readonly frameBase?: ReturnType<typeof import('./body-flow-helpers.ts').bodyAnchorFrameBase>;
+  readonly frameBase?: BodyAnchorFrameBase;
   readonly paragraph: OoxmlNode;
   readonly paragraphId: string;
   readonly drawingLayout: InlineDrawingLayoutContext;
@@ -467,12 +520,13 @@ export function synthesizeParagraphWrapExclusionZones(options: {
   /** Which revisions this pass resolves away — see {@link publishAnchoredDrawingsForParagraph}. */
   readonly displayMode?: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
+  /** Lays out a text box story, so an unwrapped box carves the width its text gives it. */
+  readonly layoutTextboxStory?: TextboxStoryLayouter;
 }): readonly ExclusionZone[] {
   const atoms = anchoredDrawingAtomsInParagraph(options.paragraph, options.drawingLayout);
   if (atoms.length === 0) return Object.freeze([]);
   const offsets = drawingModelOffsetsInParagraph(options.paragraph);
   const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
-  const contentWidth = Math.max(1, options.contentRight - options.contentLeft);
   const zones: ExclusionZone[] = [];
   for (const atom of atoms) {
     // A drawing the display mode resolves away publishes no record, so it must carve no
@@ -489,46 +543,26 @@ export function synthesizeParagraphWrapExclusionZones(options: {
     if (modelStart === undefined) continue;
     const lineTop = options.anchorLineTopByModelStart.get(modelStart);
     if (lineTop === undefined) continue;
-    const lineBox = Object.freeze({
-      x: options.contentLeft,
-      y: options.frameBase ? options.paragraphStartY + lineTop : lineTop,
-      width: contentWidth,
-      height: 14,
-    });
-    const layoutInCell = options.anchorCellBox != null;
-    const resolved = resolveAnchoredDrawingPosition(atom.projection, {
-      pageNumber: 1,
-      pageWidth: options.contentRight + options.contentLeft + contentWidth,
-      pageHeight: 792,
-      marginLeft: options.contentLeft,
-      marginRight: 0,
-      marginBottom: 0,
-      contentInsetTop: 0,
-      contentInsetBottom: 0,
-      contentWidth,
-      contentHeight: 648,
-      contentBandHeight: 648,
-      paragraphBox: lineBox,
-      anchorLineBox: lineBox,
-      anchorCharacterX: options.contentLeft,
-      columnBox: lineBox,
-      cellBox: layoutInCell ? options.anchorCellBox! : null,
-      layoutInCell,
+    const projection = placedTextboxProjection(atom.projection, options.layoutTextboxStory);
+    const resolved = resolveParagraphAnchorPosition(projection, {
+      ...(options.frameBase ? { frameBase: options.frameBase } : {}),
+      contentLeft: options.contentLeft,
+      contentRight: options.contentRight,
+      lineY: options.frameBase ? options.paragraphStartY + lineTop : lineTop,
       ownerPartName: options.drawingLayout.ownerPartName,
-      storyKind: 'body',
-      ...options.frameBase,
+      cellBox: options.anchorCellBox ?? null,
     });
     const anchorY = options.frameBase ? resolved.y : options.paragraphStartY + lineTop;
-    const measure = measureInlineDrawing(atom.projection);
+    const measure = measureInlineDrawing(projection);
     const geometry = drawingGeometryFromProjection({
-      projection: atom.projection,
+      projection,
       anchorX: resolved.x,
       anchorY,
       extentWidth: measure.width,
       extentHeight: measure.height,
     });
     const input = wrapExclusionInputForProjection({
-      projection: atom.projection,
+      projection,
       geometry,
       contentLeft: options.contentLeft,
       contentRight: options.contentRight,
@@ -576,6 +610,8 @@ export function synthesizeParagraphTopAndBottomZones(options: {
   /** Which revisions this pass resolves away — see {@link publishAnchoredDrawingsForParagraph}. */
   readonly displayMode?: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
+  /** The body page's frames, which place a page- or margin-framed band at its own position. */
+  readonly frameBase?: BodyAnchorFrameBase;
 }): readonly ExclusionZone[] {
   const atoms = anchoredDrawingAtomsInParagraph(options.paragraph, options.drawingLayout);
   if (atoms.length === 0) return Object.freeze([]);
@@ -600,10 +636,13 @@ export function synthesizeParagraphTopAndBottomZones(options: {
     if (modelStart === undefined) continue;
     const lineTop = options.anchorLineTopByModelStart.get(modelStart);
     if (lineTop === undefined) continue;
-    const anchorY = topAndBottomBandAnchorY(
-      options.paragraphStartY + lineTop,
-      atom.projection.position?.vertical ?? null
-    );
+    const pageFramed = pageFramedBandY(atom.projection, options);
+    const anchorY =
+      pageFramed ??
+      topAndBottomBandAnchorY(
+        options.paragraphStartY + lineTop,
+        atom.projection.position?.vertical ?? null
+      );
     const measure = measureInlineDrawing(atom.projection);
     const geometry = drawingGeometryFromProjection({
       projection: atom.projection,
@@ -634,6 +673,7 @@ export function synthesizeParagraphTopAndBottomZones(options: {
         relativeHeight: atom.projection.anchor?.relativeHeight ?? 0,
         allowOverlap: atom.projection.anchor?.allowOverlap ?? true,
         columnIndex: options.columnIndex ?? 0,
+        ...(pageFramed !== null ? { pageFramedBand: true } : {}),
         y: anchorY,
         verticalBand: verticalBandOfExclusion(input),
         input,
@@ -642,6 +682,41 @@ export function synthesizeParagraphTopAndBottomZones(options: {
   }
   zones.sort((left, right) => left.sourceOrder - right.sourceOrder);
   return Object.freeze(zones);
+}
+
+/**
+ * Page-content y of a body band that the page or a margin positions: where the drawing is
+ * placed on the page, whatever line holds its anchor. Null for a band that its anchor's flow
+ * positions, and when the caller has no page frames.
+ */
+function pageFramedBandY(
+  projection: DrawingProjection,
+  options: {
+    readonly frameBase?: BodyAnchorFrameBase;
+    readonly contentLeft: number;
+    readonly contentRight: number;
+    readonly anchorCellBox?: LayoutBox | null;
+  }
+): number | null {
+  const vertical = projection.position?.vertical;
+  if (!options.frameBase || options.anchorCellBox != null || !vertical) return null;
+  if (!pageFramedVertically(vertical.relativeFrom) || projection.anchor?.simplePos) return null;
+  const box = Object.freeze({
+    x: options.contentLeft,
+    y: 0,
+    width: Math.max(1, options.contentRight - options.contentLeft),
+    height: 0,
+  });
+  const resolved = resolveAnchoredDrawingPosition(projection, {
+    ...options.frameBase,
+    paragraphBox: box,
+    anchorLineBox: box,
+    anchorCharacterX: options.contentLeft,
+    columnBox: box,
+    cellBox: null,
+    layoutInCell: false,
+  });
+  return resolved.layoutFallback ? null : resolved.y;
 }
 
 function intervalToken(intervals: readonly ScanlineInterval[]): string {
@@ -679,9 +754,16 @@ function wrapInputToken(input: WrapExclusionInput): string {
   ].join(':');
 }
 
-export function exclusionLayoutToken(zones: readonly ExclusionZone[]): string {
+/**
+ * A token for the zones a break sees. `regionBottomY`, when given, joins it: an opening line
+ * that would clear its own float past the region bottom keeps to the passages beside it.
+ */
+export function exclusionLayoutToken(
+  zones: readonly ExclusionZone[],
+  regionBottomY?: number
+): string {
   if (zones.length === 0) return '';
-  return zones
+  const token = zones
     .map((zone) => {
       const band = zone.verticalBand;
       const probeY = zone.y + zone.input.contentBounds.height / 2;
@@ -692,7 +774,7 @@ export function exclusionLayoutToken(zones: readonly ExclusionZone[]): string {
         zone.input.contentRight
       );
       return [
-        zone.drawingNodeId,
+        exclusionZoneIdentity(zone),
         `${zone.sourceKind ?? ''}${zone.earlierSection ? '+earlier' : ''}`,
         String(zone.sourceOrder),
         String(zone.columnIndex),
@@ -706,6 +788,7 @@ export function exclusionLayoutToken(zones: readonly ExclusionZone[]): string {
       ].join('|');
     })
     .join('\n');
+  return regionBottomY === undefined ? token : `${token}\nbottom:${regionBottomY.toFixed(3)}`;
 }
 
 export function paintLayerRecords(

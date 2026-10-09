@@ -22,6 +22,7 @@ import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, guardToolbarMousedown } from './ToolbarButton';
+import { usePopupEscape } from './usePopupEscape';
 
 const selectMode = (snapshot: EditorSnapshot): DocumentEditingMode =>
   snapshot.editingMode ?? 'editing';
@@ -140,20 +141,18 @@ export function ToolbarEditingMode({ className, hidden }: ToolbarEditingModeProp
       if (root && event.target instanceof Node && root.contains(event.target)) return;
       setOpen(false);
     };
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      setOpen(false);
-    };
     // Capture, like the link popover: the surface prevents default on its own pointer
     // handling, so a bubbling listener never sees a click that lands on the pages.
     document.addEventListener('mousedown', onMouseDown, true);
-    document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('mousedown', onMouseDown, true);
-      document.removeEventListener('keydown', onKeyDown);
     };
   }, [open]);
+  // Escape through the shared rule: a host input keeps its own Escape.
+  usePopupEscape(open, rootRef, (fromInside) => {
+    setOpen(false);
+    if (fromInside) triggerRef.current?.focus();
+  });
 
   const choose = useCallback(
     (next: DocumentEditingMode) => {

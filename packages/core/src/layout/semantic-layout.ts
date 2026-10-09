@@ -1,6 +1,11 @@
 import { createDrawingExclusionPasses } from './drawing-exclusion-passes.ts';
 import { resolveBodyRefFields } from './style-separator-ref.ts';
-import { styleSeparatorRanges, styleSeparatorToken } from './style-separator-group.ts';
+import { styleSeparatorToken } from './style-separator-group.ts';
+import {
+  bodyParagraphCacheKey,
+  bodyParagraphOptionFlow,
+  bodyParagraphPlacementFlow,
+} from './body-paragraph-flow.ts';
 import { layoutWithCharacterHeaders } from './character-header-layout.ts';
 import {
   contextualFlowInputs,
@@ -10,7 +15,7 @@ import {
 import { resolveParagraphFrame } from './paragraph-drop-cap.ts';
 import {
   anchorLineSkipsExclusion,
-  anchorsTopAndBottomDrawing,
+  anchorsSpacingDependentBand,
   drawingZonesAtLinePlacement,
 } from './drawing-placement-exclusion.ts';
 import { createParagraphDrawingWrap } from './paragraph-drawing-wrap.ts';
@@ -72,7 +77,6 @@ import {
   appliedSpaceBefore,
   paragraphBorderExtentPt,
   collapsedSpaceBefore,
-  paragraphBreaksBefore,
 } from './paragraph-style.ts';
 import {
   adjustedBreakIndex,
@@ -84,7 +88,6 @@ import {
 import { positionedTableDeps } from './table-pinned-break.ts';
 import {
   prepareParagraphBreakInputs,
-  bodyParagraphBreakKey,
   breakPreparedParagraph,
   createParagraphBreakRetention,
 } from './paragraph-break-request.ts';
@@ -174,7 +177,7 @@ import {
   paragraphSectionNode,
   sectionLineGridPt,
 } from './section-properties.ts';
-import { markIgnoresPageBreakBefore } from './section-mark-break.ts';
+import { pageBreakBeforeRules } from './page-break-before.ts';
 import { columnSeparatorBoxes, resolveSectionColumns } from './section-columns.ts';
 import {
   inheritNotesLayoutInput,
@@ -880,7 +883,6 @@ function layoutBlocksPass(
       ...(options.projectLink ? { projectLink: options.projectLink } : {}),
       ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
       showFieldCodes: options.showFieldCodes,
-
       ...(options.numberingIndex ? { numberingIndex: options.numberingIndex } : {}),
       inlineDrawingLayout: options.inlineDrawingLayout,
       drawingTokenForParagraph: options.drawingTokenForParagraph,
@@ -1648,6 +1650,7 @@ function layoutBlocksPass(
     revisionAuthorFilter: authorFilter,
     seedForwardOnly: (options.drawingExclusionPass ?? 0) < 0,
     drawingLayout: options.inlineDrawingLayout,
+    ...(hostedStory ? { layoutTextboxStory: hostedStory.layoutTextboxStoryFor } : {}),
     paragraphAt: (index) => {
       const entry = prepared[index];
       return entry?.kind === 'paragraph' ? entry : undefined;
@@ -1658,10 +1661,11 @@ function layoutBlocksPass(
     columnCount,
   });
 
-  /** `w:pageBreakBefore`, except on an empty section mark after its section's content. */
-  const breaksBeforeAt = (at: number, entry: PreparedParagraph): boolean =>
-    paragraphBreaksBefore(entry.props) &&
-    !markIgnoresPageBreakBefore(entry.paragraph, at, prepared.length);
+  const { breaksBeforeAt, keepsBeforeAtPageStart } = pageBreakBeforeRules(
+    prepared.length,
+    options.compatibilityMode,
+    () => firstParagraphOfSection
+  );
 
   // Placement and keep-with-next lookahead share cached line breaks.
   const breakBlock = (
@@ -1696,7 +1700,7 @@ function layoutBlocksPass(
         before,
         previousSpaceAfter,
         cursorY === 0 && !regionHasFragments(),
-        firstParagraphOfSection || breaksBeforeAt(entryIndex, entry)
+        keepsBeforeAtPageStart(entryIndex, entry)
       );
       paragraphStartY +=
         paragraphSpaceBefore +
@@ -1713,32 +1717,24 @@ function layoutBlocksPass(
       columnX + columnWidth(),
       omittedAnchor
     );
-    const exclusionToken = exclusionLayoutToken(localPageZones);
+    const exclusionToken = exclusionLayoutToken(localPageZones, contentHeight());
     const anchorParagraphStartY =
       paragraphStartY - paragraphDrawingWrap.displacement(pages.length, paragraphId);
-    // `entry.key` already folds the content, the cascade props, the tab stops, and the
-    // list/textbox/drawing/REF tokens — `prepareBlock` memo-validates each per pass, and
-    // `refFields` is one frozen projection per pass, so nothing here can drift from the
-    // prepass. Preserve its list token so renumbering invalidates the marker's tab advance. Only
-    // what varies per PLACEMENT joins below; the common path must stay `entry.key` BY
-    // IDENTITY, because retention names the prepass keys (suffixed and off-prepass-width
-    // keys are transient by design) and V8 caches the shared string's hash.
-    let cacheKey: string | null = null;
-    if (cache && !suppressChrome) {
-      cacheKey = bodyParagraphBreakKey(entry.key, {
-        exclusionToken,
-        paragraphStartY,
-        anchorParagraphStartY,
-        paragraphSpaceBefore,
-        anchorsTopAndBottom: anchorsTopAndBottomDrawing(
-          entry.paragraph,
-          options.inlineDrawingLayout
-        ),
-        columnIndex: flowColumnIndex,
-        startOffset,
-      });
-      rememberBreakKey(paragraphId, cacheKey);
-    }
+    const cacheKey =
+      cache && !suppressChrome
+        ? bodyParagraphCacheKey(entry, options.inlineDrawingLayout, {
+            exclusionToken,
+            paragraphStartY,
+            anchorParagraphStartY,
+            paragraphSpaceBefore,
+            regionBottomY: contentHeight(),
+            columnIndex: flowColumnIndex,
+            startOffset,
+            frameMarginLeft: geometry.margin.left,
+            pageNumber: pageIndexStart + pages.length + 1,
+          })
+        : null;
+    if (cacheKey !== null) rememberBreakKey(paragraphId, cacheKey);
     return breakPreparedParagraph({
       compatibilityMode: options.compatibilityMode,
       paragraph: entry.paragraph,
@@ -1756,39 +1752,33 @@ function layoutBlocksPass(
         ...firstLineSlotOf(entry),
         startOffset,
         marginExtent: { left: 0, right: entry.indent.left + available + entry.indent.right },
-        ...(options.projectLink ? { projectLink: options.projectLink } : {}),
-        ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
-        showFieldCodes: options.showFieldCodes,
-        fieldCodeRanges: styleSeparatorRanges(entry.paragraph, options.fieldCodeRanges),
-        tocLinkStyleRanges: styleSeparatorRanges(entry.paragraph, options.tocLinkStyleRanges),
-        ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
+        ...bodyParagraphOptionFlow(entry.paragraph, options),
         // Body flow: an empty-cache page field paints a placeholder finalize substitutes per page.
         bodyPageFields: bodyPageFieldContext,
         ...(refFields ? { refFields } : {}),
         displayMode,
         ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
-        ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
         ...inlineDrawingFlow(options.inlineDrawingLayout, hostedStory),
         contentLeft: 0,
         contentRight:
           columnCount > 1 ? columnWidth() : entry.indent.left + available + entry.indent.right,
-        paragraphStartY,
-        anchorParagraphStartY,
-        ...(paragraphSpaceBefore > 0 ? { paragraphSpaceBefore } : {}),
-        ...(localPageZones.length > 0 ? { pageExclusionZones: localPageZones } : {}),
-        ...(suppressChrome ? { suppressEmptyPlaceholderLine: true } : {}),
+        ...bodyParagraphPlacementFlow({
+          paragraphStartY,
+          anchorParagraphStartY,
+          anchorFrameBase: anchorFrameBase(),
+          regionBottomY: contentHeight(),
+          paragraphSpaceBefore,
+          pageExclusionZones: localPageZones,
+          suppressChrome,
+        }),
       },
     });
   };
 
-  const pageExclusionZonesForEntry = (
-    entry: PreparedParagraph,
-    entryIndex: number
-  ): readonly ExclusionZone[] => {
-    return paragraphDrawingWrap.select(entry, entryIndex, flowColumnIndex, pageExclusionZones(), {
+  const pageExclusionZonesForEntry = (entry: PreparedParagraph, entryIndex: number) =>
+    paragraphDrawingWrap.select(entry, entryIndex, flowColumnIndex, pageExclusionZones(), {
       placement: true,
     });
-  };
 
   const placementZonesForLine = (
     entry: PreparedParagraph,
@@ -1816,6 +1806,7 @@ function layoutBlocksPass(
       columnIndex: flowColumnIndex,
       displayMode,
       ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
+      frameBase: anchorFrameBase(),
       pageZones,
       brokenLines,
       lineIndex,
@@ -2000,7 +1991,7 @@ function layoutBlocksPass(
       blocks: prepared,
       dynamicBlock: (at) =>
         prepared[at]?.kind === 'paragraph' &&
-        anchorsTopAndBottomDrawing(prepared[at].paragraph, options.inlineDrawingLayout),
+        anchorsSpacingDependentBand(prepared[at].paragraph, options.inlineDrawingLayout),
       contextKey: () => {
         const zones = pageExclusionZones();
         const base = `${columnWidth()}:${markOnBreakSheet}:`;
@@ -2150,6 +2141,7 @@ function layoutBlocksPass(
       try {
         const outOfFlow = layoutTableInFlow(entry.table, cursorY, false, index + 1);
         if (!outOfFlow) previousSpaceAfter = 0;
+        firstParagraphOfSection = false;
         registerTableCellBreakKeys(entry.table, collectingCellBreakKeys);
       } finally {
         collectingCellBreakKeys = null;
@@ -2326,7 +2318,7 @@ function layoutBlocksPass(
           pricedLead: collapsedMark
             ? 0
             : collapsedSpaceBefore(authoredSpacing.before, previousSpaceAfter),
-          freshLead: firstParagraphOfSection || breaksBeforeAt(index, entry) ? spacing.before : 0,
+          freshLead: keepsBeforeAtPageStart(index, entry) ? spacing.before : 0,
         });
         if (need !== null) needed = Math.max(needed, need);
       }
@@ -2351,7 +2343,7 @@ function layoutBlocksPass(
           spacing.before,
           previousSpaceAfter,
           frame ? false : atTopOfPage,
-          frame ? false : firstParagraphOfSection || breaksBeforeAt(index, entry)
+          frame ? false : keepsBeforeAtPageStart(index, entry)
         );
     if (appliedBefore > 0) cursorY += appliedBefore;
     // The top rule and its gap are flow height above the first line, exactly as the bottom

@@ -6,7 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import type { ReviewActivationOptions } from '@docx-editor.dev/core/contracts/editor';
 import type { VNode } from 'vue';
-import type { ReviewItemView } from './useReview.ts';
+import type { ReviewAdoptOptions, ReviewItemView } from './useReview.ts';
 
 /** @public */
 export interface ReviewPartProps {
@@ -19,6 +19,23 @@ export interface ReviewPartProps {
 /** @public */
 export interface ReviewActionProps extends ReviewPartProps {
   icon?: VNode | string;
+}
+
+/**
+ * Props for `DocxEditorReview.Balloon`, the balloon that opens a review item at its text:
+ * each tracked change under `revisionsIn: 'balloons'`, and format and structural changes in
+ * every mode.
+ *
+ * @public
+ */
+export interface ReviewBalloonProps {
+  /** A class added to the balloon element. */
+  className?: string;
+  /**
+   * Remove the built-in balloon, for example to render your own. Format and structural
+   * change balloons go with it.
+   */
+  hidden?: boolean;
 }
 
 /** @public */
@@ -49,9 +66,11 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children' | 'hidden'
 export interface ReviewActions {
   readonly items: readonly ReviewItemView[];
   readonly activeKey: string | null;
+  readonly activatedKey: string | null;
   setActive(key: string | null, options?: ReviewActivationOptions): boolean;
   accept(item: ReviewItemView): boolean;
   reject(item: ReviewItemView): boolean;
+  adopt(items: ReviewItemView | readonly ReviewItemView[], options?: ReviewAdoptOptions): boolean;
   resolve(item: ReviewItemView): boolean;
   reopen(item: ReviewItemView): boolean;
   readonly commentResolutionDisabledReason: string | null;

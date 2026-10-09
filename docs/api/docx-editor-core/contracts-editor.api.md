@@ -479,7 +479,7 @@ export interface DrawingPositionInput {
 export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'line' | 'margin' | 'outsideMargin' | 'page' | 'paragraph' | 'topMargin';
 
 // @public
-export interface Editor extends EditorAnchorNavigation, EditorHighlights {
+export interface Editor extends EditorAnchorNavigation, EditorHighlights, EditorReviewHits {
     acceptReviewItem(key: string): ExecResult;
     addComment(text: string, author?: string): ExecResult;
     beginHistoryGroup(): HistoryGroup;
@@ -507,6 +507,7 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights {
     }): readonly (readonly TextMatch[])[];
     // (undocumented)
     focus(scope?: EditorScope): InteractionOutcome<void>;
+    getActivatedReviewItemKey(query?: ReviewItemQuery): string | null;
     // (undocumented)
     getActiveScope(): ViewScope;
     getAvailableFonts(): readonly string[];
@@ -627,8 +628,7 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights {
     reportCustomNodeDiagnostic(diagnostic: unknown): void;
     retainSelection(): SelectionPin | null;
     save(): Promise<ArrayBuffer>;
-    // (undocumented)
-    scrollToBlock(blockId: string): boolean;
+    scrollToBlock(blockId: string, options?: ScrollToAnchorOptions): boolean;
     scrollToPage(pageNumber: number): boolean;
     selectMatch(match: TextMatch): ExecResult;
     setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult;
@@ -841,6 +841,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         afterPt?: number | null;
         beforePt?: number | null;
     };
+    setReviewChangesAuthor: SetReviewChangesAuthorOptions;
     setReviewDisplayMode: {
         mode: ReviewDisplayMode;
     };
@@ -921,6 +922,7 @@ export interface EditorEvents {
     error: (error: EditorError) => void;
     // (undocumented)
     historyDiagnostic: (diagnostic: HistoryDiagnostic) => void;
+    reviewItemReveal: (event: ReviewItemRevealEvent) => void;
     revisionMarkupChange: (settings: ResolvedRevisionMarkup) => void;
     selectionChange: (snapshot: EditorSnapshot) => void;
 }
@@ -1092,6 +1094,12 @@ export interface EditorQueryResults extends DocQueryResults {
 }
 
 // @public
+export interface EditorReviewHits {
+    getReviewItemRects(key: string): readonly HighlightRect[];
+    getReviewItemsAt(clientX: number, clientY: number, query?: ReviewItemQuery): readonly ReviewItemHit[];
+}
+
+// @public
 export type EditorScope = {
     kind: 'body';
 } | {
@@ -1160,6 +1168,7 @@ export interface EditorSnapshot {
     // (undocumented)
     readonly parseError: string | null;
     readonly reviewDisplayMode?: ReviewDisplayMode;
+    readonly reviewPane: ResolvedReviewPane;
     readonly reviewPaneOpen?: boolean;
     readonly revisionMarkup: ResolvedRevisionMarkup;
     // (undocumented)
@@ -1186,11 +1195,13 @@ export type ExecResult = {
     changed: boolean;
     history?: HistoryGroupOutcome;
     ok: true;
+    revisionAuthors?: RevisionAuthorResult;
     revisions?: RevisionBatchResult;
 } | {
     code: ExecErrorCode;
     ok: false;
     reason: string;
+    revisionAuthors?: RevisionAuthorResult;
     revisions?: RevisionBatchResult;
     target?: DocTarget;
 };
@@ -1695,7 +1706,15 @@ export interface ResolveReviewChangesOptions {
 
 // @public
 export interface ReviewActivationOptions {
-    readonly reveal?: 'start' | 'center' | 'centerIfNeeded' | 'nearest' | false;
+    readonly announce?: boolean;
+    readonly reveal?: ScrollPlacement | false;
+}
+
+// @public
+export interface ReviewChangesAttribution {
+    author?: string;
+    date?: string;
+    unsupported?: 'skip' | 'fail';
 }
 
 // @public
@@ -1754,7 +1773,16 @@ export interface ReviewCustomPlacement extends ReviewItemPlacementBase {
 }
 
 // @public
+export type ReviewDisplayMode = RevisionDisplayMode | 'simple-markup';
+
+// @public
 export type ReviewItem = ReviewRevisionItem | ReviewCommentItem | ReviewCustomItem;
+
+// @public
+export interface ReviewItemHit {
+    readonly placement: ReviewItemPlacement;
+    readonly rect: HighlightRect;
+}
 
 // @public
 export type ReviewItemPlacement = ReviewCommentPlacement | ReviewRevisionPlacement | ReviewCustomPlacement;
@@ -1780,10 +1808,20 @@ export interface ReviewItemPlacementBase {
 
 // @public
 export interface ReviewItemQuery {
-    // (undocumented)
     readonly excludeRevisionKinds?: readonly ReviewRevisionKind[];
+    readonly pairReplacements?: boolean;
     readonly placement?: boolean;
 }
+
+// @public
+export interface ReviewItemRevealEvent {
+    readonly key: string;
+    readonly pairKey?: string;
+    readonly source: ReviewItemRevealSource;
+}
+
+// @public
+export type ReviewItemRevealSource = 'navigate' | 'host';
 
 // @public
 export interface ReviewPosition {
@@ -1837,8 +1875,8 @@ export interface ReviewRevisionItem {
 // @public
 export type ReviewRevisionKind = 'insert' | 'delete'
 /**
-* A combined decision supplied by a custom review provider.
-* The built-in reader exposes text replacements as separate deletion and insertion decisions.
+* A combined deletion and insertion decision. The built-in reader lists them separately,
+* unless a review query asks to pair replacements or a custom review provider combines them.
 */
 | 'replace' | 'moveFrom' | 'moveTo'
 /** `w:rPrChange` / `w:pPrChange` — the words are unchanged, their formatting is not. */
@@ -1876,6 +1914,16 @@ export interface RevisionAddress {
     readonly date?: string;
     // (undocumented)
     readonly id: string;
+}
+
+// @public
+export interface RevisionAuthorResult {
+    readonly skipped: readonly {
+        readonly key: string;
+        readonly reason: RevisionAuthorSkipReason;
+        readonly revision?: RevisionBatchEntry;
+    }[];
+    readonly updated: readonly RevisionAuthorEntry[];
 }
 
 // @public
@@ -1950,9 +1998,12 @@ export interface RunFormatting {
 }
 
 // @public
+export type ScrollPlacement = 'start' | 'center' | 'centerIfNeeded' | 'nearest';
+
+// @public
 export interface ScrollToAnchorOptions {
     readonly behavior?: 'instant' | 'smooth';
-    readonly block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest';
+    readonly block?: ScrollPlacement;
     readonly offsetPx?: number;
 }
 
@@ -2070,6 +2121,17 @@ export type SemanticTarget = {
     readonly objectId: string;
     readonly scope: ViewScope;
 };
+
+// @public
+export type SetReviewChangesAuthorOptions = ReviewChangesAttribution & ({
+    authors?: never;
+    keys: readonly string[];
+    scope?: never;
+} | {
+    authors?: readonly string[];
+    keys?: never;
+    scope?: 'visible' | 'document';
+});
 
 // @public
 export interface StyleDefinition {

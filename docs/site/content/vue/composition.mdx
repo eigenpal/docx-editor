@@ -28,7 +28,7 @@ Use your own Vue components for toolbars, menus, and panels. Connect them with [
 | `.docx-editor` wrapper | Custom controls that use editor styles | Supplies scoped styles and tokens |
 | Container height | Every composed editor | Gives the viewport room to render |
 | Remount `:key` | When you change modules | Loads the new modules |
-| Positioned workspace row | When you use the navigation pane | Anchors the navigation pane |
+| Positioned workspace row | When you place the navigation pane beside the viewport | Anchors the navigation pane |
 | Pro review module | When you use Pro review chrome | Enables comments, tracked changes, and custom-node review chrome |
 
 If you use Pro review chrome, register its modules once on `DocxEditorRoot`. For setup, see the [Pro package documentation](/docs/2.x/pro).
@@ -148,8 +148,9 @@ Choose the amount of customization you need:
 2. Replace a part's `icon` prop.
 3. Use `as-child` to merge behavior into your element.
 4. Override one compound part.
-5. Set `:preset="false"` and arrange all parts.
-6. Build your markup with [Vue composables](/docs/2.x/vue/composables).
+5. Add your controls to the preset with `DocxEditorToolbar.Group`, or replace a slot's content with `DocxEditorToolbar.Slot`.
+6. Set `:preset="false"` and arrange all parts.
+7. Build your markup with [Vue composables](/docs/2.x/vue/composables).
 
 ### Use `as-child`
 
@@ -173,6 +174,29 @@ A named part replaces the matching part in the preset. The `hidden` prop removes
   <DocxEditorToolbar.Highlight hidden />
 </DocxEditorToolbar>
 ```
+
+A group whose slots are all hidden is removed with its separator.
+
+### Add controls to the preset toolbar
+
+`DocxEditorToolbar.Group` adds your controls to the preset toolbar as a group. The group collapses into the **More** panel like the built-in groups. `DocxEditorToolbar.Slot` replaces one built-in slot with your own content in the slot's place:
+
+```vue
+<DocxEditorToolbar>
+  <DocxEditorToolbar.Group id="review-nav" label="Review" :priority="15">
+    <DocxEditorToolbar.Action label="Next change" @select="next" />
+  </DocxEditorToolbar.Group>
+  <DocxEditorToolbar.Group id="review">
+    <DocxEditorToolbar.AddComment />
+  </DocxEditorToolbar.Group>
+  <DocxEditorToolbar.Slot slot-id="zoom.level">
+    <ZoomPicker />
+  </DocxEditorToolbar.Slot>
+  <DocxEditorToolbar.Group id="zoom" hidden />
+</DocxEditorToolbar>
+```
+
+For placement, collapse priorities, and panel content, see [Keep host controls responsive](/docs/2.x/guides/toolbar#keep-host-controls-responsive).
 
 ## Custom toolbar
 
@@ -242,11 +266,13 @@ Reuse this logic for each surface that exposes the action.
 
 You can keep packaged rows, remove rows, add registry slots, and add host rows.
 
+To remove a row, render its slot override with `hidden`, such as `<DocxEditorContextMenu.Slot slot-id="edit.cut" hidden />`. A named row part is shorthand for that override: `<DocxEditorContextMenu.Cut hidden />` removes the same row in place. The toolbar and the menu bar follow the same rule.
+
 ```vue
 <DocxEditorContextMenu class-name="my-menu">
   <DocxEditorContextMenu.Cut />
   <DocxEditorContextMenu.Copy />
-  <DocxEditorContextMenu.Slot slot="review.comments" hidden />
+  <DocxEditorContextMenu.Slot slot-id="review.addComment" hidden />
 
   <DocxEditorContextMenu.Row
     :disabled="!enabled"
@@ -264,13 +290,15 @@ You can keep packaged rows, remove rows, add registry slots, and add host rows.
     </DocxEditorContextMenu.Row>
   </DocxEditorContextMenu.Submenu>
 
-  <DocxEditorContextMenu.Slot slot="format.clear" />
+  <DocxEditorContextMenu.Slot slot-id="format.clear" />
 </DocxEditorContextMenu>
 ```
 
 `DocxEditorContextMenu.Slot` gets its label, icon, state, and command from the registry.
 
 ## Custom menu bar
+
+The menu bar stays on one line. Menus that do not fit move into one `⋯` menu as submenus. Set `:overflow="false"` to let the bar wrap instead. For details, see [Menu bar overflow](/docs/2.x/guides/toolbar#menu-bar-overflow).
 
 Pass `exporters` to the menu to connect export and print handlers. For setup, see [Print documents](/docs/2.x/guides/print).
 
@@ -322,6 +350,14 @@ Each navigation part accepts its own class.
 ```
 
 The headings list uses the document outline from the editor.
+
+### Place the navigation pane
+
+Place `DocxEditorNavigation` as a direct child of `DocxEditorViewport`, or beside the viewport in a positioned container. As a direct child of the viewport, the pane stays in place while the pages scroll. In both positions, the pane moves the page only when the left margin area cannot hold it.
+
+If the viewport leaves less than `NAVIGATION_PANE_MIN_PAGE_ROOM` (320 pixels) beside the pane, the pane covers the page instead. The review pane's visible room counts against the viewport. With the review pane's `overflow: 'scroll'`, only its marker strip counts, because the card column scrolls out of view. It then spans the viewport width less its inset on each side, and the page doesn't move. The pane closes after you choose a heading or a result. `useNavigationPane().overlay` reports this mode.
+
+The pane takes its labels from its `t` prop. Without `t`, it uses the `translate` function of `DocxEditorRoot`, then the active locale catalog.
 
 ## Custom loading screen
 
@@ -615,7 +651,9 @@ An omitted part has no interface.
 
 Import the stylesheet once and give the editor container a height. Use a flex column when chrome shares that height. Packaged controls and the viewport apply their own `.docx-editor` scope. The wrapper in [Primitives](#primitives) also makes editor styles and tokens available to custom controls.
 
-Place the navigation pane and viewport in a row with `position: relative`. The pane uses that row as its positioning context.
+Inside `DocxEditorViewport`, the navigation pane is sticky and needs no positioning context. If you place the pane beside the viewport instead, put both in a row with `position: relative`. Beside the viewport, the pane uses that row as its positioning context.
+
+`DocxEditorPageNumber` uses absolute positioning against the same positioning context. Place it beside the viewport or inside it. Inside the viewport, it renders into the viewport's parent element, so it stays in view while the pages scroll.
 
 Do not set `z-index` on the workspace row or viewport. Either value creates a stacking context that can put a fixed context menu below other chrome.
 

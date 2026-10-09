@@ -3,6 +3,10 @@ import { collectRevisionSites } from '../store/store/tree-op-revisions.ts';
 import { reviewItemKey, type ReviewRevisionItem } from '../store/store/review-items.ts';
 import type { PlannedOperation } from './plan-types.ts';
 import { planRevisionBatch, type RevisionBatchResult } from '../store/store/revision-batch.ts';
+import {
+  invalidRevisionAuthorInput,
+  planRevisionAuthorChange,
+} from '../store/store/revision-author-change.ts';
 import { storyKey } from './stories.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import type { AutomationHandleTable } from './handles.ts';
@@ -108,9 +112,18 @@ export function revisionCollectionOps(
   return own.length === all.length ? [{ op }] : chunked(own);
 }
 
-/** Resolve handles once, then plan the selected sites together. Unknown host handles fail closed. */
-export function revisionBatchPlan(
-  operation: Extract<AutomationOperation, { op: 'resolveRevisionBatch' }>,
+type BatchOperation = Extract<
+  AutomationOperation,
+  { readonly op: 'resolveRevisionBatch' | 'setRevisionAuthorBatch' }
+>;
+
+/**
+ * The story and review keys a selected-set operation addresses. Unknown host handles fail
+ * closed. Omitted revisions select the whole story; an owner story names its own decisions,
+ * so the text boxes it anchors stay out.
+ */
+function batchSelection(
+  operation: BatchOperation,
   handles: AutomationHandleTable,
   packageReads: AutomationPackageReads
 ) {
@@ -120,16 +133,12 @@ export function revisionBatchPlan(
     packageReads
   );
   if (!target.ok) return target;
-  if (
-    !['accept', 'reject'].includes(operation.action) ||
-    (operation.revisions !== undefined && !Array.isArray(operation.revisions))
-  )
+  if (operation.revisions !== undefined && !Array.isArray(operation.revisions))
     return {
       ok: false as const,
       code: 'unsupported-content' as const,
       message: 'invalid revision batch',
     };
-  // Every decision of the story. An owner story names its own, so the boxes it anchors stay.
   let keys: string[] | undefined = operation.revisions === undefined ? undefined : [];
   if (
     keys === undefined &&
@@ -151,13 +160,68 @@ export function revisionBatchPlan(
       };
     keys!.push(`revision-${revision.revisionId}`);
   }
+  const scopeRoot = sharesItsPart(target.reads.story) ? target.reads.root : undefined;
+  return { ok: true as const, reads: target.reads, keys, scopeRoot };
+}
+
+/** Resolve handles once, then plan the selected sites together. Unknown host handles fail closed. */
+export function revisionBatchPlan(
+  operation: Extract<AutomationOperation, { op: 'resolveRevisionBatch' }>,
+  handles: AutomationHandleTable,
+  packageReads: AutomationPackageReads
+) {
+  const selection = batchSelection(operation, handles, packageReads);
+  if (!selection.ok) return selection;
+  if (!['accept', 'reject'].includes(operation.action))
+    return {
+      ok: false as const,
+      code: 'unsupported-content' as const,
+      message: 'invalid revision batch',
+    };
   const plan = planRevisionBatch(
-    target.reads.part,
+    selection.reads.part,
     operation.action,
-    keys,
-    sharesItsPart(target.reads.story) ? target.reads.root : undefined
+    selection.keys,
+    selection.scopeRoot
   );
-  return { ok: true as const, reads: target.reads, ...plan };
+  return { ok: true as const, reads: selection.reads, ...plan };
+}
+
+/** Plan an attribution change for a selected set, with the same selection rules as a decision. */
+export function revisionAuthorPlan(
+  operation: Extract<AutomationOperation, { op: 'setRevisionAuthorBatch' }>,
+  handles: AutomationHandleTable,
+  packageReads: AutomationPackageReads
+) {
+  const attribution = {
+    author: operation.author,
+    ...(operation.date === undefined ? {} : { date: operation.date }),
+  };
+  if (
+    typeof operation.author !== 'string' ||
+    (operation.date !== undefined && typeof operation.date !== 'string') ||
+    invalidRevisionAuthorInput(attribution) ||
+    (operation.authors !== undefined &&
+      (operation.revisions !== undefined ||
+        !Array.isArray(operation.authors) ||
+        operation.authors.some((name) => typeof name !== 'string')))
+  )
+    return {
+      ok: false as const,
+      code: 'unsupported-content' as const,
+      message:
+        'author must be nonblank text, date an xsd:dateTime, and authors a list without revisions',
+    };
+  const selection = batchSelection(operation, handles, packageReads);
+  if (!selection.ok) return selection;
+  const plan = planRevisionAuthorChange(
+    selection.reads.part,
+    attribution,
+    selection.keys,
+    selection.scopeRoot,
+    operation.authors
+  );
+  return { ok: true as const, reads: selection.reads, ...plan };
 }
 
 /** Count pending decisions after mutation, when adjacent surviving changes may regroup. */
@@ -175,11 +239,43 @@ export function revisionBatchAnswer(
 
 /** Share story admission between strict collection decisions and selected-set decisions. */
 export function planRevisionDecision(
-  operation: CollectionDecision | Extract<AutomationOperation, { op: 'resolveRevisionBatch' }>,
+  operation: CollectionDecision | BatchOperation,
   handles: AutomationHandleTable,
   reads: AutomationPackageReads,
   pin: (story: AutomationStoryReads) => PlannedOperation | null
 ): PlannedOperation {
+  if (operation.op === 'setRevisionAuthorBatch') {
+    const target = revisionAuthorPlan(operation, handles, reads);
+    if (!target.ok) return { ok: false, error: { code: target.code, message: target.message } };
+    const conflict = pin(target.reads);
+    if (conflict) return conflict;
+    return {
+      ok: true,
+      kind: 'command',
+      story: target.reads.story,
+      ops: target.ops,
+      answer: (post) => {
+        const after = revisionDecisionTarget(
+          { op: 'acceptAllRevisions', body: operation.body },
+          handles,
+          post
+        );
+        if (!after.ok) throw new Error('reattributed story disappeared');
+        const result = target.finish(after.reads.part);
+        // The same decisions stay pending under new keys, so issued proxies follow them.
+        const prefix = 'revision-';
+        handles.retargetRevisions(
+          target.reads.story,
+          result.updated.flatMap(({ previousKey, key }) =>
+            previousKey.startsWith(prefix) && key.startsWith(prefix)
+              ? [{ from: previousKey.slice(prefix.length), to: key.slice(prefix.length) }]
+              : []
+          )
+        );
+        return { kind: 'revisionAuthors', result };
+      },
+    };
+  }
   if (operation.op === 'resolveRevisionBatch') {
     const target = revisionBatchPlan(operation, handles, reads);
     if (!target.ok) return { ok: false, error: { code: target.code, message: target.message } };

@@ -230,7 +230,8 @@
       "files": [
         "packages/core/src/editor/chrome-controls.ts",
         "packages/core/src/store/__tests__/table-resize-ops.test.ts",
-        "packages/core/src/store/__tests__/table-row-ops.test.ts"
+        "packages/core/src/store/__tests__/table-row-ops.test.ts",
+        "packages/react/src/editor/menu/parts.tsx"
       ],
       "rules": {
         "max-lines": ["error", { "max": 1100, "skipBlankLines": false, "skipComments": false }]
@@ -239,8 +240,7 @@
     {
       "files": [
         "packages/core/src/editor/surface-pointer.ts",
-        "packages/core/src/store/package/ooxml-drawing-rules.ts",
-        "packages/react/src/editor/menu/parts.tsx"
+        "packages/core/src/store/package/ooxml-drawing-rules.ts"
       ],
       "rules": {
         "max-lines": ["error", { "max": 1200, "skipBlankLines": false, "skipComments": false }]
@@ -347,12 +347,6 @@
       "files": ["packages/core/src/store/package/ooxml-tree.ts"],
       "rules": {
         "max-lines": ["error", { "max": 2050, "skipBlankLines": false, "skipComments": false }]
-      }
-    },
-    {
-      "files": ["packages/pro/src/react/DocxEditorReview.tsx"],
-      "rules": {
-        "max-lines": ["error", { "max": 2100, "skipBlankLines": false, "skipComments": false }]
       }
     },
     {

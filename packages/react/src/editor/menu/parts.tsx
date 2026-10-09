@@ -1,3 +1,8 @@
+import {
+  warnDeprecatedSlotProp,
+  warnMissingSlotId,
+  warnMissingSubmenuLabel,
+} from './menu-warnings';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { ReactNode } from 'react';
 // The menu bar's rows.
@@ -23,10 +28,17 @@ import {
   type ChromeSlotId,
 } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
-import { openReportIssue } from '../../lib/reportIssue';
 import { useEditorCommand } from '../useEditorCommand';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
-import { useMenuContext, useMenuLabel, type MenuId } from './menu-context';
+import {
+  MENU_OVERFLOW_ID,
+  useMenuContext,
+  useMenuLabel,
+  useMenuOverflow,
+  type MenuId,
+} from './menu-context';
+import { menuOverflowPlacement } from './menu-overflow-state';
+import { useMenuPanelPlacement } from './menu-panel-placement';
 import { usePlatformShortcut } from '../usePlatformShortcut';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
 import { useImageInsertOptional } from '../images/ImageInsert';
@@ -207,17 +219,47 @@ export function MenuGroup({
 // Slot-driven row
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Props for `DocxEditor.Menu.Item`: one chrome slot as a menu row. @public */
-export interface MenuItemProps {
+/**
+ * Props for `DocxEditor.Menu.Item`: one chrome slot as a menu row. Set `slotId`. A row with
+ * neither `slotId` nor the deprecated `slot` renders nothing, with a development warning.
+ * An interface, so a host can extend it.
+ *
+ * @public
+ */
+export interface MenuItemProps extends MenuItemBaseProps {
   /** The chrome slot this row drives (`'text.bold'`, `'insert.pageBreak'`, …). */
-  slot: ChromeSlotId;
+  slotId?: ChromeSlotId;
+  /** @deprecated Use `slotId`. Still read in this release, with a development warning. */
+  slot?: ChromeSlotId;
+}
+
+/** The props every `Menu.Item` takes besides the slot it names. @public */
+export interface MenuItemBaseProps {
   /** Plain-label i18n key, overriding the slot's tooltip-shaped one. */
   labelKey?: string;
   /** i18n key of the shortcut shown in the right column. */
   shortcutKey?: string;
   className?: string;
-  /** Render nothing — inside a packaged menu this removes the row. */
+  /**
+   * Render nothing: inside a packaged menu this removes the row in place. A named row part
+   * with `hidden`, such as `<ContextMenu.Cut hidden />`, is shorthand for this override
+   * with that row's `slotId`.
+   */
   hidden?: boolean;
+}
+
+/** The slot a menu row names: `slotId`, else the deprecated `slot`. @internal */
+export function menuItemSlotId(props: {
+  readonly slotId?: ChromeSlotId | undefined;
+  readonly slot?: ChromeSlotId | undefined;
+}): ChromeSlotId | undefined {
+  if (props.slotId) return props.slotId;
+  if (props.slot) {
+    warnDeprecatedSlotProp(props.slot);
+    return props.slot;
+  }
+  warnMissingSlotId();
+  return undefined;
 }
 
 /**
@@ -227,11 +269,13 @@ export interface MenuItemProps {
  *
  * @public
  */
-export function MenuItem({ slot, labelKey, shortcutKey, className, hidden }: MenuItemProps) {
+export function MenuItem(props: MenuItemProps) {
+  const { labelKey, shortcutKey, className, hidden } = props;
+  const slot = menuItemSlotId(props) ?? ('' as ChromeSlotId);
   const { execute, isActive, isEnabled, disabledReason, value } = useEditorCommand(slot);
   const { setOpenMenu } = useMenuContext();
   const label = useMenuLabel();
-  if (hidden) return null;
+  if (hidden || !slot) return null;
   const control = chromeControlForSlot(slot);
   const text = label(labelKey ?? control?.labelKey ?? slot);
   // Checked-ness only where it is meaningful — the ENGINE's rule, the same one
@@ -469,13 +513,24 @@ export const MenuImageInsert = Object.assign(MenuImageInsertImpl, {
 // Submenu
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Props for `DocxEditor.Menu.Submenu`. @public */
 /** How close a floating panel may come to the window edge, in px. */
 const EDGE_INSET = 8;
 
-export interface MenuSubmenuProps {
+/**
+ * Props for `DocxEditor.Menu.Submenu`. Set `labelKey` or `label`. A submenu with neither has
+ * no name, with a development warning. An interface, so a host can extend it.
+ *
+ * @public
+ */
+export interface MenuSubmenuProps extends MenuSubmenuBaseProps {
   /** i18n key of the parent row's label. */
-  labelKey: string;
+  labelKey?: string;
+  /** Literal parent row label, already resolved. Wins over `labelKey`. */
+  label?: string;
+}
+
+/** The props every `Menu.Submenu` takes besides its label. @public */
+export interface MenuSubmenuBaseProps {
   /** Material Symbols paths for the parent row's icon. */
   paths?: readonly string[] | null;
   className?: string;
@@ -492,13 +547,20 @@ export interface MenuSubmenuProps {
  *
  * @public
  */
-export function MenuSubmenu({ labelKey, paths, className, children }: MenuSubmenuProps) {
+export function MenuSubmenu({
+  labelKey,
+  label: literal,
+  paths,
+  className,
+  children,
+}: MenuSubmenuProps) {
   const label = useMenuLabel();
   const [open, setOpen] = useState(false);
   const parentRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const panelId = useId();
-  const text = label(labelKey);
+  if (literal === undefined && labelKey === undefined) warnMissingSubmenuLabel();
+  const text = literal ?? label(labelKey ?? '');
 
   // Placed in client space, not with `left: 100%`. The context menu is a scroller
   // (`max-height` plus `overflow-y: auto`, which forces the other axis to `auto` with it), so
@@ -640,7 +702,9 @@ function MenuTablePicker({ entry }: { entry: ChromeMenuItemEntry }) {
   const { isEnabled } = useEditorCommand(entry.slot);
   const control = chromeControlForSlot(entry.slot);
   if (!isEnabled) {
-    return <MenuItem slot={entry.slot} {...(entry.labelKey ? { labelKey: entry.labelKey } : {})} />;
+    return (
+      <MenuItem slotId={entry.slot} {...(entry.labelKey ? { labelKey: entry.labelKey } : {})} />
+    );
   }
   return (
     <MenuSubmenu
@@ -696,7 +760,7 @@ export function MenuEntry({ entry, children }: { entry: ChromeMenuEntry; childre
   if (entry.picker === 'tableGrid') return <MenuTablePicker entry={entry} />;
   return (
     <MenuItem
-      slot={entry.slot}
+      slotId={entry.slot}
       {...(entry.labelKey ? { labelKey: entry.labelKey } : {})}
       {...(entry.shortcutKey ? { shortcutKey: entry.shortcutKey } : {})}
     />
@@ -719,10 +783,7 @@ function rowKeyOfChild(child: ReactNode): string | null {
   const type = child.type as { docxSlot?: unknown; docxMenuRow?: unknown };
   if (typeof type !== 'function' && typeof type !== 'object') return null;
   if (typeof type.docxSlot === 'string') return type.docxSlot;
-  if (type.docxMenuRow === true) {
-    const slot = (child.props as { slot?: unknown }).slot;
-    if (typeof slot === 'string') return slot;
-  }
+  if (type.docxMenuRow === true) return menuItemSlotId(child.props as MenuItemProps) ?? null;
   return null;
 }
 
@@ -820,6 +881,7 @@ export function Menu({
   children,
 }: MenuProps) {
   const { openMenu, setOpenMenu, activeMenu } = useMenuContext();
+  const menuOverflow = useMenuOverflow();
   const label = useMenuLabel();
   const panelId = useId();
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -836,9 +898,23 @@ export function Menu({
   const switchedByHover = useRef(false);
   const registry = CHROME_MENUS.find((menu) => menu.id === id);
   const open = openMenu === id;
+  // The "⋯" menu's panel is clamped to the viewport like the toolbar's.
+  const panelStyle = useMenuPanelPlacement(open && id === MENU_OVERFLOW_ID, triggerRef, panelRef);
   if (hidden) return null;
   const text = literal ?? label(labelKey ?? registry?.labelKey ?? id);
+  // A menu that does not fit renders in the "⋯" menu instead of the bar, as a submenu row
+  // with the same panel. Inside that menu, every menu that still fits renders nothing.
+  const placement = menuOverflowPlacement(menuOverflow, id, activeMenu);
+  if (placement.skip) return null;
+  if (placement.asSubmenu) {
+    return (
+      <MenuSubmenu labelKey={labelKey ?? registry?.labelKey ?? id} label={text}>
+        {mergePanel(registry?.entries, children, preset)}
+      </MenuSubmenu>
+    );
+  }
   const rows = mergePanel(registry?.entries, children, preset);
+  const iconOnly = placement.iconOnly;
   // Closing returns focus to the trigger. Every close path UNMOUNTS the panel, so without
   // this the element holding focus disappears and focus falls to <body> — the user is
   // dumped at the top of the page with no announcement and has to tab back through the
@@ -855,6 +931,8 @@ export function Menu({
       role="none"
       className={`docx-menubar__menu-root${className ? ` ${className}` : ''}`}
       data-menu={id}
+      // Measured as a unit that can move into the "⋯" menu. The "⋯" menu itself cannot.
+      {...placement.rootAttributes}
     >
       <button
         ref={triggerRef}
@@ -867,8 +945,11 @@ export function Menu({
         // Roving tabindex: the bar is ONE tab stop, and arrows move within it. Without
         // this every trigger is a stop and a keyboard user tabs through four of them to
         // get past the editor's chrome.
-        tabIndex={activeMenu === id ? 0 : -1}
+        // When the active menu moved into "⋯", the "⋯" trigger holds the stop instead.
+        tabIndex={placement.tabStop ? 0 : -1}
         {...(open ? { 'data-open': '' } : {})}
+        // The "⋯" trigger shows only its icon, so its name goes on the element.
+        {...(iconOnly ? { 'aria-label': text, title: text } : {})}
         onMouseDown={guardToolbarMousedown}
         onKeyDown={(event) => {
           if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
@@ -909,7 +990,7 @@ export function Menu({
             {icon}
           </span>
         ) : null}
-        {text}
+        {iconOnly ? null : text}
       </button>
       {open ? (
         <div
@@ -926,6 +1007,7 @@ export function Menu({
           id={panelId}
           role="menu"
           aria-label={text}
+          style={panelStyle}
           className="docx-toolbar__menu docx-menubar__menu"
           onKeyDown={(event) => {
             const panel = panelRef.current;
@@ -977,89 +1059,3 @@ function defineMenu(id: ChromeMenuId): MenuPartComponent {
 export const MenuFile = defineMenu('file');
 export const MenuFormat = defineMenu('format');
 export const MenuInsert = defineMenu('insert');
-
-/** Props for `DocxEditor.Menu.ReportIssue`. @public */
-export interface MenuReportIssueProps {
-  className?: string;
-  /** Render nothing — inside the packaged Help menu this removes the row. */
-  hidden?: boolean;
-  /** Replaces the packaged handler. Falls back to the menu's `onReportIssue`, then to
-   *  this project's own tracker. */
-  onSelect?: () => void;
-}
-
-/**
- * Help › Report issue.
- *
- * A NAMED part rather than anonymous markup inside the Help menu, because it is the one
- * packaged row that reaches OUTSIDE the host's product: it opens this project's issue
- * tracker with the current page URL and user agent prefilled. A host embedding the editor
- * in its own app has every reason to point that somewhere else or drop it, and it should
- * not have to rebuild the menu to do either — `reportIssue={false}` removes it,
- * `onReportIssue` redirects it, and this part composes it back by name.
- *
- * @public
- */
-function MenuReportIssueImpl({ className, hidden, onSelect }: MenuReportIssueProps) {
-  const { setOpenMenu, onReportIssue, reportIssue } = useMenuContext();
-  const label = useMenuLabel();
-  if (hidden || reportIssue === false) return null;
-  const run = onSelect ?? onReportIssue ?? openReportIssue;
-  return (
-    <MenuRow
-      slot="help.reportIssue"
-      onSelect={() => {
-        run();
-        setOpenMenu(null);
-      }}
-      {...(className ? { className } : {})}
-    >
-      {label('toolbar.reportIssue')}
-    </MenuRow>
-  );
-}
-
-/**
- * The report-issue row, with its row-identity marker.
- *
- * The key is NOT a `ChromeSlotId` — the row is React's, not the shared registry's — but the
- * merge only needs a stable string, and using one here is what lets a host write
- * `<Menu.ReportIssue hidden/>` and have it REPLACE the packaged row rather than render a
- * second, invisible one beside it.
- *
- * @public
- */
-export const MenuReportIssue = Object.assign(MenuReportIssueImpl, {
-  docxSlot: 'help.reportIssue',
-});
-
-/**
- * Help.
- *
- * The registry leaves this menu EMPTY on purpose — a product's documentation and support
- * channel are the host's, not the library's. The one row the library can honestly own is
- * a report for this project's own tracker, so the packaged Help menu supplies it here
- * rather than in the shared registry, where a Vue or vanilla host would inherit a link it
- * never asked for. Replace the whole menu by name to say something else.
- *
- * With no children and `reportIssue` unset the menu carries that one row; with
- * `reportIssue={false}` it carries nothing, and Help is dropped rather than left as a
- * trigger that opens an empty panel.
- */
-function MenuHelpImpl({ children, ...rest }: Omit<MenuProps, 'id'>) {
-  const { reportIssue } = useMenuContext();
-  if (children === undefined && reportIssue === false) return null;
-  // The packaged row is passed as a CHILD rather than as a fallback, so the ordinary merge
-  // rules reach it: a host adds rows beside it, and `<Menu.ReportIssue hidden/>` removes
-  // just that row without taking the menu with it.
-  return (
-    <Menu id="help" {...rest}>
-      <MenuReportIssue />
-      {children}
-    </Menu>
-  );
-}
-
-export const MenuHelp: MenuPartComponent = Object.assign(MenuHelpImpl, {
-  docxMenu: 'help' as ChromeMenuId,
-});

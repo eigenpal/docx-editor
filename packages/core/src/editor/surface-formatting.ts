@@ -268,6 +268,14 @@ function pageIndents(page: PageRecord): ReadonlyMap<string, ParagraphIndentEntry
 }
 
 /**
+ * ONE signed first-line offset in twips, negative for a hanging indent. Hanging wins
+ * (ECMA-376 §17.3.1.12): the two spellings are mutually exclusive, never summed.
+ */
+export function signedFirstLine(value: ParagraphIndent): number {
+  return Math.round((value.hanging > 0 ? -value.hanging : value.firstLine) * 20);
+}
+
+/**
  * A paragraph's EFFECTIVE indent — cascade plus the numbering merge — from the layout
  * records, or null for a paragraph the published layout does not carry.
  *
@@ -796,10 +804,6 @@ export function formattingAt(
     const rtl = rtlOf(touchedParagraphs[0]!);
     // Points to twips at this boundary, so one representation crosses into the contract.
     const twips = (points: number): number => Math.round(points * 20);
-    // ONE signed first-line offset, hanging-wins (ECMA-376 §17.3.1.12) — the two spellings
-    // are mutually exclusive, never summed.
-    const signedFirstLine = (value: ParagraphIndent): number =>
-      twips(value.hanging > 0 ? -value.hanging : value.firstLine);
     const resolved = entries as readonly ParagraphIndentEntry[];
     const left = twips(first.indent.left);
     const right = twips(first.indent.right);

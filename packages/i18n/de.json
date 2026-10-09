@@ -102,7 +102,8 @@
     "formatPainter": "Format übertragen",
     "formatPainterShortcut": "Format übertragen (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "Absatzmarken anzeigen",
-    "label": "Formatierungssteuerelemente"
+    "label": "Formatierungssteuerelemente",
+    "addComment": "Kommentar hinzufügen"
   },
   "alignment": {
     "alignLeft": "Linksbündig",
@@ -674,6 +675,7 @@
     },
     "openAriaLabel": "Navigation öffnen",
     "openTitle": "Navigation",
+    "openShortcutTitle": "Navigation ({shortcut})",
     "tabs": {
       "find": "Suchen",
       "headings": "Überschriften"
@@ -773,7 +775,11 @@
     "noMarkup": "Markup: keine",
     "original": "Original",
     "protectDocument": "Dokument für Formulare schützen",
-    "simpleMarkup": "Einfaches Markup"
+    "simpleMarkup": "Einfaches Markup",
+    "replyCount": "Antworten: {count}",
+    "trackedChange": "Nachverfolgte Änderung",
+    "changeAnnouncement": "{change} von {author}: {text}",
+    "replyTargetResolved": "Die Änderung wurde aufgelöst, daher wurde die Antwort nicht gesendet."
   },
   "imageAltText": {
     "description": "Beschreibung",

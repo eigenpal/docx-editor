@@ -208,6 +208,11 @@
   --doc-review-author-5: #c2185b;
   --doc-review-author-6: #2e4053;
   --doc-review-author-7: #2e7d32;
+  /* Ink for initials on a filled author disc or badge. Every ramp slot above reaches at least
+     5.1:1 against it, which clears the 4.5:1 text minimum. A disc softened toward white does
+     not: at 82% the light disc fails in six slots, and the 62% dark disc fails in all eight.
+     The chrome is not inverted in dark mode, so one ink serves both themes. */
+  --doc-review-avatar-ink: #ffffff;
   /* The change bar: the rule in the left margin beside every line a tracked change touches.
      Word's All Markup paints it neutral grey whatever the change was (its red bar belongs to
      Simple Markup), and the ink here is Word's own on-screen grey. The width is a one-pixel
@@ -2543,8 +2548,9 @@ a.docx-hyperlink:focus-visible {
   pointer-events: none;
 }
 
-/* Public React page-number primitive. It is an overlay sibling of the viewport inside the
- * positioned workspace, so scrolling the document never moves the readout itself. */
+/* Public page-number primitive. It is an overlay sibling of the viewport inside the
+ * positioned workspace, so scrolling the document never moves the readout itself. A part
+ * placed inside the viewport renders into the viewport's parent element for the same reason. */
 .docx-editor__page-number {
   position: absolute;
   right: 24px;
@@ -3834,6 +3840,47 @@ a.docx-hyperlink:focus-visible {
   line-height: 18px;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* A collapsed host group's content. Actions render as full-width command rows; other
+ * host content keeps its own shape and wraps in the row. */
+.docx-toolbar__more-host {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px 2px 10px;
+}
+
+.docx-toolbar__more-host > .docx-toolbar__more-command {
+  flex: 1 0 100%;
+  margin-inline-start: -4px;
+}
+
+/* Insert Table: the size grid opens under its button. */
+.docx-toolbar__table-insert {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.docx-toolbar__table-insert-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: var(--doc-z-overlay);
+  margin-top: 4px;
+}
+
+/* In the "⋯" panel the grid is panel content: it opens in the flow under its row, so the
+ * panel keeps its max-height and scrolls instead of letting the grid spill past it. */
+.docx-toolbar__more-panel .docx-toolbar__table-insert {
+  flex-wrap: wrap;
+}
+
+.docx-toolbar__more-panel .docx-toolbar__table-insert-menu {
+  position: static;
+  flex-basis: 100%;
 }
 
 /* Separator: `w-px h-6 bg-border mx-1.5`. */
@@ -5204,9 +5251,11 @@ a.docx-hyperlink:focus-visible {
  * The reservation is a MEASUREMENT, not a constant: `DocxEditor.Viewport` publishes
  * `--docx-review-gutter` (this edge) and `--docx-review-gutter-start` (mirrored onto the
  * inline start, composed into the navigation rule below) from the viewport's width and the
- * page's entitled width. A viewport with room for both keeps the full column; one without
- * gets the marker strip on BOTH edges, so the sheet sits centred instead of parked beside
- * a mostly-empty band. The fallbacks — the full column while open, the strip while
+ * page's entitled width. A viewport with room for both keeps the full column. One without
+ * gets the marker strip on BOTH edges under `overflow: 'float'`, so the sheet sits
+ * centred instead of parked beside a mostly-empty band; under `overflow: 'scroll'` it
+ * keeps the full column with the page's clearance at the start, and the viewport scrolls
+ * sideways to the cards. The fallbacks — the full column while open, the strip while
  * closed — are what stood before the measurement existed, so an unmeasured host paints as
  * it always did. */
 .docx-editor__scroll-container[data-review-pane='open'] {
@@ -5239,7 +5288,8 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* Compact rail (`data-compact`: the pane is open but the viewport reserved only the
- * mirrored marker strip). The strip shows the markers, and the ONE active card floats at
+ * mirrored marker strip, which `overflow: 'scroll'` never does). The strip shows the
+ * markers, and the ONE active card floats at
  * column width, pinned inside the viewport's right edge — over the page, where a shadow
  * has to separate it from the ink underneath. Its slot is positioned inline by the rail. */
 .docx-review__slot--compact .docx-review__card {
@@ -5337,6 +5387,231 @@ a.docx-hyperlink:focus-visible {
   pointer-events: auto;
 }
 
+/* `commentMarkers: 'initials'`: a comment thread's marker is a speech bubble in its author's colour —
+   round, with the bottom-left corner left square as the tail. The button stays the 28px hit
+   target and carries the focus ring; the badge inside carries the look. */
+.docx-review__marker[data-marker='initials'] {
+  border-radius: 13px 13px 13px 3px;
+  color: inherit;
+  overflow: visible;
+}
+
+.docx-review__marker[data-marker='initials']:hover {
+  background: transparent;
+}
+
+.docx-review__marker[data-marker='initials']:focus-visible {
+  outline: 2px solid var(--doc-focus-ring);
+  /* Outside the badge's 2px surface ring, so the focus ring stays visible. */
+  outline-offset: 3px;
+}
+
+.docx-review__badge {
+  position: relative;
+  display: inline-flex;
+  box-sizing: border-box;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 4px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 13px 13px 13px 3px;
+  /* The full author colour, not the softened disc: see `--doc-review-avatar-ink`. */
+  background: var(--doc-review-author-current, var(--doc-review-author-0));
+  /* A ring in the surface colour lifts the miniature off the page edge and off a
+     neighbouring marker; the soft drop shadow gives it depth. */
+  box-shadow:
+    0 0 0 2px var(--doc-surface),
+    0 2px 6px -1px var(--doc-shadow);
+  color: var(--doc-review-avatar-ink);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  transition:
+    transform 160ms var(--doc-motion-ease-out),
+    box-shadow 160ms ease;
+}
+
+/* On a dark surface the darker author colours lose their edge; a hairline outside the ring
+   keeps it. */
+.docx-editor.dark .docx-review__badge:not([data-resolved]) {
+  box-shadow:
+    0 0 0 2px var(--doc-surface),
+    0 0 0 3px var(--doc-border),
+    0 2px 6px -1px var(--doc-shadow);
+}
+
+/* Resolved: quiet. Surface ground, muted ink, a hairline ring — present, not calling out. */
+.docx-review__badge[data-resolved] {
+  background: var(--doc-surface);
+  box-shadow:
+    0 0 0 1px var(--doc-border),
+    0 1px 2px var(--doc-shadow-subtle);
+  color: var(--doc-text-muted);
+}
+
+.docx-review__badge > svg {
+  width: 14px;
+  height: 14px;
+}
+
+.docx-review__badge-count {
+  position: absolute;
+  top: -5px;
+  right: -6px;
+  display: inline-flex;
+  box-sizing: border-box;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--doc-surface);
+  box-shadow: 0 0 0 1px var(--doc-border);
+  /* The count reads in the thread author's colour, so it belongs to its badge. */
+  color: var(--doc-review-author-current, var(--doc-text));
+  font-size: 9px;
+  font-weight: 600;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .docx-review__marker[data-marker='initials']:hover .docx-review__badge,
+  .docx-review__resolved-toggle:hover .docx-review__badge {
+    transform: translateY(-1px);
+  }
+
+  .docx-review__marker[data-marker='initials']:hover .docx-review__badge:not([data-resolved]) {
+    box-shadow:
+      0 0 0 2px var(--doc-surface),
+      0 4px 10px -2px var(--doc-shadow);
+  }
+}
+
+.docx-review__marker[data-marker='initials']:active .docx-review__badge,
+.docx-review__resolved-toggle:active .docx-review__badge {
+  transform: scale(0.92);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docx-review__badge {
+    transition: none;
+  }
+
+  .docx-review__marker[data-marker='initials']:hover .docx-review__badge,
+  .docx-review__marker[data-marker='initials']:active .docx-review__badge,
+  .docx-review__resolved-toggle:hover .docx-review__badge,
+  .docx-review__resolved-toggle:active .docx-review__badge {
+    transform: none;
+  }
+}
+
+/* The resolved miniature in the open rail wears the same quiet badge as the closed marker. */
+.docx-review__resolved-toggle .docx-review__badge {
+  margin: auto;
+}
+
+/* `revisionsIn: 'balloons'`: the change's card, its thread and its reply line in one balloon. */
+.docx-review__balloon[data-variant='change'] {
+  width: 300px;
+}
+
+.docx-review__balloon[data-variant='change'] .docx-review__summary {
+  overflow-wrap: anywhere;
+}
+
+.docx-review__balloon[data-variant='change'] .docx-review__added,
+.docx-review__balloon[data-variant='change'] .docx-review__removed {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-weight: 500;
+  cursor: inherit;
+}
+
+.docx-review__balloon[data-variant='change'] .docx-review__added {
+  color: var(--doc-revision-insertion);
+  text-decoration: underline;
+}
+
+.docx-review__balloon[data-variant='change'] .docx-review__removed {
+  color: var(--doc-revision-deletion);
+  text-decoration: line-through;
+}
+
+/* The reply line, shared by the open card and the change balloon: the writer's avatar, a
+   borderless field, and a round send button. */
+.docx-review__reply-box[data-reply-line] {
+  flex-wrap: nowrap;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--doc-border);
+}
+
+.docx-review__reply-box[data-reply-line] .docx-review__input {
+  padding: 4px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* The field has no border of its own, so the line shows focus: its rule takes the accent. */
+.docx-review__reply-box[data-reply-line] .docx-review__input:focus-visible {
+  outline: none;
+}
+
+.docx-review__reply-box[data-reply-line]:focus-within {
+  border-top-color: var(--doc-primary);
+  box-shadow: inset 0 1px 0 var(--doc-primary);
+}
+
+.docx-review__reply-box[data-reply-line] .docx-review__refused {
+  flex: 0 1 auto;
+}
+
+.docx-review__reply-box[data-reply-line]:has(.docx-review__refused) {
+  flex-wrap: wrap;
+}
+
+.docx-review__reply-avatar {
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+}
+
+.docx-review__send {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+  cursor: pointer;
+}
+
+.docx-review__send > svg {
+  width: 14px;
+  height: 14px;
+}
+
+.docx-review__send:focus-visible {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: 1px;
+}
+
+.docx-review__send:disabled {
+  background: var(--doc-surface-hover, var(--doc-shadow-subtle));
+  color: var(--doc-text-muted);
+  cursor: default;
+}
+
 /* ============================================================================
  * DOCUMENT NAVIGATION PANE  (`DocxEditor.Navigation`)
  *
@@ -5362,8 +5637,9 @@ a.docx-hyperlink:focus-visible {
 .docx-editor .docx-editor__scroll-container,
 .docx-editor.docx-editor__scroll-container {
   /* Two reservations compose on this edge: the navigation pane's displacement, and the
-   * review gutter's mirrored strip (`--docx-review-gutter-start`, 0 whenever the full
-   * column stands on the right). One declaration, because `padding-inline-start` and
+   * review gutter's start reservation (`--docx-review-gutter-start`: the mirrored strip,
+   * the page clearance under `overflow: 'scroll'`, or 0 whenever the full column fits).
+   * One declaration, because `padding-inline-start` and
    * `padding-left` are the same slot in LTR and a second rule would just lose the
    * specificity fight. */
   padding-inline-start: calc(var(--docx-nav-shift, 0px) + var(--docx-review-gutter-start, 0px));
@@ -5415,6 +5691,62 @@ a.docx-hyperlink:focus-visible {
 
 .docx-editor .docx-nav--open .docx-nav__panel-shell {
   display: flex;
+}
+
+/* A pane mounted INSIDE `DocxEditor.Viewport`. The viewport is the scroller and is
+ * itself positioned, so an absolute pane would scroll away with the pages. Sticky keeps
+ * it on the scrollport instead: a zero-height strip pinned to the top-left, first in the
+ * column whatever its source order, holding the panel at the viewport's content height
+ * (`--docx-nav-block-size`, published by the adapter). Sticky offsets resolve inside the
+ * scroller's padding, so the start offset cancels the shift padding the pane causes and
+ * the review gutter's mirrored strip; the page still moves, the pane does not. */
+.docx-editor .docx-editor__scroll-container > .docx-nav,
+.docx-editor.docx-editor__scroll-container > .docx-nav {
+  position: sticky;
+  order: -1;
+  flex: none;
+  align-self: flex-start;
+  inset-block: 0 auto;
+  /* The margin moves the strip's normal position back over the start padding; the
+   * negative offset lets sticky keep it there. Both are needed. The margin follows the
+   * padding's transition, so the two cancel at every frame and the pane holds still. */
+  inset-inline-start: calc(
+    -1 * (var(--docx-nav-shift, 0px) + var(--docx-review-gutter-start, 0px))
+  );
+  margin-inline-start: calc(
+    -1 * (var(--docx-nav-shift, 0px) + var(--docx-review-gutter-start, 0px))
+  );
+  transition: margin-inline-start 0.2s ease;
+  height: 0;
+}
+
+.docx-editor .docx-editor__scroll-container[data-zoom-fit] > .docx-nav,
+.docx-editor.docx-editor__scroll-container[data-zoom-fit] > .docx-nav {
+  transition: none;
+}
+
+.docx-editor .docx-editor__scroll-container > .docx-nav .docx-nav__panel-shell,
+.docx-editor.docx-editor__scroll-container > .docx-nav .docx-nav__panel-shell {
+  inset-block-end: auto;
+  height: var(--docx-nav-block-size, 100vh);
+}
+
+/* Narrow viewports: the pane covers the page instead of pushing it off screen. The
+ * adapter sets the class below `NAVIGATION_PANE_MIN_PAGE_ROOM` and publishes no shift.
+ * The panel spans the viewport less the inset on each side. */
+.docx-editor .docx-nav--overlay {
+  width: 100%;
+}
+
+.docx-editor .docx-editor__scroll-container > .docx-nav--overlay,
+.docx-editor.docx-editor__scroll-container > .docx-nav--overlay {
+  width: var(--docx-nav-inline-size, 100%);
+}
+
+.docx-editor .docx-nav--overlay .docx-nav__panel-shell {
+  width: auto;
+  inset-inline-end: var(--docx-nav-inset, 32px);
+  box-shadow: 0 4px 16px var(--doc-shadow);
 }
 
 /* The collapsed disc. Aligned with the page's top edge, not the viewport's, so it
@@ -5736,8 +6068,12 @@ a.docx-hyperlink:focus-visible {
    references `--doc-review-author-current` has to be computed where that property is actually set —
    an ancestor rule would resolve the fallback and inherit it down.
    Light: the page and the chrome agree on the value. Dark: the PAGE is rendered through an
-   inverting filter and the chrome is not, so only the chrome lifts. */
+   inverting filter and the chrome is not, so only the chrome lifts.
+   `--doc-review-author-disc` is kept for host CSS only: the packaged avatar and badge fill
+   with the full author colour instead (see `--doc-review-avatar-ink`). */
 .docx-review__card,
+.docx-review__reply,
+.docx-review__reply-avatar,
 .docx-review__marker {
   --doc-review-author-ink: var(--doc-review-author-current, #c0392b);
   --doc-review-author-disc: color-mix(
@@ -5748,6 +6084,8 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-editor.dark .docx-review__card,
+.docx-editor.dark .docx-review__reply,
+.docx-editor.dark .docx-review__reply-avatar,
 .docx-editor.dark .docx-review__marker {
   --doc-review-author-ink: color-mix(in srgb, var(--doc-review-author-current, #c0392b) 55%, white);
   --doc-review-author-disc: color-mix(
@@ -5935,10 +6273,10 @@ a.docx-hyperlink:focus-visible {
   height: 30px;
   flex: 0 0 auto;
   border-radius: 50%;
-  /* Softened against white: the ramp is chosen to stay legible as TEXT on the page, and the
-     same values as a 30px filled disc read as eight warning lights down the margin. */
-  background: var(--doc-review-author-disc, #c0392b);
-  color: #fff;
+  /* The full author colour, not the softened disc: white initials on the softened disc fell
+     below the 4.5:1 text minimum in most slots. See `--doc-review-avatar-ink`. */
+  background: var(--doc-review-author-current, var(--doc-review-author-0));
+  color: var(--doc-review-avatar-ink);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -6528,7 +6866,9 @@ a.docx-hyperlink:focus-visible {
 /* Reduced motion: the page still moves when it has to, it just does not glide. */
 @media (prefers-reduced-motion: reduce) {
   .docx-editor .docx-editor__scroll-container,
-  .docx-editor.docx-editor__scroll-container {
+  .docx-editor.docx-editor__scroll-container,
+  .docx-editor .docx-editor__scroll-container > .docx-nav,
+  .docx-editor.docx-editor__scroll-container > .docx-nav {
     transition-duration: 0s;
   }
 }
@@ -6580,6 +6920,29 @@ a.docx-hyperlink:focus-visible {
   margin-right: 5px;
   vertical-align: -2px;
   color: inherit;
+}
+
+/* A measuring bar stays on one line; menus that do not fit move into the "⋯" menu. It
+ * must be able to shrink below its content for the measurement to see the limit. */
+.docx-editor .docx-menubar[data-overflow] {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+/* Host children that are not menus: measured as fixed width, never moved into "⋯". */
+.docx-editor .docx-menubar__host {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+.docx-editor .docx-menubar__menu-root[data-toolbar-more] .docx-menubar__trigger-icon {
+  margin-right: 0;
+}
+
+/* The "⋯" menu's panel is never wider than the viewport less its margins. */
+.docx-editor .docx-menubar__menu-root[data-toolbar-more] > .docx-menubar__menu {
+  max-width: calc(100vw - 16px);
 }
 
 .docx-editor .docx-menubar__trigger:hover,

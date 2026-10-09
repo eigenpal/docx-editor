@@ -377,8 +377,26 @@
       "emitsAddedInVue": []
     },
     "editor/menu/menu-flyouts": {
-      "propsAddedInReact": ["slot"],
-      "propsAddedInVue": ["children", "labelKey", "labelKey", "name", "paths", "paths", "props"],
+      "propsAddedInReact": [],
+      "propsAddedInVue": [
+        "children",
+        "className",
+        "className",
+        "label",
+        "label",
+        "labelKey",
+        "labelKey",
+        "name",
+        "paths",
+        "paths",
+        "props"
+      ],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/menu/menu-help": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["name", "props"],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
@@ -461,7 +479,7 @@
       "emitsAddedInVue": []
     },
     "editor/toolbar/ToolbarAction": {
-      "propsAddedInReact": ["type"],
+      "propsAddedInReact": [],
       "propsAddedInVue": ["class", "class", "emits", "name", "props"],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
