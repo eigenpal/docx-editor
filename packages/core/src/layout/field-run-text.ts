@@ -64,21 +64,45 @@ export function propertiesOfRunContainer(container: OoxmlNode | undefined): Ooxm
       if (outline) props.push(outline);
       continue;
     }
+    if (child.localName !== 'rPrChange' && child.localName !== 'pPrChange') {
+      props.push(sharedProperty(child.localName, child.attributes));
+      continue;
+    }
     const attributes: Record<string, string> = {};
     for (const entry of child.attributes) attributes[entry.localName] = entry.value;
     const hasAttributes = Object.keys(attributes).length > 0;
-    if (child.localName === 'rPrChange' || child.localName === 'pPrChange') {
-      const revisionProperty: OoxmlProperty & { readonly revisionNodeId: string } = hasAttributes
-        ? { localName: child.localName, attributes, revisionNodeId: child.id }
-        : { localName: child.localName, revisionNodeId: child.id };
-      props.push(revisionProperty);
-      continue;
-    }
-    props.push(
-      hasAttributes ? { localName: child.localName, attributes } : { localName: child.localName }
-    );
+    const revisionProperty: OoxmlProperty & { readonly revisionNodeId: string } = hasAttributes
+      ? { localName: child.localName, attributes, revisionNodeId: child.id }
+      : { localName: child.localName, revisionNodeId: child.id };
+    props.push(revisionProperty);
   }
   return props;
+}
+
+/**
+ * One frozen property per element name and attribute list. A part read shares equal
+ * attribute lists, so the many equal property elements of a long document (`w:sz`, `w:b`,
+ * `w:rFonts`) answer with one object instead of one each, which layout caches then kept.
+ */
+const sharedProperties = new WeakMap<readonly OoxmlAttributeLike[], Map<string, OoxmlProperty>>();
+
+interface OoxmlAttributeLike {
+  readonly localName: string;
+  readonly value: string;
+}
+
+function sharedProperty(localName: string, list: readonly OoxmlAttributeLike[]): OoxmlProperty {
+  let byName = sharedProperties.get(list);
+  if (!byName) sharedProperties.set(list, (byName = new Map()));
+  const known = byName.get(localName);
+  if (known) return known;
+  const attributes: Record<string, string> = {};
+  for (const entry of list) attributes[entry.localName] = entry.value;
+  const property: OoxmlProperty = Object.freeze(
+    list.length > 0 ? { localName, attributes: Object.freeze(attributes) } : { localName }
+  );
+  byName.set(localName, property);
+  return property;
 }
 
 export function runPropertiesOf(
