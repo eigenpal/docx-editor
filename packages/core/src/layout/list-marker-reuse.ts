@@ -137,10 +137,14 @@ function relabeledBlocks(
   return next ?? blocks;
 }
 
-/** Per page object: the list items it was last checked against, and the result. */
+/**
+ * Per list item map, then per page object: the page relabelled against that map. Both keys
+ * are weak, so a map a later pass replaced is collected with its items — a page entry that
+ * held its map strongly kept one superseded map alive per page.
+ */
 const relabeledPages = new WeakMap<
-  PageRecord,
-  { readonly listItems: ReadonlyMap<string, ResolvedListItem>; readonly page: PageRecord }
+  ReadonlyMap<string, ResolvedListItem>,
+  WeakMap<PageRecord, PageRecord>
 >();
 
 /**
@@ -156,18 +160,17 @@ export function relabelListMarkers(
   measurer: TextMeasurer | undefined
 ): SemanticLayout {
   if (!listItems || listItems.size === 0 || !measurer) return layout;
+  let checked = relabeledPages.get(listItems);
+  if (!checked) relabeledPages.set(listItems, (checked = new WeakMap()));
   let pages: PageRecord[] | null = null;
   for (let index = 0; index < layout.pages.length; index += 1) {
     const page = layout.pages[index]!;
-    const known = relabeledPages.get(page);
-    let next: PageRecord;
-    if (known?.listItems === listItems) {
-      next = known.page;
-    } else {
+    let next = checked.get(page);
+    if (next === undefined) {
       const fragments = relabeledBlocks(page.fragments, listItems, measurer);
       next = fragments === page.fragments ? page : { ...page, fragments };
-      relabeledPages.set(page, { listItems, page: next });
-      if (next !== page) relabeledPages.set(next, { listItems, page: next });
+      checked.set(page, next);
+      if (next !== page) checked.set(next, next);
     }
     if (next === page) continue;
     pages ??= [...layout.pages];
