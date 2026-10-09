@@ -4906,9 +4906,11 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* The overlay variant (`<DocxEditor.Loading overlay />`): pinned over the nearest
-   positioned ancestor — the workspace row in the packaged frame — and opaque, so it
-   covers the previous document while the next one opens. The 150ms appearance delay
-   keeps an open that finishes inside a few frames from flashing a spinner.
+   positioned ancestor — the workspace row in the packaged frame. It MUTES what is under it
+   rather than hiding it: the previous document until the next one mounts, then the next
+   one's first pages while the rest is laid out. It still takes every pointer event, so
+   nothing under it can be edited. The 150ms appearance delay keeps an open that finishes
+   inside a few frames from flashing a spinner.
 
    The fade MUST be a real compositor animation. The engine paints exactly one frame
    (overlay committed, still in its delay) and then blocks the main thread with the
@@ -4919,7 +4921,7 @@ a.docx-hyperlink:focus-visible {
   position: absolute;
   inset: 0;
   z-index: var(--doc-z-overlay);
-  background: var(--doc-bg);
+  background: color-mix(in srgb, var(--doc-bg) 65%, transparent);
   will-change: opacity;
   animation: docx-editor-loading-appear 0.2s linear 0.15s backwards;
 }
@@ -4942,6 +4944,12 @@ a.docx-hyperlink:focus-visible {
   position: relative;
   width: 100%;
   height: 100%;
+}
+
+/* Over a document, only the indicator shows: no placeholder sheet on top of the real one. */
+.docx-editor__loading--overlay .docx-paginated-surface .docx-page.docx-editor__loading-page {
+  background: transparent;
+  box-shadow: none;
 }
 
 .docx-editor__loading-page {
