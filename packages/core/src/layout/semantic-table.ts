@@ -892,8 +892,13 @@ function readTableStructureUncached(
   const resolvedWidth =
     legacy === undefined &&
     (depth > 0 || !hasCompatibilityRule(compatibilityMode, 'legacyPercentTableContentWidth'))
-      ? ruleAdjustedTableWidth(tableWidth, contentWidthPt, tableBorders)
+      ? ruleAdjustedTableWidth(tableWidth, contentWidthPt, tableBorders, rows)
       : tableWidth;
+  // A top-level AutoFit table without a width fits the room its leading indent leaves.
+  const autoRoomPt =
+    tableWidth.type === 'auto' && !layoutFixed && depth === 0 && !float && alignment === 'left'
+      ? Math.max(0, indentPt)
+      : 0;
 
   const columnWidthsPt =
     columnWidthsOverridePt ??
@@ -903,7 +908,7 @@ function readTableStructureUncached(
         ? legacyRoundedCellClaims(claims, gridCols, (legacy.widthPt * tableWidth.value) / 100)
         : claims,
       columnCount,
-      contentWidthPt: legacyWidth ?? contentWidthPt,
+      contentWidthPt: (legacyWidth ?? contentWidthPt) - autoRoomPt,
       tableWidth: resolvedWidth,
       layoutFixed,
       // A hidden revision row can still account for part of the authored grid.

@@ -5,7 +5,8 @@ import { hasSupportedLegacyTableMargins } from './legacy-table-margins.ts';
 import { readTableIndentPt } from './table-widths.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 
-function hasUnsupportedRowGeometry(table: OoxmlElement): boolean {
+/** Row exceptions or grid offsets whose geometry the structure reader does not resolve. */
+export function hasUnsupportedRowGeometry(table: OoxmlElement): boolean {
   const pending = [...table.children];
   let visited = 0;
   while (pending.length > 0) {

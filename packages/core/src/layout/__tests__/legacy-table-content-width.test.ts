@@ -96,6 +96,10 @@ describe('explicit legacy full-width content alignment', () => {
   // authored grid states; the grid only reconciles fiftieth-percent rounding when it agrees.
   const referenceShapes: [string, string][] = [
     ['fixed', fixture(properties.replace('autofit', 'fixed'))],
+    [
+      'automatic width',
+      fixture(properties.replace('type="pct" w:w="5000"', 'type="auto" w:w="0"')),
+    ],
     ['partial width', fixture(properties.replace('w:w="5000"', 'w:w="4500"'))],
     ['wrapped oversized percentage', fixture(properties.replace('w:w="5000"', 'w:w="999999"'))],
     ['positive indent', fixture(properties.replace('type="dxa" w:w="0"', 'type="dxa" w:w="120"'))],
@@ -119,10 +123,6 @@ describe('explicit legacy full-width content alignment', () => {
   }
 
   const controls: [string, string][] = [
-    [
-      'automatic width',
-      fixture(properties.replace('type="pct" w:w="5000"', 'type="auto" w:w="0"')),
-    ],
     ['invalid alignment', fixture(properties + '<w:jc w:val="typo"/>')],
     ['floating', fixture(properties + '<w:tblpPr w:horzAnchor="text"/>')],
     ['separated cells', fixture(properties + '<w:tblCellSpacing w:type="dxa" w:w="20"/>')],

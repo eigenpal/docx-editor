@@ -36,7 +36,9 @@ function tableXml({
   return (
     '<w:tbl><w:tblPr>' +
     (rtl ? '<w:bidiVisual/>' : '') +
-    `<w:tblW w:w="${width}" w:type="pct"/>` +
+    (width === 'auto'
+      ? '<w:tblW w:w="0" w:type="auto"/>'
+      : `<w:tblW w:w="${width}" w:type="pct"/>`) +
     (jc ? `<w:jc w:val="${jc}"/>` : '') +
     (indent === undefined ? '' : `<w:tblInd w:w="${indent}" w:type="dxa"/>`) +
     borders +
@@ -117,6 +119,22 @@ describe('the legacy reference box of a percentage-width table', () => {
     expect(trailing.x).toBeCloseTo(-MARGIN_PT, 6);
   });
 
+  test('a table without a usable width shares the box and fits it after its indent', () => {
+    const wide = [2000, 3600];
+    for (const width of ['auto', '40000']) {
+      const shape = { width, grid: wide, jc: 'left' } as const;
+      const left = read(shape);
+      expect(left.structure.legacyContentAlignment).toBe(true);
+      expect(left.x).toBeCloseTo(-MARGIN_PT, 6);
+      expect(left.width).toBeCloseTo(box(100), 6);
+      const indented = read({ ...shape, indent: 288 });
+      expect(indented.x).toBeCloseTo(14.4 - MARGIN_PT, 6);
+      expect(indented.width).toBeCloseTo(box(100) - 14.4, 6);
+      const right = read({ ...shape, jc: 'right' });
+      expect(right.x + right.width).toBeCloseTo(TEXT_PT + MARGIN_PT, 6);
+    }
+  });
+
   test('a table without stated outer margins keeps the ordinary geometry', () => {
     const plain = read({ width: '7500', jc: 'left', margins: false });
     expect(plain.structure.legacyContentAlignment).toBeUndefined();
@@ -140,6 +158,12 @@ describe('outside the legacy box, a percentage excludes the mean outer rule', ()
       const { width } = read({ width: '15000', rules: true }, mode, 1);
       expect(width).toBeCloseTo(ruled(300), 6);
     }
+  });
+
+  test('a mode-15 table without a width fits the room its indent leaves', () => {
+    const { width, x } = read({ width: 'auto', grid: [2000, 3600], jc: 'left', indent: 288 }, 15);
+    expect(x).toBeCloseTo(14.4, 6);
+    expect(width).toBeCloseTo(TEXT_PT - 14.4, 6);
   });
 
   test('a table without side rules keeps the plain share', () => {

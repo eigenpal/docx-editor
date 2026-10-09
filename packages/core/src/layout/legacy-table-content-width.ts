@@ -18,6 +18,7 @@ import {
   type PreferredWidth,
 } from './table-widths.ts';
 import { hasSupportedLegacyTableMargins } from './legacy-table-margins.ts';
+import { hasUnsupportedRowGeometry } from './legacy-fixed-table-content.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 
 const MAX_WIDTH_PT = 31_680 / 20;
@@ -91,8 +92,8 @@ export function legacyTableContentWidth(input: {
     input.depth !== 0 ||
     input.floating ||
     input.cellSpacingPt !== 0 ||
-    input.tableWidth.type !== 'pct' ||
-    input.tableWidth.value <= 0 ||
+    (input.tableWidth.type !== 'auto' &&
+      (input.tableWidth.type !== 'pct' || input.tableWidth.value <= 0)) ||
     !Number.isFinite(contentWidthPt) ||
     contentWidthPt <= 0 ||
     contentWidthPt > MAX_WIDTH_PT ||
@@ -105,13 +106,22 @@ export function legacyTableContentWidth(input: {
   if (!properties) return undefined;
   const width = child(properties, 'tblW');
   const rawWidth = attr(width, 'w');
-  // A percentage above 100 extends the same reference box past the text column.
+  // A percentage above 100 extends the same reference box past the text column. A table
+  // without a usable width (none, auto, or a count past its range) shares the same box.
+  const automatic =
+    input.tableWidth.type === 'auto' &&
+    (!width ||
+      attr(width, 'type') === 'auto' ||
+      (attr(width, 'type') === 'pct' &&
+        /^\d{1,9}$/.test(rawWidth ?? '') &&
+        wrappedTablePercentUnits(Number(rawWidth)) === undefined));
   if (
-    attr(width, 'type') !== 'pct' ||
-    rawWidth === undefined ||
-    ((!/^\d{1,9}$/.test(rawWidth) || wrappedTablePercentUnits(Number(rawWidth)) === undefined) &&
-      (!/^\d{1,3}(?:\.\d+)?%$/.test(rawWidth) ||
-        Number(rawWidth.slice(0, -1)) * 50 > MAX_TABLE_PERCENT_UNITS))
+    !automatic &&
+    (attr(width, 'type') !== 'pct' ||
+      rawWidth === undefined ||
+      ((!/^\d{1,9}$/.test(rawWidth) || wrappedTablePercentUnits(Number(rawWidth)) === undefined) &&
+        (!/^\d{1,3}(?:\.\d+)?%$/.test(rawWidth) ||
+          Number(rawWidth.slice(0, -1)) * 50 > MAX_TABLE_PERCENT_UNITS)))
   )
     return undefined;
 
@@ -143,6 +153,7 @@ export function legacyTableContentWidth(input: {
   const last = rows[0]?.cells.at(-1);
   if (!first || !last) return undefined;
   if (!hasSupportedLegacyTableMargins(table, input.propertyNodes)) return undefined;
+  if (hasUnsupportedRowGeometry(table)) return undefined;
   // A fallback margin alone is no evidence for moving the table into the margin.
   if (!statesOuterMargins([properties, ...input.propertyNodes])) return undefined;
   const left = first.margins.left;
