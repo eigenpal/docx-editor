@@ -239,6 +239,7 @@ export function caretAt(layout: SemanticLayout, position: SemanticPosition, meas
 export interface CaretAtOptions {
     // (undocumented)
     readonly measurer?: TextMeasurer;
+    readonly preferredLineId?: string;
     readonly preferredPageIndex?: number;
 }
 

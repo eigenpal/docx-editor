@@ -52,6 +52,7 @@ export function createCaretViewFollower(deps: {
   measurer(): TextMeasurer;
   /** The page the selection was last painted on, when the same story spans several. */
   preferredPageIndex(): number | undefined;
+  preferredLineId?(): string | undefined;
   pagesLayer: HTMLElement;
   /** The surface root, whose offset the scroller's coordinates are relative to. */
   container: HTMLElement;
@@ -91,10 +92,12 @@ export function createCaretViewFollower(deps: {
       if (active !== deps.pagesLayer && (!active || !deps.pagesLayer.contains(active))) return;
 
       const preferredPageIndex = deps.preferredPageIndex();
+      const preferredLineId = deps.preferredLineId?.();
       const layout = deps.layout();
       const geometry = caretAt(layout, selection.head, {
         measurer: deps.measurer(),
         ...(preferredPageIndex !== undefined ? { preferredPageIndex } : {}),
+        ...(preferredLineId !== undefined ? { preferredLineId } : {}),
       });
       if (!geometry) return;
       const changedPage = lastCaretPageIndex !== null && lastCaretPageIndex !== geometry.pageIndex;

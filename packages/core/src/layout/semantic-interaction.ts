@@ -1,4 +1,5 @@
 import { spanBesideSymbol } from './symbol-run.ts';
+import { preferredLineCaret } from './semantic-caret-affinity.ts';
 import { nearestPageWithStops } from './caret-page-step.ts';
 import { mergedCaretGroup } from './merged-caret-navigation.ts';
 import {
@@ -313,6 +314,8 @@ export interface CaretAtOptions {
    * (shared header/footer copies).
    */
   readonly preferredPageIndex?: number;
+  /** Prefer this visual line when one model boundary has several painted occurrences. */
+  readonly preferredLineId?: string;
 }
 
 function resolveCaretAtOptions(measurerOrOptions?: TextMeasurer | CaretAtOptions): CaretAtOptions {
@@ -337,6 +340,8 @@ export function caretAt(
   const seen = new Set(placed.map((entry) => entry.line.id));
   const extra = repeats.filter((entry) => !seen.has(entry.line.id));
   const catalog = extra.length > 0 ? [...placed, ...extra] : placed;
+  const lineCaret = preferredLineCaret(layout, position, catalog, options);
+  if (lineCaret) return lineCaret;
   const ordered =
     preferred === undefined
       ? catalog

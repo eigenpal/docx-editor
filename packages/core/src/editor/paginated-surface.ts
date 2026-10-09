@@ -475,6 +475,7 @@ export function mountPaginatedSurface(
       return {
         layout: editingLayout(),
         selection: hiddenMarks.shownSelection(selection),
+        ...selectionSync.caretPreference(active?.pageIndex ?? notePageIndex ?? undefined),
         measurer,
         ...(armedAtCaret()
           ? {
@@ -496,13 +497,6 @@ export function mountPaginatedSurface(
               },
             }
           : {}),
-        ...(active
-          ? { preferredPageIndex: active.pageIndex }
-          : notePageIndex !== null
-            ? { preferredPageIndex: notePageIndex }
-            : selectionSync.selectionPageIndex() !== undefined
-              ? { preferredPageIndex: selectionSync.selectionPageIndex() }
-              : {}),
         scopedHost,
         ...(active
           ? { scopedHostKind: 'headerFooter' as const }
@@ -2656,6 +2650,7 @@ export function mountPaginatedSurface(
     layout: editingLayout,
     measurer: () => measurer,
     preferredPageIndex: () => selectionSync.selectionPageIndex(),
+    preferredLineId: () => selectionSync.selectionLineId(),
     pagesLayer,
     container,
     scroller: () => surfaceScroller(container),
@@ -3200,7 +3195,8 @@ export function mountPaginatedSurface(
   function setSelection(
     next: SemanticSelection,
     keepDesiredX = false,
-    follow: CaretFollowMode = 'caret'
+    follow: CaretFollowMode = 'caret',
+    pointerCaret?: import('@docx-editor.dev/core/layout').CaretGeometry
   ): void {
     // Compared BEFORE the flush below, which can itself move the caret.
     const moved = !selectionsEqual(next, selection);
@@ -3262,6 +3258,7 @@ export function mountPaginatedSurface(
     // carried out. `restoreSelection` raises the flag and only `flushLayout` takes it down, so
     // `undo` on an empty history left it up and disarmed the NEXT repaint, whenever it came.
     selectionSync.noteSelectionSettled();
+    selectionSync.notePointerCaret(pointerCaret);
     // CLAIMED: this is the programmatic entry point — a host's `setSelection`, an opened
     // review card, an outline jump. The plain write refuses whenever the browser's selection
     // sits outside these pages, which is exactly the case when the request came from the
@@ -6117,7 +6114,7 @@ export function mountPaginatedSurface(
       selection: () => hiddenMarks.shownSelection(selection),
       // `none`: a press lands where the reader LOOKS, and moving the paper under a double
       // click sent its second press elsewhere — a blank footer band never opened.
-      setSelection: (next) => setSelection(next, false, 'none'),
+      setSelection: (next, caret) => setSelection(next, false, 'none', caret),
       cellSelection: () => cellSelection,
       setCellSelection: (next) => setCellSelection(next),
       // `preventScroll`: the pages layer is the WHOLE document tall, and focusing it scrolls
