@@ -17,6 +17,7 @@ import {
   createNodeIdAllocator,
   parentNodeOf as parentOf,
   replaceChildren,
+  type EditOptions,
 } from '../package/ooxml-edit.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { TEXT_DEPS, fromEdit } from './tree-op-nodes.ts';
@@ -46,7 +47,7 @@ export function applyParagraphMarkRevision(
   paragraph: OoxmlParagraphNode,
   kind: 'ins' | 'del',
   revision: RevisionAttributionInput,
-  options?: { readonly deferValidation?: boolean }
+  options?: EditOptions
 ): TreeOpResult {
   const mint = createNodeIdAllocator(part);
   const effect: TreeOpEffect = {
@@ -65,7 +66,9 @@ export function applyParagraphMarkRevision(
   }
 
   const adjacent = adjacentParagraphMark(part, paragraph, kind, revision);
-  const id = adjacent?.id ?? nextRevisionId(part)();
+  // The transaction's counter when it lends one: a walk of the whole part per mark made a
+  // deletion over many paragraphs quadratic.
+  const id = adjacent?.id ?? options?.trackedRevisionIds?.mint() ?? nextRevisionId(part)();
   const attribution = adjacent
     ? {
         author: revision.author,

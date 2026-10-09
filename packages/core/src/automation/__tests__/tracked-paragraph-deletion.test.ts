@@ -391,3 +391,69 @@ test('a tracked deletion over 4000 paragraphs separated by bookmarks stays one d
   // About 4.5 s here. One id walk per mark took 54 s.
   expect(elapsed).toBeLessThan(30_000);
 }, 120_000);
+
+describe('position markers at the join after accept', () => {
+  const body =
+    p('Alpha one') +
+    '<w:bookmarkStart w:id="0" w:name="mark"/>' +
+    p('Bravo two') +
+    '<w:bookmarkEnd w:id="0"/>' +
+    p('Charlie three');
+
+  test('a marker between the joined paragraphs lands at the join point', () => {
+    const host = open(docx(body));
+    const { body: story } = roots(host);
+    run(host, [deleteBetween(paragraphsOf(host, story), [0, 6], [1, 6])]);
+    decide(host, story, true);
+    expect(paragraphTexts(host, story)).toEqual(['Alpha two', 'Charlie three']);
+    const xml = savedMainXml(host);
+    const joined = xml.slice(xml.indexOf('<w:p'), xml.indexOf('</w:p>') + 6);
+    // The bookmark covered "Bravo two"; it now covers "two", not the kept "Alpha ".
+    expect(joined).toMatch(/Alpha <\/w:t><\/w:r><w:bookmarkStart w:id="0" w:name="mark"\/><w:r>/);
+    expect(xml).toMatch(/<\/w:p><w:bookmarkEnd w:id="0"\/><w:p/);
+    expect(xml.indexOf('<w:bookmarkStart')).toBeGreaterThan(xml.indexOf('Alpha'));
+  });
+
+  test('a comment range start between the joined paragraphs lands at the join point', () => {
+    const host = open(
+      docx(
+        p('Alpha one') +
+          '<w:commentRangeStart w:id="3"/>' +
+          p('Bravo two') +
+          '<w:commentRangeEnd w:id="3"/>' +
+          p('Charlie three')
+      )
+    );
+    const { body: story } = roots(host);
+    run(host, [deleteBetween(paragraphsOf(host, story), [0, 6], [1, 6])]);
+    decide(host, story, true);
+    const xml = savedMainXml(host);
+    expect(xml).toMatch(/Alpha <\/w:t><\/w:r><w:commentRangeStart w:id="3"\/><w:r>/);
+  });
+
+  test('reject keeps the markers where they were', () => {
+    const host = open(docx(body));
+    const { body: story } = roots(host);
+    run(host, [deleteBetween(paragraphsOf(host, story), [0, 6], [1, 6])]);
+    decide(host, story, false);
+    expect(paragraphTexts(host, story)).toEqual(['Alpha one', 'Bravo two', 'Charlie three']);
+    expect(savedMainXml(host)).toMatch(
+      /one<\/w:t><\/w:r><\/w:p><w:bookmarkStart w:id="0" w:name="mark"\/><w:p[^>]*><w:r><w:t xml:space="preserve">Bravo .*two<\/w:t><\/w:r><\/w:p><w:bookmarkEnd w:id="0"\/>/
+    );
+  });
+});
+
+test('4000 paragraph deletions in one batch stay fast and record each mark', () => {
+  const count = 4000;
+  const host = open(docx(Array.from({ length: count }, (_, i) => p(`Paragraph ${i}`)).join('')));
+  const { body } = roots(host);
+  const paragraphs = paragraphsOf(host, body);
+  const started = performance.now();
+  run(
+    host,
+    paragraphs.slice(0, -1).map((paragraph) => ({ op: 'deleteParagraph' as const, paragraph }))
+  );
+  // About 0.6 s here. A revision id walk per mark and a sibling scan per paragraph took 6 s.
+  expect(performance.now() - started).toBeLessThan(4000);
+  expect(savedMainXml(host).match(/<w:rPr><w:del /g)).toHaveLength(count - 1);
+}, 120_000);

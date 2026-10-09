@@ -82,7 +82,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-Each paragraph's text becomes deleted text, and its paragraph mark becomes a deleted paragraph mark. The paragraphs stay in the document until a reviewer decides. Accept removes them, and reject restores them. A later insertion at the start of the next paragraph is a separate decision. A `range.delete()` over several paragraphs records the same deletions for every paragraph mark that the range covers. Bookmark, comment, and permission markers between the paragraphs stay in place and do not split the deletion into separate decisions.
+Each paragraph's text becomes deleted text, and its paragraph mark becomes a deleted paragraph mark. The paragraphs stay in the document until a reviewer decides. Accept removes them, and reject restores them. A later insertion at the start of the next paragraph is a separate decision. A `range.delete()` over several paragraphs records the same deletions for every paragraph mark that the range covers. Bookmark, comment, and permission markers between the paragraphs do not split the deletion into separate decisions. On accept, a marker between two joined paragraphs moves to the join point, so it still marks the same remaining text. Reject leaves the markers where they were.
 
 A refusal applies to the whole sync. If one paragraph in the example refuses, such as the last paragraph of the document, no paragraph in that sync is deleted. To delete the others, call `delete()` only on paragraphs that can take a tracked deletion. Delete adjacent paragraphs in the same sync: a later sync that deletes a paragraph beside your own pending deletion refuses, because the two would review as one decision.
 

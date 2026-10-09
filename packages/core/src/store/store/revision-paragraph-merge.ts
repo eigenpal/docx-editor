@@ -1,6 +1,7 @@
 import { isContentControl } from '../package/content-control-walk.ts';
 import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from '../package/ooxml-tree.ts';
 import { tableChildren } from './revision-table-children.ts';
+import { isInertMarker } from './revision-marker-content.ts';
 
 const properties = (n: OoxmlNode) =>
   n.kind !== 'textValue' && n.namespaceUri === WML_NAMESPACE_URI && n.localName === 'pPr';
@@ -85,6 +86,10 @@ export function mergeRevisionParagraphs(
       const target = tableParagraphMergeTarget(node)!;
       out.push(replaceIn(node, prepend(target, carried)));
       carried = [];
+    } else if (carried.length && isInertMarker(node)) {
+      // A bookmark or comment boundary between the joined paragraphs marks the join point,
+      // so it goes after the carried text, not before the whole joined paragraph.
+      carried.push(node);
     } else out.push(node);
   }
   return out;

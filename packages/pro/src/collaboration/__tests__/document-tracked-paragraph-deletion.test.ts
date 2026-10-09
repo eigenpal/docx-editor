@@ -145,6 +145,15 @@ const deleteParagraph = (index: number) =>
   });
 const deleteMiddleParagraph = deleteParagraph(1);
 
+const deleteParagraphsAt = (indexes: readonly number[]) =>
+  tracked(async (c) => {
+    const paragraphs = c.document.body.paragraphs;
+    paragraphs.load('items');
+    await c.sync();
+    for (const index of indexes) paragraphs.items[index]!.delete();
+    await c.sync();
+  });
+
 const typeInto =
   (index: number, words: string, where: 'Start' | 'End'): Edit =>
   async (c) => {
@@ -373,6 +382,61 @@ for (const properties of [false, true])
           'First clause\rMiddle clause\rLast clause',
           'First clause\rLast clause'
         );
+      } finally {
+        r.close();
+      }
+    });
+
+const MARKED =
+  p('First clause') +
+  '<w:bookmarkStart w:id="1" w:name="b1"/><w:bookmarkEnd w:id="1"/><w:commentRangeEnd w:id="9"/>' +
+  p('Middle clause') +
+  '<w:permEnd w:id="3"/>' +
+  p('Last clause');
+
+const MARKED_EDITS: Record<string, { bob: Edit; reject: string; accept: string }> = {
+  'inserts a paragraph after the first': {
+    bob: async (c) => {
+      const paragraphs = c.document.body.paragraphs;
+      paragraphs.load('items');
+      await c.sync();
+      paragraphs.items[0]!.insertParagraph('Inserted', 'After');
+      await c.sync();
+    },
+    reject: 'First clause\rInserted\rMiddle clause\rLast clause',
+    accept: 'Inserted\rLast clause',
+  },
+  'types at the start of the second': {
+    bob: typeInto(1, 'Note ', 'Start'),
+    reject: 'First clause\rNote Middle clause\rLast clause',
+    accept: 'Last clause',
+  },
+};
+
+for (const order of Object.keys(ORDERS) as Order[])
+  for (const [name, { bob, reject, accept }] of Object.entries(MARKED_EDITS))
+    test(`${order}: a peer ${name} while another deletes paragraphs across markers`, async () => {
+      const r = await room(fixture(MARKED), order);
+      try {
+        await concurrently(r, deleteParagraphsAt([0, 1]), bob);
+        await converged(r);
+        // The markers do not split the deletion: one card on each peer.
+        expect(r.peers.map((peer) => peer.editor.getReviewItems().length)).toEqual([1, 1]);
+        await expectDecisions(r, reject, accept);
+        await r.peers[1]!.runtime.run(async (c) => {
+          c.document.body.revisions.acceptAll();
+          await c.sync();
+        });
+        r.sync();
+        await converged(r);
+        const xml = await mainXml(r.peers[0]!.editor);
+        for (const marker of [
+          '<w:bookmarkStart',
+          '<w:bookmarkEnd',
+          '<w:commentRangeEnd',
+          '<w:permEnd',
+        ])
+          expect(xml).toContain(marker);
       } finally {
         r.close();
       }

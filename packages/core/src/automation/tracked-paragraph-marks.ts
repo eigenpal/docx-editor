@@ -14,6 +14,25 @@ import type { AutomationError } from './protocol.ts';
 
 const MAX_CHECK_DEPTH = 64;
 
+/**
+ * A child's index in its parent. Nodes are immutable, so one map per parent serves every
+ * paragraph a batch plans against the same tree, instead of a scan per paragraph.
+ */
+const positions = new WeakMap<OoxmlNode, ReadonlyMap<string, number>>();
+function positionIn(parent: OoxmlNode, childId: string): number {
+  if (parent.kind === 'textValue') return -1;
+  let map = positions.get(parent);
+  if (!map) {
+    const built = new Map<string, number>();
+    parent.children.forEach((child, index) => {
+      if (!built.has(child.id)) built.set(child.id, index);
+    });
+    map = built;
+    positions.set(parent, map);
+  }
+  return map.get(childId) ?? -1;
+}
+
 /** Containers whose content is a separate story, not part of the paragraph's text. */
 const OWN_STORIES = new Set(['drawing', 'pict', 'object', 'AlternateContent', 'txbxContent']);
 
@@ -80,7 +99,7 @@ export function markStrikeRefusal(part: OoxmlPart, paragraphId: string): Automat
 export function nextSiblingParagraph(part: OoxmlPart, paragraphId: string): OoxmlNode | null {
   const parent = parentNodeOf(part, paragraphId);
   if (!parent) return null;
-  const at = parent.children.findIndex((child) => child.id === paragraphId);
+  const at = positionIn(parent, paragraphId);
   if (at < 0) return null;
   for (let index = at + 1; index < parent.children.length; index += 1) {
     const sibling = parent.children[index]!;
@@ -99,7 +118,7 @@ export function areSiblingParagraphs(part: OoxmlPart, ids: readonly string[]): b
   const parent = parentNodeOf(part, ids[0]!);
   if (!parent) return false;
   const children = parent.children;
-  let at = children.findIndex((child) => child.id === ids[0]);
+  let at = positionIn(parent, ids[0]!);
   if (at < 0) return false;
   for (let index = 1; index < ids.length; index += 1) {
     let next = at + 1;
@@ -128,7 +147,7 @@ export function followsOwnMarkDeletion(
 ): boolean {
   const parent = parentNodeOf(part, paragraphId);
   if (!parent) return false;
-  const at = parent.children.findIndex((child) => child.id === paragraphId);
+  const at = positionIn(parent, paragraphId);
   for (let index = at - 1; index >= 0; index -= 1) {
     const sibling = parent.children[index]!;
     if (sibling.kind === 'paragraph')
