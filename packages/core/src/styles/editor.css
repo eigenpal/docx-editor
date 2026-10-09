@@ -4992,28 +4992,48 @@ a.docx-hyperlink:focus-visible {
   height: 100%;
 }
 
-/* Once the opening document has mounted and lays out its remaining pages, its first pages
-   show as they are, with the indicator still on the page: the engine marks its container
-   for exactly that phase. The overlay turns clear but still takes every pointer event, so
-   the document becomes clickable only when it is complete. */
+/* Once the opening document has mounted and lays out its remaining pages, the engine marks
+   its container for exactly that phase. The overlay steps aside, so the scroll container
+   scrolls. The pages show muted and take no pointer input, and the indicator sits on the
+   FIRST PAGE, so it scrolls with the document instead of floating over it. */
 :where(:has([data-docx-opening-preview])) > .docx-editor__loading--overlay {
-  background: transparent;
+  display: none;
 }
 
-/* Over real text the ring sits on a disc of paper, so it reads on any page content. */
-:where(:has([data-docx-opening-preview]))
-  > .docx-editor__loading--overlay
-  .docx-editor__loading-spinner {
-  background: var(--doc-page-bg-rendered);
-  box-shadow: 0 0 0 8px var(--doc-page-bg-rendered);
+[data-docx-opening-preview] .docx-pages {
+  pointer-events: none;
 }
 
-:where(:has([data-docx-opening-preview]))
-  > .docx-editor__loading--overlay
-  .docx-paginated-surface
-  .docx-page.docx-editor__loading-page {
-  background: transparent;
-  box-shadow: none;
+[data-docx-opening-preview] .docx-page::before {
+  position: absolute;
+  inset: 0;
+  z-index: var(--doc-z-overlay);
+  background: color-mix(in srgb, var(--doc-page-bg-rendered) 55%, transparent);
+  content: '';
+}
+
+/* The packaged spinner, drawn by the page itself. Compositor-driven, like the overlay's. */
+[data-docx-opening-preview] .docx-page[data-page-index='0']::after {
+  position: absolute;
+  top: min(50%, 30vh);
+  left: 50%;
+  z-index: var(--doc-z-overlay);
+  box-sizing: border-box;
+  width: 36px;
+  height: 36px;
+  margin: -18px 0 0 -18px;
+  border: 3px solid var(--doc-border);
+  border-top-color: var(--doc-primary);
+  border-radius: 50%;
+  will-change: transform;
+  animation: docx-editor-loading-spin 0.8s linear infinite;
+  content: '';
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-docx-opening-preview] .docx-page[data-page-index='0']::after {
+    animation: none;
+  }
 }
 
 .docx-editor__loading-page {
