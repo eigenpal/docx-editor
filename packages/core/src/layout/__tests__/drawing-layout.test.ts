@@ -789,15 +789,15 @@ describe('places anchors in story and cell context', () => {
       })
         .replace(
           '<w:body>',
-          '<w:body><w:tbl><w:tblPr><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="240" w:type="dxa"/><w:right w:w="360" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:val="3000" w:hRule="atLeast"/></w:trPr><w:tc><w:tcPr><w:vAlign w:val="' +
+          '<w:body><w:tbl><w:tblPr><w:tblLayout w:type="fixed"/><w:tblInd w:w="0" w:type="dxa"/><w:tblCellMar><w:left w:w="240" w:type="dxa"/><w:right w:w="360" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:val="3000" w:hRule="atLeast"/></w:trPr><w:tc><w:tcPr><w:vAlign w:val="' +
             align +
             '"/></w:tcPr>'
         )
         .replace('</w:body>', '</w:tc></w:tr></w:tbl></w:body>');
       const part = load(source);
       // Mode 15 keeps the table at the text column, so the column starts after the 12pt
-      // padding. Without a declared mode, the fixed table aligns that content edge with the
-      // text column instead (`fixedTableContentEdgeOrigin`).
+      // padding. Without a declared mode, the fixed table with a stated indent aligns that
+      // content edge with the text column instead (`fixedTableContentEdgeOrigin`).
       for (const [compatibilityMode, x] of [
         [15, 12],
         [undefined, 0],
