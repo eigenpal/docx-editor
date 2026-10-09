@@ -6,6 +6,8 @@ category: 'Customization'
 
 The review module can open each tracked change in a balloon at its text. Start with the built-in balloon. Build your own balloon only when your design needs a different component.
 
+<CustomizationDemo topic="balloons" />
+
 ## Use the built-in balloons
 
 Set `revisionsIn` to `'balloons'`. The review pane then lists comments only, and `DocxEditorReview` opens a balloon at the text of each tracked change. The balloon has the author, the date, the changed words, replies, a reply field, and **Accept** and **Reject**.
@@ -77,11 +79,27 @@ To add a class to the built-in balloon, pass `className` to `DocxEditorReview.Ba
 </Framework>
 </FrameworkTabs>
 
+## Style the built-in balloon
+
+`Balloon.className` styles the balloon root. Target its card to change the visible box. The following styles work with both framework examples.
+
+```css
+.docx-editor.contract-workspace .contract-change-balloon .docx-review__card {
+  border-radius: 12px;
+  border-inline-start: 3px solid var(--doc-review-author-current);
+  background: var(--doc-surface);
+  box-shadow: 0 8px 24px var(--doc-border);
+}
+.docx-editor.contract-workspace .contract-change-balloon .docx-review__reply-box {
+  border-radius: 8px;
+}
+```
+
+Use `border-radius: 3px` for a square box. Keep the built-in actions and reply field when you change its appearance. The balloon pairs replacement records into one decision. For author colors and text marks, see [Customize your tracked changes](/docs/2.x/customization/tracked-changes).
+
 ## Build your own balloon
 
-The live example draws an application balloon for tracked changes. It opens when you click a tracked change.
-
-<CustomizationDemo topic="balloons" />
+The live example styles the built-in balloon. The following reference shows how to replace it with your own component.
 
 Keep `revisionsIn: 'balloons'` and pass `hidden` to `DocxEditorReview.Balloon`. The review pane then lists comments only, the built-in balloon stays closed, and your balloon is the route to each tracked change. The built-in format and structural change balloons go with it, so your balloon handles every revision kind.
 
