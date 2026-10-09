@@ -7,7 +7,7 @@
 
 import { readTwipsMeasure, type OoxmlPart } from '@docx-editor.dev/core/store';
 import type { SemanticLayout, SemanticPosition } from '@docx-editor.dev/core/layout';
-import { lineSegmentFor, lineSegments } from '../layout/line-segments.ts';
+import { lineSegmentFor, logicalLineSegments } from '../layout/line-segments.ts';
 import { paragraphLinesIndex } from '../layout/paragraph-lines.ts';
 import { MAX_PARAGRAPH_INDENT_TWIPS } from '../layout/paragraph-indent.ts';
 import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
@@ -68,6 +68,8 @@ export interface TabIndent {
 export interface TabIndentReads {
   /** The first offset the paragraph paints. Hidden leading content is not a start. */
   paragraphStart(paragraphId: string): number;
+  /** Whether the paragraph paints no content at all, so its start is also its end. */
+  paintsNothing(paragraphId: string): boolean;
   /**
    * Resolved indent in twips. `start` is the logical leading side, `w:left` or `w:start`,
    * also in a right-to-left paragraph. `firstLine` is signed, negative when hanging.
@@ -103,7 +105,11 @@ export function tabIndentFor(
 ): TabIndent | null {
   const { from, to } = range;
   if (from.paragraphId === to.paragraphId && from.offset === to.offset) return null;
-  const markOnly = touched.length > 1 && to.offset <= reads.paragraphStart(to.paragraphId);
+  // An empty last paragraph is selected whole by a range that reaches it.
+  const markOnly =
+    touched.length > 1 &&
+    !reads.paintsNothing(to.paragraphId) &&
+    to.offset <= reads.paragraphStart(to.paragraphId);
   const paragraphs = markOnly ? touched.slice(0, -1) : touched;
   if (paragraphs.length > 1) return { write: 'stepLeft', paragraphs };
   if (from.offset > reads.paragraphStart(from.paragraphId)) return null;
@@ -116,7 +122,7 @@ export function tabIndentFor(
 }
 
 /**
- * The first offset a paragraph paints, 0 when it paints nothing, or -1 when it has no
+ * The first offset a paragraph paints, `null` when it paints nothing, or -1 when it has no
  * paragraph start of its own.
  *
  * A paragraph can open with content that takes no caret stop: a hidden run, a field
@@ -125,13 +131,14 @@ export function tabIndentFor(
  * another paragraph's text (after a style separator, or a deleted paragraph mark in a
  * resolved view) starts in the middle of that line, so no offset in it is a start.
  */
-export function firstPaintedOffset(layout: SemanticLayout, paragraphId: string): number {
+export function firstPaintedOffset(layout: SemanticLayout, paragraphId: string): number | null {
   let first = Number.POSITIVE_INFINITY;
   let checkedFirstLine = false;
   for (const { line } of paragraphLinesIndex(layout).get(paragraphId) ?? []) {
     if (!checkedFirstLine) {
       checkedFirstLine = true;
-      if (lineSegments(line)[0]?.paragraphId !== paragraphId) return -1;
+      // Logical order: a right-to-left line draws its first paragraph on the right.
+      if (logicalLineSegments(line)[0]?.paragraphId !== paragraphId) return -1;
     }
     const segment = lineSegmentFor(line, paragraphId);
     if (!segment) continue;
@@ -142,14 +149,15 @@ export function firstPaintedOffset(layout: SemanticLayout, paragraphId: string):
     // Later lines hold later offsets; the first line that paints anything decides.
     if (Number.isFinite(first)) break;
   }
-  return Number.isFinite(first) ? first : 0;
+  return Number.isFinite(first) ? first : null;
 }
 
 /** {@link TabIndentReads} over a published layout and the story part that holds the paragraphs. */
 export function layoutTabIndentReads(layout: SemanticLayout, part: OoxmlPart): TabIndentReads {
   return {
+    paintsNothing: (paragraphId) => firstPaintedOffset(layout, paragraphId) === null,
     paragraphStart(paragraphId) {
-      const painted = firstPaintedOffset(layout, paragraphId);
+      const painted = firstPaintedOffset(layout, paragraphId) ?? 0;
       if (painted < 0) return painted;
       // A note paragraph starts after its reference mark, which is not note text.
       const node = findNode(part, paragraphId);

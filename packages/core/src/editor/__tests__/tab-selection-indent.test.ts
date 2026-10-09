@@ -233,6 +233,19 @@ describe('paragraph starts that are not offset 0', () => {
     expect(serializeOoxmlPart(notes)).toContain('w:firstLine="720"');
   });
 
+  test('a right-to-left run-in heading keeps its own start', () => {
+    const rtl = '<w:bidi/>';
+    const surface = mount(
+      `<w:p><w:pPr>${rtl}<w:rPr><w:vanish/><w:specVanish/></w:rPr></w:pPr>` +
+        '<w:r><w:rPr><w:rtl/></w:rPr><w:t>שלום</w:t></w:r></w:p>' +
+        `<w:p><w:pPr>${rtl}</w:pPr><w:r><w:rPr><w:rtl/></w:rPr><w:t xml:space="preserve"> עולם</w:t></w:r></w:p>`
+    );
+    const ids = press(surface, [0, 0], [0, 4]);
+    expect(hasTab(surface)).toBe(false);
+    expect(xml(surface)).toContain('שלום');
+    expect(indentOf(surface, ids[0]!).firstLine).toBe('720');
+  });
+
   test('a paragraph that continues a run-in heading line has no start of its own', () => {
     const surface = mount(
       '<w:p><w:pPr><w:rPr><w:vanish/><w:specVanish/></w:rPr></w:pPr><w:r><w:t>Heading</w:t></w:r></w:p>' +
@@ -251,6 +264,14 @@ describe('selections that reach the next paragraph only at its start', () => {
     expect(indentOf(surface, ids[0]!).left).toBe('720');
     expect(indentOf(surface, ids[1]!).left).toBe('720');
     expect(indentOf(surface, ids[2]!)).toEqual({});
+  });
+
+  test('a selection that ends in an empty last paragraph indents it too', () => {
+    const surface = mount(paragraph('Alpha') + '<w:p/>');
+    const ids = press(surface, [0, 0], [1, 0]);
+    expect(indentOf(surface, ids[0]!).left).toBe('720');
+    expect(indentOf(surface, ids[1]!).left).toBe('720');
+    expect(indentOf(surface, ids[0]!).firstLine).toBeUndefined();
   });
 
   test('Tab over a cell rectangle indents the cells and keeps their text', () => {
@@ -315,6 +336,7 @@ describe('tabIndentFor', () => {
   const at = (paragraphId: string, offset: number) => ({ paragraphId, offset });
   const reads = (start = 0, firstLine = 0, paragraphStart = 0) => ({
     paragraphStart: () => paragraphStart,
+    paintsNothing: () => false,
     indent: () => ({ start, firstLine }),
   });
 
