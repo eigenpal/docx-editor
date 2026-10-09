@@ -5,11 +5,15 @@
 // indents and keeps the text, and Shift+Tab reverses it. Without that rule, selecting a
 // paragraph and pressing Tab deleted it.
 
-import { readTwipsMeasure } from '@docx-editor.dev/core/store';
+import { readTwipsMeasure, type OoxmlPart } from '@docx-editor.dev/core/store';
 import type { SemanticLayout, SemanticPosition } from '@docx-editor.dev/core/layout';
-import { lineSegmentFor } from '../layout/line-segments.ts';
+import { lineSegmentFor, lineSegments } from '../layout/line-segments.ts';
 import { paragraphLinesIndex } from '../layout/paragraph-lines.ts';
 import { MAX_PARAGRAPH_INDENT_TWIPS } from '../layout/paragraph-indent.ts';
+import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
+import { findNode } from '../store/package/ooxml-edit.ts';
+import { paragraphIndentOf, paragraphPropertiesOf, signedFirstLine } from './surface-formatting.ts';
+import { firstEditableNoteOffset } from './surface-note-ops.ts';
 
 /** Word's Increase/Decrease Indent step: one default tab stop. */
 export const INDENT_STEP_TWIPS = 720;
@@ -111,15 +115,23 @@ export function tabIndentFor(
 }
 
 /**
- * The first offset a paragraph paints, or 0 when it paints nothing.
+ * The first offset a paragraph paints, 0 when it paints nothing, or -1 when it has no
+ * paragraph start of its own.
  *
  * A paragraph can open with content that takes no caret stop: a hidden run, a field
  * instruction, or deleted text the current view hides. A selection from the first visible
- * character still starts at the paragraph start.
+ * character still starts at the paragraph start. A paragraph whose first line opens with
+ * another paragraph's text (after a style separator, or a deleted paragraph mark in a
+ * resolved view) starts in the middle of that line, so no offset in it is a start.
  */
 export function firstPaintedOffset(layout: SemanticLayout, paragraphId: string): number {
   let first = Number.POSITIVE_INFINITY;
+  let checkedFirstLine = false;
   for (const { line } of paragraphLinesIndex(layout).get(paragraphId) ?? []) {
+    if (!checkedFirstLine) {
+      checkedFirstLine = true;
+      if (lineSegments(line)[0]?.paragraphId !== paragraphId) return -1;
+    }
     const segment = lineSegmentFor(line, paragraphId);
     if (!segment) continue;
     for (const span of segment.spans) {
@@ -128,4 +140,25 @@ export function firstPaintedOffset(layout: SemanticLayout, paragraphId: string):
     for (const drawing of segment.drawings) first = Math.min(first, drawing.start);
   }
   return Number.isFinite(first) ? first : 0;
+}
+
+/** {@link TabIndentReads} over a published layout and the story part that holds the paragraphs. */
+export function layoutTabIndentReads(layout: SemanticLayout, part: OoxmlPart): TabIndentReads {
+  return {
+    paragraphStart(paragraphId) {
+      const painted = firstPaintedOffset(layout, paragraphId);
+      if (painted < 0) return painted;
+      // A note paragraph starts after its reference mark, which is not note text.
+      const node = findNode(part, paragraphId);
+      return Math.max(painted, node?.kind === 'paragraph' ? firstEditableNoteOffset(node) : 0);
+    },
+    indent(paragraphId) {
+      const entry = paragraphIndentOf(layout, paragraphId);
+      if (!entry) return { start: 0, firstLine: 0 };
+      // Layout sides are physical; the leading side of a right-to-left paragraph is its right.
+      const rtl = paragraphIsRtl(paragraphPropertiesOf(layout, paragraphId));
+      const start = rtl ? entry.indent.right : entry.indent.left;
+      return { start: Math.round(start * 20), firstLine: signedFirstLine(entry.indent) };
+    },
+  };
 }

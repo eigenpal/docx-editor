@@ -23,7 +23,6 @@ import { isTableNested } from '../store/store/tree-op-section-address.ts';
 import type { ListMarkerRecord } from '@docx-editor.dev/core/layout';
 import { markerHolding } from '../layout/line-segments.ts';
 import { defaultTabIntervalFromSettings } from '../layout/paragraph-tabs.ts';
-import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
 import { paragraphTabStopsOf } from './surface-formatting.ts';
 import {
   lineSpacingAttributes,
@@ -33,14 +32,12 @@ import {
 import {
   directParagraphProperties,
   mergedProperties,
-  paragraphIndentOf,
   paragraphPropertiesOf,
-  signedFirstLine,
 } from './surface-formatting.ts';
 import { createListStyleWrites } from './surface-list-style.ts';
 import {
   INDENT_STEP_TWIPS,
-  firstPaintedOffset,
+  layoutTabIndentReads,
   leftIndentTwipsOf,
   nextLeftIndent,
   tabIndentFor,
@@ -701,26 +698,10 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       // A rectangle is a set of cells, not a run of paragraphs, so Tab keeps its own lane.
       const touched = rectangleCells() === null ? targetParagraphs() : null;
       if (touched === null) return false;
-      const layout = currentLayout.value;
       // Tab moves by the document's default tab stop, the grid its tab characters land on.
       const step = Math.round(defaultTabIntervalFromSettings(session.settingsRoot()) * 20);
-      const tab = tabIndentFor(
-        range,
-        touched,
-        {
-          paragraphStart: (paragraphId) => firstPaintedOffset(layout, paragraphId),
-          indent: (paragraphId) => {
-            const entry = paragraphIndentOf(layout, paragraphId);
-            if (!entry) return { start: 0, firstLine: 0 };
-            // Layout sides are physical; the leading side of a right-to-left paragraph is its right.
-            const rtl = paragraphIsRtl(paragraphPropertiesOf(layout, paragraphId));
-            const start = rtl ? entry.indent.right : entry.indent.left;
-            return { start: Math.round(start * 20), firstLine: signedFirstLine(entry.indent) };
-          },
-        },
-        direction,
-        step
-      );
+      const reads = layoutTabIndentReads(currentLayout.value, storyPart());
+      const tab = tabIndentFor(range, touched, reads, direction, step);
       if (tab === null) return false;
       // Handled even when the write is refused or changes nothing: the fallback would type a
       // tab over the selection, and a refused indent must never become a deletion.

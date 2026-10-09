@@ -7,6 +7,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterEach, describe, expect, test } from 'bun:test';
+import { zipSync, strToU8 } from 'fflate';
 import { serializeOoxmlPart } from '@docx-editor.dev/core/store';
 import type { PaginatedSurface } from '../paginated-surface.ts';
 import { createKeyDownHandler } from '../surface-input.ts';
@@ -174,6 +175,68 @@ describe('the document tab grid', () => {
     const ids = press(surface, [0, 0], [0, 7]);
     expect(indentOf(surface, ids[0]!).firstLine).toBe('708');
     expect(xml(surface)).toContain('tracked');
+  });
+});
+
+describe('paragraph starts that are not offset 0', () => {
+  const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+  const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+
+  function withFootnote(note: string): PaginatedSurface {
+    const xmlType = (part: string) =>
+      `application/vnd.openxmlformats-officedocument.wordprocessingml.${part}+xml`;
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+          `<Override PartName="/word/document.xml" ContentType="${xmlType('document.main')}"/>` +
+          `<Override PartName="/word/footnotes.xml" ContentType="${xmlType('footnotes')}"/></Types>`
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
+      ),
+      'word/footnotes.xml': strToU8(
+        `<w:footnotes xmlns:w="${W}"><w:footnote w:id="1">${note}</w:footnote></w:footnotes>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>Alpha</w:t></w:r>` +
+          '<w:r><w:footnoteReference w:id="1"/></w:r></w:p><w:sectPr/></w:body></w:document>'
+      ),
+    });
+    const opened = mountPaginatedSurface(document.createElement('div'), bytes, { scale: 1 });
+    if (!opened.ok) throw new Error(opened.reason);
+    mounted.push(opened.surface);
+    return opened.surface;
+  }
+
+  test('the note text after the reference mark counts as the start of a note paragraph', () => {
+    const surface = withFootnote(
+      '<w:p><w:r><w:footnoteRef/></w:r><w:r><w:t xml:space="preserve">Note text</w:t></w:r></w:p>'
+    );
+    expect(surface.enterNote('footnote:1')).toBe(true);
+    const [id] = surface.session.paragraphIdsIn({ kind: 'notesPart', noteKind: 'footnote' });
+    surface.setSelection({
+      anchor: { paragraphId: id!, offset: 1 },
+      head: { paragraphId: id!, offset: 10 },
+    });
+    expect(surface.indentWithTab('increase')).toBe(true);
+    const notes = surface.session.partFor({ kind: 'notesPart', noteKind: 'footnote' })!;
+    expect(serializeOoxmlPart(notes)).toContain('Note text');
+    expect(serializeOoxmlPart(notes)).toContain('w:firstLine="720"');
+  });
+
+  test('a paragraph that continues a run-in heading line has no start of its own', () => {
+    const surface = mount(
+      '<w:p><w:pPr><w:rPr><w:vanish/><w:specVanish/></w:rPr></w:pPr><w:r><w:t>Heading</w:t></w:r></w:p>' +
+        paragraph('Body text')
+    );
+    const ids = press(surface, [1, 0], [1, 9]);
+    expect(hasTab(surface)).toBe(true);
+    expect(indentOf(surface, ids[1]!)).toEqual({});
   });
 });
 
