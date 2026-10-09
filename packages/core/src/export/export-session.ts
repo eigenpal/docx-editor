@@ -606,6 +606,7 @@ export function openDocumentForExport(
             ? withPlainResolvedMarkup(revisionAuthorFilter)
             : revisionAuthorFilter,
         showFieldCodes: false,
+        bodyBlockLimit: undefined,
       } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);
       if (!layoutHasPendingImages(layout)) {
         const restartedBeforePublish = restartOnRevisionDrift();

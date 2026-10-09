@@ -51,6 +51,8 @@ import {
   writeRejectionReason,
 } from './command-protection.ts';
 import { registerSurfaceMeasurement } from './surface-measurement.ts';
+import { registerProgressiveOpen } from './surface-progressive-open.ts';
+import { bodyBlockCountOf } from '../layout/body-block-limit.ts';
 import {
   createContentControlWidgetSessions,
   contentControlValueOps,
@@ -341,6 +343,11 @@ type ScaleMutableSurface = PaginatedSurface & {
   ): TreeApplyResult;
 };
 
+/** Body blocks a sliced opening lays out at mount, before its first yield. */
+const PROGRESSIVE_OPEN_FIRST_BLOCKS = 64;
+/** The work a sliced opening aims to do per slice, in milliseconds. */
+const PROGRESSIVE_OPEN_SLICE_MS = 40;
+
 /**
  * Mount a paginated surface over DOCX bytes.
  *
@@ -370,6 +377,8 @@ export function mountPaginatedSurface(
      * document does not parse and lay out in one blocking task. Used once.
      */
     readonly openedSession?: OpenTreeSessionResult;
+    /** Lay the body out in slices after mount; see `surface-progressive-open.ts`. */
+    readonly progressiveOpen?: boolean;
   };
   const opened =
     runtimeOptions.openedSession ??
@@ -1036,6 +1045,10 @@ export function mountPaginatedSurface(
     },
   };
 
+  /** The body block limit of an opening still in slices; null once a full layout ran. */
+  let openingBlockLimit: number | null = runtimeOptions.progressiveOpen
+    ? PROGRESSIVE_OPEN_FIRST_BLOCKS
+    : null;
   let currentLayout = layoutOnce();
   // Declared before the first paint can run — `render` reads it.
   let revisionStyles = options.revisionStyles;
@@ -1303,12 +1316,15 @@ export function mountPaginatedSurface(
   function layoutDocument(
     revision: number,
     scope?: LayoutScope,
-    context?: LayoutDocumentContext
+    context?: LayoutDocumentContext,
+    bodyBlockLimit?: number
   ): SemanticLayout {
     const activeAuthorFilter = context ? context.authorFilter : revisionFilter();
     const activeLayoutSession = context?.layoutSession ?? layoutSession;
     const activeFurnitureSource = context?.furnitureSource ?? furnitureSource;
     if (scope) attachListResolveChangeEvidence(activeLayoutSession, scope);
+    // Any full layout of the live session completes an opening still in slices.
+    if (!context && bodyBlockLimit === undefined) openingBlockLimit = null;
     drawingBundle.sync(session);
     return layoutDocumentView({
       view: session,
@@ -1339,6 +1355,7 @@ export function mountPaginatedSurface(
       displayMode: revisionDisplayMode(),
       showFieldCodes: context ? false : showFieldCodes,
       revisionAuthorFilter: activeAuthorFilter,
+      bodyBlockLimit,
     } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);
   }
 
@@ -1352,7 +1369,12 @@ export function mountPaginatedSurface(
 
   function layoutOnce(): SemanticLayout {
     const began = now();
-    const layout = layoutDocument(session.packageRevision());
+    const layout = layoutDocument(
+      session.packageRevision(),
+      undefined,
+      undefined,
+      openingBlockLimit ?? undefined
+    );
     lastLayoutMs = now() - began;
     return layout;
   }
@@ -6301,5 +6323,31 @@ export function mountPaginatedSurface(
     }
   );
   registerRefreshComposition(surface, () => selectionSync.isComposing());
+  let openingGrowth = PROGRESSIVE_OPEN_FIRST_BLOCKS;
+  if (openingBlockLimit !== null)
+    registerProgressiveOpen(surface, (budgetMs) => {
+      const deadline = now() + budgetMs;
+      while (openingBlockLimit !== null && !destroyed) {
+        const total = bodyBlockCountOf(layoutSession);
+        if (total !== undefined && openingBlockLimit >= total) {
+          // Nothing left to cut: the normal full layout, resumed from the last slice.
+          scheduler.invalidateAll(session.packageRevision(), 'opening');
+          scheduler.flush();
+          openingBlockLimit = null;
+          return true;
+        }
+        const began = now();
+        openingBlockLimit += openingGrowth;
+        layoutDocument(session.packageRevision(), undefined, undefined, openingBlockLimit);
+        // Size the next slice from this one's cost per block.
+        const msPerBlock = Math.max(now() - began, 1) / openingGrowth;
+        openingGrowth = Math.min(
+          4096,
+          Math.max(16, Math.round(PROGRESSIVE_OPEN_SLICE_MS / msPerBlock))
+        );
+        if (now() >= deadline) return false;
+      }
+      return true;
+    });
   return { ok: true, surface };
 }

@@ -210,4 +210,10 @@ export interface SemanticLayoutOptions {
    * cached rows do not stack under the empty placeholder.
    */
   readonly emptyTocSuppressedResultParagraphIds?: ReadonlySet<string>;
+  /**
+   * Lay out only the first `bodyBlockLimit` body blocks. A large open lays out a growing
+   * prefix in separate tasks, each pass resuming from the last, so the page stays
+   * responsive; the final pass has no limit. @internal
+   */
+  readonly bodyBlockLimit?: number;
 }

@@ -88,8 +88,44 @@ export interface OpenSchedulerHooks {
    * never longer than {@link PREPARED_WORK_WAIT_MS}.
    */
   readonly prepare?: (bytes: Uint8Array) => void | Promise<unknown>;
-  /** Called once when a mount is scheduled — the facade bumps and emits here. */
+  /**
+   * Called when a mount is scheduled, and again when a sliced open finishes — the facade
+   * bumps and emits here, because `isOpening` moved.
+   */
   readonly scheduled: () => void;
+  /**
+   * Optional slices after `mount`: advance the opening layout for a short while and answer
+   * whether it is complete. Each runs in its own task, and the open stays scheduled
+   * (`isOpening`) until one answers true. `flush` runs the rest at once.
+   */
+  readonly continueOpen?: (budgetMs: number) => boolean;
+}
+
+/** One scheduled open: its bytes, whether `mount` already ran, and how to stop it. */
+interface ScheduledOpen {
+  readonly bytes: Uint8Array;
+  mounted(): boolean;
+  cancel(): void;
+}
+
+/** The work one opening slice aims to do, in milliseconds. */
+const OPEN_SLICE_MS = 40;
+
+/**
+ * Queue `run` as a new task. A message port, not a timer: nested timers are clamped to 4 ms
+ * each, which a few hundred slices would turn into idle seconds.
+ */
+function queueTask(run: () => void): void {
+  if (typeof MessageChannel !== 'function') {
+    setTimeout(run, 0);
+    return;
+  }
+  const channel = new MessageChannel();
+  channel.port1.onmessage = () => {
+    channel.port1.close();
+    run();
+  };
+  channel.port2.postMessage(null);
 }
 
 /** The deferred-mount window, owned by the facade. See the module comment. */
@@ -111,7 +147,7 @@ export interface OpenScheduler {
 }
 
 export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
-  let scheduled: { readonly bytes: Uint8Array; cancel(): void } | null = null;
+  let scheduled: ScheduledOpen | null = null;
 
   const cancel = (): Uint8Array | null => {
     if (!scheduled) return null;
@@ -141,6 +177,7 @@ export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
       let fallback: ReturnType<typeof setTimeout> | null = null;
       let prepared = hooks.prepare === undefined;
       let cancelled = false;
+      let mounted = false;
       const run = () => {
         if (cancelled) return;
         if (!prepared) {
@@ -167,8 +204,19 @@ export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
           work.then(proceed, proceed);
           return;
         }
-        scheduled = null;
+        mounted = true;
         hooks.mount(bytes);
+        const slice = () => {
+          if (cancelled || scheduled !== entry) return;
+          if (hooks.continueOpen && !hooks.continueOpen(OPEN_SLICE_MS)) {
+            queueTask(slice);
+            return;
+          }
+          scheduled = null;
+          if (hooks.continueOpen) hooks.scheduled();
+        };
+        if (hooks.continueOpen) queueTask(slice);
+        else scheduled = null;
       };
       const raf = requestAnimationFrame(() => {
         if (fallback !== null) clearTimeout(fallback);
@@ -179,8 +227,9 @@ export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
         cancelAnimationFrame(raf);
         run();
       }, 250);
-      scheduled = {
+      const entry: ScheduledOpen = {
         bytes,
+        mounted: () => mounted,
         cancel: () => {
           cancelled = true;
           cancelAnimationFrame(raf);
@@ -188,14 +237,20 @@ export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
           if (fallback !== null) clearTimeout(fallback);
         },
       };
+      scheduled = entry;
       hooks.scheduled();
     },
 
     cancel,
 
     flush() {
-      const bytes = cancel();
-      if (bytes) hooks.mount(bytes);
+      const entry = scheduled;
+      if (!entry) return;
+      const alreadyMounted = entry.mounted();
+      cancel();
+      if (!alreadyMounted) hooks.mount(entry.bytes);
+      if (hooks.continueOpen) while (!hooks.continueOpen(Number.POSITIVE_INFINITY));
+      if (alreadyMounted) hooks.scheduled();
     },
 
     isScheduled: () => scheduled !== null,
