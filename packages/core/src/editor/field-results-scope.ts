@@ -10,7 +10,6 @@
 // In the `atomic` mode (the default) every helper here returns its input unchanged, so an editor
 // that does not ask for editable results runs exactly the code it ran before.
 
-import type { TreeDocxSession } from '../binding/tree-session.ts';
 import {
   withFieldResultsMode,
   withWholeFieldDeletion,
@@ -142,16 +141,25 @@ export function createFieldResultsScope(mode: FieldResultsMode): FieldResultsSco
 }
 
 /** A session whose methods, and the change callbacks it is given, run inside the mode. */
-export function scopeSession(session: TreeDocxSession, scope: FieldResultsScope): TreeDocxSession {
+/** The session members this module wraps, named structurally. */
+interface ScopedSessionMembers {
+  subscribe(onChange: (...args: never[]) => unknown): unknown;
+  applyTreeOps(...args: never[]): unknown;
+  applyTreeOpsAtomic(...args: never[]): unknown;
+}
+
+export function scopeSession<T extends object>(session: T, scope: FieldResultsScope): T {
   if (scope.mode === 'atomic') return session;
-  const subscribe = session.subscribe.bind(session);
+  const members = session as unknown as ScopedSessionMembers;
+  const subscribe = members.subscribe.bind(members);
+  const applyTreeOps = members.applyTreeOps.bind(members);
+  const applyTreeOpsAtomic = members.applyTreeOpsAtomic.bind(members);
   // The store notifies subscribers in the default mode; this editor's own subscribers read the
   // tree they just changed, in its mode.
-  (session as { subscribe: TreeDocxSession['subscribe'] }).subscribe = (onChange) =>
-    subscribe(scope.wrap(onChange));
+  members.subscribe = (onChange) => subscribe(scope.wrap(onChange));
   // Every write path: a selected whole field is removed with its markers, not emptied.
-  session.applyTreeOps = scope.edits(session.applyTreeOps.bind(session));
-  session.applyTreeOpsAtomic = scope.edits(session.applyTreeOpsAtomic.bind(session));
+  members.applyTreeOps = scope.edits(applyTreeOps);
+  members.applyTreeOpsAtomic = scope.edits(applyTreeOpsAtomic);
   return scope.methods(session);
 }
 
