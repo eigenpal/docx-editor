@@ -72,15 +72,27 @@ For saved rooms and offline work, follow the [collaboration upgrade guide](https
 
 ### Migrate saved rooms
 
-The server does not migrate rooms by itself. Two scripts move every saved room to the current collaboration format. Each script reads and writes `server/.data/`. Adapt them to your storage.
+The server does not migrate rooms by itself. Two scripts move every saved room to the current collaboration format with the public migration API, `collaborationMigrationNeed` and `migrateCollaborationRoom`. `server/room-migration.ts` holds what depends on storage: where rooms and exports are, the backup, the atomic write, and one result for each room. Replace it with your own storage.
 
 1. Stop the server, so no participant edits a room during the migration.
-1. With the build that created the rooms, run `node server/export-rooms.ts`. It writes `<room>.migration.docx` beside each room. It uses only `readCollaborationDocument`, so it runs with an earlier build unchanged.
-1. With the new build, run `node server/migrate-rooms.ts --dry-run`. For each room, it seeds a new room from the export and checks that the new room holds the same paragraphs with the same text. It prints one line for each room and writes nothing.
-1. If every room passes, run `node server/migrate-rooms.ts`. It keeps each old state as `<room>.ydoc.previous` and writes the new state in its place. Rooms already in the current format stay as they are.
+1. With the build that created the rooms, run `node server/export-rooms.ts`. It writes `<room>.migration.docx` beside each room, with `<room>.migration.sha256`, the digest of the state it exported. It uses only `readCollaborationDocument`, so it runs with an earlier build unchanged.
+1. With the new build, run `node server/migrate-rooms.ts --dry-run --report report.json`. For each room, it seeds a new room from the export and checks that the new room holds the same paragraphs with the same text, the same media, and the same link targets. It prints one line for each room, writes the results to `report.json`, and changes nothing.
+1. If every room passes, run `node server/migrate-rooms.ts`. It keeps each earlier state as `<room>.ydoc.previous` and writes the new state in its place. Rooms already in the current format stay as they are, so a second run after an interruption migrates only the rest.
 1. Start the server with the new build.
 
-A room that fails the check is not changed, and the script exits with status 1. A line that reports paragraphs as not editable names text the new room keeps but the editor cannot show; check those rooms before you resume editing. Keep the backups until you accept the migration. Collaboration undo history starts afresh in a migrated room.
+Each room ends in one of these outcomes:
+
+| Outcome | Meaning |
+| --- | --- |
+| `current` | The room is already in the current format. |
+| `migrated`, `would-migrate` | The new room passed the check. A dry run reports `would-migrate`. |
+| `failed-check` | The new room differs from the export. The room is not changed. |
+| `no-export` | The room has no export. Run `export-rooms.ts` with the earlier build. |
+| `stale-export` | The room changed after its export. Export it again, so no edit is lost. |
+| `later-format` | A later build wrote the room. This build does not open or replace it. |
+| `error` | The room or its export could not be read. |
+
+The script exits with status 1 unless every room is `current`, `migrated`, or `would-migrate`. A report that counts paragraphs as not editable names text that the new room keeps but the editor cannot show; check those rooms before you resume editing. Keep the backups until you accept the migration. Collaboration undo history starts afresh in a migrated room.
 
 ### Check admission and recovery
 

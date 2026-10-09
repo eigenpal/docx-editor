@@ -2,45 +2,43 @@
 // migration. Run `export-rooms.ts` with the build that created the rooms first, then this
 // with the new build, while the server is stopped.
 //
-//   node server/migrate-rooms.ts            migrate, and keep each old state as a backup
-//   node server/migrate-rooms.ts --dry-run  check every room, and write nothing
+//   node server/migrate-rooms.ts                       migrate, keeping each earlier state
+//   node server/migrate-rooms.ts --dry-run             check every room and write nothing
+//   node server/migrate-rooms.ts --report report.json  also write the results as JSON
 //
-// For each room, the new state is seeded from the room's export and checked against it: the
-// same paragraphs, with the same text. Only then is the old state kept as
-// `<room>.ydoc.previous` and replaced. A room in the current format is left as it is.
+// Each room is seeded from its export and checked against it: the same paragraphs with the
+// same text, the same media, and the same link targets. Only then is its earlier state kept
+// as `<room>.ydoc.previous` and replaced. A room already in the current format is left as it
+// is, so a second run resumes. The exit status is 1 when any room is not servable after the
+// run.
 
-import { copyFile, readdir, readFile } from 'node:fs/promises';
-import path from 'node:path';
-import { DATA_DIR, ROOM_ID, writeAtomically } from './room-files.ts';
-import { isCurrentFormat, migrateRoom } from './room-migration.ts';
+import { writeFile } from 'node:fs/promises';
+import { DATA_DIR } from './room-files.ts';
+import { allRoomsServable, migrateStoredRooms } from './room-migration.ts';
 
 const dryRun = process.argv.includes('--dry-run');
-let failed = 0;
-for (const name of (await readdir(DATA_DIR)).sort()) {
-  const room = name.endsWith('.ydoc') ? name.slice(0, -'.ydoc'.length) : null;
-  if (!room || !ROOM_ID.test(room)) continue;
-  const stateFile = path.join(DATA_DIR, name);
-  try {
-    if (isCurrentFormat(new Uint8Array(await readFile(stateFile)))) {
-      console.log(`${room}: already current`);
-      continue;
-    }
-    const exported = await readFile(path.join(DATA_DIR, `${room}.migration.docx`)).catch(() => {
-      throw new Error('no export: run export-rooms.ts with the build that created the room');
-    });
-    const migrated = await migrateRoom(new Uint8Array(exported), room);
-    const hidden =
-      migrated.hidden > 0 ? `, ${migrated.hidden} kept but not editable in the editor` : '';
-    if (!dryRun) {
-      await copyFile(stateFile, `${stateFile}.previous`);
-      await writeAtomically(stateFile, migrated.state);
-    }
-    console.log(
-      `${room}: ${dryRun ? 'would migrate' : 'migrated'}, ${migrated.paragraphs} paragraphs${hidden}`
-    );
-  } catch (error) {
-    failed += 1;
-    console.error(`${room}: not migrated: ${(error as Error).message}`);
+const reportAt = process.argv.indexOf('--report');
+const reportFile = reportAt >= 0 ? process.argv[reportAt + 1] : undefined;
+
+const results = await migrateStoredRooms(DATA_DIR, { dryRun });
+for (const result of results) {
+  if ('report' in result) {
+    const { paragraphs, hidden, differences, missingMedia, missingLinks } = result.report;
+    const notes = [
+      `${paragraphs} paragraphs`,
+      ...(hidden > 0 ? [`${hidden} kept but not editable in the editor`] : []),
+      ...(missingMedia.length > 0 ? [`${missingMedia.length} media parts missing`] : []),
+      ...(missingLinks.length > 0 ? [`${missingLinks.length} link targets missing`] : []),
+      ...(differences.length > 0
+        ? [`${differences.length} differ, first at ${differences[0]!.paragraph}`]
+        : []),
+    ];
+    console.log(`${result.room}: ${result.outcome}, ${notes.join(', ')}`);
+  } else if ('detail' in result) {
+    console.error(`${result.room}: ${result.outcome}: ${result.detail}`);
+  } else {
+    console.log(`${result.room}: ${result.outcome}`);
   }
 }
-process.exitCode = failed > 0 ? 1 : 0;
+if (reportFile) await writeFile(reportFile, `${JSON.stringify(results, null, 2)}\n`);
+process.exitCode = allRoomsServable(results) ? 0 : 1;

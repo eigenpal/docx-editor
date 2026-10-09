@@ -37,6 +37,15 @@ export {
   type CompactCollaborationStateOptions,
 } from './room-generation.ts';
 export {
+  collaborationMigrationNeed,
+  migrateCollaborationRoom,
+  type CollaborationMigration,
+  type CollaborationMigrationNeed,
+  type CollaborationMigrationParagraph,
+  type CollaborationMigrationReport,
+  type MigrateCollaborationRoomOptions,
+} from './room-migration.ts';
+export {
   readCollaborationResourceUsage,
   type CollaborationResourceUsage,
 } from './resource-usage.ts';

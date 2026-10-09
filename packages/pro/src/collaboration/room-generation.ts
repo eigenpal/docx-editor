@@ -128,7 +128,7 @@ export async function compactCollaborationState(
 }
 
 /** A fresh room state that holds `bytes`, with a new generation ID. */
-async function seedGeneration(bytes: Uint8Array, documentId: string): Promise<Uint8Array> {
+export async function seedGeneration(bytes: Uint8Array, documentId: string): Promise<Uint8Array> {
   const fresh = new Y.Doc();
   const stopKeepingMarkers = keepFormattingMarkers(fresh);
   const registry = new DocumentRegistry(fresh);

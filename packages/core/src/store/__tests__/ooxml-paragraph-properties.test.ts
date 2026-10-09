@@ -1,6 +1,6 @@
-// A paragraph that holds more than one `w:pPr`, or one that is not first, stays a paragraph:
-// its first leading `w:pPr` is typed, every other one is kept generic where it stands, and a
-// save writes them all back.
+// A paragraph that starts with a `w:pPr` and holds more stays a paragraph: the leading
+// `w:pPr` is typed, every later one is kept generic where it stands, and a save writes them
+// all back. A paragraph whose properties are not first stays generic, as before.
 import { describe, expect, test } from 'bun:test';
 import {
   readOoxmlPart,
@@ -67,11 +67,16 @@ describe('paragraphs with more than one w:pPr', () => {
     expect(kinds(extra).every((entry) => entry.endsWith(':generic'))).toBe(true);
   });
 
-  test('a w:pPr after the runs is generic and the paragraph stays one', () => {
-    const part = parse('<w:p><w:r><w:t>Late</w:t></w:r><w:pPr><w:jc w:val="right"/></w:pPr></w:p>');
-    const [paragraph] = paragraphs(part);
-    expect(paragraph!.kind).toBe('paragraph');
-    expect(paragraph!.children.map((child) => child.kind)).toEqual(['run', 'generic']);
+  test('a paragraph whose only w:pPr is not first stays generic, with its properties kept', () => {
+    // Typed, it would show without its alignment and its section break.
+    for (const body of [
+      '<w:p><w:r><w:t>Late</w:t></w:r><w:pPr><w:jc w:val="right"/></w:pPr></w:p>',
+      '<w:p><w:bookmarkStart w:id="1" w:name="b"/><w:pPr><w:jc w:val="center"/><w:sectPr/></w:pPr>' +
+        '<w:r><w:t>Marked</w:t></w:r></w:p>',
+    ]) {
+      const [paragraph] = paragraphs(parse(body));
+      expect(paragraph!.kind).toBe('generic');
+    }
   });
 
   test('a save writes every w:pPr back where it stood', () => {

@@ -1,94 +1,115 @@
-// Moving a saved room to the current collaboration format.
+// Migrate every room the demo server stores, with the public migration API.
 //
-// A room of an earlier format cannot be read by this build: its paragraphs are stored
-// differently. So a room moves in two steps. First the build that created it exports the
-// room as a `.docx` (`export-rooms.ts`). Then this build seeds a new room from that export,
-// checks that the new room holds the same text, and only then replaces the old state
-// (`migrate-rooms.ts`). The old state stays as a backup.
+// `@docx-editor.dev/pro/collaboration` decides whether a room needs a migration
+// (`collaborationMigrationNeed`) and seeds and checks the new room (`migrateCollaborationRoom`).
+// This file adds what depends on storage: where rooms and their exports are, the backup, the
+// atomic write, and one result for each room. Replace it with your own storage.
 
-import * as Y from 'yjs';
-import { Awareness } from 'y-protocols/awareness';
+import { readdir, readFile } from 'node:fs/promises';
+import path from 'node:path';
 import {
-  COLLABORATION_FORMAT_VERSION,
-  createDocumentCollaboration,
-  readCollaborationDocument,
-  readCollaborationFormatVersion,
+  collaborationMigrationNeed,
+  migrateCollaborationRoom,
+  type CollaborationMigrationReport,
 } from '@docx-editor.dev/pro/collaboration';
-import { readOoxmlPackage, type OoxmlNode } from '@docx-editor.dev/core/store';
+import { ROOM_ID, stateDigest, writeAtomically } from './room-files.ts';
 
-/** Whether saved room state is already in the format this build writes. */
-export function isCurrentFormat(state: Uint8Array): boolean {
-  const room = new Y.Doc();
-  try {
-    Y.applyUpdate(room, state);
-    return readCollaborationFormatVersion(room) === COLLABORATION_FORMAT_VERSION;
-  } finally {
-    room.destroy();
-  }
-}
-
-/** A paragraph of a `.docx`: its text, and whether the editor shows it as a paragraph. */
-export interface ParagraphText {
-  readonly text: string;
-  readonly shown: boolean;
-}
-
-/** Every paragraph of a `.docx`, in document order, with tables and notes. */
-export function paragraphTexts(docx: Uint8Array): ParagraphText[] {
-  const read = readOoxmlPackage(docx);
-  if (!read.ok) throw new Error(`the export cannot be read: ${read.reason}`);
-  const texts: ParagraphText[] = [];
-  const textOf = (node: OoxmlNode): string =>
-    node.kind === 'textValue' ? node.value : node.children.map(textOf).join('');
-  const visit = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue') return;
-    if (node.localName === 'p') {
-      // Each paragraph counts, shown or not: one the editor cannot show is still text a
-      // person wrote.
-      texts.push({ text: textOf(node), shown: node.kind === 'paragraph' });
-      return;
+/** What happened to one room. */
+export type RoomMigrationResult =
+  | { readonly room: string; readonly outcome: 'current' }
+  | {
+      readonly room: string;
+      readonly outcome: 'migrated' | 'would-migrate' | 'failed-check';
+      readonly report: CollaborationMigrationReport;
     }
-    for (const child of node.children) visit(child);
-  };
-  for (const part of read.package.parts.values()) visit(part.root);
-  return texts;
+  | {
+      readonly room: string;
+      readonly outcome: 'no-export' | 'stale-export' | 'later-format' | 'error';
+      readonly detail: string;
+    };
+
+/** The export the earlier build wrote for a room, beside its state. */
+export function exportFileOf(directory: string, room: string): string {
+  return path.join(directory, `${room}.migration.docx`);
 }
 
-/** Room state in the current format, seeded from an export, and checked against it. */
-export async function migrateRoom(
-  exported: Uint8Array,
-  documentId: string
-): Promise<{
-  readonly state: Uint8Array;
-  readonly paragraphs: number;
-  /** Paragraphs the new room keeps but the editor cannot show or edit. */
-  readonly hidden: number;
-}> {
-  const room = new Y.Doc();
-  const awareness = new Awareness(room);
-  try {
-    const handle = await createDocumentCollaboration({
-      ydoc: room,
-      awareness,
-      documentId,
-      identity: { actorId: 'room-migration', name: 'Room migration' },
-      bootstrap: { kind: 'create', document: exported },
-    });
-    handle.destroy();
-    const state = Y.encodeStateAsUpdate(room);
-    // The new room must hold every paragraph the export holds, with the same text. A
-    // paragraph the seed could not show would otherwise leave the room without a trace.
-    const before = paragraphTexts(exported);
-    const after = paragraphTexts(readCollaborationDocument(room));
-    if (before.length !== after.length) {
-      throw new Error(`the export has ${before.length} paragraphs, the new room ${after.length}`);
+/** The digest of the state an export was written from. */
+export function exportDigestFileOf(directory: string, room: string): string {
+  return path.join(directory, `${room}.migration.sha256`);
+}
+
+/**
+ * Migrate every room in `directory`. A room already in the current format is left as it is,
+ * so running again after an interruption migrates only the rest. A room is replaced only after
+ * its new state passed the check, and its earlier state is kept as `<room>.ydoc.previous`.
+ */
+export async function migrateStoredRooms(
+  directory: string,
+  options: { readonly dryRun?: boolean } = {}
+): Promise<RoomMigrationResult[]> {
+  const results: RoomMigrationResult[] = [];
+  for (const name of (await readdir(directory)).sort()) {
+    const room = name.endsWith('.ydoc') ? name.slice(0, -'.ydoc'.length) : null;
+    if (!room || !ROOM_ID.test(room)) continue;
+    const stateFile = path.join(directory, name);
+    try {
+      const state = new Uint8Array(await readFile(stateFile));
+      const need = collaborationMigrationNeed(state);
+      if (need === 'current') {
+        results.push({ room, outcome: 'current' });
+        continue;
+      }
+      if (need === 'later-format') {
+        results.push({ room, outcome: 'later-format', detail: 'a later build wrote this room' });
+        continue;
+      }
+      const exported = await readFile(exportFileOf(directory, room)).catch(() => null);
+      const digest = await readFile(exportDigestFileOf(directory, room), 'utf8').catch(() => null);
+      if (!exported || digest === null) {
+        results.push({
+          room,
+          outcome: 'no-export',
+          detail: 'export the room with the build that created it',
+        });
+        continue;
+      }
+      // The export must be of this exact state: one written before later edits would lose them.
+      if (digest.trim() !== stateDigest(state)) {
+        results.push({
+          room,
+          outcome: 'stale-export',
+          detail: 'the room changed after its export; export it again',
+        });
+        continue;
+      }
+      const migrated = await migrateCollaborationRoom(new Uint8Array(exported), {
+        documentId: room,
+      });
+      if (!migrated.ok) {
+        results.push({ room, outcome: 'failed-check', report: migrated.report });
+        continue;
+      }
+      if (options.dryRun) {
+        results.push({ room, outcome: 'would-migrate', report: migrated.report });
+        continue;
+      }
+      // The backup is the exact state the digest checked, on disk before the replacement.
+      await writeAtomically(`${stateFile}.previous`, state);
+      await writeAtomically(stateFile, migrated.state);
+      results.push({ room, outcome: 'migrated', report: migrated.report });
+    } catch (error) {
+      results.push({ room, outcome: 'error', detail: (error as Error).message });
     }
-    const changed = before.findIndex((paragraph, index) => paragraph.text !== after[index]!.text);
-    if (changed >= 0) throw new Error(`paragraph ${changed + 1} differs in the new room`);
-    const hidden = after.filter((paragraph) => !paragraph.shown).length;
-    return { state, paragraphs: before.length, hidden };
-  } finally {
-    awareness.destroy();
-    room.destroy();
   }
+  return results;
+}
+
+/** Whether every room ended in a state the server can serve. */
+export function allRoomsServable(results: readonly RoomMigrationResult[]): boolean {
+  return results.every(
+    (result) =>
+      result.outcome === 'current' ||
+      result.outcome === 'migrated' ||
+      result.outcome === 'would-migrate'
+  );
 }

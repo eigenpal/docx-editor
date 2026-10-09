@@ -50,6 +50,42 @@ export interface CollaborationIdentityUpdate {
 }
 
 // @public
+export type CollaborationMigration = {
+    readonly ok: true;
+    readonly report: CollaborationMigrationReport;
+    readonly state: Uint8Array;
+} | {
+    readonly ok: false;
+    readonly report: CollaborationMigrationReport;
+};
+
+// @public
+export type CollaborationMigrationNeed = 'current' | 'earlier-format' | 'later-format';
+
+// @public
+export function collaborationMigrationNeed(state: Uint8Array): CollaborationMigrationNeed;
+
+// @public
+export interface CollaborationMigrationParagraph {
+    readonly shown: boolean;
+    readonly text: string;
+}
+
+// @public
+export interface CollaborationMigrationReport {
+    readonly differences: readonly {
+        readonly actual: string | null;
+        readonly expected: string | null;
+        readonly paragraph: number;
+    }[];
+    readonly hidden: number;
+    readonly missingLinks: readonly string[];
+    readonly missingMedia: readonly string[];
+    readonly ok: boolean;
+    readonly paragraphs: number;
+}
+
+// @public
 export function collaborationModule(options: CollaborationModuleOptions): EditorModule;
 
 // @public
@@ -148,6 +184,14 @@ export interface DocumentCollaborationVersions {
     readonly protocolVersion: number;
     readonly repairVersion: number;
     readonly sharedSchemaVersion: number;
+}
+
+// @public
+export function migrateCollaborationRoom(exported: Uint8Array, options: MigrateCollaborationRoomOptions): Promise<CollaborationMigration>;
+
+// @public
+export interface MigrateCollaborationRoomOptions {
+    readonly documentId: string;
 }
 
 // @public
