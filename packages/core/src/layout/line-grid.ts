@@ -66,8 +66,10 @@ export function withLineGrid(
  * A snapped `auto` line box: the natural box rounded up to whole pitches with the glyphs
  * centred. The multiple scales the snapped box and adds the extra BELOW, as without a grid; a
  * multiple under one keeps the single pitch, because the grid line is the smallest line a
- * snapping paragraph can have. `trailing` is that multiple's extra, which pagination may let
- * hang past the bottom margin; the centring space is part of the line.
+ * snapping paragraph can have. `trailing` is all of the box below the glyphs: the lower half
+ * of the centring space plus the multiple's extra. Pagination lets that depth hang past the
+ * bottom margin, so a line fits when its glyphs fit, and the line still advances by its whole
+ * box.
  */
 export function gridLineBox(
   spacing: ParagraphLineSpacing & { readonly gridPitch: number },
@@ -80,5 +82,5 @@ export function gridLineBox(
   const baseline = naturalBaseline + (snapped - naturalHeight) / 2;
   const multiple = Math.max(1, spacing.value / 240);
   const height = snapped * multiple;
-  return { height, baseline, trailing: height - snapped };
+  return { height, baseline, trailing: height - snapped + (snapped - naturalHeight) / 2 };
 }

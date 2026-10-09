@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A line in a section with a document line grid moves to the next page when the space below its text crosses the bottom margin.",
+  "after": "The space below the text in a grid line can cross the bottom margin, so the line stays on its page when its text fits.",
+  "reason": "Only pagination geometry changes. Document nodes, text offsets, operations, snapshots, and transport messages stay the same.",
+  "tests": [
+    "packages/core/src/layout/__tests__/grid-line-page-fit.test.ts",
+    "packages/core/src/layout/__tests__/line-grid.test.ts"
+  ],
+  "changeset": "grid-line-page-fit",
+  "migration": null
+}

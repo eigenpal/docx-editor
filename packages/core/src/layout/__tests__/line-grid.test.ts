@@ -105,11 +105,12 @@ describe('line box under an active line grid', () => {
   const single: ParagraphLineSpacing = { rule: 'auto', value: 240, gridPitch: 18 };
 
   test('a line takes one pitch with its glyphs centred', () => {
-    expect(applyLineSpacing(single, 14, 11.2)).toEqual({ height: 18, baseline: 13.2, trailing: 0 });
+    // The lower half of the centring space is the depth below the glyphs.
+    expect(applyLineSpacing(single, 14, 11.2)).toEqual({ height: 18, baseline: 13.2, trailing: 2 });
   });
 
   test('tall text takes whole pitches and stays centred', () => {
-    expect(applyLineSpacing(single, 20, 16)).toEqual({ height: 36, baseline: 24, trailing: 0 });
+    expect(applyLineSpacing(single, 20, 16)).toEqual({ height: 36, baseline: 24, trailing: 8 });
     // A box that exactly fills its pitch does not take a second one.
     expect(applyLineSpacing(single, 18 + 1e-9, 14).height).toBe(18);
   });
@@ -118,7 +119,7 @@ describe('line box under an active line grid', () => {
     expect(applyLineSpacing({ ...single, value: 360 }, 14, 11.2)).toEqual({
       height: 27,
       baseline: 13.2,
-      trailing: 9,
+      trailing: 9 + 2,
     });
     // Below single, the grid line is still the smallest line.
     expect(applyLineSpacing({ ...single, value: 120 }, 14, 11.2).height).toBe(18);
