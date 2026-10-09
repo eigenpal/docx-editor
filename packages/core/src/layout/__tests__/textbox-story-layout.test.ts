@@ -904,3 +904,21 @@ test('text-box tables follow compatibility mode with a shared paragraph cache', 
     expect(found?.box.x).toBeCloseTo(mode === 14 ? -5.4 : 0, 7);
   }
 });
+
+test('a text-box table with a percentage above 100 extends past the box', () => {
+  const table =
+    '<w:tbl><w:tblPr><w:tblW w:type="pct" w:w="7500"/><w:tblLayout w:type="autofit"/><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="6000"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>text</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+  const pkg = openPackage(
+    footerTextboxDoc(textboxDrawing(table, { cx: 200 * 12700, cy: 100 * 12700 }), 1)
+  );
+  const footer = pkg.parts.get('/word/footer1.xml')!;
+  const projection = [...indexInlineDrawingProjectionsInPart(footer).values()][0]!;
+  const result = layoutTextboxStory(projection, {
+    measurer,
+    producer: 'compatibility',
+    compatibilityMode: 15,
+  });
+  const found = result?.fragments.find((fragment) => fragment.kind === 'table');
+  expect(found?.box.width).toBeCloseTo(300, 7);
+  expect(found?.box.x).toBeCloseTo(0, 7);
+});

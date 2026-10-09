@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A table percentage width above 100% resolves to the text-column width.",
+  "after": "A table percentage width up to 655.34% extends the table past the text column during layout.",
+  "reason": "Only layout geometry changes. Document nodes, text offsets, operations, room formats, and package serialization stay the same.",
+  "tests": ["packages/core/src/layout/__tests__/table-percent-overflow.test.ts"],
+  "changeset": "table-percent-overflow",
+  "migration": null
+}

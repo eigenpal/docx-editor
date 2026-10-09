@@ -241,11 +241,14 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   let lastSelectionPageIndex: number | undefined;
   let pointerCaret: CaretGeometry | undefined;
 
+  /**
+   * The line the HEAD shows on, when a pointer gesture or a keyboard motion chose one for a
+   * position that also starts the next line. It belongs to the head, so an extending motion
+   * keeps it; only a collapsed selection paints it as the caret.
+   */
   function selectionLineId(): string | undefined {
-    const { anchor, head } = deps.selection();
+    const { head } = deps.selection();
     return pointerCaret &&
-      anchor.paragraphId === head.paragraphId &&
-      anchor.offset === head.offset &&
       pointerCaret.position.paragraphId === head.paragraphId &&
       pointerCaret.position.offset === head.offset
       ? pointerCaret.lineId

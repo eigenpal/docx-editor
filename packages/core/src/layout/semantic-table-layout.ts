@@ -1,3 +1,4 @@
+import { withStoryLineGrid } from './line-grid.ts';
 import { adjustedBreakIndex, paragraphKeeps } from './pagination-keeps.ts';
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { cellContextualSpacing, contextualCellNeighbours } from './contextual-paragraph-spacing.ts';
@@ -191,6 +192,8 @@ export interface TableFlowDeps {
   /** The current row already has the full page band (possibly below repeated headers). */
   readonly rowAtPageStart?: boolean;
   readonly paragraphLineUnitPt?: number;
+  /** Story paragraphs outside cells snap to `paragraphLineUnitPt`; see {@link withStoryLineGrid}. */
+  readonly snapsStoryLines?: true;
   /** Whether a positioned table of this story carries `w:tblOverlap w:val="never"`. */
   readonly floatRefusesOverlap?: (tableId: string) => boolean;
   readonly measurer: TextMeasurer;
@@ -373,14 +376,17 @@ function placeCellParagraph(
   const paragraphId = paragraph.id;
   const keyFor = deps.cache?.keyFor?.bind(deps.cache) ?? paragraphLayoutKey;
   const listItem = deps.listItems?.get(paragraphId);
-  const layoutInputs = resolveParagraphLayoutInputs(
-    paragraph,
-    cellContentWidth,
-    deps.styleCascade,
-    listItem,
-    options?.tableCellStyle,
-    true,
-    deps.paragraphLineUnitPt
+  const layoutInputs = withStoryLineGrid(
+    resolveParagraphLayoutInputs(
+      paragraph,
+      cellContentWidth,
+      deps.styleCascade,
+      listItem,
+      options?.tableCellStyle,
+      true,
+      deps.paragraphLineUnitPt
+    ),
+    deps.snapsStoryLines && options?.inTableCell === false ? deps.paragraphLineUnitPt : undefined
   );
   const {
     props,

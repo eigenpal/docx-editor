@@ -685,13 +685,13 @@ function offsetOnLine(
   const bidiSpan = nearestBidiSpan(spans, x);
   // A picture on a shaped line has its own side to give before the nearest text answers, and
   // so does a point beyond either end of the line; see `beyondLine`.
-  if (bidiSpan && line.drawings?.length) {
-    for (const drawing of line.drawings) {
+  if (bidiSpan) {
+    for (const drawing of line.drawings ?? []) {
       if (x >= drawing.advanceStart && x < drawing.advanceEnd) return pictureHit(drawing, x, y);
     }
-    const edges = lineContentEdges(spans, line.drawings)!;
+    const edges = lineContentEdges(spans, line.drawings ?? [])!;
     const pictureAt = (edge: number) =>
-      line.drawings!.find(
+      line.drawings?.find(
         (drawing) =>
           Math.abs(drawing.advanceStart - edge) < 0.001 ||
           Math.abs(drawing.advanceEnd - edge) < 0.001
@@ -743,10 +743,8 @@ function offsetOnLine(
 function endOfLine(line: LineRecord, rightEdge: number, context: HitContext): LineOffset {
   const offset = lineEndOffset(context.layout, line);
   if (offset === line.range.end) return { offset, x: rightEdge, withinSpan: false };
-  // The end moved back over trailing space, so the caret's x moves back with it — into
-  // whichever span now CONTAINS that offset. Assuming the last span holds it paints the caret
-  // at the far right edge whenever two runs each contributed one trailing space, which is
-  // ordinary in text a producer split on revision ids.
+  // The end moved back over a break, so the caret's x moves back with it — into whichever
+  // span now CONTAINS that offset, never the far right edge of the last span.
   for (let index = line.spans.length - 1; index >= 0; index -= 1) {
     const span = line.spans[index]!;
     if (offset < span.range.start) continue;
@@ -761,8 +759,10 @@ function endOfLine(line: LineRecord, rightEdge: number, context: HitContext): Li
 }
 
 /**
- * Logical line end, excluding the wrap space or hard break whose following position
- * belongs to the next line. Page breaks are excluded even on the paragraph's last line.
+ * Logical line end, excluding a hard break, whose following position belongs to the next line.
+ * Trailing spaces of a soft wrap stay on the line: the end is after them, where End puts the
+ * caret, and the caret shows on this line through its line affinity. Page breaks are excluded
+ * even on the paragraph's last line.
  */
 export function lineEndOffset(layout: SemanticLayout, line: LineRecord): number {
   const end = line.range.end;
@@ -770,10 +770,8 @@ export function lineEndOffset(layout: SemanticLayout, line: LineRecord): number 
   if (hitIndex(layout).lastLineIdOfParagraph.get(line.range.paragraphId) === line.id) {
     return end;
   }
-  let offset = end;
-  if (offset > line.range.start && characterAt(line, offset - 1) === '\n') offset -= 1;
-  while (offset > line.range.start && characterAt(line, offset - 1) === ' ') offset -= 1;
-  return offset;
+  if (end > line.range.start && characterAt(line, end - 1) === '\n') return end - 1;
+  return end;
 }
 
 /** The character at a model offset, or null when the span's text is not a 1:1 projection. */

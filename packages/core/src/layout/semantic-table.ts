@@ -63,6 +63,7 @@ import {
   preferredLengthPt,
   readPreferredWidth,
   readTableIndentPt,
+  readTablePreferredWidth,
   resolveColumnWidthsPt,
   type CellWidthClaim,
   type PreferredWidth,
@@ -839,7 +840,7 @@ function readTableStructureUncached(
   let styleFloat: TableFloatPosition | undefined;
   for (const node of tableStyle.tablePropertyNodes) {
     const styleW = childNamed(node, 'tblW');
-    if (styleW) styleTableWidth = readPreferredWidth(styleW);
+    if (styleW) styleTableWidth = readTablePreferredWidth(styleW);
     const styleLayout = childNamed(node, 'tblLayout');
     if (styleLayout) styleLayoutFixed = attributeValue(styleLayout, 'type') === 'fixed';
     styleIndentPt =
@@ -851,7 +852,7 @@ function readTableStructureUncached(
     styleFloat = readTableFloatPosition(node) ?? styleFloat;
   }
   const ownTblW = tblPr && childNamed(tblPr, 'tblW');
-  const tableWidth = ownTblW ? readPreferredWidth(ownTblW) : styleTableWidth;
+  const tableWidth = ownTblW ? readTablePreferredWidth(ownTblW) : styleTableWidth;
   const tblLayout = tblPr && childNamed(tblPr, 'tblLayout');
   const layoutFixed = tblLayout
     ? attributeValue(tblLayout, 'type') === 'fixed'

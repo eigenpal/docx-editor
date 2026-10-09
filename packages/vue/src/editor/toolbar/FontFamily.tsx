@@ -91,7 +91,7 @@ const FontFamilyTrigger = defineComponent({
         title: text,
       };
       const display = slots.default?.() ?? [<span>{context.value.value ?? '—'}</span>];
-      if (props.asChild) return <Slot {...shared}>{display}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => display }}</Slot>;
       return (
         <button type="button" {...shared}>
           {display}
@@ -154,7 +154,7 @@ const FontFamilyContent = defineComponent({
           return nodes;
         });
       }
-      if (props.asChild) return <Slot {...shared}>{items}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => items }}</Slot>;
       if (slots.default) return <div {...shared}>{items}</div>;
       return (
         <div class={shared.class}>
@@ -211,7 +211,7 @@ const FontFamilyItem = defineComponent({
       const display = slots.default?.() ?? [
         <span style={{ fontFamily: props.value }}>{props.value}</span>,
       ];
-      if (props.asChild) return <Slot {...shared}>{display}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => display }}</Slot>;
       return (
         <button type="button" {...shared}>
           {display}
@@ -279,7 +279,7 @@ const FontFamilyRoot = defineComponent({
       if (props.asChild) {
         return (
           <Slot {...shared} ref={rootRef}>
-            {body}
+            {{ default: () => body }}
           </Slot>
         );
       }

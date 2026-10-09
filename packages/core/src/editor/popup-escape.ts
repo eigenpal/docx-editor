@@ -74,7 +74,7 @@ export function listenForPopupEscape(options: PopupEscapeOptions): () => void {
     const target = origin instanceof Node ? origin : null;
     const fromInside = target !== null && options.contains(target);
     // A modal dialog above the popup, which the popup may have opened, owns its own Escape.
-    if (!fromInside && inModalDialog(target)) return;
+    if (!fromInside && inEditorModalDialog(target, options.popup)) return;
     const owners = [
       editorInstanceScope(options.popup),
       options.chromeRoot?.(),
@@ -90,10 +90,21 @@ export function listenForPopupEscape(options: PopupEscapeOptions): () => void {
   return () => owner.removeEventListener('keydown', onKeyDown, true);
 }
 
-/** Whether `node` is inside a modal dialog. */
-function inModalDialog(node: Node | null): boolean {
+/**
+ * Whether `node` is inside a modal dialog of the editor that owns `popup`: one the editor
+ * marks as its own (`data-docx-dialog` on its dialog parts, `data-docx-modal` on its other
+ * modals, including native `showModal()` dialogs), or a modal inside the editor's instance
+ * container. Editor dialogs may render outside the editor. A host's own modal (a component
+ * library dialog elsewhere on the page) is not the editor's, so focus or Escape there still
+ * closes the popup.
+ */
+function inEditorModalDialog(node: Node | null, popup: Element): boolean {
   const element = node instanceof Element ? node : (node?.parentElement ?? null);
-  return element?.closest('[aria-modal="true"]') != null;
+  const dialog = element?.closest('[aria-modal="true"], [data-docx-modal]');
+  if (!dialog) return false;
+  if (dialog.hasAttribute('data-docx-dialog') || dialog.hasAttribute('data-docx-modal'))
+    return true;
+  return editorInstanceScope(popup)?.contains(dialog) === true;
 }
 
 /** What an open nested popup leaves in the panel: an expanded trigger or the popup itself. */
@@ -123,8 +134,9 @@ export interface PopupFocusLeaveOptions {
  * Close an open popup when focus moves outside it, for example to the find field after
  * Ctrl+F or to a host input. Two moves keep the popup open: focus that lands in the painted
  * pages, because a toolbar click leaves the caret there while the popup is open, and focus
- * that enters a modal dialog, because the popup may have opened it and the dialog returns
- * focus to its opener when it closes. Returns the disposer.
+ * that enters one of this editor's modal dialogs, because the popup may have opened it and
+ * the dialog returns focus to its opener when it closes. A host's own modal dialog closes
+ * the popup like any other control. Returns the disposer.
  *
  * @internal
  */
@@ -136,7 +148,7 @@ export function listenForPopupFocusLeave(options: PopupFocusLeaveOptions): () =>
     const element = origin instanceof Element ? origin : origin.parentElement;
     // Focus that falls to <body> moves to no control, for example while a dialog unmounts.
     if (element === null || element === owner.body || element === owner.documentElement) return;
-    if (element.closest('.docx-pages') || inModalDialog(element)) return;
+    if (element.closest('.docx-pages') || inEditorModalDialog(element, options.popup)) return;
     options.close();
   };
   owner.addEventListener('focusin', onFocusIn, true);

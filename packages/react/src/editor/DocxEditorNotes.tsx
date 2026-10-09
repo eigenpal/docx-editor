@@ -429,6 +429,7 @@ export function DocxEditorNotePropertiesDialog(
       className="docx-note-properties"
       role="dialog"
       aria-modal="true"
+      data-docx-modal=""
       aria-label={t('dialogs.footnoteProperties.title')}
       data-testid="docx-notes-properties-dialog"
       style={{ zIndex: Z_INDEX.modal }}

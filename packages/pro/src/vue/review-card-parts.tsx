@@ -96,7 +96,7 @@ export const ReviewAvatar = markPart(
           'data-testid': 'review-avatar',
           'aria-hidden': true,
         };
-        if (props.asChild) return <Slot {...shared}>{custom}</Slot>;
+        if (props.asChild) return <Slot {...shared}>{{ default: () => custom }}</Slot>;
         const avatarUrl = rail.value.authorInfo.get(entry.author)?.style?.avatarUrl;
         const face =
           custom ??
@@ -134,7 +134,7 @@ export const ReviewAuthor = markPart(
           class: `docx-review__author${props.className ? ` ${props.className}` : ''}`,
           'data-testid': 'review-author',
         };
-        if (props.asChild) return <Slot {...shared}>{slots.default?.()}</Slot>;
+        if (props.asChild) return <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>;
         return <span {...shared}>{slots.default?.() ?? author}</span>;
       };
     },
@@ -161,7 +161,7 @@ export const ReviewTime = markPart(
           'data-testid': 'review-time',
           datetime: raw,
         };
-        if (props.asChild) return <Slot {...shared}>{slots.default?.()}</Slot>;
+        if (props.asChild) return <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>;
         return <time {...shared}>{slots.default?.() ?? REVIEW_DATE_FORMAT.format(when)}</time>;
       };
     },
@@ -188,7 +188,7 @@ export const ReviewSummary = markPart(
           'data-testid': 'review-summary',
           'data-review-selectable': '',
         };
-        if (props.asChild) return <Slot {...shared}>{slots.default?.()}</Slot>;
+        if (props.asChild) return <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>;
         const custom = slots.default?.();
         if (custom) return <div {...shared}>{custom}</div>;
         return (
@@ -270,7 +270,7 @@ function createActionPart(
                 disabledReason={disabledReason}
                 slotProps={shared}
               >
-                {slots.default?.()}
+                {{ default: () => slots.default?.() }}
               </ReviewActionSlot>
             );
           }
@@ -349,7 +349,7 @@ export const ReviewDelete = markPart(
               disabledReason={disabledReason}
               slotProps={shared}
             >
-              {slots.default?.()}
+              {{ default: () => slots.default?.() }}
             </ReviewActionSlot>
           );
         }
@@ -395,24 +395,28 @@ export const ReviewReplies = markPart(
           <ol class={`docx-review__replies${props.className ? ` ${props.className}` : ''}`}>
             {replies.map((reply) => (
               <ReviewReplyScope key={reply.key} entry={reply}>
-                <li
-                  class="docx-review__reply"
-                  data-testid="review-reply"
-                  // Each reply draws in its OWN author's colour, not the thread's.
-                  {...replyAuthorAttributes(reply.author, rail.value)}
-                >
-                  <div class="docx-review__head">
-                    <ReviewAvatar />
-                    <div class="docx-review__meta">
-                      <ReviewAuthor />
-                      <ReviewTime />
-                    </div>
-                    <div class="docx-review__actions">
-                      <ReviewDelete />
-                    </div>
-                  </div>
-                  <ReviewSummary />
-                </li>
+                {{
+                  default: () => (
+                    <li
+                      class="docx-review__reply"
+                      data-testid="review-reply"
+                      // Each reply draws in its OWN author's colour, not the thread's.
+                      {...replyAuthorAttributes(reply.author, rail.value)}
+                    >
+                      <div class="docx-review__head">
+                        <ReviewAvatar />
+                        <div class="docx-review__meta">
+                          <ReviewAuthor />
+                          <ReviewTime />
+                        </div>
+                        <div class="docx-review__actions">
+                          <ReviewDelete />
+                        </div>
+                      </div>
+                      <ReviewSummary />
+                    </li>
+                  ),
+                }}
               </ReviewReplyScope>
             ))}
           </ol>
@@ -579,7 +583,7 @@ export const ReviewCard = markPart(
               }
             : {}),
         };
-        if (props.asChild) return <Slot {...shared}>{slots.default?.()}</Slot>;
+        if (props.asChild) return <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>;
         if (resolvedCollapsible) {
           return h(
             'details',

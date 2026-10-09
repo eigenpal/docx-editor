@@ -332,7 +332,7 @@ export const MenuItem = defineComponent({
           }}
           {...(props.className ? { className: props.className } : {})}
         >
-          {text}
+          {{ default: () => text }}
         </MenuRow>
       );
     };
@@ -394,7 +394,7 @@ function defineActionRow(
             }}
             {...(props.className ? { className: props.className } : {})}
           >
-            {text}
+            {{ default: () => text }}
           </MenuRow>
         );
       };
@@ -473,7 +473,7 @@ const MenuPageSetupImpl = defineComponent({
           }}
           {...(props.className ? { className: props.className } : {})}
         >
-          {text}
+          {{ default: () => text }}
         </MenuRow>
       );
     };
@@ -520,7 +520,7 @@ const MenuParagraphDialogImpl = defineComponent({
           }}
           {...(props.className ? { className: props.className } : {})}
         >
-          {text}
+          {{ default: () => text }}
         </MenuRow>
       );
     };
@@ -569,7 +569,7 @@ const MenuImageInsertImpl = defineComponent({
           }}
           {...(props.className ? { className: props.className } : {})}
         >
-          {text}
+          {{ default: () => text }}
         </MenuRow>
       );
     };
@@ -628,8 +628,11 @@ export const MenuEntry = defineComponent({
       if (entry.kind === 'submenu') {
         return (
           <MenuSubmenu labelKey={entry.labelKey} paths={entry.paths}>
-            {slots.default?.() ??
-              entry.items.map((item, index) => <MenuEntry key={index} entry={item} />)}
+            {{
+              default: () =>
+                slots.default?.() ??
+                entry.items.map((item, index) => <MenuEntry key={index} entry={item} />),
+            }}
           </MenuSubmenu>
         );
       }
@@ -794,7 +797,14 @@ export const Menu = defineComponent({
       if (placement.asSubmenu) {
         return (
           <MenuSubmenu labelKey={props.labelKey ?? registry?.labelKey ?? props.id} label={text}>
-            {mergePanel(registry?.entries, flattenChildren(slots.default?.() ?? []), props.preset)}
+            {{
+              default: () =>
+                mergePanel(
+                  registry?.entries,
+                  flattenChildren(slots.default?.() ?? []),
+                  props.preset
+                ),
+            }}
           </MenuSubmenu>
         );
       }

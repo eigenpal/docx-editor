@@ -892,7 +892,13 @@ export function autofitColumnWidthsPt(
   if (structure.layoutFixed) {
     // A nested fixed table paints no wider than the cell that holds it, after its indent: its
     // columns give way down to their own minimums. A top-level fixed table never reaches here.
-    const room = Math.max(0, contentWidthPt - Math.max(0, leadingIndentPt(structure)));
+    // A percentage above 100 extends it past the cell instead.
+    const { tableWidth } = structure;
+    const overflow =
+      tableWidth.type === 'pct' && tableWidth.value > 100
+        ? (contentWidthPt * tableWidth.value) / 100
+        : 0;
+    const room = Math.max(0, contentWidthPt - Math.max(0, leadingIndentPt(structure)), overflow);
     const widths = fixedNestedWidths(structure, room, () =>
       fixedTableCellMinimums(structure, context, view)
     );

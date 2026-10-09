@@ -8,9 +8,10 @@
 // starts part-way down a pitch keep that offset.
 //
 // A paragraph opts out with `w:pPr/w:snapToGrid w:val="0"` (inherited through the style
-// cascade like any other paragraph property). Only `auto` line spacing snaps: an `exact` or
-// `atLeast` line keeps the height its own rule gives it (a 20pt `atLeast` line under an 18pt
-// pitch is 20pt, not two pitches).
+// cascade like any other paragraph property). `auto` and `atLeast` spacing snap; an `exact`
+// line keeps its authored height. An `atLeast` value above the snapped line keeps its own
+// height (a 20pt `atLeast` line of 11pt text under an 18pt pitch is 20pt, not two pitches),
+// and a value below it takes the snapped line.
 // The run-level `w:rPr/w:snapToGrid` is the CHARACTER grid and never reaches this file.
 // Table cells do not snap unless the document sets the `w:adjustLineHeightInTable`
 // compatibility option (§17.15.3.1).
@@ -46,8 +47,7 @@ export function paragraphSnapsToLineGrid(props: readonly OoxmlProperty[]): boole
 
 /**
  * Attach the section's line pitch to a paragraph's resolved line spacing when its lines
- * snap. Returns the input unchanged when no grid applies, including for `exact` and
- * `atLeast` spacing.
+ * snap. Returns the input unchanged when no grid applies, including for `exact` spacing.
  */
 export function withLineGrid(
   spacing: ParagraphLineSpacing,
@@ -57,17 +57,26 @@ export function withLineGrid(
   tableCellsSnap: boolean
 ): ParagraphLineSpacing {
   if (gridPitchPt === undefined || !(gridPitchPt > 0)) return spacing;
-  if (spacing.rule !== 'auto' || (inTableCell && !tableCellsSnap)) return spacing;
+  if (spacing.rule === 'exact' || (inTableCell && !tableCellsSnap)) return spacing;
   if (!paragraphSnapsToLineGrid(props)) return spacing;
   return { ...spacing, gridPitch: gridPitchPt };
 }
 
 /**
- * A snapped `auto` line box: the natural box rounded up to whole pitches with the glyphs
- * centred. The multiple scales the snapped box and adds the extra BELOW, as without a grid; a
- * multiple under one keeps the single pitch, because the grid line is the smallest line a
- * snapping paragraph can have. `trailing` is that multiple's extra, which pagination may let
- * hang past the bottom margin; the centring space is part of the line.
+ * A snapped line box. The natural box rounds up to whole pitches.
+ *
+ * An `auto` multiple counts in pitches, not in natural heights: the line takes the larger of
+ * the snapped pitch count and the multiple, so double spacing is two pitches whatever the
+ * font, and a line that already needs two pitches stays two pitches at 1.5 or double. A
+ * multiple under one keeps the snapped line, the smallest line a snapping paragraph can have.
+ * The glyphs sit centred in the whole box.
+ *
+ * An `atLeast` value at or below the snapped line takes the snapped line with centred glyphs.
+ * A larger value keeps its own height: the snapped line sits at the foot of that box and the
+ * extra height is above it.
+ *
+ * `trailing` is the box below the glyphs. Pagination lets that depth hang past the bottom
+ * margin, so a line fits when its glyphs fit, and the line still advances by its whole box.
  */
 export function gridLineBox(
   spacing: ParagraphLineSpacing & { readonly gridPitch: number },
@@ -77,8 +86,33 @@ export function gridLineBox(
   const pitch = spacing.gridPitch;
   const pitches = Math.max(1, Math.ceil((naturalHeight - GRID_FIT_TOLERANCE_PT) / pitch));
   const snapped = pitches * pitch;
-  const baseline = naturalBaseline + (snapped - naturalHeight) / 2;
-  const multiple = Math.max(1, spacing.value / 240);
-  const height = snapped * multiple;
-  return { height, baseline, trailing: height - snapped };
+  const snappedCentring = (snapped - naturalHeight) / 2;
+  if (spacing.rule === 'atLeast' && spacing.value > snapped) {
+    // The snapped line sits at the foot of the taller box; the extra is above it.
+    const height = spacing.value;
+    const baseline = naturalBaseline + height - snapped + snappedCentring;
+    return { height, baseline, trailing: snappedCentring };
+  }
+  const multiple = spacing.rule === 'auto' ? spacing.value / 240 : 1;
+  const height = Math.max(pitches, multiple) * pitch;
+  const centring = (height - naturalHeight) / 2;
+  return { height, baseline: naturalBaseline + centring, trailing: centring };
+}
+
+/**
+ * Snap the lines of a story paragraph that the box flow resolved as a cell paragraph.
+ *
+ * Note stories flow through the same box walk as table cells, which never snap without
+ * `w:adjustLineHeightInTable`. Their own paragraphs follow the section grid like body text, so
+ * the walk passes the pitch here for paragraphs outside any cell. Opt-outs still apply.
+ */
+export function withStoryLineGrid<
+  T extends {
+    readonly lineSpacing: ParagraphLineSpacing;
+    readonly props: readonly OoxmlProperty[];
+  },
+>(inputs: T, gridPitchPt: number | undefined): T {
+  if (gridPitchPt === undefined || inputs.lineSpacing.gridPitch !== undefined) return inputs;
+  const lineSpacing = withLineGrid(inputs.lineSpacing, inputs.props, gridPitchPt, false, false);
+  return lineSpacing === inputs.lineSpacing ? inputs : { ...inputs, lineSpacing };
 }

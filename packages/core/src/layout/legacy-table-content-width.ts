@@ -10,7 +10,13 @@ import {
   type OoxmlElement,
 } from '@docx-editor.dev/core/store';
 import type { SemanticTableRow, TableAlignment } from './semantic-table.ts';
-import { MAX_TABLE_COLUMNS, type CellWidthClaim, type PreferredWidth } from './table-widths.ts';
+import {
+  MAX_TABLE_COLUMNS,
+  MAX_TABLE_PERCENT_UNITS,
+  wrappedTablePercentUnits,
+  type CellWidthClaim,
+  type PreferredWidth,
+} from './table-widths.ts';
 import { hasSupportedLegacyTableMargins } from './legacy-table-margins.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 
@@ -85,7 +91,6 @@ export function legacyTableContentWidth(input: {
     input.cellSpacingPt !== 0 ||
     input.tableWidth.type !== 'pct' ||
     input.tableWidth.value <= 0 ||
-    input.tableWidth.value > 100 ||
     !Number.isFinite(contentWidthPt) ||
     contentWidthPt <= 0 ||
     contentWidthPt > MAX_WIDTH_PT ||
@@ -102,11 +107,13 @@ export function legacyTableContentWidth(input: {
   const layout = child(properties, 'tblLayout');
   const stated = (name: string) =>
     properties.children.some((node) => node.kind !== 'textValue' && node.localName === name);
+  // A percentage above 100 extends the same reference box past the text column.
   if (
     attr(width, 'type') !== 'pct' ||
     rawWidth === undefined ||
-    ((!/^\d{1,4}$/.test(rawWidth) || Number(rawWidth) > 5000) &&
-      (!/^\d{1,3}(?:\.\d+)?%$/.test(rawWidth) || Number(rawWidth.slice(0, -1)) > 100)) ||
+    ((!/^\d{1,9}$/.test(rawWidth) || wrappedTablePercentUnits(Number(rawWidth)) === undefined) &&
+      (!/^\d{1,3}(?:\.\d+)?%$/.test(rawWidth) ||
+        Number(rawWidth.slice(0, -1)) * 50 > MAX_TABLE_PERCENT_UNITS)) ||
     (stated('tblInd') &&
       (attr(indent, 'type') !== 'dxa' || readTwipsMeasure(attr(indent, 'w')) !== 0)) ||
     (stated('tblLayout') && attr(layout, 'type') !== 'autofit')

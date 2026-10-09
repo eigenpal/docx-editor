@@ -52,7 +52,7 @@ export type PreferredWidthType = 'dxa' | 'pct' | 'auto' | 'nil';
  */
 export interface PreferredWidth {
   readonly type: PreferredWidthType;
-  /** POINTS for `dxa`, PERCENT (0–100) for `pct`, 0 for `auto`/`nil`. */
+  /** POINTS for `dxa`, PERCENT for `pct` (0–100, or up to 655.34 for a table), 0 otherwise. */
   readonly value: number;
 }
 
@@ -61,6 +61,21 @@ export const AUTO_PREFERRED_WIDTH: PreferredWidth = Object.freeze({ type: 'auto'
 
 /** Widest a `pct` preference may resolve to, so `w:w="999999"` cannot inflate a table. */
 const MAX_PREFERRED_PERCENT = 100;
+
+/** Widest TABLE percentage honoured above 100, as a signed 16-bit count of fiftieths. */
+export const MAX_TABLE_PERCENT_UNITS = 32_767;
+
+/**
+ * A bare table percentage is a 16-bit count of fiftieths: a larger count wraps, and a count
+ * that wraps to zero or past the signed range states no width. `undefined` means `auto`.
+ */
+export function wrappedTablePercentUnits(units: number): number | undefined {
+  const wrapped = units % 65_536;
+  return wrapped > 0 && wrapped <= MAX_TABLE_PERCENT_UNITS ? wrapped : undefined;
+}
+
+/** The narrowest stated table percentage: one fiftieth of a percent. */
+const MIN_TABLE_PERCENT = 1 / 50;
 
 /** A width stated without a unit: its type says whether it is twips or fiftieths of a percent. */
 const UNITLESS = /^[+-]?\d{0,9}(?:\.\d{0,32})?$/;
@@ -114,7 +129,7 @@ function readMeasurementOrPercent(
  * 17.4.87 also settles the conflict case: where the type and the measurement `w:w` actually
  * states contradict each other, the measurement wins and the type is ignored.
  */
-export function readPreferredWidth(node: OoxmlElement | undefined): PreferredWidth {
+export function readPreferredWidth(node: OoxmlElement | undefined, table = false): PreferredWidth {
   if (!node) return AUTO_PREFERRED_WIDTH;
   const rawType = attributeValue(node, 'type');
   if (rawType !== undefined && rawType !== 'pct' && rawType !== 'dxa') {
@@ -133,10 +148,28 @@ export function readPreferredWidth(node: OoxmlElement | undefined): PreferredWid
     // A bare `pct` value is fiftieths of a percent, read as whole units like any other.
     const percent = measure.kind === 'percent' ? measure.percent : (measure.pt * 20) / 50;
     if (!Number.isFinite(percent) || percent <= 0) return AUTO_PREFERRED_WIDTH;
-    return { type: 'pct', value: Math.min(percent, MAX_PREFERRED_PERCENT) };
+    if (!table) return { type: 'pct', value: Math.min(percent, MAX_PREFERRED_PERCENT) };
+    // A table may extend past the text column, within a 16-bit count of fiftieths. Past that
+    // range a stated percentage lays the table out at its narrowest; a bare count wraps.
+    if (measure.kind === 'percent')
+      return {
+        type: 'pct',
+        value: percent * 50 <= MAX_TABLE_PERCENT_UNITS + 1e-6 ? percent : MIN_TABLE_PERCENT,
+      };
+    const units = wrappedTablePercentUnits(percent * 50);
+    return units === undefined ? AUTO_PREFERRED_WIDTH : { type: 'pct', value: units / 50 };
   }
   if (!Number.isFinite(measure.pt) || measure.pt <= 0) return AUTO_PREFERRED_WIDTH;
   return { type: 'dxa', value: Math.min(measure.pt, MAX_COLUMN_WIDTH_PT) };
+}
+
+/**
+ * `w:tblW` (17.4.63). Unlike a cell's share of its table, a table percentage can exceed 100
+ * and extend the table past the text column, up to `MAX_TABLE_PERCENT_UNITS`. The percentage
+ * is a share of the same reference width as any other table percentage.
+ */
+export function readTablePreferredWidth(node: OoxmlElement | undefined): PreferredWidth {
+  return readPreferredWidth(node, true);
 }
 
 /** A CT_TblWidth read down to points, for the `dxa` geometry the placement reads use. */

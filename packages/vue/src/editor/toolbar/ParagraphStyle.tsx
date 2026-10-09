@@ -94,7 +94,7 @@ const ParagraphStyleTrigger = defineComponent({
         (context.value.value === null
           ? [<span>{control?.valueKey ? label(control.valueKey) : '—'}</span>]
           : [<span>{current?.name ?? context.value.value}</span>]);
-      if (props.asChild) return <Slot {...shared}>{display}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => display }}</Slot>;
       return (
         <button type="button" {...shared}>
           {display}
@@ -129,7 +129,7 @@ const ParagraphStyleContent = defineComponent({
         context.options.value.map((option) => (
           <ParagraphStyleItem key={option.styleId} value={option.styleId} />
         ));
-      if (props.asChild) return <Slot {...shared}>{items}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => items }}</Slot>;
       return <div {...shared}>{items}</div>;
     };
   },
@@ -167,7 +167,7 @@ const ParagraphStyleItem = defineComponent({
           {option?.name ?? props.value}
         </span>,
       ];
-      if (props.asChild) return <Slot {...shared}>{display}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => display }}</Slot>;
       return (
         <button type="button" {...shared}>
           {display}
@@ -235,7 +235,7 @@ const ParagraphStyleRoot = defineComponent({
       if (props.asChild) {
         return (
           <Slot {...shared} ref={rootRef}>
-            {body}
+            {{ default: () => body }}
           </Slot>
         );
       }
