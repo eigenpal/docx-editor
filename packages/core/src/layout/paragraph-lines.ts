@@ -126,6 +126,40 @@ const requestedPageLines = new WeakMap<
   Map<string, readonly PlacedLine[] | undefined>
 >();
 
+/** @internal `to` draws the same lines on the same page as `from`; only marker labels moved. */
+export function carryPageLines(from: PageRecord, to: PageRecord): void {
+  const complete = pageLinesCache.get(from);
+  if (complete) pageLinesCache.set(to, complete);
+  const requested = requestedPageLines.get(from);
+  if (requested) requestedPageLines.set(to, new Map(requested));
+  const named = namedParagraphsCache.get(from);
+  if (named) namedParagraphsCache.set(to, named);
+}
+
+/**
+ * Every paragraph id a line on the page names, through its range, a span, or a drawing.
+ *
+ * A superset of the paragraphs the page draws. A read for a paragraph the page never names,
+ * such as the one Enter just created, then skips the page in one lookup. Without it, each new
+ * paragraph walked every line of every page before the caret could be placed.
+ */
+const namedParagraphsCache = new WeakMap<PageRecord, ReadonlySet<string>>();
+
+function pageNamedParagraphs(page: PageRecord): ReadonlySet<string> {
+  const cached = namedParagraphsCache.get(page);
+  if (cached) return cached;
+  const named = new Set<string>();
+  for (const fragment of paragraphFragmentsOnPage(page)) {
+    for (const line of fragment.lines) {
+      named.add(line.range.paragraphId);
+      for (const span of line.spans) named.add(span.range.paragraphId);
+      for (const drawing of line.drawings ?? []) named.add(drawing.paragraphId);
+    }
+  }
+  namedParagraphsCache.set(page, named);
+  return named;
+}
+
 /** A caret read must not allocate entries for every other paragraph on a changed page. */
 function pageLinesFor(page: PageRecord, paragraphId: string): readonly PlacedLine[] | undefined {
   const complete = pageLinesCache.get(page);
@@ -134,6 +168,11 @@ function pageLinesFor(page: PageRecord, paragraphId: string): readonly PlacedLin
   if (requested?.has(paragraphId)) return requested.get(paragraphId);
   if (requested && requested.size >= LAZY_PARAGRAPH_READS) return pageLines(page).get(paragraphId);
   let found: PlacedLine[] | undefined;
+  if (!pageNamedParagraphs(page).has(paragraphId)) {
+    if (!requested) requestedPageLines.set(page, (requested = new Map()));
+    requested.set(paragraphId, found);
+    return found;
+  }
   for (const fragment of paragraphFragmentsOnPage(page)) {
     for (const line of fragment.lines) {
       // Merged paragraphs can draw a member whose id differs from the fragment and line.

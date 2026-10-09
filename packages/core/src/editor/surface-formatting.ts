@@ -318,7 +318,15 @@ function selectionSpans(
   const spans =
     cells && cells.length > 0
       ? spansInCells(layout, cells)
-      : spansInSelection(layout, selection, paragraphOrder ?? everyStoryOrder(layout));
+      : spansInSelection(
+          layout,
+          selection,
+          // One paragraph is ordered by offset alone; skip the document-wide order walk.
+          paragraphOrder ??
+            (selection.anchor.paragraphId === selection.head.paragraphId
+              ? []
+              : everyStoryOrder(layout))
+        );
   // `everyStoryOrder`, not `documentOrder`. The fallback is only reached by a caller that
   // named no story, and the body's order is wrong for every caret outside it — which is the
   // exact defect the parameter above exists to prevent, left standing in its own fallback.

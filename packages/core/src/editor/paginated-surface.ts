@@ -52,6 +52,7 @@ import {
 } from './command-protection.ts';
 import { registerSurfaceMeasurement } from './surface-measurement.ts';
 import { registerProgressiveOpen } from './surface-progressive-open.ts';
+import { createReviewOrderIndex } from './surface-review-order.ts';
 import { bodyBlockCountOf } from '../layout/body-block-limit.ts';
 import {
   createContentControlWidgetSessions,
@@ -101,7 +102,6 @@ import {
 } from '@docx-editor.dev/core/binding';
 import {
   TOC_MAX_PAGE_PASSES,
-  deepParagraphOrderOfPart,
   detectBodyTocs,
   findNode,
   isContentControl,
@@ -116,7 +116,6 @@ import {
   type SelectionMark,
   type StoryScope,
   type TreeDocOp,
-  type TreeModelChange,
 } from '@docx-editor.dev/core/store';
 import { resolveSelectedDrawingRecord } from './docx-editor-images.ts';
 import { createHiddenMarkEditing, type RevisionView } from './hidden-mark-joins.ts';
@@ -392,6 +391,8 @@ export function mountPaginatedSurface(
     };
   }
   const session = opened.session;
+  const reviewOrder = createReviewOrderIndex(session);
+  const reviewOrderIndex = reviewOrder.index;
   const collaborationSession = options.collaborationModel?.session;
   let author = options.author;
   let scale = options.scale ?? 96 / 72;
@@ -1628,7 +1629,7 @@ export function mountPaginatedSurface(
   // editor sharing the store — reaches layout the same way.
   const unsubscribe = session.subscribe((modelChange) => {
     // Before anything downstream can read the index against the new revision.
-    retainReviewOrderIndex(modelChange);
+    reviewOrder.retain(modelChange);
     if (
       modelChange.origin !== ORIGIN_IDS.mutationRemote &&
       modelChange.origin !== ORIGIN_IDS.mutationUndo &&
@@ -3600,92 +3601,6 @@ export function mountPaginatedSurface(
     for (const [key, found] of byKey) for (const rect of found) rects.push({ ...rect, key });
     commentRectCache = { layout: currentLayout, revision, pages, rects };
     return rects;
-  }
-
-  /**
-   * Paragraph id to document position over EVERY story the review queue lists — body
-   * first, then each furniture part — memoized per package revision and body root.
-   *
-   * Deliberately NOT the open story's scoped order: `rangeCovers` looks the caret's and an
-   * item's paragraphs up here, and an id the index cannot see is an item that can never
-   * become active. Scoping to the open story made every header item unactivatable from
-   * the body, every body item unactivatable while a header was open, and every textbox
-   * item unactivatable always (the shallow order stops at the host paragraph) — the DEEP
-   * order descends into `w:txbxContent`. Containment only ever compares positions within
-   * one story, and furniture ranks after the body, so the merge cannot invent a cover.
-   */
-  let reviewOrderIndexCache: {
-    readonly packageRevision: number;
-    readonly bodyRoot: object;
-    readonly index: Map<string, number>;
-  } | null = null;
-  /**
-   * Carry the index across a commit that cannot reorder paragraphs.
-   *
-   * The key is (package revision, body root) and a keystroke moves both, so without this the
-   * memo guaranteed exactly one whole-document rebuild per keystroke — the #391 shape, in the
-   * render path. A text-local commit with no created, deleted, split or joined paragraphs
-   * preserves every paragraph id and their order in every story, so the index is re-stamped
-   * to the values the next read will key on. Anything wider drops it, and commits that bypass
-   * the subscription (a package-shell edit) leave a stale key the read-side check rebuilds —
-   * the safe direction.
-   */
-  function retainReviewOrderIndex(change: TreeModelChange): void {
-    if (!reviewOrderIndexCache) return;
-    if (
-      change.impact === 'text-local' &&
-      change.created.length === 0 &&
-      change.deleted.length === 0 &&
-      change.splitJoin.length === 0
-    ) {
-      reviewOrderIndexCache = {
-        packageRevision: session.packageRevision(),
-        bodyRoot: session.part().root,
-        index: reviewOrderIndexCache.index,
-      };
-    } else {
-      reviewOrderIndexCache = null;
-    }
-  }
-  function reviewOrderIndex(): Map<string, number> {
-    const packageRevision = session.packageRevision();
-    const bodyRoot = session.part().root;
-    if (
-      reviewOrderIndexCache &&
-      reviewOrderIndexCache.packageRevision === packageRevision &&
-      reviewOrderIndexCache.bodyRoot === bodyRoot
-    ) {
-      return reviewOrderIndexCache.index;
-    }
-    const index = new Map<string, number>();
-    const append = (order: ReadonlyMap<string, number>): void => {
-      const base = index.size;
-      for (const [id, position] of order) {
-        if (!index.has(id)) index.set(id, base + position);
-      }
-    };
-    append(deepParagraphOrderOfPart(session.part()));
-    const seenParts = new Set<unknown>([session.part()]);
-    for (const section of session.headerFooterPartsBySection()) {
-      for (const slots of [section.headers, section.footers]) {
-        for (const part of slots.values()) {
-          if (seenParts.has(part)) continue;
-          seenParts.add(part);
-          append(deepParagraphOrderOfPart(part));
-        }
-      }
-    }
-    // Note stories too, now that their revisions reach the queue: a paragraph missing from
-    // this index is an item `rangeCovers` can never match, so a footnote card listed but
-    // could never become the ACTIVE one — and the rail gates its reply box on that.
-    for (const noteKind of ['footnote', 'endnote'] as const) {
-      const part = session.partFor({ kind: 'notesPart', noteKind });
-      if (!part || seenParts.has(part)) continue;
-      seenParts.add(part);
-      append(deepParagraphOrderOfPart(part));
-    }
-    reviewOrderIndexCache = { packageRevision, bodyRoot, index };
-    return index;
   }
 
   /** Which comment the caret is in, so its band reads as the open one. */

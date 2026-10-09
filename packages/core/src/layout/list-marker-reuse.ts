@@ -11,9 +11,13 @@
 // instead of its text, and the published records get their labels from the current list
 // items afterwards. A number whose width moves still changes the key and is laid out again.
 
+import { carryPageOrder } from './document-order.ts';
 import { framedTokenJoin } from './framed-token.ts';
 import { rtlListMarkerPieces } from './list-marker-bidi.ts';
 import { listMarkerWidth } from './list-marker-geometry.ts';
+import { carryPageLines } from './paragraph-lines.ts';
+import { carryPagePlacedIds } from './paragraph-range-rects.ts';
+import { carryPageTableContributions } from './table-caret-context.ts';
 import type { ResolvedListItem } from './list-resolve.ts';
 import type {
   BlockFragmentRecord,
@@ -170,7 +174,15 @@ export function relabelListMarkers(
       const fragments = relabeledBlocks(page.fragments, listItems, measurer);
       next = fragments === page.fragments ? page : { ...page, fragments };
       checked.set(page, next);
-      if (next !== page) checked.set(next, next);
+      if (next !== page) {
+        checked.set(next, next);
+        // Lines, boxes, and ids are the same objects. A caret read, an order walk, or a
+        // table lookup on the relabelled page reuses what the old page already answered.
+        carryPageLines(page, next);
+        carryPageOrder(page, next);
+        carryPagePlacedIds(page, next);
+        carryPageTableContributions(page, next);
+      }
     }
     if (next === page) continue;
     pages ??= [...layout.pages];

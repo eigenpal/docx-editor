@@ -9,6 +9,12 @@ type Contribution = {
   tables: Map<string, TableSummary>;
 };
 const pageContributions = new WeakMap<PageRecord, Contribution>();
+
+/** @internal `to` holds the same tables and paragraphs as `from`; only marker labels moved. */
+export function carryPageTableContributions(from: PageRecord, to: PageRecord): void {
+  const known = pageContributions.get(from);
+  if (known) pageContributions.set(to, known);
+}
 const layoutSummaries = new WeakMap<
   SemanticLayout,
   Map<string, { rows: Map<string, number>; columns: number }>

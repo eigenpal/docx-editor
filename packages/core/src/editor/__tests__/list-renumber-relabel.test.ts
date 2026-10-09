@@ -11,7 +11,10 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
-import type { BlockFragmentRecord } from '../../layout/semantic-records.ts';
+import { documentOrder } from '../../layout/document-order.ts';
+import { paragraphLinesFor } from '../../layout/paragraph-lines.ts';
+import type { BlockFragmentRecord, SemanticLayout } from '../../layout/semantic-records.ts';
+import { paragraphFragmentsOf } from '../../layout/semantic-records.ts';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -147,6 +150,25 @@ function enterInFirstItem(surface: PaginatedSurface): void {
   surface.splitParagraph();
 }
 
+/** Each body paragraph's lines and the body order, read from the records with no memo. */
+function coldLineIndex(layout: SemanticLayout) {
+  const lines = new Map<string, unknown[]>();
+  const order: string[] = [];
+  for (const page of layout.pages) {
+    for (const fragment of paragraphFragmentsOf(page)) {
+      for (const line of fragment.lines) {
+        const id = line.range.paragraphId;
+        if (!lines.has(id)) {
+          lines.set(id, []);
+          order.push(id);
+        }
+        lines.get(id)!.push(line);
+      }
+    }
+  }
+  return { lines, order };
+}
+
 describe('renumbering a long list', () => {
   test('equal-width numbers reuse later pages and still match a cold layout', () => {
     // [100] .. [335]: every number has three digits before and after the insert.
@@ -169,6 +191,29 @@ describe('renumbering a long list', () => {
       surface.redo();
       expect(markersOf(surface)).toEqual(after);
       expect(markersOf(surface)).toEqual(coldMarkers(surface));
+    } finally {
+      dispose();
+    }
+  });
+
+  test('relabelled pages answer caret and order reads like a cold walk', () => {
+    const { surface, dispose } = mount(docx(100));
+    try {
+      // Fill the per-page memos the relabelled pages inherit.
+      const before = surface.layout();
+      for (const id of coldLineIndex(before).order) paragraphLinesFor(before, id);
+      documentOrder(before);
+      enterInFirstItem(surface);
+      const after = surface.layout();
+      expect(surface.state().perf!.reusedPages).toBeGreaterThan(0);
+      const cold = coldLineIndex(after);
+      expect(documentOrder(after)).toEqual(cold.order);
+      for (const id of cold.order) {
+        expect(paragraphLinesFor(after, id).map((placed) => placed.line)).toEqual(
+          cold.lines.get(id)!
+        );
+      }
+      expect(paragraphLinesFor(after, 'no-such-paragraph')).toEqual([]);
     } finally {
       dispose();
     }
