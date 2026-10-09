@@ -17,8 +17,8 @@
 // `w:rFonts`, its `w:rStyle` chain, its paragraph's `w:pStyle` chain, its table's
 // `w:tblStyle` chain, then `w:docDefaults`. A family a nearer level overrides is not
 // reported, and an East Asian family counts only for a run whose text has East Asian
-// characters. Word-written documents name a CJK theme face and a heading face in styles that
-// Latin body text never draws with, and a notice listing those faces warns about nothing.
+// characters. Documents often name an East Asian theme face and a heading face in styles
+// that Latin body text never draws with, and a notice listing those faces warns about nothing.
 //
 // Deliberate bounds, all on the over-reporting side, never hiding a rendered face:
 // - A used table style contributes its `w:tblStylePr` conditional-format families without
