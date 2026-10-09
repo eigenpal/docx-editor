@@ -3,7 +3,14 @@ import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { compareVersions, formatOf, versions } from './common.mjs';
-import { relevant, validateRecord, validateVersionChange } from './policy.mjs';
+import {
+  isSupersededTest,
+  relevant,
+  validateRecord,
+  validateSupersedes,
+  validateVersionChange,
+} from './policy.mjs';
+import { supersededEntries } from './change.mjs';
 import { assertIsolated } from './installation.mjs';
 import { shuffle } from './scenarios.mjs';
 
@@ -98,6 +105,83 @@ describe('compatibility classification', () => {
       'missing migration heading'
     );
     expect(() => validateRecord({ ...migration, changeset: null }, 'test')).toThrow('Changeset');
+  });
+});
+
+describe('superseded tests', () => {
+  const retired = 'e2e/retired.smoke.spec.ts';
+  const retirement = {
+    ...record,
+    supersedesTests: [
+      {
+        path: retired,
+        by: 'scripts/collaboration/policy.test.ts',
+        reason: 'The unit suite covers the same behavior.',
+      },
+    ],
+  };
+
+  test('a later record may retire a missing test that an earlier record lists', () => {
+    const lister = { file: 'old.json', order: 1 };
+    const supersessions = [{ path: retired, file: 'new.json', order: 2 }];
+    expect(isSupersededTest(retired, lister, supersessions)).toBe(true);
+    const listed = { ...record, tests: [...record.tests, retired] };
+    expect(() =>
+      validateRecord(listed, 'old.json', (test) => isSupersededTest(test, lister, supersessions))
+    ).not.toThrow();
+    // Without a supersession the missing test still fails the record.
+    expect(() => validateRecord(listed, 'old.json')).toThrow('missing test');
+  });
+
+  test('an older record, or the listing record itself, cannot retire a test', () => {
+    const lister = { file: 'new.json', order: 2 };
+    expect(isSupersededTest(retired, lister, [{ path: retired, file: 'old.json', order: 1 }])).toBe(
+      false
+    );
+    expect(isSupersededTest(retired, lister, [{ path: retired, file: 'new.json', order: 2 }])).toBe(
+      false
+    );
+  });
+
+  test('a retirement names a removed test, an existing replacement, and a reason', () => {
+    expect(() => validateSupersedes(retirement, 'test')).not.toThrow();
+    expect(() => validateRecord(retirement, 'test')).not.toThrow();
+    const entry = retirement.supersedesTests[0]!;
+    const withEntry = (change: Record<string, unknown>) => ({
+      ...record,
+      supersedesTests: [{ ...entry, ...change }],
+    });
+    expect(() =>
+      validateSupersedes(withEntry({ path: 'scripts/collaboration/policy.test.ts' }), 'test')
+    ).toThrow('still exists');
+    expect(() => validateSupersedes(withEntry({ by: 'scripts/missing.test.ts' }), 'test')).toThrow(
+      'missing replacement test'
+    );
+    expect(() => validateSupersedes(withEntry({ reason: 'gone' }), 'test')).toThrow('explain why');
+    expect(() => validateSupersedes(withEntry({ path: '../outside.ts' }), 'test')).toThrow(
+      'invalid superseded test path'
+    );
+    expect(() => validateSupersedes(withEntry({ note: 'extra' }), 'test')).toThrow('unknown');
+    expect(() =>
+      validateSupersedes({ ...record, supersedesTests: [entry, entry] }, 'test')
+    ).toThrow('twice');
+    expect(() => validateSupersedes({ ...record, supersedesTests: [] }, 'test')).toThrow(
+      'non-empty'
+    );
+    expect(() =>
+      validateSupersedes({ ...retirement, tests: [...record.tests, retired] }, 'test')
+    ).toThrow('cannot list and supersede');
+  });
+
+  test('the change helper reads OLD[=>NEW] entries with one reason', () => {
+    expect(
+      supersededEntries('e2e/a.spec.ts, e2e/b.spec.ts=>packages/b.test.ts', 'Covered elsewhere.')
+    ).toEqual([
+      { path: 'e2e/a.spec.ts', reason: 'Covered elsewhere.' },
+      { path: 'e2e/b.spec.ts', by: 'packages/b.test.ts', reason: 'Covered elsewhere.' },
+    ]);
+    expect(supersededEntries('', undefined)).toEqual([]);
+    expect(() => supersededEntries('e2e/a.spec.ts', undefined)).toThrow('--supersedes-reason');
   });
 });
 

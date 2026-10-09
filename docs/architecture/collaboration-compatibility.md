@@ -6,14 +6,14 @@ If you operate an application, see [Collaboration versions and upgrades](../site
 
 ## Choose your task
 
-| If you need to…                           | Go to…                                                                          |
-| ----------------------------------------- | ------------------------------------------------------------------------------- |
-| Understand what makes a change breaking   | [Understand compatibility](#understand-compatibility)                           |
-| Submit a fix or feature                   | [Contributor workflow](#contributor-workflow)                                   |
-| Change the collaboration format           | [Document a migration](#document-a-migration)                                   |
-| Diagnose a failed check                   | [Troubleshoot a compatibility check](#troubleshoot-a-compatibility-check)       |
+| If you need to… | Go to… |
+| --- | --- |
+| Understand what makes a change breaking | [Understand compatibility](#understand-compatibility) |
+| Submit a fix or feature | [Contributor workflow](#contributor-workflow) |
+| Change the collaboration format | [Document a migration](#document-a-migration) |
+| Diagnose a failed check | [Troubleshoot a compatibility check](#troubleshoot-a-compatibility-check) |
 | Prepare a release or capture its baseline | [Release gate and baseline maintenance](#release-gate-and-baseline-maintenance) |
-| Upgrade stored collaboration data         | [Operator migration checklist](#operator-migration-checklist)                   |
+| Upgrade stored collaboration data | [Operator migration checklist](#operator-migration-checklist) |
 
 ## Understand compatibility
 
@@ -29,12 +29,12 @@ Two package releases can share a format. They can use compatible rooms even when
 
 The published 2.18.0 format is `docx-collaboration:1.3.1.1`. Its four numbers come from `DOCUMENT_COLLABORATION_VERSIONS`, in this order:
 
-| Field                   | What it describes                                                      | Example of an incompatible change                                    |
-| ----------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `protocolVersion`       | How participants exchange and interpret synchronization messages.      | A message field has a different meaning.                             |
-| `sharedSchemaVersion`   | How shared nodes, characters, and identities are stored.               | An existing stored identity uses a different representation.         |
-| `repairVersion`         | How participants resolve invalid or conflicting structures.            | Two versions choose different surviving nodes for the same conflict. |
-| `canonicalModelVersion` | How the editor represents document content in its authoritative model. | The same shared content maps to different document structures.       |
+| Field | What it describes | Example of an incompatible change |
+| --- | --- | --- |
+| `protocolVersion` | How participants exchange and interpret synchronization messages. | A message field has a different meaning. |
+| `sharedSchemaVersion` | How shared nodes, characters, and identities are stored. | An existing stored identity uses a different representation. |
+| `repairVersion` | How participants resolve invalid or conflicting structures. | Two versions choose different surviving nodes for the same conflict. |
+| `canonicalModelVersion` | How the editor represents document content in its authoritative model. | The same shared content maps to different document structures. |
 
 These examples explain when to review a field. They do not require a bump for every change in the named area.
 
@@ -52,11 +52,11 @@ Test the fixed writer against released readers. Also test ordinary editing with 
 
 Choose a decision based on shared behavior:
 
-| Decision             | Use it when…                                                               | Evidence to provide                                                            |
-| -------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `no-impact`          | The implementation change cannot affect shared state or synchronization.   | Explain why shared behavior stays unchanged.                                   |
-| `compatible`         | Released participants retain the same meaning for shared data and updates. | Explain why and identify regression tests.                                     |
-| `migration-required` | Participants would interpret shared data or updates differently.           | Identify affected format fields, regression tests, and migration instructions. |
+| Decision | Use it when… | Evidence to provide |
+| --- | --- | --- |
+| `no-impact` | The implementation change cannot affect shared state or synchronization. | Explain why shared behavior stays unchanged. |
+| `compatible` | Released participants retain the same meaning for shared data and updates. | Explain why and identify regression tests. |
+| `migration-required` | Participants would interpret shared data or updates differently. | Identify affected format fields, regression tests, and migration instructions. |
 
 Passing tests supports your decision. It does not replace a review of shared behavior. If a test fails, investigate it before deciding to change the format.
 
@@ -162,17 +162,49 @@ The following example describes the compatible split fix. Use evidence for your 
 }
 ```
 
-| Field             | What you provide                                                          |
-| ----------------- | ------------------------------------------------------------------------- |
-| `impact`          | One of the three compatibility decisions.                                 |
-| `fields`          | Format fields that require an increment. Leave empty for other decisions. |
-| `before`, `after` | Observable behavior before and after your change.                         |
-| `reason`          | Why released code can share the state, or why migration is necessary.     |
-| `tests`           | Paths to regression tests that support the decision.                      |
-| `changeset`       | The release-note identifier without `.md`, or `null` when allowed.        |
-| `migration`       | A release-specific upgrade-guide heading anchor, or `null`.               |
+| Field             | What you provide                                                             |
+| ----------------- | ---------------------------------------------------------------------------- |
+| `impact`          | One of the three compatibility decisions.                                    |
+| `fields`          | Format fields that require an increment. Leave empty for other decisions.    |
+| `before`, `after` | Observable behavior before and after your change.                            |
+| `reason`          | Why released code can share the state, or why migration is necessary.        |
+| `tests`           | Paths to regression tests that support the decision.                         |
+| `supersedesTests` | Optional. Tests an earlier record lists that this change removes or renames. |
+| `changeset`       | The release-note identifier without `.md`, or `null` when allowed.           |
+| `migration`       | A release-specific upgrade-guide heading anchor, or `null`.                  |
 
 Keep records after Changesets consumes their release notes. If a decision has already merged, add another record for a later correction. Do not rewrite history.
+
+### Remove or rename a listed test
+
+A merged record cannot change, and the check refuses a record whose listed test is missing. To remove or rename a test that an earlier record lists, add a new record that supersedes it:
+
+```sh
+bun run collaboration:change --id retire-old-smoke --impact no-impact \
+  --before "..." --after "..." --reason "..." \
+  --supersedes "e2e/old.smoke.spec.ts=>packages/core/src/editor/__tests__/new.test.ts" \
+  --supersedes-reason "The unit test covers the same behavior in CI."
+```
+
+The helper writes a `supersedesTests` entry for each path:
+
+```json
+"supersedesTests": [
+  {
+    "path": "e2e/old.smoke.spec.ts",
+    "by": "packages/core/src/editor/__tests__/new.test.ts",
+    "reason": "The unit test covers the same behavior in CI."
+  }
+]
+```
+
+The check then accepts the missing test in the earlier record. It enforces these rules:
+
+- `path` is a test that another record lists, and the file is gone.
+- `by`, when present, names the replacement test, and the file exists. Omit `by` for a removal.
+- `reason` explains why the test is no longer needed.
+- Only a record added at the same time or later than the listing record can supersede its test. A new record cannot list a test that an older record already superseded.
+- A record cannot list and supersede the same test.
 
 ### Document a migration
 
@@ -200,12 +232,12 @@ Historical fixtures are immutable. Do not recreate them with candidate code or e
 
 The _compatibility matrix_ is the set of candidate-versus-release test combinations. Each version runs in its own process, with one core runtime and one Yjs runtime. Frozen npm locks select exact dependencies. Workspace imports cannot replace published code in a released worker.
 
-| Case                                           | Required checks                                                                                                                                                       |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Candidate with itself                          | Exercise editing regressions even when its format differs from all published formats.                                                                                 |
+| Case | Required checks |
+| --- | --- |
+| Candidate with itself | Exercise editing regressions even when its format differs from all published formats. |
 | Candidate with each release sharing its format | Create rooms in both directions. Use three participants to test concurrent edits, delayed, duplicate, and reordered updates, reconnects, undo/redo, and splits/joins. |
-| Saved room from each cataloged release         | Inspect it without mutation. Export with compatible code, reseed a separate room, confirm empty undo history, and edit with two replacement clients.                  |
-| Incompatible formats or room identities        | Refuse updates before they enter the destination room.                                                                                                                |
+| Saved room from each cataloged release | Inspect it without mutation. Export with compatible code, reseed a separate room, confirm empty undo history, and edit with two replacement clients. |
+| Incompatible formats or room identities | Refuse updates before they enter the destination room. |
 
 _Convergence_ means replicas reach the same document state after exchanging updates. Convergence alone is insufficient: replicas could agree on a damaged document. Tests also check expected text, export structure, comments, tracked changes, tables, and binary assets.
 
@@ -227,17 +259,18 @@ bun run collaboration:test --release 2.18.0 --seed 592
 
 Replace the version and seed with the values from your failure. For failures in the candidate-only scenarios, run `bun run collaboration:test --all --seed 592` instead.
 
-| Failure                                                              | What you do                                                                                                         |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| A compatibility decision is missing                                  | Run `collaboration:change`, then explain the impact of this PR. An earlier PR's record does not cover your change.  |
-| A migration heading or release warning is missing                    | Add the release-specific guide section and check the linked Changeset or generated changelog.                       |
-| The release table is stale                                           | Run `bun run collaboration:catalog --table` and review the generated table.                                         |
-| A published release is missing from the catalog                      | Capture its baseline and merge the catalog update before publishing another release.                                |
-| A registry request or package install fails                          | Restore registry access and rerun. The gate does not treat unavailable evidence as a pass.                          |
-| A package export is missing or the packed format differs from source | Rebuild packages, regenerate notices, and create another candidate.                                                 |
-| The publication payload differs from the tested candidate            | Repeat candidate preparation and compatibility tests after the package change. Do not publish the untested payload. |
-| A PR preview cannot pass the publication check                       | Use the release workflow after Changesets applies package versions.                                                 |
-| Replicas disagree or document content changes unexpectedly           | Reproduce the seed, inspect the trace, and add a regression test before choosing a fix or migration.                |
+| Failure | What you do |
+| --- | --- |
+| A compatibility decision is missing | Run `collaboration:change`, then explain the impact of this PR. An earlier PR's record does not cover your change. |
+| A decision record lists a missing test | If you removed or renamed that test, add a record that supersedes it. See [Remove or rename a listed test](#remove-or-rename-a-listed-test). |
+| A migration heading or release warning is missing | Add the release-specific guide section and check the linked Changeset or generated changelog. |
+| The release table is stale | Run `bun run collaboration:catalog --table` and review the generated table. |
+| A published release is missing from the catalog | Capture its baseline and merge the catalog update before publishing another release. |
+| A registry request or package install fails | Restore registry access and rerun. The gate does not treat unavailable evidence as a pass. |
+| A package export is missing or the packed format differs from source | Rebuild packages, regenerate notices, and create another candidate. |
+| The publication payload differs from the tested candidate | Repeat candidate preparation and compatibility tests after the package change. Do not publish the untested payload. |
+| A PR preview cannot pass the publication check | Use the release workflow after Changesets applies package versions. |
+| Replicas disagree or document content changes unexpectedly | Reproduce the seed, inspect the trace, and add a regression test before choosing a fix or migration. |
 
 Use synthetic documents in fixtures and traces. Do not commit customer documents or diagnostic traces containing customer content.
 

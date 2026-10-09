@@ -41,7 +41,68 @@ export function changedPaths(base) {
   const untracked = git('ls-files', '--others', '--exclude-standard').split('\n');
   return [...new Set([...changes, ...working, ...untracked])].filter(Boolean);
 }
-export function validateRecord(record, file) {
+/** A repository test path a record may name: under scripts/, packages/, or e2e/. */
+function testPath(path) {
+  return typeof path === 'string' && /^(scripts|packages|e2e)\//.test(path) && !path.includes('..');
+}
+
+/**
+ * Check the tests a record retires. Decision records are immutable once merged, so a test an
+ * earlier record lists cannot be edited out of it. A later record declares the removal or the
+ * rename instead: `supersedesTests: [{ path, by?, reason }]`. `path` is the retired test, which
+ * must be gone; `by`, when present, is the test that replaces it, which must exist.
+ */
+export function validateSupersedes(record, file) {
+  if (record.supersedesTests === undefined) return;
+  assert.ok(
+    Array.isArray(record.supersedesTests) && record.supersedesTests.length,
+    `${file}: supersedesTests must be a non-empty array`
+  );
+  const seen = new Set();
+  for (const entry of record.supersedesTests) {
+    assert.ok(
+      entry !== null && typeof entry === 'object' && !Array.isArray(entry),
+      `${file}: each supersedesTests entry is an object`
+    );
+    const extra = Object.keys(entry).filter((key) => !['path', 'by', 'reason'].includes(key));
+    assert.equal(extra.length, 0, `${file}: unknown supersedesTests keys: ${extra.join(', ')}`);
+    assert.ok(testPath(entry.path), `${file}: invalid superseded test path ${entry.path}`);
+    assert.ok(!seen.has(entry.path), `${file}: ${entry.path} is superseded twice`);
+    seen.add(entry.path);
+    assert.ok(
+      !existsSync(resolve(ROOT, entry.path)),
+      `${file}: superseded test still exists: ${entry.path}`
+    );
+    assert.ok(
+      !record.tests.includes(entry.path),
+      `${file}: a record cannot list and supersede ${entry.path}`
+    );
+    if (entry.by !== undefined)
+      assert.ok(
+        testPath(entry.by) && existsSync(resolve(ROOT, entry.by)),
+        `${file}: missing replacement test ${entry.by}`
+      );
+    assert.ok(
+      typeof entry.reason === 'string' && entry.reason.trim().length >= 12,
+      `${file}: explain why ${entry.path} is superseded`
+    );
+  }
+}
+
+/**
+ * Whether a missing test that `lister` names is retired by a later record.
+ *
+ * `supersessions` lists `{ path, file, order }`, one per `supersedesTests` entry, where `order`
+ * is when the record was added. Only a different record, added at the same time or later, can
+ * retire a test, so a new record cannot name a test that an older record already retired.
+ */
+export function isSupersededTest(path, lister, supersessions) {
+  return supersessions.some(
+    (entry) => entry.path === path && entry.file !== lister.file && entry.order >= lister.order
+  );
+}
+
+export function validateRecord(record, file, superseded = () => false) {
   assert.ok(
     ['no-impact', 'compatible', 'migration-required'].includes(record.impact),
     `${file}: invalid impact`
@@ -65,12 +126,10 @@ export function validateRecord(record, file) {
     assert.ok(record.tests.length, `${file}: regression test evidence required`);
   for (const test of record.tests)
     assert.ok(
-      typeof test === 'string' &&
-        /^(scripts|packages|e2e)\//.test(test) &&
-        !test.includes('..') &&
-        existsSync(resolve(ROOT, test)),
+      testPath(test) && (existsSync(resolve(ROOT, test)) || superseded(test)),
       `${file}: missing test ${test}`
     );
+  validateSupersedes(record, file);
   if (record.impact === 'migration-required') {
     assert.ok(record.fields.length, `${file}: identify affected version fields`);
     assert.ok(
@@ -158,13 +217,35 @@ export function check(base, release = false) {
   const recordFiles = readdirSync(resolve(ROOT, '.collaboration/changes'))
     .filter((name) => name.endsWith('.json'))
     .map((name) => `.collaboration/changes/${name}`);
-  const records = recordFiles
-    .filter((file) => !oldFiles.has(file))
-    .map((file) => {
-      const record = json(file);
-      validateRecord(record, file);
-      return record;
+  // Tests that later records retire. Order is when git first added each record; an
+  // uncommitted record is the newest.
+  const order = (file) =>
+    Number(git('log', '--diff-filter=A', '--format=%ct', '-1', '--', file)) || Infinity;
+  const supersessions = recordFiles.flatMap((file) => {
+    const entries = json(file).supersedesTests ?? [];
+    if (!Array.isArray(entries) || entries.length === 0) return [];
+    const added = order(file);
+    return entries.map((entry) => ({ path: entry?.path, file, order: added }));
+  });
+  const listers = new Map();
+  for (const file of recordFiles)
+    for (const test of json(file).tests ?? [])
+      listers.set(test, [...(listers.get(test) ?? []), file]);
+  const validate = (file) => {
+    const record = json(file);
+    let lister;
+    validateRecord(record, file, (test) => {
+      lister ??= { file, order: order(file) };
+      return isSupersededTest(test, lister, supersessions);
     });
+    for (const entry of record.supersedesTests ?? [])
+      assert.ok(
+        (listers.get(entry.path) ?? []).some((other) => other !== file),
+        `${file}: no earlier record lists ${entry.path}`
+      );
+    return record;
+  };
+  const records = recordFiles.filter((file) => !oldFiles.has(file)).map(validate);
   const affected = paths
     .filter(relevant)
     .filter(
@@ -181,13 +262,7 @@ export function check(base, release = false) {
   const releasedFiles = new Set(
     git('ls-tree', '-r', '--name-only', publishedBase.commit, '.collaboration/changes').split('\n')
   );
-  const releaseRecords = recordFiles
-    .filter((file) => !releasedFiles.has(file))
-    .map((file) => {
-      const record = json(file);
-      validateRecord(record, file);
-      return record;
-    });
+  const releaseRecords = recordFiles.filter((file) => !releasedFiles.has(file)).map(validate);
   const baseVersions = versions(git('show', `${base}:${VERSION_SOURCE}`));
   for (const field of FIELDS)
     assert.ok(
