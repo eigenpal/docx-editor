@@ -165,25 +165,52 @@ export function nodeIndexTestRecorder(): {
 function nodeIndexFor(root: OoxmlElement): PartIndex {
   const cached = partIndexes.get(root);
   if (cached) return cached;
-  nodeIndexCompleteBuilds += 1;
+  nodeIndexBuilder(root)(Infinity);
+  return partIndexes.get(root)!;
+}
+
+/**
+ * Build `root`'s node index in steps of about `budgetMs` each, in document order. A step
+ * answers true once the index is installed, or when another read installed it first. A long
+ * part's index took about a second in one task, so a large open builds it in short ones.
+ */
+export function nodeIndexSteps(root: OoxmlElement): (budgetMs: number) => boolean {
+  const build = nodeIndexBuilder(root);
+  return (budgetMs) => partIndexes.has(root) || build(budgetMs);
+}
+
+function nodeIndexBuilder(root: OoxmlElement): (budgetMs: number) => boolean {
   const nodes = new Map<string, OoxmlNode>();
   const parents = new Map<string, string>();
   let uniqueIds = true;
-  const walk = (node: OoxmlNode, parentId: string | null): void => {
-    nodeIndexCompleteVisits += 1;
-    if (!nodes.has(node.id)) {
-      nodes.set(node.id, node);
-      if (parentId !== null) parents.set(node.id, parentId);
-    } else uniqueIds = false;
-    if (node.kind === 'textValue') return;
-    for (const child of node.children) walk(child, node.id);
+  // Parallel stacks, children pushed in reverse: the same order a recursive walk visits.
+  const pending: OoxmlNode[] = [root];
+  const pendingParents: (string | null)[] = [null];
+  return (budgetMs) => {
+    const deadline = budgetMs === Infinity ? Infinity : performance.now() + budgetMs;
+    let visits = 0;
+    while (pending.length > 0) {
+      const node = pending.pop()!;
+      const parentId = pendingParents.pop()!;
+      nodeIndexCompleteVisits += 1;
+      if (!nodes.has(node.id)) {
+        nodes.set(node.id, node);
+        if (parentId !== null) parents.set(node.id, parentId);
+      } else uniqueIds = false;
+      if (node.kind !== 'textValue') {
+        for (let index = node.children.length - 1; index >= 0; index -= 1) {
+          pending.push(node.children[index]!);
+          pendingParents.push(node.id);
+        }
+      }
+      if ((++visits & 1023) === 0 && performance.now() >= deadline) return false;
+    }
+    nodeIndexCompleteBuilds += 1;
+    const mintState = mintStates.get(root) ?? { frontier: 0 };
+    mintStates.set(root, mintState);
+    partIndexes.set(root, { nodes, parents, mintState, uniqueIds });
+    return true;
   };
-  walk(root, null);
-  const mintState = mintStates.get(root) ?? { frontier: 0 };
-  mintStates.set(root, mintState);
-  const index: PartIndex = { nodes, parents, mintState, uniqueIds };
-  partIndexes.set(root, index);
-  return index;
 }
 
 /** Every node id currently present in the part. */

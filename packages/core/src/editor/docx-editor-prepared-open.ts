@@ -7,7 +7,7 @@ import { openTreeSession, type OpenTreeSessionResult } from '@docx-editor.dev/co
 import type { ReviewModuleContribution } from '../contracts/modules.ts';
 import type { TreeDocxSessionView } from '../binding/tree-session-contract.ts';
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
-import { findNode } from '@docx-editor.dev/core/store';
+import { nodeIndexSteps } from '../store/package/ooxml-edit.ts';
 import { warmResolverGlyphFontFamilies } from './resolver-glyph-font-families.ts';
 import { warmLayoutNodeDigests } from '../layout/layout-cache.ts';
 
@@ -77,9 +77,14 @@ export function openSteps(
   let scanned = 0;
   let digested = 0;
   let fonts: void | Promise<unknown> = undefined;
-  const reads: (() => void)[] = [
-    () => void findNode(session.part(), ''),
-    () => void session.reviewItems(),
+  const indexStep = nodeIndexSteps(session.part().root);
+  // Each read answers true once done; the node index takes several steps on a long part.
+  const reads: (() => boolean)[] = [
+    () => indexStep(FONT_WARM_STEP_MS),
+    () => {
+      session.reviewItems();
+      return true;
+    },
   ];
   const step: Step = () => {
     if (!current()) return;
@@ -99,9 +104,9 @@ export function openSteps(
       }
       return step;
     }
-    const read = reads.shift();
+    const read = reads[0];
     if (!read) return fonts;
-    read();
+    if (read()) reads.shift();
     return step;
   };
   return step;
