@@ -18,6 +18,8 @@ import { DocxEditor, type DocxEditorServerRuntime, type RequestContext } from '.
 import { DocxEditor as DocxEditorBrowser } from '../../browser.ts';
 import { reviewModule } from '../../../../pro/src/review/review-module.ts';
 import { docx, p } from './support/docx.ts';
+import { createRuntime } from '../runtime.ts';
+import { openHost } from './support/hosts.ts';
 
 const three = docx(p('First clause.') + p('Second clause.') + p('Third clause.'));
 const open = (bytes: Uint8Array = three) => DocxEditor.createServer(bytes, { author: 'Agent' });
@@ -305,5 +307,34 @@ test('in the editor, a tracked paragraph deletion is one undo step', async () =>
   } finally {
     runtime.dispose();
     editor.destroy();
+  }
+});
+
+test('a paragraph deletion refuses an answer that is neither applied nor a span', async () => {
+  const inner = openHost(three);
+  const runtime = createRuntime({
+    host: {
+      ...inner,
+      execute(request) {
+        const response = inner.execute(request);
+        return {
+          ...response,
+          results: response.results.map((result, index) =>
+            request.operations[index]?.op === 'deleteParagraph' && result.status === 'ok'
+              ? { status: 'ok' as const, value: { kind: 'text' as const, text: 'unexpected' } }
+              : result
+          ),
+        };
+      },
+    },
+    save: true,
+  });
+  try {
+    await runtime.run(async (c) => {
+      c.document.body.paragraphs.getFirst().delete();
+      await expect(c.sync()).rejects.toMatchObject({ code: 'GeneralException' });
+    });
+  } finally {
+    runtime.dispose();
   }
 });

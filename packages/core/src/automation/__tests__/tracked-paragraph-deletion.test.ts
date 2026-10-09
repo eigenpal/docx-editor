@@ -175,6 +175,19 @@ describe('marks a tracked deletion does not strike', () => {
     expectRefused(docx(control + p('Next')), 0, 'unsupported-capability');
   });
 
+  test('a content control inside a text box does not block the deletion', () => {
+    const box =
+      '<w:p><w:r><w:t>Before box</w:t></w:r><w:r><w:pict xmlns:v="urn:schemas-microsoft-com:vml">' +
+      '<v:shape><v:textbox><w:txbxContent><w:p><w:sdt><w:sdtPr/><w:sdtContent>' +
+      '<w:r><w:t>Boxed control</w:t></w:r></w:sdtContent></w:sdt></w:p></w:txbxContent>' +
+      '</v:textbox></v:shape></w:pict></w:r></w:p>';
+    const host = open(docx(box + p('Next')));
+    const { body } = roots(host);
+    run2(host, body, 0);
+    decide(host, body, true);
+    expect(paragraphTexts(host, body)).toEqual(['Next']);
+  });
+
   test('a paragraph where a field crosses the mark refuses, and a closed field deletes', () => {
     const run = (inner: string) => `<w:r>${inner}</w:r>`;
     const begin = run('<w:fldChar w:fldCharType="begin"/>');
@@ -220,8 +233,11 @@ describe('position markers between paragraphs', () => {
     for (const accept of [true, false]) {
       const host = open(marked);
       const { body } = roots(host);
-      run2(host, body, 0);
-      run2(host, body, 1);
+      const paragraphs = paragraphsOf(host, body);
+      run(host, [
+        { op: 'deleteParagraph', paragraph: paragraphs[0]! },
+        { op: 'deleteParagraph', paragraph: paragraphs[1]! },
+      ]);
       decide(host, body, accept);
       expect(paragraphTexts(host, body)).toEqual(accept ? ['Three'] : ['One', 'Two', 'Three']);
       const xml = savedMainXml(host);
@@ -244,3 +260,54 @@ describe('position markers between paragraphs', () => {
 function run2(host: AutomationHost, body: AutomationHandle, index: number) {
   run(host, [{ op: 'deleteParagraph', paragraph: paragraphsOf(host, body)[index]! }]);
 }
+
+describe('deletions beside the author own pending deletion', () => {
+  for (const [first, second] of [
+    [1, 2],
+    [2, 1],
+  ] as const)
+    test(`deleting paragraph ${second} in a later sync after ${first} refuses`, () => {
+      const host = open(FOUR);
+      const { body } = roots(host);
+      run2(host, body, first);
+      const before = oracles(host);
+      const response = host.execute({
+        operations: [
+          TRACK,
+          { op: 'deleteParagraph', paragraph: paragraphsOf(host, body)[second]! },
+        ],
+      });
+      expect(refusal(response)).toBe('unsupported-revision');
+      expect(oracles(host)).toEqual(before);
+    });
+
+  test('a paragraph that is not adjacent to the earlier deletion records its own decision', () => {
+    const host = open(FOUR);
+    const { body } = roots(host);
+    run2(host, body, 0);
+    run2(host, body, 2);
+    const ids = [...savedMainXml(host).matchAll(/<w:rPr><w:del [^>]*w:id="(\d+)"/g)].map(
+      (match) => match[1]
+    );
+    expect(new Set(ids).size).toBe(2);
+  });
+});
+
+describe('reject restores the source paragraph properties exactly', () => {
+  for (const [name, properties] of [
+    ['no properties', ''],
+    ['empty properties', '<w:pPr/>'],
+    ['empty mark properties', '<w:pPr><w:rPr/></w:pPr>'],
+    ['alignment', '<w:pPr><w:jc w:val="center"/></w:pPr>'],
+  ] as const)
+    test(name, () => {
+      const host = open(
+        docx(`<w:p>${properties}<w:r><w:t>One</w:t></w:r></w:p>` + p('Two') + p('Three'))
+      );
+      const { body } = roots(host);
+      const before = oracles(host);
+      run2(host, body, 0);
+      decide(host, body, false);
+      expect(oracles(host)).toEqual(before);
+    });
+});

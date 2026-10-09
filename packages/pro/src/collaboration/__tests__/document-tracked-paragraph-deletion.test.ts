@@ -117,11 +117,13 @@ async function decided(bytes: Uint8Array, action: 'acceptAll' | 'rejectAll') {
 }
 
 /** Both peers' saved bytes decide to the same texts. */
-async function expectDecisions(r: Room, reject: string, accept: string) {
+async function expectDecisions(r: Room, reject: string, accept: string | readonly string[]) {
   for (const { editor } of r.peers) {
     const bytes = new Uint8Array(await editor.save());
     expect(await decided(bytes, 'rejectAll')).toBe(reject);
-    expect(await decided(bytes, 'acceptAll')).toBe(accept);
+    const accepted = await decided(bytes, 'acceptAll');
+    if (typeof accept === 'string') expect(accepted).toBe(accept);
+    else expect(accept).toContain(accepted);
   }
 }
 
@@ -185,16 +187,21 @@ async function expectSameDecisions(r: Room) {
  * Edits that split the same run concurrently keep both splits' text, a known limit of the
  * collaboration model, so those cases check only that the room stays ready and converges.
  */
-const CONCURRENT: Record<string, { bob: Edit; reject?: string; accept?: string }> = {
+const CONCURRENT: Record<
+  string,
+  { bob: Edit; reject?: string; accept?: string | readonly string[] }
+> = {
   'types at the paragraph start': {
     bob: typeInto(1, 'Note ', 'Start'),
     reject: 'First clause\rNote Middle clause\rLast clause',
     accept: 'First clause\rLast clause',
   },
+  // Typing at the edge of the struck text joins the deletion or stays ordinary text,
+  // depending on client order. Ordinary text joins the next paragraph on accept.
   'types at the paragraph end': {
     bob: typeInto(1, ' note', 'End'),
     reject: 'First clause\rMiddle clause note\rLast clause',
-    accept: 'First clause\rLast clause',
+    accept: ['First clause\rLast clause', 'First clause\r noteLast clause'],
   },
   'bolds the first word': {
     bob: onWord('Middle', (range) => (range.font.bold = true)),
@@ -315,6 +322,60 @@ for (const order of Object.keys(ORDERS) as Order[])
       r.close();
     }
   });
+
+const centerMiddle: Edit = async (c) => {
+  const paragraphs = c.document.body.paragraphs;
+  paragraphs.load('items');
+  await c.sync();
+  paragraphs.items[1]!.alignment = 'Centered';
+  await c.sync();
+};
+
+for (const properties of [false, true])
+  for (const order of Object.keys(ORDERS) as Order[])
+    test(`${order}${properties ? ', paragraph properties' : ''}: the author rejects a deletion a peer centered concurrently`, async () => {
+      const r = await room(fixture(properties ? THREE_WITH_PROPERTIES : THREE), order);
+      try {
+        await concurrently(r, deleteMiddleParagraph, centerMiddle);
+        await converged(r);
+        await r.peers[0]!.runtime.run(async (c) => {
+          c.document.body.revisions.rejectAll();
+          await c.sync();
+        });
+        r.sync();
+        await converged(r);
+        for (const { runtime } of r.peers)
+          await runtime.run(async (c) => {
+            expect(await text(c)).toBe('First clause\rMiddle clause\rLast clause');
+          });
+      } finally {
+        r.close();
+      }
+    });
+
+for (const properties of [false, true])
+  for (const order of Object.keys(ORDERS) as Order[])
+    test(`${order}${properties ? ', paragraph properties' : ''}: a peer bolds the whole paragraph another deletes`, async () => {
+      const r = await room(fixture(properties ? THREE_WITH_PROPERTIES : THREE), order);
+      try {
+        const boldWhole: Edit = async (c) => {
+          const paragraphs = c.document.body.paragraphs;
+          paragraphs.load('items');
+          await c.sync();
+          paragraphs.items[1]!.font.bold = true;
+          await c.sync();
+        };
+        await concurrently(r, deleteMiddleParagraph, boldWhole);
+        await converged(r);
+        await expectDecisions(
+          r,
+          'First clause\rMiddle clause\rLast clause',
+          'First clause\rLast clause'
+        );
+      } finally {
+        r.close();
+      }
+    });
 
 test('typing after a tracked deletion in the same run stays ordinary text', async () => {
   const r = await room(fixture());
@@ -444,7 +505,7 @@ test('a tracked deletion of a paragraph with many runs costs time linear in its 
     const started = performance.now();
     await r.peers[0]!.runtime.run(deleteMiddleParagraph);
     r.sync();
-    // About 1 s here. Recording each run against the whole struck text took over 10 s.
+    // About 1 s here. A cost that grows with runs times struck text would take over 10 s.
     expect(performance.now() - started).toBeLessThan(6000);
     await converged(r);
   } finally {

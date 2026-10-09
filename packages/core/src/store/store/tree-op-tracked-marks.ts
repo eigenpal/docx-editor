@@ -13,6 +13,7 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import {
+  createMarkContainerIdAllocator,
   createNodeIdAllocator,
   parentNodeOf as parentOf,
   replaceChildren,
@@ -97,8 +98,11 @@ export function applyParagraphMarkRevision(
   // The existing containers keep their ids. A fresh `w:pPr` reads, to a collaborating
   // replica, as removing the old one, and a peer's concurrent property edit inside the old one
   // then lands in a container that no longer exists.
+  // Containers this stamp creates take the `mark` id family, so resolving the mark removes
+  // them again and only them: a source `<w:pPr/>` or empty `w:rPr` stays as it was.
+  const markMint = createMarkContainerIdAllocator(part);
   const rPr = build(
-    previousRPr?.id ?? mint(),
+    previousRPr?.id ?? markMint(),
     'runProperties',
     'rPr',
     previousRPr && previousRPr.kind !== 'textValue' ? previousRPr.attributes : [],
@@ -114,7 +118,7 @@ export function applyParagraphMarkRevision(
   const trailing = pPrRest.filter(isTrailingParagraphProperty);
   const leading = pPrRest.filter((child) => !isTrailingParagraphProperty(child));
   const pPr = build(
-    properties?.id ?? mint(),
+    properties?.id ?? markMint(),
     'paragraphProperties',
     'pPr',
     properties ? properties.attributes : [],
@@ -167,7 +171,7 @@ export function retractsOwnParagraphMark(paragraph: OoxmlParagraphNode, author: 
 }
 
 /** The revision of one KIND on a paragraph's own mark, or undefined. */
-function paragraphMarkRevisionOf(
+export function paragraphMarkRevisionOf(
   paragraph: OoxmlParagraphNode,
   kind: 'ins' | 'del'
 ): { readonly localName: string; readonly author: string } | undefined {

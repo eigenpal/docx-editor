@@ -6,9 +6,14 @@
 import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { findNode, parentNodeOf } from '../store/package/ooxml-edit.ts';
 import { fldCharType } from '../store/package/field-nodes.ts';
+import { isDrawingKnownKind } from '../store/package/ooxml-drawing-rules.ts';
 import { namedChild, paragraphPropertiesNodeOf } from '../store/store/tree-op-nodes.ts';
 import { isInertMarker } from '../store/store/revision-marker-content.ts';
+import { paragraphMarkRevisionOf } from '../store/store/tree-op-tracked-marks.ts';
 import type { AutomationError } from './protocol.ts';
+
+/** Containers whose content is a separate story, not part of the paragraph's text. */
+const OWN_STORIES = new Set(['drawing', 'pict', 'object', 'AlternateContent', 'txbxContent']);
 
 const refusal = (message: string, detail: string): AutomationError => ({
   code: 'unsupported-capability',
@@ -20,7 +25,8 @@ const refusal = (message: string, detail: string): AutomationError => ({
  * Why a tracked deletion may not strike this paragraph's mark, or null.
  *
  * - A mark with `w:sectPr` ends a section. Joining it would merge two sections.
- * - An inline content control would survive the join as an empty control shell.
+ * - An inline content control would survive the join as an empty control shell. Controls
+ *   inside a drawing or text box belong to that story and do not count.
  * - A complex field that starts or ends in this paragraph and closes in another would take
  *   the next paragraph's text as its result.
  */
@@ -34,6 +40,8 @@ export function markStrikeRefusal(part: OoxmlPart, paragraphId: string): Automat
   let unbalanced = false;
   const visit = (node: OoxmlNode, depth: number): void => {
     if (node.kind === 'textValue' || depth > 64) return;
+    // A drawing or text box holds its own story; its controls and fields stay inside it.
+    if (isDrawingKnownKind(node.kind) || OWN_STORIES.has(node.localName)) return;
     if (node.kind === 'contentControl') control = true;
     if (node.kind === 'fldChar') {
       const type = fldCharType(node);
@@ -70,4 +78,27 @@ export function nextSiblingParagraph(part: OoxmlPart, paragraphId: string): Ooxm
     if (!isInertMarker(sibling)) return null;
   }
   return null;
+}
+
+/**
+ * Whether the paragraph before this one ends with the author's own pending mark deletion.
+ *
+ * A deletion that starts this paragraph would continue that one and review as one decision
+ * with it, so it refuses, as a deletion beside the author's deletion inside a paragraph does.
+ */
+export function followsOwnMarkDeletion(
+  part: OoxmlPart,
+  paragraphId: string,
+  author: string
+): boolean {
+  const parent = parentNodeOf(part, paragraphId);
+  if (!parent) return false;
+  const at = parent.children.findIndex((child) => child.id === paragraphId);
+  for (let index = at - 1; index >= 0; index -= 1) {
+    const sibling = parent.children[index]!;
+    if (sibling.kind === 'paragraph')
+      return paragraphMarkRevisionOf(sibling, 'del')?.author === author;
+    if (!isInertMarker(sibling)) return false;
+  }
+  return false;
 }

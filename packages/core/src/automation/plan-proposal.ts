@@ -14,7 +14,11 @@ import {
   type ResolvedRange,
 } from './spans.ts';
 import { proposalInputError, proposalRevisionError } from './proposals.ts';
-import { markStrikeRefusal, nextSiblingParagraph } from './tracked-paragraph-marks.ts';
+import {
+  followsOwnMarkDeletion,
+  markStrikeRefusal,
+  nextSiblingParagraph,
+} from './tracked-paragraph-marks.ts';
 
 /**
  * The proposal a tracked text or paragraph edit makes, or the refusal that ends it.
@@ -133,6 +137,15 @@ export function planProposal(
       return refuse(
         'unsupported-content',
         'tracked ranges require adjacent sibling paragraphs',
+        'span'
+      );
+    if (
+      range.start.offset === 0 &&
+      followsOwnMarkDeletion(reads.part, ids[0]!, operation.author.trim())
+    )
+      return refuse(
+        'unsupported-revision',
+        "a deletion beside the author's pending deletion would review as one decision",
         'span'
       );
     const revision = { author: operation.author.trim(), date: new Date().toISOString() };
