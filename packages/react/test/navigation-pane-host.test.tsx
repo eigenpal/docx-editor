@@ -686,3 +686,47 @@ describe('an open toolbar popup and Ctrl/Cmd+F', () => {
     expect(document.activeElement).toBe(scroller);
   });
 });
+
+describe('focus when the pane covers the page', () => {
+  test('focus in content that turns inert moves into the pane', () => {
+    const viewport = document.createElement('div');
+    const pane = document.createElement('nav');
+    const find = document.createElement('input');
+    find.className = 'docx-nav__search-input';
+    pane.append(find);
+    const rail = document.createElement('div');
+    const draft = document.createElement('textarea');
+    rail.append(draft);
+    viewport.append(pane, rail);
+    document.body.append(viewport);
+    try {
+      draft.focus();
+      expect(document.activeElement).toBe(draft);
+      const release = inertBehindPane(pane, viewport);
+      expect(rail.hasAttribute('inert')).toBe(true);
+      expect(document.activeElement).toBe(find);
+      release();
+      expect(rail.hasAttribute('inert')).toBe(false);
+    } finally {
+      viewport.remove();
+    }
+  });
+
+  test('focus outside the covered content stays where it is', () => {
+    const viewport = document.createElement('div');
+    const pane = document.createElement('nav');
+    pane.append(document.createElement('input'));
+    viewport.append(pane, document.createElement('div'));
+    const host = document.createElement('input');
+    document.body.append(viewport, host);
+    try {
+      host.focus();
+      const release = inertBehindPane(pane, viewport);
+      expect(document.activeElement).toBe(host);
+      release();
+    } finally {
+      viewport.remove();
+      host.remove();
+    }
+  });
+});

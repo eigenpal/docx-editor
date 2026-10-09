@@ -375,7 +375,7 @@ Navigation parts are compound statics. Add a class to each part instead of targe
 
 Place `DocxEditor.Navigation` as a direct child of `DocxEditor.Viewport`, or beside the viewport in a positioned container. As a direct child of the viewport, the pane stays in place while the pages scroll. In both positions, the pane moves the page only when the left margin area cannot hold it.
 
-If the viewport leaves less than `NAVIGATION_PANE_MIN_PAGE_ROOM` (320 pixels) beside the pane, the pane covers the page instead. It then spans the viewport width less its inset on each side, and the page doesn't move. The pane closes after you choose a heading or a result. `useNavigationPane().overlay` reports this mode.
+If the viewport leaves less than `NAVIGATION_PANE_MIN_PAGE_ROOM` (320 pixels) beside the pane, the pane covers the page instead. The review pane's visible room counts against the viewport. With the review pane's `overflow: 'scroll'`, only its marker strip counts, because the card column scrolls out of view. It then spans the viewport width less its inset on each side, and the page doesn't move. The pane closes after you choose a heading or a result. `useNavigationPane().overlay` reports this mode.
 
 The pane takes its labels from its `t` prop. Without `t`, it uses the `translate` function of `DocxEditor.Root`, then the active locale catalog.
 

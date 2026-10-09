@@ -104,6 +104,25 @@ export function focusPaneEntry(element: HTMLElement): void {
   }
 }
 
+/** Focus the pane's first focusable control, or the pane itself. */
+function focusIntoPane(pane: Element): void {
+  const target =
+    pane.querySelector<HTMLElement>(
+      '.docx-nav__heading--current, .docx-nav__heading, .docx-nav__search-input'
+    ) ??
+    pane.querySelector<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+  if (target) {
+    target.focus();
+    return;
+  }
+  if (pane instanceof HTMLElement) {
+    if (!pane.hasAttribute('tabindex')) pane.setAttribute('tabindex', '-1');
+    pane.focus();
+  }
+}
+
 /**
  * Make the page content `inert` while an overlaying pane covers it, so Tab and the pointer
  * cannot reach content the pane hides. A pane inside the scroll container leaves its own
@@ -112,20 +131,25 @@ export function focusPaneEntry(element: HTMLElement): void {
  * attributes set here are removed again. Returns the cleanup.
  */
 export function inertBehindPane(pane: Element, viewport: Element): () => void {
-  const marked: Element[] = [];
-  const mark = (element: Element) => {
-    if (element.hasAttribute('inert')) return;
-    element.setAttribute('inert', '');
-    marked.push(element);
-  };
+  const covered: Element[] = [];
   if (viewport.contains(pane)) {
     let node: Element = pane;
     while (node !== viewport && node.parentElement) {
-      for (const sibling of node.parentElement.children) if (sibling !== node) mark(sibling);
+      for (const sibling of node.parentElement.children) if (sibling !== node) covered.push(sibling);
       node = node.parentElement;
     }
   } else {
-    for (const child of viewport.children) mark(child);
+    covered.push(...viewport.children);
+  }
+  // Focus in content that turns inert, such as an open balloon or a comment draft, would
+  // drop to <body>. Move it into the pane first.
+  const active = pane.ownerDocument.activeElement;
+  if (active && covered.some((element) => element.contains(active))) focusIntoPane(pane);
+  const marked: Element[] = [];
+  for (const element of covered) {
+    if (element.hasAttribute('inert')) continue;
+    element.setAttribute('inert', '');
+    marked.push(element);
   }
   return () => {
     for (const element of marked) element.removeAttribute('inert');
