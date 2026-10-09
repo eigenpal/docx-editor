@@ -813,6 +813,28 @@ describe('places anchors in story and cell context', () => {
       }
     }
   });
+  test('a legacy fixed table without a style or indent starts its outer edge at the column', () => {
+    const source = anchoredPictureXml({
+      positionH:
+        '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>',
+    })
+      .replace(
+        '<w:body>',
+        '<w:body><w:tbl><w:tblPr><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="240" w:type="dxa"/><w:right w:w="360" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:tc>'
+      )
+      .replace('</w:body>', '</w:tc></w:tr></w:tbl></w:body>');
+    const part = load(source);
+    // With neither a table style nor a stated indent, the table sits as if indented by its
+    // leading cell margin, so the cell column starts one 12pt margin inside the text column.
+    for (const compatibilityMode of [undefined, 11, 14, 15]) {
+      const layout = layoutSemanticDocument(part, 1, {
+        measurer,
+        inlineDrawingLayout: layoutContext(part),
+        compatibilityMode,
+      });
+      expect(layout.pages[0]!.anchoredDrawings![0]!.x).toBeCloseTo(12, 5);
+    }
+  });
   test('body anchor publishes on the page with owner part context', () => {
     const part = load(anchoredPictureXml({ before: run('A') }));
     const layout = lay(part, layoutContext(part));
