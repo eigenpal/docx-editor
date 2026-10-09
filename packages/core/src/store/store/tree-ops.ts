@@ -12,7 +12,11 @@
 import { withFieldResultsMode } from '../package/field-result-mode.ts';
 import type { EditOptions } from '../package/ooxml-edit.ts';
 import type { OoxmlPart } from '../package/ooxml-tree.ts';
-import { savedResultDeletionPlan, simpleFieldsEditedInside } from './field-result-edits.ts';
+import {
+  savedResultDeletionPlan,
+  savedResultOpRefusal,
+  simpleFieldsEditedInside,
+} from './field-result-edits.ts';
 import { complexFieldFromSimple } from './field-simple-to-complex.ts';
 import { applyTreeOp as applyTreeOpInMode } from './tree-op-apply.ts';
 import type { TreeDocOp, TreeOpResult } from './tree-op-validate.ts';
@@ -53,18 +57,33 @@ export { paragraphTextOf } from './tree-op-apply.ts';
 export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOptions): TreeOpResult {
   return withFieldResultsMode(options?.fieldResults, () => {
     // A deletion across editable saved results keeps every field's markers balanced.
+    if (savedResultOpRefusal(part, op)) return { ok: false, reason: 'field-result-unsupported' };
     const plan = savedResultDeletionPlan(part, op);
     if (plan.kind === 'refuse') return { ok: false, reason: 'field-structure' };
     if (plan.kind === 'atomic') {
       return withFieldResultsMode('atomic', () => applyTreeOpInMode(part, plan.op, options));
     }
     let target = part;
+    const created: string[] = [];
+    const deleted: string[] = [];
     for (const simpleId of simpleFieldsEditedInside(part, op)) {
       const rewritten = complexFieldFromSimple(target, simpleId, options);
-      if (!rewritten.ok) return { ok: false, reason: 'field-structure' };
+      if (!rewritten.ok) return { ok: false, reason: 'tree-invariant' };
       target = rewritten.part;
+      created.push(...rewritten.created);
+      deleted.push(...rewritten.deleted);
     }
-    return applyTreeOpInMode(target, op, options);
+    const result = applyTreeOpInMode(target, op, options);
+    if (!result.ok || deleted.length === 0) return result;
+    // The rewrite replaced the simple field: its node is gone and the marker runs are new.
+    return {
+      ...result,
+      effect: {
+        ...result.effect,
+        created: [...result.effect.created, ...created],
+        deleted: [...result.effect.deleted, ...deleted],
+      },
+    };
   });
 }
 export {

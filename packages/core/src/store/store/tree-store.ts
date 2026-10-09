@@ -946,7 +946,11 @@ export class TreeDocumentStore {
       ...(effects?.caret ? { caret: effects.caret } : {}),
       ...(story ? { story } : {}),
     };
-    for (const listener of this.subscribers) listener(change);
+    // Subscribers are outside the store call: they read in the default mode, never in the
+    // transaction's editable field-result mode.
+    withFieldResultsMode('atomic', () => {
+      for (const listener of this.subscribers) listener(change);
+    });
     return change;
   }
 }

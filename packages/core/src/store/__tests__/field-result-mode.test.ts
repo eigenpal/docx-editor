@@ -6,9 +6,9 @@
 // another field one unit.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, serializeOoxmlPart } from '../index.ts';
+import { canonicalOoxmlFingerprint, readOoxmlPart, serializeOoxmlPart } from '../index.ts';
 import { FIELD_ATOM_CHAR } from '../package/field-nodes.ts';
-import type { OoxmlPart } from '../package/ooxml-tree.ts';
+import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { TreeDocumentStore } from '../store/tree-store.ts';
 import { applyTreeOp, paragraphTextOf } from '../store/tree-ops.ts';
 import type { TreeDocOp } from '../store/tree-op-types.ts';
@@ -220,4 +220,145 @@ describe('a store transaction in the editable mode', () => {
     });
     expect(paragraphTextOf(store.part, id)).toBe(`ab ${FIELD_ATOM_CHAR}# cd`);
   });
+});
+
+describe('result edges', () => {
+  for (const { label, field, result } of KINDS) {
+    test(`deletes the first, the last, and every result character: ${label}`, () => {
+      const { part, id } = paragraphWith(field);
+      const start = 3;
+      const end = start + result.length;
+      const text = (edited: OoxmlPart) => paragraphTextOf(edited, id, EDITABLE);
+      const first = apply(part, { op: 'deleteText', paragraphId: id, start, end: start + 1 });
+      expect(text(first)).toBe(`ab ${result.slice(1)} cd`);
+      const last = apply(part, { op: 'deleteText', paragraphId: id, start: end - 1, end });
+      expect(text(last)).toBe(`ab ${result.slice(0, -1)} cd`);
+      // Backspace through the whole result one character at a time keeps an empty field.
+      let edited = part;
+      for (let offset = end; offset > start; offset -= 1) {
+        edited = apply(edited, {
+          op: 'deleteText',
+          paragraphId: id,
+          start: offset - 1,
+          end: offset,
+        });
+      }
+      expect(text(edited)).toBe('ab  cd');
+      expect(paragraphTextOf(edited, id)).toBe(`ab ${FIELD_ATOM_CHAR} cd`);
+    });
+  }
+});
+
+describe('ops the editable mode does not support inside a result', () => {
+  test('are refused inside a result and allowed at its edges', () => {
+    const { part, id } = paragraphWith(complex(' DATE ', run('2020-01-02')));
+    const inside: readonly TreeDocOp[] = [
+      { op: 'splitParagraph', paragraphId: id, offset: 5 },
+      { op: 'insertTab', paragraphId: id, offset: 5 },
+      { op: 'insertHyperlink', paragraphId: id, start: 1, end: 5, anchor: 'x' },
+    ];
+    for (const op of inside) {
+      const refused = applyTreeOp(part, op, EDITABLE);
+      expect(refused.ok).toBe(false);
+      if (!refused.ok) expect(refused.reason).toBe('field-result-unsupported');
+    }
+    for (const offset of [3, 13]) {
+      const split = applyTreeOp(part, { op: 'splitParagraph', paragraphId: id, offset }, EDITABLE);
+      expect(split.ok).toBe(true);
+    }
+  });
+});
+
+describe('rewriting a simple field before an edit inside it', () => {
+  test('keeps its data, attributes, and tracked formatting in their places', () => {
+    const field =
+      '<w:fldSimple w:instr=" MERGEFIELD Name " w:fldLock="1" w:dirty="1">' +
+      '<w:fldData>ZGF0YQ==</w:fldData>' +
+      '<w:r><w:rPr><w:b/><w:rPrChange w:id="7" w:author="A" w:date="2026-01-01T00:00:00Z">' +
+      '<w:rPr/></w:rPrChange></w:rPr><w:t>Name</w:t></w:r></w:fldSimple>';
+    const { part, id } = paragraphWith(field);
+    const before = serializeOoxmlPart(part);
+    expect(before).toContain('fldSimple');
+    const result = applyTreeOp(
+      part,
+      { op: 'insertText', paragraphId: id, offset: 5, text: '#' },
+      EDITABLE
+    );
+    if (!result.ok) throw Error(result.reason);
+    // The effect reports the replaced field and the four new marker runs.
+    const paragraph = (part.root.children[0] as { children: readonly OoxmlNode[] }).children[0]!;
+    const simpleNode = (paragraph as { children: readonly OoxmlNode[] }).children.find(
+      (child) =>
+        child.kind !== 'textValue' && 'localName' in child && child.localName === 'fldSimple'
+    )!;
+    expect(result.effect.deleted).toContain(simpleNode.id);
+    expect(result.effect.created.length).toBeGreaterThanOrEqual(4);
+    const xml = serializeOoxmlPart(result.part);
+    expect(xml).not.toContain('fldSimple');
+    // The field data sits in the begin marker, with the field's lock and dirty flags.
+    const begin = /<w:fldChar[^>]*w:fldCharType="begin"[^>]*>.*?<\/w:fldChar>/.exec(xml)?.[0];
+    expect(begin).toBeDefined();
+    expect(begin).toContain('<w:fldData>ZGF0YQ==</w:fldData>');
+    expect(begin).toContain('w:fldLock="1"');
+    expect(begin).toContain('w:dirty="1"');
+    expect(xml.indexOf('<w:fldData>')).toBe(xml.lastIndexOf('<w:fldData>'));
+    // The tracked property change stays on the result run only: one revision, one id.
+    expect(xml.match(/w:id="7"/g)?.length).toBe(1);
+    expect(xml).toContain('MERGEFIELD Name');
+    expect(paragraphTextOf(result.part, id, EDITABLE)).toBe('ab Na#me cd');
+
+    // The rewritten part reopens to the same canonical structure.
+    const reopened = readOoxmlPart(xml, {
+      name: '/word/document.xml',
+      contentType: 'application/xml',
+    });
+    if (!reopened.ok) throw Error(reopened.reason);
+    expect(canonicalOoxmlFingerprint(reopened.part)).toBe(canonicalOoxmlFingerprint(result.part));
+  });
+});
+
+describe('store subscribers', () => {
+  test('read in the default mode, even during an editable transaction', () => {
+    const { part, id } = paragraphWith(complex(' MERGEFIELD Name ', run('Name')));
+    const store = new TreeDocumentStore(part);
+    const seen: (string | null)[] = [];
+    store.subscribe(() => seen.push(paragraphTextOf(store.part, id)));
+    store.transact(
+      (ctx) => {
+        ctx.apply({ op: 'insertText', paragraphId: id, offset: 5, text: '#' });
+      },
+      { fieldResults: 'editable' }
+    );
+    expect(seen).toEqual([`ab ${FIELD_ATOM_CHAR} cd`]);
+  });
+});
+
+describe('deciding tracked edits inside a result', () => {
+  for (const decision of ['acceptAllRevisions', 'rejectAllRevisions'] as const) {
+    test(decision, () => {
+      const { part, id } = paragraphWith(complex(' MERGEFIELD Name ', run('Name')));
+      let edited = apply(part, {
+        op: 'insertText',
+        paragraphId: id,
+        offset: 5,
+        text: '#',
+        revision: REVISION,
+      });
+      edited = apply(edited, {
+        op: 'deleteText',
+        paragraphId: id,
+        start: 3,
+        end: 4,
+        revision: REVISION,
+      });
+      const decided = apply(edited, { op: decision });
+      expect(paragraphTextOf(decided, id, EDITABLE)).toBe(
+        decision === 'acceptAllRevisions' ? 'ab a#me cd' : 'ab Name cd'
+      );
+      const xml = serializeOoxmlPart(decided);
+      expect(xml).not.toContain('<w:ins ');
+      expect(xml).not.toContain('<w:del ');
+      expect(xml).toContain('w:fldCharType="separate"');
+    });
+  }
 });

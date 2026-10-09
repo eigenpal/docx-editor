@@ -10,9 +10,20 @@
 // The mode is passed explicitly at every public boundary (`EditOptions.fieldResults`,
 // `paragraphTextOf(..., { fieldResults })`). Inside one synchronous store call the boundary
 // installs it with `withFieldResultsMode`, so the deep offset helpers it reaches read the same
-// mode without each signature carrying it. Nothing outside such a call ever sees `editable`.
+// mode without each signature carrying it. Nothing outside such a call ever sees `editable`:
+// store subscribers run in `atomic`.
+//
+// TODO(#1197, editor change): the editor turns `editable` on only without a collaboration
+// module, and refuses a host request for both. Until then nothing in the editor uses it.
 
-/** How saved field results are addressed. */
+/**
+ * How saved field results are addressed.
+ *
+ * - `atomic`: every closed field is one offset unit.
+ * - `editable`: the results of CREATEDATE, DATE, FILENAME, FILLIN, HYPERLINK, MERGEFIELD,
+ *   PRINTDATE, QUOTE, SAVEDATE, SEQ, and TIME fields are text. Every other field type, a
+ *   field whose result holds another field, and a legacy FORMTEXT input keep their own rules.
+ */
 export type FieldResultsMode = 'atomic' | 'editable';
 
 let current: FieldResultsMode = 'atomic';

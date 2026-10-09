@@ -646,7 +646,7 @@ export function parsedFieldSpansOf(
         addressing:
           fieldResultAddressing(fldSimpleInstr(child) ?? '', {
             maxInstructionChars,
-            nestedInResult: simpleHoldsField(child),
+            nestedInResult: fieldResults === 'editable' && simpleHoldsField(child),
             fieldResults,
           }) === 'saved-result'
             ? 'saved-result'

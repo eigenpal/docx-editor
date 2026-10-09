@@ -66,12 +66,16 @@ export function classifySavedResultDeletion(
   const ranges = savedResultRanges(paragraph);
   let removes = false;
   for (const range of ranges) {
-    const startInside = start > range.start && start < range.end;
-    const endInside = end > range.start && end < range.end;
-    if (startInside !== endInside) return { kind: 'crosses' };
-    if (startInside) continue;
-    const covers = start <= range.start && end >= range.end;
-    if (covers && (start < range.start || end > range.end)) removes = true;
+    // Touching a result's edge from outside is no overlap; its edges are field edges.
+    if (start >= range.end || end <= range.start) continue;
+    // Inside the result, edges included: the first and last characters, or all of it.
+    if (start >= range.start && end <= range.end) continue;
+    // Over the whole field and past it: the field goes with the range.
+    if (start <= range.start && end >= range.end) {
+      removes = true;
+      continue;
+    }
+    return { kind: 'crosses' };
   }
   if (!removes) return { kind: 'inside' };
   // A saved result of length L is one unit in the atomic mode: every field wholly before an
@@ -135,4 +139,42 @@ export function simpleFieldsEditedInside(part: OoxmlPart, op: TreeDocOp): readon
         : start < range.end && end > range.start
     )
     .map((range) => range.nodeId);
+}
+
+/** The offsets an op addresses in one paragraph, when it addresses any. */
+function addressedOffsets(op: TreeDocOp): { paragraphId: string; points: number[] } | null {
+  const record = op as unknown as Record<string, unknown>;
+  if (typeof record.paragraphId !== 'string') return null;
+  const points: number[] = [];
+  for (const key of ['offset', 'start', 'end'] as const) {
+    if (typeof record[key] === 'number') points.push(record[key] as number);
+  }
+  if (Array.isArray(record.offsets)) {
+    for (const value of record.offsets) if (typeof value === 'number') points.push(value);
+  }
+  return points.length > 0 ? { paragraphId: record.paragraphId, points } : null;
+}
+
+/** Ops that edit inside an editable saved result; every other op is refused there. */
+const RESULT_EDIT_OPS: ReadonlySet<string> = new Set([
+  'insertText',
+  'deleteText',
+  'setRunProperties',
+]);
+
+/**
+ * In the `editable` mode, refuse an op this mode does not support inside a saved result: any
+ * op other than typing, deletion, and run formatting whose offsets fall strictly inside a
+ * result, or whose range has one end inside and one outside. A split, a tab, a link, a note,
+ * or a fragment there would need rules the field markers do not have yet.
+ */
+export function savedResultOpRefusal(part: OoxmlPart, op: TreeDocOp): boolean {
+  if (currentFieldResultsMode() !== 'editable' || RESULT_EDIT_OPS.has(op.op)) return false;
+  const addressed = addressedOffsets(op);
+  if (!addressed) return false;
+  const paragraph = findNode(part, addressed.paragraphId);
+  if (!isParagraph(paragraph)) return false;
+  return savedResultRanges(paragraph).some((range) =>
+    addressed.points.some((point) => point > range.start && point < range.end)
+  );
 }

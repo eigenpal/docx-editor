@@ -1173,6 +1173,12 @@ export type TreeOpRejection =
    * refused. A range that covers the whole field removes the field.
    */
   | 'field-structure'
+  /**
+   * In the editable field-result mode, an op other than typing, deletion, or run formatting
+   * addresses a position inside a field's saved result. Splits, tabs, links, notes, and
+   * fragments there are not supported yet.
+   */
+  | 'field-result-unsupported'
   | 'unknown-block'
   | 'not-a-block'
   | 'block-required'

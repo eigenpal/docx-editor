@@ -6,7 +6,7 @@
 // word processor anyway. So an edit that reaches inside an editable simple field's result
 // first rewrites the field, then edits ordinary runs.
 
-import { fieldOnOffAttribute, fldSimpleInstr, isFldSimple } from '../package/field-nodes.ts';
+import { fldSimpleInstr, isFldSimple } from '../package/field-nodes.ts';
 import {
   createNodeIdAllocator,
   findNode,
@@ -55,29 +55,64 @@ function resultRunProperties(simple: OoxmlNode): OoxmlNode | null {
   return null;
 }
 
+const localNameOf = (node: OoxmlNode): string =>
+  node.kind === 'textValue' ? '' : ((node as { localName?: string }).localName ?? '');
+
+/**
+ * The result's properties for a marker run, without a tracked property change: that change
+ * belongs to the result run, and a copy would repeat its `w:id`.
+ */
+function markerRunProperties(rPr: OoxmlNode, nextId: () => string): OoxmlNode {
+  const clone = cloneWithNewIds(rPr, nextId);
+  if (clone.kind === 'textValue') return clone;
+  return {
+    ...clone,
+    children: clone.children.filter((child) => localNameOf(child) !== 'rPrChange'),
+  } as OoxmlNode;
+}
+
+/** What the rewrite replaced: the simple field, and the runs that now carry its markers. */
+export interface SimpleFieldRewrite {
+  readonly ok: true;
+  readonly part: OoxmlPart;
+  readonly created: readonly string[];
+  readonly deleted: readonly string[];
+}
+
 /**
  * Replace the simple field `simpleId` with its complex form. The instruction and the result
- * runs are kept as they are; `w:fldLock` and `w:dirty` move to the begin marker.
+ * runs are kept as they are. The field's `w:fldLock` and `w:dirty` attributes and its
+ * `w:fldData` move to the begin marker.
  */
 export function complexFieldFromSimple(
   part: OoxmlPart,
   simpleId: string,
   options?: EditOptions
-): { ok: true; part: OoxmlPart } | { ok: false } {
+): SimpleFieldRewrite | { ok: false } {
   const simple = findNode(part, simpleId);
   const parent = parentOf(part, simpleId);
   if (!simple || !isFldSimple(simple) || simple.kind === 'textValue' || !parent)
     return { ok: false };
   const nextId = createNodeIdAllocator(part);
   const rPr = resultRunProperties(simple);
-  const run = (child: OoxmlNode): OoxmlNode =>
-    element(nextId, 'run', 'r', [], rPr ? [cloneWithNewIds(rPr, nextId), child] : [child]);
-  const beginAttributes = [attribute('fldCharType', 'begin')];
-  for (const name of ['fldLock', 'dirty'] as const) {
-    if (fieldOnOffAttribute(simple, name) === true) beginAttributes.push(attribute(name, 'true'));
+  const created: string[] = [];
+  const run = (child: OoxmlNode): OoxmlNode => {
+    const children = rPr ? [markerRunProperties(rPr, nextId), child] : [child];
+    const marker = element(nextId, 'run', 'r', [], children);
+    created.push(marker.id);
+    return marker;
+  };
+  const beginAttributes: Record<string, unknown>[] = [attribute('fldCharType', 'begin')];
+  for (const kept of simple.attributes) {
+    if (kept.localName === 'fldLock' || kept.localName === 'dirty')
+      beginAttributes.push({ ...kept });
   }
-  const fldChar = (attributes: readonly Record<string, unknown>[]) =>
-    element(nextId, 'fldChar', 'fldChar', attributes, []);
+  const fieldData = simple.children.filter((child) => localNameOf(child) === 'fldData');
+  const result = simple.children.filter((child) => localNameOf(child) !== 'fldData');
+  const fldChar = (
+    attributes: readonly Record<string, unknown>[],
+    children: readonly OoxmlNode[] = []
+  ) => element(nextId, 'fldChar', 'fldChar', attributes, children);
   const instruction = element(
     nextId,
     'instrText',
@@ -94,13 +129,15 @@ export function complexFieldFromSimple(
     [{ id: nextId(), kind: 'textValue', value: fldSimpleInstr(simple) ?? '' } as OoxmlNode]
   );
   const complex = [
-    run(fldChar(beginAttributes)),
+    run(fldChar(beginAttributes, fieldData)),
     run(instruction),
     run(fldChar([attribute('fldCharType', 'separate')])),
-    ...simple.children,
+    ...result,
     run(fldChar([attribute('fldCharType', 'end')])),
   ];
   const rebuilt = parent.children.flatMap((child) => (child.id === simpleId ? complex : [child]));
   const replaced = replaceChildren(part, parent.id, rebuilt, options);
-  return replaced.ok ? { ok: true, part: replaced.part } : { ok: false };
+  return replaced.ok
+    ? { ok: true, part: replaced.part, created, deleted: [simpleId] }
+    : { ok: false };
 }
