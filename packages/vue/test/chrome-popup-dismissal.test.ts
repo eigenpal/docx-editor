@@ -167,4 +167,3 @@ describe('a picker behind a host modal (Vue)', () => {
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
   });
 });
-

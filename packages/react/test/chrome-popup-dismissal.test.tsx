@@ -193,4 +193,3 @@ describe('a picker behind a host modal', () => {
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
   });
 });
-
