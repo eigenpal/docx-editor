@@ -137,6 +137,11 @@
         "react/exhaustive-deps": "off"
       }
     },
+    // Vue chrome passes children to its own components as function slots.
+    {
+      "files": ["packages/vue/src/**/*.tsx", "packages/pro/src/vue/**/*.tsx"],
+      "rules": { "docx/vue-function-slots": "error" }
+    },
     {
       "files": ["packages/pro/src/__tests__/**/*vue*.{ts,tsx}"],
       "rules": { "react/rules-of-hooks": "off", "react/exhaustive-deps": "off" }

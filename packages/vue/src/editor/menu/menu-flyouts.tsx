@@ -260,7 +260,11 @@ export const MenuTablePicker = defineComponent({
           labelKey={props.entry.labelKey ?? control?.labelKey ?? props.entry.slot}
           paths={control?.paths}
         >
-          <MenuTableGrid {...({ slot: props.entry.slot } as { slot: ChromeSlotId })} />
+          {{
+            default: () => (
+              <MenuTableGrid {...({ slot: props.entry.slot } as { slot: ChromeSlotId })} />
+            ),
+          }}
         </MenuSubmenu>
       );
     };

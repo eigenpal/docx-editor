@@ -96,6 +96,45 @@ const RAW_COMPATIBILITY_MODE_SELECTORS = [
   "SwitchStatement[discriminant.property.name='compatibilityMode']",
 ];
 
+// Vue chrome passes children to its own components as FUNCTION slots. A JSX child list on a
+// component tag reaches Vue as a non-function default slot: Vue normalizes it once and hands
+// the same vnodes to every later render. When the component mounts those children again, and a
+// server-rendered host has switched Vue to its hydration renderer, the reused vnodes hydrate
+// against the wrong DOM (packages/vue/test/hydration-renderer-slots.test.ts).
+const VUE_ARRAY_SLOT_MSG =
+  'Pass component children as a function slot: <X>{{ default: () => children }}</X>. ' +
+  'A JSX child list is a non-function slot, whose reused vnodes break under the hydration ' +
+  'renderer. See packages/vue/test/hydration-renderer-slots.test.ts.';
+
+/** Vue built-ins that take raw children, not slots. */
+const VUE_RAW_CHILDREN = new Set(['Teleport', 'KeepAlive', 'Suspense', 'Fragment']);
+
+function isComponentTag(name) {
+  if (name.type === 'JSXIdentifier')
+    return /^[A-Z]/.test(name.name) && !VUE_RAW_CHILDREN.has(name.name);
+  return name.type === 'JSXMemberExpression';
+}
+
+function isWhitespaceText(child) {
+  return child.type === 'JSXText' && child.value.trim() === '';
+}
+
+const vueFunctionSlots = {
+  create(context) {
+    return {
+      JSXElement(node) {
+        if (!isComponentTag(node.openingElement.name)) return;
+        const children = node.children.filter((child) => !isWhitespaceText(child));
+        if (children.length === 0) return;
+        const only = children.length === 1 ? children[0] : null;
+        if (only?.type === 'JSXExpressionContainer' && only.expression.type === 'ObjectExpression')
+          return;
+        context.report({ node: node.openingElement, message: VUE_ARRAY_SLOT_MSG });
+      },
+    };
+  },
+};
+
 export default {
   meta: { name: 'docx' },
   rules: {
@@ -147,6 +186,8 @@ export default {
       // `new Foo(...arr)` is not a CallExpression, so it needs its own selector.
       { selector: 'NewExpression > SpreadElement', message: VARARGS_NEW_MSG },
     ]),
+
+    'vue-function-slots': vueFunctionSlots,
 
     'no-raw-compatibility-mode': selectorRule(
       RAW_COMPATIBILITY_MODE_SELECTORS.map((selector) => ({

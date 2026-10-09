@@ -52,7 +52,7 @@ const MenuReportIssueImpl = defineComponent({
           }}
           {...(props.className ? { className: props.className } : {})}
         >
-          {label('toolbar.reportIssue')}
+          {{ default: () => label('toolbar.reportIssue') }}
         </MenuRow>
       );
     };

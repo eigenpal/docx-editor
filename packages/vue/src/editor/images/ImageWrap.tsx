@@ -106,7 +106,7 @@ export const ImageWrap = defineComponent({
       return (
         <div ref={rootRef} class="docx-toolbar__image-wrap">
           {props.asChild ? (
-            <Slot {...shared}>{slots.default?.()}</Slot>
+            <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>
           ) : (
             <button {...shared}>{slots.default?.() ?? chromeIcon(control?.paths)}</button>
           )}

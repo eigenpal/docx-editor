@@ -110,6 +110,19 @@ describe('listenForPopupFocusLeave', () => {
     expect(state.closed).toBe(1);
   });
 
+  test("focus in the editor's native showModal dialog keeps the popup open", () => {
+    const view = editorFixture();
+    const dialog = document.createElement('dialog');
+    dialog.setAttribute('data-docx-modal', '');
+    const field = document.createElement('input');
+    dialog.append(field);
+    document.body.append(dialog);
+    cleanups.push(() => dialog.remove());
+    const state = countCloses(view);
+    field.focus();
+    expect(state.closed).toBe(0);
+  });
+
   test('a modal dialog inside the editor instance counts as its own', () => {
     const view = editorFixture();
     const dialog = document.createElement('div');

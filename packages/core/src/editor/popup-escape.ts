@@ -92,16 +92,18 @@ export function listenForPopupEscape(options: PopupEscapeOptions): () => void {
 
 /**
  * Whether `node` is inside a modal dialog of the editor that owns `popup`: one the editor
- * marks with `data-docx-dialog` (its dialog parts, which may render outside the editor), or
- * one inside the editor's instance container. A host's own modal (a component library
- * dialog elsewhere on the page) is not the editor's, so focus or Escape there still closes
- * the popup.
+ * marks as its own (`data-docx-dialog` on its dialog parts, `data-docx-modal` on its other
+ * modals, including native `showModal()` dialogs), or a modal inside the editor's instance
+ * container. Editor dialogs may render outside the editor. A host's own modal (a component
+ * library dialog elsewhere on the page) is not the editor's, so focus or Escape there still
+ * closes the popup.
  */
 function inEditorModalDialog(node: Node | null, popup: Element): boolean {
   const element = node instanceof Element ? node : (node?.parentElement ?? null);
-  const dialog = element?.closest('[aria-modal="true"]');
+  const dialog = element?.closest('[aria-modal="true"], [data-docx-modal]');
   if (!dialog) return false;
-  if (dialog.hasAttribute('data-docx-dialog')) return true;
+  if (dialog.hasAttribute('data-docx-dialog') || dialog.hasAttribute('data-docx-modal'))
+    return true;
   return editorInstanceScope(popup)?.contains(dialog) === true;
 }
 

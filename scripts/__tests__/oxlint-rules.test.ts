@@ -120,6 +120,27 @@ const FILES: Record<string, string> = {
   'packages/core/src/layout/compatibility/sample.ts': `${COMPAT_MODE}\n`,
   'packages/core/src/layout/__tests__/compat-sample.test.ts': `${COMPAT_MODE}\n`,
   'packages/react/src/compat-sample.ts': `${COMPAT_MODE}\n`,
+  // Vue chrome passes component children as function slots. Lines 4 and 5 are banned; the
+  // rest are allowed: a function slot, an intrinsic element, a raw-children built-in, and a
+  // self-closing component.
+  'packages/vue/src/slots-sample.tsx': [
+    'declare const Row: unknown;',
+    'declare const parts: { Item: unknown };',
+    'declare const Teleport: unknown;',
+    'export const a = <Row>text</Row>;',
+    'export const b = <parts.Item>{[1, 2]}</parts.Item>;',
+    'export const ok = <Row>{{ default: () => "text" }}</Row>;',
+    'export const ok2 = <div>text</div>;',
+    'export const ok3 = <Teleport to="body"><div /></Teleport>;',
+    'export const ok4 = <Row />;',
+    '',
+  ].join('\n'),
+  // The rule is scoped to Vue sources; React passes children as props.
+  'packages/react/src/slots-sample.tsx': [
+    'declare const Row: unknown;',
+    'export const a = <Row>text</Row>;',
+    '',
+  ].join('\n'),
   // The global cap.
   'packages/core/src/layout/long.ts': Array.from(
     { length: 1001 },
@@ -187,6 +208,7 @@ test('every banned shape is reported where the configuration applies it, and now
   const spread = 'docx(no-varargs-spread)';
   const restrictedImport = 'eslint(no-restricted-imports)';
   const rawMode = 'docx(no-raw-compatibility-mode)';
+  const vueSlots = 'docx(vue-function-slots)';
   const rawModeLines = (file: string) =>
     [5, 6, 7, 8, 9, 10].map((line) => `${file}:${line} ${rawMode}`);
   const sinkLines = (file: string, first: number) => [
@@ -202,6 +224,8 @@ test('every banned shape is reported where the configuration applies it, and now
   expect(reports()).toEqual(
     [
       'packages/core/src/layout/long.ts:1001 eslint(max-lines)',
+      `packages/vue/src/slots-sample.tsx:4 ${vueSlots}`,
+      `packages/vue/src/slots-sample.tsx:5 ${vueSlots}`,
       ...rawModeLines('packages/core/src/layout/compat-sample.ts'),
       ...rawModeLines('packages/react/src/compat-sample.ts'),
       `packages/core/src/editor/tailwind.config.ts:6 ${sink}`,

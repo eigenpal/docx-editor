@@ -194,7 +194,7 @@ function buildMenuCompound(slot: TableChromeSlotId, classBase: string, defaultLa
         if (props.asChild) {
           return (
             <Slot {...shared} ref={rootRef}>
-              {body}
+              {{ default: () => body }}
             </Slot>
           );
         }
@@ -248,7 +248,7 @@ function buildMenuCompound(slot: TableChromeSlotId, classBase: string, defaultLa
         if (props.asChild) {
           return (
             <>
-              <Slot {...btnProps}>{display}</Slot>
+              <Slot {...btnProps}>{{ default: () => display }}</Slot>
               {reasonNode}
             </>
           );
@@ -286,7 +286,7 @@ function buildMenuCompound(slot: TableChromeSlotId, classBase: string, defaultLa
           class: `docx-table-chrome__panel${props.className ? ` ${props.className}` : ''}`,
           onMousedown: guardToolbarMousedown,
         };
-        if (props.asChild) return <Slot {...shared}>{slots.default?.()}</Slot>;
+        if (props.asChild) return <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>;
         return <div {...shared}>{slots.default?.()}</div>;
       };
     },
@@ -332,7 +332,7 @@ const TableBorderTargetItem = defineComponent({
         },
       };
       const display = slots.default?.() ?? [tableIcon(option.icon)];
-      if (props.asChild) return <Slot {...shared}>{display}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => display }}</Slot>;
       return <button {...shared}>{display}</button>;
     };
   },
@@ -411,7 +411,7 @@ const TableBorderStyleItem = defineComponent({
         <span class={`docx-table-line ${option.previewClass}`} aria-hidden="true" />,
         <span>{label(option.labelKey)}</span>,
       ];
-      if (props.asChild) return <Slot {...shared}>{display}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => display }}</Slot>;
       return <button {...shared}>{display}</button>;
     };
   },
@@ -483,7 +483,7 @@ const TableBorderWidthItem = defineComponent({
         />,
         <span>{label(option.labelKey)}</span>,
       ];
-      if (props.asChild) return <Slot {...shared}>{display}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => display }}</Slot>;
       return <button {...shared}>{display}</button>;
     };
   },
@@ -586,7 +586,7 @@ function buildColorSplitCompound(
         if (props.asChild) {
           return (
             <Slot {...shared} ref={rootRef}>
-              {body}
+              {{ default: () => body }}
             </Slot>
           );
         }
@@ -633,7 +633,7 @@ function buildColorSplitCompound(
         if (props.asChild) {
           return (
             <>
-              <Slot {...btnProps}>{display}</Slot>
+              <Slot {...btnProps}>{{ default: () => display }}</Slot>
               {reasonNode}
             </>
           );
@@ -674,7 +674,7 @@ function buildColorSplitCompound(
         if (props.asChild) {
           return (
             <>
-              <Slot {...btnProps}>{display}</Slot>
+              <Slot {...btnProps}>{{ default: () => display }}</Slot>
               {reasonNode}
             </>
           );
@@ -743,7 +743,7 @@ function buildColorSplitCompound(
             />
           </>
         );
-        if (props.asChild) return <Slot {...shared}>{body}</Slot>;
+        if (props.asChild) return <Slot {...shared}>{{ default: () => body }}</Slot>;
         return <div {...shared}>{body}</div>;
       };
     },

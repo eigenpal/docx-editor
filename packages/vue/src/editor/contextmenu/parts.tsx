@@ -62,7 +62,7 @@ function defineCommandRow(
             }}
             {...(props.className ? { className: props.className } : {})}
           >
-            {label(props.labelKey ?? defaults.labelKey)}
+            {{ default: () => label(props.labelKey ?? defaults.labelKey) }}
           </MenuRow>
         );
       };
@@ -148,7 +148,7 @@ export const ContextMenuPaste = defineComponent({
           }}
           {...(props.className ? { className: props.className } : {})}
         >
-          {label(props.labelKey ?? 'contextMenu.paste')}
+          {{ default: () => label(props.labelKey ?? 'contextMenu.paste') }}
         </MenuRow>
       );
     };
@@ -233,7 +233,7 @@ export const ContextMenuPasteWithoutFormatting = defineComponent({
           }}
           {...(props.className ? { className: props.className } : {})}
         >
-          {label(props.labelKey ?? 'contextMenu.pasteWithoutFormatting')}
+          {{ default: () => label(props.labelKey ?? 'contextMenu.pasteWithoutFormatting') }}
         </MenuRow>
       );
     };
@@ -324,7 +324,7 @@ function defineTableCommandRow(
               if (cmd.execute()) close(true);
             }}
           >
-            {label(props.labelKey ?? defaults.labelKey)}
+            {{ default: () => label(props.labelKey ?? defaults.labelKey) }}
           </MenuRow>
         );
       };
@@ -500,7 +500,7 @@ function defineTocCommandRow(
             }}
             {...(props.className ? { className: props.className } : {})}
           >
-            {label(props.labelKey ?? defaults.labelKey)}
+            {{ default: () => label(props.labelKey ?? defaults.labelKey) }}
           </MenuRow>
         );
       };
