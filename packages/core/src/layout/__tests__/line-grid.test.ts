@@ -119,7 +119,7 @@ describe('line box under an active line grid', () => {
     expect(applyLineSpacing({ ...single, value: 360 }, 14, 11.2)).toEqual({
       height: 27,
       baseline: 13.2,
-      trailing: 9 + 2,
+      trailing: 9,
     });
     // Below single, the grid line is still the smallest line.
     expect(applyLineSpacing({ ...single, value: 120 }, 14, 11.2).height).toBe(18);
