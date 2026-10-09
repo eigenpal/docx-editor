@@ -88,6 +88,15 @@ describe('createRemoteCaret', () => {
     expect(view.caretOf.map(caret('a', 5)).head).toEqual({ paragraphId: 'a', offset: 8 });
   });
 
+  test('a selection the host set after a remote commit is not carried', () => {
+    const view = screen({ a: 'Alpha' });
+    view.caretOf.note(caret('a', 0), [], true);
+    view.caretOf.discard();
+    view.show({ a: 'XY Alpha' });
+    const chosen = caret('a', 1);
+    expect(view.caretOf.map(chosen)).toBe(chosen);
+  });
+
   test('a split that arrives with other edits still carries the caret with its text', () => {
     // One burst: a peer presses Enter before the caret, and another types at the start of the
     // paragraph. The head no longer starts the old text, so the split check misses.

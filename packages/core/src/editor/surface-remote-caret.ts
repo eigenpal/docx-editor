@@ -146,6 +146,11 @@ export interface RemoteCaret {
    * the user's own typing as the peer's.
    */
   noteLocal(): void;
+  /**
+   * The host set the selection itself. A remote commit noted before it carries the caret the
+   * user had then, which the host's choice replaces: nothing is carried.
+   */
+  discard(): void;
   /** The layout now shows the remote commit; carry the selection across it. */
   map(selection: SemanticSelection): SemanticSelection;
 }
@@ -212,6 +217,9 @@ export function createRemoteCaret(deps: RemoteCaretDeps): RemoteCaret {
     },
     noteLocal() {
       if (capture !== null) capture = STALE;
+    },
+    discard() {
+      capture = null;
     },
     map(selection) {
       const taken = capture;

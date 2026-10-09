@@ -4999,6 +4999,8 @@ export function mountPaginatedSurface(
       // during a plain open, and that restore must not select a drawing the user never did
       // (the carried initialDrawingSelectionIntent already preserves a real one).
       if (!selectionsEqual(next, selection)) setDrawingIntent({ kind: 'programmatic' }, false);
+      // The host's selection wins over carrying the old caret across a remote commit.
+      remoteCaret.discard();
       setSelection(next);
     },
 
