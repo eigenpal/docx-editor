@@ -117,7 +117,7 @@ const HyperLinkUrl = defineComponent({
       if (props.asChild)
         return (
           <Slot {...shared} class={props.className}>
-            {content}
+            {{ default: () => content }}
           </Slot>
         );
       if (inert) {
@@ -168,7 +168,7 @@ const HyperLinkCopy = defineComponent({
       if (props.asChild)
         return (
           <Slot {...shared} class={props.className}>
-            {content}
+            {{ default: () => content }}
           </Slot>
         );
       return <button {...shared}>{content}</button>;
@@ -204,7 +204,7 @@ const HyperLinkEdit = defineComponent({
       if (props.asChild)
         return (
           <Slot {...shared} class={props.className}>
-            {content}
+            {{ default: () => content }}
           </Slot>
         );
       return <button {...shared}>{content}</button>;
@@ -240,7 +240,7 @@ const HyperLinkUnlink = defineComponent({
       if (props.asChild)
         return (
           <Slot {...shared} class={props.className}>
-            {content}
+            {{ default: () => content }}
           </Slot>
         );
       return <button {...shared}>{content}</button>;
@@ -350,7 +350,7 @@ const HyperLinkApply = defineComponent({
       if (props.asChild)
         return (
           <Slot {...shared} class={props.className}>
-            {slots.default?.()}
+            {{ default: () => slots.default?.() }}
           </Slot>
         );
       return <button {...shared}>{slots.default?.() ?? label}</button>;
@@ -408,7 +408,7 @@ const HyperLinkCancel = defineComponent({
       if (props.asChild)
         return (
           <Slot {...shared} class={props.className}>
-            {slots.default?.()}
+            {{ default: () => slots.default?.() }}
           </Slot>
         );
       return <button {...shared}>{slots.default?.() ?? label}</button>;
@@ -531,7 +531,7 @@ const HyperLinkRoot = defineComponent({
       if (state.mode === 'closed') return null;
 
       const body = props.preset ? (
-        <HyperLinkPreset>{slots.default?.()}</HyperLinkPreset>
+        <HyperLinkPreset>{{ default: () => slots.default?.() }}</HyperLinkPreset>
       ) : (
         slots.default?.()
       );
@@ -547,7 +547,7 @@ const HyperLinkRoot = defineComponent({
         'aria-label': title,
       };
 
-      if (props.asChild) return <Slot {...shared}>{body}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => body }}</Slot>;
       return <div {...shared}>{body}</div>;
     };
   },

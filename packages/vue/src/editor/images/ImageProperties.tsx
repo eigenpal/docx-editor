@@ -541,6 +541,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
             ref={dialogRef}
             role="dialog"
             aria-modal="true"
+            data-docx-modal=""
             aria-labelledby={titleId}
             class="docx-dialog docx-image-properties-dialog"
             onClick={(event) => event.stopPropagation()}
@@ -919,7 +920,7 @@ export const ImagePropertiesTrigger = defineComponent({
       return (
         <>
           {props.asChild ? (
-            <Slot {...shared}>{slots.default?.()}</Slot>
+            <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>
           ) : (
             <button {...shared}>{slots.default?.() ?? chromeIcon(control?.paths)}</button>
           )}

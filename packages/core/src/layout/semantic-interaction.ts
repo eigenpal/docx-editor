@@ -1,5 +1,12 @@
 import { spanBesideSymbol } from './symbol-run.ts';
 import { preferredLineCaret } from './semantic-caret-affinity.ts';
+import {
+  lineEdgeTarget,
+  verticalLineEndTarget,
+  verticalStartOnAffineLine,
+  type LineEdgeDeps,
+  type MoveCaretOptions,
+} from './caret-line-edge-navigation.ts';
 import { nearestPageWithStops } from './caret-page-step.ts';
 import { mergedCaretGroup } from './merged-caret-navigation.ts';
 import {
@@ -13,7 +20,7 @@ import {
 // Navigation derives from layout records in both headless and browser adapters.
 // Positions use the canonical paragraph id and UTF-16 offset accepted by tree operations.
 
-import { caretBoxOnLine, contentControlAtPoint, hitTestPage } from './semantic-hit-test.ts';
+import { caretBoxOnLine } from './semantic-hit-test.ts';
 import { documentOrder, documentOrderIndex } from './document-order.ts';
 export { documentOrder, everyStoryOrder } from './document-order.ts';
 export { selectionRects, keyedRangeRects, type KeyedRange } from './selection-rects.ts';
@@ -52,6 +59,7 @@ import {
 import { wordBoundary } from './semantic-word-navigation.ts';
 import {
   laterLineOwns,
+  nextLineStartsAt,
   laterLineWithDrawingAt,
   laterSegmentHolds,
   earlierSegmentHolds,
@@ -137,16 +145,19 @@ function pushSegmentCaretStops(
   const continuesEarlier =
     segment.start > 0 || earlierSegmentHolds(layout, line, segment.paragraphId, segment.start);
   for (let offset = segment.start; offset <= segment.end; offset += 1) {
-    // A line ENDED BY A HARD BREAK does not own the position after it — the line the
-    // break opened does, and `caretAt` places the caret there. Emitting it here too
-    // would put the stop this lane navigates to on a different line from the caret
-    // the user can see: Home would jump to the row above, Down would skip the new
-    // line entirely, and the empty line a trailing Shift+Enter opens would be
-    // unreachable because the dedup below discarded its only stop as a duplicate.
+    // A position that a LATER line starts at belongs to that line, whether a hard break or
+    // a soft wrap ended this one, and `caretAt` places the caret there. Emitting it here too
+    // would put the stop this lane navigates to on a different line from the caret the user
+    // can see: Home would land after the next line's first character, Down would skip a
+    // line opened by a break, and the empty line a trailing Shift+Enter opens would be
+    // unreachable because the dedup below discarded its only stop as a duplicate. The end
+    // of a wrapped line stays reachable through line affinity (End, a click past the end).
     if (
       offset === segment.end &&
       offset > segment.start &&
-      ((!mixed && breakEndsLineBefore(line, offset) && laterLineOwns(layout, line, offset)) ||
+      ((!mixed &&
+        ((breakEndsLineBefore(line, offset) && laterLineOwns(layout, line, offset)) ||
+          nextLineStartsAt(layout, line, offset))) ||
         laterSegmentHolds(layout, line, segment.paragraphId, offset))
     ) {
       continue;
@@ -350,12 +361,11 @@ export function caretAt(
           const bHit = b.pageIndex === preferred ? 0 : 1;
           return aHit - bHit;
         });
-  // A position at a line's END is also the START of the next one, and the first line that
-  // contains it is not always the right answer. After a HARD BREAK it is the wrong one: the
-  // break is what ended the line, so the caret belongs at the start of the line the user
-  // just opened — not a break's width to the right of the last glyph on the line above,
-  // which is what a Shift+Enter looked like. Soft wraps stay on the first match, where the
-  // offset is genuinely shared and the end of the visual line is the conventional answer.
+  // A position at a line's END is also the START of the next one. Without a line
+  // preference the caret belongs at the start of the line that begins there: after a HARD
+  // BREAK that is the line the user just opened, and at a SOFT WRAP it is where the next
+  // typed character lands. The end of the upper line is shown only for a caller that asks
+  // for that line (`preferredLineId`: End, or a click past the line's end).
   let afterBreak: { line: LineRecord; pageIndex: number; clipBox?: LayoutBox } | null = null;
   for (const { line, pageIndex, clipBox } of ordered) {
     // The part of the line this paragraph owns. On a merged line that is half of it, and the
@@ -367,7 +377,8 @@ export function caretAt(
       position.offset === segment.end &&
       lineSegments(line).length === 1 &&
       (breakEndsLineBefore(line, position.offset) ||
-        (position.offset > segment.start && isDrawingOnlySegment(line, segment)))
+        (position.offset > segment.start &&
+          (isDrawingOnlySegment(line, segment) || nextLineStartsAt(layout, line, position.offset))))
     ) {
       // Remember it, but keep looking for the line that STARTS here. Falling back to it
       // keeps a caret placed rather than lost if no such line was laid out — for the
@@ -426,43 +437,7 @@ export function caretAt(
   return null;
 }
 
-/**
- * The caret position nearest a point, in PAGE-CONTENT coordinates.
- *
- * Never returns null for a point inside the document: a click in the margin, past the end of
- * a line, or below the last line still has an obvious intended caret, and refusing to answer
- * would make those clicks do nothing.
- *
- * The rules live in `semantic-hit-test.ts`, which answers with the cell address and the
- * on-glyphs flag a pointer controller needs too; this keeps the geometry-only shape for
- * callers that want nothing else.
- */
-export function hitTestSemantic(
-  layout: SemanticLayout,
-  point: { readonly x: number; readonly y: number; readonly pageIndex?: number }
-): CaretGeometry | null {
-  // The point is PAGE-CONTENT relative, so it only means something on one page. Scoring it
-  // against every page cost a full-document walk to answer with page 0 anyway: on uniform
-  // geometry each page produces an identical score and the first one wins by construction.
-  // Naming page 0 outright is the same answer, honestly, in constant time.
-  const pageIndex =
-    point.pageIndex !== undefined && layout.pages[point.pageIndex] ? point.pageIndex : 0;
-  return hitTestPage(layout, pageIndex, point)?.caret ?? null;
-}
-
-/**
- * Innermost content-control boundary at a page-content point, or null outside every control.
- *
- * Prefers the deepest nesting depth when nested boundaries share geometry.
- */
-export function contentControlAtSemantic(
-  layout: SemanticLayout,
-  point: { readonly x: number; readonly y: number; readonly pageIndex?: number }
-): ContentControlBoundaryRecord | null {
-  const pageIndex =
-    point.pageIndex !== undefined && layout.pages[point.pageIndex] ? point.pageIndex : 0;
-  return contentControlAtPoint(layout, pageIndex, point);
-}
+export { contentControlAtSemantic, hitTestSemantic } from './semantic-point-queries.ts';
 
 /** Layout-published content-control boundaries in document order. */
 export function contentControlsInLayout(
@@ -639,10 +614,25 @@ export function deletedTextBoundaries(
 }
 
 /** Story-scoped stops are required when navigating inside an open header or footer. */
-export interface MoveCaretOptions {
-  /** Precomputed active-story stops; body navigation keeps the indexed default. */
-  readonly stops?: readonly CaretGeometry[];
-  readonly measurer?: TextMeasurer;
+export type { MoveCaretOptions } from './caret-line-edge-navigation.ts';
+
+function lineEdgeDeps(
+  layout: SemanticLayout,
+  measurer?: TextMeasurer,
+  stops?: readonly CaretGeometry[]
+): LineEdgeDeps {
+  return {
+    locate: (position, lineId) =>
+      caretAt(layout, position, {
+        ...(measurer ? { measurer } : {}),
+        ...(lineId !== undefined ? { preferredLineId: lineId } : {}),
+      }),
+    hasStop: ({ paragraphId, offset }) =>
+      stops
+        ? stops.some((s) => s.position.paragraphId === paragraphId && s.position.offset === offset)
+        : (paragraphCaretStops(layout, paragraphId, measurer).index.get(paragraphId)?.has(offset) ??
+          false),
+  };
 }
 
 function moveHorizontalCaret(
@@ -686,7 +676,16 @@ export function moveCaret(
   command: NavigationCommand,
   desiredX: number | null = null,
   options: MoveCaretOptions = {}
-): { position: SemanticPosition; desiredX: number | null } | null {
+): {
+  position: SemanticPosition;
+  desiredX: number | null;
+  /**
+   * The line the caret shows on after the motion, when it is not the default line for the
+   * position (End at a wrap shows on the upper line). Pass it back as
+   * {@link MoveCaretOptions.lineId} and as `CaretAtOptions.preferredLineId`.
+   */
+  lineId?: string;
+} | null {
   const directionOf = (stop: VisualCaretStop) => bidiDirectionOfStop(layout, stop);
   if (!options.stops && (command === 'left' || command === 'right')) {
     return moveHorizontalCaret(layout, position, command === 'left' ? -1 : 1, options.measurer);
@@ -717,6 +716,13 @@ export function moveCaret(
       ? moveHorizontalCaret(layout, position, physicalDirection, options.measurer)
       : { position: { paragraphId: position.paragraphId, offset: target }, desiredX: null };
   }
+  if (command === 'lineStart' || command === 'lineEnd') {
+    // Home and End read the LOGICAL edges of the caret's own line, in every story.
+    const deps = lineEdgeDeps(layout, options.measurer, options.stops);
+    const direction = command === 'lineStart' ? -1 : 1;
+    const edge = lineEdgeTarget(layout, position, direction, options.lineId, deps);
+    if (edge) return { ...edge, desiredX: null };
+  }
   if (!options.stops && (command === 'lineStart' || command === 'lineEnd')) {
     // Home and End mean the ends of the LINE a reader sees. One paragraph's stops describe
     // that line only while the line holds one paragraph: on a line a resolved view merged,
@@ -740,14 +746,18 @@ export function moveCaret(
   if (!options.stops && (command === 'up' || command === 'down')) {
     const paragraphIndex = documentOrderIndex(layout).get(position.paragraphId);
     if (paragraphIndex === undefined) return null;
-    return moveVerticalCaret(
-      position,
+    const deps = lineEdgeDeps(layout, options.measurer);
+    const start = verticalStartOnAffineLine(position, options.lineId, deps);
+    const moved = moveVerticalCaret(
+      start?.position ?? position,
       command === 'up' ? -1 : 1,
-      desiredX,
+      desiredX ?? start?.x ?? null,
       documentOrder(layout),
       paragraphIndex,
       (paragraphId) => paragraphCaretStops(layout, paragraphId, options.measurer)
     );
+    const end = moved && verticalLineEndTarget(layout, moved.position, moved.desiredX, deps);
+    return end ? { ...end, desiredX: moved!.desiredX } : moved;
   }
   const stops = options.stops ?? caretStops(layout, options.measurer);
   if (stops.length === 0) return null;

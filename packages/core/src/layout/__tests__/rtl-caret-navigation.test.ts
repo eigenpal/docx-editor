@@ -143,20 +143,16 @@ test.each([false, true])(
 );
 
 test.each(['אבג ABC', 'ABC אבג'])(
-  'RTL Home/End follow base-direction edges in mixed text %s',
+  'RTL Home/End go to the logical line edges in mixed text %s',
   (text) => {
+    // Home and End are logical: the first and last character of the line in reading order,
+    // wherever bidi reordering paints them.
     const doc = layout([text]);
     const stops = caretStops(doc, measurer);
     const position = stops[1]!.position;
     for (const options of [{ measurer }, { measurer, stops: stops.map((stop) => ({ ...stop })) }]) {
-      const home = moveCaret(doc, position, 'lineStart', null, options)!.position;
-      const end = moveCaret(doc, position, 'lineEnd', null, options)!.position;
-      expect(stops.find((stop) => stop.position.offset === home.offset)!.x).toBe(
-        Math.max(...stops.map((stop) => stop.x))
-      );
-      expect(stops.find((stop) => stop.position.offset === end.offset)!.x).toBe(
-        Math.min(...stops.map((stop) => stop.x))
-      );
+      expect(moveCaret(doc, position, 'lineStart', null, options)!.position.offset).toBe(0);
+      expect(moveCaret(doc, position, 'lineEnd', null, options)!.position.offset).toBe(text.length);
     }
   }
 );
