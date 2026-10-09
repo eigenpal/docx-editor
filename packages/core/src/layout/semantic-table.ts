@@ -80,9 +80,7 @@ import { readCellTextDirection } from './table-cell-text-direction.ts';
 import { readCellVerticalAlign, type CellVerticalAlign } from './table-cell-vertical-align.ts';
 import { tableRowIsHeader } from './table-row-header-style.ts';
 import { cellIgnoresEndMark } from './table-cell-hide-mark.ts';
-import { legacyRoundedCellClaims, legacyTableContentWidth } from './legacy-table-content-width.ts';
-import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
-import { ruleAdjustedTableWidth } from './table-percent-rules.ts';
+import { resolveTableWidthPlacement } from './table-width-placement.ts';
 import { legacyFixedTableContentOffset } from './legacy-fixed-table-content.ts';
 import { withLegacyTableSideRules } from './legacy-table-side-rules.ts';
 import { conditionalTypesFor, readTableLook } from './table-conditional-formats.ts';
@@ -865,7 +863,7 @@ function readTableStructureUncached(
     0;
   // Captured controls pull a top-level table (bidiVisual too) into the leading margin by a
   // negative indent, and leave a nested table where a zero indent puts it.
-  const indentPt = depth === 0 ? statedIndentPt : Math.max(0, statedIndentPt);
+  const readIndentPt = depth === 0 ? statedIndentPt : Math.max(0, statedIndentPt);
   const alignment = readTableAlignment(tblPr) ?? styleAlignment ?? 'left';
   // A nested table's position is stated against its cell, not the page — `w:tblpPr` inside
   // one is honoured by Word only for the top-level table, so deeper tables stay in flow.
@@ -875,7 +873,7 @@ function readTableStructureUncached(
     styleCellSpacingPt ??
     0;
 
-  const legacy = legacyTableContentWidth({
+  const placement = resolveTableWidthPlacement({
     table,
     propertyNodes: tableStyle.tablePropertyNodes,
     rows,
@@ -886,30 +884,26 @@ function readTableStructureUncached(
     tableWidth,
     cellSpacingPt,
     floating: float !== undefined,
+    layoutFixed,
+    alignment,
+    bidiVisual,
+    indentPt: readIndentPt,
+    indentStated: Boolean(tblPr && childNamed(tblPr, 'tblInd')) || styleIndentPt !== undefined,
+    tableBorders,
+    claims,
+    gridCols,
   });
+  const { legacy, indentPt } = placement;
   const legacyWidth = legacy?.widthPt;
-  // A nested table, and every table outside the legacy modes, adds its outer rule to the share.
-  const resolvedWidth =
-    legacy === undefined &&
-    (depth > 0 || !hasCompatibilityRule(compatibilityMode, 'legacyPercentTableContentWidth'))
-      ? ruleAdjustedTableWidth(tableWidth, contentWidthPt, tableBorders, rows)
-      : tableWidth;
-  // A top-level AutoFit table without a width fits the room its leading indent leaves.
-  const autoRoomPt =
-    tableWidth.type === 'auto' && !layoutFixed && depth === 0 && !float && alignment === 'left'
-      ? Math.max(0, indentPt)
-      : 0;
 
   const columnWidthsPt =
     columnWidthsOverridePt ??
     resolveColumnWidthsPt({
       gridCols,
-      claims: legacy?.gridConfirmed
-        ? legacyRoundedCellClaims(claims, gridCols, (legacy.widthPt * tableWidth.value) / 100)
-        : claims,
+      claims: placement.claims,
       columnCount,
-      contentWidthPt: (legacyWidth ?? contentWidthPt) - autoRoomPt,
-      tableWidth: resolvedWidth,
+      contentWidthPt: placement.contentWidthPt,
+      tableWidth: placement.tableWidth,
       layoutFixed,
       // A hidden revision row can still account for part of the authored grid.
       hasOmittedRows,

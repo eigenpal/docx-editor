@@ -222,7 +222,7 @@ describe('a table percentage above 100 extends the table past the text column', 
 describe('a grid-confirmed legacy table above 100%', () => {
   const legacy = (width = '5500', grid = '2438', alignment = 'center') =>
     `<w:tbl><w:tblPr><w:tblW w:type="pct" w:w="${width}"/><w:jc w:val="${alignment}"/>` +
-    '<w:tblLayout w:type="autofit"/><w:tblCellMar><w:left w:type="dxa" w:w="108"/>' +
+    '<w:tblInd w:w="0" w:type="dxa"/><w:tblLayout w:type="autofit"/><w:tblCellMar><w:left w:type="dxa" w:w="108"/>' +
     '<w:right w:type="dxa" w:w="108"/></w:tblCellMar></w:tblPr>' +
     `<w:tblGrid><w:gridCol w:w="${grid}"/></w:tblGrid><w:tr><w:tc><w:tcPr>` +
     '<w:tcW w:type="pct" w:w="5000"/></w:tcPr><w:p>' +

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlElement } from '@docx-editor.dev/core/store';
 import { readTableStructure, tableOriginX } from '../semantic-table.ts';
+import { cellContentInsets } from '../table-cell-geometry.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const TEXT_PT = 144;
@@ -10,7 +11,8 @@ const RULE = '<w:{side} w:val="single" w:sz="4" w:space="0" w:color="000000"/>';
 interface Shape {
   readonly width?: string;
   readonly jc?: string;
-  readonly indent?: number;
+  /** `null` states no indent at all. */
+  readonly indent?: number | null;
   readonly layout?: string;
   readonly grid?: readonly number[];
   readonly rtl?: boolean;
@@ -21,7 +23,7 @@ interface Shape {
 function tableXml({
   width = '5000',
   jc = '',
-  indent,
+  indent = 0,
   layout = 'autofit',
   grid = [1200, 1800],
   rtl = false,
@@ -40,7 +42,7 @@ function tableXml({
       ? '<w:tblW w:w="0" w:type="auto"/>'
       : `<w:tblW w:w="${width}" w:type="pct"/>`) +
     (jc ? `<w:jc w:val="${jc}"/>` : '') +
-    (indent === undefined ? '' : `<w:tblInd w:w="${indent}" w:type="dxa"/>`) +
+    (indent === null ? '' : `<w:tblInd w:w="${indent}" w:type="dxa"/>`) +
     borders +
     `<w:tblLayout w:type="${layout}"/>` +
     (margins
@@ -55,10 +57,14 @@ function tableXml({
 }
 
 function read(shape: Shape, mode: number | undefined = 14, depth = 0) {
-  const result = readOoxmlPart(
-    `<w:document xmlns:w="${W}"><w:body>${tableXml(shape)}</w:body></w:document>`,
-    { name: '/word/document.xml', contentType: 'application/xml' }
-  );
+  return readXml(tableXml(shape), mode, depth);
+}
+
+function readXml(xml: string, mode: number | undefined = 14, depth = 0) {
+  const result = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${xml}</w:body></w:document>`, {
+    name: '/word/document.xml',
+    contentType: 'application/xml',
+  });
   if (!result.ok) throw new Error(result.reason);
   const body = result.part.root.children.find(
     (node) => node.kind !== 'textValue' && node.localName === 'body'
@@ -135,6 +141,51 @@ describe('the legacy reference box of a percentage-width table', () => {
     }
   });
 
+  test('with neither a table style nor an indent, the outer edge meets the text edge', () => {
+    const pct = read({ width: '5000', jc: 'left', indent: null });
+    expect(pct.structure.legacyContentAlignment).toBe(true);
+    expect(pct.x).toBeCloseTo(0, 6);
+    expect(pct.width).toBeCloseTo(box(100), 6);
+    const auto = read({ width: 'auto', grid: [2000, 3600], jc: 'left', indent: null });
+    expect(auto.x).toBeCloseTo(0, 6);
+    expect(auto.width).toBeCloseTo(box(100) - MARGIN_PT, 6);
+    // Other alignments, and a stated zero indent, keep the content-aligned edge.
+    expect(read({ width: '5000', jc: 'right', indent: null }).x + box(100)).toBeCloseTo(
+      TEXT_PT + MARGIN_PT,
+      6
+    );
+    expect(read({ width: '5000', jc: 'left', indent: 0 }).x).toBeCloseTo(-MARGIN_PT, 6);
+  });
+
+  test('a fixed table without a width aligns its content once', () => {
+    for (const grid of [
+      [1200, 1800],
+      [2000, 3600],
+    ]) {
+      const { structure, x } = read({ width: 'auto', grid, jc: 'left', layout: 'fixed' });
+      expect(x).toBeCloseTo(-MARGIN_PT, 6);
+      const first = structure.rows[0]!.cells[0]!;
+      const inset = cellContentInsets(first, true).left;
+      // The first cell's text starts on the text edge, not a margin further in or out.
+      expect(x + inset).toBeCloseTo(0, 6);
+    }
+  });
+
+  test('rows with their own table exceptions keep the ordinary geometry', () => {
+    const exception = (inner: string) =>
+      tableXml({ width: '5000', jc: 'left' }).replace(
+        '<w:tr>',
+        `<w:tr><w:tblPrEx>${inner}</w:tblPrEx>`
+      );
+    for (const inner of [
+      '<w:tblInd w:w="240" w:type="dxa"/>',
+      '<w:tblW w:w="4000" w:type="dxa"/>',
+      '<w:tblCellMar><w:left w:w="360" w:type="dxa"/></w:tblCellMar>',
+    ]) {
+      expect(readXml(exception(inner)).structure.legacyContentAlignment).toBeUndefined();
+    }
+  });
+
   test('a table without stated outer margins keeps the ordinary geometry', () => {
     const plain = read({ width: '7500', jc: 'left', margins: false });
     expect(plain.structure.legacyContentAlignment).toBeUndefined();
@@ -164,6 +215,36 @@ describe('outside the legacy box, a percentage excludes the mean outer rule', ()
     const { width, x } = read({ width: 'auto', grid: [2000, 3600], jc: 'left', indent: 288 }, 15);
     expect(x).toBeCloseTo(14.4, 6);
     expect(width).toBeCloseTo(TEXT_PT - 14.4, 6);
+  });
+
+  test("the outer cells' own rules replace the table's", () => {
+    const cellRule = (xml: string, side: string, value: string) =>
+      xml.replace(
+        '<w:tc>',
+        `<w:tc><w:tcPr><w:tcBorders><w:${side} w:val="${value}" w:sz="4"/></w:tcBorders></w:tcPr>`
+      );
+    // Table rules hidden by the outer cells: the plain share.
+    let xml = tableXml({ width: '15000', rules: true });
+    xml = cellRule(xml, 'left', 'nil');
+    xml = xml.replace(
+      /<w:tc>(?![\s\S]*<w:tc>)/,
+      '<w:tc><w:tcPr><w:tcBorders><w:right w:val="nil"/></w:tcBorders></w:tcPr>'
+    );
+    expect(readXml(xml, 15).width).toBeCloseTo(3 * TEXT_PT, 6);
+    // Cell rules without table rules: the rule share.
+    let own = tableXml({ width: '15000' });
+    own = cellRule(own, 'left', 'single');
+    own = own.replace(
+      /<w:tc>(?![\s\S]*<w:tc>)/,
+      '<w:tc><w:tcPr><w:tcBorders><w:right w:val="single" w:sz="4"/></w:tcBorders></w:tcPr>'
+    );
+    expect(readXml(own, 15).width).toBeCloseTo(ruled(300), 6);
+  });
+
+  test('a right-to-left table reads its visual outer sides', () => {
+    for (const rtl of [false, true]) {
+      expect(read({ width: '15000', rules: true, rtl }, 15).width).toBeCloseTo(ruled(300), 6);
+    }
   });
 
   test('a table without side rules keeps the plain share', () => {

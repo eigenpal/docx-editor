@@ -274,8 +274,10 @@ test('implicit legacy defaults and centered percentages use a grid-confirmed mar
   for (const alignment of ['left', 'center']) {
     for (const pct of [70, 100]) {
       const totalTwips = Math.round(((210.8 * pct) / 100) * 20);
+      // A stated zero indent: without it, and without a table style, a left table's outer edge
+      // (not its content) meets the text edge.
       const xml = fixture(
-        `<w:tblW w:type="pct" w:w="${pct * 50}"/><w:jc w:val="${alignment}"/>`,
+        `<w:tblW w:type="pct" w:w="${pct * 50}"/><w:jc w:val="${alignment}"/><w:tblInd w:w="0" w:type="dxa"/>`,
         `<w:tblGrid><w:gridCol w:w="${Math.floor(totalTwips / 2)}"/><w:gridCol w:w="${totalTwips - Math.floor(totalTwips / 2)}"/></w:tblGrid>`,
         `<w:tr>${cell(2500, 'one')}${cell(2500, 'two')}</w:tr>`
       );
