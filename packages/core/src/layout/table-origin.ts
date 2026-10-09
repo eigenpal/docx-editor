@@ -51,15 +51,22 @@ export function positionedTableOriginX(
  * remaining width and ignore the indent. `outerRuleOffsetPt` then moves the grid inward by
  * half the outer side rule where the table puts that rule's outer edge on the aligned edge.
  * For a supported mode-14 fixed table, that offset instead aligns the first cell's content.
- * A verified legacy content-aligned table instead aligns the leading cell's content edge
- * with the text column, without changing its indent.
+ * A legacy content-aligned table instead puts the content edge of its leading or trailing
+ * cell on the aligned edge of the text column; its indent still applies from the leading edge.
  */
 export function tableOriginX(structure: SemanticTableStructure, containerWidthPt: number): number {
-  if (structure.legacyContentAlignment && structure.alignment === 'left')
-    return -(structure.rows[0]?.cells[0]?.margins.left ?? 0);
   const width = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
   const slack = containerWidthPt - width;
   if (!Number.isFinite(slack)) return 0;
+  if (structure.legacyContentAlignment && structure.alignment !== 'center') {
+    // The leading or trailing cell's content edge sits on the aligned text edge. The indent
+    // moves the table from its leading edge.
+    const first = structure.rows[0]?.cells[0]?.margins.left ?? 0;
+    const last = structure.rows[0]?.cells.at(-1)?.margins.right ?? 0;
+    if (structure.alignment === 'left')
+      return structure.bidiVisual ? -first : structure.indentPt - first;
+    return structure.bidiVisual ? slack + last - structure.indentPt : slack + last;
+  }
   if (structure.alignment === 'center') return slack / 2;
   // Travels with the cell insets that `withSharedGridLineSideRules` gives the same table.
   const ruleOffset = structure.outerRuleOffsetPt ?? 0;

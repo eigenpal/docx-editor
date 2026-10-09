@@ -80,7 +80,7 @@ import { readCellTextDirection } from './table-cell-text-direction.ts';
 import { readCellVerticalAlign, type CellVerticalAlign } from './table-cell-vertical-align.ts';
 import { tableRowIsHeader } from './table-row-header-style.ts';
 import { cellIgnoresEndMark } from './table-cell-hide-mark.ts';
-import { legacyRoundedCellClaims, legacyTableContentWidth } from './legacy-table-content-width.ts';
+import { resolveTableWidthPlacement } from './table-width-placement.ts';
 import { legacyFixedTableContentOffset } from './legacy-fixed-table-content.ts';
 import { withLegacyTableSideRules } from './legacy-table-side-rules.ts';
 import { conditionalTypesFor, readTableLook } from './table-conditional-formats.ts';
@@ -863,7 +863,7 @@ function readTableStructureUncached(
     0;
   // Captured controls pull a top-level table (bidiVisual too) into the leading margin by a
   // negative indent, and leave a nested table where a zero indent puts it.
-  const indentPt = depth === 0 ? statedIndentPt : Math.max(0, statedIndentPt);
+  const readIndentPt = depth === 0 ? statedIndentPt : Math.max(0, statedIndentPt);
   const alignment = readTableAlignment(tblPr) ?? styleAlignment ?? 'left';
   // A nested table's position is stated against its cell, not the page — `w:tblpPr` inside
   // one is honoured by Word only for the top-level table, so deeper tables stay in flow.
@@ -873,7 +873,7 @@ function readTableStructureUncached(
     styleCellSpacingPt ??
     0;
 
-  const legacyWidth = legacyTableContentWidth({
+  const placement = resolveTableWidthPlacement({
     table,
     propertyNodes: tableStyle.tablePropertyNodes,
     rows,
@@ -882,24 +882,28 @@ function readTableStructureUncached(
     compatibilityMode,
     depth,
     tableWidth,
-    layoutFixed,
-    alignment,
-    indentPt,
     cellSpacingPt,
     floating: float !== undefined,
+    layoutFixed,
+    alignment,
+    bidiVisual,
+    indentPt: readIndentPt,
+    indentStated: Boolean(tblPr && childNamed(tblPr, 'tblInd')) || styleIndentPt !== undefined,
+    tableBorders,
+    claims,
+    gridCols,
   });
+  const { legacy, indentPt } = placement;
+  const legacyWidth = legacy?.widthPt;
 
   const columnWidthsPt =
     columnWidthsOverridePt ??
     resolveColumnWidthsPt({
       gridCols,
-      claims:
-        legacyWidth === undefined
-          ? claims
-          : legacyRoundedCellClaims(claims, gridCols, (legacyWidth * tableWidth.value) / 100),
+      claims: placement.claims,
       columnCount,
-      contentWidthPt: legacyWidth ?? contentWidthPt,
-      tableWidth,
+      contentWidthPt: placement.contentWidthPt,
+      tableWidth: placement.tableWidth,
       layoutFixed,
       // A hidden revision row can still account for part of the authored grid.
       hasOmittedRows,
