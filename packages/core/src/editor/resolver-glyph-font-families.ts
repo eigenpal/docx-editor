@@ -48,6 +48,30 @@ export function warmResolverGlyphFontFamilies(
   numberingFontInputs(blocks);
 }
 
+/**
+ * {@link warmResolverGlyphFontFamilies} for rows `[from, to)` of one top-level body table, so a
+ * long table's scan also runs in short tasks. Answers the table's row count.
+ */
+export function warmResolverGlyphFontTableRows(
+  session: TreeDocxSessionView,
+  table: OoxmlElement,
+  from: number,
+  to: number
+): number {
+  const rows = scannerOf(session).warmTableRows(
+    table,
+    from,
+    to,
+    session.stylesRoot(),
+    session.documentThemeFonts()
+  );
+  // These two read every child with one scope, so a row can stand in for its table.
+  const children = (table.children as readonly OoxmlElement[]).slice(from, to);
+  symbolFieldFontFamilies(children);
+  numberingFontInputs(children);
+  return Math.max(rows, table.children.length);
+}
+
 /** Rendered faces absent from declarations use the resolver's reserved share. */
 export function resolverGlyphFontFamilies(session: TreeDocxSessionView): readonly string[] {
   const revision = session.packageRevision();

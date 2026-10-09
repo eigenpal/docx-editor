@@ -8,13 +8,18 @@ import type { ReviewModuleContribution } from '../contracts/modules.ts';
 import type { TreeDocxSessionView } from '../binding/tree-session-contract.ts';
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { nodeIndexSteps } from '../store/package/ooxml-edit.ts';
-import { warmResolverGlyphFontFamilies } from './resolver-glyph-font-families.ts';
+import {
+  warmResolverGlyphFontFamilies,
+  warmResolverGlyphFontTableRows,
+} from './resolver-glyph-font-families.ts';
 import { warmLayoutNodeDigests } from '../layout/layout-cache.ts';
 
 /** About how long one font warm-up step runs, in milliseconds. */
 const FONT_WARM_STEP_MS = 40;
 /** Body blocks scanned per warm-up call, between deadline checks. */
 const FONT_WARM_BATCH = 16;
+/** Rows of one table scanned per warm-up call, between deadline checks. */
+const FONT_WARM_ROWS = 32;
 
 const prepared = new WeakMap<Uint8Array, OpenTreeSessionResult>();
 
@@ -74,8 +79,32 @@ export function openSteps(
     if (block.kind === 'table') for (const row of block.children) digests.push(row);
     digests.push(block);
   }
+  // Font work, in calls a deadline can fall between: plain blocks in batches, a table a few
+  // rows at a time and then as a whole (its rows are cached by then).
+  const fontCalls: (() => void)[] = [];
+  for (let start = 0; start < blocks.length; ) {
+    const block = blocks[start]!;
+    if (block.kind === 'table') {
+      for (let row = 0; row < block.children.length; row += FONT_WARM_ROWS) {
+        const from = row;
+        fontCalls.push(() => {
+          warmResolverGlyphFontTableRows(session, block, from, from + FONT_WARM_ROWS);
+        });
+      }
+      fontCalls.push(() => warmResolverGlyphFontFamilies(session, [block]));
+      start += 1;
+      continue;
+    }
+    let end = start;
+    while (end < blocks.length && end - start < FONT_WARM_BATCH && blocks[end]!.kind !== 'table')
+      end += 1;
+    const batch = blocks.slice(start, end);
+    fontCalls.push(() => warmResolverGlyphFontFamilies(session, batch));
+    start = end;
+  }
   let scanned = 0;
   let digested = 0;
+  let fontsStarted = false;
   let fonts: void | Promise<unknown> = undefined;
   const indexStep = nodeIndexSteps(session.part().root);
   // Each read answers true once done; the node index takes several steps on a long part.
@@ -89,12 +118,11 @@ export function openSteps(
   const step: Step = () => {
     if (!current()) return;
     const deadline = performance.now() + FONT_WARM_STEP_MS;
-    if (scanned < blocks.length) {
-      while (scanned < blocks.length && performance.now() < deadline) {
-        warmResolverGlyphFontFamilies(session, blocks.slice(scanned, scanned + FONT_WARM_BATCH));
-        scanned += FONT_WARM_BATCH;
-      }
-      if (scanned >= blocks.length) fonts = startFonts();
+    if (!fontsStarted) {
+      while (scanned < fontCalls.length && performance.now() < deadline) fontCalls[scanned++]!();
+      if (scanned < fontCalls.length) return step;
+      fontsStarted = true;
+      fonts = startFonts();
       return step;
     }
     if (digested < digests.length) {

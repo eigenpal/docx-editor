@@ -90,12 +90,31 @@ function inspectFontNode(node: OoxmlElement, context: ScanContext) {
   return { families: [...families], children: fontScanChildren(node, next).reverse() };
 }
 
+/** A live scanner, plus a warm-up for one long table a few rows at a time. */
+export type EastAsianLanguageFontScanner = ((
+  roots: readonly OoxmlElement[],
+  stylesRoot: OoxmlElement | null,
+  theme: ThemeFonts
+) => readonly string[]) & {
+  /**
+   * Scan rows `[from, to)` of the top-level `table` into the cache a full read uses, with the
+   * same cell scopes. Answers the row count, so a caller knows when it is done.
+   */
+  warmTableRows(
+    table: OoxmlElement,
+    from: number,
+    to: number,
+    stylesRoot: OoxmlElement | null,
+    theme: ThemeFonts
+  ): number;
+};
+
 /** Reusable discovery belongs to the live editor session that needs incremental updates. */
-export function createEastAsianLanguageFontScanner(): typeof eastAsianLanguageFontFamilies {
+export function createEastAsianLanguageFontScanner(): EastAsianLanguageFontScanner {
   const scan = createFontFamilyTreeCache(inspectFontNode);
   let previousContext: ScanContext | undefined;
   let previousStylesRoot: OoxmlElement | null | undefined;
-  return (roots, stylesRoot, theme) => {
+  const contextFor = (stylesRoot: OoxmlElement | null, theme: ThemeFonts): ScanContext => {
     if (!previousContext || previousStylesRoot !== stylesRoot || previousContext.theme !== theme) {
       const styles = buildStyleCascadeTable(stylesRoot, theme);
       previousStylesRoot = stylesRoot;
@@ -111,8 +130,30 @@ export function createEastAsianLanguageFontScanner(): typeof eastAsianLanguageFo
         ]),
       };
     }
-    return scan([...roots].reverse(), previousContext);
+    return previousContext;
   };
+  const scanner = (
+    roots: readonly OoxmlElement[],
+    stylesRoot: OoxmlElement | null,
+    theme: ThemeFonts
+  ) => scan([...roots].reverse(), contextFor(stylesRoot, theme));
+  return Object.assign(scanner, {
+    warmTableRows(
+      table: OoxmlElement,
+      from: number,
+      to: number,
+      stylesRoot: OoxmlElement | null,
+      theme: ThemeFonts
+    ): number {
+      const context = contextFor(stylesRoot, theme);
+      // The same structure and cell scopes `inspectFontNode` gives a table at the top level.
+      const rows = readTableStructure(table, 468, context.depth, context.styles)?.rows ?? [];
+      for (const row of rows.slice(from, to)) {
+        for (const cell of row.cells) scan(cell.blocks, cellContext(context, cell.styleFormatting));
+      }
+      return rows.length;
+    },
+  });
 }
 
 /** One-shot export discovery releases its subtree cache before layout allocates its live set. */

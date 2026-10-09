@@ -90,3 +90,53 @@ test('a replaced open stops its steps without starting font work', () => {
   expect(step()).toBeUndefined();
   expect(started).toBe(false);
 });
+
+test('an empty body still starts the font work', () => {
+  const opened = openTreeSession(docx(''));
+  if (!opened.ok) throw new Error(opened.reason);
+  let started = false;
+  let result: unknown = openSteps(
+    opened.session,
+    () => true,
+    () => {
+      started = true;
+    }
+  );
+  while (typeof result === 'function') result = (result as () => unknown)();
+  expect(started).toBe(true);
+});
+
+test('a long table scanned a few rows at a time finds what a cold scan finds', () => {
+  const rows = Array.from(
+    { length: 200 },
+    (_, index) =>
+      `<w:tr><w:tc><w:p><w:r><w:t>${index === 150 ? '日本語' : `row ${index}`}</w:t></w:r></w:p></w:tc></w:tr>`
+  ).join('');
+  const table =
+    '<w:tbl><w:tblPr><w:tblStyle w:val="CJK"/><w:tblLook w:firstRow="1"/></w:tblPr><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>' +
+    rows +
+    '</w:tbl>';
+  const withTable = (bytesOf: () => Uint8Array) => {
+    const opened = openTreeSession(bytesOf());
+    if (!opened.ok) throw new Error(opened.reason);
+    return opened.session;
+  };
+  const files = () => {
+    const unzipped = unzipSync(bytes());
+    const document = strFromU8(unzipped['word/document.xml']!);
+    unzipped['word/document.xml'] = strToU8(document.replace('<w:body>', `<w:body>${table}`));
+    return zipSync(unzipped);
+  };
+  const cold = resolverGlyphFontFamilies(withTable(files));
+  const warm = withTable(files);
+  let families: readonly string[] | null = null;
+  let result: unknown = openSteps(
+    warm,
+    () => true,
+    () => {
+      families = resolverGlyphFontFamilies(warm);
+    }
+  );
+  while (typeof result === 'function') result = (result as () => unknown)();
+  expect(families).toEqual(cold);
+});
