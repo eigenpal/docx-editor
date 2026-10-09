@@ -733,7 +733,7 @@ export const Menu = defineComponent({
 
     return () => {
       if (props.hidden) return null;
-      const { openMenu, setOpenMenu, activeMenu } = menuContext.value;
+      const { openMenu, setOpenMenu, activeMenu, opening } = menuContext.value;
       const registry = CHROME_MENUS.find((menu) => menu.id === props.id);
       const open = openMenu === props.id;
       const text = props.label ?? label(props.labelKey ?? registry?.labelKey ?? props.id);
@@ -757,6 +757,7 @@ export const Menu = defineComponent({
             aria-expanded={open}
             aria-controls={open ? panelId : undefined}
             class="docx-menubar__trigger"
+            disabled={opening === true}
             tabindex={activeMenu === props.id ? 0 : -1}
             {...(open ? { 'data-open': '' } : {})}
             onMousedown={guardToolbarMousedown}

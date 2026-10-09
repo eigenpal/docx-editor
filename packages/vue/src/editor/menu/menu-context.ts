@@ -23,6 +23,8 @@ export interface MenuContextValue {
   readonly onParagraphDialog: (() => void) | undefined;
   readonly onReportIssue: (() => void) | undefined;
   readonly reportIssue: boolean | undefined;
+  /** A document is opening: the bar is disabled, like the toolbar. */
+  readonly opening?: boolean;
 }
 
 export const MenuContext: InjectionKey<MaybeRef<MenuContextValue>> = Symbol('MenuContext');

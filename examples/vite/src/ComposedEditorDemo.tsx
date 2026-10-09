@@ -19,6 +19,7 @@ import {
   useDocxSource,
   useEditorCaret,
   useEditorEvent,
+  useEditorState,
   type EditorCaret,
 } from '@docx-editor.dev/react';
 // PRO: comments + tracked changes ship in @docx-editor.dev/pro. Register the
@@ -356,6 +357,8 @@ function EditorChrome({
   collaborationControl: ReactNode;
 }) {
   const editor = useDocxEditor();
+  // While a large file opens, the previous document is still mounted: Open and New wait.
+  const opening = useEditorState((snapshot) => snapshot.isOpening === true);
   // Where the caret is, as a paragraph and an offset — the shape the write APIs take as
   // their `at`. `snapshot.selection` cannot answer this (it addresses paragraphs by id and
   // carries no offsets), and reading it used to mean reaching into `editor.surface`, an
@@ -431,7 +434,10 @@ function EditorChrome({
                 order is clearer than merging into it. */}
             <DocxEditor.Menu.File preset={false}>
               <DocxEditor.Menu.Open />
-              <DocxEditor.Menu.Row onSelect={newDocument} disabled={!editor || collaborating}>
+              <DocxEditor.Menu.Row
+                onSelect={newDocument}
+                disabled={!editor || collaborating || opening}
+              >
                 New
               </DocxEditor.Menu.Row>
               <DocxEditor.Menu.Save />
@@ -494,12 +500,12 @@ function EditorChrome({
           <ThemeToggle value={colorMode} onChange={onColorModeChange} />
           <DemoHeaderButton
             variant="primary"
-            disabled={!editor || collaborating}
+            disabled={!editor || collaborating || opening}
             onClick={() => fileInputRef.current?.click()}
           >
             Open DOCX
           </DemoHeaderButton>
-          <DemoHeaderButton disabled={!editor || collaborating} onClick={newDocument}>
+          <DemoHeaderButton disabled={!editor || collaborating || opening} onClick={newDocument}>
             New
           </DemoHeaderButton>
           {collaborationControl}
