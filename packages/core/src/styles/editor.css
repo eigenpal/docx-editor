@@ -5000,9 +5000,11 @@ a.docx-hyperlink:focus-visible {
   overflow: hidden;
 }
 
+/* At most 30% of the window height below the page top, so a tall page at a high zoom still
+   shows the indicator without scrolling. */
 .docx-editor__loading-page-status {
   position: absolute;
-  top: 50%;
+  top: min(50%, 30vh);
   right: 0;
   left: 0;
   display: flex;
@@ -6969,6 +6971,13 @@ a.docx-hyperlink:focus-visible {
 .docx-editor .docx-menubar__trigger:hover,
 .docx-editor .docx-menubar__trigger[data-open] {
   background: var(--doc-bg-hover);
+}
+
+/* Disabled while a document opens, like the toolbar. */
+.docx-editor .docx-menubar__trigger:disabled {
+  background: transparent;
+  color: var(--doc-text-subtle);
+  cursor: default;
 }
 
 /* The panel: the shared card, dropped below its trigger. */
