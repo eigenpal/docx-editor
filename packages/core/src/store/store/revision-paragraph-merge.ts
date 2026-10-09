@@ -67,7 +67,8 @@ function replaceIn(node: OoxmlNode, target: OoxmlElement): OoxmlNode {
 /** Merge after rebuilding: a removed table/row cannot receive or swallow carried text. */
 export function mergeRevisionParagraphs(
   children: OoxmlNode[],
-  marks: ReadonlySet<string>
+  marks: ReadonlySet<string>,
+  mint: () => string
 ): OoxmlNode[] {
   if (!children.some((n) => marks.has(n.id))) return children;
   const sources = paragraphMergeSources(children);
@@ -75,21 +76,24 @@ export function mergeRevisionParagraphs(
   let carried: OoxmlNode[] = [];
   for (const node of children) {
     if (node.kind === 'paragraph') {
-      const merged = carried.length ? prepend(node, carried) : node;
-      carried = [];
       if (marks.has(node.id) && sources.has(node.id)) {
-        carried = merged.children.filter((n) => !properties(n));
+        // A dropped paragraph only adds to the carried content; the one that keeps its mark
+        // is built once, so a long run of joins stays linear.
+        for (const child of node.children) if (!properties(child)) carried.push(child);
         continue;
       }
-      out.push(merged);
+      out.push(carried.length ? prepend(node, carried) : node);
+      carried = [];
     } else if (node.kind === 'table' && carried.length) {
       const target = tableParagraphMergeTarget(node)!;
       out.push(replaceIn(node, prepend(target, carried)));
       carried = [];
     } else if (carried.length && isInertMarker(node)) {
       // A bookmark or comment boundary between the joined paragraphs marks the join point,
-      // so it goes after the carried text, not before the whole joined paragraph.
-      carried.push(node);
+      // so it goes after the carried text, not before the whole joined paragraph. It is a new
+      // node there: a collaborating replica records removing the body-level one and inserting
+      // this one, rather than moving one node from between blocks into a paragraph.
+      carried.push({ ...node, id: mint() } as OoxmlNode);
     } else out.push(node);
   }
   return out;

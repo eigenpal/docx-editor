@@ -662,7 +662,7 @@ function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): Oox
     out.push(...rebuilt);
   }
 
-  return mergeRevisionParagraphs(out, plan.mergeForward);
+  return mergeRevisionParagraphs(out, plan.mergeForward, plan.mint);
 }
 
 function rebuild(node: OoxmlNode, plan: RebuildPlan): OoxmlNode[] {

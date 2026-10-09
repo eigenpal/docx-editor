@@ -11,7 +11,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { afterAll, expect, test } from 'bun:test';
 import { strFromU8, unzipSync } from 'fflate';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
-import { createDocxEditor } from '@docx-editor.dev/core/editor';
+import { createBrowserAutomationHost, createDocxEditor } from '@docx-editor.dev/core/editor';
 import { canonicalOoxmlFingerprint, readOoxmlPackage } from '@docx-editor.dev/core/store';
 import { DocxEditor, type Range, type RequestContext } from '@docx-editor.dev/editor-api/browser';
 import { collaborationModule, reviewModule } from '../../index';
@@ -144,6 +144,40 @@ const deleteParagraph = (index: number) =>
     await c.sync();
   });
 const deleteMiddleParagraph = deleteParagraph(1);
+
+/**
+ * A tracked deletion from (first, start) to (last, end). The public API has no range between
+ * two offsets in different paragraphs, so this goes through the editor's automation host.
+ */
+function deleteSpan(
+  editor: Parameters<typeof createBrowserAutomationHost>[0],
+  first: number,
+  start: number,
+  last: number,
+  end: number
+) {
+  const host = createBrowserAutomationHost(editor);
+  const handle = (response: { results: readonly unknown[] }) =>
+    (response.results[0] as { value: { handle: never } }).value.handle;
+  const document = handle(host.execute({ operations: [{ op: 'getDocument' }] }));
+  const body = handle(host.execute({ operations: [{ op: 'getBody', document }] }));
+  const listed = host.execute({ operations: [{ op: 'getParagraphs', body }] }).results[0];
+  const paragraphs = (listed as unknown as { value: { handles: never[] } }).value.handles;
+  const response = host.execute({
+    operations: [
+      { op: 'setChangeTrackingMode', mode: 'TrackMineOnly', author: 'Alice' },
+      {
+        op: 'replaceSpan',
+        span: {
+          start: { paragraph: paragraphs[first]!, offset: start },
+          end: { paragraph: paragraphs[last]!, offset: end },
+        },
+        text: '',
+      },
+    ],
+  });
+  expect(response.ok).toBe(true);
+}
 
 const deleteParagraphsAt = (indexes: readonly number[]) =>
   tracked(async (c) => {
@@ -437,6 +471,59 @@ for (const order of Object.keys(ORDERS) as Order[])
           '<w:permEnd',
         ])
           expect(xml).toContain(marker);
+      } finally {
+        r.close();
+      }
+    });
+
+const JOINED =
+  p('Alpha one') +
+  '<w:bookmarkStart w:id="1" w:name="b1"/><w:commentRangeStart w:id="4"/>' +
+  p('Bravo two') +
+  '<w:bookmarkEnd w:id="1"/><w:commentRangeEnd w:id="4"/>' +
+  p('Charlie three');
+
+/** The markers sit at the join point, after the kept text, and every range keeps its end. */
+function expectJoinedMarkers(xml: string) {
+  expect(xml).toMatch(
+    /Alpha <\/w:t><\/w:r><w:bookmarkStart w:id="1" w:name="b1"\/><w:commentRangeStart w:id="4"\/><w:r>(?:<w:rPr\/>)?<w:t>two<\/w:t><\/w:r><\/w:p><w:bookmarkEnd w:id="1"\/><w:commentRangeEnd w:id="4"\/>/
+  );
+}
+
+for (const order of Object.keys(ORDERS) as Order[])
+  for (const accepter of [0, 1])
+    test(`${order}: accepting a partial join on peer ${accepter} keeps every marker at the join`, async () => {
+      const r = await room(fixture(JOINED), order);
+      try {
+        deleteSpan(r.peers[0]!.editor, 0, 6, 1, 6);
+        r.sync();
+        await converged(r);
+        await r.peers[accepter]!.runtime.run(async (c) => {
+          c.document.body.revisions.acceptAll();
+          await c.sync();
+        });
+        r.sync();
+        await converged(r);
+        for (const { editor } of r.peers) expectJoinedMarkers(await mainXml(editor));
+        const reopened = await DocxEditor.createServer(
+          new Uint8Array(await r.peers[1]!.editor.save())
+        );
+        try {
+          expectJoinedMarkers(strFromU8(unzipSync(await reopened.save())['word/document.xml']!));
+        } finally {
+          reopened.dispose();
+        }
+        expect(r.peers[accepter]!.editor.exec({ type: 'undo' }).ok).toBe(true);
+        r.sync();
+        await converged(r);
+        const undone = await mainXml(r.peers[0]!.editor);
+        expect(undone).toContain(
+          '<w:bookmarkStart w:id="1" w:name="b1"/><w:commentRangeStart w:id="4"/><w:p'
+        );
+        // On the proposing peer the deletion and the accept can share one undo step, so undo
+        // can return to the original document rather than to the pending deletion.
+        expect(undone).toContain('<w:bookmarkEnd w:id="1"/><w:commentRangeEnd w:id="4"/>');
+        expect(undone).not.toMatch(/Alpha <\/w:t><\/w:r><w:bookmarkStart/);
       } finally {
         r.close();
       }

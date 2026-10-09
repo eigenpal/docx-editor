@@ -53,15 +53,21 @@ export function nextRevisionId(part: OoxmlPart, actorId?: string): () => string 
     };
   }
   let next = highest + 1;
+  // Read once on the first wrap, then every id this minter hands out is recorded in it, so
+  // two mints in one transaction never return the same free id.
+  let wrapped: Set<string> | null = null;
   return () => {
     // Past the ceiling there is no "one higher" left, and clamping to it would hand back an
     // id the file already uses — turning every edit the user makes into a member of somebody
     // else's revision, which a crafted `@w:id` could force deliberately. Wrap and take the
     // lowest id nobody is using instead.
     if (next > MAX_REVISION_ID) {
-      const used = usedRevisionIds(part);
+      const used = (wrapped ??= usedRevisionIds(part));
       for (let candidate = 0; candidate <= MAX_REVISION_ID; candidate += 1) {
-        if (!used.has(String(candidate))) return String(candidate);
+        const id = String(candidate);
+        if (used.has(id)) continue;
+        used.add(id);
+        return id;
       }
       // Two billion revisions in one part is not a document; refuse to invent a collision.
       throw new TypeError('no free revision id');

@@ -457,3 +457,41 @@ test('4000 paragraph deletions in one batch stay fast and record each mark', () 
   expect(performance.now() - started).toBeLessThan(4000);
   expect(savedMainXml(host).match(/<w:rPr><w:del /g)).toHaveLength(count - 1);
 }, 120_000);
+
+test('a file that already uses the highest revision id still gets distinct new ids', () => {
+  const ceiling =
+    '<w:p><w:ins w:id="2147483647" w:author="Reviewer" w:date="2026-01-01T00:00:00Z">' +
+    '<w:r><w:t>Old</w:t></w:r></w:ins></w:p>';
+  const host = open(docx(ceiling + p('Alpha one') + p('Bravo two') + p('Charlie three')));
+  const { body } = roots(host);
+  const paragraphs = paragraphsOf(host, body);
+  run(host, [
+    { op: 'deleteParagraph', paragraph: paragraphs[1]! },
+    { op: 'deleteParagraph', paragraph: paragraphs[2]! },
+  ]);
+  const ids = [...savedMainXml(host).matchAll(/<w:del [^>]*w:id="(\d+)"/g)].map((m) => m[1]);
+  // Two text deletions and one shared mark id, none of them a duplicate of another.
+  expect(new Set(ids).size).toBe(3);
+  expect(ids).not.toContain('2147483647');
+});
+
+test('accepting a join over 8000 paragraphs separated by bookmarks stays fast', () => {
+  const count = 8000;
+  const body = Array.from(
+    { length: count },
+    (_, i) =>
+      p(`Paragraph ${i}`) +
+      `<w:bookmarkStart w:id="${i}" w:name="b${i}"/><w:bookmarkEnd w:id="${i}"/>`
+  ).join('');
+  const host = open(docx(body));
+  const { body: story } = roots(host);
+  const paragraphs = paragraphsOf(host, story);
+  // Keep "Para" of the first paragraph, so every later marker joins the carried text.
+  run(host, [deleteBetween(paragraphs, [0, 4], [count - 1, 0])]);
+  const started = performance.now();
+  decide(host, story, true);
+  // About 1.4 s here; copying the carried content into every dropped paragraph took 2.2 s,
+  // and the gap grows with the paragraph count (5.8 s against 10.8 s at 16000).
+  expect(performance.now() - started).toBeLessThan(10_000);
+  expect(paragraphTexts(host, story)).toEqual([`ParaParagraph ${count - 1}`]);
+}, 300_000);
