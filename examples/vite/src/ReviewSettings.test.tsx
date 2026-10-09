@@ -77,8 +77,30 @@ test('the panel applies a setting, saves it, and Escape returns focus to the gea
   expect(editor()?.snapshot().reviewPane.commentMarkers).toBe('icon');
   expect(JSON.parse(localStorage.getItem(KEY) ?? '{}').commentMarkers).toBe('icon');
 
+  // An Escape from elsewhere, or one another surface already handled, leaves the panel open.
+  const focused = document.activeElement as HTMLElement;
+  const outside = document.createElement('button');
+  document.body.append(outside);
+  outside.focus();
   await act(async () => {
-    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.keyDown(outside, { key: 'Escape' });
+  });
+  expect(controls.queryByRole('dialog')).not.toBeNull();
+  focused.focus();
+  await act(async () => {
+    const handled = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      bubbles: true,
+      cancelable: true,
+    });
+    handled.preventDefault();
+    focused.dispatchEvent(handled);
+  });
+  expect(controls.queryByRole('dialog')).not.toBeNull();
+  outside.remove();
+
+  await act(async () => {
+    fireEvent.keyDown(focused, { key: 'Escape' });
   });
   expect(controls.queryByRole('dialog')).toBeNull();
   expect(document.activeElement).toBe(gear);

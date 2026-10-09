@@ -153,11 +153,18 @@ export function ReviewSettings() {
     panelRef.current?.querySelector<HTMLInputElement>('input:checked')?.focus();
   }, [open]);
 
-  // Escape closes and returns focus to the gear; a press outside the panel closes it.
+  // Escape from the panel or the gear closes it and returns focus to the gear. An Escape
+  // elsewhere, such as in the document or in a menu that handled it, belongs to that
+  // surface. A press outside the panel closes it.
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.isComposing) return;
+      if (event.key !== 'Escape' || event.isComposing || event.defaultPrevented) return;
+      const root = rootRef.current;
+      const fromSettings =
+        root !== null &&
+        (root.contains(event.target as Node) || root.contains(document.activeElement));
+      if (!fromSettings) return;
       event.preventDefault();
       setOpen(false);
       triggerRef.current?.focus();

@@ -31,6 +31,8 @@ Use the named part for controls that collect a value or open UI, such as `FontCo
 </Framework>
 </FrameworkTabs>
 
+`Toolbar.Button`, `Menu.Item`, and `ContextMenu.Slot` take the slot ID as `slotId` (`slot-id` in Vue templates). The `slot` prop is deprecated. It still works and logs a development warning.
+
 Use `Action` for a host-owned action without a registry slot. Use `Separator` only for layout. Use `Group` to add controls to the preset toolbar as a group that collapses into the **More** panel, and `Slot` to replace one slot with your own content. The `Button`, `Action`, `Separator`, `Group`, and `Slot` helpers don't add slot IDs.
 
 ## History, zoom, styles, and font
