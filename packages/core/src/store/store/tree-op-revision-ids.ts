@@ -56,6 +56,8 @@ export function nextRevisionId(part: OoxmlPart, actorId?: string): () => string 
   // Read once on the first wrap, then every id this minter hands out is recorded in it, so
   // two mints in one transaction never return the same free id.
   let wrapped: Set<string> | null = null;
+  // Every id below the cursor is taken, so the next mint starts there instead of at zero.
+  let cursor = 0;
   return () => {
     // Past the ceiling there is no "one higher" left, and clamping to it would hand back an
     // id the file already uses — turning every edit the user makes into a member of somebody
@@ -63,10 +65,11 @@ export function nextRevisionId(part: OoxmlPart, actorId?: string): () => string 
     // lowest id nobody is using instead.
     if (next > MAX_REVISION_ID) {
       const used = (wrapped ??= usedRevisionIds(part));
-      for (let candidate = 0; candidate <= MAX_REVISION_ID; candidate += 1) {
-        const id = String(candidate);
+      for (; cursor <= MAX_REVISION_ID; cursor += 1) {
+        const id = String(cursor);
         if (used.has(id)) continue;
         used.add(id);
+        cursor += 1;
         return id;
       }
       // Two billion revisions in one part is not a document; refuse to invent a collision.
@@ -84,7 +87,9 @@ function usedRevisionIds(part: OoxmlPart): Set<string> {
     if (REVISION_ID_BEARING.has(node.localName) && node.namespaceUri === WML_NAMESPACE_URI) {
       for (const attribute of node.attributes) {
         if (attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === 'id') {
-          used.add(attribute.value);
+          // Compared as numbers: a file's `05` takes the id a new revision would write as `5`.
+          const value = attribute.value;
+          used.add(/^\d{1,15}$/.test(value) ? String(Number(value)) : value);
         }
       }
     }

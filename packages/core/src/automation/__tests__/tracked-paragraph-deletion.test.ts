@@ -495,3 +495,27 @@ test('accepting a join over 8000 paragraphs separated by bookmarks stays fast', 
   expect(performance.now() - started).toBeLessThan(10_000);
   expect(paragraphTexts(host, story)).toEqual([`ParaParagraph ${count - 1}`]);
 }, 300_000);
+
+test('after the ceiling, a padded file id such as 05 is not minted again as 5', () => {
+  const revision = (id: string, text: string) =>
+    `<w:p><w:ins w:id="${id}" w:author="Reviewer" w:date="2026-01-01T00:00:00Z">` +
+    `<w:r><w:t>${text}</w:t></w:r></w:ins></w:p>`;
+  const taken = ['2147483647', '0', '1', '2', '3', '4', '05'];
+  const host = open(
+    docx(
+      taken.map((id, i) => revision(id, `Old ${i}`)).join('') +
+        p('Alpha one') +
+        p('Bravo two') +
+        p('Charlie three')
+    )
+  );
+  const { body } = roots(host);
+  const paragraphs = paragraphsOf(host, body);
+  run(host, [
+    { op: 'deleteParagraph', paragraph: paragraphs[taken.length]! },
+    { op: 'deleteParagraph', paragraph: paragraphs[taken.length + 1]! },
+  ]);
+  const ids = [...savedMainXml(host).matchAll(/<w:del [^>]*w:id="(\d+)"/g)].map((m) => m[1]!);
+  expect(new Set(ids).size).toBe(3);
+  for (const id of ids) expect(taken.map((value) => String(Number(value)))).not.toContain(id);
+});

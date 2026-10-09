@@ -529,6 +529,52 @@ for (const order of Object.keys(ORDERS) as Order[])
       }
     });
 
+for (const order of Object.keys(ORDERS) as Order[])
+  for (const undoer of [0, 1])
+    test(`${order}: both peers accept the same partial join at once, then peer ${undoer} undoes`, async () => {
+      const r = await room(fixture(JOINED), order);
+      try {
+        deleteSpan(r.peers[0]!.editor, 0, 6, 1, 6);
+        r.sync();
+        await converged(r);
+        await concurrently(
+          r,
+          async (c) => {
+            c.document.body.revisions.acceptAll();
+            await c.sync();
+          },
+          async (c) => {
+            c.document.body.revisions.acceptAll();
+            await c.sync();
+          }
+        );
+        await converged(r);
+        // One copy of each start marker, at the join, on both peers and after reopening.
+        for (const { editor } of r.peers) {
+          const xml = await mainXml(editor);
+          expect(xml.match(/<w:bookmarkStart /g)).toHaveLength(1);
+          expect(xml.match(/<w:commentRangeStart /g)).toHaveLength(1);
+          expectJoinedMarkers(xml);
+        }
+        const reopened = await DocxEditor.createServer(
+          new Uint8Array(await r.peers[1]!.editor.save())
+        );
+        try {
+          expectJoinedMarkers(strFromU8(unzipSync(await reopened.save())['word/document.xml']!));
+        } finally {
+          reopened.dispose();
+        }
+        expect(r.peers[undoer]!.editor.exec({ type: 'undo' }).ok).toBe(true);
+        r.sync();
+        await converged(r);
+        const undone = await mainXml(r.peers[0]!.editor);
+        expect(undone.match(/<w:bookmarkStart /g)).toHaveLength(1);
+        expect(undone.match(/<w:commentRangeStart /g)).toHaveLength(1);
+      } finally {
+        r.close();
+      }
+    });
+
 test('typing after a tracked deletion in the same run stays ordinary text', async () => {
   const r = await room(fixture());
   try {
