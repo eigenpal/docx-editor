@@ -777,6 +777,11 @@ function applyFieldShading(element: HTMLElement, span: StyleSpanRecord, ctx: Pai
   // Marked whatever the mode, because the mode is a VIEW setting a host can flip without
   // relaying out, and because the review surface and tests want to find fields regardless.
   element.dataset.fieldAtom = field.formField ? 'form' : 'field';
+  // An editable saved result spans several pieces; the caret shades all of them together.
+  if (field.resultStart !== undefined && field.resultEnd !== undefined) {
+    element.dataset.fieldResultStart = String(field.resultStart);
+    element.dataset.fieldResultEnd = String(field.resultEnd);
+  }
   const shaded = field.formField
     ? ctx.shadeFormFields !== false
     : (ctx.fieldShading ?? DEFAULT_FIELD_SHADING) !== 'never';

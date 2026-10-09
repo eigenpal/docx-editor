@@ -117,10 +117,10 @@ describe('laid-out text follows the store addressing of each mode', () => {
       const fieldSpans = fragmentOf(layout)
         .lines.flatMap((line) => line.spans)
         .filter((span) => span.fieldAtom);
-      // Every result piece is marked as the same field, by its first offset.
-      expect(fieldSpans.map((span) => span.fieldAtom?.resultStart)).toEqual(
-        fieldSpans.map(() => 3)
-      );
+      // Every result piece is marked as the same field, by the range of the whole result.
+      expect(
+        fieldSpans.map((span) => [span.fieldAtom?.resultStart, span.fieldAtom?.resultEnd])
+      ).toEqual(fieldSpans.map(() => [3, 3 + result.length]));
       expect(Math.min(...fieldSpans.map((span) => span.range.start))).toBe(3);
       expect(Math.max(...fieldSpans.map((span) => span.range.end))).toBe(3 + result.length);
     });

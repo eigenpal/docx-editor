@@ -71,11 +71,7 @@ import { isRunDrawingAtom, runDrawingAtomPlan } from './field-drawing-atom.ts';
 import { legacyCheckboxAccessibleName } from '../store/package/legacy-checkbox-accessibility.ts';
 import { legacyFormFieldDataOf } from '../store/package/field-nodes.ts';
 import { fieldProjectionSpansOf } from './field-projection-spans.ts';
-import {
-  markSavedResultPieces,
-  resultMarker,
-  savedSimpleResultLink,
-} from './field-saved-result.ts';
+import { markSavedResultPieces, savedSimpleResultLink } from './field-saved-result.ts';
 import {
   emptyNamespaceScope,
   namespaceScopeForNode,
@@ -340,7 +336,11 @@ export function unmergedPiecesOfParagraphForDisplay(
         offset += pending.cachedText.length;
       }
     } else {
+      const first = pieces.length;
       for (const piece of pending.buffered) pieces.push(linked(piece));
+      if (pending.savedResult) {
+        markSavedResultPieces(pieces, first, pending.atomStart, pending.bufferOffset);
+      }
       offset = pending.bufferOffset;
     }
     pending = null;
@@ -662,7 +662,7 @@ export function unmergedPiecesOfParagraphForDisplay(
             projected: true,
             ...symAttribution,
             ...(currentLink ? { link: currentLink } : {}),
-            fieldAtom: resultMarker(pending),
+            fieldAtom: { formField: pending.formField },
           });
           continue;
         }
@@ -769,7 +769,7 @@ export function unmergedPiecesOfParagraphForDisplay(
           ...(currentLink ? { link: currentLink } : {}),
           // EVERY buffered result piece is a field's displayed result — a demoted
           // (unterminated) field's cache shades exactly like a FORMTEXT's editable one.
-          fieldAtom: resultMarker(pending),
+          fieldAtom: { formField: pending.formField },
         });
         offset += modelWidth;
         pending.bufferOffset = offset;
@@ -899,7 +899,7 @@ export function unmergedPiecesOfParagraphForDisplay(
     currentLink = savedSimpleResultLink(simple, previousLink, projectFieldLink);
     for (const inner of simple.children) processInline(inner, depth + 1, scope, containerDepth + 1);
     currentLink = previousLink;
-    markSavedResultPieces(pieces, first, resultStart);
+    markSavedResultPieces(pieces, first, resultStart, offset);
   };
 
   const processInline = (

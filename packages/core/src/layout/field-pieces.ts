@@ -121,6 +121,8 @@ export interface FieldAtomMarker {
    * caret find the whole result it is in.
    */
   readonly resultStart?: number;
+  /** The model offset just past the same result, beside {@link resultStart}. */
+  readonly resultEnd?: number;
 }
 
 /**
