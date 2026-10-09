@@ -1,7 +1,11 @@
 // The review queue's paragraph order over every story, kept across text-only commits.
 
 import type { TreeDocxSessionView } from '../binding/tree-session-contract.ts';
-import { deepParagraphOrderOfPart, type TreeModelChange } from '@docx-editor.dev/core/store';
+import {
+  deepParagraphOrderOfPart,
+  type OoxmlPart,
+  type TreeModelChange,
+} from '@docx-editor.dev/core/store';
 
 /**
  * Paragraph id to document position over EVERY story the review queue lists — body
@@ -30,7 +34,32 @@ export function createReviewOrderIndex(
     readonly packageRevision: number;
     readonly bodyRoot: object;
     readonly index: Map<string, number>;
+    /** The other stories the index read, in order. */
+    readonly otherParts: readonly OoxmlPart[];
   } | null = null;
+  /** Every header, footer, and note part, in the order the index appends them. */
+  const otherStoryParts = (): OoxmlPart[] => {
+    const parts: OoxmlPart[] = [];
+    const seen = new Set<OoxmlPart>([session.part()]);
+    for (const section of session.headerFooterPartsBySection()) {
+      for (const slots of [section.headers, section.footers]) {
+        for (const part of slots.values()) {
+          if (seen.has(part)) continue;
+          seen.add(part);
+          parts.push(part);
+        }
+      }
+    }
+    for (const noteKind of ['footnote', 'endnote'] as const) {
+      const part = session.partFor({ kind: 'notesPart', noteKind });
+      if (!part || seen.has(part)) continue;
+      seen.add(part);
+      parts.push(part);
+    }
+    return parts;
+  };
+  const sameParts = (left: readonly OoxmlPart[], right: readonly OoxmlPart[]): boolean =>
+    left.length === right.length && left.every((part, index) => part === right[index]);
   return {
     /**
      * Carry the index across a commit that cannot reorder paragraphs.
@@ -39,22 +68,27 @@ export function createReviewOrderIndex(
      * memo guaranteed exactly one whole-document rebuild per keystroke — the #391 shape, in the
      * render path. A text-local commit with no created, deleted, split or joined paragraphs
      * preserves every paragraph id and their order in every story, so the index is re-stamped
-     * to the values the next read will key on. Anything wider drops it, and commits that bypass
-     * the subscription (a package-shell edit) leave a stale key the read-side check rebuilds —
-     * the safe direction.
+     * to the values the next read will key on. A property or list commit keeps every paragraph
+     * too, but a list commit follows a package-shell write of its definition, so it is carried
+     * only while every other story part is still the same object. Anything wider drops it, and
+     * commits that bypass the subscription (a package-shell edit) leave a stale key the
+     * read-side check rebuilds — the safe direction.
      */
     retain(change) {
       if (!cache) return;
+      const otherParts = change.impact === 'text-local' ? cache.otherParts : otherStoryParts();
       if (
-        change.impact === 'text-local' &&
+        change.impact !== 'global' &&
         change.created.length === 0 &&
         change.deleted.length === 0 &&
-        change.splitJoin.length === 0
+        change.splitJoin.length === 0 &&
+        (change.impact === 'text-local' || sameParts(cache.otherParts, otherParts))
       ) {
         cache = {
           packageRevision: session.packageRevision(),
           bodyRoot: session.part().root,
           index: cache.index,
+          otherParts,
         };
       } else {
         cache = null;
@@ -74,26 +108,12 @@ export function createReviewOrderIndex(
         }
       };
       append(deepParagraphOrderOfPart(session.part()));
-      const seenParts = new Set<unknown>([session.part()]);
-      for (const section of session.headerFooterPartsBySection()) {
-        for (const slots of [section.headers, section.footers]) {
-          for (const part of slots.values()) {
-            if (seenParts.has(part)) continue;
-            seenParts.add(part);
-            append(deepParagraphOrderOfPart(part));
-          }
-        }
-      }
       // Note stories too, now that their revisions reach the queue: a paragraph missing from
       // this index is an item `rangeCovers` can never match, so a footnote card listed but
       // could never become the ACTIVE one — and the rail gates its reply box on that.
-      for (const noteKind of ['footnote', 'endnote'] as const) {
-        const part = session.partFor({ kind: 'notesPart', noteKind });
-        if (!part || seenParts.has(part)) continue;
-        seenParts.add(part);
-        append(deepParagraphOrderOfPart(part));
-      }
-      cache = { packageRevision, bodyRoot, index };
+      const otherParts = otherStoryParts();
+      for (const part of otherParts) append(deepParagraphOrderOfPart(part));
+      cache = { packageRevision, bodyRoot, index, otherParts };
       return index;
     },
   };

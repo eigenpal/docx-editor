@@ -244,6 +244,7 @@ export function openTreeSessionFromPackage(
     paragraphOrder: ReadonlyMap<string, number>;
     commentsPart: OoxmlPart | undefined;
     commentsExtendedPart: OoxmlPart | undefined;
+    pkg: OoxmlPackage;
   } | null = null;
   /** Memoized per body revision, like `reviewCache` — see `hasReviewContent`. */
   let reviewContentCache: { revision: number; present: boolean } | null = null;
@@ -1056,7 +1057,9 @@ export function openTreeSessionFromPackage(
                 store.part,
                 commentsPart,
                 commentsExtendedPart,
-                packageStore.packageRevision
+                packageStore.packageRevision,
+                pkg,
+                lastChangePackage
               )
             : null;
 
@@ -1106,6 +1109,7 @@ export function openTreeSessionFromPackage(
           paragraphOrder,
           commentsPart,
           commentsExtendedPart,
+          pkg,
         };
         return reviewCache.items;
       },

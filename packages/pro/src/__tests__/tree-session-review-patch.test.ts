@@ -3,7 +3,7 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// Conservative local review patch after one-paragraph text-local edits.
+// Conservative local review patch after one-paragraph text-local and list edits.
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
@@ -36,12 +36,19 @@ const cEnd = (id: string) =>
   `<w:commentRangeEnd w:id="${id}"/><w:r><w:commentReference w:id="${id}"/></w:r>`;
 
 const OFFICE_HEADER = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
+const NUMBERING_REL =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering';
+/** One bullet definition, so a new list adds only a `w:num` to an existing part. */
+const BULLET_NUMBERING =
+  '<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/>' +
+  '<w:lvlText w:val="-"/></w:lvl></w:abstractNum>' +
+  '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>';
 
 function isRevision(item: ReviewItem): item is ReviewRevisionItem {
   return item.kind === 'revision';
 }
 
-function docx(body: string, comments?: string, header?: string): Uint8Array {
+function docx(body: string, comments?: string, header?: string, numbering?: string): Uint8Array {
   const files: Record<string, Uint8Array> = {
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT_NS}">` +
@@ -52,6 +59,9 @@ function docx(body: string, comments?: string, header?: string): Uint8Array {
           : '') +
         (header
           ? '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>'
+          : '') +
+        (numbering
+          ? '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>'
           : '') +
         '</Types>'
     ),
@@ -76,6 +86,10 @@ function docx(body: string, comments?: string, header?: string): Uint8Array {
   if (header) {
     documentRels.push(`<Relationship Id="rIdH" Type="${OFFICE_HEADER}" Target="header1.xml"/>`);
     files['word/header1.xml'] = strToU8(`<w:hdr xmlns:w="${W}">${header}</w:hdr>`);
+  }
+  if (numbering) {
+    documentRels.push(`<Relationship Id="rIdN" Type="${NUMBERING_REL}" Target="numbering.xml"/>`);
+    files['word/numbering.xml'] = strToU8(`<w:numbering xmlns:w="${W}">${numbering}</w:numbering>`);
   }
   if (documentRels.length > 0) {
     files['word/_rels/document.xml.rels'] = strToU8(
@@ -525,6 +539,96 @@ describe('local review patch after one-paragraph text-local edits', () => {
           isRevision(item) && item.author === 'Margaret Hamilton' && item.text?.includes('v2')
       )
     ).toBe(true);
+  });
+
+  test('a list toggle that writes its list definition patches the queue', () => {
+    const body = TWO_PARAGRAPH_TRACKED + `<w:p>${run('plain item')}</w:p>`;
+    const session = open(docx(body, undefined, undefined, BULLET_NUMBERING));
+    const before = session.reviewItems();
+    expect(before).toHaveLength(2);
+
+    const numId = session.ensureListDefinition('bullet');
+    expect(numId).not.toBeNull();
+    const edit = session.applyTreeOps([
+      { op: 'setListNumbering', paragraphId: session.paragraphIds()[2]!, numId },
+    ]);
+    expect(edit.committed).toBe(true);
+
+    const after = session.reviewItems();
+    expect(after).toEqual(oracle(session));
+    // Patched, not derived again: every card keeps its identity.
+    expect(after[0]).toBe(before[0]);
+    expect(after[1]).toBe(before[1]);
+  });
+
+  test('a tracked list toggle falls back and still matches the oracle', () => {
+    const body = TWO_PARAGRAPH_TRACKED + `<w:p>${run('plain item')}</w:p>`;
+    const session = open(docx(body, undefined, undefined, BULLET_NUMBERING));
+    const before = session.reviewItems();
+
+    const numId = session.ensureListDefinition('bullet');
+    session.applyTreeOps([
+      {
+        op: 'setListNumbering',
+        paragraphId: session.paragraphIds()[2]!,
+        numId,
+        revision: { author: 'Ada', date: '2026-01-01T00:00:00Z' },
+      },
+    ]);
+
+    const after = session.reviewItems();
+    expect(after).toEqual(oracle(session));
+    expect(after.length).toBeGreaterThan(before.length);
+    expect(after[0]).not.toBe(before[0]);
+  });
+
+  test('a list toggle in a table cell falls back and still matches the oracle', () => {
+    const body =
+      TWO_PARAGRAPH_TRACKED +
+      `<w:tbl><w:tblPr/><w:tr><w:tc><w:p>${run('cell item')}</w:p></w:tc></w:tr></w:tbl>`;
+    const session = open(docx(body, undefined, undefined, BULLET_NUMBERING));
+    const before = session.reviewItems();
+
+    const numId = session.ensureListDefinition('bullet');
+    session.applyTreeOps([
+      { op: 'setListNumbering', paragraphId: session.paragraphIds()[2]!, numId },
+    ]);
+
+    const after = session.reviewItems();
+    expect(after).toEqual(oracle(session));
+    expect(after[0]).not.toBe(before[0]);
+  });
+
+  test('a header change beside a list toggle forces full derivation', () => {
+    const header = `<w:p>${run('Confidential ')}${ins('7', run('draft'))}</w:p>`;
+    const body = TWO_PARAGRAPH_TRACKED + `<w:p>${run('plain item')}</w:p>`;
+    const session = open(docx(body, undefined, header, BULLET_NUMBERING));
+    const before = session.reviewItems();
+
+    const headerParagraphId = session.paragraphIdsIn({ kind: 'headerFooter', rId: 'rIdH' })[0]!;
+    session.applyTreeOps(
+      [
+        {
+          op: 'insertText',
+          paragraphId: headerParagraphId,
+          offset: 'Confidential draft'.length,
+          text: ' v2',
+          revision: { author: 'Margaret Hamilton', date: '2026-03-04T05:06:07Z' },
+        },
+      ],
+      undefined,
+      undefined,
+      { kind: 'headerFooter', rId: 'rIdH' }
+    );
+    const numId = session.ensureListDefinition('bullet');
+    session.applyTreeOps([
+      { op: 'setListNumbering', paragraphId: session.paragraphIds()[2]!, numId },
+    ]);
+
+    const after = session.reviewItems();
+    expect(after).toEqual(oracle(session));
+    expect(after.some((item) => isRevision(item) && item.text?.includes('v2'))).toBe(true);
+    expect(after[0]).not.toBe(before[0]);
   });
 
   test('structural edits fall back and still match the oracle', () => {

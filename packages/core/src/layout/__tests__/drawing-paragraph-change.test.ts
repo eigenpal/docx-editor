@@ -28,8 +28,32 @@ test('paragraph splits and joins preserve unchanged drawing ancestors', () => {
   expect(drawingInputsUnchangedByParagraphEdit(split.part.root, part.root)).toBe(true);
 });
 
+test('accepts edits to paragraphs whose fields and bookmarks hold no drawing', () => {
+  const part = load(
+    '<w:p><w:pPr><w:adjustRightInd/></w:pPr><w:bookmarkStart w:id="1" w:name="a"/>' +
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText>REF a</w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r><w:bookmarkEnd w:id="1"/></w:p>' +
+      '<w:p><w:r><w:object/></w:r></w:p>'
+  );
+  const p = part.root.children[0]!.children[0]!;
+  const typed = applyTreeOp(part, { op: 'insertText', paragraphId: p.id, offset: 0, text: 'X' });
+  if (!typed.ok) throw Error(typed.reason);
+  expect(drawingInputsUnchangedByParagraphEdit(part.root, typed.part.root)).toBe(true);
+  const listed = applyTreeOp(part, { op: 'setListNumbering', paragraphId: p.id, numId: '1' });
+  if (!listed.ok) throw Error(listed.reason);
+  expect(drawingInputsUnchangedByParagraphEdit(part.root, listed.part.root)).toBe(true);
+});
+
+test('rejects a property edit on a paragraph that holds a drawing', () => {
+  // An object's preview reads its own paragraph's frame and style.
+  const part = load('<w:p><w:bookmarkStart w:id="1" w:name="a"/><w:r><w:object/></w:r></w:p>');
+  const p = part.root.children[0]!.children[0]!;
+  const listed = applyTreeOp(part, { op: 'setListNumbering', paragraphId: p.id, numId: '1' });
+  if (!listed.ok) throw Error(listed.reason);
+  expect(drawingInputsUnchangedByParagraphEdit(part.root, listed.part.root)).toBe(false);
+});
+
 for (const body of [
-  '<w:p><w:r><w:instrText>Text</w:instrText></w:r></w:p>',
   `<w:p><w:r><w:drawing><w:txbxContent>${paragraph}</w:txbxContent></w:drawing></w:r></w:p>`,
   `<w:p><w:r><w:pict><w:txbxContent>${paragraph}</w:txbxContent></w:pict></w:r></w:p>`,
   `<w:p><w:r><w:object><w:txbxContent>${paragraph}</w:txbxContent></w:object></w:r></w:p>`,

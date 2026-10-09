@@ -3,6 +3,33 @@ import { MAX_PART_SCAN_ELEMENTS } from '../store/package/drawing-projection.ts';
 import { MAX_XML_DEPTH } from '../store/package/xml-reader.ts';
 import { ordinaryDrawingParagraph } from './table-ordinary-paragraph.ts';
 
+/** Elements that are, or host, a projected drawing atom. */
+const DRAWING_HOSTS = new Set(['drawing', 'pict', 'object']);
+const drawingFreeParagraphs = new WeakMap<OoxmlNode, boolean>();
+
+/**
+ * A paragraph with no drawing atom in it: only WordprocessingML elements, none of them a
+ * drawing, a picture, or an object. A drawing's projection reads its own paragraph's
+ * properties (a frame makes an object preview), so a property edit is safe only here. Fields,
+ * bookmarks, and other properties carry no atom, so they do not stop the proof.
+ */
+function drawingFreeParagraph(paragraph: OoxmlNode): boolean {
+  const known = drawingFreeParagraphs.get(paragraph);
+  if (known !== undefined) return known;
+  let visited = 0;
+  const visit = (node: OoxmlNode, depth: number): boolean => {
+    if (++visited > MAX_PART_SCAN_ELEMENTS || depth > MAX_XML_DEPTH) return false;
+    if (node.kind === 'textValue') return true;
+    if (node.namespaceUri !== WML_NAMESPACE_URI || DRAWING_HOSTS.has(node.localName)) {
+      return false;
+    }
+    return node.children.every((child) => visit(child, depth + 1));
+  };
+  const result = visit(paragraph, 0);
+  drawingFreeParagraphs.set(paragraph, result);
+  return result;
+}
+
 /** Prove that paragraph edits preserve drawing atoms, their order, and their ancestors. */
 export function drawingInputsUnchangedByParagraphEdit(
   before: OoxmlNode,
@@ -10,7 +37,7 @@ export function drawingInputsUnchangedByParagraphEdit(
 ): boolean {
   let visited = 0;
   const ordinary = (node: OoxmlNode): boolean =>
-    node.kind === 'paragraph' && ordinaryDrawingParagraph(node);
+    node.kind === 'paragraph' && (ordinaryDrawingParagraph(node) || drawingFreeParagraph(node));
   const visit = (previous: OoxmlNode, next: OoxmlNode, depth: number): boolean => {
     if (++visited > MAX_PART_SCAN_ELEMENTS || depth > MAX_XML_DEPTH) return false;
     if (previous === next) return true;
@@ -24,7 +51,7 @@ export function drawingInputsUnchangedByParagraphEdit(
       previous.prefix !== next.prefix
     )
       return false;
-    // Neither subtree contains drawings, fields, frames, or other projected content.
+    // Neither paragraph contains a drawing atom, so its edit moves no projection.
     if (ordinary(previous) && ordinary(next)) return true;
     if (
       previous.attributes !== next.attributes ||

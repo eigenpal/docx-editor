@@ -1,4 +1,4 @@
-// The CONSERVATIVE local review patch: how a one-paragraph text-local edit updates the
+// The CONSERVATIVE local review patch: how a one-paragraph local edit updates the
 // review queue without re-deriving it from the whole story.
 //
 // Split out of `tree-session.ts`, which owns the cache and calls these; the rules
@@ -19,6 +19,7 @@ import {
   parentNodeOf,
   collectRevisionSites,
   linkRevisionReplies,
+  type OoxmlPackage,
   type OoxmlPart,
   type TreeModelChange,
 } from '@docx-editor.dev/core/store';
@@ -29,6 +30,38 @@ export interface LocalReviewPatchCache {
   readonly packageRevision: number;
   readonly commentsPart: OoxmlPart | undefined;
   readonly commentsExtendedPart: OoxmlPart | undefined;
+  /** The package the queue was derived or patched from. */
+  readonly pkg: OoxmlPackage;
+}
+
+/**
+ * Turning a paragraph into a list item first writes its list definition here, outside the
+ * edit's own transaction. The review queue never reads this part.
+ */
+const NUMBERING_PART = '/word/numbering.xml';
+
+/**
+ * Whether every package input of the queue except the edited story is the same object as
+ * before: every part but `storyPartName` and the numbering part, and the relationships and
+ * content types that resolve headers, footers, notes, and comments.
+ */
+function reviewInputsUnchanged(
+  before: OoxmlPackage,
+  after: OoxmlPackage,
+  storyPartName: string
+): boolean {
+  if (
+    before.relationships !== after.relationships ||
+    before.contentTypes !== after.contentTypes ||
+    before.parts.size !== after.parts.size
+  ) {
+    return false;
+  }
+  for (const [name, part] of after.parts) {
+    if (name === storyPartName || name === NUMBERING_PART) continue;
+    if (before.parts.get(name) !== part) return false;
+  }
+  return true;
 }
 
 function itemStartParagraphRank(
@@ -156,15 +189,25 @@ export function localReviewPatchParagraphId(
   part: OoxmlPart,
   commentsPart: OoxmlPart | undefined,
   commentsExtendedPart: OoxmlPart | undefined,
-  currentPackageRevision: number
+  currentPackageRevision: number,
+  currentPackage: OoxmlPackage,
+  changePackage: OoxmlPackage | null
 ): string | null {
   if (change.fromRevision !== cache.bodyRevision) return null;
   // Body text-local edits bump package revision by exactly one. A header/footer or package
   // write can move package revision without moving the body revision — patching against a
-  // queue derived before that would keep stale furniture cards by reference.
-  if (currentPackageRevision !== cache.packageRevision + 1) return null;
+  // queue derived before that would keep stale furniture cards by reference. A list
+  // definition written just before the edit moves it too; that write is allowed only when
+  // the edit was the last write and every other input is the same object.
+  if (
+    currentPackageRevision !== cache.packageRevision + 1 &&
+    (changePackage !== currentPackage ||
+      !reviewInputsUnchanged(cache.pkg, currentPackage, part.name))
+  ) {
+    return null;
+  }
   if (change.story !== undefined && change.story.kind !== 'body') return null;
-  if (change.impact !== 'text-local') return null;
+  if (change.impact === 'global') return null;
   if (change.dirty.length !== 1) return null;
   if (change.created.length > 0 || change.deleted.length > 0 || change.splitJoin.length > 0) {
     return null;
@@ -175,6 +218,19 @@ export function localReviewPatchParagraphId(
   const paragraphId = change.dirty[0]!;
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return null;
+  if (change.impact !== 'text-local') {
+    // A property or list edit can add a formatting change that folds into a neighbor's card.
+    // Only a paragraph left with no revision markup at all is sure to need no card of its own.
+    if (collectRevisionSites({ ...part, root: paragraph }).length > 0) return null;
+    // A list edit moves the flow, and a paragraph in a table has row and cell markup outside
+    // it. Only a paragraph directly in the body has nothing above it to hold a card.
+    if (
+      change.impact === 'flow-structural' &&
+      parentNodeOf(part, paragraphId)?.localName !== 'body'
+    ) {
+      return null;
+    }
+  }
 
   // A local edit can CREATE a cross-paragraph group. The cached queue cannot prove
   // that boundary safe: before typing after Enter, only the preceding mark exists.
