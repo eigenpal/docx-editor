@@ -105,7 +105,8 @@ test('font catalogs and rendered style indexes invalidate when only the bidi fac
       direct: [family],
       inherited: ['Latin Body'],
     });
-    expect(collectRenderedFontFamilies([body], null, fonts)).toEqual([family, 'Latin Body'].sort());
+    // The notice's answer is what text renders in: the direct face shadows the default.
+    expect(collectRenderedFontFamilies([body], null, fonts)).toEqual([family]);
     expect(collectRenderedFontFamilies([bareBody], styles, fonts)).toEqual([family]);
   }
 });
