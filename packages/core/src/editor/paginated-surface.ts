@@ -4797,7 +4797,8 @@ export function mountPaginatedSurface(
         moved.position,
         ['left', 'wordLeft', 'lineStart', 'up', 'pageUp'].includes(command)
       );
-      if (outside) moved = { ...moved, position: outside };
+      // The escape lands elsewhere, so the motion's caret (and its page) no longer applies.
+      if (outside) moved = { ...moved, position: outside, caret: undefined };
       if (tocAtPosition(session.part(), moved.position)) {
         if (extend) return;
         const backwards = new Set<NavigationCommand>([

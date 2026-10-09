@@ -9,7 +9,8 @@
 import { lineSegmentFor, lineSegments } from './line-segments.ts';
 import { paragraphLinesIndex } from './paragraph-lines.ts';
 import { breakEndsLineBefore } from './semantic-caret-line.ts';
-import type { LineRecord, SemanticLayout } from './semantic-records.ts';
+import type { LineRecord, SemanticLayout, TextMeasurer } from './semantic-records.ts';
+import type { CaretGeometry } from './semantic-interaction.ts';
 
 interface Position {
   readonly paragraphId: string;
@@ -128,4 +129,17 @@ export function verticalLineEndTarget(
   const endGeometry = deps.locate(end.position, end.lineId);
   if (!endGeometry) return null;
   return Math.abs(endGeometry.x - targetX) < Math.abs(shown.x - targetX) ? end : null;
+}
+
+/** How `moveCaret` resolves a motion. */
+export interface MoveCaretOptions {
+  /** Precomputed active-story stops; body navigation keeps the indexed default. */
+  readonly stops?: readonly CaretGeometry[];
+  readonly measurer?: TextMeasurer;
+  /**
+   * The line the caret shows on (its line affinity), for an offset that ends one wrapped line
+   * and starts the next. Home, End, Up, and Down then start from that line. A line that does
+   * not hold the offset is ignored, and the default line for the offset applies.
+   */
+  readonly lineId?: string;
 }

@@ -5,6 +5,7 @@ import {
   verticalLineEndTarget,
   verticalStartOnAffineLine,
   type LineEdgeDeps,
+  type MoveCaretOptions,
 } from './caret-line-edge-navigation.ts';
 import { nearestPageWithStops } from './caret-page-step.ts';
 import { mergedCaretGroup } from './merged-caret-navigation.ts';
@@ -613,13 +614,7 @@ export function deletedTextBoundaries(
 }
 
 /** Story-scoped stops are required when navigating inside an open header or footer. */
-export interface MoveCaretOptions {
-  /** Precomputed active-story stops; body navigation keeps the indexed default. */
-  readonly stops?: readonly CaretGeometry[];
-  readonly measurer?: TextMeasurer;
-  /** The line the caret shows on, when its offset also starts the next line. */
-  readonly lineId?: string;
-}
+export type { MoveCaretOptions } from './caret-line-edge-navigation.ts';
 
 function lineEdgeDeps(
   layout: SemanticLayout,
@@ -681,7 +676,16 @@ export function moveCaret(
   command: NavigationCommand,
   desiredX: number | null = null,
   options: MoveCaretOptions = {}
-): { position: SemanticPosition; desiredX: number | null; lineId?: string } | null {
+): {
+  position: SemanticPosition;
+  desiredX: number | null;
+  /**
+   * The line the caret shows on after the motion, when it is not the default line for the
+   * position (End at a wrap shows on the upper line). Pass it back as
+   * {@link MoveCaretOptions.lineId} and as `CaretAtOptions.preferredLineId`.
+   */
+  lineId?: string;
+} | null {
   const directionOf = (stop: VisualCaretStop) => bidiDirectionOfStop(layout, stop);
   if (!options.stops && (command === 'left' || command === 'right')) {
     return moveHorizontalCaret(layout, position, command === 'left' ? -1 : 1, options.measurer);

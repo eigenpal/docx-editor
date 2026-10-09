@@ -125,5 +125,15 @@ for (const [label, paragraph] of [
     expect(surface.state().selection.head.offset).toBe(b);
     surface.navigate('lineStart', true);
     expect(surface.state().selection.head.offset).toBe(0);
+
+    // Typing at the end of the upper line, then undo: the restored caret has no line
+    // affinity, so it shows at the next line's start, where the next typed text lands.
+    at(2);
+    surface.navigate('lineEnd');
+    expect(caretLine()).toBe(0);
+    surface.type('#');
+    surface.undo();
+    expect(surface.state().selection.head.offset).toBe(b);
+    expect(caretLine()).toBe(1);
   });
 }

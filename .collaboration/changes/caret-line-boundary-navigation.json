@@ -7,7 +7,8 @@
   "tests": [
     "packages/core/src/layout/__tests__/caret-line-boundary-navigation.test.ts",
     "packages/core/src/editor/__tests__/surface-caret-line-boundary.test.ts",
-    "packages/pro/src/collaboration/__tests__/caret-line-boundary-affinity.test.ts"
+    "packages/pro/src/collaboration/__tests__/caret-line-boundary-affinity.test.ts",
+    "packages/core/src/editor/__tests__/story-caret-line-boundary.test.ts"
   ],
   "changeset": "caret-line-boundary-navigation",
   "migration": null

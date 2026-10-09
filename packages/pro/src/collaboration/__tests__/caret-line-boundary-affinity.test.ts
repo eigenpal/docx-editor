@@ -101,3 +101,65 @@ test('a caret at the end of a wrapped line keeps its line through remote edits',
     harness.cleanup();
   }
 });
+
+test('a remote edit before the caret in its paragraph leaves a valid caret', async () => {
+  const harness = createPeerHarness('caret-line-boundary-before', { offlineEditing: true });
+  const views: { editor: DocxEditorInstance; container: HTMLElement }[] = [];
+  try {
+    const { alice, bob } = await harness.pair(zipDocument(BODY));
+    for (const peer of [alice, bob]) {
+      peer.detach();
+      const container = document.createElement('div');
+      document.body.append(container);
+      const editor = createDocxEditor({
+        container,
+        document: peer.room.document,
+        modules: [collaborationModule({ session: peer.room.session })],
+      });
+      views.push({ editor, container });
+    }
+    const left = views[0]!;
+    const right = views[1]!;
+    const surface = left.editor.surface!;
+    surface.focus();
+    const lines = linesOf(surface.layout());
+    const paragraphId = lines.at(-1)!.range.paragraphId;
+    const b = lines.filter((line) => line.range.paragraphId === paragraphId)[1]!.range.start;
+    surface.setSelection({
+      anchor: { paragraphId, offset: 2 },
+      head: { paragraphId, offset: 2 },
+    });
+    surface.navigate('lineEnd');
+    expect(surface.state().selection.head.offset).toBe(b);
+
+    right.editor.exec({
+      type: 'setSelection',
+      range: { anchor: { paragraphId, offset: 0 }, head: { paragraphId, offset: 0 } },
+    });
+    expect(right.editor.exec({ type: 'insertText', text: 'Q' }).ok).toBe(true);
+    await Promise.resolve();
+
+    // Whether the local offset follows the remote insertion belongs to the collaboration
+    // session; either way the caret stays on a painted line and keeps editing.
+    const head = surface.state().selection.head;
+    expect(head.paragraphId).toBe(paragraphId);
+    expect([b, b + 1]).toContain(head.offset);
+    expect(paintedLine(left.editor, left.container, paragraphId)).toBeGreaterThanOrEqual(0);
+    surface.navigate('lineStart');
+    surface.type('#');
+    await Promise.resolve();
+    const text = (editor: DocxEditorInstance) =>
+      linesOf(editor.surface!.layout())
+        .filter((line) => line.range.paragraphId === paragraphId)
+        .flatMap((line) => line.spans.map((span) => span.text))
+        .join('');
+    expect(text(left.editor)).toContain('#');
+    expect(text(right.editor)).toBe(text(left.editor));
+  } finally {
+    for (const view of views) {
+      view.editor.destroy();
+      view.container.remove();
+    }
+    harness.cleanup();
+  }
+});

@@ -410,22 +410,37 @@ export function navigateInActiveScope(
     ...(lineId !== undefined ? { lineId } : {}),
   });
   if (!moved) return null;
-  if (!storyStops) {
-    if (moved.lineId === undefined) return moved;
-    const caret = caretAt(layout, moved.position, {
-      ...(measurer ? { measurer } : {}),
-      preferredLineId: moved.lineId,
-    });
-    return { position: moved.position, desiredX: moved.desiredX, ...(caret ? { caret } : {}) };
-  }
   // Prefer an exact stop match so continuation-page geometry carries its pageIndex through
-  // word/line gestures that rebuild the position without returning the stop itself.
-  const stop = storyStops.find(
-    (candidate) =>
-      candidate.position.paragraphId === moved.position.paragraphId &&
-      candidate.position.offset === moved.position.offset
-  );
-  return stop ? { ...moved, pageIndex: stop.pageIndex } : moved;
+  // word/line gestures that rebuild the position without returning the stop itself. A stop on
+  // the chosen line wins: a wrap offset has its stop on the next line.
+  const stop =
+    storyStops?.find(
+      (candidate) =>
+        candidate.position.paragraphId === moved.position.paragraphId &&
+        candidate.position.offset === moved.position.offset &&
+        (moved.lineId === undefined || candidate.lineId === moved.lineId)
+    ) ??
+    storyStops?.find(
+      (candidate) =>
+        candidate.position.paragraphId === moved.position.paragraphId &&
+        candidate.position.offset === moved.position.offset
+    );
+  const pageIndex = stop?.pageIndex;
+  // The line the motion chose travels as the caret's affinity, in every story.
+  const caret =
+    moved.lineId === undefined
+      ? null
+      : caretAt(layout, moved.position, {
+          ...(measurer ? { measurer } : {}),
+          ...(pageIndex !== undefined ? { preferredPageIndex: pageIndex } : {}),
+          preferredLineId: moved.lineId,
+        });
+  return {
+    position: moved.position,
+    desiredX: moved.desiredX,
+    ...(pageIndex !== undefined ? { pageIndex } : {}),
+    ...(caret ? { caret } : {}),
+  };
 }
 
 export function findNoteAtSheetPoint(
