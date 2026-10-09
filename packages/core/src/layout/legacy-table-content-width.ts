@@ -10,13 +10,17 @@ import {
   type OoxmlElement,
 } from '@docx-editor.dev/core/store';
 import type { SemanticTableRow, TableAlignment } from './semantic-table.ts';
-import { MAX_TABLE_COLUMNS, type CellWidthClaim, type PreferredWidth } from './table-widths.ts';
+import {
+  MAX_TABLE_COLUMNS,
+  MAX_TABLE_PERCENT_UNITS,
+  type CellWidthClaim,
+  type PreferredWidth,
+} from './table-widths.ts';
 import { hasSupportedLegacyTableMargins } from './legacy-table-margins.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 
 const MAX_WIDTH_PT = 31_680 / 20;
 const EPSILON_PT = 0.001;
-const MAX_PERCENT_UNITS = 32_767;
 
 /** Reconcile the precision of legacy fiftieth-percent preferences with a verified twip grid. */
 export function legacyRoundedCellClaims(
@@ -106,9 +110,9 @@ export function legacyTableContentWidth(input: {
   if (
     attr(width, 'type') !== 'pct' ||
     rawWidth === undefined ||
-    ((!/^\d{1,5}$/.test(rawWidth) || Number(rawWidth) > MAX_PERCENT_UNITS) &&
+    ((!/^\d{1,5}$/.test(rawWidth) || Number(rawWidth) > MAX_TABLE_PERCENT_UNITS) &&
       (!/^\d{1,3}(?:\.\d+)?%$/.test(rawWidth) ||
-        Number(rawWidth.slice(0, -1)) * 50 > MAX_PERCENT_UNITS)) ||
+        Number(rawWidth.slice(0, -1)) * 50 > MAX_TABLE_PERCENT_UNITS)) ||
     (stated('tblInd') &&
       (attr(indent, 'type') !== 'dxa' || readTwipsMeasure(attr(indent, 'w')) !== 0)) ||
     (stated('tblLayout') && attr(layout, 'type') !== 'autofit')

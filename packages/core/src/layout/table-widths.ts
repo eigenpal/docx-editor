@@ -63,7 +63,7 @@ export const AUTO_PREFERRED_WIDTH: PreferredWidth = Object.freeze({ type: 'auto'
 const MAX_PREFERRED_PERCENT = 100;
 
 /** Widest TABLE percentage honoured above 100, as a signed 16-bit count of fiftieths. */
-const MAX_TABLE_PERCENT_UNITS = 32_767;
+export const MAX_TABLE_PERCENT_UNITS = 32_767;
 
 /** A width stated without a unit: its type says whether it is twips or fiftieths of a percent. */
 const UNITLESS = /^[+-]?\d{0,9}(?:\.\d{0,32})?$/;

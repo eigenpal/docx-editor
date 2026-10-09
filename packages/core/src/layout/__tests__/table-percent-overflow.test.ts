@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, serializeOoxmlPart, type OoxmlElement } from '@docx-editor.dev/core/store';
+import { layoutHeaderFooterStory } from '../hf-layout.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
-import type { TableFragmentRecord } from '../semantic-records.ts';
+import type { BlockFragmentRecord, TableFragmentRecord } from '../semantic-records.ts';
 import { readTableStructure, tableOriginX } from '../semantic-table.ts';
 import { readPreferredWidth, readTablePreferredWidth } from '../table-widths.ts';
 import { elevenPointDefaults } from './fixtures/eleven-point-defaults.ts';
@@ -45,21 +46,11 @@ function table({
   );
 }
 
-function layOut(body: string, compatibilityMode: number) {
-  const read = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
-    name: '/word/document.xml',
-    contentType: 'application/xml',
-  });
-  if (!read.ok) throw new Error(read.reason);
-  const result = layoutSemanticDocument(read.part, 1, {
-    measurer: createFixedMeasurer(6, 12),
-    styleCascade: elevenPointDefaults(),
-    compatibilityMode,
-    geometry: { width: CONTENT_PT, height: 400, margin: { top: 0, bottom: 0, left: 0, right: 0 } },
-  });
-  const fragment = result.pages[0]!.fragments.find(
-    (candidate): candidate is TableFragmentRecord => candidate.kind === 'table'
-  )!;
+const measurer = createFixedMeasurer(6, 12);
+const isTable = (block: BlockFragmentRecord): block is TableFragmentRecord =>
+  block.kind === 'table';
+
+function shape(fragment: TableFragmentRecord) {
   const cells = fragment.rows[0]!.cells;
   return {
     x: fragment.box.x,
@@ -70,6 +61,22 @@ function layOut(body: string, compatibilityMode: number) {
         cell.blocks.flatMap((block) => (block.kind === 'paragraph' ? block.lines : [])).length
     ),
   };
+}
+
+function layOut(body: string, compatibilityMode: number | undefined) {
+  const read = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
+    name: '/word/document.xml',
+    contentType: 'application/xml',
+  });
+  if (!read.ok) throw new Error(read.reason);
+  const result = layoutSemanticDocument(read.part, 1, {
+    measurer,
+    styleCascade: elevenPointDefaults(),
+    compatibilityMode,
+    geometry: { width: CONTENT_PT, height: 400, margin: { top: 0, bottom: 0, left: 0, right: 0 } },
+  });
+  const fragment = result.pages[0]!.fragments.find(isTable)!;
+  return { ...shape(fragment), fragment };
 }
 
 function tblW(attributes: string): OoxmlElement {
@@ -114,7 +121,7 @@ describe('a table percentage above 100 extends the table past the text column', 
     expect(resolved.widths).toEqual([300, 150]);
   });
 
-  for (const mode of [11, 12, 14]) {
+  for (const mode of [undefined, 11, 12, 14]) {
     test(`mode ${mode} measures the percentage against the content-aligned reference box`, () => {
       // The 300 pt text column plus two 5.4 pt outer cell margins, at 120%.
       const target = (CONTENT_PT + 10.8) * 1.2;
@@ -126,6 +133,65 @@ describe('a table percentage above 100 extends the table past the text column', 
       expect(resolved.lines).toEqual([1, 1]);
     });
   }
+
+  test('mode 15 measures the percentage against the text column alone', () => {
+    // Authored outer cell margins do not widen the reference box.
+    const grid = [3600, 3600];
+    const resolved = layOut(table({ width: '6000', grid, margin: 108 }), 15);
+    expect(resolved.width).toBeCloseTo(360, 6);
+    expect(resolved.x).toBeCloseTo(-30, 6);
+  });
+
+  test('a nested table extends past the cell that holds it', () => {
+    const outer =
+      '<w:tbl><w:tblPr><w:tblW w:w="6000" w:type="dxa"/><w:tblLayout w:type="fixed"/>' +
+      '<w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/></w:tblCellMar>' +
+      '</w:tblPr><w:tblGrid><w:gridCol w:w="6000"/></w:tblGrid><w:tr><w:tc><w:tcPr>' +
+      `<w:tcW w:w="6000" w:type="dxa"/></w:tcPr>${table()}<w:p/></w:tc></w:tr></w:tbl>`;
+    const cell = layOut(outer, 15).fragment.rows[0]!.cells[0]!;
+    const nested = shape(cell.blocks.find(isTable)!);
+    expect(nested.width).toBeCloseTo(450, 6);
+    expect(nested.lines).toEqual([1, 1]);
+  });
+
+  test('a right-to-left table extends from its leading edge', () => {
+    const rtl = (jc: string) => table({ jc }).replace('<w:tblPr>', '<w:tblPr><w:bidiVisual/>');
+    const leading = layOut(rtl(''), 15);
+    expect(leading.width).toBeCloseTo(450, 6);
+    expect(leading.x).toBeCloseTo(-150, 6);
+    expect(layOut(rtl('center'), 15).x).toBeCloseTo(-75, 6);
+  });
+
+  test('a header table extends past the text column', () => {
+    const part = readOoxmlPart(`<w:hdr xmlns:w="${W}">${table()}<w:p/></w:hdr>`, {
+      name: '/word/header1.xml',
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml',
+    });
+    if (!part.ok) throw new Error(part.reason);
+    const story = layoutHeaderFooterStory(
+      part.part,
+      CONTENT_PT,
+      measurer,
+      'test',
+      undefined,
+      elevenPointDefaults(),
+      // Page context, tabs, revision display, drawings and properties keep their defaults.
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { compatibilityMode: 15 }
+    );
+    const header = shape(story.fragments.find(isTable)!);
+    expect(header.width).toBeCloseTo(450, 6);
+    expect(header.x).toBeCloseTo(-75, 6);
+    expect(header.lines).toEqual([1, 1]);
+  });
 
   test('the percentage stays within its stated range', () => {
     expect(readTablePreferredWidth(tblW('w:w="32767" w:type="pct"'))).toEqual({
