@@ -41,7 +41,7 @@ const FORMATTING_PROPERTIES: readonly {
   property: ReviewFormattingChange['property'];
   element: string;
   attribute: string;
-  kind?: 'toggle' | 'halfPoints' | 'twips';
+  kind?: 'toggle' | 'halfPoints' | 'twips' | 'direction';
 }[] = [
   { property: 'bold', element: 'b', attribute: 'val', kind: 'toggle' },
   { property: 'italic', element: 'i', attribute: 'val', kind: 'toggle' },
@@ -57,6 +57,8 @@ const FORMATTING_PROPERTIES: readonly {
   { property: 'hangingIndent', element: 'ind', attribute: 'hanging', kind: 'twips' },
   { property: 'spaceBefore', element: 'spacing', attribute: 'before', kind: 'twips' },
   { property: 'spaceAfter', element: 'spacing', attribute: 'after', kind: 'twips' },
+  // Paragraph base direction, with the on/off values layout honours.
+  { property: 'direction', element: 'bidi', attribute: 'val', kind: 'direction' },
 ];
 
 export function changedFormatting(site: RevisionSite): ReviewFormattingChange[] {
@@ -82,6 +84,8 @@ export function changedFormatting(site: RevisionSite): ReviewFormattingChange[] 
       )?.value;
       if (spec.kind === 'toggle')
         return raw === '0' || raw === 'false' || raw === 'off' ? 'false' : 'true';
+      if (spec.kind === 'direction')
+        return raw === undefined || raw === '1' || raw === 'true' || raw === 'on' ? 'rtl' : 'ltr';
       if (raw === undefined) return null;
       if (spec.kind === 'halfPoints' || spec.kind === 'twips') {
         const numeric = spec.kind === 'twips' ? (readTwipsMeasure(raw) ?? Number.NaN) : Number(raw);

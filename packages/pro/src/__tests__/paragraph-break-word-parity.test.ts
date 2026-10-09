@@ -208,6 +208,35 @@ test('formatting cards describe changed values and omit unchanged properties', (
   editor.destroy();
 });
 
+test('formatting cards describe a paragraph direction change', () => {
+  const cases = [
+    {
+      pPr: '<w:bidi/>',
+      prior: '',
+      value: 'rtl',
+      label: 'Formatted: Text direction: Right-to-left',
+    },
+    {
+      pPr: '<w:bidi w:val="0"/>',
+      prior: '<w:bidi/>',
+      value: 'ltr',
+      label: 'Formatted: Text direction: Left-to-right',
+    },
+    { pPr: '', prior: '<w:bidi/>', value: null, label: 'Formatted: Text direction: Default' },
+  ] as const;
+  for (const { pPr, prior, value, label } of cases) {
+    const editor = mount({
+      body: `<w:p><w:pPr>${pPr}<w:pPrChange w:id="4" ${stamp}><w:pPr>${prior}</w:pPr></w:pPrChange></w:pPr><w:r><w:t>Example</w:t></w:r></w:p>`,
+    });
+    const card = editor.getReviewItems()[0]!;
+    if (card.kind !== 'revision') throw new Error('expected formatting');
+    expect(card.item.formattingChanges).toEqual([{ property: 'direction', value }]);
+    expect(revisionItemLabel(card.item, createT(en))).toBe(label);
+    expect(vueRevisionItemLabel(card.item, createT(en))).toBe(label);
+    editor.destroy();
+  }
+});
+
 test('opposing paragraph-mark revisions sharing an address have distinct review keys', () => {
   const editor = mount({
     body: `<w:p><w:pPr><w:rPr><w:ins w:id="1" ${stamp}/><w:del w:id="1" ${stamp}/></w:rPr></w:pPr><w:r><w:t>First</w:t></w:r></w:p><w:p><w:r><w:t>Second</w:t></w:r></w:p>`,

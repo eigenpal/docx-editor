@@ -414,6 +414,7 @@
       "hangingIndent": "Hanging indent",
       "spaceBefore": "Space before",
       "spaceAfter": "Space after",
+      "direction": "Text direction",
       "default": "Default",
       "points": "pt",
       "left": "Left",
@@ -425,7 +426,9 @@
       "none": "None",
       "single": "Single",
       "double": "Double",
-      "auto": "Automatic"
+      "auto": "Automatic",
+      "rtl": "Right-to-left",
+      "ltr": "Left-to-right"
     },
     "structuralDetails": {
       "rowInsert": "Inserted table row",

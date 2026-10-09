@@ -123,7 +123,7 @@ function formattingChangeLabel(
       ].includes(property)
     ) {
       detail = `${value} ${translate(`revisions.formattingDetails.points`)}`;
-    } else if (/^(left|center|right|both|start|end|none|single|double|auto)$/.test(value)) {
+    } else if (/^(left|center|right|both|start|end|none|single|double|auto|rtl|ltr)$/.test(value)) {
       detail = translate(`revisions.formattingDetails.${value}` as TranslationKey);
     } else if (property === 'color' && /^[0-9a-f]{6}$/i.test(value)) {
       detail = `#${value.toUpperCase()}`;

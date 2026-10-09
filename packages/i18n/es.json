@@ -414,6 +414,7 @@
       "hangingIndent": "Sangría francesa",
       "spaceBefore": "Espacio anterior",
       "spaceAfter": "Espacio posterior",
+      "direction": "Dirección del texto",
       "default": "Predeterminado",
       "points": "pto",
       "left": "Izquierda",
@@ -425,7 +426,9 @@
       "none": "Ninguno",
       "single": "Sencillo",
       "double": "Doble",
-      "auto": "Automático"
+      "auto": "Automático",
+      "rtl": "De derecha a izquierda",
+      "ltr": "De izquierda a derecha"
     },
     "structuralDetails": {
       "rowInsert": "Fila de tabla insertada",
