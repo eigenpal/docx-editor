@@ -4,9 +4,7 @@
   "before": "The font substitution notice listed every font named by a used style chain and by the document defaults, including East Asian fonts for Latin-only text and fonts that a nearer style or the run itself overrides.",
   "after": "Each text run resolves its font in layout order, and an East Asian font counts only for runs that contain East Asian characters. The export font candidates keep the broader set.",
   "reason": "This is a read-only derivation over the document tree that feeds a local notice and export font loading. It adds no stored field, operation, or journal primitive and does not change how shared nodes, identities, or updates are represented or interpreted.",
-  "tests": [
-    "packages/core/src/binding/__tests__/document-rendered-fonts.test.ts"
-  ],
+  "tests": ["packages/core/src/binding/__tests__/document-rendered-fonts.test.ts"],
   "changeset": "font-notice-rendered-faces",
   "migration": null
 }
