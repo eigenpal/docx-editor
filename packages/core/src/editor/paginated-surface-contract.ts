@@ -202,9 +202,10 @@ export interface PaginatedSurface {
    * each paragraph. A selection in one paragraph that starts at the paragraph start, whole or
    * partial, works on the first line: Tab sets a first-line indent of one default tab stop
    * (`w:defaultTabStop`), or steps the left indent when the first line already has that
-   * indent or more, or a hanging indent. Shift+Tab steps the left indent back first, then
-   * clears the first-line indent. A paragraph the selection reaches only at its start is
-   * not touched by this rule.
+   * indent or more, or a hanging indent. Shift+Tab clears a first-line indent that the
+   * paragraph states itself, so a style value applies again, and otherwise steps the left
+   * indent back. A paragraph the selection reaches only at its start is not touched by this
+   * rule, unless it is the empty last paragraph of the story.
    *
    * Answers true when the selection takes this rule, also when the write is refused or
    * changes nothing, so the text is never replaced. Answers false for a caret and for a

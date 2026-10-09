@@ -10,9 +10,12 @@ import type { SemanticLayout, SemanticPosition } from '@docx-editor.dev/core/lay
 import { lineSegmentFor, logicalLineSegments } from '../layout/line-segments.ts';
 import { paragraphLinesIndex } from '../layout/paragraph-lines.ts';
 import { MAX_PARAGRAPH_INDENT_TWIPS } from '../layout/paragraph-indent.ts';
-import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
-import { paragraphIndentOf, paragraphPropertiesOf, signedFirstLine } from './surface-formatting.ts';
+import {
+  directParagraphProperties,
+  paragraphIndentOf,
+  signedFirstLine,
+} from './surface-formatting.ts';
 import { firstEditableNoteOffset } from './surface-note-ops.ts';
 import { placeholderSelectionRange } from './surface-pointer.ts';
 
@@ -65,21 +68,34 @@ export interface TabIndent {
   readonly paragraphs: readonly string[];
 }
 
+/**
+ * Where a paragraph starts, for Tab. `empty` paints nothing. `midLine` opens on a line that
+ * another paragraph's text starts (after a style separator, or a deleted paragraph mark in a
+ * resolved view), so no offset in it is a paragraph start. Otherwise `offset` is the first
+ * offset the paragraph paints: hidden leading content, a field instruction, or a note
+ * reference mark is not a start.
+ */
+export type ParagraphStart =
+  | { readonly kind: 'start'; readonly offset: number }
+  | { readonly kind: 'empty' }
+  | { readonly kind: 'midLine' };
+
 /** What {@link tabIndentFor} reads about one paragraph. */
 export interface TabIndentReads {
-  /** The first offset the paragraph paints. Hidden leading content is not a start. */
-  paragraphStart(paragraphId: string): number;
+  start(paragraphId: string): ParagraphStart;
+  /** Whether the paragraph is the last one in its story. */
+  endsStory(paragraphId: string): boolean;
   /**
-   * Whether the paragraph paints nothing AND ends the story. A range that reaches the
-   * story's empty last paragraph (Select All) selects it whole; an empty paragraph inside
-   * the story is reached only at its start.
+   * The first-line indent: `resolved` is the effective signed value in twips, negative when
+   * hanging; `direct` is whether the paragraph states one itself.
    */
-  emptyStoryEnd(paragraphId: string): boolean;
-  /**
-   * Resolved indent in twips. `start` is the logical leading side, `w:left` or `w:start`,
-   * also in a right-to-left paragraph. `firstLine` is signed, negative when hanging.
-   */
-  indent(paragraphId: string): { readonly start: number; readonly firstLine: number };
+  firstLine(paragraphId: string): { readonly resolved: number; readonly direct: boolean };
+}
+
+/** Whether `offset` is at or before where the paragraph starts. */
+function atStart(start: ParagraphStart, offset: number): boolean {
+  if (start.kind === 'midLine') return false;
+  return start.kind === 'empty' || offset <= start.offset;
 }
 
 /**
@@ -91,15 +107,14 @@ export interface TabIndentReads {
  * - A selection in one paragraph that starts at the paragraph start, whole or partial,
  *   works on the first line. Tab sets a first-line indent of one `step`, the document's
  *   default tab stop. When the first line already has one step or more, or a hanging
- *   indent, Tab steps the left indent instead.
- *   Shift+Tab reverses that: it steps the left indent back first, then clears the
- *   first-line indent.
+ *   indent, Tab steps the left indent instead. Shift+Tab clears a first-line indent the
+ *   paragraph states itself, and otherwise steps the left indent back.
  * - A caret, or a selection in one paragraph that starts inside the text, answers `null`.
  *
  * `touched` is every paragraph from the range start to the range end, in order. A range
- * that ends at the start of the next paragraph (its first painted offset or before) selects
- * only the paragraph mark, so that last paragraph does not count. The other paragraph
- * commands keep that paragraph, as they always have.
+ * that ends at the start of a later paragraph selects only the mark before it, so that
+ * paragraph does not count, unless it is the empty last paragraph of the story (Select
+ * All). The other paragraph commands keep that paragraph, as they always have.
  */
 export function tabIndentFor(
   range: { readonly from: SemanticPosition; readonly to: SemanticPosition },
@@ -110,39 +125,31 @@ export function tabIndentFor(
 ): TabIndent | null {
   const { from, to } = range;
   if (from.paragraphId === to.paragraphId && from.offset === to.offset) return null;
+  const last = touched.length > 1 ? reads.start(to.paragraphId) : null;
   const markOnly =
-    touched.length > 1 &&
-    !reads.emptyStoryEnd(to.paragraphId) &&
-    to.offset <= reads.paragraphStart(to.paragraphId);
+    last !== null &&
+    atStart(last, to.offset) &&
+    !(last.kind === 'empty' && reads.endsStory(to.paragraphId));
   const paragraphs = markOnly ? touched.slice(0, -1) : touched;
   if (paragraphs.length > 1) return { write: 'stepLeft', paragraphs };
-  if (from.offset > reads.paragraphStart(from.paragraphId)) return null;
-  const { start, firstLine } = reads.indent(from.paragraphId);
+  if (!atStart(reads.start(from.paragraphId), from.offset)) return null;
+  const { resolved, direct } = reads.firstLine(from.paragraphId);
   if (direction === 'increase') {
-    const opensFirstLine = firstLine >= 0 && firstLine < step;
+    const opensFirstLine = resolved >= 0 && resolved < step;
     return { write: opensFirstLine ? 'setFirstLine' : 'stepLeft', paragraphs };
   }
-  return { write: start <= 0 && firstLine > 0 ? 'clearFirstLine' : 'stepLeft', paragraphs };
+  return { write: direct && resolved > 0 ? 'clearFirstLine' : 'stepLeft', paragraphs };
 }
 
-/**
- * The first offset a paragraph paints, `null` when it paints nothing, or -1 when it has no
- * paragraph start of its own.
- *
- * A paragraph can open with content that takes no caret stop: a hidden run, a field
- * instruction, or deleted text the current view hides. A selection from the first visible
- * character still starts at the paragraph start. A paragraph whose first line opens with
- * another paragraph's text (after a style separator, or a deleted paragraph mark in a
- * resolved view) starts in the middle of that line, so no offset in it is a start.
- */
-export function firstPaintedOffset(layout: SemanticLayout, paragraphId: string): number | null {
+/** {@link ParagraphStart} from the published layout alone. */
+export function paintedStart(layout: SemanticLayout, paragraphId: string): ParagraphStart {
   let first = Number.POSITIVE_INFINITY;
   let checkedFirstLine = false;
   for (const { line } of paragraphLinesIndex(layout).get(paragraphId) ?? []) {
     if (!checkedFirstLine) {
       checkedFirstLine = true;
       // Logical order: a right-to-left line draws its first paragraph on the right.
-      if (logicalLineSegments(line)[0]?.paragraphId !== paragraphId) return -1;
+      if (logicalLineSegments(line)[0]?.paragraphId !== paragraphId) return { kind: 'midLine' };
     }
     const segment = lineSegmentFor(line, paragraphId);
     if (!segment) continue;
@@ -153,32 +160,44 @@ export function firstPaintedOffset(layout: SemanticLayout, paragraphId: string):
     // Later lines hold later offsets; the first line that paints anything decides.
     if (Number.isFinite(first)) break;
   }
-  return Number.isFinite(first) ? first : null;
+  return Number.isFinite(first) ? { kind: 'start', offset: first } : { kind: 'empty' };
 }
 
-/** {@link TabIndentReads} over a published layout and the story part that holds the paragraphs. */
+/** The `w:ind` attributes that state a first-line or hanging indent. */
+const FIRST_LINE_ATTRIBUTES = ['firstLine', 'hanging', 'firstLineChars', 'hangingChars'];
+
+/**
+ * {@link TabIndentReads} over a published layout and the story part that holds the
+ * paragraphs. Starts are cached, since one key press asks about a paragraph more than once.
+ */
 export function layoutTabIndentReads(
   layout: SemanticLayout,
   part: OoxmlPart,
   order: readonly string[]
 ): TabIndentReads {
+  const starts = new Map<string, ParagraphStart>();
   return {
-    emptyStoryEnd: (paragraphId) =>
-      order[order.length - 1] === paragraphId && firstPaintedOffset(layout, paragraphId) === null,
-    paragraphStart(paragraphId) {
-      const painted = firstPaintedOffset(layout, paragraphId) ?? 0;
-      if (painted < 0) return painted;
-      // A note paragraph starts after its reference mark, which is not note text.
-      const node = findNode(part, paragraphId);
-      return Math.max(painted, node?.kind === 'paragraph' ? firstEditableNoteOffset(node) : 0);
+    start(paragraphId) {
+      const cached = starts.get(paragraphId);
+      if (cached) return cached;
+      let start = paintedStart(layout, paragraphId);
+      if (start.kind === 'start') {
+        // A note paragraph starts after its reference mark, which is not note text.
+        const node = findNode(part, paragraphId);
+        const note = node?.kind === 'paragraph' ? firstEditableNoteOffset(node) : 0;
+        if (note > start.offset) start = { kind: 'start', offset: note };
+      }
+      starts.set(paragraphId, start);
+      return start;
     },
-    indent(paragraphId) {
+    endsStory: (paragraphId) => order[order.length - 1] === paragraphId,
+    firstLine(paragraphId) {
       const entry = paragraphIndentOf(layout, paragraphId);
-      if (!entry) return { start: 0, firstLine: 0 };
-      // Layout sides are physical; the leading side of a right-to-left paragraph is its right.
-      const rtl = paragraphIsRtl(paragraphPropertiesOf(layout, paragraphId));
-      const start = rtl ? entry.indent.right : entry.indent.left;
-      return { start: Math.round(start * 20), firstLine: signedFirstLine(entry.indent) };
+      const ind = directParagraphProperties(part, paragraphId).find(
+        (property) => property.localName === 'ind'
+      )?.attributes;
+      const direct = FIRST_LINE_ATTRIBUTES.some((name) => ind?.[name] !== undefined);
+      return { resolved: entry ? signedFirstLine(entry.indent) : 0, direct };
     },
   };
 }

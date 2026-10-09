@@ -320,26 +320,37 @@ describe('selections that reach the next paragraph only at its start', () => {
 });
 
 describe('Shift+Tab over a selection', () => {
-  test('reverses two Tab presses, the left indent first and then the first line', () => {
+  test('reverses two Tab presses back to no indent', () => {
     const surface = mount(THREE);
     const ids = press(surface, [0, 0], [0, 16]);
     press(surface, [0, 0], [0, 16]);
     expect(indentOf(surface, ids[0]!)).toMatchObject({ left: '720', firstLine: '720' });
     press(surface, [0, 0], [0, 16], true);
-    expect(indentOf(surface, ids[0]!)).toMatchObject({ left: '0', firstLine: '720' });
+    expect(indentOf(surface, ids[0]!).firstLine).toBeUndefined();
+    expect(indentOf(surface, ids[0]!).left).toBe('720');
     press(surface, [0, 0], [0, 16], true);
-    expect(indentOf(surface, ids[0]!).firstLine ?? '0').toBe('0');
+    expect(indentOf(surface, ids[0]!).left).toBe('0');
     expect(xml(surface)).toContain('Alpha beta gamma');
   });
 
-  test('steps the leading indent of a right-to-left paragraph back before its first line', () => {
+  test('reverses one Tab on a paragraph that already has a left indent', () => {
+    const surface = mount(paragraph('Indented body', '<w:pPr><w:ind w:left="720"/></w:pPr>'));
+    const ids = press(surface, [0, 0], [0, 13]);
+    expect(indentOf(surface, ids[0]!)).toMatchObject({ left: '720', firstLine: '720' });
+    press(surface, [0, 0], [0, 13], true);
+    expect(indentOf(surface, ids[0]!).left).toBe('720');
+    expect(indentOf(surface, ids[0]!).firstLine).toBeUndefined();
+  });
+
+  test('steps the leading indent of a right-to-left paragraph once its first line is clear', () => {
     const surface = mount(
       paragraph('Right to left', '<w:pPr><w:bidi/><w:ind w:left="720" w:firstLine="720"/></w:pPr>')
     );
     const ids = press(surface, [0, 0], [0, 13], true);
-    expect(indentOf(surface, ids[0]!)).toMatchObject({ left: '0', firstLine: '720' });
+    expect(indentOf(surface, ids[0]!).firstLine).toBeUndefined();
+    expect(indentOf(surface, ids[0]!).left).toBe('720');
     press(surface, [0, 0], [0, 13], true);
-    expect(indentOf(surface, ids[0]!).firstLine ?? '0').toBe('0');
+    expect(indentOf(surface, ids[0]!).left).toBe('0');
   });
 
   test('clears the direct first-line value rather than writing zero', () => {
@@ -364,10 +375,10 @@ describe('Shift+Tab over a selection', () => {
 
 describe('tabIndentFor', () => {
   const at = (paragraphId: string, offset: number) => ({ paragraphId, offset });
-  const reads = (start = 0, firstLine = 0, paragraphStart = 0) => ({
-    paragraphStart: () => paragraphStart,
-    emptyStoryEnd: () => false,
-    indent: () => ({ start, firstLine }),
+  const reads = (direct = false, firstLine = 0, startOffset = 0) => ({
+    start: () => ({ kind: 'start' as const, offset: startOffset }),
+    endsStory: () => false,
+    firstLine: () => ({ resolved: firstLine, direct }),
   });
 
   test('answers null for a caret and for a selection inside one paragraph', () => {
@@ -386,7 +397,7 @@ describe('tabIndentFor', () => {
     });
     expect(tabIndentFor(toB, ['a', 'b'], reads(), 'increase', 720)).toBeNull();
     const hiddenStart = { from: at('a', 0), to: at('b', 3) };
-    expect(tabIndentFor(hiddenStart, ['a', 'b'], reads(0, 0, 3), 'increase', 720)).toEqual({
+    expect(tabIndentFor(hiddenStart, ['a', 'b'], reads(false, 0, 3), 'increase', 720)).toEqual({
       write: 'setFirstLine',
       paragraphs: ['a'],
     });
@@ -395,7 +406,7 @@ describe('tabIndentFor', () => {
   test('a hanging or wide first line steps the left indent instead', () => {
     const range = { from: at('a', 0), to: at('a', 2) };
     for (const firstLine of [-360, 800]) {
-      expect(tabIndentFor(range, ['a'], reads(0, firstLine), 'increase', 720)).toEqual({
+      expect(tabIndentFor(range, ['a'], reads(false, firstLine), 'increase', 720)).toEqual({
         write: 'stepLeft',
         paragraphs: ['a'],
       });
@@ -404,16 +415,16 @@ describe('tabIndentFor', () => {
 
   test('a start before the first painted offset is the paragraph start', () => {
     const range = { from: at('a', 3), to: at('a', 6) };
-    expect(tabIndentFor(range, ['a'], reads(0, 0, 3), 'increase', 720)).toEqual({
+    expect(tabIndentFor(range, ['a'], reads(false, 0, 3), 'increase', 720)).toEqual({
       write: 'setFirstLine',
       paragraphs: ['a'],
     });
   });
 
-  test('Shift+Tab clears the first line only once the left indent is gone', () => {
+  test('Shift+Tab clears only a first line the paragraph states itself', () => {
     const range = { from: at('a', 0), to: at('a', 2) };
-    expect(tabIndentFor(range, ['a'], reads(720, 720), 'decrease', 720)?.write).toBe('stepLeft');
-    expect(tabIndentFor(range, ['a'], reads(0, 720), 'decrease', 720)?.write).toBe(
+    expect(tabIndentFor(range, ['a'], reads(false, 720), 'decrease', 720)?.write).toBe('stepLeft');
+    expect(tabIndentFor(range, ['a'], reads(true, 720), 'decrease', 720)?.write).toBe(
       'clearFirstLine'
     );
   });

@@ -694,6 +694,9 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
 
     indentWithTab(direction) {
       const range = orderedRange();
+      // A caret types a tab; answer before any selection-wide work.
+      if (range.from.paragraphId === range.to.paragraphId && range.from.offset === range.to.offset)
+        return false;
       if (selectsOnlyPlaceholder(currentLayout.value, range)) return false;
       const touched = targetParagraphs(range);
       if (touched === null) return false;
