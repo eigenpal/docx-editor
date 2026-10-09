@@ -130,6 +130,7 @@ import {
 import {
   currentPage as currentPageOf,
   pageSetupOf,
+  pageSetupWhileOpening,
   gateCommand,
   runFormattingOf,
   selectionFormattingHalfPoints,
@@ -833,10 +834,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
   // Fonts resolve asynchronously (HarfBuzz init + validation) PER LOAD, composing the
   // app's `config.fonts` with the faces the document itself embeds — explicit sources
-  // beat embedded ones, and both beat substitutions. A large open resolves them between
-  // its prepare and mount tasks, so the mount lays out once, already shaped. Otherwise the
-  // document opens on the fixed measurer and is measured again when fonts arrive; a load
-  // with no surface of its own yet just leaves the measurer for its mount to pick up.
+  // beat embedded ones, and both beat substitutions. A large open resolves them between its
+  // prepare and mount tasks, so its mount lays out once, shaped. Otherwise the document opens
+  // on the fixed measurer and is measured again when fonts arrive (or by its later mount).
   //
   // Failure is DEGRADATION, never a blocked load: a face the validator refuses drops
   // with a typed report and the remaining faces admit; a wholly failed resolution leaves
@@ -1182,7 +1182,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       page: { current: currentPageOf(surface), total: totalPagesOf(surface) },
       canUndo: state?.canUndo ?? false,
       canRedo: state?.canRedo ?? false,
-      pageSetup: pageSetupOf(surface),
+      pageSetup: pageSetupWhileOpening(openScheduler, surface),
       reviewPaneOpen,
       reviewPane: reviewPane.current(),
       showParagraphMarks: paragraphMarks.get(),

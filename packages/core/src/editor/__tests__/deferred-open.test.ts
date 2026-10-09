@@ -150,6 +150,8 @@ describe('deferred open of a large document', () => {
     editor.on('selectionChange', () => {
       selectionEvents += 1;
     });
+    const oldPageSetup = editor.snapshot().pageSetup;
+    expect(oldPageSetup).not.toBeNull();
 
     editor.load(LARGE);
     // The old document is gone at once: no stale pages, chrome state or memory under the
@@ -160,9 +162,13 @@ describe('deferred open of a large document', () => {
     expect(container.textContent).not.toContain('small document body');
     // Scheduling emitted, so a subscribed host re-reads and shows its overlay.
     expect(selectionEvents).toBeGreaterThan(0);
+    // The rulers and the loading page keep the old page geometry until the new one mounts.
+    expect(editor.snapshot().pageSetup).toEqual(oldPageSetup);
+    expect(editor.getPageSetup()).toBeNull();
 
     await until(() => container.textContent?.includes('large document body') === true);
     expect(editor.snapshot().isOpening).toBe(false);
+    expect(editor.snapshot().pageSetup).toEqual(editor.getPageSetup());
     editor.destroy();
   });
 

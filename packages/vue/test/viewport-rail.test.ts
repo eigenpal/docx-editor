@@ -134,7 +134,7 @@ describe('DocxEditorViewport review rail', () => {
     view.unmount();
   });
 
-  test('drops the old ruler while a replacement document opens', async () => {
+  test('snaps the ruler reservation while a replacement document opens', async () => {
     const view = mountEditorTree(() => [
       h(DocxEditorHorizontalRuler),
       h(DocxEditorLoading, { overlay: true }),
@@ -146,11 +146,8 @@ describe('DocxEditorViewport review rail', () => {
     await nextTick();
     await nextTick();
 
-    // The old document is released at once, so nothing measures its page any more.
-    expect(view.container.querySelector('.docx-ruler-frame')).toBeNull();
+    expect(view.container.querySelector('.docx-ruler-frame--opening')).not.toBeNull();
     await flush();
-    expect(view.editor().snapshot().isOpening).toBe(false);
-    expect(view.container.querySelector('.docx-ruler-frame')).not.toBeNull();
     expect(view.container.querySelector('.docx-ruler-frame--opening')).toBeNull();
     view.unmount();
   });

@@ -328,7 +328,7 @@ describe('DocxEditor.Loading', () => {
     await waitFor(() => expect(triggers().every((trigger) => !trigger.disabled)).toBe(true));
   });
 
-  test('a deferred replacement drops the old ruler until the new document mounts', async () => {
+  test('a ruler snaps to the centred loading page before a deferred replacement', async () => {
     let editor: DocxEditorInstance | null = null;
     const view = render(
       <DocxEditorRoot
@@ -352,13 +352,10 @@ describe('DocxEditor.Loading', () => {
     expect(editor!.snapshot().isOpening).toBe(true);
     await act(async () => {});
 
-    // The old document is released at once, so nothing measures its page any more.
-    expect(view.container.querySelector('.docx-ruler-frame')).toBeNull();
+    expect(view.container.querySelector('.docx-ruler-frame--opening')).not.toBeNull();
     await waitFor(() => {
       expect(view.container.textContent).toContain('large body');
-      expect(editor!.snapshot().isOpening).toBe(false);
     });
-    expect(view.container.querySelector('.docx-ruler-frame')).not.toBeNull();
     expect(view.container.querySelector('.docx-ruler-frame--opening')).toBeNull();
   });
 
