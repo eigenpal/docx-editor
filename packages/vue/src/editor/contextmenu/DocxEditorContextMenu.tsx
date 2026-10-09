@@ -103,7 +103,7 @@ const ContextMenuAddComment = defineComponent({
             menu.value.setOpenMenu(null);
           }}
         >
-          {label('comments.addComment')}
+          {{ default: () => label('comments.addComment') }}
         </MenuRow>
       );
     };
@@ -125,7 +125,7 @@ const ContextMenuEditField = defineComponent({
             editor.value?.exec({ type: 'editTextFormField' });
           }}
         >
-          {label('textFormField.edit')}
+          {{ default: () => label('textFormField.edit') }}
         </MenuRow>
       );
   },

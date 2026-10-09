@@ -440,15 +440,15 @@ export function paragraphLineSpacing(props: readonly OoxmlProperty[]): Paragraph
  * Exact-height boxes place their baseline at 80% of the height; the legacy
  * noExtraLineSpacing switch instead preserves the face baseline within the box.
  *
- * An `auto` line of a snapping paragraph under an active line grid takes whole pitches
- * instead ({@link gridLineBox}); `trailing` then names the extra below the grid line.
+ * An `auto` or `atLeast` line of a snapping paragraph under an active line grid takes whole
+ * pitches instead ({@link gridLineBox}); `trailing` then names the box below the glyphs.
  */
 export function applyLineSpacing(
   spacing: ParagraphLineSpacing,
   naturalHeight: number,
   naturalBaseline: number
 ): { height: number; baseline: number; trailing?: number } {
-  if (spacing.gridPitch !== undefined && spacing.gridPitch > 0 && spacing.rule === 'auto') {
+  if (spacing.gridPitch !== undefined && spacing.gridPitch > 0 && spacing.rule !== 'exact') {
     return gridLineBox(
       { ...spacing, gridPitch: spacing.gridPitch },
       naturalHeight,

@@ -943,7 +943,7 @@ export function breakParagraph(
     if (lineSpacing.rule !== 'exact') growPendingLineDrawingExtent(line);
     line.trailingSpacing =
       line.drawings.length === 0 && lineSpacing.rule !== 'exact'
-        ? Math.max(0, spaced.trailing ?? spaced.height - naturalHeight)
+        ? Math.max(0, Math.min(spaced.trailing ?? Infinity, spaced.height - naturalHeight))
         : drawingLineTrailing;
     finalizeTopAndBottomClearance();
     commitBreakClearance();

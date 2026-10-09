@@ -423,9 +423,12 @@ const DocxEditorToolbarRoot = defineComponent({
               const row =
                 override || isValueSlot(entry.slot) ? (
                   <ToolbarOverflowControl label={labelOf(label, entry, group.labelKey)}>
-                    {typeof panelContent === 'function'
-                      ? (panelContent as () => VNode)()
-                      : render(entry)}
+                    {{
+                      default: () =>
+                        typeof panelContent === 'function'
+                          ? (panelContent as () => VNode)()
+                          : render(entry),
+                    }}
                   </ToolbarOverflowControl>
                 ) : (
                   <ToolbarOverflowItem slot={entry.slot as ChromeSlotId} />
@@ -476,7 +479,7 @@ const DocxEditorToolbarRoot = defineComponent({
                 <ToolbarOverflowControl
                   label={labelOf(label, entry, TABLE_CONTEXTUAL_GROUP.labelKey)}
                 >
-                  {renderTable(entry)}
+                  {{ default: () => renderTable(entry) }}
                 </ToolbarOverflowControl>
               </Fragment>,
             ];

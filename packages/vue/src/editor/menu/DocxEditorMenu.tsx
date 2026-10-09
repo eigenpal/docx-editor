@@ -508,7 +508,9 @@ const DocxEditorMenuRoot = defineComponent({
                 icon={chromeIcon(MORE_PATHS) as VNode}
                 preset={false}
               >
-                <MenuOverflowScope>{menus}</MenuOverflowScope>
+                {{
+                  default: () => <MenuOverflowScope>{{ default: () => menus }}</MenuOverflowScope>,
+                }}
               </Menu>
             ) : null}
           </div>
