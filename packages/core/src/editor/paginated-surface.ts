@@ -145,7 +145,6 @@ import {
   withNumberingStyleLinks,
   deletedTextBoundaries,
   wordBoundary,
-  type CaretGeometry,
   type CellSelection,
   type ContentControlBoundaryRecord,
   type KeyedRange,
@@ -3197,7 +3196,7 @@ export function mountPaginatedSurface(
     next: SemanticSelection,
     keepDesiredX = false,
     follow: CaretFollowMode = 'caret',
-    pointerCaret?: CaretGeometry
+    pointerCaret?: import('@docx-editor.dev/core/layout').CaretGeometry
   ): void {
     // Compared BEFORE the flush below, which can itself move the caret.
     const moved = !selectionsEqual(next, selection);
