@@ -94,7 +94,7 @@ test('Tab over two paragraphs converges through typing, undo, redo and reconnect
 
   select(a, [0, 2], [1, 3]);
   select(b, [2, 0], [2, 0]);
-  expect(a.editor.surface!.indentWithTab()).toBe(true);
+  expect(a.editor.surface!.indentWithTab('increase')).toBe(true);
   expect(b.editor.exec({ type: 'insertText', text: 'X' }).ok).toBe(true);
   sync(a, b);
   const after = await converged(a, b);
@@ -130,7 +130,7 @@ test('a first-line indent from Tab converges with a remote deletion in the parag
 
   select(a, [0, 0], [0, 10]);
   select(b, [0, 5], [0, 10]);
-  expect(a.editor.surface!.indentWithTab()).toBe(true);
+  expect(a.editor.surface!.indentWithTab('increase')).toBe(true);
   b.editor.surface!.deleteBackward();
   sync(a, b);
   const after = await converged(a, b);
@@ -145,4 +145,28 @@ test('a first-line indent from Tab converges with a remote deletion in the parag
   const main = serializeOoxmlPart(saved.package.parts.get(saved.package.mainDocumentPart)!);
   expect(main).toContain('Alpha');
   expect(indents(main)).toEqual([expect.stringContaining('w:firstLine="720"')]);
+});
+
+test('two participants pressing Tab on the same paragraph converge', async () => {
+  const a = await peer('Alice');
+  const b = await peer('Bob', a);
+
+  select(a, [0, 2], [1, 3]);
+  select(b, [0, 4], [1, 1]);
+  expect(a.editor.surface!.indentWithTab('increase')).toBe(true);
+  expect(b.editor.surface!.indentWithTab('increase')).toBe(true);
+  sync(a, b);
+  const after = await converged(a, b);
+  expect(after).toContain('Alpha beta');
+  expect(after).toContain('Second line');
+  expect(indents(after)).toHaveLength(2);
+
+  // Both wrote the same value, so either undo may find its write already replaced. Whatever
+  // each one does, the participants agree and keep the text.
+  a.editor.exec({ type: 'undo' });
+  b.editor.exec({ type: 'undo' });
+  sync(a, b);
+  const undone = await converged(a, b);
+  expect(undone).toContain('Alpha beta');
+  expect(undone).toContain('Second line');
 });

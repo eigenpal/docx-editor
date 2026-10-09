@@ -38,6 +38,7 @@ import {
 import { createListStyleWrites } from './surface-list-style.ts';
 import {
   INDENT_STEP_TWIPS,
+  firstPaintedOffset,
   leftIndentTwipsOf,
   nextLeftIndent,
   tabIndentFor,
@@ -687,24 +688,39 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       return touched !== null && writeIndent(touched, update);
     },
 
-    indentWithTab() {
+    indentWithTab(direction) {
+      const range = orderedRange();
+      if (range.from.paragraphId === range.to.paragraphId && range.from.offset === range.to.offset)
+        return false;
       // A rectangle is a set of cells, not a run of paragraphs, so Tab keeps its own lane.
       const touched = rectangleCells() === null ? targetParagraphs() : null;
       if (touched === null) return false;
+      const layout = currentLayout.value;
       const tab = tabIndentFor(
-        orderedRange(),
+        range,
         touched,
-        (paragraphId) => {
-          const entry = paragraphIndentOf(currentLayout.value, paragraphId);
-          return entry ? signedFirstLine(entry.indent) : 0;
+        {
+          paragraphStart: (paragraphId) => firstPaintedOffset(layout, paragraphId),
+          indent: (paragraphId) => {
+            const entry = paragraphIndentOf(layout, paragraphId);
+            if (!entry) return { left: 0, firstLine: 0 };
+            return {
+              left: Math.round(entry.indent.left * 20),
+              firstLine: signedFirstLine(entry.indent),
+            };
+          },
         },
-        INDENT_STEP_TWIPS
+        direction
       );
       if (tab === null) return false;
-      // A refused or empty write answers false, so the keymap types a tab as it did before.
-      return tab.kind === 'firstLine'
-        ? writeIndent(tab.paragraphs, { firstLine: INDENT_STEP_TWIPS })
-        : stepIndent(tab.paragraphs, 'increase');
+      // Handled even when the write is refused or changes nothing: the fallback would type a
+      // tab over the selection, and a refused indent must never become a deletion.
+      if (tab.write === 'stepLeft') stepIndent(tab.paragraphs, direction);
+      else
+        writeIndent(tab.paragraphs, {
+          firstLine: tab.write === 'setFirstLine' ? INDENT_STEP_TWIPS : 0,
+        });
+      return true;
     },
 
     setParagraphFormat(update) {

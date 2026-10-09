@@ -316,7 +316,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Left, right, first-line, and hanging indents control line placement. Increase Indent and Decrease Indent are on the toolbar, on Tab, and on Ctrl+M. Inside a list they change the level, so the marker changes too. Outside a list, Tab over a selection of two or more paragraphs indents them, and Tab over a selection that starts at a paragraph start sets a first-line indent, or steps the left indent when the first line is already indented or hanging. The selected text stays. A caret, or a selection in one paragraph that starts inside the text, types a tab character.',
+      'Left, right, first-line, and hanging indents control line placement. Increase Indent and Decrease Indent are on the toolbar, on Tab, and on Ctrl+M. Inside a list they change the level, so the marker changes too. Outside a list, Tab over a selection of two or more paragraphs indents them, and Tab over a selection that starts at a paragraph start sets a first-line indent, or steps the left indent when the first line is already indented or hanging. Shift+Tab reverses these steps. The selected text stays. A caret, or a selection in one paragraph that starts inside the text, types a tab character.',
   },
   {
     id: 'paragraphs.styles',
