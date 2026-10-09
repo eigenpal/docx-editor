@@ -36,10 +36,10 @@ import {
 } from './surface-formatting.ts';
 import { createListStyleWrites } from './surface-list-style.ts';
 import {
-  INDENT_STEP_TWIPS,
   layoutTabIndentReads,
   selectsOnlyPlaceholder,
   leftIndentTwipsOf,
+  nextGridIndent,
   nextLeftIndent,
   tabIndentFor,
 } from './surface-indent-step.ts';
@@ -435,7 +435,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
   function stepIndent(
     touched: readonly string[],
     direction: 'increase' | 'decrease',
-    size = INDENT_STEP_TWIPS
+    grid?: number
   ): boolean {
     const step = direction === 'increase' ? 1 : -1;
     const ops: TreeDocOp[] = [];
@@ -465,7 +465,8 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       // but it is written as the paragraph's own formatting, merged over the paragraph's
       // own `w:pPr` — an op whose base is the cascade is refused (`directParagraphProperties`).
       const current = leftIndentTwipsOf(properties);
-      const next = nextLeftIndent(current, step, size);
+      const next =
+        grid === undefined ? nextLeftIndent(current, step) : nextGridIndent(current, step, grid);
       if (next === current) continue;
       const direct = directParagraphProperties(storyPart(), paragraphId);
       // Only the paragraph's OWN `w:ind` attributes are carried over: `w:ind` cascades
@@ -694,9 +695,11 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
 
     indentWithTab(direction) {
       const range = orderedRange();
-      // A caret types a tab; answer before any selection-wide work.
-      if (range.from.paragraphId === range.to.paragraphId && range.from.offset === range.to.offset)
-        return false;
+      // A caret types a tab; answer before any selection-wide work. A one-cell rectangle on
+      // an empty cell is collapsed too, but it is a cell selection.
+      const collapsed =
+        range.from.paragraphId === range.to.paragraphId && range.from.offset === range.to.offset;
+      if (collapsed && rectangleCells() === null) return false;
       if (selectsOnlyPlaceholder(currentLayout.value, range)) return false;
       const touched = targetParagraphs(range);
       if (touched === null) return false;

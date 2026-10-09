@@ -12,7 +12,12 @@ import { serializeOoxmlPart } from '@docx-editor.dev/core/store';
 import type { PaginatedSurface } from '../paginated-surface.ts';
 import { createKeyDownHandler } from '../surface-input.ts';
 import { directParagraphProperties } from '../surface-formatting.ts';
-import { INDENT_STEP_TWIPS, nextLeftIndent, tabIndentFor } from '../surface-indent-step.ts';
+import {
+  INDENT_STEP_TWIPS,
+  nextGridIndent,
+  nextLeftIndent,
+  tabIndentFor,
+} from '../surface-indent-step.ts';
 import { MAX_PARAGRAPH_INDENT_TWIPS } from '../../layout/paragraph-indent.ts';
 import { mountPaginatedSurface } from '../paginated-surface.ts';
 import { placeholderSelectionRange } from '../surface-pointer.ts';
@@ -296,6 +301,17 @@ describe('selections that reach the next paragraph only at its start', () => {
     expect(indentOf(surface, ids[1]!)).toEqual({});
   });
 
+  test('Tab over a one-cell rectangle on an empty cell indents the cell', () => {
+    const surface = mount(
+      `<w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl>` +
+        paragraph('After')
+    );
+    selectCellRectangle(surface, { row: 0, column: 0 }, { row: 0, column: 0 });
+    expect(surface.indentWithTab('increase')).toBe(true);
+    expect(hasTab(surface)).toBe(false);
+    expect(xml(surface)).toContain('w:left="720"');
+  });
+
   test('Tab over a cell rectangle indents the cells and keeps their text', () => {
     const cell = (text: string) => `<w:tc>${paragraph(text)}</w:tc>`;
     const surface = mount(
@@ -427,6 +443,14 @@ describe('tabIndentFor', () => {
     expect(tabIndentFor(range, ['a'], reads(true, 720), 'decrease', 720)?.write).toBe(
       'clearFirstLine'
     );
+  });
+
+  test('a grid step lands on the next tab stop, never a sliver short of the margin', () => {
+    expect(nextGridIndent(720, -1, 708)).toBe(708);
+    expect(nextGridIndent(708, -1, 708)).toBe(0);
+    expect(nextGridIndent(12, -1, 708)).toBe(0);
+    expect(nextGridIndent(720, 1, 708)).toBe(1416);
+    expect(nextGridIndent(0, 1, 708)).toBe(708);
   });
 
   test('a step never passes the margin or the bound, and an increase never moves back', () => {

@@ -28,7 +28,20 @@ export const INDENT_STEP_TWIPS = 720;
  * than jumping back to the bound. A decrease stops at the margin, as it always has.
  */
 export function nextLeftIndent(current: number, step: number, size = INDENT_STEP_TWIPS): number {
-  const next = current + step * size;
+  return boundedIndent(current, step, current + step * size);
+}
+
+/**
+ * The next stop on a tab grid of `size` from `current`, in the direction of `step`, with the
+ * same bounds as {@link nextLeftIndent}. An indent off the grid moves to the nearest grid
+ * stop, so Shift+Tab never leaves a sliver of indent behind.
+ */
+export function nextGridIndent(current: number, step: number, size: number): number {
+  const stops = step > 0 ? Math.floor(current / size) + 1 : Math.ceil(current / size) - 1;
+  return boundedIndent(current, step, stops * size);
+}
+
+function boundedIndent(current: number, step: number, next: number): number {
   return step > 0
     ? Math.max(current, Math.min(MAX_PARAGRAPH_INDENT_TWIPS, next))
     : Math.max(0, next);
