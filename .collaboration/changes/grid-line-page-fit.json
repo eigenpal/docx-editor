@@ -6,7 +6,8 @@
   "reason": "Only pagination geometry changes. Document nodes, text offsets, operations, snapshots, and transport messages stay the same.",
   "tests": [
     "packages/core/src/layout/__tests__/grid-line-page-fit.test.ts",
-    "packages/core/src/layout/__tests__/line-grid.test.ts"
+    "packages/core/src/layout/__tests__/line-grid.test.ts",
+    "packages/core/src/output/__tests__/grid-empty-line-band.test.ts"
   ],
   "changeset": "grid-line-page-fit",
   "migration": null
