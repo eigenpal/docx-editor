@@ -1,3 +1,4 @@
+import { FieldResultsModeMemo } from '../store/package/field-result-mode.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { detectBodyTocs, tocFieldRange } from '../store/package/toc-detect.ts';
@@ -11,7 +12,8 @@ export interface FieldCodeRange {
   readonly suppressParagraph: boolean;
 }
 export type FieldCodeRanges = ReadonlyMap<string, readonly FieldCodeRange[]>;
-const cache = new WeakMap<OoxmlPart, FieldCodeRanges>();
+/** Offsets differ between field-result modes, so each mode keeps its own entry. */
+const cache = new FieldResultsModeMemo<OoxmlPart, FieldCodeRanges>();
 /** Cross-paragraph fields retain their original model ranges while their results are hidden. */
 export function tocCodeRanges(part: OoxmlPart): FieldCodeRanges {
   const held = cache.get(part);

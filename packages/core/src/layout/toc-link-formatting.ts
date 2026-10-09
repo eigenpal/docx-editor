@@ -1,3 +1,4 @@
+import { FieldResultsModeMemo } from '../store/package/field-result-mode.ts';
 import { fnv1a64Hex } from '../store/comparators/canonical.ts';
 import { framedTokenJoin } from './layout-cache.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
@@ -11,7 +12,8 @@ export interface TocLinkRange {
   readonly end: number;
 }
 export type TocLinkRanges = ReadonlyMap<string, readonly TocLinkRange[]>;
-const cache = new WeakMap<OoxmlPart, TocLinkRanges>();
+/** Offsets differ between field-result modes, so each mode keeps its own entry. */
+const cache = new FieldResultsModeMemo<OoxmlPart, TocLinkRanges>();
 
 /** Only actual TOC results suppress the Hyperlink character style, as in Word. */
 export function tocLinkRanges(part: OoxmlPart): TocLinkRanges {

@@ -1213,14 +1213,16 @@ function paintLine(
     // same model offset. Two adjacent fields share one content-keyed id when their targets
     // match, so keying on the id alone would merge two discrete links into one anchor a screen
     // reader announces once. Keying on the offset too keeps each field its own link unit while
-    // still letting one field's wrapped or space-split result stay a single anchor.
+    // still letting one field's wrapped or space-split result stay a single anchor. A result
+    // laid out as editable text spans several offsets, so its pieces share `resultStart`.
     if (span.fieldAtom) {
+      const fieldStart = fieldAnchorStart(span);
       const sameField =
-        anchor !== null && anchorLinkId === link.id && anchorFieldStart === span.range.start;
+        anchor !== null && anchorLinkId === link.id && anchorFieldStart === fieldStart;
       if (!sameField) {
         anchor = paintHyperlinkAnchor(document, link, ctx);
         anchorLinkId = link.id;
-        anchorFieldStart = span.range.start;
+        anchorFieldStart = fieldStart;
         element.append(anchor);
       }
       anchor!.append(painted);
@@ -1344,7 +1346,12 @@ function sharesAnchor(a: StyleSpanRecord, b: StyleSpanRecord): boolean {
   if (!a.link && !b.link) return true;
   if (!a.link || !b.link || a.link.id !== b.link.id) return false;
   if (Boolean(a.fieldAtom) !== Boolean(b.fieldAtom)) return false;
-  return !a.fieldAtom || a.range.start === b.range.start;
+  return !a.fieldAtom || fieldAnchorStart(a) === fieldAnchorStart(b);
+}
+
+/** The model offset that identifies a field's link anchor: its result's start, or its unit. */
+function fieldAnchorStart(span: StyleSpanRecord): number {
+  return span.fieldAtom?.resultStart ?? span.range.start;
 }
 
 function paintFragment(

@@ -72,14 +72,15 @@ import { legacyCheckboxAccessibleName } from '../store/package/legacy-checkbox-a
 import { legacyFormFieldDataOf } from '../store/package/field-nodes.ts';
 import { fieldProjectionSpansOf } from './field-projection-spans.ts';
 import {
+  markSavedResultPieces,
+  resultMarker,
+  savedSimpleResultLink,
+} from './field-saved-result.ts';
+import {
   emptyNamespaceScope,
   namespaceScopeForNode,
 } from '../store/package/drawing-projection-walk.ts';
-import {
-  isProjectableNoteAtom,
-  projectedNoteMarkText,
-  type NoteMarkContext,
-} from './note-projection.ts';
+import { isProjectableNoteAtom, noteAtomPiece, type NoteMarkContext } from './note-projection.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
   NO_REVISIONS,
@@ -138,7 +139,8 @@ export function unmergedPiecesOfParagraphForDisplay(
   /** The link the walk is currently inside, so every piece it emits is tagged with it. */
   let currentLink: SpanLinkRecord | undefined;
 
-  const { atomBeginIds, editableResultBeginIds, coveredIds } = fieldProjectionSpansOf(paragraph);
+  const spans = fieldProjectionSpansOf(paragraph);
+  const { atomBeginIds, editableResultBeginIds, coveredIds } = spans;
 
   const field = createFieldParseState();
   const budget = createScanBudget();
@@ -387,31 +389,9 @@ export function unmergedPiecesOfParagraphForDisplay(
       return;
     }
     if (isProjectableNoteAtom(grand)) {
-      const projected = projectedNoteMarkText(grand, noteMarks);
-      const start = offset;
-      const end = start + 1;
-      offset = end;
-      if (style.hidden) return;
-      if (!projected) return;
-      // Empty projected displays still consume their canonical model unit.
-      if (projected.text.length === 0 && !projected.measureText) return;
-      const noteNav =
-        projected.scopeId && projected.nav
-          ? { scopeId: projected.scopeId, direction: projected.nav }
-          : undefined;
-      push(
-        projected.text.length > 0 ? projected.text : (projected.measureText ?? ''),
-        props,
-        style,
-        true,
-        start,
-        end,
-        {
-          ...(projected.measureText !== undefined ? { measureText: projected.measureText } : {}),
-          ...(noteNav ? { noteNav } : {}),
-          ...(projected.noteSeparator ? { noteSeparator: projected.noteSeparator } : {}),
-        }
-      );
+      const start = offset++;
+      const note = style.hidden ? null : noteAtomPiece(grand, noteMarks);
+      if (note) push(note.text, props, style, true, start, start + 1, note.extras);
       return;
     }
     // A `w:ptab` advances the line but occupies NO model offset, so it is pushed with a
@@ -528,6 +508,7 @@ export function unmergedPiecesOfParagraphForDisplay(
             beginId: grand.id,
             atomic,
             editableResult: editableResultBeginIds.has(grand.id),
+            savedResult: spans.savedResultBeginIds.has(grand.id),
             atomStart: offset,
             props,
             style,
@@ -681,7 +662,7 @@ export function unmergedPiecesOfParagraphForDisplay(
             projected: true,
             ...symAttribution,
             ...(currentLink ? { link: currentLink } : {}),
-            fieldAtom: { formField: pending.formField },
+            fieldAtom: resultMarker(pending),
           });
           continue;
         }
@@ -788,7 +769,7 @@ export function unmergedPiecesOfParagraphForDisplay(
           ...(currentLink ? { link: currentLink } : {}),
           // EVERY buffered result piece is a field's displayed result — a demoted
           // (unterminated) field's cache shades exactly like a FORMTEXT's editable one.
-          fieldAtom: { formField: pending.formField },
+          fieldAtom: resultMarker(pending),
         });
         offset += modelWidth;
         pending.bufferOffset = offset;
@@ -901,6 +882,26 @@ export function unmergedPiecesOfParagraphForDisplay(
     });
   };
 
+  /**
+   * Lay out a `w:fldSimple` whose saved result is editable text (`fieldResults: 'editable'`).
+   *
+   * The element takes no offset of its own; its result runs are walked as ordinary content, as
+   * the store's offset authority walks them. Each piece is marked as the field's result, and a
+   * HYPERLINK instruction links it unless an enclosing typed link already does.
+   */
+  const projectSavedSimpleResult = (
+    simple: OoxmlElement,
+    depth: number,
+    scope: ReadonlyMap<string, string>,
+    containerDepth: number
+  ): void => {
+    const [first, resultStart, previousLink] = [pieces.length, offset, currentLink];
+    currentLink = savedSimpleResultLink(simple, previousLink, projectFieldLink);
+    for (const inner of simple.children) processInline(inner, depth + 1, scope, containerDepth + 1);
+    currentLink = previousLink;
+    markSavedResultPieces(pieces, first, resultStart);
+  };
+
   const processInline = (
     child: OoxmlNode,
     depth: number,
@@ -923,7 +924,10 @@ export function unmergedPiecesOfParagraphForDisplay(
       return push('\uFFFC', inheritedRunProperties, style, true, start, offset, { equation });
     }
     if (isFldSimple(child)) {
-      projectSimpleField(child, depth);
+      // A saved result laid out as text: its runs are ordinary content at their own offsets.
+      if (spans.savedResultSimpleIds.has(child.id) && !pending?.atomic) {
+        projectSavedSimpleResult(child as OoxmlElement, depth, namespaceScope, containerDepth);
+      } else projectSimpleField(child, depth);
       return;
     }
     if (child.kind === 'run') {

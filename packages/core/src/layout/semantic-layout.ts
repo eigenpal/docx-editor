@@ -1,3 +1,4 @@
+import { withFieldResultsMode } from '../store/package/field-result-mode.ts';
 import { createDrawingExclusionPasses } from './drawing-exclusion-passes.ts';
 import { resolveBodyRefFields } from './style-separator-ref.ts';
 import { styleSeparatorToken } from './style-separator-group.ts';
@@ -284,6 +285,10 @@ export function layoutSemanticDocument(
   revision: number,
   options: SemanticLayoutOptions
 ): SemanticLayout {
+  return withFieldResultsMode(options.fieldResults, () => layoutInMode(part, revision, options));
+}
+
+function layoutInMode(part: OoxmlPart, revision: number, options: SemanticLayoutOptions) {
   // ONE revision projection for both. Section block ranges index this exact list; using a
   // different display mode or author predicate maps filtered blocks to the wrong geometry.
   const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;

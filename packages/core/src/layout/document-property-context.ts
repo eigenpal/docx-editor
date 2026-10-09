@@ -1,4 +1,5 @@
 // Document-property fields change measured text without changing their paragraph nodes.
+import { withFieldResultsProducer } from './field-results-producer.ts';
 import type { DocumentProperties } from '@docx-editor.dev/core/store';
 import type { DocumentPropertyKey } from './field-doc-property.ts';
 import type { SemanticLayoutOptions } from './semantic-layout-options.ts';
@@ -53,7 +54,8 @@ export function documentProjectionProducer(
   controlToken: string,
   tocToken: string
 ): string {
-  const base = options.showFieldCodes ? `${options.producer ?? ''}|field-codes` : options.producer;
+  const shown = options.showFieldCodes ? `${options.producer ?? ''}|field-codes` : options.producer;
+  const base = shown === undefined ? shown : withFieldResultsProducer(shown);
   // Coordinated hosts already invalidate only paragraphs whose projected values changed.
   // A partial projection contract must retain the document-wide fallback.
   const properties =

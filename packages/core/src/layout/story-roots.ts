@@ -1,3 +1,4 @@
+import { currentFieldResultsMode } from '../store/package/field-result-mode.ts';
 import { tocCodeRanges } from './field-code-toc.ts';
 import { tocFieldChromeParagraphIds, emptyTocSuppressedResultParagraphIds } from './toc-layout.ts';
 import type { NumberingIndex } from './numbering-index.ts';
@@ -331,7 +332,7 @@ function memberIsAddressable(
   displayMode: RevisionDisplayMode,
   authorFilter?: RevisionAuthorFilter
 ): boolean {
-  const key = `${displayMode}|${authorFilter?.cacheKey ?? ''}`;
+  const key = `${displayMode}|${authorFilter?.cacheKey ?? ''}|${currentFieldResultsMode()}`;
   const perMode = addressableByNode.get(member);
   const cached = perMode?.get(key);
   if (cached !== undefined) return cached;

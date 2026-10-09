@@ -1026,6 +1026,7 @@ export interface FieldAtomMarker {
         readonly picture?: string;
     };
     readonly pageRef?: PageRefFieldProjection;
+    readonly resultStart?: number;
 }
 
 // @public
@@ -3621,6 +3622,7 @@ export interface SemanticLayoutOptions {
     readonly evenAndOddHeaders?: boolean;
     // @internal (undocumented)
     readonly fieldCodeRanges?: FieldCodeRanges;
+    readonly fieldResults?: FieldResultsMode;
     readonly furniture?: PageFurniture;
     // (undocumented)
     readonly geometry?: PageGeometry;

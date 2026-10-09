@@ -1,6 +1,7 @@
 // Canonical document-view composition root shared by browser and exporter hosts.
 
 import type { HeadlessDocumentView, OoxmlNode } from '@docx-editor.dev/core/store';
+import { withFieldResultsMode, type FieldResultsMode } from '../store/package/field-result-mode.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import type { DocumentLinkProjectors } from './document-link-projector.ts';
 import type { FieldLinkProjector } from './field-pieces.ts';
@@ -54,6 +55,7 @@ export const SEMANTIC_LAYOUT_OPTION_ROLES = Object.freeze({
   projectLink: 'document-coordinator',
   projectFieldLink: 'document-coordinator',
   showFieldCodes: 'document-coordinator',
+  fieldResults: 'document-coordinator',
   documentProperties: 'document-coordinator',
   notes: 'document-coordinator',
   pageBottomReserves: 'layout-internal',
@@ -100,6 +102,8 @@ export interface LayoutDocumentViewOptions {
   readonly projectFieldLink?: FieldLinkProjector;
   /** Field-code inspection projection. @internal */
   readonly showFieldCodes?: boolean;
+  /** How saved field results are addressed; see `SemanticLayoutOptions.fieldResults`. */
+  readonly fieldResults?: FieldResultsMode;
   readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
   readonly inlineDrawingLayoutForPart?: (
     partName: string
@@ -130,6 +134,8 @@ const _LAYOUT_DOCUMENT_VIEW_OPTION_SINKS = {
   linkProjectors: 'both',
   projectFieldLink: 'both',
   showFieldCodes: 'both',
+  // The whole view is laid out inside the mode, notes included.
+  fieldResults: 'semantic-layout',
   inlineDrawingLayout: 'semantic-layout',
   inlineDrawingLayoutForPart: 'notes',
   drawingTokenForParagraph: 'semantic-layout',
@@ -155,6 +161,10 @@ type CoordinatorInputsFor<Sink extends Exclude<LayoutDocumentViewSink, 'both'>> 
  * @internal
  */
 export function layoutDocumentView(options: LayoutDocumentViewOptions): SemanticLayout {
+  return withFieldResultsMode(options.fieldResults, () => layoutDocumentViewInMode(options));
+}
+
+function layoutDocumentViewInMode(options: LayoutDocumentViewOptions): SemanticLayout {
   const defaultTabStopPt = options.defaultTabStopPt?.();
   const bodyPartName = options.view.part().name;
   const noteOptions = {
@@ -193,6 +203,7 @@ export function layoutDocumentView(options: LayoutDocumentViewOptions): Semantic
     linkProjectors: options.linkProjectors,
     projectFieldLink: options.projectFieldLink,
     showFieldCodes: options.showFieldCodes,
+    fieldResults: options.fieldResults,
     inlineDrawingLayout: options.inlineDrawingLayout,
     drawingTokenForParagraph: options.drawingTokenForParagraph,
     drawingLayoutEpoch: options.drawingLayoutEpoch,
@@ -216,6 +227,7 @@ export function layoutDocumentView(options: LayoutDocumentViewOptions): Semantic
     projectLink: semanticInputs.linkProjectors.projectLink,
     projectFieldLink: semanticInputs.projectFieldLink,
     showFieldCodes: semanticInputs.showFieldCodes,
+    fieldResults: semanticInputs.fieldResults,
     documentProperties: semanticInputs.view.documentProperties(),
     inlineDrawingLayout: semanticInputs.inlineDrawingLayout,
     drawingTokenForParagraph: semanticInputs.drawingTokenForParagraph,
