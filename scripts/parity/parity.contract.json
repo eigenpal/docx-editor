@@ -23,7 +23,8 @@
       "zoom",
       "zoomMode",
       "revisionMarkup",
-      "reviewDisplayMode"
+      "reviewDisplayMode",
+      "fieldResults"
     ],
     "deferredInVue": {},
     "reactCallbacksAsVueEmits": {

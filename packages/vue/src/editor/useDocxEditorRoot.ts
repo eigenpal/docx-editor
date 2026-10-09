@@ -2,6 +2,7 @@ import type {
   RevisionMarkupOptions,
   ResolvedRevisionMarkup,
   ReviewDisplayMode,
+  FieldResultsMode,
 } from '@docx-editor.dev/core/editor';
 import { formControlTranslateKey } from './form-control-translate';
 import {
@@ -84,6 +85,13 @@ export interface DocxEditorRootProps {
   onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
   /** Initial revision display mode. */
   reviewDisplayMode?: ReviewDisplayMode;
+  /**
+   * How the reader edits saved field results. `'atomic'` (the default) keeps every field one
+   * unit. `'editable'` allows typing, deletion, and selection inside the saved result of a
+   * DATE, MERGEFIELD, HYPERLINK, or similar field. Read when the editor is created. Refused
+   * with a collaboration module.
+   */
+  fieldResults?: FieldResultsMode;
 
   tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
   imageDecodePort?: ImageDecodePort;
@@ -231,6 +239,7 @@ export function useDocxEditorRootOwner(
       translate: translateResolver.value,
       ...(p.revisionMarkup !== undefined ? { revisionMarkup: p.revisionMarkup } : {}),
       ...(p.reviewDisplayMode !== undefined ? { reviewDisplayMode: p.reviewDisplayMode } : {}),
+      ...(p.fieldResults !== undefined ? { fieldResults: p.fieldResults } : {}),
       ...(p.mode !== undefined ? { mode: p.mode } : {}),
       ...(revisionStyleRegistry.current() !== undefined
         ? { revisionStyles: revisionStyleRegistry.current() }

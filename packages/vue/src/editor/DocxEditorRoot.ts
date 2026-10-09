@@ -2,6 +2,7 @@ import type {
   RevisionMarkupOptions,
   ResolvedRevisionMarkup,
   ReviewDisplayMode,
+  FieldResultsMode,
 } from '@docx-editor.dev/core/editor';
 import { DialogHost } from './dialog-host';
 import { PopupConfigProvider, type DocxEditorPopups } from './popup-config';
@@ -131,6 +132,7 @@ export const DocxEditorRoot = defineComponent({
     mode: { type: String as PropType<'edit' | 'view' | 'suggesting'>, default: undefined },
     revisionMarkup: Object as PropType<RevisionMarkupOptions>,
     reviewDisplayMode: String as PropType<ReviewDisplayMode>,
+    fieldResults: { type: String as PropType<FieldResultsMode>, default: undefined },
     zoom: { type: Number, default: undefined },
     zoomMode: { type: [Object, String] as PropType<ZoomMode | 'auto'>, default: undefined },
     tableInteractionLabel: {

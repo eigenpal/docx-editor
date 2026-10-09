@@ -1,4 +1,8 @@
-import type { RevisionMarkupOptions, ReviewDisplayMode } from '@docx-editor.dev/core/editor';
+import type {
+  FieldResultsMode,
+  RevisionMarkupOptions,
+  ReviewDisplayMode,
+} from '@docx-editor.dev/core/editor';
 import type {
   DocumentHandle,
   DocumentSource,
@@ -66,6 +70,13 @@ export interface DocxEditorProps {
   revisionMarkup?: RevisionMarkupOptions;
   /** Initial revision display mode. */
   reviewDisplayMode?: ReviewDisplayMode;
+  /**
+   * How the reader edits saved field results. `'atomic'` (the default) keeps every field one
+   * unit. `'editable'` allows typing, deletion, and selection inside the saved result of a
+   * DATE, MERGEFIELD, HYPERLINK, or similar field. Read when the editor is created. Refused
+   * with a collaboration module.
+   */
+  fieldResults?: FieldResultsMode;
 
   /**
    * BCP-47 locale for regional date input and engine-generated labels. Defaults to en-US.

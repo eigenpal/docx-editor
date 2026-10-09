@@ -158,6 +158,8 @@ import { refreshSurfaceRefFieldResults } from './surface-ref-field-refresh.ts';
 import { type RevisionAuthorFilter } from '../layout/revision-projection.ts';
 import { createRevisionAuthorVisibility } from './revision-author-visibility.ts';
 import type { PaginatedSurfaceRuntimeOptions } from './surface-runtime-options.ts';
+import { scopeSession, surfaceFieldResultsScope } from './field-results-scope.ts';
+import { withSavedFieldResults } from './surface-saved-field-results.ts';
 import { PROPERTY_CHANGE_WRAPPER_OF_OP } from '../store/store/tree-op-tracked-properties.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
 import { selectionMarkRects } from '../layout/selection-rects.ts';
@@ -348,6 +350,7 @@ export function mountPaginatedSurface(
   options: PaginatedSurfaceOptions = {}
 ): OpenPaginatedResult {
   const runtimeOptions = options as PaginatedSurfaceRuntimeOptions;
+  const fieldScope = surfaceFieldResultsScope(options);
   const opened = openTreeSession(
     bytes,
     options.reviewModel ? { reviewModel: options.reviewModel } : {}
@@ -359,7 +362,7 @@ export function mountPaginatedSurface(
       ...(opened.detail ? { detail: opened.detail } : {}),
     };
   }
-  const session = opened.session;
+  const session = scopeSession(opened.session, fieldScope);
   const collaborationSession = options.collaborationModel?.session;
   let author = options.author;
   let scale = options.scale ?? 96 / 72;
@@ -398,6 +401,7 @@ export function mountPaginatedSurface(
   const pagesLayer = document.createElement('div');
   pagesLayer.className = 'docx-pages';
   pagesLayer.style.position = 'relative';
+  fieldScope.listeners(pagesLayer);
 
   // THE PAINTED PAGES ARE THE EDITABLE SURFACE.
   //
@@ -1310,8 +1314,7 @@ export function mountPaginatedSurface(
       // constructed `proposed` never shares cached pages with an `all-markup` one.
       displayMode: revisionDisplayMode(),
       showFieldCodes: context ? false : showFieldCodes,
-      // Saved field results stay one unit until the editor offers the editable mode.
-      fieldResults: 'atomic',
+      fieldResults: fieldScope.mode,
       revisionAuthorFilter: activeAuthorFilter,
     } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);
   }
@@ -5870,7 +5873,7 @@ export function mountPaginatedSurface(
 
   // The selection mirror uses this handle to avoid adopting selection mid-drag.
   let pointer: PointerController | null = null;
-  textFormInteraction = createTextFormFieldInteraction(
+  const textFormRules = createTextFormFieldInteraction(
     {
       onRequest: options.onRequestTextFormField,
       onInvalidRequest: options.onRequestInvalidTextFormField,
@@ -5904,6 +5907,17 @@ export function mountPaginatedSurface(
         }),
     },
     runtimeOptions.initialTextFormInput
+  );
+  textFormInteraction = withSavedFieldResults(
+    textFormRules,
+    {
+      part: (paragraphId) => partOfNodeId(session, paragraphId),
+      selection: () => selection,
+      select: (next) => setSelection(next),
+      writable: () => editingMode !== 'view' && !showFieldCodes,
+      compare: comparePositions,
+    },
+    fieldScope
   );
   registerFormFieldIdentity(surface, textFormInteraction.fieldId);
   legacyCheckboxInteraction = createLegacyCheckboxInteraction({
@@ -6280,5 +6294,5 @@ export function mountPaginatedSurface(
     }
   );
   registerRefreshComposition(surface, () => selectionSync.isComposing());
-  return { ok: true, surface };
+  return { ok: true, surface: fieldScope.methods(surface) };
 }

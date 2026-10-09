@@ -7,7 +7,7 @@
 // that covers a whole field and reaches past it removes the field: it is applied in the
 // `atomic` mode, where the field is one unit, with its offsets mapped to that addressing.
 
-import { currentFieldResultsMode } from '../package/field-result-mode.ts';
+import { currentFieldResultsMode, wholeFieldDeletion } from '../package/field-result-mode.ts';
 import { parsedFieldSpansOf } from '../package/field-nodes.ts';
 import { findNode } from '../package/ooxml-edit.ts';
 import type { OoxmlPart, OoxmlParagraphNode } from '../package/ooxml-tree.ts';
@@ -15,7 +15,7 @@ import { isParagraph, paragraphOffsetIndex } from './tree-op-segments.ts';
 import type { TreeDocOp } from './tree-op-types.ts';
 
 /** One saved result's offsets in the `editable` mode: `start` and `end` bound its text. */
-interface SavedResultRange {
+export interface SavedResultRange {
   readonly start: number;
   readonly end: number;
   /** The field's segment node: the begin `fldChar`, or the `w:fldSimple` element. */
@@ -24,7 +24,7 @@ interface SavedResultRange {
 }
 
 /** Saved-result fields of a paragraph, in document order, under the current mode. */
-function savedResultRanges(paragraph: OoxmlParagraphNode): readonly SavedResultRange[] {
+export function savedResultRanges(paragraph: OoxmlParagraphNode): readonly SavedResultRange[] {
   const offsets = paragraphOffsetIndex(paragraph);
   const ranges: SavedResultRange[] = [];
   for (const field of parsedFieldSpansOf(paragraph)) {
@@ -64,10 +64,16 @@ export function classifySavedResultDeletion(
   end: number
 ): SavedResultDeletion {
   const ranges = savedResultRanges(paragraph);
+  const wholeField = wholeFieldDeletion();
   let removes = false;
   for (const range of ranges) {
     // Touching a result's edge from outside is no overlap; its edges are field edges.
     if (start >= range.end || end <= range.start) continue;
+    // A selected whole field: its edges are the field's edges, so the field goes.
+    if (wholeField && start === range.start && end === range.end) {
+      removes = true;
+      continue;
+    }
     // Inside the result, edges included: the first and last characters, or all of it.
     if (start >= range.start && end <= range.end) continue;
     // Over the whole field and past it: the field goes with the range.

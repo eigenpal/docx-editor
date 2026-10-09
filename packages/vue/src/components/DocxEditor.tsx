@@ -4,6 +4,7 @@ import type {
   RevisionMarkupOptions,
   ResolvedRevisionMarkup,
   ReviewDisplayMode,
+  FieldResultsMode,
 } from '@docx-editor.dev/core/editor';
 import { DocxEditorExportDialog } from '../editor/DocxEditorExportDialog';
 import { DocxEditorPrintDialog } from '../editor/DocxEditorPrintDialog';
@@ -238,6 +239,7 @@ const docxEditorFrameProps = {
   zoom: { type: Number, default: undefined },
   revisionMarkup: Object as PropType<RevisionMarkupOptions>,
   reviewDisplayMode: String as PropType<ReviewDisplayMode>,
+  fieldResults: { type: String as PropType<FieldResultsMode>, default: undefined },
   zoomMode: { type: [Object, String] as PropType<DocxEditorProps['zoomMode']>, default: undefined },
   locale: { type: String, default: undefined },
   author: { type: String, default: undefined },
@@ -468,6 +470,7 @@ const DocxEditorFrame = defineComponent({
           ...(props.zoom !== undefined ? { zoom: props.zoom } : {}),
           revisionMarkup: props.revisionMarkup,
           reviewDisplayMode: props.reviewDisplayMode,
+          ...(props.fieldResults !== undefined ? { fieldResults: props.fieldResults } : {}),
           onRevisionMarkupChange: (settings: ResolvedRevisionMarkup) =>
             emit('revisionMarkupChange', settings),
           ...(props.zoomMode !== undefined ? { zoomMode: props.zoomMode } : {}),

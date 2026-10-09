@@ -2,6 +2,7 @@ import type {
   RevisionMarkupOptions,
   ResolvedRevisionMarkup,
   ReviewDisplayMode,
+  FieldResultsMode,
 } from '@docx-editor.dev/core/editor';
 import { FormControlTranslateProvider } from './form-control-translate';
 import { DialogProvider } from './dialog-host';
@@ -131,6 +132,13 @@ export interface DocxEditorRootProps {
   onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
   /** Initial revision display mode. */
   reviewDisplayMode?: ReviewDisplayMode;
+  /**
+   * How the reader edits saved field results. `'atomic'` (the default) keeps every field one
+   * unit. `'editable'` allows typing, deletion, and selection inside the saved result of a
+   * DATE, MERGEFIELD, HYPERLINK, or similar field. Read when the editor is created. Refused
+   * with a collaboration module.
+   */
+  fieldResults?: FieldResultsMode;
 
   /** Fired once per instance, after it is published to the tree (and after any
    *  `DocxEditor.Content` in the same commit has attached its mount point). A large
@@ -287,6 +295,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       translate,
       ...(p.revisionMarkup !== undefined ? { revisionMarkup: p.revisionMarkup } : {}),
       ...(p.reviewDisplayMode !== undefined ? { reviewDisplayMode: p.reviewDisplayMode } : {}),
+      ...(p.fieldResults !== undefined ? { fieldResults: p.fieldResults } : {}),
       ...(p.mode !== undefined ? { mode: p.mode } : {}),
       ...(declaredStyles !== undefined ? { revisionStyles: declaredStyles } : {}),
       ...(p.modules !== undefined ? { modules: p.modules } : {}),
