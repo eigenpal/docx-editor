@@ -3,7 +3,7 @@ import './dom-setup.ts';
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import { DocxEditor } from '../src/components/DocxEditor.tsx';
@@ -43,6 +43,30 @@ const ONE_PAGE = docx(paragraph('one'));
 const THREE_PAGES = docx(
   paragraph('one') + pageBreak + paragraph('two') + pageBreak + paragraph('three')
 );
+
+/** Three pages past the open-yield threshold, through an ordinary filler part. */
+function largeThreePages(): Uint8Array {
+  const lines: string[] = [];
+  for (let line = 1, total = 0; total < 700 * 1024; line += 1) {
+    const text = `<l>filler line ${line} carrying a little ordinary sentence text.</l>`;
+    lines.push(text);
+    total += text.length;
+  }
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        '<Default Extension="xml" ContentType="application/xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body>${paragraph('one') + pageBreak + paragraph('two') + pageBreak + paragraph('three')}</w:body></w:document>`
+    ),
+    'customXml/item1.xml': strToU8(`<filler>${lines.join('')}</filler>`),
+  });
+}
 
 afterEach(cleanup);
 
@@ -206,5 +230,37 @@ describe('DocxEditor.PageNumber', () => {
     const scope = chip.closest('.docx-editor');
     expect(scope).not.toBeNull();
     expect(scope!.parentElement?.closest('.docx-editor') ?? null).toBeNull();
+  });
+
+  test('shows no count while a document opens, then the full count', async () => {
+    let editor: Editor | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={THREE_PAGES}
+        onReady={(ready) => {
+          editor = ready;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+        <DocxEditorPageNumber />
+      </DocxEditorRoot>
+    );
+    await waitFor(() => expect(editor).not.toBeNull());
+    expect(view.container.querySelector('.docx-editor__page-number')).not.toBeNull();
+
+    act(() => {
+      (editor as unknown as { load(bytes: Uint8Array): void }).load(largeThreePages());
+    });
+    await act(async () => {});
+    // A partial layout's total would be wrong, so no count shows during the open.
+    expect(editor!.snapshot().isOpening).toBe(true);
+    expect(view.container.querySelector('.docx-editor__page-number')).toBeNull();
+
+    await waitFor(() => expect(editor!.snapshot().isOpening).toBe(false));
+    await waitFor(() =>
+      expect(view.container.querySelector('.docx-editor__page-number')).not.toBeNull()
+    );
   });
 });
