@@ -122,13 +122,18 @@ function textIdOf(attributes: InlineAttributes): string {
  * wholesale gets new text elements and still keeps its letters, while new text never keeps
  * scattered letters of text it replaces, which a peer's concurrent insert would interleave.
  */
-export function diffTokens(before: readonly Token[], after: readonly Token[]): Step[] {
+export function diffTokens(
+  before: readonly Token[],
+  after: readonly Token[],
+  /** Whether typing at one place skips the full diff. Tests compare both answers. */
+  shortcut = true
+): Step[] {
   // A character outside the basic plane is two code units, and shared text replaces a half
   // that an edit cuts off with U+FFFD. So the script compares whole code points, and each
   // step on a pair covers both halves.
   const left = codePoints(before);
   const right = codePoints(after);
-  if (left === null && right === null) return diffCodePoints(before, after);
+  if (left === null && right === null) return diffCodePoints(before, after, shortcut);
   const beforeAt = left?.starts ?? null;
   const afterAt = right?.starts ?? null;
   const unitsOf = (starts: readonly number[] | null, index: number, length: number): number[] => {
@@ -138,7 +143,7 @@ export function diffTokens(before: readonly Token[], after: readonly Token[]): S
     return end - start === 2 ? [start, start + 1] : [start];
   };
   const steps: Step[] = [];
-  for (const step of diffCodePoints(left?.tokens ?? before, right?.tokens ?? after)) {
+  for (const step of diffCodePoints(left?.tokens ?? before, right?.tokens ?? after, shortcut)) {
     if (step.op === 'del') {
       for (const unit of unitsOf(beforeAt, step.before, before.length))
         steps.push({ op: 'del', before: unit });
@@ -205,7 +210,13 @@ function codePoints(
   return { tokens: merged, starts };
 }
 
-function diffCodePoints(before: readonly Token[], after: readonly Token[]): Step[] {
+function diffCodePoints(
+  before: readonly Token[],
+  after: readonly Token[],
+  shortcut: boolean
+): Step[] {
+  const inserted = shortcut ? pureInsertion(before, after) : null;
+  if (inserted) return inserted;
   // Equal strong alignments can differ in what their gaps keep: runs merged by a join give the
   // same letters a new text element, and an early tie can pair letters of one word with those
   // of the next. Of the two tie-breaks, keep the one that keeps more, and of two that keep as
@@ -223,6 +234,44 @@ function diffCodePoints(before: readonly Token[], after: readonly Token[]): Step
         ? second
         : first;
   return dropScatteredLetters(joinInserts(chosen, after), before);
+}
+
+/**
+ * The script of an edit that only inserts one stretch, where no other script keeps as much:
+ * typing at one place. Null for any other edit, which the full diff decides.
+ *
+ * The full diff runs two alignments over the whole paragraph, and typing is most of what a
+ * paragraph's text sees. Where the stretch could stand is decided as the full diff decides
+ * it, and a test compares the two answers.
+ */
+function pureInsertion(before: readonly Token[], after: readonly Token[]): Step[] | null {
+  const added = after.length - before.length;
+  if (added <= 0) return null;
+  let prefix = 0;
+  while (prefix < before.length && before[prefix]!.strong === after[prefix]!.strong) prefix += 1;
+  let suffix = 0;
+  while (
+    suffix < before.length - prefix &&
+    before[before.length - 1 - suffix]!.strong === after[after.length - 1 - suffix]!.strong
+  ) {
+    suffix += 1;
+  }
+  if (prefix + suffix !== before.length) return null;
+  const first = after[prefix]!;
+  const last = after[prefix + added - 1]!;
+  // The same character before the stretch could stand at its end instead: the full diff
+  // keeps the earlier one, which the longest prefix does too. A letter equal only by value
+  // pairs by other rules, so the full diff decides that place.
+  const previous = prefix > 0 ? before[prefix - 1]! : null;
+  if (previous && previous.key === last.key && previous.strong !== last.strong) return null;
+  if (prefix < before.length && before[prefix]!.key === first.key) return null;
+  const steps: Step[] = [];
+  for (let at = 0; at < prefix; at += 1) steps.push({ op: 'eq', before: at, after: at });
+  for (let at = prefix; at < prefix + added; at += 1) steps.push({ op: 'ins', after: at });
+  for (let at = prefix; at < before.length; at += 1) {
+    steps.push({ op: 'eq', before: at, after: at + added });
+  }
+  return steps;
 }
 
 /**
