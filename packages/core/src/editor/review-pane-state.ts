@@ -6,6 +6,7 @@
 import type { ExecResult } from '../contracts/editor.ts';
 import {
   resolveReviewPane,
+  reviewPaneListsItem,
   type ResolvedReviewPane,
   type ReviewPaneOptions,
 } from '../contracts/review-pane.ts';
@@ -30,10 +31,10 @@ export interface ReviewPaneState {
 
 /**
  * Whether the pane shows a card for this item. With `revisionsIn: 'balloons'` the pane
- * lists comments and custom cards only; tracked changes open in balloons.
+ * lists no tracked change and no comment that replies to one: balloons show both.
  */
 function paneShows(pane: ResolvedReviewPane, item: ReviewItem): boolean {
-  return pane.revisionsIn === 'pane' || item.kind !== 'revision';
+  return reviewPaneListsItem(pane.revisionsIn, item);
 }
 
 export function createReviewPaneState(

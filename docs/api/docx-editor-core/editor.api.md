@@ -2815,6 +2815,15 @@ export interface ReviewModuleContribution {
 export function reviewPaneEntitledZoom(mode: ZoomMode | undefined, zoom: number, overflow?: ReviewPaneOverflow): number | null;
 
 // @public
+export interface ReviewPaneItemKind {
+    readonly kind: string;
+    readonly parentRevisionId?: string;
+}
+
+// @public
+export function reviewPaneListsItem(revisionsIn: RevisionDisplay, item: ReviewPaneItemKind): boolean;
+
+// @public
 export type ReviewPaneOpening = 'auto' | 'manual';
 
 // @public

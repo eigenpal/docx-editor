@@ -44,6 +44,7 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 import type { ReviewRevisionKind, SelectionPin } from '@docx-editor.dev/core/contracts/editor';
+import { reviewPaneListsItem } from '@docx-editor.dev/core/editor';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import {
   REVIEW_PANE_GUTTER,
@@ -85,7 +86,6 @@ import {
   selectDocumentReadOnly,
   selectPaneOpening,
   selectRevisionsIn,
-  servedByChangeBalloon,
 } from './review-shared.ts';
 import {
   ReviewAccept,
@@ -208,7 +208,8 @@ function ReviewRoot({
     return review.items.filter(
       (entry) =>
         (formatting || !hasFormattingBalloon(entry)) &&
-        (revisionsIn !== 'balloons' || !servedByChangeBalloon(entry)) &&
+        // The engine's own rule, so the pane it opens is never empty.
+        reviewPaneListsItem(revisionsIn, entry) &&
         (!filter || filter(entry))
     );
   }, [review.items, filter, formatting, revisionsIn]);

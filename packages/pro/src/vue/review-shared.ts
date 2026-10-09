@@ -53,16 +53,6 @@ export const PAIRED_REVIEW_QUERY = Object.freeze({
   pairReplacements: true,
 }) satisfies ReviewItemQuery;
 
-/**
- * Whether `revisionsIn: 'balloons'` moves this entry out of the rail: every tracked change, and
- * every comment that replies to one (the balloon draws it under the change).
- */
-export function servedByChangeBalloon(entry: ReviewItemView): boolean {
-  return (
-    entry.kind === 'revision' || (entry.kind === 'comment' && entry.parentRevisionId !== undefined)
-  );
-}
-
 export function isThreadedReply(entry: ReviewItemView, present: ReadonlySet<string>): boolean {
   if (entry.kind !== 'comment') return false;
   if (entry.parentId !== undefined) return present.has(entry.parentId);

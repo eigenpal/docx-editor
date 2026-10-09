@@ -26,7 +26,11 @@ import {
   type VNode,
   type VNodeArrayChildren,
 } from 'vue';
-import type { DocxEditorInstance, ReviewAuthorInfo } from '@docx-editor.dev/core/editor';
+import {
+  reviewPaneListsItem,
+  type DocxEditorInstance,
+  type ReviewAuthorInfo,
+} from '@docx-editor.dev/core/editor';
 import type { ReviewRevisionKind, SelectionPin } from '@docx-editor.dev/core/contracts/editor';
 import {
   ReviewRailContext,
@@ -68,7 +72,6 @@ import {
   selectDocumentReadOnly,
   selectPaneOpening,
   selectRevisionsIn,
-  servedByChangeBalloon,
   type RailMetrics,
 } from './review-shared.ts';
 import {
@@ -251,7 +254,8 @@ const ReviewRoot = defineComponent({
       reviewHook.items.value.filter(
         (entry) =>
           (props.formatting || !hasFormattingBalloon(entry)) &&
-          (revisionsIn.value !== 'balloons' || !servedByChangeBalloon(entry)) &&
+          // The engine's own rule, so the pane it opens is never empty.
+          reviewPaneListsItem(revisionsIn.value, entry) &&
           (!props.filter || props.filter(entry))
       )
     );

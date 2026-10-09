@@ -272,10 +272,19 @@ export async function paint(
   // Runs in a tracked row carry no revision of their own; the row's applies to all of them.
   // Only All Markup shows revision marks; the resolved views have no tracked rows to mark.
   const rowRevisions = new Map<BlockFragmentRecord, RowRevision>();
-  if (layout.displayMode === 'all-markup')
+  // Text-box stories hold tracked rows too: a box's own story and each group member's.
+  if (layout.displayMode === 'all-markup') {
+    const tick = () => work.tick();
     forEachSemanticStory(layout, (root) =>
-      indexRowRevisions(root.host.fragments, rowRevisions, () => work.tick())
+      indexRowRevisions(root.host.fragments, rowRevisions, tick)
     );
+    forEachSemanticDrawing(layout, ({ drawing }) => {
+      if (drawing.textboxStory)
+        indexRowRevisions(drawing.textboxStory.fragments, rowRevisions, tick);
+      for (const member of drawing.groupTextboxStories ?? [])
+        indexRowRevisions(member.story.fragments, rowRevisions, tick);
+    });
+  }
   // Match the visible document order before adding authors from resolved-away revisions.
   forEachSemanticSpan(layout, (visit) => {
     for (const revision of visit.span.revisions ?? []) addAuthor(revision.author);

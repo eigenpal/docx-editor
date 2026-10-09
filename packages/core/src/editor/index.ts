@@ -513,10 +513,15 @@ export type {
 export { runChromePrint, ChromePrintError, isChromePrintShortcut } from './chrome-print.ts';
 export type { ChromePrintErrorCode, ChromePrintJob, ChromePrintOptions } from './chrome-print.ts';
 
-export { DEFAULT_REVIEW_PANE, resolveReviewPane } from '../contracts/review-pane.ts';
+export {
+  DEFAULT_REVIEW_PANE,
+  resolveReviewPane,
+  reviewPaneListsItem,
+} from '../contracts/review-pane.ts';
 export type {
   CommentMarkerStyle,
   ResolvedReviewPane,
+  ReviewPaneItemKind,
   ReviewPaneOpening,
   ReviewPaneOptions,
   ReviewPaneOverflow,

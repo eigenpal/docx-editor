@@ -12,7 +12,11 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
-import { createDocxEditor, DEFAULT_REVIEW_PANE } from '@docx-editor.dev/core/editor';
+import {
+  createDocxEditor,
+  DEFAULT_REVIEW_PANE,
+  reviewPaneListsItem,
+} from '@docx-editor.dev/core/editor';
 import { reviewModule } from '../index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -39,6 +43,33 @@ function docx(body: string): Uint8Array {
     ),
   });
 }
+
+const COMMENTS_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
+
+/** One tracked insertion and one comment over exactly its characters: a reply to the change. */
+const REPLY_TO_CHANGE = zipSync({
+  '[Content_Types].xml': strToU8(
+    `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+      `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>` +
+      `<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/></Types>`
+  ),
+  '_rels/.rels': strToU8(
+    `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+  ),
+  'word/document.xml': strToU8(
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t xml:space="preserve">Kept </w:t></w:r>` +
+      `<w:commentRangeStart w:id="5"/>` +
+      `<w:ins w:id="1" w:author="Ada" w:date="2024-01-01T00:00:00Z"><w:r><w:t>added</w:t></w:r></w:ins>` +
+      `<w:commentRangeEnd w:id="5"/><w:r><w:commentReference w:id="5"/></w:r></w:p></w:body></w:document>`
+  ),
+  'word/comments.xml': strToU8(
+    `<w:comments xmlns:w="${W}"><w:comment w:id="5" w:author="Ada" w:date="2024-01-01T00:00:00Z">` +
+      `<w:p><w:r><w:t>Why?</w:t></w:r></w:p></w:comment></w:comments>`
+  ),
+  'word/_rels/document.xml.rels': strToU8(
+    `<Relationships xmlns="${REL}"><Relationship Id="rIdC" Type="${COMMENTS_REL}" Target="comments.xml"/></Relationships>`
+  ),
+});
 
 describe('reviewModule without a key (honor system)', () => {
   test('fully functional, silent, and offline', () => {
@@ -179,6 +210,31 @@ describe('review pane opening', () => {
     edited.load(docx(TRACKED));
     expect(edited.isReviewPaneOpen()).toBe(true);
     edited.destroy();
+  });
+
+  test('under balloons, comments that reply to tracked changes never open the pane', () => {
+    // The change's balloon shows the reply, so the pane has nothing to list.
+    const options = (revisionsIn: 'pane' | 'balloons') => ({
+      container: document.createElement('div'),
+      document: REPLY_TO_CHANGE,
+      author: 'Grace Hopper',
+      modules: [reviewModule({ pane: { revisionsIn } })],
+    });
+    const loaded = createDocxEditor(options('balloons'));
+    const items = loaded.getReviewItems({ placement: false });
+    const reply = items.find((item) => item.kind === 'comment');
+    expect(reply?.kind === 'comment' && reply.parentRevisionId).toBeTruthy();
+    expect(items.some((item) => reviewPaneListsItem('balloons', item))).toBe(false);
+    expect(items.every((item) => reviewPaneListsItem('pane', item))).toBe(true);
+    expect(loaded.isReviewPaneOpen()).toBe(false);
+    loaded.destroy();
+
+    // An open pane closes when the switch to balloons leaves it nothing to list.
+    const switched = createDocxEditor(options('pane'));
+    expect(switched.isReviewPaneOpen()).toBe(true);
+    expect(switched.setReviewPaneOptions({ revisionsIn: 'balloons' }).ok).toBe(true);
+    expect(switched.isReviewPaneOpen()).toBe(false);
+    switched.destroy();
   });
 
   test('switching an open pane to balloons closes it when nothing is left to list', () => {
