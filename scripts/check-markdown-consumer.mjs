@@ -20,12 +20,15 @@ function run(command, args, cwd = consumer) {
   });
   if (result.status !== 0) throw new Error(`${command} exited with ${result.status}`);
 }
+// Every package is pinned, including `langsmith`, which `@langchain/core` brings in: its
+// 0.10.10 release ships declarations that do not type-check, and an unpinned install picks it.
 run('npm', [
   'install',
   '--ignore-scripts',
   'next@16.3.4',
   '@langchain/core@1.2.9',
   '@langchain/textsplitters@1.0.1',
+  'langsmith@0.10.9',
   '@types/node@22',
 ]);
 cpSync(fixture, path.join(consumer, 'narrow-pages.docx'));
