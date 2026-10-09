@@ -635,7 +635,13 @@ export function applyPrimitiveJournal(
     const written: InlineWritten = plan
       ? applyInlinePlan(registry, plan, tokens)
       : { copied: new Set<string>(), deleted: new Set<string>(), embedded: new Set<string>() };
-    recordRelocatedMarkers(registry, planned.removed, written.embedded, planned.mintedNodes);
+    recordRelocatedMarkers(
+      registry,
+      planned.removed,
+      written.embedded,
+      planned.mintedNodes,
+      plan?.paragraphs.map(({ after }) => after) ?? []
+    );
     deleteHeldOriginals(registry, removed.held, written.copied);
     recordDeletions(registry, written, removed.shown);
     deleteEmbedsOfRemoved(registry, removed.embeds, planned.removed, written);

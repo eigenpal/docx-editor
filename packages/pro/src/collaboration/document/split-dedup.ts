@@ -24,6 +24,7 @@ import {
   nodeRecordSplitFrom,
   nodeRecordSplitLineage,
 } from './schema.ts';
+import { relocatedMarkerRecord } from './relocated-markers.ts';
 
 export interface SplitDedupContext {
   readonly isPresent: (id: LogicalId) => boolean;
@@ -66,6 +67,8 @@ export class SplitDedupIndex {
   }
 
   indexExisting(id: LogicalId): void {
+    // A relocated position marker shares the lineage fields but is never a split loser.
+    if (relocatedMarkerRecord(this.nodes.get(id))) return;
     const root = nodeRecordSplitLineage(this.nodes.get(id));
     if (root === null || root === id) return;
     this.invalidate();

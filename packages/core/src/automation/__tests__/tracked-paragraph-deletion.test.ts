@@ -500,7 +500,7 @@ test('after the ceiling, a padded file id such as 05 is not minted again as 5', 
   const revision = (id: string, text: string) =>
     `<w:p><w:ins w:id="${id}" w:author="Reviewer" w:date="2026-01-01T00:00:00Z">` +
     `<w:r><w:t>${text}</w:t></w:r></w:ins></w:p>`;
-  const taken = ['2147483647', '0', '1', '2', '3', '4', '05'];
+  const taken = ['2147483647', '000', '+1', '2', '0000000000000000003', '4', '05'];
   const host = open(
     docx(
       taken.map((id, i) => revision(id, `Old ${i}`)).join('') +
@@ -517,5 +517,5 @@ test('after the ceiling, a padded file id such as 05 is not minted again as 5', 
   ]);
   const ids = [...savedMainXml(host).matchAll(/<w:del [^>]*w:id="(\d+)"/g)].map((m) => m[1]!);
   expect(new Set(ids).size).toBe(3);
-  for (const id of ids) expect(taken.map((value) => String(Number(value)))).not.toContain(id);
+  for (const id of ids) expect(['0', '1', '2', '3', '4', '5']).not.toContain(id);
 });

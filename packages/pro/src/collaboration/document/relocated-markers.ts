@@ -9,65 +9,114 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * Accepting a deletion that joins two paragraphs moves a bookmark or comment boundary that
  * stood between them into the joined paragraph, as a new node. Two participants who accept
  * the same join at once each write their own copy, so the merged text holds both. Each copy
- * records the marker it replaced as its split lineage, and a paragraph shows only the first
- * copy of one lineage in its text (`inlineChildren`). Every replica reads the same text
+ * records the marker it replaced in the split lineage fields, and a paragraph shows only the
+ * first copy of one lineage in its text (`inlineChildren`). Every replica reads the same text
  * order, so they keep the same copy, which is the one at the join.
+ *
+ * Only position markers take part. The split-dedup index, which decides concurrent run
+ * splits, never indexes them (`relocatedMarkerRecord`), because a marker copy is never one of
+ * its losers.
  */
-import { isRangeMarkerKind, WML_NAMESPACE_URI } from '@docx-editor.dev/core/store';
+import * as Y from 'yjs';
+import {
+  isRangeMarkerKind,
+  WML_NAMESPACE_URI,
+  type OoxmlElement,
+  type OoxmlNode,
+} from '@docx-editor.dev/core/store';
 import type { LogicalId } from './identity.ts';
 import type { DocumentRegistry } from './registry.ts';
-import { isElementRecord } from './schema.ts';
+import {
+  isElementRecord,
+  isNodeMap,
+  NODE_SPLIT_FROM_FIELD,
+  NODE_SPLIT_LINEAGE_FIELD,
+  nodeRecordSplitLineage,
+  readNodeShell,
+} from './schema.ts';
+
+const GENERIC_MARKERS = new Set(['proofErr', 'permStart', 'permEnd']);
 
 /** The markers that hold no content and only mark a position. */
-function isPositionMarker(kind: string, namespaceUri: string, localName: string): boolean {
+function isPositionMarker(kind: string, localName: string): boolean {
   if (kind === 'bookmarkStart' || kind === 'bookmarkEnd') return true;
   if (isRangeMarkerKind(kind as Parameters<typeof isRangeMarkerKind>[0])) return true;
-  return (
-    kind === 'generic' &&
-    namespaceUri === WML_NAMESPACE_URI &&
-    (localName === 'proofErr' || localName === 'permStart' || localName === 'permEnd')
-  );
+  return kind === 'generic' && GENERIC_MARKERS.has(localName);
+}
+
+/** Whether a shared record is a position marker, which the split-dedup index leaves out. */
+export function relocatedMarkerRecord(record: unknown): boolean {
+  if (!isNodeMap(record)) return false;
+  const shell = readNodeShell(record as Y.Map<unknown>);
+  return isPositionMarker(shell.kind, shell.localName);
+}
+
+/** The marker a relocated copy replaced, or null for any other node. */
+export function relocatedMarkerLineage(record: unknown): LogicalId | null {
+  return relocatedMarkerRecord(record) ? nodeRecordSplitLineage(record) : null;
+}
+
+/** The attributes that tell two markers of one element apart. */
+function identityOf(
+  attributes: readonly { namespaceUri: string; localName: string; value: string }[]
+) {
+  const read = (localName: string) =>
+    attributes.find((a) => a.namespaceUri === WML_NAMESPACE_URI && a.localName === localName)
+      ?.value ?? null;
+  return [read('id'), read('name')];
+}
+
+/** The nodes the plan's paragraphs hold, by id, for the attributes a record does not carry. */
+function nodesOf(paragraphs: readonly OoxmlElement[]): Map<string, OoxmlElement> {
+  const found = new Map<string, OoxmlElement>();
+  const pending: OoxmlNode[] = [...paragraphs];
+  while (pending.length > 0) {
+    const node = pending.pop()!;
+    if (node.kind === 'textValue') continue;
+    found.set(node.id, node as OoxmlElement);
+    for (const child of node.children) pending.push(child);
+  }
+  return found;
 }
 
 /**
- * One marker's element, or null for anything else. Attributes are not compared: an embedded
- * node's attributes live in its paragraph's shared text, not on its record. The markers of one
- * join keep their order, so pairing them in order pairs each copy with its source.
- */
-function markerKey(registry: DocumentRegistry, id: LogicalId): string | null {
-  const record = registry.record(id);
-  if (!record || !isElementRecord(record) || record.childIds.length > 0) return null;
-  if (!isPositionMarker(record.kind, record.namespaceUri, record.localName)) return null;
-  return JSON.stringify([record.kind, record.namespaceUri, record.localName]);
-}
-
-/**
- * Link each marker this journal embedded in a paragraph to a marker of the same element it
- * removed, in order. Linear in the removed and embedded nodes.
+ * Link each marker this journal embedded in a paragraph to the marker it removed with the
+ * same element, `w:id` and `w:name`. An embedded node's attributes are written with its
+ * paragraph's text, so they are read from the paragraphs the journal wrote. Linear in the
+ * removed nodes and in those paragraphs.
  */
 export function recordRelocatedMarkers(
   registry: DocumentRegistry,
   removed: readonly LogicalId[],
   embedded: ReadonlySet<string>,
-  minted: ReadonlySet<string>
+  minted: ReadonlySet<string>,
+  paragraphs: readonly OoxmlElement[]
 ): void {
   if (embedded.size === 0 || removed.length === 0) return;
   const removedByKey = new Map<string, LogicalId[]>();
   for (const id of removed) {
-    const key = markerKey(registry, id);
-    if (key === null) continue;
+    const record = registry.record(id);
+    if (!record || !isElementRecord(record) || record.childIds.length > 0) continue;
+    if (!isPositionMarker(record.kind, record.localName)) continue;
+    const key = JSON.stringify([record.kind, record.localName, ...identityOf(record.attributes)]);
     const list = removedByKey.get(key) ?? [];
     list.push(id);
     removedByKey.set(key, list);
   }
   if (removedByKey.size === 0) return;
+  const written = nodesOf(paragraphs);
   for (const id of embedded) {
     if (!minted.has(id)) continue;
-    const key = markerKey(registry, id as LogicalId);
-    const source = key === null ? undefined : removedByKey.get(key)?.shift();
+    const node = written.get(id);
+    if (!node || !isPositionMarker(node.kind, node.localName)) continue;
+    const key = JSON.stringify([node.kind, node.localName, ...identityOf(node.attributes)]);
+    const source = removedByKey.get(key)?.shift();
     if (source === undefined) continue;
+    const record = registry.schema.nodes.get(id);
+    if (!isNodeMap(record)) continue;
     // A copy of a copy keeps the first marker as its lineage, as a split of a split does.
     const root = registry.splitLineageOf(source) ?? source;
-    registry.recordRunSplit(root, source, [id as LogicalId]);
+    record.set(NODE_SPLIT_FROM_FIELD, root);
+    record.set(NODE_SPLIT_LINEAGE_FIELD, root);
   }
 }

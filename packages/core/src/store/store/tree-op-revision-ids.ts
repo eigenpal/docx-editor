@@ -87,9 +87,11 @@ function usedRevisionIds(part: OoxmlPart): Set<string> {
     if (REVISION_ID_BEARING.has(node.localName) && node.namespaceUri === WML_NAMESPACE_URI) {
       for (const attribute of node.attributes) {
         if (attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === 'id') {
-          // Compared as numbers: a file's `05` takes the id a new revision would write as `5`.
+          // Compared as numbers: a file's `05`, `+5` or `0000000000000000005` takes the id a
+          // new revision would write as `5`, and an all-zero id takes `0`.
           const value = attribute.value;
-          used.add(/^\d{1,15}$/.test(value) ? String(Number(value)) : value);
+          const digits = /^\+?0*(\d{1,15})$/.exec(value);
+          used.add(digits ? String(Number(digits[1])) : value);
         }
       }
     }
