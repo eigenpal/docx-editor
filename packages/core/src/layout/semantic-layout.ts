@@ -205,6 +205,7 @@ import {
 } from './semantic-records.ts';
 import { withResolvedListItems, withResolvedListItemsForSession } from './list-resolve.ts';
 import { listItemToken, markerFlowToken, relabelListMarkers } from './list-marker-reuse.ts';
+import { limitBodyBlocks } from './body-block-limit.ts';
 import { refTokenForTableBlock } from './field-ref.ts';
 import { createListFirstLineMetrics, markerLineStart, publishListMarker } from './list-marker.ts';
 import { FlowCheckpointOwner, flowCheckpointsMatch } from './flow-checkpoint.ts';
@@ -294,12 +295,9 @@ export function layoutSemanticDocument(
   // different display mode or author predicate maps filtered blocks to the wrong geometry.
   const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
   const authorFilter = options.revisionAuthorFilter;
-  const blocks = storyBlocks(
-    part,
-    displayMode,
-    authorFilter,
-    options.styleCascade,
-    options.numberingIndex
+  const { blocks, all: allBlocks } = limitBodyBlocks(
+    storyBlocks(part, displayMode, authorFilter, options.styleCascade, options.numberingIndex),
+    options
   );
   const sections = enumerateDocumentSectionsFromBlocks(part, blocks).sections;
   // Wrapper-only metadata (alias/tag/lock/…) lives outside flattened paragraph nodes. Fold a
@@ -328,8 +326,8 @@ export function layoutSemanticDocument(
     ? { ...optionsWithControlContext, drawingSourceOrder }
     : optionsWithControlContext;
   const optionsWithLists = options.session
-    ? withResolvedListItemsForSession(drawingOptions, blocks, options.session)
-    : withResolvedListItems(drawingOptions, blocks);
+    ? withResolvedListItemsForSession(drawingOptions, allBlocks, options.session)
+    : withResolvedListItems(drawingOptions, allBlocks);
 
   // REF cross-references resolve against the document's bookmarks and resolved numbering,
   // so the context is built here — the one place that sees both — and rides the options
@@ -401,7 +399,8 @@ export function layoutSemanticDocument(
       };
     }
     // Reused records keep the labels they were laid out with; renumbered ones get theirs here.
-    if (options.session) {
+    // A sliced open's prefix passes only append blocks, which renumber nothing before them.
+    if (options.session && options.bodyBlockLimit === undefined) {
       projected = relabelListMarkers(projected, optionsWithLists.listItems, options.measurer);
     }
     const withBoundaries = attachContentControlBoundaries(projected, part, controlToken);

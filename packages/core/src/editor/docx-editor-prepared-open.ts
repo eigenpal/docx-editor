@@ -21,12 +21,21 @@ export function prepareOpen(
   return opened;
 }
 
-/** The mount option for a prepared open of `bytes`, or nothing. Removes the entry. */
+/**
+ * The mount options for a prepared open of `bytes`, or nothing. Removes the entry. A prepared
+ * open is a large one, so its first layout also runs in slices after the mount.
+ */
 export function takePreparedOpen(bytes: Uint8Array): {
   readonly openedSession?: OpenTreeSessionResult;
+  readonly progressiveOpen?: boolean;
 } {
   const openedSession = prepared.get(bytes);
   if (openedSession === undefined) return {};
   prepared.delete(bytes);
-  return { openedSession };
+  return { openedSession, progressiveOpen: true };
 }
+
+export {
+  continueProgressiveOpen as continueOpen,
+  progressiveOpenPending as stillOpening,
+} from './surface-progressive-open.ts';

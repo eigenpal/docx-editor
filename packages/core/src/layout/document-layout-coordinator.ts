@@ -72,6 +72,7 @@ export const SEMANTIC_LAYOUT_OPTION_ROLES = Object.freeze({
   tocLinkStyleRanges: 'layout-internal',
   emptyTocPlaceholderParagraphIds: 'layout-internal',
   emptyTocSuppressedResultParagraphIds: 'layout-internal',
+  bodyBlockLimit: 'document-coordinator',
 } satisfies Readonly<Record<keyof SemanticLayoutOptions, SemanticLayoutOptionRole>>);
 
 type SemanticOptionsWithRole<Role extends SemanticLayoutOptionRole> = {
@@ -110,6 +111,8 @@ export interface LayoutDocumentViewOptions {
   readonly drawingLayoutEpochForPart?: (partName: string) => string;
   readonly displayMode?: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
+  /** Lay out only this many body blocks; see `SemanticLayoutOptions.bodyBlockLimit`. */
+  readonly bodyBlockLimit?: number;
 }
 
 type LayoutDocumentViewSink = 'notes' | 'semantic-layout' | 'both';
@@ -138,6 +141,7 @@ const _LAYOUT_DOCUMENT_VIEW_OPTION_SINKS = {
   drawingLayoutEpochForPart: 'notes',
   displayMode: 'both',
   revisionAuthorFilter: 'both',
+  bodyBlockLimit: 'semantic-layout',
 } as const satisfies Readonly<Record<keyof LayoutDocumentViewOptions, LayoutDocumentViewSink>>;
 
 type CoordinatorInputsFor<Sink extends Exclude<LayoutDocumentViewSink, 'both'>> = {
@@ -198,6 +202,7 @@ export function layoutDocumentView(options: LayoutDocumentViewOptions): Semantic
     drawingLayoutEpoch: options.drawingLayoutEpoch,
     displayMode: options.displayMode,
     revisionAuthorFilter: options.revisionAuthorFilter,
+    bodyBlockLimit: options.bodyBlockLimit,
   } satisfies Record<CoordinatorInputsFor<'semantic-layout'>, unknown>;
   const semanticOptions = {
     measurer: semanticInputs.measurer,
@@ -228,6 +233,7 @@ export function layoutDocumentView(options: LayoutDocumentViewOptions): Semantic
     notes,
     displayMode: semanticInputs.displayMode,
     revisionAuthorFilter: semanticInputs.revisionAuthorFilter,
+    bodyBlockLimit: semanticInputs.bodyBlockLimit,
   } satisfies SemanticLayoutOptions & Record<DocumentCoordinatedSemanticOption, unknown>;
   return layoutSemanticDocument(
     semanticInputs.view.part(),

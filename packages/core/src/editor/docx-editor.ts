@@ -121,7 +121,7 @@ import { createPublishSignal } from './surface-publish-signal.ts';
 import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
 import { resolveDocTargetSelection } from './doc-target-resolution.ts';
 import { createOpenScheduler } from './docx-editor-open-scheduler.ts';
-import { prepareOpen, takePreparedOpen } from './docx-editor-prepared-open.ts';
+import * as preparedOpen from './docx-editor-prepared-open.ts';
 import type { TreeDocxSessionView } from '../binding/tree-session-contract.ts';
 import {
   customNodeDiagnosticReporter,
@@ -259,6 +259,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let preparedFontSession: TreeDocxSessionView | null = null;
   let fontWork: Promise<void> | null = null;
   let mountedSeq = -1;
+  const stillOpening = () =>
+    preparedFontSession !== null || (!!surface && preparedOpen.stillOpening(surface));
   const hostConfig = createDocxEditorHostConfigState(config);
   let author = normalizeEditorAuthor(config.author);
   let container: HTMLElement | null = config.container ?? null;
@@ -292,8 +294,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   /** Defers a big document's open behind a painted frame; see `docx-editor-open-scheduler.ts`. */
   const openScheduler = createOpenScheduler({
     mount: (bytes) => mountBytes(bytes),
+    continueOpen: (budgetMs) => !surface || preparedOpen.continueOpen(surface, budgetMs),
     prepare: (bytes) => {
-      const opened = prepareOpen(bytes, reviewModelOption(modules, reportDiagnostic));
+      const opened = preparedOpen.prepareOpen(bytes, reviewModelOption(modules, reportDiagnostic));
       // Fonts resolved now are laid out once, by the mount, not a second time after it.
       if (!opened.ok || deferredRefreshBytes === bytes) return;
       preparedFontSession = opened.session;
@@ -622,7 +625,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       revisionDisplayMode: reviewEnabled ? reviewDisplayMode : 'proposed',
       revisionMarkup: revisionMarkupState.current(),
       ...reviewModelOption(modules, reportDiagnostic),
-      ...takePreparedOpen(bytes),
+      ...preparedOpen.takePreparedOpen(bytes),
       ...(shapedMeasurer
         ? { measurer: shapedMeasurer, ...(shapedProducer ? { producer: shapedProducer } : {}) }
         : {}),
@@ -735,8 +738,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     refreshHost?.contentMounted(bytes);
     // The page's size is only knowable now — it comes from this document's section properties
     // — so a fit mode resolves here. Synchronous on purpose: it lands in the same task as the
-    // mount, so the browser paints once at the fitted scale rather than painting 100% and
-    // correcting on the next frame.
+    // mount, so the browser paints once at the fitted scale, not at 100% and then corrected.
     //
     // AFTER the subscription above, because a fit that moves the scale EMITS, and a host
     // handler that throws from that emit would otherwise abort this function with the surface
@@ -1741,7 +1743,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       return mountGeneration;
     },
     get surface() {
-      return surface;
+      return surface && preparedOpen.stillOpening(surface) ? null : surface;
     },
 
     ...popupChrome.setters,
@@ -1752,11 +1754,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     stateVersion: () => stateVersion,
 
     fontMeasurement: () => ({
-      measurer: shapedMeasurer && !preparedFontSession ? ('shaped' as const) : ('fixed' as const),
-      resolving: fontsResolving || preparedFontSession !== null,
-      ...(shapedMeasurer && shapedProducer && !preparedFontSession
-        ? { producer: shapedProducer }
-        : {}),
+      measurer: shapedMeasurer && !stillOpening() ? ('shaped' as const) : ('fixed' as const),
+      resolving: fontsResolving || stillOpening(),
+      ...(shapedMeasurer && shapedProducer && !stillOpening() ? { producer: shapedProducer } : {}),
     }),
 
     attach(el) {

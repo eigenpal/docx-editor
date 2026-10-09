@@ -3603,6 +3603,8 @@ export interface SemanticLayout {
 
 // @public
 export interface SemanticLayoutOptions {
+    // @internal
+    readonly bodyBlockLimit?: number;
     readonly cache?: ParagraphLayoutCache<readonly PendingLine[]>;
     readonly compatibilityMode?: number;
     readonly defaultTabStopPt?: number;
