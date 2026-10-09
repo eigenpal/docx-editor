@@ -1332,6 +1332,7 @@ export interface DocxEditorConfig {
     author?: string;
     container?: HTMLElement;
     document?: DocumentSource;
+    fieldResults?: FieldResultsMode;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     imageDecodePort?: ImageDecodePort;
     locale?: string;
@@ -1498,6 +1499,9 @@ export interface EquationOps {
 export function executeImageCommand(editor: DocxEditorInstance, command: Extract<EditorCommand, {
     type: 'insertImage' | 'replaceImage';
 }>): Promise<ExecResult>;
+
+// @public
+export type FieldResultsMode = 'atomic' | 'editable';
 
 // @public
 export type FieldShadingMode = 'never' | 'when-selected' | 'always';
@@ -2290,6 +2294,7 @@ export interface PaginatedSurfaceOptions {
     readonly defaultFontFamily?: string;
     readonly drawingStrings?: DrawingPaintStrings;
     readonly editingMode?: SurfaceEditingMode;
+    readonly fieldResults?: FieldResultsMode;
     readonly fieldShading?: FieldShadingMode;
     readonly fontAlias?: (family: string) => string | undefined;
     readonly hiddenRevisionAuthors?: readonly string[];

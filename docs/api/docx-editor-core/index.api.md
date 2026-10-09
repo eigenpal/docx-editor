@@ -1303,6 +1303,7 @@ export interface DocxEditorConfig {
     author?: string;
     container?: HTMLElement;
     document?: DocumentSource;
+    fieldResults?: FieldResultsMode;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     imageDecodePort?: ImageDecodePort;
     locale?: string;
@@ -2133,6 +2134,9 @@ export interface Extent {
     // (undocumented)
     readonly widthEmu: number;
 }
+
+// @public
+export type FieldResultsMode = 'atomic' | 'editable';
 
 // @public
 export const FONT_RESOLVER_BRAND: unique symbol;
