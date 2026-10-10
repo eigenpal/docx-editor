@@ -43,6 +43,14 @@ export function positionedTableOriginX(
   return Math.max(frames.page.left, origin - inset);
 }
 
+/** The painted width of a simple side rule, else `0`. */
+function simpleRulePt(
+  edge: { readonly state: string; readonly style?: string; readonly widthPt?: number } | undefined
+): number {
+  if (edge?.state !== 'edge' || (edge.style !== 'single' && edge.style !== 'thick')) return 0;
+  return Number.isFinite(edge.widthPt) && edge.widthPt! > 0 ? edge.widthPt! : 0;
+}
+
 /**
  * Where a table's left edge sits inside the box that contains it.
  *
@@ -61,18 +69,28 @@ export function tableOriginX(structure: SemanticTableStructure, containerWidthPt
   if (structure.legacyContentAlignment && structure.alignment !== 'center') {
     // The leading or trailing cell's content edge sits on the aligned text edge. The indent
     // moves the table from its leading edge.
-    const first = structure.rows[0]?.cells[0]?.margins.left ?? 0;
+    const leading = structure.rows[0]?.cells[0];
     const last = structure.rows[0]?.cells.at(-1)?.margins.right ?? 0;
+    // A left-to-right table's content starts at the margin, or at its centred outer rule's
+    // inner half where the margin is narrower.
+    const first = Math.max(
+      leading?.margins.left ?? 0,
+      structure.bidiVisual
+        ? 0
+        : simpleRulePt((leading?.contentBorders ?? leading?.borders)?.left) / 2
+    );
     if (structure.alignment === 'left')
       return structure.bidiVisual ? -first : structure.indentPt - first;
-    return structure.bidiVisual ? slack + last - structure.indentPt : slack + last;
+    if (structure.bidiVisual) return slack + last - structure.indentPt;
+    return structure.legacyTrailingOuterEdge ? slack : slack + last;
   }
-  if (structure.alignment === 'center') return slack / 2;
+  if (structure.alignment === 'center')
+    return slack / 2 + (structure.bidiVisual ? (structure.outerRuleOffsetPt ?? 0) : 0);
   // Travels with the cell insets that `withSharedGridLineSideRules` gives the same table.
   const ruleOffset = structure.outerRuleOffsetPt ?? 0;
   // A bidiVisual table aligned to its leading (right) edge measures the indent from that edge.
   if (structure.alignment === 'right')
-    return structure.bidiVisual ? slack - structure.indentPt : slack + ruleOffset;
+    return structure.bidiVisual ? slack - structure.indentPt + ruleOffset : slack + ruleOffset;
   if (structure.bidiVisual) return ruleOffset;
   // Captured controls apply the whole indent whatever the table width: a negative indent
   // pulls the table into the leading margin, and a positive one can push it past the
