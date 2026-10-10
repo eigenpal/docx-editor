@@ -519,7 +519,6 @@ function placeCellParagraph(
       tabStops,
       ...(deps.pageContext ? { pageContext: deps.pageContext } : {}),
       flow: {
-        paragraphMarkIsCellEnd: options?.cellEndMark,
         firstLineOffset,
         ...(startOffset === 0 ? listMarkerFirstLineMetrics(listItem, deps.measurer) : {}),
         startOffset,
