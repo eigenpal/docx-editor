@@ -202,7 +202,10 @@ describe('B14 — structural conditions key on the grid column, not the cell ind
   });
 });
 
-describe('B11 — an explicit w:val="nil" suppresses the inherited interior rule', () => {
+// A cell's nil clears its OWN side only. The neighbour that inherits the interior rule keeps
+// it: a column whose cells state `w:left w:val="nil"` beside a column that inherits
+// `insideV` still shows the rule between them in the reference rendering.
+describe('B11 — an explicit w:val="nil" clears only its own side of an interior rule', () => {
   const omitted: TableBorderSide = { state: 'omitted' };
   const none: TableBorderSide = { state: 'none' };
   const edge = (widthPt: number, color: string | null = null): TableBorderSide => ({
@@ -234,22 +237,32 @@ describe('B11 — an explicit w:val="nil" suppresses the inherited interior rule
     mergeRowSpan: 1,
   });
 
-  test('nil on one cell removes the insideH rule the neighbour only inherits', () => {
+  test('nil on one cell keeps the insideH rule the neighbour inherits', () => {
     const resolved = resolveTableCellBorderGrid(
       [[gridCell(box({ bottom: none }))], [gridCell(box({}))]],
       tableWithInside,
       1
     );
-    expect(resolved[0]![0]!.bottom).toBeUndefined();
+    expect(resolved[0]![0]!.bottom).toMatchObject({ style: 'single', widthPt: 0.5 });
   });
 
-  test('nil on one cell removes the insideV rule the neighbour only inherits', () => {
+  test('nil on one cell keeps the insideV rule the neighbour inherits', () => {
     const resolved = resolveTableCellBorderGrid(
       [[gridCell(box({ right: none })), gridCell(box({}), 1)]],
       tableWithInside,
       2
     );
+    expect(resolved[0]![0]!.right).toMatchObject({ style: 'single', widthPt: 0.5 });
+  });
+
+  test('nil on both sides of a shared edge clears the inherited rule', () => {
+    const resolved = resolveTableCellBorderGrid(
+      [[gridCell(box({ right: none })), gridCell(box({ left: none }), 1)]],
+      tableWithInside,
+      2
+    );
     expect(resolved[0]![0]!.right).toBeUndefined();
+    expect(resolved[0]![1]!.left).toBeUndefined();
   });
 
   test('a neighbour that authors its own edge still wins over the nil', () => {

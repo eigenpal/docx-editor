@@ -314,6 +314,7 @@ test.each([false, true])(
       expect(paragraph.lines).toHaveLength(1);
       expect(paragraph.lines[0]!.box.x - cell.box.x).toBeCloseTo(5.4, 6);
     }
+    expect(fragment.rows[1]!.cells[0]!.borders?.right?.widthPt).toBe(0.5);
     const session = createLayoutSession();
     for (const width of [300, 120, 300]) {
       expect(layout(part, 15, session, width).pages).toEqual(

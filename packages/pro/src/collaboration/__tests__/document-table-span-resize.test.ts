@@ -84,9 +84,11 @@ test('resizing below merged headers converges with concurrent edits, history, de
     expect(packageFingerprint(a)).toBe(packageFingerprint(b));
     expect(saveReopenDigest(a)).toEqual(saveReopenDigest(b));
     expect(tableOf(alice).columnEdges).toEqual(tableOf(bob).columnEdges);
-    const rightRules = (editor: Editor) =>
-      tableOf(editor).rows.map((row) => row.cells.map((cell) => cell.borders?.right?.widthPt));
-    expect(rightRules(alice)).toEqual(rightRules(bob));
+    for (const editor of [alice, bob]) {
+      for (const row of tableOf(editor).rows.slice(1)) {
+        expect(row.cells[0]!.borders?.right?.widthPt).toBe(0.5);
+      }
+    }
   };
   const select = (editor: Editor, text: string) => {
     const paragraphId = editor
