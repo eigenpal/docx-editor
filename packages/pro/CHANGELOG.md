@@ -1,5 +1,28 @@
 # @docx-editor.dev/pro
 
+## 2.28.0
+
+### Minor Changes
+
+- a59ace3: Add `collaborationMigrationNeed` and `migrateCollaborationRoom`, which move a saved room of an earlier collaboration format to the current format from its export, keep the room's document ID, and return the new room only when it matches the export. See [Upgrade saved rooms](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions#upgrade-saved-rooms).
+- a59ace3: Add `DocxEditorCollaboration.Status`, which tells users when the document is connecting, offline, waiting for changes, out of sync, or refused an edit. The collaboration hooks also report `waiting`, `recovering`, and `failureCount`, and the Hocuspocus and WebRTC hooks report `unsyncedChanges` so you can warn before a page with unsent edits closes.
+- a59ace3: Add `compactCollaborationState` and `checkCollaborationRoomGeneration`, so a Hocuspocus server keeps each room's size bounded by compacting it into a new generation when it loads the room. A replica that still holds the previous generation reports `room-generation-changed` and rejoins.
+- a59ace3: Keep collaboration rooms working when people edit the same paragraphs at the same time, keep your caret in place while others type, and recover from a bad remote update without leaving the room. Editing continues while disconnected by default, and `offlineEditing: false` pauses it. Fixes #579
+- a59ace3: Text one participant deletes now stays deleted when another participant moves it or undoes a change around it at the same time. `CollaborationResourceUsage` reports `formattingMarkers`, so hosts can see a room's formatting history grow.
+- a59ace3: Collaboration keeps every participant's typing and formatting when edits conflict, including typing in text another participant deletes, reformats, splits, or joins at the same time. Breaking collaboration upgrade: rooms of earlier formats must be exported and reseeded; see [Upgrade rooms to format 1.4.2.1](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions#upgrade-rooms-to-format-1421).
+- a59ace3: Add `prepareCollaborationServerDocument` for servers that hold a room's document, such as Hocuspocus. Call it when the server creates or loads the document, so the server never removes formatting from text that participants type.
+- 85e3703: Change the author, and optionally the date, of pending tracked changes without accepting or rejecting them, with `useReview().adopt()`, the `setReviewChangesAuthor` editor command, or `RevisionCollection.setAuthor()`. Fixes #1145
+- a59ace3: Remove the experimental `createTextCollaboration` and its `PROTOCOL_VERSION`, `SCHEMA_VERSION`, and `MAX_BASELINE_BYTES` exports; use `createDocumentCollaboration`, which now refuses an insert longer than the shared text limit before the edit applies, instead of dropping it.
+- e5450c0: Add the `revisionsIn`, `commentMarkers`, and `overflow: 'scroll'` review pane settings for tracked-change balloons, comment marker style, and a pane that does not fit, and show collapsed comment markers as miniatures with up to three author initials, the reply count, and a ring that lifts them off the page. To keep the comment icon, pass `commentMarkers: 'icon'` to `reviewModule({ pane })` or `editor.setReviewPaneOptions()`.
+- d543255: Add review pane settings, `getReviewItemsAt`, `getReviewItemRects`, `getActivatedReviewItemKey`, replacement pairing, and `scrollToBlock` scroll options for hosts that draw their own review interface. Fix the compact review card template, reply author colors, and `useReviewAuthor` outside the review rail.
+
+### Patch Changes
+
+- a59ace3: Keep one collaboration room for each hook call, so pages with several hydrated React roots, or Vue stores that hold a room for each tenant, no longer close each other's rooms.
+- a59ace3: Typing in a collaboration room writes each keystroke to shared state directly, which makes typing faster in long documents. Fixes #1168
+- fcdf463: With `revisionsIn: 'balloons'`, comments that reply to tracked changes no longer open an empty review pane, and the new `reviewPaneListsItem` export tells a custom review pane which items to list. PDF export marks text in tracked table rows inside text boxes.
+- Updated dependencies: @docx-editor.dev/core@2.28.0, @docx-editor.dev/react@2.28.0, @docx-editor.dev/vue@2.28.0
+
 ## 2.27.0
 
 ### Patch Changes
