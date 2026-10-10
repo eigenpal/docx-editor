@@ -472,8 +472,10 @@ function appendAnchoredDrawingsForRecords(
 const HEX = /^[0-9A-Fa-f]{6}$/;
 // Unicode-aware: `\w` is ASCII-only, so every CJK family name — 游ゴシック, 맑은 고딕 — failed
 // validation and the run silently fell back to the inherited face, losing the typeface of an
-// entire document. Quote, backslash, semicolon, comma and control characters stay excluded,
-// which is what keeps the quoted CSS string unbreakable.
+// entire document. Comma and semicolon are part of one family name: the sink always writes
+// the name as a double-quoted CSS string through the `fontFamily` style property, so neither
+// can split the family list or end the declaration. Quote, backslash and control characters
+// stay excluded, which is what keeps that quoted string unbreakable.
 const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_,;]{1,64}$/u;
 
 /** ST_Underline to the nearest CSS decoration style. */

@@ -84,6 +84,19 @@ test('canonical package aliases preserve complete primary and alternate names', 
   expect(serializeOoxmlPart(document.part())).toBe(before);
 });
 
+test('alternate names longer than 31 characters are ignored', () => {
+  const limit = 'A'.repeat(31);
+  expect(
+    fontTableAlternates(view('Unknown Face', limit).currentPackage()).get('unknown face')
+  ).toBe(limit);
+  const long = 'A'.repeat(32);
+  expect(fontTableAlternates(view('Unknown Face', long).currentPackage()).has('unknown face')).toBe(
+    false
+  );
+  const plan = documentFontSubstitutionPlan(view('Unknown Face', long), ['Unknown Face']);
+  expect(plan.families).not.toContain(long);
+});
+
 test('known primary faces win over whole alternate names', () => {
   const plan = documentFontSubstitutionPlan(view(), ['Georgia;Verdana']);
   const fonts = composeFontConfiguration({
@@ -272,6 +285,32 @@ test('an isolated East Asian unknown uses the document script default, never a L
     result.substitutions?.find((substitution) => substitution.from.family === 'Meiryo;SimSun')?.to
       .family
   ).toBe('SimSun');
+});
+
+test('a large document keeps the script default of a run after much body text', () => {
+  const parts = unzipSync(
+    documentBytes(
+      'Meiryo;SimSun',
+      '',
+      'fontTable.xml',
+      '<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/><w:lang w:eastAsia="zh-CN"/>'
+    )
+  );
+  // More than 200,000 nodes of plain body text precede the only run that names the font.
+  const filler = '<w:p><w:r><w:t>PUBLIC</w:t></w:r></w:p>'.repeat(60_000);
+  parts['word/document.xml'] = strToU8(
+    strFromU8(parts['word/document.xml']!)
+      .replace('<w:body>', `<w:body>${filler}`)
+      .replace(
+        'w:ascii="Meiryo;SimSun" w:hAnsi="Meiryo;SimSun"',
+        'w:ascii="Times New Roman" w:hAnsi="Times New Roman"'
+      )
+  );
+  const opened = openHeadlessDocument(zipSync(parts));
+  if (!opened.ok) throw new Error(opened.reason);
+  const plan = documentFontSubstitutionPlan(opened.view, ['Meiryo;SimSun']);
+  expect(plan.fallbacks.get('meiryo;simsun')).toBe('SimSun');
+  expect(plan.ambiguousFamilies).toEqual([]);
 });
 
 function slotDefaultPlan(runDefaults?: string, theme?: string, settings?: string) {

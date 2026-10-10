@@ -556,11 +556,13 @@ The shaper uses the resolved script and direction. Adjacent source runs with ide
 
 Bidirectional paragraphs with tabs or inline atoms retain the existing placement path. Complex-script font selection and joining across formatting boundaries remain partial.
 
-## Whole Word font names
+## Font names with punctuation
 
-`Georgia;Verdana` names one font. It does not request Georgia followed by Verdana. Comma-separated names also remain one name. The editor preserves the original name when it saves the document.
+The editor requests a run font name as one family, even when it contains a semicolon or a comma. For example, `Georgia;Verdana` requests one family. It does not request Georgia followed by Verdana. The editor preserves the original name when it saves the document.
 
-An available primary face wins over its font-table `w:altName`. Otherwise, Core requests the complete alternate name and uses its admitted face. Word treats the complete alternate as one name, including commas and semicolons. See [Word alternate-name behavior](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/f7c44a60-3d38-4925-8934-57d77c277e84).
+The editor does not split a comma-separated name into candidates. If a run names `Georgia,Verdana` and the font table has no `w:altName` for it, the editor does not use Georgia. Instead, the editor uses an available script default or the existing fallback path.
+
+An available primary face wins over its font-table `w:altName`. Otherwise, Core requests the complete alternate name as one family and uses its admitted face. Core ignores a `w:altName` value that is longer than 31 characters.
 
 The browser and font-backed exports use the same substitute face for geometry. The browser registers that face under its private alias before painting. The font notice retains the unavailable original name. Export evidence identifies the admitted substitute and its bytes.
 

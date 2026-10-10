@@ -7,6 +7,8 @@ import { fontFamilyName } from './font-family-name.ts';
 const FONT_TABLE_REL =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable';
 const MAX_FONT_TABLE_NAMES = 256;
+/** `w:altName` is limited to 31 characters. A longer value is ignored, never truncated. */
+const MAX_ALTERNATE_NAME_LENGTH = 31;
 
 function wordElement(node: OoxmlNode, name: string): node is OoxmlElement {
   return (
@@ -40,9 +42,13 @@ export function fontTableAlternates(pkg: OoxmlPackage): ReadonlyMap<string, stri
     const family = fontFamilyName(wordAttribute(font, 'name'));
     if (!family) continue;
     const alternateNode = font.children.find((node) => wordElement(node, 'altName'));
-    const alternate =
+    const rawAlternate =
       alternateNode && alternateNode.kind !== 'textValue'
-        ? fontFamilyName(wordAttribute(alternateNode, 'val'))
+        ? wordAttribute(alternateNode, 'val')
+        : undefined;
+    const alternate =
+      rawAlternate !== undefined && rawAlternate.length <= MAX_ALTERNATE_NAME_LENGTH
+        ? fontFamilyName(rawAlternate)
         : null;
     const key = family.trim().toLowerCase();
     if (alternate && !alternatives.has(key)) alternatives.set(key, alternate);
