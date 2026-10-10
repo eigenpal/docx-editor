@@ -129,6 +129,76 @@ for (const [left, right] of [
   });
 }
 
+// A format split copies the run's text into new runs. An element another peer inserted into
+// the run at the same time stays at its offset, in either order (issue #1133). A field is a run
+// sequence of its own, from its begin character to its end character.
+for (const op of ['insertHardBreak', 'insertTab', 'insertPageField'] as const) {
+  const mark =
+    op === 'insertHardBreak' ? '<w:br/>' : op === 'insertTab' ? '<w:tab/>' : 'w:fldCharType';
+  const inserted = (paragraphId: string): TreeDocOp =>
+    op === 'insertPageField'
+      ? { op, paragraphId, offset: 9, field: 'PAGE' }
+      : element(op, paragraphId);
+  // The paragraph's text with the element as `|`, or a field as `[...]` around its result.
+  const placed = (xml: string): string =>
+    xml
+      .replace(/<w:instrText[^>]*>.*?<\/w:instrText>/g, '')
+      .replace(/<[^>]*>/g, (tag) =>
+        tag === mark
+          ? '|'
+          : /w:fldCharType="begin"/.test(tag)
+            ? '['
+            : /w:fldCharType="end"/.test(tag)
+              ? ']'
+              : ''
+      );
+  for (const formatFirst of [false, true]) {
+    test(`${op} and formatting of the same run made at once both survive (${formatFirst ? 'format' : 'element'} first)`, async () => {
+      const { alice, bob, pause, resume } = await harness.pair(bytes);
+      pause();
+      const format = () =>
+        harness.apply(bob, [
+          {
+            op: 'setRunProperties',
+            paragraphId: harness.paragraphIdAt(bob, 0),
+            start: 0,
+            end: 4,
+            properties: [{ localName: 'b' }],
+          },
+          // A second format over the element's offset: two generations of split runs.
+          {
+            op: 'setRunProperties',
+            paragraphId: harness.paragraphIdAt(bob, 0),
+            start: 2,
+            end: 12,
+            properties: [{ localName: 'i' }],
+          },
+        ]);
+      if (formatFirst) format();
+      harness.apply(alice, [inserted(harness.paragraphIdAt(alice, 0))]);
+      if (!formatFirst) format();
+      resume();
+      harness.expectConverged(alice, bob);
+      const merged = body(alice);
+      expect(merged).toContain(mark);
+      expect(merged).toContain('<w:b/>');
+      expect(merged).toContain('<w:i/>');
+      // The element still sits after "Acme Ltd ".
+      expect(placed(merged)).toMatch(/^Acme Ltd (\||\[[^\]]*\])1 Main Street$/);
+      expect(alice.room.session.undo()).toBe(true);
+      harness.expectConverged(alice, bob);
+      expect(body(alice)).not.toContain(mark);
+      expect(body(alice)).toContain('<w:b/>');
+      expect(alice.room.session.redo()).toBe(true);
+      harness.expectConverged(alice, bob);
+      expect(body(alice)).toBe(merged);
+      const carol = await harness.join(alice, 'carol');
+      harness.expectConverged(alice, carol);
+      expect(body(carol)).toBe(merged);
+    });
+  }
+}
+
 // Undo by the peer whose split lost restores the original text, which supersedes every split of
 // it, the other peer's included. That is the rule format splits follow, and released peers read
 // the same shared state the same way, so the replicas converge with the text once.

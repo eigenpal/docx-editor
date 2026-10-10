@@ -146,6 +146,24 @@ To find where the time goes, profile one edit kind:
 bun --cpu-prof --cpu-prof-dir=profiles edit-latency.ts --only Enter
 ```
 
+## Measure room migration memory
+
+A room migration runs offline in a worker process. To size that worker, run `migration/memory.mjs` from the repository root after you build the packages:
+
+```bash
+bun run build:packages
+bun run collaboration:migration-memory -- --fixtures
+bun run collaboration:migration-memory -- --sizes 1000,50000
+```
+
+For each document, it runs `migrateCollaborationRoom` under Node.js in a process of its own, one process at a time. It reports these values:
+
+- `Time`: how long the migration took.
+- `Peak RSS`: the most memory the whole process held, including Node.js and the loaded modules. V8 grows its heap past what it needs when no limit is set, so this value is an upper bound.
+- `Minimum heap`: the smallest `--max-old-space-size` with which the migration completes, found by bisection to within 8%. Size the worker by this value, with a margin.
+
+The synthetic documents have paragraphs of about 250 characters with one bold run. `--fixtures` adds three repository fixtures. The run writes `migration/results/memory.json`.
+
 ## Find collaboration defects
 
 The scenario fuzzer runs replicas in one process, joined by a simulated network. Each replica attaches a document store the way the editor does, and edits it with random operations: typing, deleting, splitting and joining paragraphs, run and paragraph formatting, tabs, breaks, block deletes, table rows and columns, cell fills, lists and list levels, hyperlinks, content controls, footnotes, and image resizing, moving, wrapping, and deletion. Some scenarios also add undo and redo, offline periods, and late joiners. The `textbox` shape edits a document with a floating text box.
