@@ -1,5 +1,56 @@
 # @docx-editor.dev/core
 
+## 2.28.0
+
+### Minor Changes
+
+- 2f75824: Home, End, Up, Down, and clicks at a wrapped line edge put the caret on the correct line, and typed text lands where the caret shows. `moveCaret` accepts and returns an optional `lineId` for the line the caret shows on.
+- a59ace3: Add `compactCollaborationState` and `checkCollaborationRoomGeneration`, so a Hocuspocus server keeps each room's size bounded by compacting it into a new generation when it loads the room. A replica that still holds the previous generation reports `room-generation-changed` and rejoins.
+- 12de74f: Add a `fieldResults: 'editable'` option to `createDocxEditor` and the React and Vue editors, so readers can type, delete, and select inside the saved results of DATE, MERGEFIELD, HYPERLINK, and similar fields. Fixes #1197
+- 9280bbe: Layout accepts a `fieldResults: 'editable'` option that lays out the saved results of DATE, MERGEFIELD, HYPERLINK, and similar fields as text, so the caret, hit testing, and selection work inside a result. The default `atomic` mode is unchanged.
+- 37cf742: The store can address the saved results of DATE, MERGEFIELD, HYPERLINK, and similar fields as editable text through a new `fieldResults: 'editable'` option on transactions, edit options, and `paragraphTextOf`. The default `atomic` mode keeps every field one unit, so existing offsets do not change.
+- cf75de1: Improve the layout of pictures, text boxes, drawing groups, and header and footer floating tables, honor clearing line breaks, and show embedded object and fallback previews that did not paint before.
+- b3559e5: A click at a line edge keeps the caret on the clicked line, in multi-line field results, wrapped text, right-to-left lines, and beside inline pictures. `caretAt` accepts an optional `preferredLineId` that selects which painted line shows a shared position.
+- 300f5ad: The navigation pane now works inside `DocxEditor.Viewport`, covers the page on narrow screens, and captures the browser's find shortcut (Ctrl+F, or Cmd+F on macOS) while focus is in the editor; set `findShortcut` to `false` on the pane, or in the `navigation` prop, to leave the shortcut to the browser.
+- 85e3703: Change the author, and optionally the date, of pending tracked changes without accepting or rejecting them, with `useReview().adopt()`, the `setReviewChangesAuthor` editor command, or `RevisionCollection.setAuthor()`. Fixes #1145
+- e5450c0: Add the `revisionsIn`, `commentMarkers`, and `overflow: 'scroll'` review pane settings for tracked-change balloons, comment marker style, and a pane that does not fit, and show collapsed comment markers as miniatures with up to three author initials, the reply count, and a ring that lifts them off the page. To keep the comment icon, pass `commentMarkers: 'icon'` to `reviewModule({ pane })` or `editor.setReviewPaneOptions()`.
+- e5450c0: Add the `reviewItemReveal` editor event, which fires when Next Change or Previous Change lands on a review item, or when `setActiveReviewItem` succeeds with `announce: true`, so a host can open its own balloon or card.
+- d543255: Add review pane settings, `getReviewItemsAt`, `getReviewItemRects`, `getActivatedReviewItemKey`, replacement pairing, and `scrollToBlock` scroll options for hosts that draw their own review interface. Fix the compact review card template, reply author colors, and `useReviewAuthor` outside the review rail.
+- fcdf463: With `revisionsIn: 'balloons'`, comments that reply to tracked changes no longer open an empty review pane, and the new `reviewPaneListsItem` export tells a custom review pane which items to list. PDF export marks text in tracked table rows inside text boxes.
+- 5f5cc3c: Toolbar and menu popups close when focus moves elsewhere, such as to the find field, and the navigation pane stays docked beside a scrolling review column. `Toolbar.Button`, `Menu.Item`, and `ContextMenu.Slot` take `slotId`; `slot` is deprecated and still works with a development warning, and on `MenuItemProps` and `MenuSubmenuProps` both `slot` and `labelKey` are optional, because `slotId` and `label` can take their place.
+- 0e3d5f4: Pressing Tab or Shift+Tab over selected paragraphs, or over a selection from a paragraph start, changes their indent and keeps the text, where Tab replaced the text with a tab before. Fixes #1172
+- b47308c: PDF export marks text in tracked table rows, new table rows keep the source row's paragraph formatting, and tracked edits can start right after your own pending insertion. A range whose text changed since it was read now fails with `StaleDocument` instead of editing the wrong text.
+
+### Patch Changes
+
+- a59ace3: Keep your caret, and the carets of other participants, next to the same character when one remote update changes text on both sides of it.
+- b60efc7: A list level with empty number text keeps its suffix, so the first line and the caret in an empty item start at the tab stop, after the space, or at the number position.
+- b5a4aa5: The font substitution notice lists only fonts that the document's text renders in, so East Asian fonts named for Latin-only text and fonts overridden by a nearer style no longer appear.
+- 70a8887: Text uses the correct font for full-width characters, East Asian font hints, the no-break space, and font slots that no style names, and PDF export and the font substitution notice use the same fonts.
+- c2a22da: Keep a line on its page in a section with a document line grid when its text fits above the bottom margin and only the space below the text crosses it.
+- c2a22da: Lay out multiple and at-least line spacing in sections with a document line grid in whole grid lines, with the text centered.
+- a18b05e: Use the declared hAnsi font for eligible non-ASCII text when it differs from the ascii font.
+- c965bd0: Keep line-fitting spacing adjustments out of Format Painter writes.
+- f0fb4e9: Tables in older compatibility modes align their content with the text column for every alignment, indent, and layout, AutoFit tables without a width fit the room their indent leaves, and a compatibility mode declared outside the compat element applies.
+- 3825d23: Snap footnote and endnote lines to the document line grid of the section that holds them.
+- a59ace3: A paragraph that holds more than one `w:pPr` element now loads with its first one, shows, and saves, instead of disappearing from the editor.
+- f9c3338: Editor popups close when focus moves into a host's own modal dialog, and the Vue table toolbar keeps its menus in server-rendered apps after the selection leaves a table and returns.
+- cffcfd5: Split mixed East Asian cached field text into font-specific display spans while preserving each field's atomic model range.
+
+  Keep note navigation and measurement reservations unchanged. This changes font selection for displayed field results, without changing canonical data.
+
+- a59ace3: A selection that the host sets now stays where the host put it, also when a participant's earlier change is still showing.
+- 04d25c3: A paragraph that opens with a page break followed by another page or column break no longer adds an extra blank page after a full page.
+- 4876209: Give a line with large superscript, subscript, or note reference text the full height of that text above and below the baseline on every line, which also corrects these lines on a document grid, and stop scaling raised text offsets with multiple line spacing. Fixes #1198
+- 8c106e3: Tables with a percentage width above 100% extend past the text column instead of shrinking to it, so their cells keep their line breaks.
+- 5bc79fb: AutoFit tables share width between columns by each column's spare room above its content. Tables with zero cell margins, in text boxes, nested without a width, or right to left take their correct width and position.
+- 9ff8bf9: Preserve whole Word font names and resolve unavailable faces through whole font-table alternate names.
+
+  Use the same admitted substitute for editor measurement, painting, font notices, and font-backed export.
+
+- 267377b: Render horizontal and vertical VML shape paths with one zero extent.
+- Updated dependencies: @docx-editor.dev/i18n@2.28.0
+
 ## 2.27.0
 
 ### Minor Changes

@@ -1,5 +1,12 @@
 # @docx-editor.dev/docx-to-pdf
 
+## 2.28.0
+
+### Patch Changes
+
+- fcdf463: With `revisionsIn: 'balloons'`, comments that reply to tracked changes no longer open an empty review pane, and the new `reviewPaneListsItem` export tells a custom review pane which items to list. PDF export marks text in tracked table rows inside text boxes.
+- Updated dependencies: @docx-editor.dev/core@2.28.0, @docx-editor.dev/fonts-cjk@2.28.0, @docx-editor.dev/fonts@2.28.0
+
 ## 2.27.0
 
 ### Patch Changes

@@ -1,5 +1,20 @@
 # @docx-editor.dev/vue
 
+## 2.28.0
+
+### Minor Changes
+
+- 300f5ad: The navigation pane now works inside `DocxEditor.Viewport`, covers the page on narrow screens, and captures the browser's find shortcut (Ctrl+F, or Cmd+F on macOS) while focus is in the editor; set `findShortcut` to `false` on the pane, or in the `navigation` prop, to leave the shortcut to the browser.
+- 5f5cc3c: Toolbar and menu popups close when focus moves elsewhere, such as to the find field, and the navigation pane stays docked beside a scrolling review column. `Toolbar.Button`, `Menu.Item`, and `ContextMenu.Slot` take `slotId`; `slot` is deprecated and still works with a development warning, and on `MenuItemProps` and `MenuSubmenuProps` both `slot` and `labelKey` are optional, because `slotId` and `label` can take their place.
+- 10eeaf6: Add toolbar host groups, slot replacement, an Add comment control, and a table-size grid for the toolbar's table button, and make the menu bar move menus that do not fit into one "⋯" menu instead of wrapping by default (set `overflow={false}` to keep wrapping). The context-menu row id `review.comments` is deprecated in favor of `review.addComment`, and the old id still works with a development warning.
+
+### Patch Changes
+
+- 8055b45: The page number indicator now stays in view when you place it inside the viewport instead of beside it.
+- f9c3338: Editor popups close when focus moves into a host's own modal dialog, and the Vue table toolbar keeps its menus in server-rendered apps after the selection leaves a table and returns.
+- 93e1bc2: Close toolbar dropdowns, pickers, and the More panel when you press Escape in the document, and keep Escape in your own inputs working. Fixes #1151
+- Updated dependencies: @docx-editor.dev/core@2.28.0, @docx-editor.dev/i18n@2.28.0
+
 ## 2.27.0
 
 ### Patch Changes
