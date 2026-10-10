@@ -153,6 +153,17 @@ describe('a paragraph that opens with a page break', () => {
     expect(pageTexts(layout)).toEqual([lastFill(14), '', '', 'after']);
   });
 
+  test('keeps a page break followed by a column break on a full page', () => {
+    const columnBreak = '<w:r><w:br w:type="column"/></w:r>';
+    const breaks = `<w:p><w:pPr>${exact}</w:pPr>${br}${columnBreak}</w:p>`;
+    const layout = lay(load(fill(14) + breaks + paragraph('after') + sect));
+    expect(layout.pages).toHaveLength(3);
+    const [first] = fragmentsAt(layout, 14);
+    expect(first!.page).toBe(0);
+    expect(first!.fragment.outOfFlow).toBe(true);
+    expect(fragmentsAt(layout, 15).map(({ page }) => page)).toEqual([2]);
+  });
+
   test('keeps the first of two breaks after a table that fills the page', () => {
     const fullTable =
       '<w:tbl><w:tblPr><w:tblW w:w="3000" w:type="dxa"/><w:tblCellMar>' +

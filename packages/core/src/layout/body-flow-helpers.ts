@@ -101,14 +101,15 @@ export function paragraphHoldsNothing(
 const lineHoldsContent = (line: PendingLine): boolean =>
   line.drawings.length > 0 || line.spans.some((span) => /[^\f\n]/.test(span.text));
 
-/** Whether a line after the opening break starts a sheet of its own: text, picture, or break. */
+/** Whether a line after the opening break holds text, a picture, or a page or column break. */
 const lineFollowsBreak = (line: PendingLine): boolean =>
-  line.pageBreakAfter === true || lineHoldsContent(line);
+  line.pageBreakAfter === true || line.columnBreakAfter === true || lineHoldsContent(line);
 
 /**
- * Whether a paragraph opens with a page break and has content or another page break after it:
- * its first line holds nothing but the break. That line never takes a sheet of its own. It stays at the bottom of
- * the page it starts on, and the break then starts the content on the next sheet.
+ * Whether a paragraph opens with a page break and has content or another break after it:
+ * its first line holds nothing but the break. That line never takes a sheet of its own. It
+ * stays at the bottom of the page it starts on, and the break then starts the content on the
+ * next sheet.
  *
  * A list marker is not content there: it moves to the first line after the break. Borders,
  * shading, and space before are not either: the break line draws no rule, the space before
