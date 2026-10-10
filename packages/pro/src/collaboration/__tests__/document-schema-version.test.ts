@@ -8,7 +8,7 @@ import { createPeerHarness, zipDocument } from './document-peer-support.ts';
 import { PACKAGE_META_KEY } from '../document/schema.ts';
 const h = createPeerHarness('schema-version-592');
 afterEach(() => h.cleanup());
-for (const version of [2, 4]) {
+for (const version of [3, 5]) {
   test(`rejects incompatible shared text schema ${version} on an existing peer and a new join`, async () => {
     const { alice, bob } = await h.pair(
       zipDocument('<w:p><w:r><w:t>text</w:t></w:r></w:p><w:sectPr/>')

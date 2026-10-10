@@ -863,7 +863,20 @@
   },
   "collaboration": {
     "moreParticipants": "{count, plural, one {# weitere Person} other {# weitere Personen}}",
-    "participants": "Personen in diesem Dokument"
+    "participants": "Personen in diesem Dokument",
+    "status": {
+      "connecting": "Verbindung zum Dokument wird hergestellt…",
+      "editRefused": "Ihre letzte Änderung konnte nicht geteilt werden und wurde rückgängig gemacht.",
+      "offline": "Offline. Sie können weiterarbeiten; Ihre Änderungen werden synchronisiert, sobald die Verbindung wieder besteht.",
+      "outOfSync": "Diese Kopie ist nicht mehr mit dem gemeinsamen Dokument synchron.",
+      "rejoin": "Erneut beitreten",
+      "syncing": "Die neuesten Änderungen werden übernommen…",
+      "waiting": "Warten auf die neuesten Änderungen…",
+      "stalled": "Die neuesten Änderungen sind nicht angekommen. Treten Sie erneut bei, um das gemeinsame Dokument zu laden.",
+      "offlinePaused": "Offline. Die Bearbeitung ist wieder möglich, sobald die Verbindung besteht.",
+      "upgradeRequired": "Diese App und das gemeinsame Dokument verwenden unterschiedliche Versionen der Zusammenarbeit. Speichern Sie eine Kopie und wenden Sie sich an Ihre Administration.",
+      "newRoomRequired": "Dieses gemeinsame Dokument kann nicht fortgesetzt werden. Speichern Sie eine Kopie und teilen Sie sie erneut."
+    }
   },
   "textFormField": {
     "apply": "OK",

@@ -112,6 +112,42 @@ afterEach(() => {
 });
 
 describe('useDocumentCollaboration (Vue)', () => {
+  test('a session that fails after the join reports the error and clears it when it heals', async () => {
+    let status: 'ready' | 'error' = 'ready';
+    const listeners = new Set<() => void>();
+    const base = stubSession('healing');
+    const session: EditorCollaborationSession = {
+      ...base,
+      status: () => status,
+      statusSnapshot: () =>
+        Object.freeze(
+          status === 'error'
+            ? {
+                status: 'error' as const,
+                reason: { code: 'remote-apply-failed' as const },
+                lastFailure: { code: 'remote-apply-failed' as const },
+              }
+            : { status: 'ready' as const, reason: undefined, lastFailure: undefined }
+        ),
+      subscribeStatus: (listener) => {
+        const notify = (): void => listener(status);
+        listeners.add(notify);
+        return () => listeners.delete(notify);
+      },
+    };
+    const room = { ...fakeRoom('healing'), session };
+    const mounted = mountHook(async () => room);
+    await mounted.latest()?.connect(connectOptions());
+    await nextTick();
+    status = 'error';
+    for (const notify of [...listeners]) notify();
+    expect(mounted.latest()?.error.value?.code).toBe('remote-apply-failed');
+    status = 'ready';
+    for (const notify of [...listeners]) notify();
+    expect(mounted.latest()?.error.value).toBeNull();
+    mounted.unmount();
+  });
+
   test('connect adopts the consumer-owned room and composes the collaboration module', async () => {
     const room = fakeRoom('joined');
     const mounted = mountHook(async () => room);

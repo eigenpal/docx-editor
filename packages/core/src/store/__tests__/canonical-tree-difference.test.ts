@@ -285,6 +285,22 @@ describe('remotePackageDelta classifies what one received package changed', () =
     expect(publications).toBe(0);
   });
 
+  test('equal content under a renamed id installs, also when another part changed', () => {
+    const bytes = documentBytes(`${PARAGRAPH}<w:sectPr/>`);
+    const store = openStore(bytes);
+    const current = store.currentPackage();
+    // Every part of a separate parse is a new object, so more than one part "changed".
+    const twin = loadPackage(bytes);
+    const main = mainPart(twin);
+    const renamed = JSON.parse(JSON.stringify(main.root)) as {
+      children: { children: { id: string }[] }[];
+    };
+    const run = renamed.children[0]!.children[0]!.children[0]!;
+    run.id = `${run.id}~renamed`;
+    const next = withPart(twin, { ...main, root: renamed as unknown as OoxmlNode });
+    expect(remotePackageDelta(next, current).equal).toBe(false);
+  });
+
   test('a received text edit publishes what a local one publishes', () => {
     const store = openStore(documentBytes(`${PARAGRAPH}<w:sectPr/>`));
     const next = bodyOf(

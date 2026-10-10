@@ -253,6 +253,4 @@ export interface TreeSurfaceState {
 // @public
 export function treeToDoc(part: OoxmlPart): Node_2;
 
-// (No @packageDocumentation comment for this package)
-
 ```

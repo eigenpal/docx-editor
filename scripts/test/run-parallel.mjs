@@ -38,11 +38,15 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 // `docs/` and `examples/` for the same reason, learned the hard way: the typed feature matrix
 // has a test beside it, and it never ran here, so a plain type error in that file survived
 // review. A test the suite does not walk is worth nothing.
+//
+// `benchmarks/` holds the collaboration scenario checks. Its long load run is named
+// `*.bench.ts`, so it stays out of the suite and runs only when asked for.
 const SEARCH_ROOTS = [
   join(ROOT, 'packages'),
   join(ROOT, 'scripts'),
   join(ROOT, 'docs'),
   join(ROOT, 'examples'),
+  join(ROOT, 'benchmarks'),
 ];
 const CACHE_FILE = join(ROOT, 'node_modules', '.cache', 'docx-editor', 'test-durations.json');
 

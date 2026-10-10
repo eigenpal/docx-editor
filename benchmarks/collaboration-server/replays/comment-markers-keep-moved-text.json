@@ -1,0 +1,93 @@
+{
+  "config": "join",
+  "seed": 12,
+  "replicas": 2,
+  "delivery": "server",
+  "actions": [
+    {
+      "kind": "join",
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "resizeDrawing",
+          "drawingNodeId": "",
+          "extentEmu": {
+            "cx": 1653150,
+            "cy": 486849
+          }
+        },
+        "targets": [
+          {
+            "field": "drawingNodeId",
+            "localName": "drawing",
+            "index": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "join",
+      "from": 0
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 0,
+          "text": "lor"
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "join",
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 4,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "addComment",
+          "start": 2,
+          "end": 7
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 2
+        },
+        "paragraphs": [0]
+      }
+    }
+  ]
+}

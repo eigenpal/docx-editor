@@ -5,6 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import * as Y from 'yjs';
 import type { LogicalId } from './identity.ts';
+import { keyId } from './registry-node-reads.ts';
 import { rejectDangerousKey } from './limits.ts';
 import {
   NODE_DELETED_FIELD,
@@ -25,11 +26,11 @@ export function observeDirtyPaths(
     for (const event of events) {
       const path = event.path;
       if (path.length === 0) {
-        for (const key of event.changes.keys.keys()) logicalIds.add(String(key));
+        for (const key of event.changes.keys.keys()) logicalIds.add(keyId(key));
         membershipChanged = true;
         continue;
       }
-      logicalIds.add(String(path[0]));
+      logicalIds.add(keyId(path[0]!));
       if (event.target instanceof Y.Array) membershipChanged = true;
       if (
         event.target instanceof Y.Map &&

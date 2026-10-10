@@ -12,49 +12,65 @@ import { materializedPassCounts } from '../document/materialize.ts';
 import { collaborationDocx } from './support.ts';
 import {
   applyJournal,
+  childIdsOf,
   destroyReplica,
   expectConverged,
   findText,
   joinReplica,
   loadPackage,
   packageOf,
-  parentOf,
   seedReplica,
+  shownParentOf,
   spliceTextJournal,
   walk,
   WML,
+  type Replica,
 } from './document-support.ts';
+import type { LogicalId } from '../document/index.ts';
 
+function container(replica: Replica, id: LogicalId): void {
+  replica.registry.putElement({
+    logicalId: id,
+    kind: 'generic',
+    namespaceUri: WML,
+    localName: 'customXml',
+    attributes: [],
+    bindings: [],
+  });
+}
+
+function countOf(replica: Replica, id: string): number {
+  const pkg = packageOf(replica);
+  let count = 0;
+  walk(pkg.parts.get(pkg.mainDocumentPart)!.root, (node) => {
+    if (node.id === id) count += 1;
+  });
+  return count;
+}
+
+// Runs live in their paragraph's shared text, so these contest a paragraph record between
+// the body and a container element.
 describe('contested placement across materializer passes', () => {
   test('a settled contest stops forcing full passes for the winner', async () => {
     const replica = await seedReplica(loadPackage(collaborationDocx()));
     try {
       const bravoText = findText(packageOf(replica), 'Bravo paragraph');
-      const bravoRun = parentOf(replica.registry, bravoText.id, 'run');
-      const bravoParagraph = parentOf(replica.registry, bravoRun, 'paragraph');
-      const charlieText = findText(packageOf(replica), 'Charlie paragraph');
-      const charlieParagraph = parentOf(
-        replica.registry,
-        parentOf(replica.registry, charlieText.id, 'run'),
-        'paragraph'
-      );
+      const bravo = shownParentOf(replica, bravoText.id, 'paragraph');
+      const body = shownParentOf(replica, bravo, 'body');
+      const loser = replica.mint.take();
 
-      // A hostile peer lists the run under a second paragraph. The first pass that sees the
-      // contest still earns its full pass — that pass decides the placement.
-      applyJournal(replica, {
-        effects: [
-          {
-            kind: 'spliceChildren',
-            parentLogicalId: charlieParagraph,
-            start: 1,
-            deleteCount: 0,
-            childLogicalIds: [bravoRun],
-          },
-        ],
+      // A hostile peer lists the paragraph under a second container after it. The first pass
+      // that sees the contest still earns its full pass: that pass decides the placement.
+      replica.doc.transact(() => {
+        container(replica, loser);
+        replica.registry.spliceChildren(loser, 0, 0, [bravo]);
+        replica.registry.spliceChildren(body, childIdsOf(replica, body).length, 0, [loser]);
       });
-      expect(replica.registry.parentOf(bravoRun)).toBe(bravoParagraph);
+      expect(replica.registry.parentOf(bravo)).toBe(body);
+      const settled = replica.materializer.rebuild();
+      if (!settled.ok) throw new Error(settled.code);
 
-      // Steady state: typing in the winning paragraph reproduces the decided placement.
+      // Steady state: typing in the contested paragraph reproduces the decided placement.
       const steady: { passes: number; full: number }[] = [];
       for (let at = 0; at < 3; at += 1) {
         const before = materializedPassCounts();
@@ -66,24 +82,15 @@ describe('contested placement across materializer passes', () => {
         expect(sample.passes).toBe(1);
         if (sample.full > 0) {
           throw new Error(
-            'A keystroke in the contest winner forced a full placement pass. The contest was ' +
-              'already decided, the pass placed the child under the parent the registry ' +
-              'resolves, and the losing listing did not change — the decision holds.'
+            'A keystroke in the contested paragraph forced a full placement pass. The ' +
+              'contest was already decided, and the losing listing did not change.'
           );
         }
       }
 
-      // The child appears exactly once, under the first-preorder parent, and a replica that
-      // joins fresh — deciding the contest with a full walk — sees the same document.
-      const pkg = packageOf(replica);
-      const main = pkg.parts.get(pkg.mainDocumentPart);
-      expect(main).toBeDefined();
-      let listed = 0;
-      walk(main!.root, (node) => {
-        if (node.id === bravoRun) listed += 1;
-      });
-      expect(listed).toBe(1);
-
+      // The paragraph appears exactly once, under the first-preorder parent, and a replica
+      // that joins fresh, deciding the contest with a full walk, sees the same document.
+      expect(countOf(replica, bravo)).toBe(1);
       const joined = joinReplica(replica, 21);
       try {
         expectConverged(replica, joined);
@@ -91,13 +98,19 @@ describe('contested placement across materializer passes', () => {
         destroyReplica(joined);
       }
 
-      // A keystroke in the LOSING paragraph rebuilds a lister the decision excluded, and that
-      // honestly still needs the full pass.
-      const before = materializedPassCounts();
-      applyJournal(replica, spliceTextJournal(charlieText.id, 0, 'Y'));
-      const after = materializedPassCounts();
-      expect(after.full - before.full).toBe(1);
-      expect(replica.registry.parentOf(bravoRun)).toBe(bravoParagraph);
+      // A change to the LOSING lister keeps the decided placement.
+      applyJournal(replica, {
+        effects: [
+          {
+            kind: 'setAttribute',
+            logicalId: loser,
+            qname: { namespaceUri: WML, localName: 'element', prefix: 'w' },
+            value: 'x',
+          },
+        ],
+      });
+      expect(countOf(replica, bravo)).toBe(1);
+      expect(replica.registry.parentOf(bravo)).toBe(body);
     } finally {
       destroyReplica(replica);
     }
@@ -106,62 +119,39 @@ describe('contested placement across materializer passes', () => {
   test('an adoption-involved contest never takes the settled-contest skip', async () => {
     const replica = await seedReplica(loadPackage(collaborationDocx()));
     try {
-      const alphaText = findText(packageOf(replica), 'Alpha paragraph');
-      const alphaParagraph = parentOf(
-        replica.registry,
-        parentOf(replica.registry, alphaText.id, 'run'),
-        'paragraph'
-      );
       const charlieText = findText(packageOf(replica), 'Charlie paragraph');
-      const charlieRun = parentOf(replica.registry, charlieText.id, 'run');
-      const charlieParagraph = parentOf(replica.registry, charlieRun, 'paragraph');
-
-      // A tombstoned lister T routes the contested run through survivor ADOPTION: the full
-      // pass places it under the survivor, while `parentOf` nulls the dead chain and
-      // resolves to the live lister. The settled-contest skip trusted `parentOf` and
-      // emitted the run under BOTH parents on the next keystroke in the live lister. The
-      // lister must be dead at resolution time (a fresh node, tombstoned in a SECOND
-      // transaction so its child-array events fire) or the registry resolves to it and the
-      // mismatch honestly forces the full pass.
+      const charlie = shownParentOf(replica, charlieText.id, 'paragraph');
+      const body = shownParentOf(replica, charlie, 'body');
+      const survivor = replica.mint.take();
       const t = replica.mint.take();
+
+      // A tombstoned lister T routes the contested paragraph through survivor ADOPTION: the
+      // full pass places it under the survivor, while `parentOf` nulls the dead chain and
+      // resolves to the live lister. The lister must be dead at resolution time (a fresh
+      // node, tombstoned in a SECOND transaction so its child-array events fire) or the
+      // registry resolves to it and the mismatch honestly forces the full pass.
       replica.doc.transact(() => {
-        replica.registry.putElement({
-          logicalId: t,
-          kind: 'paragraph',
-          namespaceUri: WML,
-          localName: 'p',
-          attributes: [],
-          bindings: [],
-        });
-        replica.registry.spliceChildren(t, 0, 0, [charlieRun]);
+        container(replica, survivor);
+        replica.registry.spliceChildren(body, 0, 0, [survivor]);
+        container(replica, t);
+        replica.registry.spliceChildren(t, 0, 0, [charlie]);
       });
       replica.doc.transact(() => {
-        replica.registry.tombstone(t, alphaParagraph);
+        replica.registry.tombstone(t, survivor);
       });
 
-      expect(replica.registry.listingParents(charlieRun).length).toBe(2);
-      expect(replica.registry.parentOf(charlieRun)).toBe(charlieParagraph);
-      expect(replica.registry.adoptedChildren(alphaParagraph)).toContain(charlieRun);
+      expect(replica.registry.listingParents(charlie).length).toBe(2);
+      expect(replica.registry.parentOf(charlie)).toBe(body);
+      expect(replica.registry.adoptedChildren(survivor)).toContain(charlie);
 
-      // One settle pass decides the placement: first preorder wins, alpha adopts the run.
+      // One settle pass decides the placement: first preorder wins, the survivor adopts it.
       const settled = replica.materializer.rebuild();
       if (!settled.ok) throw new Error(settled.code);
-      const pkg1 = packageOf(replica);
-      let count = 0;
-      walk(pkg1.parts.get(pkg1.mainDocumentPart)!.root, (node) => {
-        if (node.id === charlieRun) count += 1;
-      });
-      expect(count).toBe(1);
+      expect(countOf(replica, charlie)).toBe(1);
 
-      // A keystroke inside the LOSING lister's subtree rebuilds charlieParagraph only.
+      // A keystroke inside the contested paragraph rebuilds it only.
       applyJournal(replica, spliceTextJournal(charlieText.id, 0, 'Z'));
-
-      const pkg2 = packageOf(replica);
-      let after = 0;
-      walk(pkg2.parts.get(pkg2.mainDocumentPart)!.root, (node) => {
-        if (node.id === charlieRun) after += 1;
-      });
-      expect(after).toBe(1);
+      expect(countOf(replica, charlie)).toBe(1);
 
       const joined = joinReplica(replica, 23);
       try {

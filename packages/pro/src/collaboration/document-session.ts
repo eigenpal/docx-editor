@@ -12,13 +12,19 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * other, because a remote publication deliberately emits no journal.
  */
 
-import { projectJournalToShared } from './document/projected-journal.ts';
+import { projectTypingOrJournal } from './document/projected-journal.ts';
+import { editWaits } from './document/journal.ts';
+import { markRestoredText } from './document/paragraph-text-restore.ts';
+import { awaitingUpdates } from './document/yjs-items.ts';
+import { viewRenamesPlan } from './document/paragraph-text-drift.ts';
+import { stepHistory } from './document/history-undone.ts';
 import { HistoryGroupCapture } from './document/history-group-capture.ts';
 import * as Y from 'yjs';
 import type { Awareness } from 'y-protocols/awareness';
 import {
   ORIGIN_IDS,
   writeOoxmlPackage,
+  type OoxmlPackage,
   type StoryScope,
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
@@ -30,7 +36,9 @@ import type {
   CollaborationParticipant,
   CollaborationRemoteSelection,
   CollaborationStatus,
+  CollaborationSelectionMove,
   CollaborationStatusSnapshot,
+  EditorCollaborationSession,
 } from '@docx-editor.dev/core/collaboration';
 import {
   historyGroupOfJournal,
@@ -41,29 +49,18 @@ import {
   createCollaborationStatusTracker,
   safeParticipantColor,
 } from '@docx-editor.dev/core/collaboration';
-import {
-  DocumentRegistry,
-  PackageMaterializer,
-  applyPrimitiveJournal,
-  seedPackage,
-} from './document/index.ts';
-import {
-  binaryPartReaderOf,
-  collectJournalBinaryPayloads,
-  publishBinaryPayloads,
-  type BinaryPayload,
-} from './document/seed.ts';
+import { DocumentRegistry, PackageMaterializer, applyPrimitiveJournal } from './document/index.ts';
+import { collectJournalBlobs, putJournalBlobs } from './document-session-blobs.ts';
+import { healTargetOf, RefusalStreak, type HealTarget } from './document-session-heal.ts';
+import { HistorySelection } from './document-history-selection.ts';
+import { startAttachWatchdog } from './document-session-watchdog.ts';
+import { RemoteSelectionResolver } from './document-remote-selections.ts';
 import { droppedContentDetail, packageVersionFailure } from './document/schema.ts';
 import { SHARED_BLOBS_KEY, SharedBlobStore, limitFailure } from './shared-blob-store.ts';
-import {
-  DEFAULT_INITIALIZATION_TIMEOUT_MS,
-  observeSeedRecords,
-  openBaselinePackage,
-  runCreateOrJoinBootstrap,
-  seedRecordCount,
-  waitForSharedInitialization,
-} from './document-bootstrap.ts';
+import { observeSeedRecords, initializeSharedState } from './document-bootstrap.ts';
 import { LogicalIdentityMap } from './document-identity.ts';
+import { CaretAnchors } from './document-caret-anchors.ts';
+import { EditWait } from './document-edit-wait.ts';
 import { resourceUsageOf, type CollaborationResourceUsage } from './resource-usage.ts';
 import {
   AWARENESS_FIELD,
@@ -71,24 +68,21 @@ import {
   MAX_IDENTITY_LENGTH,
   awarenessPayload,
   sessionIdentity,
+  encodeSelection,
   validateDocumentId,
   validateIdentity,
   type AwarenessPayload,
   type EncodedSelection,
-  type EncodedSelectionAddress,
 } from './document-awareness.ts';
-import { CollaborationSchemaError } from './schema.ts';
-import type {
-  CollaborationBootstrap,
-  CollaborationHandle,
-  CollaborationIdentityUpdate,
-  TextCollaborationSession,
-} from './session.ts';
+import { CollaborationSchemaError } from './errors.ts';
+import type { CollaborationHandle, CollaborationIdentityUpdate } from './types.ts';
+import type { CreateDocumentCollaborationOptions } from './document-session-options.ts';
 
-/** One refused journal recovers; a run of them means the next edit refuses too. */
-const MAX_REFUSALS_IN_A_ROW = 3;
-/** Local journals inside this window share one actor undo item. */
-const UNDO_CAPTURE_TIMEOUT_MS = 5_000;
+/**
+ * Local journals inside this window share one actor undo item: one typing run, not the whole
+ * paragraph a user types without a long pause. This is the `Y.UndoManager` default.
+ */
+const UNDO_CAPTURE_TIMEOUT_MS = 500;
 /** After this long with no attached document port, the session warns that nothing replicates. */
 const ATTACH_WATCHDOG_MS = 2_000;
 
@@ -119,17 +113,25 @@ class DocumentSession implements DocumentCollaborationSession {
     (participants: readonly CollaborationParticipant[]) => void
   >();
   private readonly localOrigin = Object.freeze({ kind: 'docx-document-local' });
+  private readonly caretAnchors: CaretAnchors;
+  private readonly editWait: EditWait;
   private readonly undoManager: Y.UndoManager;
   private port: CollaborationDocumentPort | null = null;
   private detachPort: (() => void) | null = null;
   private applyingRemote = false;
+  /** The last publish waited for a held-back update and left the editor behind shared state. */
+  private viewWaiting = false;
+  /** Where a degraded session returns on its next clean remote apply; null when terminal. */
+  private healTo: HealTarget | null = null;
+  private readonly historySelections: HistorySelection;
+  private readonly remoteSelectionResolver = new RemoteSelectionResolver();
   private realignedInBatch = false;
   /** Journals a `change` subscriber committed while a remote install ran. Never dropped. */
   private readonly journalsHeldDuringRemote: CanonicalPrimitiveJournal[] = [];
   private drainingHeldJournals = false;
   private remoteCounter = 0;
   private destroyed = false;
-  private refusedInARow = 0;
+  private readonly refusals = new RefusalStreak();
   private readonly historyGroups: HistoryGroupCapture;
   private readonly stopBlobWatch: () => void;
   private readonly stopSeedWatch: () => void;
@@ -145,7 +147,7 @@ class DocumentSession implements DocumentCollaborationSession {
     private readonly identityMap: LogicalIdentityMap,
     private readonly blobs: SharedBlobStore,
     attachWatchdogMs: number,
-    private readonly offlineEditing: boolean
+    readonly offlineEditing: boolean
   ) {
     this.documentId = documentId;
     this.sessionId = sessionId;
@@ -156,6 +158,25 @@ class DocumentSession implements DocumentCollaborationSession {
       deleteFilter: registry.undoDeleteFilter(),
     });
     this.historyGroups = new HistoryGroupCapture(this.undoManager, this);
+    this.historySelections = new HistorySelection(
+      this.undoManager,
+      (id) => this.port?.paragraphByStableId(id)?.text ?? null,
+      (paragraphId, character) => this.caretAnchors.findStable(paragraphId, character)
+    );
+    this.editWait = new EditWait({
+      ydoc,
+      viewWaiting: () => this.viewWaiting,
+      nodeWaits: (nodeId) => editWaits(registry, this.identityMap.resolve(nodeId)),
+      publish: (waiting) => this.statusState.setWaiting(waiting) && this.notifyStatus(),
+    });
+    this.caretAnchors = new CaretAnchors({
+      registry,
+      port: () => this.port,
+      logicalIdOf: (nodeId) => this.identityMap.resolve(nodeId),
+      embedOf: (id) => materializer.builtNode(id),
+      viewIsCurrent: () => !this.viewWaiting,
+    });
+    ydoc.on('beforeTransaction', this.onBeforeYjsTransaction);
     ydoc.on('afterTransaction', this.onYjsTransaction);
     awareness.on('change', this.onAwarenessChange);
     this.stopBlobWatch = blobs.observeChanges((digests) => {
@@ -170,24 +191,10 @@ class DocumentSession implements DocumentCollaborationSession {
     this.stopSeedWatch = observeSeedRecords(ydoc, () => {
       this.setStatus('error', 'concurrent-seed');
     });
-    // A session that is never attached still reports `ready`, and in the connect-later flow a
-    // missed `key` remount silently stops replication. The failure codes are a closed core
-    // union with only terminal statuses, so this cannot be a typed non-fatal warning; a
-    // one-shot console.warn is the honest surface. Cleared on attach and on destroy.
-    this.attachWatchdog = setTimeout(() => {
+    this.attachWatchdog = startAttachWatchdog(this.documentId, attachWatchdogMs, () => {
       this.attachWatchdog = null;
-      if (this.destroyed || this.port) return;
-      console.warn(
-        `[docx-editor] The collaboration session for "${this.documentId}" was created ` +
-          `${attachWatchdogMs}ms ago and no editor attached its document port. The session ` +
-          `reports "ready" but no edits replicate. Remount the editor when the session ` +
-          `appears — for example pass key={session.sessionId} — so ` +
-          `collaborationModule({ session }) attaches it.`
-      );
-    }, attachWatchdogMs);
-    // Browsers have no unref; destroy clears the timer. Guarded unref keeps a short-lived
-    // Node host from waiting on the watchdog.
-    (this.attachWatchdog as { unref?: () => void }).unref?.();
+      return this.destroyed || this.port !== null;
+    });
   }
 
   get identity(): CollaborationIdentity {
@@ -229,7 +236,16 @@ class DocumentSession implements DocumentCollaborationSession {
     detail?: string
   ): void {
     if (this.destroyed) return;
-    if (this.statusState.status() === 'error' && status !== 'error') return;
+    if (this.statusState.status() === 'error' && status !== 'error') {
+      // A degraded session tracks the transport, so healing restores the connection's state.
+      // A reconnect is also a chance to heal: the update that failed may have been the last
+      // one a peer sent, and its sync can have filled the gap without a new transaction here.
+      if (this.healTo !== null) {
+        this.healTo = { status, code: reason, detail };
+        this.publishSharedToPort();
+      }
+      return;
+    }
     if (reason !== undefined) {
       this.setStatus(status, reason, detail);
       return;
@@ -279,6 +295,9 @@ class DocumentSession implements DocumentCollaborationSession {
       stopJournal();
       if (this.port === port) this.port = null;
       this.detachPort = null;
+      // No editor shows this session any more, so its caret leaves every peer's screen. The
+      // participant entry stays: the room is still open.
+      if (this.currentSelection) this.publishAwareness();
     };
     return () => this.detachPort?.();
   }
@@ -306,8 +325,8 @@ class DocumentSession implements DocumentCollaborationSession {
    *
    * A journal applies to the local Y.Doc either way, so a `disconnected` replica can keep
    * editing and its buffered updates merge on reconnect exactly as concurrent online edits
-   * do. Only the host can show an offline indicator, so it opts in. `initializing` stays
-   * refused (the bootstrap has not published a first revision) and `error` stays terminal.
+   * do. A host can opt out with `offlineEditing: false`. `initializing` stays refused (the
+   * bootstrap has not published a first revision) and `error` refuses edits.
    */
   private hasCompatibleSharedSchema(): boolean {
     const failure = packageVersionFailure(this.registry.schema.meta);
@@ -323,10 +342,26 @@ class DocumentSession implements DocumentCollaborationSession {
   }
 
   /** Every authorable mutation replicates, so only session readiness gates a write. */
-  gateOperations(_ops: readonly TreeDocOp[], _scope: StoryScope): CollaborationFailureCode | null {
+  gateOperations(ops: readonly TreeDocOp[], _scope: StoryScope): CollaborationFailureCode | null {
     if (this.destroyed) return 'collaboration-session-destroyed';
     if (!this.canWriteSharedState()) return 'collaboration-session-not-ready';
     if (!this.port) return 'collaboration-session-not-attached';
+    // An edit that a held-back update would refuse after the commit waits for it instead.
+    if (this.editWait.refuses(ops)) return 'collaboration-session-not-ready';
+    return this.textLimitFailure(ops);
+  }
+
+  /**
+   * Refuse an insert longer than one shared text admits, before the editor commits it.
+   * Shared state refuses it too, but after the commit, where the edit only disappears in the
+   * realign and its caller never learns why. Reads the operations alone, so a keystroke costs
+   * nothing more.
+   */
+  private textLimitFailure(ops: readonly TreeDocOp[]): CollaborationFailureCode | null {
+    const limit = this.registry.limits.maxTextLength;
+    for (const op of ops) {
+      if (op.op === 'insertText' && op.text.length > limit) return 'collaboration-text-limit';
+    }
     return null;
   }
 
@@ -346,26 +381,35 @@ class DocumentSession implements DocumentCollaborationSession {
   }
 
   undo(): boolean {
+    return this.popHistory('undo');
+  }
+
+  /** The selection the last undo or redo restored: the one its step was made from. */
+  historySelection(): CollaborationLocalSelection | null {
+    return this.historySelections.lastRestored();
+  }
+
+  redo(): boolean {
+    return this.popHistory('redo');
+  }
+
+  private popHistory(direction: 'undo' | 'redo'): boolean {
     if (!this.canWriteSharedState()) return false;
     this.flushPendingJournals();
     // The flush can refuse the queued journal and take this session to terminal `error`,
     // so the gate re-checks: undo must not write a room the session just diverged from.
     if (!this.canWriteSharedState()) return false;
-    if (this.undoManager.undoStack.length === 0) return false;
+    const stack = direction === 'undo' ? this.undoManager.undoStack : this.undoManager.redoStack;
+    if (stack.length === 0) return false;
     this.historyGroups.reset();
-    this.undoManager.undo();
-    this.registry.normalizeRestoredSplitTextAnchors();
-    return true;
-  }
-
-  redo(): boolean {
-    if (!this.canWriteSharedState()) return false;
-    this.flushPendingJournals();
-    if (!this.canWriteSharedState()) return false;
-    if (this.undoManager.redoStack.length === 0) return false;
-    this.historyGroups.reset();
-    this.undoManager.redo();
-    this.registry.normalizeRestoredSplitTextAnchors();
+    this.historySelections.noteBefore();
+    this.historySelections.startPop();
+    const from = Y.getState(this.ydoc.store, this.ydoc.clientID);
+    this.registry.takeUnlisted();
+    stepHistory(this.registry, this.undoManager, direction, () => {
+      this.registry.normalizeRestoredSplitTextAnchors();
+      markRestoredText(this.ydoc, from);
+    });
     return true;
   }
 
@@ -383,21 +427,19 @@ class DocumentSession implements DocumentCollaborationSession {
 
   setLocalSelection(selection: CollaborationLocalSelection | null): void {
     if (this.destroyed) return;
+    this.caretAnchors.track(selection);
     if (!selection) {
+      this.historySelections.track(null);
       this.publishAwareness();
       return;
     }
-    this.publishAwareness({
-      anchor: {
-        paragraphId: selection.anchor.paragraphId.toUpperCase(),
-        offset: Math.max(0, selection.anchor.offset),
-      },
-      head: {
-        paragraphId: selection.head.paragraphId.toUpperCase(),
-        offset: Math.max(0, selection.head.offset),
-      },
-      ...(selection.kind === 'cells' ? { kind: 'cells' as const } : {}),
-    });
+    const { encoded, texts } = encodeSelection(
+      selection,
+      (paragraphId) => this.port?.paragraphByStableId(paragraphId)?.text,
+      (point) => this.caretAnchors.characterOf(point)
+    );
+    this.historySelections.track(encoded, texts);
+    this.publishAwareness(encoded);
   }
 
   participants(): readonly CollaborationParticipant[] {
@@ -425,40 +467,11 @@ class DocumentSession implements DocumentCollaborationSession {
   }
 
   remoteSelections(): readonly CollaborationRemoteSelection[] {
-    const port = this.port;
-    if (!port) return [];
-    const resolve = (
-      address: EncodedSelectionAddress
-    ): CollaborationRemoteSelection['anchor'] | null => {
-      const paragraph = port.paragraphByStableId(address.paragraphId);
-      if (!paragraph) return null;
-      return Object.freeze({
-        paragraphId: paragraph.paragraphId,
-        nodeId: paragraph.nodeId,
-        offset: Math.min(address.offset, paragraph.text.length),
-      });
-    };
-    const states = [...this.awareness.getStates().entries()].slice(0, MAX_AWARENESS_STATES);
-    const selections: CollaborationRemoteSelection[] = [];
-    for (const [clientId, state] of states) {
-      if (clientId === this.awareness.clientID) continue;
-      const payload = awarenessPayload((state as Record<string, unknown>)[AWARENESS_FIELD]);
-      if (!payload?.selection) continue;
-      const anchor = resolve(payload.selection.anchor);
-      const head = resolve(payload.selection.head);
-      if (!anchor || !head) continue;
-      selections.push(
-        Object.freeze({
-          actorId: payload.actorId,
-          name: payload.name,
-          ...(payload.color ? { color: payload.color } : {}),
-          ...(payload.selection.kind === 'cells' ? { kind: 'cells' as const } : {}),
-          anchor,
-          head,
-        })
-      );
-    }
-    return Object.freeze(selections);
+    return this.port
+      ? this.remoteSelectionResolver.resolve(this.awareness, this.port, (paragraphId, character) =>
+          this.caretAnchors.find(paragraphId, character)
+        )
+      : [];
   }
 
   subscribeRemoteSelections(
@@ -502,9 +515,13 @@ class DocumentSession implements DocumentCollaborationSession {
     this.destroyed = true;
     this.stopBlobWatch();
     this.stopSeedWatch();
+    this.ydoc.off('beforeTransaction', this.onBeforeYjsTransaction);
     this.ydoc.off('afterTransaction', this.onYjsTransaction);
     this.awareness.off('change', this.onAwarenessChange);
-    this.awareness.setLocalState(null);
+    // Withdraw only this session's presence. The host owns the awareness and may keep its own
+    // fields on it; a hook that owns it destroys it, which removes the whole state.
+    this.awareness.setLocalStateField(AWARENESS_FIELD, null);
+    this.historySelections.destroy();
     this.undoManager.destroy();
     this.materializer.destroy();
     // The caller owns `ydoc` and can outlive this session, so the registry gives its
@@ -520,7 +537,12 @@ class DocumentSession implements DocumentCollaborationSession {
     // Custom ports and headless stores can publish without the editor's operation gate.
     // Enforce admission here too, before minting identities or publishing document/blob data.
     if (!this.canWriteSharedState()) return;
-    const projected = projectJournalToShared(this.registry, this.identityMap.translate(journal));
+    this.registry.inline.takeDrift();
+    const projected = projectTypingOrJournal(
+      this.registry,
+      this.identityMap.translate(journal),
+      (id) => this.materializer.shownPartChildren(id)
+    );
     if (!projected.ok) {
       this.refuseLocalJournal({
         code: projected.code as CollaborationFailureCode,
@@ -529,21 +551,29 @@ class DocumentSession implements DocumentCollaborationSession {
       return;
     }
     const shared = projected.journal;
-    const blobs = this.collectJournalBlobs(journal);
+    const blobs = collectJournalBlobs(this.port, journal);
     if (blobs !== null && blobs.ok === false) {
       this.refuseLocalJournal(blobs.failure);
       return;
     }
     // A custom blob reader can run host code; recheck after that callback before writing.
     if (!this.canWriteSharedState()) return;
+    let transient = false;
+    this.historySelections.noteBefore();
     const refusal = this.historyGroups.capture(historyGroupOfJournal(journal), () =>
       this.ydoc.transact((): CollaborationFailure | null => {
         if (blobs !== null) {
-          const published = this.putJournalBlobs(blobs.payloads);
+          const published = putJournalBlobs(this.blobs, blobs.payloads);
           if (published !== null) return published;
         }
-        const result = applyPrimitiveJournal(this.registry, shared);
+        const result = applyPrimitiveJournal(
+          this.registry,
+          shared,
+          projected.plan,
+          projected.typed
+        );
         if (!result.ok) {
+          transient = result.transient === true;
           return {
             code: result.code as CollaborationFailureCode,
             ...(result.detail ? { detail: result.detail } : {}),
@@ -553,60 +583,21 @@ class DocumentSession implements DocumentCollaborationSession {
       }, this.localOrigin)
     );
     if (refusal === null) {
-      this.refusedInARow = 0;
+      this.refusals.published();
+      // Shared state can show this edit differently from the tree the editor computed: an ID
+      // another paragraph also holds, text that follows a move. Take what shared state shows.
+      // Typing only splices text, which renames nothing; any other edit can.
+      const drift =
+        this.registry.inline.takeDrift() ||
+        (journal.effects.some((effect) => effect.kind !== 'spliceText') &&
+          viewRenamesPlan(this.registry, projected.plan));
+      if (drift) this.publishSharedToPort();
       return;
     }
-    this.refuseLocalJournal(refusal);
+    this.refuseLocalJournal(refusal, transient);
   }
 
-  /**
-   * Resolve local binary bytes named by this journal before the Yjs transaction opens.
-   *
-   * `putBinary` carries a digest, not the bytes. A peer that applies the descriptor
-   * without the payload fails materialize with `missing-blob` and keeps the old
-   * document — the image paste never arrives, even when the story text did.
-   * Bytes already live in the local package; a save/re-parse would walk every XML
-   * node while the transaction is open.
-   */
-  private collectJournalBlobs(
-    journal: CanonicalPrimitiveJournal
-  ):
-    | { readonly ok: true; readonly payloads: readonly BinaryPayload[] }
-    | { readonly ok: false; readonly failure: CollaborationFailure }
-    | null {
-    const port = this.port;
-    if (!port) {
-      const needed = journal.effects.some((effect) => effect.kind === 'putBinary');
-      return needed
-        ? {
-            ok: false,
-            failure: Object.freeze({ code: 'collaboration-session-not-attached' as const }),
-          }
-        : null;
-    }
-    const collected = collectJournalBinaryPayloads(journal.effects, binaryPartReaderOf(port));
-    if (collected === null) return null;
-    if (!collected.ok) {
-      return { ok: false, failure: Object.freeze(collected.failure) };
-    }
-    return collected;
-  }
-
-  private putJournalBlobs(payloads: readonly BinaryPayload[]): CollaborationFailure | null {
-    try {
-      publishBinaryPayloads(this.blobs, payloads);
-    } catch (error) {
-      return error instanceof CollaborationSchemaError
-        ? Object.freeze({
-            code: error.code,
-            ...(error.detail ? { detail: error.detail } : {}),
-          })
-        : Object.freeze({ code: 'blob-store-full' as const });
-    }
-    return null;
-  }
-
-  private refuseLocalJournal(refusal: CollaborationFailure): void {
+  private refuseLocalJournal(refusal: CollaborationFailure, transient = false): void {
     this.historyGroups.reset();
     this.undoManager.stopCapturing();
     // The status this replica held before the refusal. Recovery restores it, because a
@@ -616,9 +607,15 @@ class DocumentSession implements DocumentCollaborationSession {
     const before = this.statusState.snapshot();
     // The local store already committed this edit, so leaving it would make this replica
     // silently different from the room. Shared state is the authority: take it back.
-    this.refusedInARow += 1;
-    this.setStatus('error', refusal.code, refusal.detail);
-    this.publishSharedToPort();
+    // A refusal that waits on a peer's update is not evidence the next edit will fail too.
+    this.refusals.refusedOne(transient);
+    // Below the cap the realign is expected to succeed; if it cannot materialize yet, the
+    // session degrades and heals like any remote failure rather than ending here.
+    const heal = this.refusals.recoverable() ? healTargetOf(before) : null;
+    this.setStatus('error', refusal.code, refusal.detail, heal);
+    // A refused edit says this view and shared state disagree, so the realign does not trust
+    // the incremental view either: it rebuilds from shared state alone.
+    this.publishSharedToPort(true);
     // The flush loop took the whole batch before notifying, so the journals after this one are
     // already in flight. A microtask is the earliest point the synchronous batch is over.
     this.realignedInBatch = true;
@@ -631,7 +628,7 @@ class DocumentSession implements DocumentCollaborationSession {
     // so the session stops pretending it is healthy.
     const current = this.statusState.snapshot().reason;
     if (
-      this.refusedInARow < MAX_REFUSALS_IN_A_ROW &&
+      this.refusals.recoverable() &&
       this.statusState.status() === 'error' &&
       current !== undefined &&
       current.code === refusal.code &&
@@ -640,6 +637,16 @@ class DocumentSession implements DocumentCollaborationSession {
     ) {
       this.setStatus(before.status, before.reason?.code, before.reason?.detail);
     }
+  }
+
+  /** Before a change from elsewhere, while shared state still holds what the editor shows. */
+  private readonly onBeforeYjsTransaction = (transaction: Y.Transaction): void => {
+    if (transaction.origin === this.localOrigin) this.caretAnchors.localChange();
+    else this.caretAnchors.beforeChange();
+  };
+
+  remoteSelectionMove(): CollaborationSelectionMove | null {
+    return this.caretAnchors.move();
   }
 
   private readonly onYjsTransaction = (transaction: Y.Transaction): void => {
@@ -656,7 +663,7 @@ class DocumentSession implements DocumentCollaborationSession {
     this.publishSharedToPort();
   };
 
-  private publishSharedToPort(): void {
+  private publishSharedToPort(full = false): void {
     const port = this.port;
     if (!port || this.applyingRemote) return;
     this.applyingRemote = true;
@@ -667,15 +674,22 @@ class DocumentSession implements DocumentCollaborationSession {
         this.setStatus('error', exceeded.code, exceeded.detail);
         return;
       }
-      const materialized = this.materializer.current();
+      // Shared state that waits for a held-back update is incomplete: a replaced attribute can
+      // be gone before its new value arrives. The editor still follows it, so local edits
+      // address what shared state holds, but a view that incompleteness breaks is skipped
+      // rather than reported, and the update that completes it publishes again.
+      const waiting = awaitingUpdates(this.ydoc);
+      const materialized = full ? this.materializer.rebuildFull() : this.materializer.current();
       // After materializing, because that is what reads the blobs and so what hashes them.
       const poisoned = this.blobs.poisonedDigest();
       if (poisoned) {
         this.setStatus('error', 'blob-digest-mismatch', poisoned);
         return;
       }
+      this.viewWaiting = false;
       if (!materialized.ok) {
-        this.setStatus('error', materialized.code);
+        if (waiting) this.viewWaiting = true;
+        else this.degrade(materialized.code);
         return;
       }
       // The materializer repairs shared state it cannot express as a tree, and repair means
@@ -685,31 +699,45 @@ class DocumentSession implements DocumentCollaborationSession {
       // of content is the one outcome worse than refusing.
       const dropped = droppedContentDetail(materialized.issues);
       if (dropped) {
-        this.setStatus('error', 'materialize-dropped-content', dropped);
+        if (waiting) this.viewWaiting = true;
+        else this.degrade('materialize-dropped-content', dropped);
         return;
       }
-      this.remoteCounter += 1;
-      const result = port.applyRemotePackage(materialized.package, {
-        origin: ORIGIN_IDS.mutationRemote,
-        actorId: 'remote',
-        operationId: `${this.sessionId}:remote:${this.remoteCounter}`,
-      });
+      const apply = (pkg: OoxmlPackage) => {
+        this.remoteCounter += 1;
+        return port.applyRemotePackage(pkg, {
+          origin: ORIGIN_IDS.mutationRemote,
+          actorId: 'remote',
+          operationId: `${this.sessionId}:remote:${this.remoteCounter}`,
+        });
+      };
+      let result = apply(materialized.package);
       if (!result.ok) {
-        this.setStatus('error', 'remote-apply-failed', result.reason);
+        // The incremental view kept a subtree a concurrent edit invalidated. Rebuild the view
+        // from shared state alone, as every replica would, before calling the room broken.
+        const full = this.materializer.rebuildFull();
+        if (full.ok && !droppedContentDetail(full.issues)) result = apply(full.package);
+      }
+      if (!result.ok) {
+        if (waiting) this.viewWaiting = true;
+        else this.degrade('remote-apply-failed', result.reason);
         return;
       }
       // Every node in the canonical tree now carries a logical id, so no local mapping is
       // live. Keeping one would let a re-minted canonical id resolve to the wrong node.
       if (result.changed) this.identityMap.reset();
+      this.caretAnchors.afterPublish();
+      const heal = this.healTo;
+      if (heal !== null) this.setStatus(heal.status, heal.code, heal.detail);
     } catch (error) {
-      this.setStatus(
-        'error',
+      this.degrade(
         error instanceof CollaborationSchemaError ? error.code : 'remote-apply-failed',
         error instanceof CollaborationSchemaError ? error.detail : undefined
       );
     } finally {
       this.applyingRemote = false;
       this.drainJournalsHeldDuringRemote();
+      this.editWait.refresh();
     }
   }
 
@@ -768,12 +796,28 @@ class DocumentSession implements DocumentCollaborationSession {
     this.awareness.setLocalStateField(AWARENESS_FIELD, payload);
   }
 
+  /**
+   * A remote update this replica could not express yet. Yjs editors never stop on one: the
+   * view keeps the last good document, and the next update usually completes what this one
+   * started. So the session reports `error` (edits pause) but heals on the next clean apply.
+   */
+  private degrade(code: CollaborationFailureCode, detail?: string): void {
+    this.setStatus('error', code, detail, this.healTo ?? healTargetOf(this.statusState.snapshot()));
+  }
+
+  /** `heal` arms healing for an `error`: the status the next clean update restores. */
   private setStatus(
     status: CollaborationStatus,
     code?: CollaborationFailureCode,
-    detail?: string
+    detail?: string,
+    heal: HealTarget | null = null
   ): void {
-    if (!this.statusState.set(status, code, detail)) return;
+    // Any other route into `error` is terminal; only a degrade or a refusal arms healing.
+    this.healTo = status === 'error' ? heal : null;
+    if (this.statusState.set(status, code, detail, this.healTo !== null)) this.notifyStatus();
+  }
+
+  private notifyStatus(): void {
     const snapshot = this.statusState.snapshot();
     for (const listener of [...this.statusListeners]) {
       listener(snapshot.status, snapshot.reason?.code, snapshot.reason?.detail);
@@ -782,12 +826,24 @@ class DocumentSession implements DocumentCollaborationSession {
 }
 
 /**
- * Full-document collaboration session.
- *
- * The seam matches {@link TextCollaborationSession}, plus a live display-identity update.
+ * Full-document collaboration session: the engine-facing seam, the transport status a
+ * provider sets, and a live display-identity update.
  * @public
  */
-export interface DocumentCollaborationSession extends TextCollaborationSession {
+export interface DocumentCollaborationSession extends EditorCollaborationSession {
+  /**
+   * Provider convenience seam. Low-level consumers normally leave the session ready.
+   *
+   * `reason` is a typed code so a host can branch on it: pass `'transport-disconnected'` for
+   * a socket that will retry itself and `'authentication-failed'` for a credential the server
+   * rejected, because those need opposite responses. The provider's own phrasing goes in
+   * `detail`.
+   */
+  setTransportStatus(
+    status: 'ready' | 'disconnected' | 'error',
+    reason?: CollaborationFailureCode,
+    detail?: string
+  ): void;
   /**
    * Update the display identity for the rest of this session and republish presence.
    *
@@ -813,37 +869,38 @@ export interface DocumentCollaborationSession extends TextCollaborationSession {
 /** Owned full-document collaboration replica. @public */
 export type DocumentCollaborationHandle = CollaborationHandle<DocumentCollaborationSession>;
 
-/**
- * Options for one full-document collaboration replica.
- *
- * The caller owns `ydoc`.
- * @public
- */
-export interface CreateDocumentCollaborationOptions {
-  readonly ydoc: Y.Doc;
-  readonly awareness: Awareness;
-  readonly documentId: string;
-  /** Unique attachment identity. Omit it to generate a new identity for this session. */
-  readonly sessionId?: string;
-  readonly identity: CollaborationIdentity;
-  readonly bootstrap: CollaborationBootstrap;
-  /**
-   * Admit local edits while the transport is `disconnected`.
-   *
-   * A journal applies to the local `Y.Doc` either way, so buffered offline edits merge on
-   * reconnect exactly as concurrent online edits do. Off by default: a host that shows no
-   * offline indicator would let users type into a document no peer receives yet. `error`
-   * stays terminal and `initializing` stays refused regardless of this option.
-   */
-  readonly offlineEditing?: boolean;
-}
-
+export type { CreateDocumentCollaborationOptions } from './document-session-options.ts';
 export { readCollaborationDocument } from './document-read.ts';
 
 /**
  * Create or join one full-document collaboration replica.
  *
- * The caller owns `ydoc`.
+ * The caller owns `ydoc`, `awareness`, and the provider, and destroys them after
+ * `handle.destroy()`.
+ *
+ * @throws CollaborationSchemaError when the replica cannot start:
+ * `invalid-document-id`, `invalid-session-id`, `invalid-identity`, or
+ * `invalid-identity-color` for a bad option; `initialization-timeout` or
+ * `initialization-aborted` when no room arrived; `already-initialized` for `create` on a
+ * seeded room; `document-id-mismatch` for a room of another document;
+ * `protocol-version-mismatch` or `schema-version-mismatch` for a room of another format;
+ * `baseline-too-large`, `invalid-baseline`, or `no-main-document-part` for seed bytes that
+ * cannot open; `concurrent-seed` or `blob-digest-mismatch` for a damaged room; a resource
+ * limit code such as `too-many-nodes` or `blob-store-full`; or `missing-blob`,
+ * `missing-root`, or `invalid-relationships` for shared state that does not form a document.
+ *
+ * @example
+ * ```ts
+ * await new Promise((resolve) => provider.once('sync', resolve));
+ * const room = await createDocumentCollaboration({
+ *   ydoc,
+ *   awareness,
+ *   documentId: 'room-1',
+ *   identity: { actorId: 'user-1', name: 'Ada' },
+ *   bootstrap: { kind: 'join' },
+ * });
+ * // Mount the editor with room.document and collaborationModule({ session: room.session }).
+ * ```
  * @public
  */
 export async function createDocumentCollaboration(
@@ -887,73 +944,13 @@ async function bootstrapDocumentReplica(
   context: DocumentReplicaContext
 ): Promise<DocumentCollaborationHandle> {
   const { attachWatchdogMs, documentId, sessionId, identity, registry } = context;
-  const identityMap = new LogicalIdentityMap((logicalId) => registry.hasNode(logicalId));
+  // A run, text element or wrapper lives in its paragraph's shared text, not as a record.
+  const identityMap = new LogicalIdentityMap(
+    (logicalId) => registry.hasNode(logicalId) || registry.inline.owner(logicalId) !== null
+  );
   const blobs = new SharedBlobStore(options.ydoc.getMap<Uint8Array>(SHARED_BLOBS_KEY));
 
-  if (options.bootstrap.kind === 'create') {
-    if (registry.schema.meta.get('initialized') === true) {
-      throw new CollaborationSchemaError('already-initialized');
-    }
-    const seeded = await seedPackage(
-      registry,
-      openBaselinePackage(options.bootstrap.document),
-      blobs
-    );
-    if (!seeded.ok) throw new CollaborationSchemaError(seeded.code);
-    options.ydoc.transact(() => {
-      registry.schema.meta.set('documentId', documentId);
-    });
-  } else if (options.bootstrap.kind === 'create-or-join') {
-    const outcome = await runCreateOrJoinBootstrap({
-      ydoc: options.ydoc,
-      awareness: options.awareness,
-      registry,
-      blobs,
-      documentId,
-      document: options.bootstrap.document,
-      probeTimeoutMs: options.bootstrap.probeTimeoutMs,
-      electionWindowMs: options.bootstrap.electionWindowMs,
-      timeoutMs: options.bootstrap.timeoutMs,
-      signal: options.bootstrap.signal,
-    });
-    if (outcome === 'joined') {
-      if (registry.schema.meta.get('documentId') !== documentId) {
-        throw new CollaborationSchemaError('document-id-mismatch');
-      }
-      // Same rebuild as the join path: shared state arrived before this registry existed.
-      const versionFailure = packageVersionFailure(registry.schema.meta);
-      if (versionFailure)
-        throw new CollaborationSchemaError(versionFailure.code, versionFailure.detail);
-      registry.rebuildDerivedIndexes();
-    }
-  } else {
-    await waitForSharedInitialization(
-      registry,
-      blobs,
-      options.bootstrap.timeoutMs ?? DEFAULT_INITIALIZATION_TIMEOUT_MS,
-      options.bootstrap.signal
-    );
-    if (registry.schema.meta.get('documentId') !== documentId) {
-      throw new CollaborationSchemaError('document-id-mismatch');
-    }
-    // Shared state can arrive before this registry exists, and the derived parent index is
-    // built from child-array EVENTS. Without one rebuild here a joiner materializes a
-    // document with no known parents.
-    const versionFailure = packageVersionFailure(registry.schema.meta);
-    if (versionFailure)
-      throw new CollaborationSchemaError(versionFailure.code, versionFailure.detail);
-    registry.rebuildDerivedIndexes();
-  }
-
-  // Two merged seed transactions duplicate the whole document, and no client can pick one
-  // side. Refuse the room before any edit can ride on it; a legacy room with no seed
-  // records (or exactly one) passes.
-  if (seedRecordCount(options.ydoc) > 1) {
-    throw new CollaborationSchemaError('concurrent-seed');
-  }
-
-  const exceeded = limitFailure(registry, blobs);
-  if (exceeded) throw new CollaborationSchemaError(exceeded.code, exceeded.detail);
+  await initializeSharedState(options, registry, blobs, documentId);
 
   const materializer = new PackageMaterializer(registry, blobs);
   // Any throw between here and the return leaks the materializer's observers on the
@@ -985,7 +982,7 @@ async function bootstrapDocumentReplica(
       identityMap,
       blobs,
       attachWatchdogMs,
-      options.offlineEditing === true
+      options.offlineEditing !== false
     );
     return Object.freeze({
       document,

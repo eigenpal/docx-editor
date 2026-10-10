@@ -60,6 +60,11 @@ export interface CollaborationDocumentPort {
   paragraphs(): readonly CollaborationParagraph[];
   paragraphByNodeId(nodeId: string): CollaborationParagraph | null;
   /**
+   * The model text of the paragraph with this node id in any story, or null when the editor
+   * shows none. A lookup by node id, whatever the paragraph's `w14:paraId`. Optional.
+   */
+  paragraphTextOf?(nodeId: string): string | null;
+  /**
    * Resolve a stable `w14:paraId` in any story this replica holds.
    *
    * `paragraphs()` stays body-only because text publication transacts against the body
@@ -116,6 +121,7 @@ export {
   type CreateCollaborationDocumentPortOptions,
 } from './document-port.ts';
 export { historyGroupOfJournal } from './primitive-journal.ts';
+export { mapOffsetAcrossText } from './offset-mapping.ts';
 export type { HistoryGroup } from '../store/store/history-group.ts';
 export type {
   CanonicalAttributeName,

@@ -22,7 +22,7 @@ export function failureMessage(
       title: t('collaborationDemo.serverRecovery.versionTitle'),
       body: t('collaborationDemo.serverRecovery.versionBody'),
       documentation: {
-        url: 'https://www.docx-editor.dev/docs/latest/pro/collaboration-versions',
+        url: 'https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions',
         label: t('collaborationDemo.serverRecovery.upgradeGuide'),
       },
     };

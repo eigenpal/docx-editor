@@ -4,6 +4,7 @@
 // section-ending paragraphs and content-control wrappers. A fresh-document write must remove
 // those blocks, while a body must retain its final `w:sectPr` page setup.
 
+import { actorScopedSeed } from '../package/actor-scoped-ids.ts';
 import { areInsertableTexts, textWithHyphens } from './tree-op-inline-elements.ts';
 import { createNodeIdAllocator, findNode, replaceChildren } from '../package/ooxml-edit.ts';
 import {
@@ -76,7 +77,7 @@ function paragraph(
   }
   const identity: OoxmlAttribute[] = [];
   if (w14Prefix !== null) {
-    const paraId = mintParaId(seed, usedParagraphIds);
+    const paraId = mintParaId(actorScopedSeed(seed), usedParagraphIds);
     usedParagraphIds.add(paraId);
     identity.push(...mintedParagraphIdentityAttributes(w14Prefix, paraId));
   }

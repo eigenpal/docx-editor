@@ -139,11 +139,11 @@ test('a remote edit before the caret in its paragraph leaves a valid caret', asy
     expect(right.editor.exec({ type: 'insertText', text: 'Q' }).ok).toBe(true);
     await Promise.resolve();
 
-    // Whether the local offset follows the remote insertion belongs to the collaboration
-    // session; either way the caret stays on a painted line and keeps editing.
+    // The caret stays next to its character: the remote insertion before it moves it one
+    // offset on, and it stays on a painted line and keeps editing.
     const head = surface.state().selection.head;
     expect(head.paragraphId).toBe(paragraphId);
-    expect([b, b + 1]).toContain(head.offset);
+    expect(head.offset).toBe(b + 1);
     expect(paintedLine(left.editor, left.container, paragraphId)).toBeGreaterThanOrEqual(0);
     surface.navigate('lineStart');
     surface.type('#');

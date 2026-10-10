@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Customization guidance appears in separate guides.",
+  "after": "Customization guides use contract previews and existing editor APIs.",
+  "reason": "Documentation and application presentation do not change shared state or synchronization.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-revision-markup.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-revisions.test.ts"
+  ],
+  "changeset": null,
+  "migration": null
+}

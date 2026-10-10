@@ -12,9 +12,9 @@ import * as Y from 'yjs';
 import type { Awareness } from 'y-protocols/awareness';
 import {
   createHocuspocusCollaboration,
-  HOCUSPOCUS_PROVIDER_FOR_TESTS,
   type CreateHocuspocusCollaborationOptions,
 } from '../hocuspocus.ts';
+import { HOCUSPOCUS_PROVIDER_FOR_TESTS } from '../hocuspocus-test-provider.ts';
 import { collaborationDocx } from './support.ts';
 
 const ROOM_ID = 'aaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -50,6 +50,17 @@ class FakeProvider {
   destroy(): void {
     this.destroyCount += 1;
   }
+}
+
+/** A provider whose server answers at once, optionally with a room that already exists. */
+function syncedProvider(init: FakeProviderInit, roomState?: Uint8Array): FakeProvider {
+  const provider = new FakeProvider(init);
+  setTimeout(() => {
+    if (roomState) Y.applyUpdate(init.document, roomState);
+    provider.isSynced = true;
+    provider.emit('synced', { state: true });
+  }, 0);
+  return provider;
 }
 
 function optionsWithFactory(
@@ -173,7 +184,7 @@ describe('createHocuspocusCollaboration', () => {
           bootstrap: { kind: 'create', document: collaborationDocx() },
         },
         (init) => {
-          connected = new FakeProvider(init);
+          connected = syncedProvider(init);
           return connected;
         }
       )
@@ -198,7 +209,7 @@ describe('createHocuspocusCollaboration', () => {
           bootstrap: { kind: 'create', document: collaborationDocx() },
         },
         (init) => {
-          provider = new FakeProvider(init);
+          provider = syncedProvider(init);
           return provider;
         }
       )
@@ -229,7 +240,7 @@ describe('createHocuspocusCollaboration', () => {
           bootstrap: { kind: 'create', document: collaborationDocx() },
         },
         (init) => {
-          provider = new FakeProvider(init);
+          provider = syncedProvider(init);
           return provider;
         }
       )
@@ -238,8 +249,7 @@ describe('createHocuspocusCollaboration', () => {
     room.destroy();
   });
 
-  test('create seeds the shared document before the provider connects', async () => {
-    let seededBytesAtConnect = -1;
+  test('create syncs with the server first, then seeds an empty room', async () => {
     let provider: FakeProvider | undefined;
     const room = await createHocuspocusCollaboration(
       optionsWithFactory(
@@ -251,15 +261,13 @@ describe('createHocuspocusCollaboration', () => {
           bootstrap: { kind: 'create', document: collaborationDocx() },
         },
         (init) => {
-          seededBytesAtConnect = Y.encodeStateAsUpdate(init.document).byteLength;
-          provider = new FakeProvider(init);
+          // Nothing is seeded before the server has answered.
+          expect(Y.encodeStateAsUpdate(init.document).byteLength).toBeLessThan(10);
+          provider = syncedProvider(init);
           return provider;
         }
       )
     );
-    // The provider was constructed AFTER the seed, so the first broadcast is a complete
-    // document rather than something half-seeded.
-    expect(seededBytesAtConnect).toBeGreaterThan(100);
     expect(provider?.init.name).toBe(ROOM_ID);
     expect(provider?.init.token).toBe('server-token');
     expect(room.document.byteLength).toBeGreaterThan(0);
@@ -268,6 +276,59 @@ describe('createHocuspocusCollaboration', () => {
     room.destroy();
     expect(provider?.destroyCount).toBe(1);
     expect(room.ydoc.isDestroyed).toBe(true);
+  });
+
+  test('create-or-join skips the probe after the server sync, so an empty room opens fast', async () => {
+    const started = Date.now();
+    const room = await createHocuspocusCollaboration(
+      optionsWithFactory(
+        {
+          url: URL,
+          roomId: ROOM_ID,
+          identity: IDENTITY,
+          bootstrap: { kind: 'create-or-join', document: collaborationDocx() },
+        },
+        (init) => syncedProvider(init)
+      )
+    );
+    // Only the 1.5 s election remains; the 4 s probe found nothing a sync had not shown.
+    expect(Date.now() - started).toBeLessThan(3_000);
+    expect(room.session.status()).toBe('ready');
+    room.destroy();
+  });
+
+  test('create refuses a room that already holds a document instead of seeding it twice', async () => {
+    const creator = await createHocuspocusCollaboration(
+      optionsWithFactory(
+        {
+          url: URL,
+          roomId: ROOM_ID,
+          identity: IDENTITY,
+          bootstrap: { kind: 'create', document: collaborationDocx() },
+        },
+        (init) => syncedProvider(init)
+      )
+    );
+    const existing = Y.encodeStateAsUpdate(creator.ydoc);
+    let second: FakeProvider | undefined;
+    await expect(
+      createHocuspocusCollaboration(
+        optionsWithFactory(
+          {
+            url: URL,
+            roomId: ROOM_ID,
+            identity: IDENTITY,
+            bootstrap: { kind: 'create', document: collaborationDocx() },
+          },
+          (init) => {
+            second = syncedProvider(init, existing);
+            return second;
+          }
+        )
+      )
+    ).rejects.toMatchObject({ code: 'already-initialized' });
+    expect(second?.destroyCount).toBe(1);
+    creator.destroy();
   });
 
   test('status events map to transport status on the session', async () => {
@@ -281,7 +342,7 @@ describe('createHocuspocusCollaboration', () => {
           bootstrap: { kind: 'create', document: collaborationDocx() },
         },
         (init) => {
-          provider = new FakeProvider(init);
+          provider = syncedProvider(init);
           return provider;
         }
       )
@@ -310,7 +371,7 @@ describe('createHocuspocusCollaboration', () => {
           identity: IDENTITY,
           bootstrap: { kind: 'create', document: collaborationDocx() },
         },
-        (init) => new FakeProvider(init)
+        (init) => syncedProvider(init)
       )
     );
     const sharedState = Y.encodeStateAsUpdate(creator.ydoc);

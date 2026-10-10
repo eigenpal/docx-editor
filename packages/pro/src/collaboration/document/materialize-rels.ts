@@ -10,20 +10,21 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // helpers rebuild that tree from the records, reusing every child element whose record still
 // says the same thing, because the part object's identity is a cache key downstream.
 
+import { attributeValue } from './materialize-freeze.ts';
 import type {
   OoxmlAttribute,
   OoxmlElement,
   OoxmlNode,
   OoxmlPart,
 } from '@docx-editor.dev/core/store';
-import type { LogicalId } from './identity.ts';
+import { elementFrom } from './node-shapes.ts';
+import { asLogicalId, idOf, type LogicalId } from './identity.ts';
 import { rejectDangerousKey, rejectPartName } from './limits.ts';
 import type { EncodedRelationship } from './schema.ts';
 
-export const PACKAGE_RELATIONSHIPS_NAMESPACE =
+const PACKAGE_RELATIONSHIPS_NAMESPACE =
   'http://schemas.openxmlformats.org/package/2006/relationships';
-export const RELATIONSHIPS_CONTENT_TYPE =
-  'application/vnd.openxmlformats-package.relationships+xml';
+const RELATIONSHIPS_CONTENT_TYPE = 'application/vnd.openxmlformats-package.relationships+xml';
 
 const RELS_PART_NAME_RE = /^(.*)\/_rels\/([^/]*)\.rels$/;
 
@@ -35,10 +36,6 @@ export function relsOwnerOf(relsName: string): string | null {
   const match = RELS_PART_NAME_RE.exec(relsName);
   if (!match) return null;
   return match[2] === '' ? '/' : `${match[1]}/${match[2]}`;
-}
-
-function attributeValue(node: OoxmlElement, localName: string): string | undefined {
-  return node.attributes.find((attribute) => attribute.localName === localName)?.value;
 }
 
 function freezeRelationshipAttribute(localName: string, value: string): OoxmlAttribute {
@@ -67,18 +64,20 @@ function freezeRelationshipElement(
   if (record.targetMode === 'External') {
     attributes.push(freezeRelationshipAttribute('TargetMode', 'External'));
   }
-  return Object.freeze({
-    id: logicalId,
-    kind: 'generic',
-    namespaceUri: PACKAGE_RELATIONSHIPS_NAMESPACE,
-    localName: 'Relationship',
-    namespaceBindings: Object.freeze([]),
-    attributes: Object.freeze(attributes),
-    children: Object.freeze([]),
-  }) as OoxmlElement;
+  return Object.freeze(
+    elementFrom({
+      id: logicalId,
+      kind: 'generic',
+      namespaceUri: PACKAGE_RELATIONSHIPS_NAMESPACE,
+      localName: 'Relationship',
+      namespaceBindings: Object.freeze([]),
+      attributes: Object.freeze(attributes),
+      children: Object.freeze([]),
+    })
+  );
 }
 
-export function relationshipMatchesRecord(node: OoxmlNode, record: EncodedRelationship): boolean {
+function relationshipMatchesRecord(node: OoxmlNode, record: EncodedRelationship): boolean {
   if (node.kind === 'textValue') return false;
   if (node.namespaceUri !== PACKAGE_RELATIONSHIPS_NAMESPACE) return false;
   if (node.localName !== 'Relationship') return false;
@@ -137,7 +136,9 @@ export function relationshipChildrenOf(
       continue;
     }
     const logicalId =
-      existing && existing.kind !== 'textValue' ? existing.id : `${relsName}#rel-${record.id}`;
+      existing && existing.kind !== 'textValue'
+        ? idOf(existing)
+        : asLogicalId(`${relsName}#rel-${record.id}`);
     if (rejectDangerousKey(logicalId)) continue;
     next.push(freezeRelationshipElement(logicalId, record));
   }
@@ -145,17 +146,19 @@ export function relationshipChildrenOf(
 }
 
 function emptyRelationshipsRoot(relsName: string): OoxmlElement {
-  return Object.freeze({
-    id: `${relsName}#root`,
-    kind: 'generic',
-    namespaceUri: PACKAGE_RELATIONSHIPS_NAMESPACE,
-    localName: 'Relationships',
-    namespaceBindings: Object.freeze([
-      Object.freeze({ prefix: '', namespaceUri: PACKAGE_RELATIONSHIPS_NAMESPACE }),
-    ]),
-    attributes: Object.freeze([]),
-    children: Object.freeze([]),
-  }) as OoxmlElement;
+  return Object.freeze(
+    elementFrom({
+      id: `${relsName}#root`,
+      kind: 'generic',
+      namespaceUri: PACKAGE_RELATIONSHIPS_NAMESPACE,
+      localName: 'Relationships',
+      namespaceBindings: Object.freeze([
+        Object.freeze({ prefix: '', namespaceUri: PACKAGE_RELATIONSHIPS_NAMESPACE }),
+      ]),
+      attributes: Object.freeze([]),
+      children: Object.freeze([]),
+    })
+  );
 }
 
 export function emptyRelsPart(relsName: string): OoxmlPart {

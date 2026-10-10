@@ -863,7 +863,20 @@
   },
   "collaboration": {
     "moreParticipants": "{count, plural, other {另有 # 人}}",
-    "participants": "此文档中的参与者"
+    "participants": "此文档中的参与者",
+    "status": {
+      "connecting": "正在连接到文档…",
+      "editRefused": "你上一次的更改无法共享，因此已撤销。",
+      "offline": "已离线。你可以继续编辑；连接恢复后，你的更改会同步。",
+      "outOfSync": "此副本与共享文档不同步。",
+      "rejoin": "重新加入",
+      "syncing": "正在同步最新更改…",
+      "waiting": "正在等待最新更改…",
+      "stalled": "最新更改尚未到达。请重新加入以加载共享文档。",
+      "offlinePaused": "已离线。连接恢复后可继续编辑。",
+      "upgradeRequired": "此应用与共享文档使用的协作版本不同。请保存副本并联系管理员。",
+      "newRoomRequired": "此共享文档无法继续。请保存副本并重新共享。"
+    }
   },
   "textFormField": {
     "apply": "确定",

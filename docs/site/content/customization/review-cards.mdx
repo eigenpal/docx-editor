@@ -1,0 +1,239 @@
+---
+title: 'Comments and review cards'
+description: 'Customize DOCX editor comment boxes and review cards with named parts, author styling, reply controls, and custom templates.'
+category: 'Customization'
+---
+
+Pass a card class through `card`. Compose `Author`, `Summary`, `Accept`, `Reject`, `Replies`, and `Reply` parts.
+
+Use `List` for custom cards. Its React callback or Vue `#item` slot supplies each review item. `useReviewItem()` reads the surrounding card item.
+
+Use `useReviewAuthor()` for the resolved author color and avatar. To choose between initials badges and the comment icon on collapsed markers, set the `commentMarkers` review pane setting. Use `Markers` with an `icon` function for marker icons of your own. Keep rejected writes visible to the user.
+
+To list comments only and open each tracked change in a tracked change balloon at its text, set `revisionsIn: 'balloons'` instead of a filter. A comments-only `filter` hides revision cards and gives no other route to revision decisions. For more information, see [Tracked changes](/docs/2.x/customization/tracked-changes#choose-where-tracked-changes-appear).
+
+<CustomizationDemo topic="review-cards" />
+
+## Comment and review card options
+
+Customize the DOCX editor review column separately from its comment boxes and tracked change cards. The review module keeps document state. These components control its presentation.
+
+### Review column configuration
+
+| Prop                | Default or use                                                      |
+| ------------------- | ------------------------------------------------------------------- |
+| `className`         | Styles the review column.                                           |
+| `card.className`    | Adds a class to every card.                                         |
+| `preset`            | `true`; use `false` to compose the column yourself.                 |
+| `stack`             | `true`; prevents cards from overlapping.                            |
+| `gap`               | Pixel distance between stacked cards.                               |
+| `filter`            | Chooses which review items this column shows.                       |
+| `structural`        | `true`; keeps structural decisions in the sidebar.                  |
+| `formatting`        | `false`; formatting with page anchors uses tracked change balloons. |
+| `furniture`         | Adds application content at the column's start while it is open.    |
+| `t`                 | Resolves review labels.                                             |
+| `hidden`, `asChild` | Controls the column part's rendering.                               |
+
+The column owns the spacing between stacked cards. Use `gap` instead of adding card margins. When `stack={false}`, cards stay at their raw text anchors. Filtering the column does not resolve, delete, accept, or reject an item. Keep every required review decision reachable through another surface when you hide it here.
+
+### Named review parts
+
+| Part                          | What you can customize                               |
+| ----------------------------- | ---------------------------------------------------- |
+| `List`                        | Item rendering and complete card templates.          |
+| `Card`                        | Card wrapper, shape, background, and custom element. |
+| `Avatar`, `Author`, `Time`    | Author identity and metadata presentation.           |
+| `Summary`                     | Comment text or tracked change summary presentation. |
+| `Accept`, `Reject`            | Tracked change decision controls.                    |
+| `Resolve`, `Reopen`, `Delete` | Comment thread actions.                              |
+| `Replies`                     | Existing replies.                                    |
+| `Reply`                       | Reply input and submission controls.                 |
+| `Draft`                       | Comment draft input and submission controls.         |
+| `AddComment`                  | Opens a comment draft from the review column.        |
+| `Empty`                       | Empty review state.                                  |
+| `Markers`                     | Collapsed review markers and per-item icons.         |
+| `Balloon`                     | Built-in tracked change balloon class or visibility. |
+
+Standard review parts accept `className`, `hidden`, `asChild`, and children where supported. Action parts also accept `icon`. `Markers` accepts `className`, `hidden`, and an icon or an item-dependent icon callback. Its geometry props come from the review column. Keep those supplied values in an override. `Balloon` accepts only `className` and `hidden`. Use the tracked changes guide for a complete replacement.
+
+### Card states and CSS properties
+
+Select your own card class with these attributes. Presence attributes use selectors such as `[data-active]`, rather than `[data-active="true"]`.
+
+| Attribute                 | Meaning                                               |
+| ------------------------- | ----------------------------------------------------- |
+| `data-kind`               | Comment, custom item, or tracked change kind.         |
+| `data-active`             | The active review item.                               |
+| `data-resolved`           | A resolved comment thread.                            |
+| `data-resolved-miniature` | The built-in collapsed resolved comment presentation. |
+| `data-review-author`      | Author name.                                          |
+| `data-review-author-slot` | Assigned author color slot.                           |
+| `data-node-name`          | Custom document node type on a custom review card.    |
+
+| CSS property | Use |
+| --- | --- |
+| `--doc-card` | Resting card surface. |
+| `--doc-review-card-active-bg` | Active card surface. |
+| `--doc-card-shadow`, `--doc-card-shadow-strong` | Resting and stronger card shadows. |
+| `--doc-review-author-0` through `--doc-review-author-7` | Author palette shared with document marks. |
+| `--doc-review-avatar-ink` | Initials on filled author avatars. |
+| `--doc-comment-bg`, `--doc-comment-border` | Resting comment range highlight. |
+| `--doc-comment-active-bg`, `--doc-comment-active-border` | Active comment range highlight. |
+| `--doc-comment-resolved-active-bg`, `--doc-comment-resolved-active-border` | Active resolved comment range highlight. |
+
+Author declarations can set a specific author's color and avatar. Use [Tracked changes](/docs/2.x/customization/tracked-changes#set-author-colors-and-avatars) for the shared author configuration.
+
+### Complete custom comment boxes
+
+Use `List` item rendering for a complete custom card template. Keep the `Card` context around parts that read the current item. Use `useReviewItem` inside that context to read the selected item's view. Use `useReviewAuthor(item.author)` for its author presentation.
+
+Keep actions connected to review state and engine capability checks. A custom comment box must still show failed submissions and unavailable actions. Preserve reply input focus during typing. Preserve document selection when an action only opens interface controls. Resolved built-in comment cards support a compact presentation and an expanded thread. Replacing the whole card also replaces that presentation, so implement the states your application needs.
+
+## React and Vue reference
+
+Pass your DOCX bytes and loaded fonts to this component. The preview uses a fictional contract.
+
+<FrameworkTabs variant="block">
+<Framework value="react">
+
+```tsx
+import { DocxEditor, type DocxEditorRootProps } from '@docx-editor.dev/react';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
+import '@docx-editor.dev/core/styles/editor.css';
+
+const modules = [reviewModule()];
+
+export function ContractEditor({
+  bytes,
+  fonts,
+}: {
+  bytes: Uint8Array;
+  fonts: DocxEditorRootProps['fonts'];
+}) {
+  return (
+    <div className="docx-editor contract-workspace">
+      <DocxEditor.Root
+        document={bytes}
+        fonts={fonts}
+        modules={modules}
+        author="Demo reviewer"
+        mode="suggesting"
+        reviewDisplayMode="all-markup"
+      >
+        <DocxEditor.Toolbar />
+        <DocxEditor.Viewport style={{ height: 520 }}>
+          <DocxEditor.Content />
+          <DocxEditor.HyperLink />
+          <DocxEditor.ContextMenu />
+          <DocxEditorReview card={{ className: 'contract-card' }}>
+            <DocxEditorReview.Author />
+            <DocxEditorReview.Summary className="contract-comment-body" />
+            <DocxEditorReview.Accept icon={<span>Accept</span>} />
+            <DocxEditorReview.Reject icon={<span>Reject</span>} />
+            <DocxEditorReview.Replies className="contract-thread" />
+            <DocxEditorReview.Reply className="contract-reply" />
+          </DocxEditorReview>
+        </DocxEditor.Viewport>
+      </DocxEditor.Root>
+    </div>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/vue';
+import type { FontConfigurationFragment } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/core/styles/editor.css';
+
+defineProps<{ bytes: Uint8Array; fonts: FontConfigurationFragment }>();
+const modules = [reviewModule()];
+</script>
+
+<template>
+  <div class="docx-editor contract-workspace">
+    <DocxEditor.Root
+      :document="bytes"
+      :fonts="fonts"
+      :modules="modules"
+      author="Demo reviewer"
+      mode="suggesting"
+      review-display-mode="all-markup"
+    >
+      <DocxEditor.Toolbar />
+      <DocxEditor.Viewport :style="{ height: '520px' }">
+        <DocxEditor.Content />
+        <DocxEditor.HyperLink />
+        <DocxEditor.ContextMenu />
+        <DocxEditorReview :card="{ className: 'contract-card' }">
+          <DocxEditorReview.Author />
+          <DocxEditorReview.Summary class-name="contract-comment-body" />
+          <DocxEditorReview.Accept />
+          <DocxEditorReview.Reject />
+          <DocxEditorReview.Replies class-name="contract-thread" />
+          <DocxEditorReview.Reply class-name="contract-reply" />
+        </DocxEditorReview>
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  </div>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+## Style card parts
+
+Add a selector under your editor wrapper. Use the resolved author token for the leading border.
+
+```css
+.docx-editor.contract-workspace .contract-card {
+  border-radius: 12px;
+  border-inline-start: 3px solid var(--doc-review-author-current);
+  background: var(--doc-surface);
+  box-shadow: 0 3px 14px var(--doc-border);
+}
+.docx-editor.contract-workspace .contract-card[data-active] {
+  background: var(--doc-review-card-active-bg);
+}
+```
+
+Use `card.className` for every card. Root `className` styles the review column. Custom card arrangements must retain reply, resolve, accept, and reject actions that your workflow needs.
+
+## Choose a comment box style
+
+The live example offers rounded, square, author accent, and minimal thread styles. Use `data-kind="comment"` to style comment boxes separately from tracked change cards. Use `data-active` for the selected card and `data-resolved` for resolved comments.
+
+The following styles add an author accent and a subtle reply background. They apply to both framework examples.
+
+```css
+.docx-editor.contract-workspace .contract-card[data-kind='comment'] {
+  border-inline-start: 3px solid var(--doc-review-author-current);
+  background: color-mix(in srgb, var(--doc-review-author-current) 5%, var(--doc-surface));
+}
+.docx-editor.contract-workspace .contract-comment-body {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.docx-editor.contract-workspace .contract-thread {
+  margin-block-start: 12px;
+  border-inline-start: 1px solid var(--doc-border);
+  padding-inline-start: 12px;
+}
+.docx-editor.contract-workspace .contract-reply {
+  border-radius: 8px;
+  background: var(--doc-bg);
+}
+```
+
+For a minimal thread style, remove the card shadow and use a one-pixel border. Keep author names, dates, and action labels visible. Do not use author color as the only way to identify a reviewer.
+
+Named parts replace their packaged counterparts in place. The examples retain packaged resolve, reopen, delete, and reply actions. Use `hidden` on a named part only when your workflow provides another action. Styling changes do not change document comments or shared review data.
+
+## More control
+
+See [Review colors and styling](/docs/2.x/pro/review-styling) for supported parts, types, and additional examples.

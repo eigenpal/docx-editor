@@ -11,40 +11,27 @@ import * as Y from 'yjs';
 
 // @public
 export interface CollaborationIdentityUpdate {
-    // (undocumented)
     readonly color?: string;
-    // (undocumented)
     readonly name?: string;
 }
 
 // @public
 export interface CollaborationSession {
-    // (undocumented)
     canRedo(): boolean;
-    // (undocumented)
     canUndo(): boolean;
-    // (undocumented)
     readonly documentId: string;
-    // (undocumented)
     readonly identity: CollaborationIdentity;
-    // (undocumented)
+    readonly offlineEditing?: boolean;
     participants(): readonly CollaborationParticipant[];
-    // (undocumented)
     redo(): boolean;
-    // (undocumented)
     remoteSelections(): readonly CollaborationRemoteSelection[];
     readonly sessionId: string;
     setIdentity?(update: CollaborationIdentityUpdate): void;
-    // (undocumented)
     status(): CollaborationStatus;
     statusSnapshot(): CollaborationStatusSnapshot;
-    // (undocumented)
     subscribeParticipants(listener: (participants: readonly CollaborationParticipant[]) => void): () => void;
-    // (undocumented)
     subscribeRemoteSelections(listener: (selections: readonly CollaborationRemoteSelection[]) => void): () => void;
-    // (undocumented)
     subscribeStatus(listener: (status: CollaborationStatus, reason?: CollaborationFailureCode, detail?: string) => void): () => void;
-    // (undocumented)
     undo(): boolean;
 }
 
@@ -56,12 +43,9 @@ export type UseHocuspocusCollaborationBootstrap = CollaborationBootstrap;
 
 // @public
 export interface UseHocuspocusCollaborationConnectOptions {
-    // (undocumented)
     readonly bootstrap: UseHocuspocusCollaborationBootstrap;
-    // (undocumented)
     readonly identity: CollaborationIdentity;
     readonly offlineEditing?: boolean;
-    // (undocumented)
     readonly roomId: string;
     readonly syncedTimeoutMs?: number;
     readonly token?: string | (() => string | Promise<string>);
@@ -77,22 +61,16 @@ export interface UseHocuspocusCollaborationOptions {
 // @public
 export interface UseHocuspocusCollaborationReturn {
     readonly connect: (options: UseHocuspocusCollaborationConnectOptions) => Promise<CollaborationFailure | null>;
-    // (undocumented)
     readonly document: Readonly<Ref<Uint8Array | null>>;
-    // (undocumented)
     readonly error: Readonly<Ref<CollaborationFailure | null>>;
     readonly leave: (nextDocument: Uint8Array) => void;
-    // (undocumented)
     readonly modules: Readonly<Ref<readonly EditorModule[]>>;
-    // (undocumented)
     readonly pending: Readonly<Ref<boolean>>;
     readonly provider: Readonly<Ref<HocuspocusProvider | null>>;
     readonly rejoin: (nextDocument: Uint8Array) => Promise<CollaborationFailure | null>;
-    // (undocumented)
     readonly session: Readonly<Ref<CollaborationSession | null>>;
+    readonly unsyncedChanges: Readonly<Ref<number>>;
     readonly ydoc: Readonly<Ref<Y.Doc | null>>;
 }
-
-// (No @packageDocumentation comment for this package)
 
 ```

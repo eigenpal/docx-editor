@@ -22,9 +22,7 @@ export function activatedCustomNodeOf(resolved: ResolvedCustomNodeActivation, ed
 // @public
 export interface CollaborationAvatarProps {
     readonly children?: VNode | VNode[];
-    // (undocumented)
     readonly className?: string;
-    // (undocumented)
     readonly participant: CollaborationParticipant;
 }
 
@@ -33,14 +31,12 @@ export interface CollaborationAvatarRenderProps {
     readonly avatarUrl?: string;
     readonly color: string;
     readonly initials: string;
-    // (undocumented)
     readonly participant: CollaborationParticipant;
 }
 
 // @public
 export interface CollaborationAvatarsProps {
     readonly children?: (props: CollaborationAvatarRenderProps) => VNode | VNode[];
-    // (undocumented)
     readonly className?: string;
     readonly max?: number;
     readonly session?: CollaborationSession | null;
@@ -79,32 +75,46 @@ export interface CollaborationCaretLabelsProps {
 
 // @public
 export interface CollaborationFailure {
-    // (undocumented)
     readonly code: CollaborationFailureCode;
-    // (undocumented)
     readonly detail?: string;
 }
 
 // @public
-export type CollaborationFailureCode = 'already-initialized' | 'authentication-failed' | 'baseline-digest-mismatch' | 'baseline-too-large' | 'blob-digest-mismatch' | 'blob-read' | 'blob-store-full' | 'blob-too-large' | 'collaboration-format-mismatch' | 'collaboration-session-destroyed' | 'collaboration-session-not-attached' | 'collaboration-session-not-ready' | 'collaboration-text-limit' | 'concurrent-seed' | 'document-id-mismatch' | 'duplicate-paragraph-id' | 'experimental-collaboration-body-text-only' | 'experimental-collaboration-existing-paragraphs-only' | 'experimental-collaboration-text-only' | 'experimental-collaboration-untracked-text-only' | 'immutable-baseline-changed' | 'immutable-metadata-changed' | 'initialization-aborted' | 'initialization-timeout' | 'invalid-baseline' | 'invalid-blob-descriptor' | 'invalid-bound' | 'invalid-document-id' | 'invalid-identity' | 'invalid-identity-color' | 'invalid-logical-id' | 'invalid-relationships' | 'invalid-saved-room' | 'invalid-session-id' | 'invalid-shared-metadata' | 'invalid-string' | 'local-mirror-failed' | 'materialize-dropped-content' | 'missing-blob' | 'missing-local-blob' | 'missing-root' | 'no-main-document-part' | 'not-initialized' | 'paragraph-set-mismatch' | 'port-already-attached' | 'protocol-version-mismatch' | 'prototype-key' | 'remote-apply-failed' | 'saved-room-unavailable' | 'schema-version-mismatch' | 'shared-schema-invalid' | 'text-too-long' | 'too-many-attributes' | 'too-many-children' | 'too-many-nodes' | 'too-many-parts' | 'too-many-relationships' | 'transport' | 'transport-disconnected' | 'tree-too-deep' | 'unknown-logical-id' | 'unknown-paragraph-id' | 'unsafe-part-name' | 'unsupported-root-key';
+export type CollaborationFailureCode =
+/** Edit refused by the session gate. The status does not change. Wait for `ready`. */
+'collaboration-session-destroyed' | 'collaboration-session-not-attached' | 'collaboration-session-not-ready' | 'collaboration-text-limit' | 'experimental-collaboration-body-text-only'
+/** Factory input rejected before joining. Fix the value the host passed. */
+| 'invalid-document-id' | 'invalid-identity' | 'invalid-identity-color' | 'invalid-session-id'
+/** Join or seed did not complete. Connect the provider, check the room id, and retry. */
+| 'already-initialized' | 'document-id-mismatch' | 'initialization-aborted' | 'initialization-timeout' | 'not-initialized'
+/** The seed document cannot seed a room. Fix the file. */
+| 'baseline-too-large' | 'blob-read' | 'invalid-baseline' | 'missing-local-blob' | 'no-main-document-part'
+/** This client and the room have different formats. Terminal. Save local work. */
+| 'collaboration-format-mismatch' | 'protocol-version-mismatch' | 'schema-version-mismatch'
+/** The room is unusable. Terminal. Create a new room from saved bytes. */
+| 'blob-digest-mismatch' | 'concurrent-seed' | 'port-already-attached'
+/** A remote update is not applied yet. Heals when a later update arrives. Wait. */
+| 'duplicate-paragraph-id' | 'invalid-relationships' | 'materialize-dropped-content' | 'missing-blob' | 'missing-root' | 'remote-apply-failed' | 'unknown-paragraph-id'
+/** Over a resource limit. A local edit realigns; shared state over a limit is terminal. */
+| 'blob-store-full' | 'blob-too-large' | 'invalid-blob-descriptor' | 'invalid-bound' | 'invalid-logical-id' | 'invalid-string' | 'prototype-key' | 'text-too-long' | 'too-many-attributes' | 'too-many-children' | 'too-many-nodes' | 'too-many-parts' | 'too-many-relationships' | 'tree-too-deep' | 'unknown-logical-id' | 'unsafe-part-name'
+/** Transport state. Only `transport-disconnected` recovers on its own. */
+| 'authentication-failed' | 'room-generation-changed' | 'transport' | 'transport-disconnected'
+/** Reserved for a room server that refuses a saved room. Passed through, never emitted. */
+| 'invalid-saved-room' | 'saved-room-unavailable'
+/** @deprecated Emitted by nothing. Kept for compatibility; do not branch on these. */
+| 'baseline-digest-mismatch' | 'experimental-collaboration-existing-paragraphs-only' | 'experimental-collaboration-text-only' | 'experimental-collaboration-untracked-text-only' | 'immutable-baseline-changed' | 'immutable-metadata-changed' | 'invalid-shared-metadata' | 'local-mirror-failed' | 'paragraph-set-mismatch' | 'shared-schema-invalid' | 'unsupported-root-key';
 
 // @public
 export interface CollaborationIdentity {
-    // (undocumented)
     readonly actorId: string;
-    // (undocumented)
     readonly color?: string;
-    // (undocumented)
     readonly name: string;
-    // (undocumented)
     readonly role?: 'human' | 'agent';
 }
 
 // @public
 export interface CollaborationIdentityUpdate {
-    // (undocumented)
     readonly color?: string;
-    // (undocumented)
     readonly name?: string;
 }
 
@@ -113,49 +123,38 @@ export function collaborationModule(options: CollaborationModuleOptions): Editor
 
 // @public
 export interface CollaborationModuleOptions extends ProLicenseOptions {
-    // (undocumented)
     readonly session: EditorCollaborationSession;
 }
 
 // @public
+export type CollaborationNoticeKind = 'connecting' | 'offline' | 'offlinePaused' | 'syncing' | 'waiting' | 'stalled' | 'editRefused' | 'outOfSync' | 'upgradeRequired' | 'newRoomRequired';
+
+// @public
 export interface CollaborationParticipant extends CollaborationIdentity {
-    // (undocumented)
     readonly isLocal: boolean;
 }
 
 // @public
 export interface CollaborationRemoteSelection {
-    // (undocumented)
     readonly actorId: string;
-    // (undocumented)
     readonly anchor: CollaborationRemoteSelectionAddress;
-    // (undocumented)
     readonly color?: string;
-    // (undocumented)
     readonly head: CollaborationRemoteSelectionAddress;
-    // (undocumented)
     readonly kind?: CollaborationSelectionKind;
-    // (undocumented)
     readonly name: string;
 }
 
 // @public
 export interface CollaborationRemoteSelectionAddress {
-    // (undocumented)
     readonly nodeId: string;
-    // (undocumented)
     readonly offset: number;
-    // (undocumented)
     readonly paragraphId: string;
 }
 
 // @public
 export interface CollaborationRootSource {
-    // (undocumented)
     readonly document: Uint8Array | null;
-    // (undocumented)
     readonly modules: readonly EditorModule[];
-    // (undocumented)
     readonly session: CollaborationSession | null;
 }
 
@@ -164,32 +163,21 @@ export type CollaborationSelectionKind = 'cells';
 
 // @public
 export interface CollaborationSession {
-    // (undocumented)
     canRedo(): boolean;
-    // (undocumented)
     canUndo(): boolean;
-    // (undocumented)
     readonly documentId: string;
-    // (undocumented)
     readonly identity: CollaborationIdentity;
-    // (undocumented)
+    readonly offlineEditing?: boolean;
     participants(): readonly CollaborationParticipant[];
-    // (undocumented)
     redo(): boolean;
-    // (undocumented)
     remoteSelections(): readonly CollaborationRemoteSelection[];
     readonly sessionId: string;
     setIdentity?(update: CollaborationIdentityUpdate): void;
-    // (undocumented)
     status(): CollaborationStatus;
     statusSnapshot(): CollaborationStatusSnapshot;
-    // (undocumented)
     subscribeParticipants(listener: (participants: readonly CollaborationParticipant[]) => void): () => void;
-    // (undocumented)
     subscribeRemoteSelections(listener: (selections: readonly CollaborationRemoteSelection[]) => void): () => void;
-    // (undocumented)
     subscribeStatus(listener: (status: CollaborationStatus, reason?: CollaborationFailureCode, detail?: string) => void): () => void;
-    // (undocumented)
     undo(): boolean;
 }
 
@@ -197,13 +185,27 @@ export interface CollaborationSession {
 export type CollaborationStatus = 'initializing' | 'ready' | 'disconnected' | 'error' | 'destroyed';
 
 // @public
+export interface CollaborationStatusNoticeProps {
+    readonly className?: string;
+    readonly onRejoin?: () => void;
+    readonly session?: CollaborationSession | null;
+}
+
+// @public
+export interface CollaborationStatusNoticeRenderProps {
+    readonly kind: CollaborationNoticeKind;
+    readonly message: string;
+    readonly rejoin?: () => void;
+}
+
+// @public
 export interface CollaborationStatusSnapshot {
-    // (undocumented)
+    readonly failureCount?: number;
     readonly lastFailure: CollaborationFailure | undefined;
-    // (undocumented)
     readonly reason: CollaborationFailure | undefined;
-    // (undocumented)
+    readonly recovering?: boolean;
     readonly status: CollaborationStatus;
+    readonly waiting?: boolean;
 }
 
 // @public
@@ -211,17 +213,12 @@ export type CommentMarkerStyle = 'initials' | 'icon';
 
 // @public
 export interface CreateDocumentCollaborationOptions {
-    // (undocumented)
     readonly awareness: Awareness;
-    // (undocumented)
     readonly bootstrap: CollaborationBootstrap;
-    // (undocumented)
     readonly documentId: string;
-    // (undocumented)
     readonly identity: CollaborationIdentity;
     readonly offlineEditing?: boolean;
     readonly sessionId?: string;
-    // (undocumented)
     readonly ydoc: Y.Doc;
 }
 
@@ -328,9 +325,42 @@ export const DocxEditorCollaboration: {
     }>> & Readonly<{}>, {
         session: CollaborationSession | null;
     }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+    Status: vue.DefineComponent<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        onRejoin: {
+            default: undefined;
+            type: PropType<() => void>;
+        };
+        session: {
+            default: undefined;
+            type: PropType<CollaborationSession | null>;
+        };
+    }>, () => VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        onRejoin: {
+            default: undefined;
+            type: PropType<() => void>;
+        };
+        session: {
+            default: undefined;
+            type: PropType<CollaborationSession | null>;
+        };
+    }>> & Readonly<{}>, {
+        className: string;
+        onRejoin: () => void;
+        session: CollaborationSession | null;
+    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 };
 
-// @public (undocumented)
+// @public
 export type DocxEditorCollaborationNamespace = typeof DocxEditorCollaboration;
 
 // @public
@@ -1119,7 +1149,6 @@ export function useCollaborationParticipants(session?: MaybeRefOrGetter<Collabor
 
 // @public
 export interface UseCollaborationParticipantsReturn {
-    // (undocumented)
     readonly participants: Readonly<Ref<readonly CollaborationParticipant[]>>;
 }
 
@@ -1138,13 +1167,13 @@ export function useCollaborationStatus(session?: MaybeRefOrGetter<CollaborationS
 export interface UseCollaborationStatusReturn {
     readonly attached: Readonly<Ref<boolean>>;
     readonly diverged: ComputedRef<boolean>;
-    // (undocumented)
+    readonly failureCount: Readonly<Ref<number>>;
     readonly lastFailure: Readonly<Ref<CollaborationFailure | undefined>>;
     readonly live: ComputedRef<boolean>;
-    // (undocumented)
     readonly reason: Readonly<Ref<CollaborationFailure | undefined>>;
-    // (undocumented)
+    readonly recovering: Readonly<Ref<boolean>>;
     readonly status: Readonly<Ref<CollaborationStatus | 'inactive'>>;
+    readonly waiting: Readonly<Ref<boolean>>;
 }
 
 // @public
@@ -1165,16 +1194,11 @@ export interface UseDocumentCollaborationOptions {
 // @public
 export interface UseDocumentCollaborationReturn {
     readonly connect: (options: UseDocumentCollaborationConnectOptions) => Promise<CollaborationFailure | null>;
-    // (undocumented)
     readonly document: Readonly<Ref<Uint8Array | null>>;
-    // (undocumented)
     readonly error: Readonly<Ref<CollaborationFailure | null>>;
     readonly leave: (nextDocument: Uint8Array) => void;
-    // (undocumented)
     readonly modules: Readonly<Ref<readonly EditorModule[]>>;
-    // (undocumented)
     readonly pending: Readonly<Ref<boolean>>;
-    // (undocumented)
     readonly session: Readonly<Ref<CollaborationSession | null>>;
 }
 
@@ -1233,7 +1257,5 @@ export function useStackedReviewPositions(items: MaybeRefOrGetter_2<readonly {
     readonly gap?: number;
     readonly scale?: number;
 }>): ComputedRef<ReadonlyMap<string, number>>;
-
-// (No @packageDocumentation comment for this package)
 
 ```

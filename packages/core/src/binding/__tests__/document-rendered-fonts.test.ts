@@ -116,6 +116,34 @@ describe('collectRenderedFontFamilies', () => {
     expect(cjk.renderedFontFamilies()).toEqual(['DengXian', 'Garamond']);
   });
 
+  test('a distinct hAnsi face renders only when the run has non-ASCII text it draws', () => {
+    const fonts = '<w:rFonts w:ascii="Garamond" w:hAnsi="Tahoma"/>';
+    const text = (value: string) =>
+      open(docx({ body: `<w:p><w:r><w:rPr>${fonts}</w:rPr><w:t>${value}</w:t></w:r></w:p>` }))
+        .renderedFontFamilies()
+        .slice();
+    expect(text('Latin')).toEqual(['Garamond']);
+    expect(text('Café')).toEqual(['Garamond', 'Tahoma']);
+    // The no-break space keeps the ascii face; Hebrew is not drawn through hAnsi.
+    expect(text('1 2 ש')).toEqual(['Garamond']);
+
+    // The slot inherits on its own: a nearer ascii-only rFonts does not hide a style's hAnsi.
+    const inherited = open(
+      docx({
+        body:
+          '<w:p><w:pPr><w:pStyle w:val="Body"/></w:pPr><w:r><w:rPr>' +
+          '<w:rFonts w:ascii="Garamond"/></w:rPr><w:t>über</w:t></w:r></w:p>',
+        styles: styles(
+          '<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/>' +
+            '</w:rPr></w:rPrDefault></w:docDefaults>' +
+            '<w:style w:type="paragraph" w:styleId="Body">' +
+            '<w:rPr><w:rFonts w:hAnsi="Tahoma"/></w:rPr></w:style>'
+        ),
+      })
+    );
+    expect(inherited.renderedFontFamilies()).toEqual(['Garamond', 'Tahoma']);
+  });
+
   test('a w:sym face is not a rendered text face', () => {
     // Word writes `w:sym w:font="MS Gothic"` for a checkbox and `Wingdings` for a bullet.
     // A symbol face paints one glyph, moves no text metrics, and is not a family the picker
