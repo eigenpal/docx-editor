@@ -15,6 +15,10 @@
 // value into the paragraph as direct formatting. The divergence from upstream — which answers
 // the effective value — is recorded in `compat/manifest.json`.
 //
+// Paragraph direction is the one exception: its read resolves the cascade, and its write states
+// `w:bidi` only where the paragraph does not already read the asked way. Writing back a direction
+// read here is therefore a no-op, so the freezing hazard above does not arise.
+//
 // WRITING IS THE ACCEPTED PROPERTY BOUNDARY (design D8). Every field below maps to exactly one
 // element in `ACCEPTED_RUN_PROPERTIES` / `ACCEPTED_PARAGRAPH_PROPERTIES`, and a value the
 // boundary cannot express is REFUSED rather than approximated. Numbers are converted at this
@@ -54,6 +58,12 @@ const MAX_HALF_POINTS = 1999;
 
 /** Alignment as this protocol publishes it. `Mixed`/`Unknown` are read-only answers. */
 export type AutomationAlignment = 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
+
+/**
+ * A paragraph's base direction (`w:bidi`) as this protocol publishes it: the direction the
+ * paragraph reads in, after its style cascade.
+ */
+export type AutomationReadingOrder = 'LeftToRight' | 'RightToLeft';
 
 /**
  * What a range agrees about its characters' formatting.
@@ -110,6 +120,8 @@ export interface AutomationParagraphFormatRead {
   readonly spaceBefore: number | null;
   readonly spaceAfter: number | null;
   readonly widowControl: boolean | null;
+  /** The direction the paragraph reads in: its own `w:bidi` if any, else the style cascade's. */
+  readonly readingOrder: AutomationReadingOrder;
 }
 
 /**
@@ -136,6 +148,12 @@ export interface AutomationParagraphFormatWrite {
   readonly spaceBefore?: number;
   readonly spaceAfter?: number;
   readonly widowControl?: boolean;
+  /**
+   * The direction the paragraph should read in. Nothing is written when it already does. Else the
+   * paragraph's own `w:bidi` is removed when that alone set the other direction, or stated:
+   * `<w:bidi/>`, or `<w:bidi w:val="0"/>` over a right-to-left style.
+   */
+  readonly readingOrder?: AutomationReadingOrder;
 }
 
 /** Why a formatting value could not be authored. Named so a caller learns the field. */
@@ -282,6 +300,21 @@ const JC_BY_ALIGNMENT: Readonly<Record<string, string>> = Object.freeze({
   Justified: 'both',
 });
 
+/**
+ * The paragraph's own `w:bidi`, read as the layout reads it: the LAST one wins, and no value, `1`,
+ * `true` and `on` are right to left while every other value is left to right. `null` when the
+ * paragraph states none.
+ */
+function ownRtl(properties: OoxmlElement | undefined): boolean | null {
+  let rtl: boolean | null = null;
+  for (const child of properties?.children ?? []) {
+    if (child.kind === 'textValue' || child.localName !== 'bidi') continue;
+    const value = attributeOf(child, 'val');
+    rtl = value === null || ['1', 'true', 'on'].includes(value);
+  }
+  return rtl;
+}
+
 function alignmentOf(properties: OoxmlElement | undefined): AutomationAlignment {
   const value = attributeOf(namedChild(properties, 'jc'), 'val');
   if (value === null) return 'Unknown';
@@ -317,6 +350,11 @@ export function paragraphFormatRead(
     spaceBefore: pointsFromTwips(attributeOf(spacing, 'before')),
     spaceAfter: pointsFromTwips(attributeOf(spacing, 'after')),
     widowControl: onOff(namedChild(pPr, 'widowControl')),
+    // Direction is the one paragraph property this lane resolves through the style cascade. A
+    // write states `w:bidi` only where the paragraph does not already read the asked way, so
+    // writing back the effective direction read here changes nothing and freezes nothing.
+    readingOrder:
+      (ownRtl(pPr) ?? styles.inheritsRtl(part, paragraph)) ? 'RightToLeft' : 'LeftToRight',
   };
 }
 
@@ -430,15 +468,17 @@ export function paragraphFormatProperties(
   paragraphId: string,
   request: AutomationParagraphFormatWrite,
   styles: AutomationStyleIndex
-): FormattingPlan<OoxmlProperty[]> {
+): FormattingPlan<OoxmlProperty[]> & { readonly unchanged?: boolean } {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return { ok: false, detail: 'not a paragraph' };
   const pPr = paragraphPropertiesNodeOf(paragraph);
   const properties: OoxmlProperty[] = [];
 
+  let styleId: string | undefined;
   if (request.style !== undefined) {
     const resolved = styleIdFor(request.style, styles);
     if (!resolved.ok) return { ok: false, detail: resolved.detail };
+    styleId = resolved.styleId;
     properties.push({ localName: 'pStyle', attributes: { val: resolved.styleId } });
   }
 
@@ -514,14 +554,45 @@ export function paragraphFormatProperties(
     });
   }
 
-  if (properties.length === 0) return { ok: false, detail: 'no formatting was asked for' };
+  let removeBidi = false;
+  if (request.readingOrder !== undefined) {
+    if (request.readingOrder !== 'RightToLeft' && request.readingOrder !== 'LeftToRight')
+      return { ok: false, detail: `readingOrder: ${String(request.readingOrder)}` };
+    const wanted = request.readingOrder === 'RightToLeft';
+    const own = ownRtl(pPr);
+    // Against the style this same write applies, so a style and a direction can share a sync.
+    const inherited = styles.inheritsRtl(part, paragraph, styleId);
+    // The same rule as the editor's direction command: no write when the paragraph already reads
+    // that way, and otherwise the smallest statement that makes it.
+    if ((own ?? inherited) !== wanted) {
+      if (inherited === wanted) removeBidi = true;
+      else properties.push({ localName: 'bidi', ...(wanted ? {} : { attributes: { val: '0' } }) });
+    }
+  }
+
+  // A direction the paragraph already has is a request satisfied, not a refusal.
+  if (properties.length === 0 && !removeBidi && request.readingOrder === undefined)
+    return { ok: false, detail: 'no formatting was asked for' };
   // `setParagraphProperties` REPLACES the container: an authorable property the op does not name
   // is DROPPED. So the op has to carry the paragraph's existing bag forward, or setting alignment
   // would delete its style, its numbering and its spacing.
-  return {
-    ok: true,
-    value: mergedProperties(directParagraphProperties(part, paragraphId), properties),
-  };
+  const current = directParagraphProperties(part, paragraphId);
+  const merged = mergedProperties(current, properties);
+  const value = removeBidi ? merged.filter((property) => property.localName !== 'bidi') : merged;
+  // A write of what the paragraph already states is no edit: no op, no change event, no undo step.
+  return { ok: true, value, unchanged: sameProperties(current, value) };
+}
+
+/** Whether two property bags state the same elements with the same attributes, in any order. */
+function sameProperties(left: readonly OoxmlProperty[], right: readonly OoxmlProperty[]): boolean {
+  if (left.length !== right.length) return false;
+  const key = (property: OoxmlProperty) =>
+    JSON.stringify([
+      property.localName,
+      Object.entries(property.attributes ?? {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+    ]);
+  const keys = new Set(left.map(key));
+  return right.every((property) => keys.has(key(property)));
 }
 
 /** A property element's `w:`-namespace attributes as a plain record, safe to copy from. */

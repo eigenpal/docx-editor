@@ -22,7 +22,7 @@ A supported subset covers only the listed objects and operations. It does not me
 | Paragraphs and ranges | Supported subset | Read text, insert or replace text, insert paragraphs, clear, delete, split, search, style, hyperlinks, and selection | The API does not expose document-wide `start` or `end` offsets. |
 | Search | Partial | Plain-text search, `matchCase`, and `matchWholeWord` | Setting `ignorePunct`, `ignoreSpace`, or `matchWildcards` to `true` fails with `NotSupported`. |
 | Font formatting | Partial | Bold, italic, color, name, size, underline, strike-through, highlight, subscript, and superscript | Underline supports 18 styles. Highlight writes require the Word palette. Mixed, unspecified, or inherited values return `null`. |
-| Paragraph formatting | Supported subset | Style, alignment, first-line indent, left indent, right indent, line spacing, space before, and space after | The API exposes these values on `Paragraph`. It does not expose the full `ParagraphFormat` object. |
+| Paragraph formatting | Supported subset | Style, alignment, first-line indent, left indent, right indent, line spacing, space before, and space after. The `readingOrder` addition sets paragraph direction. | The API exposes these values on `Paragraph`. It does not expose the full `ParagraphFormat` object. |
 | Lists | Partial | Create lists, attach/detach paragraphs, set bullets/numbering, nesting, indents, and restart | Picture bullets are unavailable. Different list levels can batch after list creation. |
 | Bookmarks | Partial | Discover bookmarks, read names and ranges, and select bookmarks | The API does not support bookmark deletion or document-wide bookmark offsets. |
 | Sections and page setup | Partial | Section bodies, headers, footers, size, orientation, margins, page breaks, and next-page section breaks | Other break types fail. Missing header/footer stories are created on their first write. |
@@ -46,6 +46,7 @@ For operation-specific tracking limits, see [Tracked changes](/docs/2.x/editor-a
 | An item accessor returns a usable proxy immediately. | Supported read-derived proxies resolve prerequisite reads during `sync()`. | Sync before inspecting loaded values. Inserted objects require a sync before dependent operations. |
 | A collection can load item properties with paths such as `items/text`. | A collection loads its items only. | Load the collection, sync, load each item, then sync again. |
 | `LoadQueryOptions.expand` loads navigation properties. | A nonempty `expand` value throws `InvalidArgument`. | Load each navigation object or collection directly. |
+| Assigning a property updates the proxy's value, and a load queued after the assignment in the same batch reads the new value. | The proxy keeps its loaded value. A load queued in the same sync as a write returns the value from before the write. | Load the property in a later sync to read a value that you wrote. |
 | `sync()` can return a pass-through value. | `sync()` returns `Promise<void>`. | Keep pass-through values in local state. |
 | The Office host supplies the signed-in comment author. | DocxEditor does not use an Office account identity. | Pass `{ author }` when you create the runtime. |
 | Comment and revision dates have the `Date` type. | Invalid or missing file dates return `null`. | Narrow the nullable `Date` before you use it. |
@@ -99,6 +100,7 @@ These common members extend the Office.js-compatible subset.
 | `ContentControl.subtype` | Reports the control type with DOCX terms. |
 | `Comment.text` and `CommentReply.text` | Read comment text without replacing the comment body. |
 | `Paragraph.uniqueLocalId` | Reads the paragraph identity for the active runtime. |
+| `Paragraph.readingOrder` | Sets and reads the direction the paragraph reads in. Office.js has no paragraph direction member. |
 
 `Body.bookmarks` and `Body.revisions` only cover that body's story. They do not combine the main body, headers, footers, and notes.
 

@@ -87,6 +87,8 @@ const direction = formatting?.direction ?? (formatting?.disagrees?.direction ? '
 
 To build your own buttons, use the `direction.ltr` and `direction.rtl` [chrome slots](/docs/2.x/guides/chrome-slots#alignment-direction-lists-and-formatting).
 
+To set direction from a document automation script on a server or in the browser, use `Paragraph.readingOrder`. It addresses paragraphs instead of the selection. For more information, see [Right-to-left paragraphs](/docs/2.x/editor-api/formatting#right-to-left-paragraphs).
+
 ## Host pages with RTL direction
 
 You can mount the editor in a page that sets `dir="rtl"` or `direction: rtl`. You don't need to override the direction on the editor components.

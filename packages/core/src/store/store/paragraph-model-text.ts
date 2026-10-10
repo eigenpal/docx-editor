@@ -3,8 +3,29 @@
 import { inlineCharacterTextOf, isSymbolElement, SYMBOL_TEXT } from '../package/hyphen-text.ts';
 import { fieldAtomText } from '../package/field-nodes.ts';
 import { hardBreakKind, hardBreakText } from '../package/hard-break.ts';
-import type { OoxmlParagraphNode } from '../package/ooxml-tree.ts';
-import { segmentsOf } from './tree-op-segments.ts';
+import type { OoxmlPart, OoxmlParagraphNode } from '../package/ooxml-tree.ts';
+import { findNode } from '../package/ooxml-edit.ts';
+import { withFieldResultsMode, type FieldResultsMode } from '../package/field-result-mode.ts';
+import { isParagraph, segmentsOf } from './tree-op-segments.ts';
+
+/**
+ * Paragraph text as the ops address it, for tests and callers computing offsets.
+ *
+ * `fieldResults` defaults to the mode of the store call in progress, which is `atomic` outside
+ * any editable transaction: every field is one unit, the raw text collaboration and
+ * automation read. `editable` reads saved field results as text, as an editor in that mode
+ * addresses them.
+ */
+export function paragraphTextOf(
+  part: OoxmlPart,
+  paragraphId: string,
+  options?: { readonly fieldResults?: FieldResultsMode }
+): string | null {
+  return withFieldResultsMode(options?.fieldResults, () => {
+    const paragraph = findNode(part, paragraphId);
+    return isParagraph(paragraph) ? paragraphModelTextOf(paragraph) : null;
+  });
+}
 
 /** Paragraph text as the ops address it, from one canonical paragraph node. @internal */
 export function paragraphModelTextOf(paragraph: OoxmlParagraphNode): string {

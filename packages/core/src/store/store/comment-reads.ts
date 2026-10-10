@@ -26,6 +26,7 @@
 // walk covers body, furniture, every normal note, separator and continuation-separator content,
 // and nested textboxes without making any one layout story model the store's authority.
 
+import { FieldResultsModeMemo } from '../package/field-result-mode.ts';
 import type { OoxmlPackage } from '../package/ooxml-package.ts';
 import {
   WML_NAMESPACE_URI,
@@ -148,7 +149,7 @@ function markersInParagraphWithPolicy(
 }
 
 /** Marker points per immutable paragraph node. */
-const markerPointsCache = new WeakMap<OoxmlParagraphNode, readonly MarkerPoint[]>();
+const markerPointsCache = new FieldResultsModeMemo<OoxmlParagraphNode, readonly MarkerPoint[]>();
 
 function computeMarkersInParagraph(
   paragraph: OoxmlParagraphNode,

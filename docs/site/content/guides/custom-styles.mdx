@@ -83,7 +83,7 @@ const { document: template } = useDocxSource('/templates/brand.docx');
 
 The style dropdown lists paragraph styles from the document. Applying a style uses its fonts, colors, spacing, and configured `next` style. When `next` selects a body style, pressing Enter after a heading starts a body paragraph.
 
-Set `w:qFormat` to include a style in the dropdown. Use `w:semiHidden` or `w:hidden` to exclude it.
+The picker lists paragraph styles without filtering `w:qFormat`, `w:semiHidden`, or `w:hidden`. Use a custom picker to restrict the displayed options.
 
 ## Tables
 
@@ -156,3 +156,7 @@ The editor preserves existing style files (`styles.xml`, `theme1.xml`, `settings
 - [Fonts and measurement](/docs/2.x/guides/fonts): font sources and measurement
 - [Word fidelity](/docs/2.x/word-fidelity): what survives a round trip
 - [React props](/docs/2.x/react/props) and [Vue props](/docs/2.x/vue/props): `fonts` and the rest of the root props
+
+## Customize your editor
+
+Start with [Overview](/docs/2.x/customization). Choose a focused guide with a live contract preview and React and Vue examples.

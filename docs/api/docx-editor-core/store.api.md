@@ -104,6 +104,7 @@ export interface AtomicFieldSpan {
 
 // @public
 export function atomicFieldSpansOf(paragraph: OoxmlParagraphNode, options?: {
+    readonly fieldResults?: FieldResultsMode;
     readonly maxInstructionChars?: number;
     readonly maxNesting?: number;
 }): readonly AtomicFieldSpan[];
@@ -1264,6 +1265,7 @@ export type DrawingTreeDocOp = Extract<TreeDocOp, {
 export interface EditOptions {
     // (undocumented)
     readonly deferValidation?: boolean;
+    readonly fieldResults?: FieldResultsMode;
     readonly revisionIds?: () => string;
     readonly trackedRevisionIds?: TransactionRevisionIds;
 }
@@ -1399,6 +1401,9 @@ export function fieldAtomText(): typeof FIELD_ATOM_CHAR;
 
 // @public
 export function fieldOnOffAttribute(node: OoxmlNode, localName: 'dirty' | 'fldLock'): boolean | undefined;
+
+// @public
+export type FieldResultsMode = 'atomic' | 'editable';
 
 // @public
 export function findContentControl(root: OoxmlNode, nodeId: string): ContentControlEntry | null;
@@ -3356,7 +3361,9 @@ export function paragraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOf
 export function paragraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, number>;
 
 // @public
-export function paragraphTextOf(part: OoxmlPart, paragraphId: string): string | null;
+export function paragraphTextOf(part: OoxmlPart, paragraphId: string, options?: {
+    readonly fieldResults?: FieldResultsMode;
+}): string | null;
 
 // @public
 export function paraIdOf(node: OoxmlNode): string | null;
@@ -3889,7 +3896,7 @@ export interface ReviewRevisionItem {
     // (undocumented)
     readonly date?: string;
     readonly formattingChanges?: readonly {
-        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter';
+        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter' | 'direction';
         readonly value: string | null;
     }[];
     readonly formattingKind?: string;
@@ -5037,7 +5044,19 @@ export type TreeOpRejection = 'unknown-op' | 'unknown-paragraph' | 'not-a-paragr
 * a real offset that is not a PLACE — refused rather than resolved to the nearest one, so a
 * caller learns the node would not have landed where they asked.
 */
-| 'indivisible-content' | 'unknown-block' | 'not-a-block' | 'block-required' | 'carries-section-mark'
+| 'indivisible-content'
+/**
+* The range has one end inside a field's editable saved result and the other outside it.
+* Deleting it would leave the field's begin, separate, and end markers unbalanced, so it is
+* refused. A range that covers the whole field removes the field.
+*/
+| 'field-structure'
+/**
+* In the editable field-result mode, an op other than typing, deletion, or run formatting
+* addresses a position inside a field's saved result. Splits, tabs, links, notes, and
+* fragments there are not supported yet.
+*/
+| 'field-result-unsupported' | 'unknown-block' | 'not-a-block' | 'block-required' | 'carries-section-mark'
 /** The transaction named a part the package does not hold. */
 | 'unknown-part'
 /**
@@ -5214,6 +5233,7 @@ export interface TreeTransactionContext {
 // @public
 export interface TreeTransactOptions {
     readonly actorId?: string;
+    readonly fieldResults?: FieldResultsMode;
     readonly historyGroup?: HistoryGroup;
     readonly minimumImpact?: ImpactClass;
     readonly operationId?: string;

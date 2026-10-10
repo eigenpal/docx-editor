@@ -1,5 +1,8 @@
 import { createFormsTextReplacementContext } from './forms-text-replacement.ts';
 import { reportHistoryGroup, type HistoryGroup } from './history-group.ts';
+import { withFieldResultsMode } from '../package/field-result-mode.ts';
+import type { TransactOptions, TreeDocumentStoreOptions } from './tree-store-options.ts';
+export type { TransactOptions, TreeDocumentStoreOptions } from './tree-store-options.ts';
 import { textFormFieldForEdit } from './text-form-fields.ts';
 import { applyProtectedTextFormEdit } from './tree-op-field-results.ts';
 // Tree-backed document store with intent-scoped semantic history (tasks 5.2, 5.4-5.6).
@@ -163,42 +166,6 @@ export interface TransactionContext {
   selectionAfter(selection: SelectionMark | null): void;
 }
 
-/** How one transaction behaves: its story scope, its attribution, and its selection marks. */
-export interface TransactOptions {
-  readonly origin?: string;
-  /** Stable actor attribution for collaboration and audit correlation. */
-  readonly actorId?: string;
-  /** Stable constituent identity for collaboration duplicate correlation. */
-  readonly operationId?: string;
-  /**
-   * Whether this transaction enters the legacy snapshot undo stack.
-   *
-   * Collaboration commits set this to false because their actor-local undo authority is the
-   * CRDT undo manager. Omitted preserves the ordinary non-collaborative history behavior.
-   */
-  readonly recordsHistory?: boolean;
-  /**
-   * A COMMAND is one user intent that may need several ops (a toolbar click applying a
-   * property across a multi-run selection). It is still exactly one history entry, which is
-   * the same rule a plain transaction follows — the option exists to say so explicitly at
-   * the call site rather than leaving it implied.
-   */
-  readonly scope?: 'transaction' | 'command';
-  /**
-   * Floor on the published impact. Header/footer story edits use `global` so every page
-   * sharing the part invalidates rather than keeping stale furniture.
-   */
-  readonly minimumImpact?: ImpactClass;
-  /** Story identity stamped onto the published ModelChange (package-aware targeting). */
-  readonly story?: TreeStoryRef;
-  /**
-   * The gesture this transaction belongs to: consecutive transactions carrying the SAME
-   * token extend one history entry (package from before the first, selection after the
-   * latest). Another token, none, undo or redo closes the group. See {@link HistoryGroup}.
-   */
-  readonly historyGroup?: HistoryGroup;
-}
-
 interface HistoryEntry {
   /**
    * The whole package as it was, not just the story part.
@@ -226,22 +193,6 @@ const IMPACT_RANK: Record<ImpactClass, number> = {
   'flow-structural': 2,
   global: 3,
 };
-
-/** How a store is constructed: its limits, its history depth, and its identity source. */
-export interface TreeDocumentStoreOptions {
-  /** Bound on retained history entries. Oldest entries drop first. */
-  readonly historyLimit?: number;
-  /**
-   * The document's `settings.xml`, for a store built from a PART rather than a package.
-   *
-   * Forms protection lives one part up from the op, and a store built from a part gets a
-   * synthetic one-part package that cannot see it — so `w:documentProtection w:edit="forms"`
-   * was enforced in the body and nowhere else, and a header, a footer or a note accepted every
-   * write a protected document is supposed to refuse. Read through a getter, not captured: a
-   * document can gain or lose protection while its stories stay open.
-   */
-  readonly settingsPart?: () => OoxmlPart | null | undefined;
-}
 
 /** A package holding exactly one part, for callers that never open a real one. */
 function singlePartPackage(part: OoxmlPart): OoxmlPackage {
@@ -458,7 +409,9 @@ export class TreeDocumentStore {
     build: (ctx: TransactionContext) => void,
     options: TransactOptions = {}
   ): TransactResult {
-    return runWithTransactionActor(options.actorId, () => this.commitTransaction(build, options));
+    return runWithTransactionActor(options.actorId, () =>
+      withFieldResultsMode(options.fieldResults, () => this.commitTransaction(build, options))
+    );
   }
 
   private commitTransaction(
@@ -994,7 +947,11 @@ export class TreeDocumentStore {
       ...(effects?.caret ? { caret: effects.caret } : {}),
       ...(story ? { story } : {}),
     };
-    for (const listener of this.subscribers) listener(change);
+    // Subscribers are outside the store call: they read in the default mode, never in the
+    // transaction's editable field-result mode.
+    withFieldResultsMode('atomic', () => {
+      for (const listener of this.subscribers) listener(change);
+    });
     return change;
   }
 }
