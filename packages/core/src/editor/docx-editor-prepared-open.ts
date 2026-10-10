@@ -23,6 +23,12 @@ const FONT_WARM_BATCH = 16;
 /** Rows of one table scanned per warm-up call, between deadline checks. */
 const FONT_WARM_ROWS = 32;
 
+/** What font resolution reads from a session, whether prepared or mounted. */
+export type FontSession = Pick<
+  TreeDocxSessionView,
+  'embeddedFonts' | 'currentPackage' | 'stylesRoot' | 'documentThemeFonts'
+>;
+
 const prepared = new WeakMap<Uint8Array, OpenTreeSessionResult>();
 
 /** Open `bytes` now with the review model the mount will pass, and return the result. */
@@ -79,6 +85,22 @@ export function takePreparedOpen(bytes: Uint8Array): {
   if (openedSession === undefined) return {};
   prepared.delete(bytes);
   return { openedSession, progressiveOpen: true };
+}
+
+/**
+ * The open scheduler's `prepare` hook: read `bytes` in steps, let `adopt` claim the opened
+ * session for font work (null declines), then warm fonts and reads while it stays current.
+ */
+export function preparedOpenHook(
+  review: () => { readonly reviewModel?: ReviewModuleContribution },
+  adopt: (bytes: Uint8Array, session: TreeDocxSessionView) => (() => boolean) | null,
+  startFonts: () => void | Promise<unknown>
+): (bytes: Uint8Array) => Step {
+  return (bytes) =>
+    prepareOpenSteps(bytes, review(), (opened) => {
+      const current = opened.ok ? adopt(bytes, opened.session) : null;
+      return opened.ok && current ? openSteps(opened.session, current, startFonts) : undefined;
+    });
 }
 
 export {

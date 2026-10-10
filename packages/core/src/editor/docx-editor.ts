@@ -301,19 +301,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const openScheduler = createOpenScheduler({
     mount: (bytes) => mountBytes(bytes),
     continueOpen: (budgetMs) => !surface || preparedOpen.continueOpen(surface, budgetMs),
-    // The package reads in short tasks. Fonts resolved before the mount are laid out once, by
-    // the mount, not a second time after it; their family scan also runs in short tasks.
-    prepare: (bytes) =>
-      preparedOpen.prepareOpenSteps(
-        bytes,
-        reviewModelOption(modules, reportDiagnostic),
-        (opened) => {
-          if (!opened.ok || deferredRefreshBytes === bytes) return;
-          preparedFontSession = opened.session;
-          const current = () => preparedFontSession === opened.session;
-          return preparedOpen.openSteps(opened.session, current, () => liveFonts.schedule(true));
-        }
-      ),
+    // Fonts resolved before the mount are laid out once, by the mount; see `preparedOpenHook`.
+    prepare: preparedOpen.preparedOpenHook(
+      () => reviewModelOption(modules, reportDiagnostic),
+      (bytes, session) => {
+        if (deferredRefreshBytes === bytes) return null;
+        preparedFontSession = session;
+        return () => preparedFontSession === session;
+      },
+      () => liveFonts.schedule(true)
+    ),
     scheduled: () => {
       bump();
       emitSelectionChange();
@@ -857,7 +854,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   // the document editable on the fixed measurer.
   async function resolveDocumentFonts(
     seq: number,
-    mounted: { readonly session: Pick<TreeDocxSessionView, 'embeddedFonts'> },
+    mounted: { readonly session: preparedOpen.FontSession },
     families: readonly string[]
   ): Promise<void> {
     const configured = config.fonts;
