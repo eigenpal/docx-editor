@@ -61,7 +61,7 @@ test('explicit cell suppression reserves no inherited border space', () => {
   }
 });
 
-test.each([false, true])('merged side retains the opposing inherited border (RTL=%s)', (rtl) => {
+test.each([false, true])('merged side clears every painted neighbor interval (RTL=%s)', (rtl) => {
   const sharedSide = rtl ? 'left' : 'right';
   for (const suppressedRows of [1, 2]) {
     const cell = (row: number, merged: boolean) =>
@@ -89,41 +89,14 @@ test.each([false, true])('merged side retains the opposing inherited border (RTL
     const structure = readTableStructure(table!, 240, 0)!;
     const head = structure.rows[0]!.cells[0]!;
     expect(head.borders[sharedSide].state).toBe('omitted');
-    expect((head.contentBorders ?? head.borders)[sharedSide].state).toBe('edge');
+    expect((head.contentBorders ?? head.borders)[sharedSide].state).toBe(
+      suppressedRows === 2 ? 'omitted' : 'edge'
+    );
     const laid = layoutSemanticDocument(read.part, 0, { measurer: createFixedMeasurer(5, 12) });
     const fragment = laid.pages[0]!.fragments.find((item) => item.kind === 'table')!;
     const painted = fragment.rows.flatMap((row) =>
       row.cells.flatMap((cell) => cell.borders?.edgeSegments ?? [])
     );
-    expect(painted.length > 0).toBe(true);
-  }
-});
-
-test.each(['nil', 'none'])('a cell %s border preserves its neighbor inherited edge', (value) => {
-  for (const horizontal of [false, true]) {
-    for (const both of [false, true]) {
-      const side = horizontal ? 'bottom' : 'right';
-      const opposite = horizontal ? 'top' : 'left';
-      const cell = (edge: string) => `<w:tc><w:tcPr>${edge}</w:tcPr><w:p/></w:tc>`;
-      const suppressed = (edge: string) =>
-        `<w:tcBorders><w:${edge} w:val="${value}"/></w:tcBorders>`;
-      const first = cell(both ? suppressed(side) : '');
-      const second = cell(suppressed(opposite));
-      const rows = horizontal
-        ? `<w:tr>${first}</w:tr><w:tr>${second}</w:tr>`
-        : `<w:tr>${first}${second}</w:tr>`;
-      const read = readOoxmlPart(
-        `<w:document xmlns:w="${W}"><w:body><w:tbl><w:tblPr><w:tblBorders>
-        <w:insideH w:val="single" w:sz="4"/><w:insideV w:val="single" w:sz="4"/>
-        </w:tblBorders></w:tblPr><w:tblGrid><w:gridCol w:w="1800"/>${horizontal ? '' : '<w:gridCol w:w="1800"/>'}</w:tblGrid>
-        ${rows}</w:tbl></w:body></w:document>`,
-        { name: '/word/document.xml', contentType: 'app/xml' }
-      );
-      if (!read.ok) throw new Error(read.reason);
-      const layout = layoutSemanticDocument(read.part, 0, { measurer: createFixedMeasurer(5, 12) });
-      const table = layout.pages[0]!.fragments.find((fragment) => fragment.kind === 'table')!;
-      expect(table.rows[0]!.cells[0]!.borders?.[side] !== undefined).toBe(!both);
-      expect(serializeOoxmlPart(read.part)).toContain(`w:val="${value}"`);
-    }
+    expect(painted.length > 0).toBe(suppressedRows === 1);
   }
 });

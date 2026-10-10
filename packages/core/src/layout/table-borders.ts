@@ -45,8 +45,9 @@ export type TableBorderSideName = 'top' | 'right' | 'bottom' | 'left';
 /**
  * One border edge in one of three states.
  *
- * Omitted edges inherit. Explicit no-border edges suppress their own inherited rule.
- * An opposing edge can still win, including a rule inherited by the neighboring cell.
+ * Omitted edges inherit. Explicit no-border edges suppress inherited rules; a directly
+ * authored opposing edge can still win. This matches the saved Word sample's mixed and
+ * borderless tables, including cells authored with `w:val="none"`.
  */
 export type TableBorderSide =
   | { readonly state: 'omitted' }
@@ -815,6 +816,20 @@ export function resolveTableCellBorderGrid(
       interior,
     });
 
+  /** Preserve explicit no-border cells against inherited rules from their neighbours.
+   * An authored opposing edge still participates in the shared-edge conflict.
+   */
+  const interiorConflict = (
+    mine: TableBorderSide,
+    theirs: TableBorderSide,
+    mineEffective: TableBorderSide,
+    theirsEffective: TableBorderSide
+  ): TableBorderSide => {
+    if (mine.state === 'none' && theirs.state !== 'edge') return NONE;
+    if (theirs.state === 'none' && mine.state !== 'edge') return NONE;
+    return resolveBorderConflict(mineEffective, theirsEffective);
+  };
+
   for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
     const row = rows[rowIndex]!;
     for (let cellIndex = 0; cellIndex < row.length; cellIndex += 1) {
@@ -868,7 +883,9 @@ export function resolveTableCellBorderGrid(
           if (below?.cell.vMergeContinue) {
             edge = OMITTED;
           } else {
-            edge = resolveBorderConflict(
+            edge = interiorConflict(
+              cell.borders.bottom,
+              below ? below.cell.borders.top : OMITTED,
               effective(cell, 'bottom', true),
               below ? effective(below.cell, 'top', true) : table.insideH
             );
@@ -885,7 +902,9 @@ export function resolveTableCellBorderGrid(
           edge = effective(cell, 'right', false);
         } else {
           const neighbor = ownerAt(ownership, r, lastCol + 1, work);
-          edge = resolveBorderConflict(
+          edge = interiorConflict(
+            cell.borders.right,
+            neighbor ? neighbor.cell.borders.left : OMITTED,
             effective(cell, 'right', true),
             neighbor ? effective(neighbor.cell, 'left', true) : table.insideV
           );
