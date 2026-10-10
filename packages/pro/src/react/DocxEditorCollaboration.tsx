@@ -24,7 +24,7 @@ import type {
   CollaborationRemoteSelection,
 } from '@docx-editor.dev/core/collaboration';
 import type { RemoteCaretLabelAnchor } from '@docx-editor.dev/core/editor';
-import type { CollaborationSession } from '../collaboration/session.ts';
+import type { CollaborationSession } from '../collaboration/types.ts';
 import {
   orderedParticipants,
   participantInitials,
@@ -33,6 +33,7 @@ import {
   presenceAvatarUrlOf,
   type PresenceAccent,
 } from '../collaboration/presence-chrome.ts';
+import { CollaborationStatusNotice } from './CollaborationStatusNotice.tsx';
 import { useCollaborationParticipants } from './useCollaborationParticipants.ts';
 import { useCollaborationSession } from './useCollaborationSession.ts';
 
@@ -90,6 +91,7 @@ export interface CollaborationCaretLabelsProps {
 
 /** Render props for {@link DocxEditorCollaboration}.Avatars' per-participant override. @public */
 export interface CollaborationAvatarRenderProps {
+  /** The participant this avatar shows. */
   readonly participant: CollaborationParticipant;
   /** The resolved accent — published colour, or the review roster's colour for the name. */
   readonly color: string;
@@ -108,6 +110,7 @@ export interface CollaborationAvatarsProps {
   readonly session?: CollaborationSession | null;
   /** Avatars shown before the rest collapse into one "+N" chip. Omit to show everyone. */
   readonly max?: number;
+  /** Classes added to the part's root element. */
   readonly className?: string;
   /** Renders one participant's avatar in place of the packaged disc. */
   readonly children?: (props: CollaborationAvatarRenderProps) => ReactNode;
@@ -115,7 +118,9 @@ export interface CollaborationAvatarsProps {
 
 /** Props for {@link DocxEditorCollaboration}.Avatar. @public */
 export interface CollaborationAvatarProps {
+  /** The participant to show. */
   readonly participant: CollaborationParticipant;
+  /** Classes added to the part's root element. */
   readonly className?: string;
   /** Replaces the initials inside the disc; the accent background stays. */
   readonly children?: ReactNode;
@@ -426,6 +431,8 @@ export interface DocxEditorCollaborationNamespace {
   readonly Avatars: typeof CollaborationAvatars;
   /** One participant's avatar, for hosts arranging their own presence chrome. */
   readonly Avatar: typeof CollaborationAvatar;
+  /** The room's state in one line, shown only when the user needs to know. */
+  readonly Status: typeof CollaborationStatusNotice;
 }
 
 /**
@@ -436,6 +443,7 @@ export interface DocxEditorCollaborationNamespace {
  * @example
  * ```tsx
  * <DocxEditorCollaboration.Avatars session={session} max={4} />
+ * <DocxEditorCollaboration.Status session={session} onRejoin={rejoin} />
  * <DocxEditorCollaboration.CaretLabels session={session}>
  *   {({ selection, color }) => <MyLabel name={selection.name} color={color} />}
  * </DocxEditorCollaboration.CaretLabels>
@@ -447,4 +455,5 @@ export const DocxEditorCollaboration: DocxEditorCollaborationNamespace = Object.
   CaretLabels: CollaborationCaretLabels,
   Avatars: CollaborationAvatars,
   Avatar: CollaborationAvatar,
+  Status: CollaborationStatusNotice,
 });

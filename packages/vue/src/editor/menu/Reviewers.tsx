@@ -39,7 +39,7 @@ export const MenuReviewers = defineComponent({
       if (!state.enabled) {
         return (
           <MenuRow disabled title={disabledReason ?? undefined} {...menuRowSlot('review.authors')}>
-            {text}
+            {{ default: () => text }}
           </MenuRow>
         );
       }
@@ -49,24 +49,28 @@ export const MenuReviewers = defineComponent({
       const allVisible = reviewerAuthors.every((info) => !hiddenSet.has(info.author));
       return (
         <MenuSubmenu labelKey="reviewers.label" className={props.className}>
-          <ReviewerRow
-            checked={allVisible}
-            label={label('reviewers.all')}
-            rowSlot="reviewer-all"
-            onChoose={() => editorRef.value?.setAllReviewAuthorsVisible(!allVisible)}
-          />
-          <div class="docx-toolbar__menu-separator" role="separator" />
-          {reviewerAuthors.map((info) => (
-            <ReviewerRow
-              key={info.author}
-              checked={!hiddenSet.has(info.author)}
-              label={info.author || '—'}
-              rowSlot={`reviewer-${info.slot}`}
-              onChoose={() =>
-                editorRef.value?.setReviewAuthorVisible(info.author, hiddenSet.has(info.author))
-              }
-            />
-          ))}
+          {{
+            default: () => [
+              <ReviewerRow
+                checked={allVisible}
+                label={label('reviewers.all')}
+                rowSlot="reviewer-all"
+                onChoose={() => editorRef.value?.setAllReviewAuthorsVisible(!allVisible)}
+              />,
+              <div class="docx-toolbar__menu-separator" role="separator" />,
+              reviewerAuthors.map((info) => (
+                <ReviewerRow
+                  key={info.author}
+                  checked={!hiddenSet.has(info.author)}
+                  label={info.author || '—'}
+                  rowSlot={`reviewer-${info.slot}`}
+                  onChoose={() =>
+                    editorRef.value?.setReviewAuthorVisible(info.author, hiddenSet.has(info.author))
+                  }
+                />
+              )),
+            ],
+          }}
         </MenuSubmenu>
       );
     };
@@ -90,7 +94,7 @@ const ReviewerRow = defineComponent({
         icon={<span class="docx-menubar__reviewer-check">{props.checked ? '✓' : ''}</span>}
         selectHandler={props.onChoose}
       >
-        {props.label}
+        {{ default: () => props.label }}
       </MenuRow>
     );
   },

@@ -26,7 +26,6 @@ export function collaborationModule(options: CollaborationModuleOptions): Editor
 
 // @public
 export interface CollaborationModuleOptions extends ProLicenseOptions {
-    // (undocumented)
     readonly session: EditorCollaborationSession;
 }
 
@@ -384,7 +383,5 @@ export interface StandardSchemaV1<Input = unknown, Output = Input> {
 
 // @public
 export function updateCustomNode<Schema extends StandardSchemaV1 | undefined = undefined>(editor: Editor, definition: CustomNodeDefinition<Schema>, nodeId: string, update?: CustomNodeUpdate<Schema>): CustomNodeWriteOutcome;
-
-// (No @packageDocumentation comment for this package)
 
 ```

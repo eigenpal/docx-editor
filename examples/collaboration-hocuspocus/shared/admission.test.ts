@@ -112,7 +112,7 @@ describe('demo version recovery', () => {
       expect(direct.body).toContain('Keep the saved room');
       expect(direct.body).toContain('Save a copy of any local changes first');
       expect(direct.documentation).toEqual({
-        url: 'https://www.docx-editor.dev/docs/latest/pro/collaboration-versions',
+        url: 'https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions',
         label: 'Read the collaboration upgrade guide',
       });
     });

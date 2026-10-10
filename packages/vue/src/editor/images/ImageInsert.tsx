@@ -191,7 +191,7 @@ export const ImageInsertTrigger = defineComponent({
         onMousedown: guardToolbarMousedown,
         onClick: insert.openFilePicker,
       };
-      if (props.asChild) return <Slot {...shared}>{slots.default?.()}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>;
       return <button {...shared}>{slots.default?.() ?? chromeIcon(control?.paths)}</button>;
     };
   },

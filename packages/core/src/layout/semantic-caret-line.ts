@@ -26,6 +26,23 @@ export function laterLineOwns(layout: SemanticLayout, line: LineRecord, offset: 
   return false;
 }
 
+/**
+ * Whether the line right after `line` in its paragraph starts at `offset` — a soft wrap or a
+ * page continuation that shares the offset. Only the NEXT line counts: a story laid out once
+ * and attached to every page lists its lines again for each sheet, and a later copy starting
+ * at the same offset is not a continuation.
+ */
+export function nextLineStartsAt(
+  layout: SemanticLayout,
+  line: LineRecord,
+  offset: number
+): boolean {
+  const lines = paragraphLinesIndex(layout).get(line.range.paragraphId) ?? [];
+  const index = lines.findIndex((placed) => placed.line === line);
+  const next = lines[index + 1]?.line;
+  return index >= 0 && next !== undefined && next !== line && next.range.start === offset;
+}
+
 /** The cut field fragment on `line` whose range starts or ends at `offset`, if any. */
 function fieldFragmentAt(
   line: LineRecord,

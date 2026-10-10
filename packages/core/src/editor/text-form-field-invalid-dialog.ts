@@ -13,6 +13,8 @@ export function textFormFieldInvalidDialog(
   const text = textFormLabels(panel, t);
   panel.className = 'docx-text-form-dialog';
   panel.setAttribute('role', 'alertdialog');
+  // An editor modal: an open toolbar popup stays open behind it (see popup-escape.ts).
+  panel.setAttribute('data-docx-modal', '');
   text(panel, 'textFormField.invalidTitle', 'aria-label');
   text(panel, `textFormField.invalid${type === 'number' ? 'Number' : 'Date'}`, 'aria-description');
   const heading = document.createElement('h2');

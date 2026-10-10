@@ -75,7 +75,6 @@ import {
   ownProposedParagraph,
   withPropertyChangeRecord,
 } from './tree-op-tracked-properties.ts';
-import { paragraphModelTextOf } from './paragraph-model-text.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import {
   isValidParaId,
@@ -151,7 +150,6 @@ import {
 import {
   insertionDestination,
   fieldInsertionEndAt,
-  isParagraph,
   runsUnder,
   segmentAncestryNodeId,
   segmentsOf,
@@ -3037,7 +3035,7 @@ function emptyCellParagraph(
   const identity: OoxmlAttribute[] = [];
   const w14Prefix = w14PrefixInScopeAt(part, anchorTable);
   if (w14Prefix !== null) {
-    const paraIdValue = mintParaId(seed, used);
+    const paraIdValue = mintParaId(actorScopedSeed(seed), used);
     identity.push(...mintedParagraphIdentityAttributes(w14Prefix, paraIdValue));
   }
   return {
@@ -3486,9 +3484,4 @@ export function splitRunsAt(
   return { ok: true, part: replaced.part };
 }
 
-/** Paragraph text as the ops address it, for tests and callers computing offsets. */
-export function paragraphTextOf(part: OoxmlPart, paragraphId: string): string | null {
-  const paragraph = findNode(part, paragraphId);
-  if (!isParagraph(paragraph)) return null;
-  return paragraphModelTextOf(paragraph);
-}
+export { paragraphTextOf } from './paragraph-model-text.ts';

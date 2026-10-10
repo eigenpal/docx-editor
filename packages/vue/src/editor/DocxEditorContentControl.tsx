@@ -197,7 +197,7 @@ const ContentControlHeader = defineComponent({
           </button>
         </>
       );
-      if (props.asChild) return <Slot {...shared}>{content}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => content }}</Slot>;
       return <div {...shared}>{content}</div>;
     };
   },
@@ -273,7 +273,7 @@ const ContentControlFields = defineComponent({
         'data-testid': 'content-control-inspector-fields',
         style: { display: 'flex', flexDirection: 'column' as const, gap: '8px' },
       };
-      if (props.asChild) return <Slot {...shared}>{fields}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => fields }}</Slot>;
       return <div {...shared}>{fields}</div>;
     };
   },
@@ -315,7 +315,7 @@ const ContentControlRemove = defineComponent({
           <span>{label}</span>
         </>
       );
-      if (props.asChild) return <Slot {...shared}>{content}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => content }}</Slot>;
       return <button {...shared}>{content}</button>;
     };
   },
@@ -407,7 +407,7 @@ const ContentControlRoot = defineComponent({
         </>
       );
 
-      if (props.asChild) return <Slot {...shared}>{titled}</Slot>;
+      if (props.asChild) return <Slot {...shared}>{{ default: () => titled }}</Slot>;
       return <div {...shared}>{titled}</div>;
     };
   },

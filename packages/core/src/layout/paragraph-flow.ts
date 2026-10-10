@@ -16,7 +16,8 @@ import {
 } from './pending-line.ts';
 import { spaceShrinkWordTail } from './space-shrink-word-tail.ts';
 import { wordFollowsOnlyTabs } from './leading-tab-word.ts';
-import { scriptLineFloor } from './paragraph-mark-metrics.ts';
+import { growScriptLineMetrics } from './paragraph-mark-metrics.ts';
+import { spacedLine } from './positioned-run-spacing.ts';
 import { markRunPropertiesWithoutCharacterStyle } from './paragraph-mark-run.ts';
 import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
 import {
@@ -64,7 +65,7 @@ import {
   TAB_LEADER_GLYPH,
   type ResolvedTabStops,
 } from './paragraph-tabs.ts';
-import { SINGLE_LINE_SPACING, applyLineSpacing } from './paragraph-style.ts';
+import { SINGLE_LINE_SPACING } from './paragraph-style.ts';
 import {
   DEFAULT_RUN_STYLE,
   displayText,
@@ -855,7 +856,7 @@ export function breakParagraph(
     (line.drawings as InlineDrawingRecord[]).splice(0, line.drawings.length, ...repositioned);
   };
 
-  const closeLine = (options?: { readonly includeParagraphMark?: boolean }): void => {
+  const closeLine = (): void => {
     previousLineCut = false; // Only the oversized-word cut sets it again.
     placeLeadingIgnoredBreaks(line, pageBreaksIgnored);
     const empty =
@@ -868,10 +869,8 @@ export function breakParagraph(
       line.height = metrics.height;
       line.baseline = metrics.baseline;
       glyphBaseline = metrics.baseline;
-    } else if (options?.includeParagraphMark && !flow?.paragraphMarkIsCellEnd) {
-      // A script line's floor stays below the glyph baseline, so a cover page keeps its rhythm.
-      const floor = scriptLineFloor(line.spans, unstyledMarkStyle.verticalAlign, measurer);
-      line.height = Math.max(line.height, floor);
+    } else {
+      glyphBaseline += growScriptLineMetrics(line, unstyledMarkStyle.verticalAlign, measurer);
     }
     // The list marker is painted as furniture, but it sits on THIS line's baseline, so its
     // face reserves space above it like the run the marker is in Word. The descent is the
@@ -913,7 +912,7 @@ export function breakParagraph(
           pageBreaksIgnored
         )
       : naturalHeight;
-    const spaced = applyLineSpacing(lineSpacing, spacingBase, line.baseline);
+    const spaced = spacedLine(lineSpacing, spacingBase, line.baseline, line.spans, measurer);
     if (!scalesTextBandOnly) line.baseline = spaced.baseline;
     const floored = firstLine && lineSpacing.rule !== 'exact' ? markerBaselineFloor : 0;
     const markerFloor = Math.max(0, floored - line.baseline);
@@ -943,7 +942,7 @@ export function breakParagraph(
     if (lineSpacing.rule !== 'exact') growPendingLineDrawingExtent(line);
     line.trailingSpacing =
       line.drawings.length === 0 && lineSpacing.rule !== 'exact'
-        ? Math.max(0, spaced.trailing ?? spaced.height - naturalHeight)
+        ? Math.max(0, Math.min(spaced.trailing ?? Infinity, spaced.height - naturalHeight))
         : drawingLineTrailing;
     finalizeTopAndBottomClearance();
     commitBreakClearance();
@@ -1673,7 +1672,7 @@ export function breakParagraph(
   }
   // Retain the final line for the caret and paragraph mark; wraps do not inherit mark metrics.
   if (line.spans.length > 0 || line.drawings.length > 0 || lines.length === 0 || trailingLineBreak)
-    closeLine({ includeParagraphMark: true });
+    closeLine();
   // A centred colon can use the next opening bracket's bearing only on the same line.
   // Retry once with natural colon advances instead of forcing a new unbreakable group.
   if (!preserveColonAdvances && colonLostOpeningBearing(lines))

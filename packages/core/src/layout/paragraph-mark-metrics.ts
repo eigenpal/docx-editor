@@ -7,40 +7,46 @@ import { styleForFontSlot, type FontSlot } from './script-itemization.ts';
 const TEXT_GLYPH = /[^ \t\n\r\f\v\uFFFC]/u;
 
 /**
- * The height a paragraph's last line keeps below its glyphs when it holds super- or subscript
- * text, or 0 when it holds none.
+ * Grow a line that holds super- or subscript text to each script run's full-size metrics.
+ *
+ * A script run draws at its smaller glyph size, raised or lowered, but its line keeps the
+ * run's full-size ascent above the baseline and full-size descent below it, as if the run sat
+ * on the baseline at its own size. Superscript and subscript count the same, on every line of
+ * the paragraph. A superscript or subscript mark (`markVerticalAlign`) keeps the smaller glyph
+ * size. Returns how far the baseline moved down, so the caller can move the glyph band with it.
  *
  * A paragraph mark never grows a line that holds content, whether its size is direct or comes
- * from its character style. Under a 24pt mark, 12pt text keeps a 12pt line in body text and
- * in a table cell, in compatibility modes 14 and 15 and with no mode set. So do 12pt
- * superscript, subscript and mixed text, a 10pt inline picture, and an equation. Only a line
- * with nothing on it takes the mark's height, and the caller sizes that line from the mark.
- *
- * A script run measures at its smaller glyph size, so its line keeps one ordinary floor: each
- * script run at its full size. Under a 24pt or a 12pt mark, a 12pt superscript line is as tall
- * as a 12pt text line, also when the cascade is 8pt. The paragraph's run cascade is no floor:
- * 8pt text with an 8pt superscript keeps the 8pt line under a 12pt cascade, with an 8pt mark,
- * a 24pt mark or no mark. A superscript or subscript mark (`markVerticalAlign`) keeps the
- * smaller glyph size.
+ * from its character style; only a line with nothing on it takes the mark's height, and the
+ * caller sizes that line from the mark. The paragraph's run cascade is no floor either: 8pt
+ * text with an 8pt superscript keeps the 8pt line under a 12pt cascade.
  */
-export function scriptLineFloor(
-  spans: readonly (Pick<StyleSpanRecord, 'noteSeparator' | 'fieldAtom'> & {
-    readonly text: string;
-    readonly style: ResolvedRunStyle;
-    readonly fontSlot?: FontSlot;
-  })[],
+export function growScriptLineMetrics(
+  line: {
+    height: number;
+    baseline: number;
+    readonly spans: readonly (Pick<StyleSpanRecord, 'noteSeparator' | 'fieldAtom'> & {
+      readonly text: string;
+      readonly style: ResolvedRunStyle;
+      readonly fontSlot?: FontSlot;
+    })[];
+  },
   markVerticalAlign: ResolvedRunStyle['verticalAlign'],
   measurer: Pick<TextMeasurer, 'lineMetrics'>
 ): number {
-  let floor = 0;
-  for (const span of spans) {
+  let ascent = line.baseline;
+  let descent = line.height - line.baseline;
+  for (const span of line.spans) {
     if (span.style.verticalAlign === 'baseline' || !TEXT_GLYPH.test(span.text)) continue;
     const fullSize = { ...span.style, verticalAlign: markVerticalAlign };
-    floor = Math.max(
-      floor,
-      measurer.lineMetrics(styleForFontSlot(fullSize, span.fontSlot), lineBandText(span, span.text))
-        .height
+    const metrics = measurer.lineMetrics(
+      styleForFontSlot(fullSize, span.fontSlot),
+      lineBandText(span, span.text)
     );
+    ascent = Math.max(ascent, metrics.baseline);
+    descent = Math.max(descent, metrics.height - metrics.baseline);
   }
-  return floor;
+  const raised = ascent - line.baseline;
+  line.baseline = ascent;
+  line.height = ascent + descent;
+  return raised;
 }

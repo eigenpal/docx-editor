@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Mixed cached atomic fields can measure East Asian text with the Latin font.",
+  "after": "Mixed cached atomic fields select East Asian font slots while retaining the original model range.",
+  "reason": "This changes display-only font partitioning. Canonical fields, atomic offsets, operations, and collaboration data remain unchanged.",
+  "tests": ["packages/core/src/layout/__tests__/projected-field-font-slots.test.ts"],
+  "changeset": "projected-field-font-slots",
+  "migration": null
+}

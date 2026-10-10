@@ -3,24 +3,25 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
+import { subscribeTextReads } from './registry-text-reads.ts';
+import { TEXT_DELETIONS_KEY } from './paragraph-text-deletions.ts';
+import { keepFormattingMarkers } from './yjs-items.ts';
+import { compareDocumentOrder } from './registry-document-order.ts';
+import { RegistryHistory } from './registry-history.ts';
 import { observeDirtyPaths } from './registry-dirty-paths.ts';
 import { captureInsertionBoundary } from './split-text-boundaries.ts';
 import { SplitTextSources, type SplitTextRange } from './split-text-sources.ts';
 import * as Y from 'yjs';
 import type { CanonicalBinaryDescriptor } from '@docx-editor.dev/core/collaboration/replication';
 import { partNameKey } from '@docx-editor.dev/core/store';
-import { yjsItemKey, type LogicalId, type NodeIdentityMeta, wordFacingIdsOf } from './identity.ts';
+import { type LogicalId, type NodeIdentityMeta, wordFacingIdsOf } from './identity.ts';
 import { SplitDedupIndex, type SplitTextOverlays } from './split-dedup.ts';
 import { runIsPresent } from './run-text-reads.ts';
-import {
-  DEFAULT_DOCUMENT_LIMITS,
-  mergeLimits,
-  rejectDangerousKey,
-  type DocumentLimits,
-} from './limits.ts';
+import { mergeLimits, rejectDangerousKey, type DocumentLimits } from './limits.ts';
 import {
   NODE_CHILDREN_FIELD,
   NODE_DELETED_FIELD,
+  NODE_UNDONE_FIELD,
   NODE_REPLACED_BY_FIELD,
   NODE_SHELL_FIELD,
   NODE_TEXT_FIELD,
@@ -37,11 +38,10 @@ import {
   makeTextRecord,
   nodeRecordReplacedBy,
   nodeRecordSplitFrom,
+  nodeRecordSplitLineage,
   nodeRecordTombstoned,
   packNodeShell,
   packageSchemaOf,
-  parseAttributeMapKey,
-  parseBindingMapKey,
   type DirtyPaths,
   type ElementRecord,
   type EncodedAttribute,
@@ -56,25 +56,34 @@ import { readRelationships, relationshipKey } from './relationship-store.ts';
 import { observeRegistrySchema } from './registry-observers.ts';
 import {
   assignFirstReachableParents,
-  resolveContestedPlacements,
+  placeParents,
+  type ContestContext,
 } from './registry-contested-placement.ts';
 import {
   applyAttributeMapEvent,
   applyBindingMapEvent,
   deleteSharedAttribute,
   deleteSharedBinding,
-  upsertIndexedAttribute,
-  upsertIndexedBinding,
+  indexSideMaps,
   writeSharedAttribute,
   writeSharedBinding,
 } from './registry-side-maps.ts';
 import {
+  asTrackedType,
+  assertNoParentFieldsIn,
   elementRecordOf,
+  isLogicalIdKey,
+  itemKeyOf,
+  keyId,
   nodeKindOf,
   nodeShapeOf,
-  sameChildOrder,
+  readString,
   type NodeShape,
 } from './registry-node-reads.ts';
+import { addListing, syncChildListings, type ChildListings } from './registry-listings.ts';
+import { AdoptionIndex } from './registry-adoption.ts';
+import { InlineIndex } from './paragraph-inline-index.ts';
+import { INLINE_FIELD } from './paragraph-text.ts';
 import {
   readBinaries,
   readContentTypeDefaults,
@@ -84,33 +93,26 @@ import {
 import { retainsNumberingInfrastructure } from './undo-numbering.ts';
 import { nodeRecordDeleteFilter } from './undo-delete-filter.ts';
 
-function itemKeyOf(type: Y.Map<unknown>): string | null {
-  const item = (type as unknown as { _item?: { id: { client: number; clock: number } } })._item;
-  if (!item) return null;
-  return yjsItemKey(item.id.client, item.id.clock);
-}
-
-function asTrackedType(type: unknown): Y.AbstractType<unknown> {
-  return type as Y.AbstractType<unknown>;
-}
-
-function readString(value: unknown): string {
-  return typeof value === 'string' ? value : '';
-}
-
 /** Child-ID arrays are the only replicated membership and order authority. */
 export class DocumentRegistry {
   readonly schema: PackageSchema;
   readonly limits: DocumentLimits;
   /** First reachable preorder parent. Derived, never replicated. */
   private parentIndex = new Map<LogicalId, LogicalId>();
+  readonly history = new RegistryHistory();
+  /** Ids more than one parent lists. Their placement can move without their listings moving. */
+  private contested = new Set<LogicalId>();
+  /** Parents a contested child moved from or to since the materializer last asked. */
+  private readonly reparented = new Set<LogicalId>();
   /** Every child-array listing. Derived, never replicated. */
   private listings = new Map<LogicalId, Set<LogicalId>>();
   private childrenSnapshot = new Map<LogicalId, readonly LogicalId[]>();
-  private adoptees = new Map<LogicalId, LogicalId[]>();
-  private tombstoneSources = new Map<LogicalId, Set<LogicalId>>();
-  /** Which survivor's source set lists each tombstone. Derived, never replicated. */
-  private tombstoneSurvivor = new Map<LogicalId, LogicalId>();
+  private readonly adoption: AdoptionIndex;
+  /** Which paragraph's shared text holds each inline ID. */
+  readonly inline: InlineIndex;
+  private readonly stopMarks: () => void;
+  private readonly stopKeepingMarkers: () => void;
+  private readonly markListeners = new Set<(ids: ReadonlySet<LogicalId>) => void>();
   private attributesByNode = new Map<LogicalId, Map<string, EncodedAttribute>>();
   private bindingsByNode = new Map<LogicalId, Map<string, EncodedBinding>>();
   /** Deterministic dedup of concurrent format splits (#581). */
@@ -133,10 +135,41 @@ export class DocumentRegistry {
     readonly doc: Y.Doc,
     limits?: Partial<DocumentLimits>
   ) {
+    this.stopKeepingMarkers = keepFormattingMarkers(doc);
     this.schema = packageSchemaOf(doc);
     this.limits = mergeLimits(limits);
     this.splitDedup = new SplitDedupIndex(this.schema.nodes);
+    // A paragraph no parent lists counts as deleted: an undo of a split unlists the new one.
+    this.inline = new InlineIndex(
+      this.schema.nodes,
+      this.limits,
+      (id) => this.isTombstoned(id) || !this.parentIndex.has(id),
+      (a, b) =>
+        compareDocumentOrder(
+          {
+            parentOf: (id) => this.parentIndex.get(id),
+            childrenOf: (id) => this.childrenSnapshot.get(id),
+            maxDepth: this.limits.maxTreeDepth,
+          },
+          a,
+          b
+        )
+    );
+    this.adoption = new AdoptionIndex(this.schema.nodes, {
+      kindOf: (id) => this.kindOf(id),
+      isTombstoned: (id) => this.isTombstoned(id),
+      listersOf: (id) => this.listings.get(id) ?? [],
+    });
     this.splitTextSources = new SplitTextSources(this.schema.nodes, this.doc, this.limits);
+    // A mark or a deletion record can change without its text: an undo's restore marks, or a
+    // peer's update that brings them after their text. Those paragraphs read again and rebuild.
+    this.stopMarks = subscribeTextReads(doc, {
+      inline: this.inline,
+      loading: () => this.bulkLoad > 0,
+      changed: (ids) => {
+        for (const listener of this.markListeners) listener(ids);
+      },
+    });
     this.stopObserving = observeRegistrySchema(this.schema, {
       onNodeEvents: (events) => {
         if (this.bulkLoad > 0) return;
@@ -171,6 +204,8 @@ export class DocumentRegistry {
    */
   destroy(): void {
     this.stopObserving();
+    this.stopMarks();
+    this.stopKeepingMarkers();
   }
 
   beginBulkLoad(): void {
@@ -193,6 +228,8 @@ export class DocumentRegistry {
       asTrackedType(this.schema.binaries),
       asTrackedType(this.schema.attributes),
       asTrackedType(this.schema.bindings),
+      // An undo of a deletion withdraws its record, so the text shows again.
+      asTrackedType(this.doc.getMap(TEXT_DELETIONS_KEY)),
     ];
   }
 
@@ -270,7 +307,9 @@ export class DocumentRegistry {
   }
 
   parentOf(logicalId: LogicalId): LogicalId | null {
-    return this.parentIndex.get(logicalId) ?? null;
+    // Inline content and embedded nodes are listed by no child array; their paragraph's
+    // shared text holds them.
+    return this.parentIndex.get(logicalId) ?? this.inline.owner(logicalId);
   }
 
   identityMeta(logicalId: LogicalId): NodeIdentityMeta | null {
@@ -294,7 +333,7 @@ export class DocumentRegistry {
   }
 
   adoptedChildren(survivorId: LogicalId): readonly LogicalId[] {
-    return this.adoptees.get(survivorId) ?? [];
+    return this.adoption.adoptees.get(survivorId) ?? [];
   }
 
   /**
@@ -306,7 +345,7 @@ export class DocumentRegistry {
    * children silently disappear from the survivor.
    */
   adoptionIndex(): ReadonlyMap<LogicalId, readonly LogicalId[]> {
-    return this.adoptees;
+    return this.adoption.adoptees;
   }
 
   /**
@@ -344,7 +383,7 @@ export class DocumentRegistry {
   }
 
   allLogicalIds(): readonly LogicalId[] {
-    return [...this.schema.nodes.keys()].filter((key) => !rejectDangerousKey(key));
+    return [...this.schema.nodes.keys()].filter(isLogicalIdKey);
   }
 
   /**
@@ -460,8 +499,17 @@ export class DocumentRegistry {
     );
     const text = range?.text ?? this.textOf(logicalId);
     const start = (range?.start ?? 0) + utf16Start;
-    if (deleteCount > 0) text.delete(start, deleteCount);
-    if (insert.length > 0) text.insert(start, insert);
+    // A shared-text insert skips forward past deleted characters, so a replacement written
+    // after its delete sat behind the text it replaced: a peer typing at that place landed
+    // between them, and undo put the old text before the peer's words. Plain text inserts
+    // first. Split-text slices keep delete-first, which their boundary anchors are built on.
+    if (range === null && this.splitTextSources.isPlain(logicalId)) {
+      if (insert.length > 0) text.insert(start, insert);
+      if (deleteCount > 0) text.delete(start + insert.length, deleteCount);
+    } else {
+      if (deleteCount > 0) text.delete(start, deleteCount);
+      if (insert.length > 0) text.insert(start, insert);
+    }
     restoreBoundary?.();
   }
 
@@ -522,6 +570,11 @@ export class DocumentRegistry {
     return nodeRecordSplitFrom(this.schema.nodes.get(logicalId));
   }
 
+  /** The split a run's branch descends from, or null when no concurrent split made it. */
+  splitLineageOf(logicalId: LogicalId): LogicalId | null {
+    return nodeRecordSplitLineage(this.schema.nodes.get(logicalId));
+  }
+
   /** Runs a concurrent format split superseded and this replica must not materialize (#581). */
   replacementLoserRuns(): ReadonlySet<LogicalId> {
     if (this.hasUnobservedWrites()) this.splitDedup.invalidate();
@@ -530,6 +583,10 @@ export class DocumentRegistry {
 
   splitTextRange(id: LogicalId): SplitTextRange | null {
     return this.splitTextSources.range(id);
+  }
+
+  splitTextPending(id: LogicalId): boolean {
+    return this.splitTextSources.isPending(id);
   }
 
   projectedTextValue(id: LogicalId): string | null {
@@ -658,8 +715,22 @@ export class DocumentRegistry {
     return this.schema.nodes.has(logicalId);
   }
 
+  /** Whether a view shows the node in a child list: it arrived, is live, and its text is not pending. */
+  showsAsChild(logicalId: LogicalId): boolean {
+    const record = this.schema.nodes.get(logicalId);
+    if (record === undefined || nodeRecordTombstoned(record)) return false;
+    return !(isTextNodeMap(record) && this.splitTextPending(logicalId));
+  }
+
   observeDirty(onDirty: (paths: DirtyPaths) => void): () => void {
-    return observeDirtyPaths(this.schema, onDirty);
+    const stopPaths = observeDirtyPaths(this.schema, onDirty);
+    const onMarks = (logicalIds: ReadonlySet<LogicalId>): void =>
+      onDirty({ logicalIds, membershipChanged: false, packageChanged: false });
+    this.markListeners.add(onMarks);
+    return () => {
+      stopPaths();
+      this.markListeners.delete(onMarks);
+    };
   }
 
   rebuildDerivedIndexes(): void {
@@ -671,63 +742,39 @@ export class DocumentRegistry {
     this.parentIndex = new Map();
     this.listings = new Map();
     this.childrenSnapshot = new Map();
-    this.adoptees = new Map();
-    this.tombstoneSources = new Map();
-    this.tombstoneSurvivor = new Map();
+    this.adoption.reset();
     this.attributesByNode = new Map();
     this.bindingsByNode = new Map();
     this.splitDedup.reset();
     this.splitTextSources.reset();
     this.schema.nodes.forEach((rec, parentId) => {
-      if (rejectDangerousKey(parentId)) return;
+      if (!isLogicalIdKey(parentId)) return;
       const children = childArrayOf(rec);
       if (!children) return;
       const childIds = children.toArray();
       this.childrenSnapshot.set(parentId, childIds);
-      for (const childId of childIds) this.addListing(childId, parentId);
+      for (const childId of childIds) addListing(this.listingIndex(), childId, parentId);
     });
     this.schema.nodes.forEach((rec, id) => {
-      if (nodeRecordTombstoned(rec)) this.syncAdoptee(id);
-      this.splitDedup.indexExisting(id);
+      if (nodeRecordTombstoned(rec)) this.adoption.sync(keyId(id));
+      this.splitDedup.indexExisting(keyId(id));
     });
-    this.schema.attributes.forEach((packed, key) => {
-      if (typeof packed !== 'string' || rejectDangerousKey(key)) return;
-      const parsed = parseAttributeMapKey(key);
-      if (!parsed || rejectDangerousKey(parsed.logicalId) || rejectDangerousKey(parsed.localName)) {
-        return;
-      }
-      upsertIndexedAttribute(
-        this.schema,
-        this.attributesByNode,
-        parsed.logicalId,
-        parsed.namespaceId,
-        parsed.localName,
-        packed
-      );
-    });
-    this.schema.bindings.forEach((namespaceId, key) => {
-      if (typeof namespaceId !== 'string' || rejectDangerousKey(key)) return;
-      const parsed = parseBindingMapKey(key);
-      if (!parsed || rejectDangerousKey(parsed.logicalId) || rejectDangerousKey(parsed.prefix)) {
-        return;
-      }
-      upsertIndexedBinding(
-        this.schema,
-        this.bindingsByNode,
-        parsed.logicalId,
-        parsed.prefix,
-        namespaceId
-      );
-    });
-    this.assignFirstReachable(null);
+    indexSideMaps(this.schema, this.attributesByNode, this.bindingsByNode);
+    assignFirstReachableParents(this.placementContext(), null);
+    this.contested = new Set();
+    for (const [id, listed] of this.listings) if (listed.size > 1) this.contested.add(id);
+    // Children no part reaches — under a tombstone, say — get their parent the way child-array
+    // events assign it. Otherwise a cold joiner or export resolved them to no parent, counted
+    // a concurrently split run as absent, and showed text every live replica hides.
+    const unplaced = new Set<LogicalId>();
+    for (const id of this.listings.keys()) if (!this.parentIndex.has(id)) unplaced.add(id);
+    if (unplaced.size > 0) this.resolveParents(unplaced);
+    // Last: a paragraph no parent lists reads as deleted, so placement comes first.
+    this.inline.rebuild();
   }
 
   assertNoParentFields(): void {
-    this.schema.nodes.forEach((value) => {
-      if (isNodeMap(value) && (value.has('parent') || value.has('parentId'))) {
-        throw new Error('registry record must not replicate a parent field');
-      }
-    });
+    assertNoParentFieldsIn(this.schema.nodes);
   }
 
   private applyChildArrayEvents(events: Y.YEvent<Y.AbstractType<unknown>>[]): void {
@@ -735,6 +782,7 @@ export class DocumentRegistry {
     // These events describe every write, local or remote, so they carry the whole count.
     this.pendingNodeAdds = 0;
     const changed = new Set<LogicalId>();
+    let structural = false;
     for (const event of events) {
       // Text and boundary metadata do not change which split branches are reachable.
       if (
@@ -749,24 +797,56 @@ export class DocumentRegistry {
             )))
       )
         this.splitDedup.invalidate();
-      if (event.path.length > 0) this.splitTextSources.noteChanged(String(event.path[0]));
+      if (event.path.length > 0) this.splitTextSources.noteChanged(keyId(event.path[0]!));
+      if (event.target instanceof Y.Text && event.path[1] === INLINE_FIELD) {
+        this.inline.paragraphChanged(keyId(event.path[0]!));
+        continue;
+      }
+      // A record's shared text can arrive after the record itself, in a later update, and a
+      // deleted paragraph's text shows nothing, or only what follows a move out of it.
+      if (
+        event.target instanceof Y.Map &&
+        event.path.length === 1 &&
+        (event.changes.keys.has(INLINE_FIELD) || event.changes.keys.has(NODE_DELETED_FIELD))
+      ) {
+        this.inline.paragraphChanged(keyId(event.path[0]!));
+      }
       // A remote applyUpdate delivers a new element record with its children already filled.
       // Yjs does not emit a child-array event for that initial fill. Skipping it left
       // `parentOf` null, so an attribute-only journal could not dirty the part root and the
       // receiving replica kept the cached `commentsExtended.xml`.
       if (event.path.length === 0 && event.target instanceof Y.Map) {
+        structural = true;
         for (const [key, change] of event.changes.keys) {
           if (this.nodeCountCache >= 0 && change.action !== 'update') {
             this.nodeCountCache += change.action === 'add' ? 1 : -1;
           }
-          if (change.action === 'delete' || rejectDangerousKey(String(key))) continue;
+          if (rejectDangerousKey(String(key))) continue;
+          if (change.action === 'delete') {
+            // A removed record's text no longer holds IDs or copies.
+            this.inline.paragraphChanged(keyId(key));
+            continue;
+          }
           // A run a peer split off carries its origin; index it so the loser-dedup sees the
           // concurrent split the moment the remote record arrives, not only after a rebuild.
-          this.splitDedup.indexExisting(String(key));
-          this.splitTextSources.indexExisting(String(key));
-          for (const childId of this.syncChildListings(String(key))) changed.add(childId);
+          this.splitDedup.indexExisting(keyId(key));
+          // A new record can be the source a waiting alias names, so its aliases re-read too.
+          this.splitTextSources.noteChanged(keyId(key));
+          for (const childId of this.syncChildListings(keyId(key))) changed.add(childId);
+          this.inline.paragraphChanged(keyId(key));
+          this.inline.recordArrived(keyId(key));
+          // A record can arrive already joined into another; its survivor adopts from it.
+          if (this.isTombstoned(keyId(key))) this.adoption.sync(keyId(key));
+          this.adoption.recomputeListerSurvivors(keyId(key));
         }
         continue;
+      }
+      if (
+        event.target instanceof Y.Map &&
+        event.path.length === 1 &&
+        event.changes.keys.has(NODE_UNDONE_FIELD)
+      ) {
+        this.history.noteMarkChanged(keyId(event.path[0]!));
       }
       // Undo retains record containers. Redo restores scalar provenance on those existing
       // maps, so a late joiner must index field changes as well as new map entries.
@@ -775,12 +855,13 @@ export class DocumentRegistry {
         event.path.length === 1 &&
         (event.changes.keys.has('splitFrom') || event.changes.keys.has('splitLineage'))
       ) {
-        this.splitDedup.indexExisting(String(event.path[0]));
+        this.splitDedup.indexExisting(keyId(event.path[0]!));
       }
       if (event.target instanceof Y.Array && event.path.length > 0) {
-        const parentId = String(event.path[0]);
+        structural = true;
+        const parentId = keyId(event.path[0]!);
         for (const childId of this.syncChildListings(parentId)) changed.add(childId);
-        if (this.isTombstoned(parentId)) this.syncAdoptee(parentId);
+        if (this.isTombstoned(parentId)) this.adoption.sync(parentId);
         continue;
       }
       if (
@@ -789,10 +870,33 @@ export class DocumentRegistry {
         (event.changes.keys.has(NODE_DELETED_FIELD) ||
           event.changes.keys.has(NODE_REPLACED_BY_FIELD))
       ) {
-        this.syncAdoptee(String(event.path[0]));
+        structural = true;
+        const id = keyId(event.path[0]!);
+        this.adoption.sync(id);
+        this.adoption.recomputeListerSurvivors(id);
+        // A delete or restore changes which lister can place this node's children.
+        for (const child of this.childrenSnapshot.get(id) ?? []) changed.add(child);
       }
     }
+    // A contested child goes to the lister first in document order. A sibling moving, or a
+    // lister's ancestor going away, changes that order without touching the child's own
+    // listings, so every contest is decided again after each structural batch.
+    if (structural) for (const id of this.contested) changed.add(id);
     if (changed.size > 0) this.resolveParents(changed);
+    // The holder that shows a contested copy is the last in document order.
+    if (structural) this.inline.orderChanged();
+  }
+
+  /** The records that lost their last parent since the last call, and still have none. */
+  takeUnlisted(): LogicalId[] {
+    return this.history.takeUnlisted((id) => this.parentIndex.has(id));
+  }
+
+  /** Parents whose shown children a contest moved since the last call. */
+  takeReparented(): readonly LogicalId[] {
+    const moved = [...this.reparented];
+    this.reparented.clear();
+    return moved;
   }
 
   private applyAttributeMapEvent(event: Y.YMapEvent<string>): void {
@@ -808,136 +912,43 @@ export class DocumentRegistry {
   private syncChildListings(parentId: LogicalId): LogicalId[] {
     const rec = this.schema.nodes.get(parentId);
     const next = rec ? (childArrayOf(rec)?.toArray() ?? []) : [];
-    const prev = this.childrenSnapshot.get(parentId) ?? [];
-    // The top-level node map reports a whole record as one key change, so this runs for every
-    // node a journal writes, whether or not that node's children moved. An unchanged listing
-    // has nothing to say and no snapshot to replace.
-    if (sameChildOrder(prev, next)) return [];
-    // Membership by set, not by scan. The body root lists every block in the document, and a
-    // journal now publishes on the commit that produces it, so this sits on the keystroke
-    // path: a scan per child cost ~640,000 comparisons to append one block to a list of 800.
-    const nextSet = new Set(next);
-    const prevSet = new Set(prev);
-    const affected: LogicalId[] = [];
-    for (const childId of prev) {
-      if (nextSet.has(childId)) continue;
-      this.removeListing(childId, parentId);
-      affected.push(childId);
-    }
-    for (const childId of next) {
-      // A child the snapshot already listed here is already in `listings`, because the two
-      // only ever move together. Re-adding it cost three map operations per sibling, so
-      // appending one block to a list of 800 rewrote all 800 listings to change one.
-      if (prevSet.has(childId)) continue;
-      this.addListing(childId, parentId);
-      affected.push(childId);
-    }
-    this.childrenSnapshot.set(parentId, next);
-    return affected;
+    return syncChildListings(this.listingIndex(), parentId, next);
   }
 
-  private addListing(childId: LogicalId, parentId: LogicalId): void {
-    const listed = this.listings.get(childId) ?? new Set<LogicalId>();
-    listed.add(parentId);
-    this.listings.set(childId, listed);
-  }
-
-  private removeListing(childId: LogicalId, parentId: LogicalId): void {
-    const listed = this.listings.get(childId);
-    if (!listed) return;
-    listed.delete(parentId);
-    if (listed.size === 0) this.listings.delete(childId);
+  private listingIndex(): ChildListings {
+    return { listings: this.listings, childrenSnapshot: this.childrenSnapshot };
   }
 
   private resolveParents(ids: ReadonlySet<LogicalId>): void {
-    const multi: LogicalId[] = [];
-    for (const id of ids) {
-      const listed = this.listings.get(id);
-      if (!listed || listed.size === 0) {
-        this.parentIndex.delete(id);
-        continue;
+    const before = new Map<LogicalId, LogicalId | undefined>();
+    for (const id of ids) before.set(id, this.parentIndex.get(id));
+    this.placeParents(ids);
+    for (const [id, previous] of before) {
+      if ((this.listings.get(id)?.size ?? 0) > 1) this.contested.add(id);
+      else this.contested.delete(id);
+      const next = this.parentIndex.get(id);
+      if (next === previous) continue;
+      if ((next === undefined) !== (previous === undefined)) {
+        this.inline.listingChanged(id);
+        if (next === undefined) this.history.noteUnlisted(id);
       }
-      if (listed.size === 1) {
-        this.parentIndex.set(id, [...listed][0]!);
-        continue;
-      }
-      multi.push(id);
+      if (previous !== undefined) this.reparented.add(previous);
+      if (next !== undefined) this.reparented.add(next);
     }
-    if (multi.length === 0) return;
-    const resolved = resolveContestedPlacements(
-      {
-        nodes: this.schema.nodes,
-        parentIndex: this.parentIndex,
-        listings: this.listings,
-        childrenSnapshot: this.childrenSnapshot,
-        partRoots: this.partEntries().map((entry) => entry.rootLogicalId),
-      },
-      multi
-    );
-    if (!resolved) this.assignFirstReachable(new Set(multi));
   }
 
-  private assignFirstReachable(only: ReadonlySet<LogicalId> | null): void {
-    assignFirstReachableParents(
-      {
-        nodes: this.schema.nodes,
-        parentIndex: this.parentIndex,
-        listings: this.listings,
-        childrenSnapshot: this.childrenSnapshot,
-        partRoots: this.partEntries().map((entry) => entry.rootLogicalId),
-      },
-      only
-    );
+  private placeParents(ids: ReadonlySet<LogicalId>): void {
+    placeParents(this.placementContext(), ids);
   }
 
-  private syncAdoptee(removedId: LogicalId): void {
-    // A tombstone lists at most one survivor, and every listing is written here, so the
-    // reverse index names the one source set that can hold `removedId`. Scanning every
-    // survivor instead made each tombstone event cost every tombstone in the session.
-    const previous = this.tombstoneSurvivor.get(removedId);
-    if (previous !== undefined) {
-      this.tombstoneSurvivor.delete(removedId);
-      const sources = this.tombstoneSources.get(previous);
-      if (sources) {
-        sources.delete(removedId);
-        if (sources.size === 0) this.tombstoneSources.delete(previous);
-      }
-    }
-    const rec = this.schema.nodes.get(removedId);
-    const survivor = nodeRecordReplacedBy(rec);
-    if (survivor === null) return;
-    if (nodeRecordTombstoned(rec)) {
-      const sources = this.tombstoneSources.get(survivor) ?? new Set<LogicalId>();
-      sources.add(removedId);
-      this.tombstoneSources.set(survivor, sources);
-      this.tombstoneSurvivor.set(removedId, survivor);
-    }
-    // An un-tombstoned node keeps its `replacedBy`, and its former survivor has to give the
-    // adopted children back, so the survivor recomputes in both branches.
-    this.recomputeAdoptees(survivor);
-  }
-
-  private isContentWitness(id: LogicalId): boolean {
-    const kind = this.kindOf(id);
-    return kind !== null && !kind.endsWith('Properties');
-  }
-
-  private recomputeAdoptees(survivorId: LogicalId): void {
-    const extras: LogicalId[] = [];
-    for (const tombstoneId of this.tombstoneSources.get(survivorId) ?? []) {
-      const rec = this.schema.nodes.get(tombstoneId);
-      if (!rec) continue;
-      for (const childId of childArrayOf(rec)?.toArray() ?? []) {
-        if (this.isTombstoned(childId) || !this.schema.nodes.has(childId)) continue;
-        // A join drops the removed paragraph's `w:pPr`. Adopting that property node onto the
-        // survivor produced two `paragraphProperties` children, which `known-node-invariant`
-        // refused, so the receiving replica never installed the joined tree.
-        if (!this.isContentWitness(childId)) continue;
-        extras.push(childId);
-      }
-    }
-    if (extras.length > 0) this.adoptees.set(survivorId, extras);
-    else this.adoptees.delete(survivorId);
+  private placementContext(): ContestContext {
+    return {
+      nodes: this.schema.nodes,
+      parentIndex: this.parentIndex,
+      listings: this.listings,
+      childrenSnapshot: this.childrenSnapshot,
+      partRoots: this.partEntries().map((entry) => entry.rootLogicalId),
+    };
   }
 
   unlinkFromAllParents(id: LogicalId): void {
@@ -956,7 +967,7 @@ export class DocumentRegistry {
     }
   }
 
-  private removeFromArray(array: Y.Array<string>, id: string): void {
+  private removeFromArray(array: Y.Array<LogicalId>, id: LogicalId): void {
     for (let index = array.length - 1; index >= 0; index -= 1) {
       if (array.get(index) === id) array.delete(index, 1);
     }
@@ -980,5 +991,3 @@ export class DocumentRegistry {
     return rec;
   }
 }
-
-export const DOCUMENT_LIMITS = DEFAULT_DOCUMENT_LIMITS;

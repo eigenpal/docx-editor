@@ -46,7 +46,8 @@ export function emitNestedTable(
     deps.displayMode,
     deps.revisionAuthorFilter,
     deps.compatibilityMode,
-    autofitContextOf(deps)
+    autofitContextOf(deps),
+    deps.textBoxStory === true && depth === (deps.tableNestingOffset ?? 0)
   );
   if (!structure || structure.rows.length === 0) return null;
   const startRowIndex = continuation?.nextRowIndex ?? 0;

@@ -164,6 +164,21 @@ export function createPeerHarness(
     return new TreePackageStore(loaded.package, normalizeParagraphIdentity(main));
   }
 
+  /**
+   * A Yjs client ID fixed by the peer's name. Concurrent inserts at one place order by client
+   * ID, so random IDs made a test's outcome change from run to run. Set
+   * `COLLABORATION_TEST_CLIENT_SALT` to try other orders.
+   */
+  function newDoc(name: string): Y.Doc {
+    const ydoc = new Y.Doc();
+    let hash = 0x811c9dc5;
+    for (const char of `${process.env.COLLABORATION_TEST_CLIENT_SALT ?? ''}:${name}`) {
+      hash = Math.imul(hash ^ char.charCodeAt(0), 0x01000193) >>> 0;
+    }
+    ydoc.clientID = (hash % 0x3fffffff) + 1;
+    return ydoc;
+  }
+
   function attachPeer(ydoc: Y.Doc, awareness: Awareness, room: DocumentCollaborationHandle): Peer {
     const store = storeFrom(room.document);
     const port = createCollaborationDocumentPort(store, { documentId });
@@ -175,7 +190,7 @@ export function createPeerHarness(
   }
 
   async function createPeer(bytes: Uint8Array, name: string): Promise<Peer> {
-    const ydoc = new Y.Doc();
+    const ydoc = newDoc(name);
     const awareness = new Awareness(ydoc);
     const room = await createDocumentCollaboration({
       ydoc,
@@ -234,7 +249,7 @@ export function createPeerHarness(
     host: Peer,
     name: string
   ): Promise<{ peer: Peer; pause: () => void; resume: () => void }> {
-    const ydoc = new Y.Doc();
+    const ydoc = newDoc(name);
     const awareness = new Awareness(ydoc);
     Y.applyUpdate(ydoc, Y.encodeStateAsUpdate(host.ydoc), 'join');
     const room = await createDocumentCollaboration({

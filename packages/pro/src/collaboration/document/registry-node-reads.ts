@@ -14,7 +14,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 
 import * as Y from 'yjs';
-import type { LogicalId } from './identity.ts';
+import { itemIdOf } from './yjs-items.ts';
+import { asLogicalId, yjsItemKey, type LogicalId } from './identity.ts';
+import { rejectDangerousKey } from './limits.ts';
 import {
   NODE_TEXT_FIELD,
   namespaceUriOf,
@@ -85,4 +87,37 @@ export function elementRecordOf(
     // Malformed peer records degrade to an empty listing, rather than throwing (#567).
     childIds: childArrayOf(rec)?.toArray() ?? [],
   };
+}
+
+/** The Yjs item key of a shared type, or null before it is integrated. */
+export function itemKeyOf(type: Y.Map<unknown>): string | null {
+  const id = itemIdOf(type);
+  return id && yjsItemKey(id.client, id.clock);
+}
+
+export function readString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+export function asTrackedType(type: unknown): Y.AbstractType<unknown> {
+  return type as Y.AbstractType<unknown>;
+}
+
+/** The logical ID a key or path entry of the shared nodes map names. */
+export function keyId(key: string | number): LogicalId {
+  return asLogicalId(String(key));
+}
+
+/** Whether a key of the shared nodes map is a safe logical ID. */
+export function isLogicalIdKey(key: string): key is LogicalId {
+  return !rejectDangerousKey(key);
+}
+
+/** Throws when a record replicates a parent field: parents are derived, never shared. */
+export function assertNoParentFieldsIn(nodes: Y.Map<Y.Map<unknown>>): void {
+  nodes.forEach((value) => {
+    if (isNodeMap(value) && (value.has('parent') || value.has('parentId'))) {
+      throw new Error('registry record must not replicate a parent field');
+    }
+  });
 }

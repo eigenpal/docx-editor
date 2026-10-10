@@ -4,12 +4,8 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import * as Y from 'yjs';
+import { holderItem } from './yjs-items.ts';
 import { NODE_INITIAL_SHELL_FIELD, NODE_SPLIT_LINEAGE_FIELD } from './schema.ts';
-
-/** Read the item that holds a type, which Yjs keeps off the public surface. */
-function itemOf(type: unknown): Y.Item | null {
-  return (type as { _item?: Y.Item | null } | null)?._item ?? null;
-}
 
 /** Whether an item carries a shared type, so deleting it takes a whole subtree along. */
 function carriesType(item: Y.Item): boolean {
@@ -58,7 +54,7 @@ export function nodeRecordDeleteFilter(nodes: unknown): (item: Y.Item) => boolea
     // The record entry itself.
     if ((parent as unknown) === nodes) return false;
     // A field of a record: its holder sits directly in `nodes`.
-    const holder = itemOf(parent);
+    const holder = holderItem(parent);
     if (holder === null || (holder.parent as unknown) !== nodes) return true;
     // A descendant created by another author still needs its origin's ancestry after undo.
     // Unlike splitFrom (which records the active split), this lineage is immutable evidence.

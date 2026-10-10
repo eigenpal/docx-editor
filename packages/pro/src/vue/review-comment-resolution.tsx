@@ -3,6 +3,8 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
+// The package builds its React and Vue entries together; this file uses Vue's JSX runtime.
+/** @jsxImportSource vue */
 
 import { defineComponent, h, type ComputedRef, type PropType, type VNode } from 'vue';
 import type { TranslationKey } from '@docx-editor.dev/i18n';

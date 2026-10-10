@@ -495,6 +495,7 @@ export function DocxEditorImagePropertiesDialog({
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
+        data-docx-modal=""
         aria-labelledby={titleId}
         className="docx-dialog docx-image-properties-dialog"
         onClick={(event) => event.stopPropagation()}

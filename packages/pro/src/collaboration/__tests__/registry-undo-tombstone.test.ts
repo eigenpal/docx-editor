@@ -12,13 +12,14 @@ import {
   NODE_SHELL_FIELD,
   NODE_SPLIT_LINEAGE_FIELD,
 } from '../document/schema.ts';
+import { asLogicalId } from '../document/identity.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const LOCAL_ORIGIN = Object.freeze({ kind: 'test-local' });
 
 function element(registry: DocumentRegistry, logicalId: string, localName: string): void {
   registry.putElement({
-    logicalId,
+    logicalId: asLogicalId(logicalId),
     kind: 'generic',
     namespaceUri: W,
     localName,
@@ -82,10 +83,10 @@ function pairWithInsertedParagraph(): Pair {
   aliceDoc.transact(() => {
     element(alice, 'para', 'p');
     element(alice, 'run', 'r');
-    alice.putText('text', '');
-    alice.spliceChildren('run', 0, 0, ['text']);
-    alice.spliceChildren('para', 0, 0, ['run']);
-    alice.spliceChildren('body', 0, 0, ['para']);
+    alice.putText(asLogicalId('text'), '');
+    alice.spliceChildren(asLogicalId('run'), 0, 0, [asLogicalId('text')]);
+    alice.spliceChildren(asLogicalId('para'), 0, 0, [asLogicalId('run')]);
+    alice.spliceChildren(asLogicalId('body'), 0, 0, [asLogicalId('para')]);
   }, LOCAL_ORIGIN);
 
   const bobDoc = new Y.Doc();
@@ -114,17 +115,17 @@ describe('undo keeps node records out of the delete set', () => {
     // exactly that delete, so the filter has to hold the record back while still letting the
     // id that listed it under its parent go.
     const { alice, undo } = pairWithInsertedParagraph();
-    expect(alice.parentOf('para')).toBe('body');
+    expect(alice.parentOf(asLogicalId('para'))).toBe(asLogicalId('body'));
 
     undo.undo();
 
-    expect(alice.hasNode('para')).toBe(true);
-    expect(alice.hasNode('run')).toBe(true);
-    expect(alice.hasNode('text')).toBe(true);
+    expect(alice.hasNode(asLogicalId('para'))).toBe(true);
+    expect(alice.hasNode(asLogicalId('run'))).toBe(true);
+    expect(alice.hasNode(asLogicalId('text'))).toBe(true);
     // Gone from the document: nothing lists it any more.
-    expect(alice.listingParents('para')).toEqual([]);
-    expect(alice.parentOf('para')).toBeNull();
-    expect(alice.childArray('body').toArray()).toEqual([]);
+    expect(alice.listingParents(asLogicalId('para'))).toEqual([]);
+    expect(alice.parentOf(asLogicalId('para'))).toBeNull();
+    expect(alice.childArray(asLogicalId('body')).toArray()).toEqual([]);
   });
 
   test('redo puts the node back where it was', () => {
@@ -133,9 +134,9 @@ describe('undo keeps node records out of the delete set', () => {
 
     undo.redo();
 
-    expect(alice.childArray('body').toArray()).toEqual(['para']);
-    expect(alice.parentOf('para')).toBe('body');
-    expect(alice.childArray('run').toArray()).toEqual(['text']);
+    expect(alice.childArray(asLogicalId('body')).toArray()).toEqual(['para']);
+    expect(alice.parentOf(asLogicalId('para'))).toBe(asLogicalId('body'));
+    expect(alice.childArray(asLogicalId('run')).toArray()).toEqual(['text']);
   });
 
   test("undoing an insert does not destroy a peer's concurrent typing inside it", () => {
@@ -143,7 +144,7 @@ describe('undo keeps node records out of the delete set', () => {
 
     // Concurrent: Bob types into the paragraph while Alice undoes the insert of it.
     bobDoc.transact(() => {
-      bob.spliceText('text', 0, 0, 'hello');
+      bob.spliceText(asLogicalId('text'), 0, 0, 'hello');
     }, 'bob-local');
     undo.undo();
 
@@ -152,8 +153,8 @@ describe('undo keeps node records out of the delete set', () => {
     // The characters must stay reachable on both replicas. An orphaned subtree can be audited
     // or rescued; a deleted one is gone from every API there is.
     for (const registry of [alice, bob]) {
-      expect(registry.hasNode('text')).toBe(true);
-      const record = registry.record('text');
+      expect(registry.hasNode(asLogicalId('text'))).toBe(true);
+      const record = registry.record(asLogicalId('text'));
       expect(record?.kind).toBe('textValue');
       expect((record as { value: string }).value).toBe('hello');
     }
@@ -161,10 +162,15 @@ describe('undo keeps node records out of the delete set', () => {
 
   test('a rename undoes and redoes without losing the retained initial shell', () => {
     const { aliceDoc, alice, undo } = pairWithInsertedParagraph();
-    const name = () => (alice.record('run') as { localName?: string } | null)?.localName;
+    const name = () =>
+      (alice.record(asLogicalId('run')) as { localName?: string } | null)?.localName;
     aliceDoc.transact(
       () =>
-        alice.updateElementShell('run', { kind: 'generic', namespaceUri: W, localName: 'renamed' }),
+        alice.updateElementShell(asLogicalId('run'), {
+          kind: 'generic',
+          namespaceUri: W,
+          localName: 'renamed',
+        }),
       LOCAL_ORIGIN
     );
     expect(name()).toBe('renamed');
@@ -177,20 +183,26 @@ describe('undo keeps node records out of the delete set', () => {
     // Undo the original insertion after undo restored the earlier shell version.
     undo.undo();
     expect(name()).toBe('r');
-    expect(alice.childArray('body').toArray()).toEqual([]);
+    expect(alice.childArray(asLogicalId('body')).toArray()).toEqual([]);
     undo.redo();
     expect(name()).toBe('r');
-    expect(alice.childArray('body').toArray()).toEqual(['para']);
+    expect(alice.childArray(asLogicalId('body')).toArray()).toEqual(['para']);
   });
 
   test('a deliberate rename back to the initial QName remains undoable', () => {
     const { aliceDoc, alice, undo } = pairWithInsertedParagraph();
     const rename = (localName: string) =>
       aliceDoc.transact(
-        () => alice.updateElementShell('run', { kind: 'generic', namespaceUri: W, localName }),
+        () =>
+          alice.updateElementShell(asLogicalId('run'), {
+            kind: 'generic',
+            namespaceUri: W,
+            localName,
+          }),
         LOCAL_ORIGIN
       );
-    const name = () => (alice.record('run') as { localName?: string } | null)?.localName;
+    const name = () =>
+      (alice.record(asLogicalId('run')) as { localName?: string } | null)?.localName;
     rename('renamed');
     rename('r');
     expect(name()).toBe('r');
@@ -204,19 +216,23 @@ describe('undo keeps node records out of the delete set', () => {
     const { aliceDoc, alice, bobDoc, bob, undo } = pairWithInsertedParagraph();
     bobDoc.transact(() => {
       element(bob, 'foreign', 'foreign');
-      bob.spliceChildren('foreign', 0, 0, ['run']);
+      bob.spliceChildren(asLogicalId('foreign'), 0, 0, [asLogicalId('run')]);
     }, 'bob-local');
     undo.undo();
     exchange(aliceDoc, bobDoc);
     for (const registry of [alice, bob]) {
-      expect((registry.record('run') as { localName?: string } | null)?.localName).toBe('r');
-      expect(registry.childArray('foreign').toArray()).toEqual(['run']);
+      expect(
+        (registry.record(asLogicalId('run')) as { localName?: string } | null)?.localName
+      ).toBe('r');
+      expect(registry.childArray(asLogicalId('foreign')).toArray()).toEqual(['run']);
     }
     undo.redo();
     exchange(aliceDoc, bobDoc);
     for (const registry of [alice, bob]) {
-      expect((registry.record('run') as { localName?: string } | null)?.localName).toBe('r');
-      expect(registry.childArray('foreign').toArray()).toEqual(['run']);
+      expect(
+        (registry.record(asLogicalId('run')) as { localName?: string } | null)?.localName
+      ).toBe('r');
+      expect(registry.childArray(asLogicalId('foreign')).toArray()).toEqual(['run']);
     }
   });
 
@@ -230,18 +246,18 @@ describe('undo keeps node records out of the delete set', () => {
     });
     doc.transact(() => {
       element(registry, 'body', 'body');
-      registry.putText('text', 'ab');
-      registry.spliceChildren('body', 0, 0, ['text']);
-      registry.tombstone('body');
+      registry.putText(asLogicalId('text'), 'ab');
+      registry.spliceChildren(asLogicalId('body'), 0, 0, [asLogicalId('text')]);
+      registry.tombstone(asLogicalId('body'));
     });
     const filter = registry.undoDeleteFilter();
     const nodes = registry.schema.nodes;
 
     const recordItem = itemBehind(nodes.get('text'));
-    const textFieldItem = itemBehind(registry.textOf('text'));
-    const childrenFieldItem = itemBehind(registry.childArray('body'));
-    const characterItem = firstCharacterItem(registry.textOf('text'));
-    const childIdItem = firstListItem(registry.childArray('body'));
+    const textFieldItem = itemBehind(registry.textOf(asLogicalId('text')));
+    const childrenFieldItem = itemBehind(registry.childArray(asLogicalId('body')));
+    const characterItem = firstCharacterItem(registry.textOf(asLogicalId('text')));
+    const childIdItem = firstListItem(registry.childArray(asLogicalId('body')));
 
     expect(filter(recordItem)).toBe(false);
     expect(filter(textFieldItem)).toBe(false);
@@ -253,7 +269,7 @@ describe('undo keeps node records out of the delete set', () => {
     doc.transact(() => element(registry, 'mutable', 'original'));
     undo.stopCapturing();
     doc.transact(() =>
-      registry.updateElementShell('mutable', {
+      registry.updateElementShell(asLogicalId('mutable'), {
         kind: 'generic',
         namespaceUri: W,
         localName: 'renamed',

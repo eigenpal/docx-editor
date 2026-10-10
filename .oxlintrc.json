@@ -137,6 +137,11 @@
         "react/exhaustive-deps": "off"
       }
     },
+    // Vue chrome passes children to its own components as function slots.
+    {
+      "files": ["packages/vue/src/**/*.tsx", "packages/pro/src/vue/**/*.tsx"],
+      "rules": { "docx/vue-function-slots": "error" }
+    },
     {
       "files": ["packages/pro/src/__tests__/**/*vue*.{ts,tsx}"],
       "rules": { "react/rules-of-hooks": "off", "react/exhaustive-deps": "off" }
@@ -388,6 +393,11 @@
       "rules": {
         "max-lines": ["error", { "max": 3500, "skipBlankLines": false, "skipComments": false }]
       }
+    },
+    // The benchmark and scenario tools are command-line programs: their report is console output.
+    {
+      "files": ["benchmarks/**/*.ts"],
+      "rules": { "no-console": "off" }
     }
   ]
 }

@@ -2036,11 +2036,13 @@ export function mergeListIndent(levelIndent: NumberingLevelIndent, inherited: re
 // @public
 export function moveCaret(layout: SemanticLayout, position: SemanticPosition, command: NavigationCommand, desiredX?: number | null, options?: MoveCaretOptions): {
     desiredX: number | null;
+    lineId?: string;
     position: SemanticPosition;
 } | null;
 
 // @public
 export interface MoveCaretOptions {
+    readonly lineId?: string;
     // (undocumented)
     readonly measurer?: TextMeasurer;
     readonly stops?: readonly CaretGeometry[];
@@ -2184,6 +2186,7 @@ export interface NotesLayoutInput {
     readonly footnotePropsBySection: readonly ResolvedFootnoteProperties[];
     // (undocumented)
     readonly footnotesPart: OoxmlPart | null;
+    readonly lineGridPitchBySection?: readonly (number | undefined)[];
     readonly linkRelsEpoch?: string;
     // (undocumented)
     readonly measurer: TextMeasurer;
@@ -2825,7 +2828,8 @@ export function readTableBorders(tblPr: OoxmlElement | undefined): TableBorderBo
 // @public
 export function readTableStructure(table: OoxmlNode, contentWidthPt: number, depth: number, styleCascade?: StyleCascadeTable,
 displayMode?: RevisionDisplayMode, authorFilter?: RevisionAuthorFilter, compatibilityMode?: number,
-autofit?: TableAutofitContext): SemanticTableStructure | null;
+autofit?: TableAutofitContext,
+textBox?: boolean): SemanticTableStructure | null;
 
 // @public
 export interface RefFieldContext {
@@ -3862,6 +3866,7 @@ export interface SemanticTableStructure {
     readonly indentPt: number;
     readonly layoutFixed: boolean;
     readonly legacyContentAlignment?: true;
+    readonly legacyTrailingOuterEdge?: true;
     readonly outerRuleOffsetPt?: number;
     // (undocumented)
     readonly rows: readonly SemanticTableRow[];
@@ -4742,7 +4747,5 @@ export interface WordSegment {
 
 // @public
 export function wordSegmentsToGraphemeRecords(text: string, segments: readonly WordSegment[]): readonly GraphemeWordSegmentRecord[];
-
-// (No @packageDocumentation comment for this package)
 
 ```

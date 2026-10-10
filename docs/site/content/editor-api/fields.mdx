@@ -102,3 +102,7 @@ The runtime accepts `\o` with ascending levels 1 through 9, plus `\h`, `\z`, and
 ## Next steps
 
 See [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) and [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).
+
+### Mixed-script display font slots
+
+Font substitution can change field widths and pagination. Mixed cached atomic results select fonts by display script. Splitting displayed font runs preserves the original atomic source range. Navigation spans and explicit measurement reservations keep their existing behavior. This behavior changes display font selection without changing stored field data.

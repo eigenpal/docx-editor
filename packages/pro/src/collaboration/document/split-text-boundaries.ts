@@ -23,7 +23,11 @@ export function captureInsertionBoundary(
   const atStart = offset === 0 && range.startAssoc !== -1;
   let atEnd = offset === range.end - range.start;
   if (!atStart && !atEnd) return null;
-  const target = JSON.parse(nodes.get(targetId)!.get(NODE_SPLIT_TEXT_SOURCE_FIELD) as string);
+  // A peer's rewrite of this field can be in flight; the held range still answers, but there
+  // is no written value to repair against, so the boundary is left as Yjs places it.
+  const written = nodes.get(targetId)?.get(NODE_SPLIT_TEXT_SOURCE_FIELD);
+  if (typeof written !== 'string') return null;
+  const target = JSON.parse(written);
   const startAnchor = Y.createRelativePositionFromJSON(target.start);
   const endAnchor = Y.createRelativePositionFromJSON(target.end);
   // A live following character (or the source tail sentinel) already moves an end
@@ -38,11 +42,23 @@ export function captureInsertionBoundary(
     start: 'before' | 'after' | null;
     end: 'before' | 'after' | null;
   }[] = [];
+  // Yjs places text typed at a run of deleted characters after the whole run. Boundaries on
+  // ANY deleted character of that run collapse onto the insertion point with the target's
+  // end, so they move past the new text with it; matching the target's anchor alone left
+  // the next slice starting before the new text, and every peer showed it twice.
+  const store = range.text.doc!.store;
+  const collapsedOntoEnd = (position: Y.RelativePosition): boolean => {
+    if (position.item === null || !Y.getItem(store, position.item).deleted) return false;
+    const absolute = Y.createAbsolutePositionFromRelativePosition(position, range.text.doc!, false);
+    return absolute !== null && absolute.type === range.text && absolute.index === range.end;
+  };
   for (const id of sources.sourceAliases(range.sourceId)) {
     // Validate all metadata before editing shared text.
     if (!sources.range(id)) continue;
     const record = nodes.get(id)!;
-    const data = JSON.parse(record.get(NODE_SPLIT_TEXT_SOURCE_FIELD) as string);
+    const encoded = record.get(NODE_SPLIT_TEXT_SOURCE_FIELD);
+    if (typeof encoded !== 'string') continue;
+    const data = JSON.parse(encoded);
     const side = (endpoint: unknown, edge: 'start' | 'end'): 'before' | 'after' | null => {
       const position = Y.createRelativePositionFromJSON(endpoint);
       if (
@@ -54,6 +70,8 @@ export function captureInsertionBoundary(
         return edge === 'start' ? 'after' : 'before';
       if (atStart && Y.compareRelativePositions(position, startAnchor)) return 'before';
       if (atEnd && Y.compareRelativePositions(position, endAnchor)) return 'after';
+      if (atEnd && !atStart && !(id === targetId && edge === 'start') && collapsedOntoEnd(position))
+        return 'after';
       return null;
     };
     const start = id === targetId && atStart ? 'before' : side(data.start, 'start');

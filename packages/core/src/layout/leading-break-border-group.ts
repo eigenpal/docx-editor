@@ -48,6 +48,9 @@ function modelHoldsPageBreak(paragraph: OoxmlElement): boolean {
   return holds;
 }
 
+/** Stands in for a column break so it counts as something after the opening break. */
+const COLUMN_BREAK_MARK = '\u000e';
+
 /** One layout pass's group rule. The answers are memoized for that pass only. */
 export function createLeadingBreakGroups(
   view: LeadingBreakView,
@@ -78,14 +81,20 @@ export function createLeadingBreakGroups(
       view.fieldCodeRanges?.get(block.paragraph.id)
     );
     // The same test `opensWithPageBreak` applies to the lines: the first line holds only the
-    // break, and a later line holds text or a picture.
+    // break, and a later line holds text, a picture, or another page or column break.
     let text = '';
     for (const piece of pieces)
-      text += piece.inlineDrawing || piece.equation ? '\uFFFC' : piece.text;
-    return text.startsWith(PAGE_BREAK_CHAR) && /[^\f\n]/.test(text);
+      text +=
+        piece.inlineDrawing || piece.equation
+          ? '\uFFFC'
+          : piece.breakKind === 'column'
+            ? COLUMN_BREAK_MARK
+            : piece.text;
+    // Only line breaks after the opening break leave it alone on its line.
+    return text.startsWith(PAGE_BREAK_CHAR) && /[^\n]/.test(text.slice(PAGE_BREAK_CHAR.length));
   };
 
-  /** Whether a regular paragraph's display opens with a page break and shows content after. */
+  /** Whether a paragraph's display opens with a page break followed by content or a break. */
   const opensWithBreak = (block: PreparedParagraph): boolean => {
     if (block.frame || !modelHoldsPageBreak(block.paragraph)) return false;
     const known = memo.get(block.paragraph);

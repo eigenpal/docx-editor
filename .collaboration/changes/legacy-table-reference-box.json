@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Older-mode percentage tables used the content-aligned reference box only when left-aligned or centered, unindented, AutoFit, and confirmed by the grid.",
+  "after": "Older-mode tables use the reference box for every alignment, indent, layout, and direction, including tables without a usable width; AutoFit tables without a width fit the room their indent leaves; a mode declared outside the compat element applies.",
+  "reason": "Only layout geometry changes. Document nodes, text offsets, operations, room formats, and package serialization stay the same.",
+  "tests": [
+    "packages/core/src/layout/__tests__/compatibility-mode.test.ts",
+    "packages/core/src/layout/__tests__/legacy-table-content-width.test.ts",
+    "packages/core/src/layout/__tests__/legacy-table-reference-box.test.ts"
+  ],
+  "changeset": "legacy-table-reference-box",
+  "migration": null
+}

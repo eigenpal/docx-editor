@@ -163,6 +163,10 @@ For customizable list popups, use [content controls](/docs/2.x/guides/content-co
 
 A field's `w:name` supplies its accessible name as bounded plain text. Fields with entry or exit macro references supply no name through this path. Macro values are not read. Entry and exit macros never run.
 
+## Mixed-script cached field results
+
+Cached atomic field results can contain Latin and East Asian text. The layout selects the declared East Asian font for eligible display runs. All display slices keep the field's original model range. Navigation spans and explicit measurement reservations keep their existing behavior. Canonical field data and calculation support retain their existing behavior.
+
 ## Next steps
 
 - [Headers and footers](/docs/2.x/guides/headers-footers): Add page-number fields.

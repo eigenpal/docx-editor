@@ -15,17 +15,12 @@ export function createWebrtcCollaboration(options: CreateWebrtcCollaborationOpti
 
 // @public
 export interface CreateWebrtcCollaborationOptions {
-    // (undocumented)
     readonly bootstrap: CollaborationBootstrap;
-    // (undocumented)
     readonly iceServers?: readonly RTCIceServer[];
-    // (undocumented)
     readonly identity: CollaborationIdentity;
     readonly offlineEditing?: boolean;
     readonly password?: string;
-    // (undocumented)
     readonly roomId: string;
-    // (undocumented)
     readonly signaling?: readonly string[];
 }
 
@@ -49,12 +44,10 @@ export function warnOnDemoSignalingFallback(signaling: readonly string[] | undef
 
 // @public
 export interface WebrtcCollaborationHandle extends DocumentCollaborationHandle {
-    // (undocumented)
     readonly provider: WebrtcProvider;
-    // (undocumented)
+    subscribeUnsyncedChanges(listener: () => void): () => void;
+    unsyncedChanges(): number;
     readonly ydoc: Y.Doc;
 }
-
-// (No @packageDocumentation comment for this package)
 
 ```

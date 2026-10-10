@@ -18,6 +18,7 @@ import { capturePackageSelections, selectionForHistory } from './package-history
 
 import type { OoxmlPart } from '../package/ooxml-tree.ts';
 import { normalizeParagraphIdentity } from '../package/para-id.ts';
+import { runWithTransactionActor } from '../package/actor-scoped-ids.ts';
 import { openStoryPartsOf, openStoryTokenOf } from './open-story-parts.ts';
 import { packageEditTouchesShell } from './package-shell-delta.ts';
 import { closeHistoryGroupsExcept, reportHistoryGroup } from './history-group.ts';
@@ -703,16 +704,16 @@ export class TreePackageStore {
   }
 
   /**
-   * Commit one furniture or note lifecycle op as a single ModelChange / undo unit that
-   * restores the entire package atomically (parts, rels, content-types, settings).
+   * Commit one furniture or note lifecycle op as one ModelChange / undo unit that restores the
+   * whole package atomically. `actorId` scopes the ids it mints, as `transact` does.
    */
   applyLifecycleOp(
-    op: HeaderFooterLifecycleOp | NoteLifecycleOp | TreeDocOp
+    op: HeaderFooterLifecycleOp | NoteLifecycleOp | TreeDocOp,
+    options: { readonly actorId?: string } = {}
   ): PackageTransactResult {
-    return runObservedStoreTransaction(
-      this,
-      () => this.commitLifecycleOp(op),
-      packageTransactionPublished
+    const commit = () => this.commitLifecycleOp(op);
+    return runWithTransactionActor(options.actorId, () =>
+      runObservedStoreTransaction(this, commit, packageTransactionPublished)
     );
   }
 

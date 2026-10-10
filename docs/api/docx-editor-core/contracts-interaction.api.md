@@ -80,6 +80,4 @@ export type ViewScope = Exclude<EditorScope, {
     kind: 'all';
 }>;
 
-// (No @packageDocumentation comment for this package)
-
 ```

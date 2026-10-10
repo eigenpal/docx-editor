@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Footnote and endnote lines keep their natural height in a section with a document line grid.",
+  "after": "Footnote and endnote lines snap to the line grid of the section that holds them.",
+  "reason": "Only note layout geometry changes. Document nodes, text offsets, operations, snapshots, and transport messages stay the same.",
+  "tests": ["packages/core/src/layout/__tests__/note-lines-on-grid.test.ts"],
+  "changeset": "note-lines-on-grid",
+  "migration": null
+}

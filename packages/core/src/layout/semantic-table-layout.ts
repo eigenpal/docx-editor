@@ -1,3 +1,4 @@
+import { withStoryLineGrid } from './line-grid.ts';
 import { adjustedBreakIndex, paragraphKeeps } from './pagination-keeps.ts';
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { cellContextualSpacing, contextualCellNeighbours } from './contextual-paragraph-spacing.ts';
@@ -191,6 +192,8 @@ export interface TableFlowDeps {
   /** The current row already has the full page band (possibly below repeated headers). */
   readonly rowAtPageStart?: boolean;
   readonly paragraphLineUnitPt?: number;
+  /** Story paragraphs outside cells snap to `paragraphLineUnitPt`; see {@link withStoryLineGrid}. */
+  readonly snapsStoryLines?: true;
   /** Whether a positioned table of this story carries `w:tblOverlap w:val="never"`. */
   readonly floatRefusesOverlap?: (tableId: string) => boolean;
   readonly measurer: TextMeasurer;
@@ -232,6 +235,8 @@ export interface TableFlowDeps {
   readonly outOfCellFloatParagraphs?: ReadonlySet<string>; // see table-out-of-cell-floats.ts
   /** Story boxes start their first table at traversal depth one. */
   readonly tableNestingOffset?: 1;
+  /** The story is a text box's content. */
+  readonly textBoxStory?: true;
   /**
    * Turns a typed `w:hyperlink` into the sanitized record its spans carry. A link in a
    * table cell is an ordinary link; without this it would paint its text and be dead.
@@ -373,14 +378,17 @@ function placeCellParagraph(
   const paragraphId = paragraph.id;
   const keyFor = deps.cache?.keyFor?.bind(deps.cache) ?? paragraphLayoutKey;
   const listItem = deps.listItems?.get(paragraphId);
-  const layoutInputs = resolveParagraphLayoutInputs(
-    paragraph,
-    cellContentWidth,
-    deps.styleCascade,
-    listItem,
-    options?.tableCellStyle,
-    true,
-    deps.paragraphLineUnitPt
+  const layoutInputs = withStoryLineGrid(
+    resolveParagraphLayoutInputs(
+      paragraph,
+      cellContentWidth,
+      deps.styleCascade,
+      listItem,
+      options?.tableCellStyle,
+      true,
+      deps.paragraphLineUnitPt
+    ),
+    deps.snapsStoryLines && options?.inTableCell === false ? deps.paragraphLineUnitPt : undefined
   );
   const {
     props,
@@ -511,7 +519,6 @@ function placeCellParagraph(
       tabStops,
       ...(deps.pageContext ? { pageContext: deps.pageContext } : {}),
       flow: {
-        paragraphMarkIsCellEnd: options?.cellEndMark,
         firstLineOffset,
         ...(startOffset === 0 ? listMarkerFirstLineMetrics(listItem, deps.measurer) : {}),
         startOffset,

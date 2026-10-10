@@ -17,10 +17,11 @@ import {
   joinReplica,
   loadPackage,
   packageOf,
-  parentOf,
   seedReplica,
+  shownParentOf,
   syncOne,
 } from './document-support.ts';
+import { type LogicalId } from '../document/identity.ts';
 
 describe('cross-nesting cycles', () => {
   test('a merged parent-index cycle cannot hang materialization', async () => {
@@ -28,21 +29,13 @@ describe('cross-nesting cycles', () => {
     const bob = joinReplica(alice, 31);
     try {
       const alphaText = findText(packageOf(alice), 'Alpha paragraph');
-      const alpha = parentOf(
-        alice.registry,
-        parentOf(alice.registry, alphaText.id, 'run'),
-        'paragraph'
-      );
+      const alpha = shownParentOf(alice, alphaText.id, 'paragraph');
       const bravoText = findText(packageOf(alice), 'Bravo paragraph');
-      const bravo = parentOf(
-        alice.registry,
-        parentOf(alice.registry, bravoText.id, 'run'),
-        'paragraph'
-      );
+      const bravo = shownParentOf(alice, bravoText.id, 'paragraph');
       const body = alice.registry.parentOf(alpha);
       expect(body).not.toBeNull();
 
-      const unlist = (replica: typeof alice, parent: string, child: string): void => {
+      const unlist = (replica: typeof alice, parent: LogicalId, child: LogicalId): void => {
         const record = replica.registry.record(parent);
         if (!record || !isElementRecord(record)) throw new Error('parent record missing');
         const at = record.childIds.indexOf(child);

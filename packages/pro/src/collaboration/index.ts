@@ -7,23 +7,20 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * `@docx-editor.dev/pro/collaboration` — Yjs replica factories and the module factory.
  *
  * The default entry imports no network provider. Import
- * `@docx-editor.dev/pro/collaboration/webrtc` for the WebRTC wrapper.
+ * `@docx-editor.dev/pro/collaboration/webrtc` for the WebRTC wrapper and
+ * `@docx-editor.dev/pro/collaboration/hocuspocus` for the Hocuspocus wrapper.
  *
  * @packageDocumentation
  * @public
  */
 
 export { collaborationModule, type CollaborationModuleOptions } from './collaboration-module.ts';
-export {
-  createTextCollaboration,
-  type CollaborationBootstrap,
-  type CollaborationHandle,
-  type CollaborationIdentityUpdate,
-  type CollaborationSession,
-  type CreateTextCollaborationOptions,
-  type TextCollaborationHandle,
-  type TextCollaborationSession,
-} from './session.ts';
+export type {
+  CollaborationBootstrap,
+  CollaborationHandle,
+  CollaborationIdentityUpdate,
+  CollaborationSession,
+} from './types.ts';
 export {
   createDocumentCollaboration,
   readCollaborationDocument,
@@ -31,16 +28,30 @@ export {
   type DocumentCollaborationHandle,
   type DocumentCollaborationSession,
 } from './document-session.ts';
+export { prepareCollaborationServerDocument } from './server-document.ts';
+export {
+  checkCollaborationRoomGeneration,
+  compactCollaborationState,
+  readCollaborationRoomGeneration,
+  type CollaborationRoomGatePayload,
+  type CompactCollaborationStateOptions,
+} from './room-generation.ts';
+export {
+  collaborationMigrationNeed,
+  migrateCollaborationRoom,
+  type CollaborationMigration,
+  type CollaborationMigrationCheck,
+  type CollaborationMigrationDifference,
+  type CollaborationMigrationPosition,
+  type CollaborationMigrationNeed,
+  type CollaborationMigrationReport,
+  type MigrateCollaborationRoomOptions,
+} from './room-migration.ts';
 export {
   readCollaborationResourceUsage,
   type CollaborationResourceUsage,
 } from './resource-usage.ts';
-export {
-  MAX_BASELINE_BYTES,
-  PROTOCOL_VERSION,
-  SCHEMA_VERSION,
-  CollaborationSchemaError,
-} from './schema.ts';
+export { CollaborationSchemaError } from './errors.ts';
 export {
   DOCUMENT_COLLABORATION_VERSIONS,
   assertDocumentCollaborationCompatibility,

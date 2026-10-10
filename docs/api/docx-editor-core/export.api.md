@@ -328,6 +328,4 @@ export interface SharedExportShaping {
 // @public
 export type SharedExportShapingCapabilities = SharedExportShaping & ExportLaidOutTextApi;
 
-// (No @packageDocumentation comment for this package)
-
 ```

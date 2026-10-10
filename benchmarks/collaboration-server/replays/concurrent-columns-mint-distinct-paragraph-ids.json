@@ -1,0 +1,89 @@
+{
+  "config": "denseLinks",
+  "seed": 12,
+  "replicas": 3,
+  "delivery": "peer",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "row",
+        "table": 0,
+        "row": 0,
+        "op": {
+          "op": "insertTableRow",
+          "tableId": "",
+          "rowId": "",
+          "where": "above"
+        }
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "insertTableColumn",
+          "tableId": "",
+          "gridColumnId": "",
+          "where": "left"
+        },
+        "targets": [
+          {
+            "field": "tableId",
+            "localName": "tbl",
+            "index": 0
+          },
+          {
+            "field": "gridColumnId",
+            "localName": "gridCol",
+            "index": 0,
+            "within": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "insertTableColumn",
+          "tableId": "",
+          "gridColumnId": "",
+          "where": "right"
+        },
+        "targets": [
+          {
+            "field": "tableId",
+            "localName": "tbl",
+            "index": 0
+          },
+          {
+            "field": "gridColumnId",
+            "localName": "gridCol",
+            "index": 0,
+            "within": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 0,
+          "text": "lo"
+        },
+        "paragraphs": [2]
+      }
+    }
+  ]
+}
