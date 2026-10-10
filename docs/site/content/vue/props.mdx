@@ -13,6 +13,7 @@ Use `document` for the document source.
 
 | Prop | Type | Description |
 | --- | --- | --- |
+| `fieldResults` | `'atomic' \| 'editable'` | Saved field result editing. Defaults to `'atomic'`; fixed when the editor starts. |
 | `document` | `DocumentSource` | DOCX bytes, `'blank'`, or a `DocumentHandle`. |
 | `author` | `string` | Author for later comments, replies, and tracked changes. |
 | `locale` | `string` | BCP-47 locale for regional date input and generated labels. Defaults to `en-US`; updates without a remount. |
@@ -35,6 +36,12 @@ import { DocxEditor } from '@docx-editor.dev/vue';
 `<DocxEditor>` rebuilds when the `document` identity changes. It applies later `author`, `locale`, `mode`, `translate`, `zoom`, `zoomMode`, and catalog changes without a rebuild. Existing revisions keep their authors.
 
 For regional date input, pass `locale="en-GB"` for day/month input or `locale="pl-PL"` for Polish dates such as `01.02.2030`. The same prop works on `DocxEditor.Root`. It preserves dates already in the document. Use `i18n` separately to customize UI strings; see [date input behavior](/docs/2.x/guides/fields) for details.
+
+## Saved field result editing
+
+Set `fieldResults` to `'editable'` to let users edit supported saved field results, such as `MERGEFIELD` or `HYPERLINK` text. The same prop works on `DocxEditor.Root`. Later prop changes have no effect. Remount the editor to change this setting.
+
+Computed fields remain one unit. Collaboration refuses `'editable'` with a `TypeError`. For supported fields and editing rules, see [Edit saved field results](/docs/2.x/guides/fields#edit-saved-field-results).
 
 ## Viewing mode
 

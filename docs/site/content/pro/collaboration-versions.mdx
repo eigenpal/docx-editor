@@ -380,21 +380,11 @@ If your storage keeps a room as a list of updates, merge the list once before th
 
 #### Plan the migration window
 
-Editing stops for the whole migration, so measure it on copies of your largest rooms first. The migration runs in a worker process, not in your collaboration server, and the memory it needs is for that worker only. Its time and memory grow in proportion to the number of paragraphs in the room.
+Editing stops during migration. Test copies of your largest rooms before choosing the maintenance window.
 
-The following figures are for one room, under Node.js 25 on an Apple M4 Pro. Minimum heap is the smallest `--max-old-space-size` with which the migration completes. Peak RSS is the most memory the whole process held, including Node.js itself.
+Run migrations in separate worker processes. Migrate one room at a time per worker. Memory use grows with paragraph count. Set a heap limit and restrict worker concurrency to your server's capacity.
 
-| Room | Room state | Time | Minimum heap | Peak RSS |
-| --- | --- | --- | --- | --- |
-| 340 paragraphs, with images | 3.6 MiB | 0.6 seconds | 44 MiB | 365 MiB |
-| 1,000 paragraphs | 1.1 MiB | 0.8 seconds | 54 MiB | 488 MiB |
-| 2,644 paragraphs, with comments and tracked changes | 2.8 MiB | 2.8 seconds | 108 MiB | 872 MiB |
-| 5,000 paragraphs | 5.5 MiB | 3.5 seconds | 185 MiB | 1,067 MiB |
-| 10,000 paragraphs | 11.2 MiB | 7.6 seconds | 287 MiB | 1,574 MiB |
-| 12,841 paragraphs on 521 pages | 46.0 MiB | 12.5 seconds | 791 MiB | 2,328 MiB |
-| 20,000 paragraphs | 22.6 MiB | 16.2 seconds | 556 MiB | 2,709 MiB |
-
-Room state is the size of the migrated room's saved state. As a rule, allow 64 MiB of heap, plus the larger of 30 MiB for each 1,000 paragraphs and 20 times the room state, plus a margin. For example, a worker for rooms of up to 10,000 paragraphs and 15 MiB of state runs with `node --max-old-space-size=512`. Migrate one room at a time in each worker, and run several workers if you need more throughput. To measure your own rooms, use the [migration memory benchmark](https://github.com/eigenpal/docx-editor/tree/main/benchmarks/collaboration-server#measure-room-migration-memory).
+For measurement commands, see the [migration memory benchmark](https://github.com/eigenpal/docx-editor/tree/main/benchmarks/collaboration-server#measure-room-migration-memory).
 
 #### Roll back a migration
 

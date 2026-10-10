@@ -50,7 +50,7 @@ interface CollaborativeEditorProps {
 }
 
 export function CollaborativeEditor({ roomId, bytes, actorId, name }: CollaborativeEditorProps) {
-  const { document, modules, session, pending, error } = useWebrtcCollaboration({
+  const { document, modules, session, error } = useWebrtcCollaboration({
     room: {
       roomId,
       identity: { actorId, name },
@@ -58,14 +58,18 @@ export function CollaborativeEditor({ roomId, bytes, actorId, name }: Collaborat
     },
   });
 
-  if (error) {
-    return <p>Could not join this document. Save any local work and contact support.</p>;
-  }
-  if (pending || !document) {
-    return <p>Connecting…</p>;
+  if (!document) {
+    return <p>{error ? 'Could not join this document.' : 'Connecting…'}</p>;
   }
 
-  return <DocxEditor key={session?.sessionId} document={document} modules={modules} />;
+  return (
+    <>
+      {error && (
+        <p role="alert">Collaboration needs attention. Save a copy before you reconnect.</p>
+      )}
+      <DocxEditor key={session?.sessionId} document={document} modules={modules} />
+    </>
+  );
 }
 ```
 
@@ -84,7 +88,7 @@ const props = defineProps<{
   name: string;
 }>();
 
-const { document, modules, session, pending, error } = useWebrtcCollaboration(() => ({
+const { document, modules, session, error } = useWebrtcCollaboration(() => ({
   room: {
     roomId: props.roomId,
     identity: { actorId: props.actorId, name: props.name },
@@ -94,9 +98,11 @@ const { document, modules, session, pending, error } = useWebrtcCollaboration(()
 </script>
 
 <template>
-  <p v-if="error">Could not join this document. Save any local work and contact support.</p>
-  <p v-else-if="pending || !document">Connecting…</p>
-  <DocxEditor v-else :key="session?.sessionId" :document="document" :modules="modules" />
+  <p v-if="error" role="alert">
+    Collaboration is unavailable. Save any local work before you reconnect.
+  </p>
+  <p v-if="!document && !error">Connecting…</p>
+  <DocxEditor v-if="document" :key="session?.sessionId" :document="document" :modules="modules" />
 </template>
 ```
 
