@@ -131,6 +131,10 @@ A collapsed comment marker marks a comment thread beside the page, for example w
 - `'initials'`: a badge with the thread author's initials in the author's color. A small count shows the number of replies, and a check mark replaces the initials when the thread is resolved. Each badge is a miniature of its thread, so the user can see who commented without opening the pane.
 - `'icon'`: the comment icon. Use it when initials do not identify your users, such as for anonymous reviewers.
 
+The DOCX editor shows at most three characters from a comment's saved initials. If saved initials are absent, it uses the first letters of the author's first two name parts. An empty author name shows `?`.
+
+The built-in initials badge has a maximum width of 36 pixels. Long initials stay inside the badge, while the reply count stays outside it. Dark mode preserves the badge border when you move the pointer over the marker.
+
 ```ts
 const modules = [reviewModule({ pane: { commentMarkers: 'icon' } })];
 ```
