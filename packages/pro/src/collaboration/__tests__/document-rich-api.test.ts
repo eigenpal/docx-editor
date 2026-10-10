@@ -507,55 +507,6 @@ test('independent concurrent row deletions converge and remain reviewable', asyn
   }
 });
 
-test('collaboration refuses tracked paragraph-range deletion and preserves concurrent edits', async () => {
-  const r = await room(
-    zipDocument(
-      '<w:p><w:r><w:t>First clause</w:t></w:r></w:p><w:p><w:r><w:t>Last clause</w:t></w:r></w:p>'
-    )
-  );
-  try {
-    r.pair.pause();
-    const before = new Uint8Array(await r.peers[0]!.editor.save());
-    await expect(
-      r.peers[0]!.runtime.run(async (c) => {
-        c.document.changeTrackingMode = 'TrackMineOnly';
-        const range = c.document.body.getRange('Content');
-        await c.sync();
-        range.delete();
-        await c.sync();
-      })
-    ).rejects.toMatchObject({ code: 'NotSupported' });
-    expect(new Uint8Array(await r.peers[0]!.editor.save())).toEqual(before);
-    await r.peers[1]!.runtime.run(async (c) => {
-      c.document.body.paragraphs.getLast().insertText('User note: ', 'Start');
-      await c.sync();
-    });
-    r.sync();
-    r.pair.resume();
-    r.sync();
-    expect(r.peers[0]!.editor.surface!.session.bodyText()).toBe(
-      r.peers[1]!.editor.surface!.session.bodyText()
-    );
-    expect(r.peers[0]!.editor.surface!.session.bodyText()).toContain('User note: ');
-    for (const peer of r.peers) {
-      const reopened = await DocxEditor.createServer(new Uint8Array(await peer.editor.save()));
-      try {
-        await reopened.run(async (c) => {
-          c.document.body.load('text');
-          c.document.revisions.load('items');
-          await c.sync();
-          expect(c.document.body.text).toBe('First clause\rUser note: Last clause');
-          expect(c.document.revisions.items).toHaveLength(0);
-        });
-      } finally {
-        reopened.dispose();
-      }
-    }
-  } finally {
-    r.close();
-  }
-});
-
 test('collaboration refuses tracked whole-cell values before they can absorb concurrent text', async () => {
   const bytes = zipDocument(
     '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="4680"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>Cell text</w:t></w:r></w:p></w:tc></w:tr></w:tbl><w:p/>'

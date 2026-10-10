@@ -62,6 +62,7 @@ export { HEADER_FOOTER_VARIANTS, type AutomationStoryId } from './stories.ts';
 // Formatting: what a span agrees about its characters, and what a write may author.
 export type {
   AutomationAlignment,
+  AutomationReadingOrder,
   AutomationFontRead,
   AutomationFontWrite,
   AutomationParagraphFormatRead,

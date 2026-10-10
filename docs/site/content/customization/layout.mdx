@@ -1,0 +1,195 @@
+---
+title: 'Layout'
+description: 'Configure DOCX editor layout with composed React and Vue parts, navigation, responsive zoom, and application panels.'
+category: 'Customization'
+---
+
+Use `Root` to own the application frame. Give the viewport a height or a flexible parent with `min-height: 0`.
+
+Place `Toolbar` before or after `Viewport`. Omit it for a document-only workspace. Keep `HyperLink`, `ContextMenu`, and review controls under the same root.
+
+Add `Navigation` for headings and search. Keep application panels outside the painted document surface.
+
+<CustomizationDemo topic="layout" />
+
+## Layout options
+
+Compose the DOCX editor with separate document, navigation, review, and application regions. `DocxEditor.Root` provides the editor instance. It creates no wrapper element.
+
+| Part | What you can customize | Requirement |
+| --- | --- | --- |
+| Application wrapper | Width, height, grid, flex layout, theme, and application panels. | Keep `.docx-editor` on the themed wrapper. |
+| `DocxEditor.Toolbar` | Position, visible controls, groups, and overflow. | Keep it inside `Root`. |
+| `DocxEditor.Menu` | Position, menu entries, and file actions. | Keep it inside `Root`. |
+| `DocxEditor.Viewport` | `className`, `style`, and children. | Keep the document content inside this scroll container. |
+| `DocxEditor.Content` | Document mounting location. | Keep application controls outside its editable surface. |
+| `DocxEditor.Navigation` | Open state, tab, width, toggle, highlights, and named parts. | Use a positioned sibling or a direct viewport child. |
+| `DocxEditorReview` | Review column, cards, spacing, markers, and presentation. | Register the review module. |
+
+Give the viewport a bounded height. In a flex or grid layout, set `min-height: 0` on the shrinking document region. Keep the viewport's supplied classes. The editor uses them to find its scroll container. The editor calculates navigation and review spacing. Do not replace those calculations with fixed page offsets.
+
+### Navigation configuration
+
+| Prop | Values or type | Default and use |
+| --- | --- | --- |
+| `defaultOpen` | Boolean | `false`; initial uncontrolled state. |
+| `open`, `onOpenChange` | Boolean and callback | Controlled open state. Accept callback changes in application state. |
+| `defaultTab` | `headings`, `find` | `headings`; initial uncontrolled tab. |
+| `tab`, `onTabChange` | Tab and callback | Controlled active tab. |
+| `paneWidth` | Pixels | `280`; panel width. |
+| `toggle` | Boolean or part props | `true`; use `false` to remove the collapsed toggle. |
+| `searchHighlight` | `all`, `active`, `none` | `all`; marks matches while Find is open. |
+| `findShortcut` | Boolean | `true`; opens Find with Ctrl+F or Cmd+F inside the editor. |
+| `t` | Label resolver | Uses the root translator and locale catalog. |
+| `className`, `style` | CSS overrides | Style the navigation region. |
+| `children` | Named parts | Replaces the default navigation composition. |
+
+The navigation parts include `Toggle`, `Header`, `Title`, `Close`, `Tabs`, `Tab`, `Headings`, and `Find`. Use `useNavigationPane`, `useDocumentOutline`, and `useDocumentSearch` for a custom navigation interface. The navigation pane preserves its search query when closed. On narrow viewports, it overlays the page and closes after a heading or search result selection.
+
+### Zoom and responsive layout
+
+| Root prop | Configuration | Behavior |
+| --- | --- | --- |
+| `zoom` | Scale, such as `1` for 100%. | Selects fixed zoom unless `zoomMode` specifies another mode. |
+| `zoomMode` | `auto` | Fits page width between 50% and 100%. |
+| `zoomMode` | `{ type: 'fixed' }` | Keeps the selected scale as the viewport changes. |
+| `zoomMode` | `{ type: 'fit', fit: 'pageWidth' }` | Tracks available width. |
+| Fit bounds | `minZoom`, `maxZoom` on the fit configuration | Limit the automatic scale. |
+
+Opening navigation or review controls can change the available width for a fit mode. Changing zoom does not change stored page dimensions or margins. Use [Tracked changes](/docs/2.x/customization/tracked-changes#choose-where-tracked-changes-appear) for review column overflow settings.
+
+### Root configuration and lifetime
+
+| Setting | Update behavior |
+| --- | --- |
+| `document`, `fonts`, `imageDecodePort` | An identity change creates a new editor instance. |
+| `modules` | Registers capabilities when the instance starts. Keep the module list stable. |
+| `author`, `locale`, `translate`, `mode` | Changes apply without creating another instance. |
+| `zoom`, `zoomMode` | Changes update the viewport without creating another instance. |
+| `revisionMarkup` | Controls viewer preferences. Accept changes through `onRevisionMarkupChange`. |
+| `reviewDisplayMode` | Sets the initial tracked change display mode. |
+| `onReady` | Gives the application the ready editor instance. |
+| `onChange` | Reports document changes. It does not provide saved bytes. |
+| `onFontError` | Reports typed font initialization errors. |
+
+Keep document bytes and font configuration references stable during ordinary application renders. A new instance resets selection and undo history. Use the existing instance's load operation when your application deliberately replaces its document.
+
+## React and Vue reference
+
+Pass your DOCX bytes and loaded fonts to this component. The preview uses a fictional contract.
+
+<FrameworkTabs variant="block">
+<Framework value="react">
+
+```tsx
+import { DocxEditor, type DocxEditorRootProps } from '@docx-editor.dev/react';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
+import '@docx-editor.dev/core/styles/editor.css';
+
+const modules = [reviewModule()];
+
+export function ContractEditor({
+  bytes,
+  fonts,
+}: {
+  bytes: Uint8Array;
+  fonts: DocxEditorRootProps['fonts'];
+}) {
+  return (
+    <div className="docx-editor contract-workspace">
+      <DocxEditor.Root
+        document={bytes}
+        fonts={fonts}
+        modules={modules}
+        author="Demo reviewer"
+        mode="suggesting"
+        reviewDisplayMode="all-markup"
+      >
+        <DocxEditor.Toolbar />
+        <DocxEditor.Viewport style={{ height: 520 }}>
+          <DocxEditor.Content />
+          <DocxEditor.HyperLink />
+          <DocxEditor.ContextMenu />
+          <DocxEditorReview />
+        </DocxEditor.Viewport>
+      </DocxEditor.Root>
+    </div>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/vue';
+import type { FontConfigurationFragment } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/core/styles/editor.css';
+
+defineProps<{ bytes: Uint8Array; fonts: FontConfigurationFragment }>();
+const modules = [reviewModule()];
+</script>
+
+<template>
+  <div class="docx-editor contract-workspace">
+    <DocxEditor.Root
+      :document="bytes"
+      :fonts="fonts"
+      :modules="modules"
+      author="Demo reviewer"
+      mode="suggesting"
+      review-display-mode="all-markup"
+    >
+      <DocxEditor.Toolbar />
+      <DocxEditor.Viewport :style="{ height: '520px' }">
+        <DocxEditor.Content />
+        <DocxEditor.HyperLink />
+        <DocxEditor.ContextMenu />
+        <DocxEditorReview />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  </div>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+## Add the navigation pane
+
+Place `DocxEditor.Navigation` as a direct child of `DocxEditor.Viewport`, or beside the viewport in a positioned container. Inside the viewport, the pane stays in place while the pages scroll. The pane moves the page only when the margin area beside the page cannot hold it. On a narrow viewport, the pane covers the page instead.
+
+While focus is in the editor, <kbd>Ctrl</kbd>+<kbd>F</kbd> (<kbd>Cmd</kbd>+<kbd>F</kbd> on macOS) opens the **Find** tab. To leave the shortcut to the browser, set `findShortcut` to `false`.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor.Viewport style={{ height: 520 }}>
+  <DocxEditor.Navigation findShortcut={false} />
+  <DocxEditor.Content />
+  <DocxEditorReview />
+</DocxEditor.Viewport>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditor.Viewport :style="{ height: '520px' }">
+  <DocxEditor.Navigation :find-shortcut="false" />
+  <DocxEditor.Content />
+  <DocxEditorReview />
+</DocxEditor.Viewport>
+```
+
+</Framework>
+</FrameworkTabs>
+
+The navigation pane and the review pane can be open together. The review pane's `overflow` setting doesn't change the navigation pane, which stays docked at its side in every mode. For more information, see [Tracked changes](/docs/2.x/customization/tracked-changes#choose-what-happens-when-the-pane-does-not-fit).
+
+## More control
+
+See [Composition](/docs/2.x/react/composition) for supported parts, types, and additional examples.

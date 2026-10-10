@@ -64,7 +64,9 @@ for (const mode of ['direct', 'suggest'] as const)
           });
         const result = await stream.finish('mixed-imported', 'edit_text', { story, edits });
         if (mode === 'suggest' && next === 'deleteParagraph') {
-          expect(result?.code).toBe('NotSupported');
+          // The insertion just proposed this paragraph's mark, so a tracked deletion of the
+          // paragraph touches a pending revision and refuses.
+          expect(result?.code).toBe('NotImplemented');
           expect(result?.completedSteps).toEqual(['insert paragraph']);
         } else expect(result?.success, JSON.stringify(result)).toBe(true);
         const reopened = await DocxEditor.createServer(await runtime.save());

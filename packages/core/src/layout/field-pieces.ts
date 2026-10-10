@@ -558,30 +558,26 @@ function fontSlotSlice(
   };
 }
 
+function projectedFontSlotSlice(
+  piece: FieldAwarePiece,
+  from: number,
+  to: number,
+  fontSlot: FieldAwarePiece['fontSlot']
+): FieldAwarePiece {
+  return {
+    ...piece,
+    text: piece.text.slice(from, to),
+    ...(fontSlot ? { fontSlot } : {}),
+  };
+}
+
 /**
- * Mark the text that resolves through the `eastAsia` font slot, after a paragraph's pieces
- * are all assembled.
+ * Resolve East Asian font slots for literal text and eligible cached fields.
  *
- * A post-pass over the WHOLE paragraph, not a per-piece one, because Common characters
- * inherit their slot from strong neighbours and `w:t`/run boundaries are not script
- * boundaries: a fullwidth comma alone in its own run between two CJK runs is East Asian
- * text, and only a pass that sees both neighbours can say so. Classification is
- * `eastAsiaRunsOfSegments`; this function owns which pieces participate and how the answer
- * lands on them:
- *
- * - Ordinary literal text (model range 1:1 with its text) is SPLIT into slot-homogeneous
- *   pieces. Piece boundaries are not break opportunities (`opensWord` in
- *   `paragraph-flow.ts` carries words across them), so the split changes which face a
- *   character resolves to and nothing else.
- * - Layout-owned text — projected results, field atoms, note marks, `measureText`
- *   reservations — stays WHOLE: its spans publish the piece's model range, and slicing
- *   that range would corrupt offsets. Such a piece takes the slot only when ALL of its
- *   text resolves eastAsia; a mixed one keeps the base face, which is what it painted
- *   before slots existed.
- * - Control pieces (tabs, breaks, drawings, equations) neither classify nor split.
- *
- * The style objects are untouched: a piece carries the run's real resolution and the slot
- * beside it, and the face is derived at the measurer/paint boundary via `styleForFontSlot`.
+ * Literal pieces keep their character-based model offsets. Projected cached
+ * atomic field results split into display font runs. Every display slice keeps
+ * the original shared start/end model range. Other layout-owned projections,
+ * note navigation, and measurement reservations retain whole-piece behavior.
  */
 export function applyEastAsiaFontSlots(
   pieces: FieldAwarePiece[],
@@ -655,7 +651,15 @@ export function applyEastAsiaFontSlots(
       !piece.noteNav &&
       piece.measureText === undefined &&
       piece.end - piece.start === piece.text.length;
-    if (!literal) {
+    // Cached atomic field results use one model unit for all displayed text.
+    // Split only the measured/painted font slots; retain the atomic source range.
+    const projectedAtom =
+      piece.projected === true &&
+      piece.fieldAtom != null &&
+      !piece.noteNav &&
+      piece.measureText === undefined;
+    const sliceFontSlot = projectedAtom ? projectedFontSlotSlice : fontSlotSlice;
+    if (!literal && !projectedAtom) {
       const whole =
         pieceRanges.length === 1 &&
         pieceRanges[0]!.from === 0 &&
@@ -665,12 +669,12 @@ export function applyEastAsiaFontSlots(
     }
     let cursor = 0;
     for (const range of pieceRanges) {
-      if (range.from > cursor) out.push(fontSlotSlice(piece, cursor, range.from, undefined));
-      out.push(fontSlotSlice(piece, range.from, range.to, 'eastAsia'));
+      if (range.from > cursor) out.push(sliceFontSlot(piece, cursor, range.from, undefined));
+      out.push(sliceFontSlot(piece, range.from, range.to, 'eastAsia'));
       cursor = range.to;
     }
     if (cursor < piece.text.length) {
-      out.push(fontSlotSlice(piece, cursor, piece.text.length, undefined));
+      out.push(sliceFontSlot(piece, cursor, piece.text.length, undefined));
     }
   }
   return out;
