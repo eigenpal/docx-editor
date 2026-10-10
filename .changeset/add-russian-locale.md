@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/i18n': patch
+"@docx-editor.dev/i18n": minor
 ---
 
-Add Russian (ru) locale with full UI translation coverage.
+Add Russian (ru) translations through the `ru` export and the `@docx-editor.dev/i18n/ru` subpath.
