@@ -176,6 +176,22 @@ describe('collectRenderedFontFamilies', () => {
     expect(session.renderedFontFamilies()).toEqual(['DengXian', 'Garamond']);
   });
 
+  test('a hint and East Asian face from a paragraph style report that face too', () => {
+    const session = open(
+      docx({
+        body:
+          '<w:p><w:pPr><w:pStyle w:val="Hinted"/></w:pPr><w:r><w:rPr>' +
+          '<w:rFonts w:ascii="Garamond" w:hAnsi="Garamond"/></w:rPr><w:t>§</w:t></w:r></w:p>',
+        styles: styles(
+          '<w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="24"/></w:rPr></w:rPrDefault></w:docDefaults>' +
+            '<w:style w:type="paragraph" w:styleId="Hinted"><w:rPr>' +
+            '<w:rFonts w:eastAsia="DengXian" w:hint="eastAsia"/></w:rPr></w:style>'
+        ),
+      })
+    );
+    expect(session.renderedFontFamilies()).toEqual(['DengXian', 'Garamond']);
+  });
+
   test('a w:sym face is not a rendered text face', () => {
     // Word writes `w:sym w:font="MS Gothic"` for a checkbox and `Wingdings` for a bullet.
     // A symbol face paints one glyph, moves no text metrics, and is not a family the picker

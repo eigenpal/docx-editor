@@ -58,7 +58,7 @@ test('absent theme languages retain regional defaults; the run language picks no
   expect(themeFontFamilyOf('minorBidi', fonts)).toBe('CS Body');
   expect(themeFontFamilyOf('minorHAnsi', fonts)).toBe('Latin Body');
   // Without a theme language the empty East Asian slot takes the Simplified Chinese face,
-  // whatever language the run declares.
+  // whatever language the run declares (probes z01-z04 in local/evidence/hansi-font-slots).
   expect(themeFontFamilyOf('minorEastAsia', fonts, 'ja-JP')).toBe('Chinese Body');
   const bidiOnly = collectThemeSchemeFaces(theme, settings('w:bidi="ar-SA"'));
   expect(themeFontFamilyOf('minorEastAsia', bidiOnly, 'ja-JP')).toBe('Chinese Body');
@@ -147,5 +147,5 @@ test('an omitted East Asian slot uses the document body face after every authore
   expect(
     resolveRunStyle([], collectThemeSchemeFaces(null, settings('w:eastAsia="zh-CN"')))
       .fontFamilyEastAsia
-  ).toBe('DengXian');
+  ).toBe('DengXian'); // No theme part: the built-in theme's face (probes x01, x02, z07).
 });

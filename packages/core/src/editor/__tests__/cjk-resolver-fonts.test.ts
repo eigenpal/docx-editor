@@ -58,6 +58,7 @@ async function requested(bytes: Uint8Array) {
 }
 
 test('live resolver requests the built-in theme face without a theme part', async () => {
+  // Probes x01, x02 and z07 in local/evidence/hansi-font-slots.
   expect(await requested(docx(paragraph('zh-CN')))).toContain('DengXian');
 });
 
@@ -74,7 +75,7 @@ test('live resolver requests the theme face for run, conditional table, and head
     )
   );
   // Without a theme language every East Asian token takes the Simplified Chinese face, whatever
-  // language the run, the table style or the header declares.
+  // language the run, the table style or the header declares (probes z01-z03).
   expect(families).toContain('Chinese Body');
   expect(families).not.toContain('Japanese Body');
   expect(families).not.toContain('Batang');
@@ -138,6 +139,7 @@ test('incremental discovery retains conditional table fonts after a text edit', 
   const opened = openTreeSession(fixture(table));
   if (!opened.ok) throw new Error(opened.reason);
   const session = opened.session;
+  // The table style's Japanese language selects no theme face (probe z02).
   expect(resolverGlyphFontFamilies(session)).toContain('Chinese Body');
   expect(
     session.applyTreeOps([

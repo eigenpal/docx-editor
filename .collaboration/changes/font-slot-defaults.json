@@ -9,7 +9,9 @@
     "packages/core/src/layout/__tests__/east-asia-symbol-hint.test.ts",
     "packages/core/src/layout/__tests__/application-run-defaults.test.ts",
     "packages/core/src/binding/__tests__/document-rendered-fonts.test.ts",
-    "packages/pro/src/collaboration/__tests__/hansi-font-slots.test.ts"
+    "packages/pro/src/collaboration/__tests__/hansi-font-slots.test.ts",
+    "packages/core/src/layout/__tests__/default-font-faces.test.ts",
+    "packages/core/src/layout/__tests__/run-style.test.ts"
   ],
   "changeset": "font-slot-defaults",
   "migration": null

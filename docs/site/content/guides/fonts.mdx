@@ -527,15 +527,26 @@ A Word run can name separate `ascii`, `hAnsi`, and `eastAsia` fonts. For example
 
 The selection follows the definite ranges in Microsoft's [Word run-font rules](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/aef3c9a6-5d6c-434b-90b7-85e761fd8e62). Basic Latin stays in `ascii`, and the no-break space advances in `hAnsi`; existing East Asian pieces retain their face. PDF export and the font substitution notice include the `hAnsi` face when the text uses it. Explicit `cs` and `rtl` runs retain their complex-script selection. Symbol fonts and layout controls retain their existing selection. Combining marks keep their base character's face across source runs.
 
-Full-width letters, digits, and punctuation use the `eastAsia` face. Fixed-width spaces such as the en space and the thin space advance in `hAnsi`.
+Full-width letters, digits, and punctuation use the `eastAsia` face. Fixed-width spaces such as the en space and the thin space advance in `hAnsi`. Cached field results use the `hAnsi` face like other text and keep their single model range.
 
-With `w:hint="eastAsia"`, accented Latin-1 letters such as `é` and Latin Extended Additional letters use the `eastAsia` face when the run's East Asian language is Chinese or absent. Latin Extended-A, Latin Extended-B, and IPA letters also use it when the `eastAsia` face is a Chinese font. Otherwise these letters use `hAnsi`. The font table's declared character set does not change the choice. Projected field text changes face only when its whole result selects one face. A mixed projected result retains its base face and single model range.
+With `w:hint="eastAsia"`, these 12 letters use the `eastAsia` face when the run's East Asian language is Chinese or absent: `à` `á` `è` `é` `ê` `ì` `í` `ò` `ó` `ù` `ú` `ü` (U+00E0, U+00E1, U+00E8 to U+00EA, U+00EC, U+00ED, U+00F2, U+00F3, U+00F9, U+00FA, U+00FC). Latin Extended Additional letters follow the same rule. Latin Extended-A, Latin Extended-B, and IPA letters (U+0100 to U+02AF) use the `eastAsia` face when the language is Chinese or absent, or when the `eastAsia` face is a Chinese font. Otherwise these letters use `hAnsi`.
+
+A _Chinese font_ is a face whose character set is Simplified Chinese (GB2312) or Traditional Chinese (Big5). For a face the editor knows, such as SimSun, Microsoft YaHei, or STKaiti, its own character set decides, and the font table cannot change it. For any other face, such as one the reader does not have, the font table entry's `w:charset` value `86` or `88` decides. A vertical-writing name such as `@SimSun` is not a Chinese font. Spaces around a name do not count.
 
 ### Faces that no style names
 
-When a document has a `w:rPrDefault` element, a slot that no level names uses a format default face: Times New Roman for `ascii` and `hAnsi`, and SimSun for `eastAsia`. When the document omits `w:rPrDefault`, those slots use the theme's body faces.
+When a document has a `w:rPrDefault` element, a slot that no level names uses a format default face: Times New Roman for `ascii` and `hAnsi`, and SimSun for `eastAsia`. When the document omits `w:rPrDefault`, those slots use the theme's body faces. A run that names an `ascii` face but no `hAnsi` face uses the same default for `hAnsi`.
 
-An East Asian theme reference takes the theme's `a:ea` face. If that face is empty, the theme language selects a supplemental face, and Simplified Chinese applies when the document sets no East Asian theme language. The run's own language does not select a theme face. If the theme has no face for that script, the script's default face applies, such as SimSun or MS Mincho. A document without a theme part uses the built-in theme's faces, such as DengXian.
+An East Asian theme reference takes the theme's `a:ea` face. If that face is empty, the East Asian theme language (`w:themeFontLang`) selects a supplemental face. Simplified Chinese applies when the document sets no East Asian theme language. The run's own language does not select a theme face. If the theme has no face for that script, a default face applies:
+
+| Script              | Body face | Heading face | Without a theme part (body, heading) |
+| ------------------- | --------- | ------------ | ------------------------------------ |
+| Simplified Chinese  | SimSun    | SimHei       | DengXian, DengXian Light             |
+| Traditional Chinese | PMingLiU  | MingLiU      | PMingLiU, PMingLiU                   |
+| Japanese            | MS Mincho | MS Gothic    | Yu Mincho, Yu Gothic Light           |
+| Korean              | Batang    | Dotum        | Malgun Gothic, Malgun Gothic         |
+
+A Latin theme reference in a package without a theme part uses the configured default font.
 
 ## Arabic and bidirectional paragraphs
 

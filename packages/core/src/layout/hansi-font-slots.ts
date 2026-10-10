@@ -28,6 +28,7 @@ function hAnsiFamily(props: readonly OoxmlProperty[], theme?: ThemeFonts): strin
   let family: string | undefined;
   let slotDefault: string | undefined;
   let namesLatin = false;
+  let namesHAnsi = false;
   for (const prop of props) {
     const attrs = prop.attributes;
     if (prop.localName === RUN_FONT_DEFAULTS) {
@@ -37,9 +38,11 @@ function hAnsiFamily(props: readonly OoxmlProperty[], theme?: ThemeFonts): strin
     if (prop.localName !== 'rFonts') continue;
     namesLatin ||= LATIN_FACE_ATTRIBUTES.some((name) => attrs?.[name] !== undefined);
     if (attrs?.hAnsi === undefined && attrs?.hAnsiTheme === undefined) continue;
+    namesHAnsi = true;
     family = slotFace(attrs, theme) ?? family;
   }
-  return family ?? (namesLatin ? slotDefault : undefined);
+  // A named hAnsi slot that resolves to no face keeps the run's ascii face, never the default.
+  return family ?? (namesLatin && !namesHAnsi ? slotDefault : undefined);
 }
 
 /** The hAnsi ranges, after the East Asian pass has claimed the characters it draws. */

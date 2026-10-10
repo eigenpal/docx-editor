@@ -608,7 +608,7 @@ export function applyEastAsiaFontSlots(
       !isSymbolEncodedFamily(piece.style.fontFamily) &&
       !hasTimesNewRomanEastAsiaException(piece.props, piece.style.fontFamilyEastAsia, themeFonts);
     hintedSegments.push(
-      hinted ? eastAsiaHintScope(piece.props, piece.style.fontFamilyEastAsia) : false
+      hinted ? eastAsiaHintScope(piece.props, piece.style.fontFamilyEastAsia, themeFonts) : false
     );
   }
   const ranges = eastAsiaRunsOfSegments(segments, hintedSegments);

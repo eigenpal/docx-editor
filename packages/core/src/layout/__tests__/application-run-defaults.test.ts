@@ -40,11 +40,12 @@ test('missing run defaults receive application kerning, explicit empty defaults 
   }
   for (const xml of ['<w:rPrDefault/>', '<w:rPrDefault><w:rPr/></w:rPrDefault>']) {
     const table = cascade(`<w:docDefaults>${xml}</w:docDefaults>`);
-    // An authored rPrDefault keeps the format defaults: no kerning, and the format faces.
+    // An authored rPrDefault keeps the format defaults: no kerning, and the format faces
+    // (probes d04, d06, d07, z06 and z09-z12 in local/evidence/hansi-font-slots).
     expect(table.docDefaultsRun).toEqual([
       {
         localName: 'runFontDefaults',
-        attributes: { hAnsi: 'Times New Roman', eastAsia: 'SimSun' },
+        attributes: { ascii: 'Times New Roman', hAnsi: 'Times New Roman', eastAsia: 'SimSun' },
       },
     ]);
     expect(isRunKerningEnabled(resolveRunStyle(table.docDefaultsRun))).toBe(false);
@@ -86,9 +87,13 @@ test('slots no level names take the format faces, or the theme under the applica
   );
   if (!parsed.ok) throw new Error(parsed.reason);
   const authored = buildStyleCascadeTable(parsed.part.root, theme);
-  // The East Asian slot takes the format face; a run naming no Latin face keeps the body face.
+  // Probes d06, d07 and z09-z12: every unnamed slot takes the format face, not the theme.
   const formatted = resolveRunStyle(authored.docDefaultsRun, theme);
-  expect([formatted.fontFamily, formatted.fontFamilyEastAsia]).toEqual(['Body', 'SimSun']);
+  expect([formatted.fontFamily, formatted.fontFamilyEastAsia]).toEqual([
+    'Times New Roman',
+    'SimSun',
+  ]);
+  // Probe d09: without an rPrDefault the application profile uses the theme body faces.
   const profiled = resolveRunStyle(buildStyleCascadeTable(null, theme).docDefaultsRun, theme);
   expect([profiled.fontFamily, profiled.fontFamilyEastAsia]).toEqual(['Body', 'Body EA']);
 });

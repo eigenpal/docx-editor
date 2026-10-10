@@ -92,11 +92,12 @@ test('theme fonts accept faces only beneath their schema slot', () => {
     )
   );
 
-  // An East Asian slot the theme leaves empty takes the Simplified Chinese default face.
-  expect(malformed).toEqual({
+  // An East Asian slot the theme leaves empty takes the Simplified Chinese default face:
+  // SimHei for headings (probes m01, p-major-zhcn), SimSun for body text (e01).
+  expect(malformed).toMatchObject({
     major: null,
     minor: 'Valid Minor',
-    majorEastAsia: 'SimSun',
+    majorEastAsia: 'SimHei',
     minorEastAsia: 'Valid EA',
     majorBidi: null,
     minorBidi: null,
@@ -111,7 +112,8 @@ test('supplemental CJK theme faces remain independent and validate authored font
         '<a:font script="Hant" typeface="bad;face"/><a:font script="__proto__" typeface="Invalid"/></a:minorFont>'
     )
   );
-  // Without a theme language, an empty East Asian slot takes the Simplified Chinese face.
+  // Without a theme language, an empty East Asian slot takes the Simplified Chinese
+  // supplemental face (probes m02, z01-z04).
   expect(theme.majorEastAsia).toBe('Heading');
   expect(theme.minorEastAsia).toBe('Body');
   expect(theme.majorSupplemental).toEqual({ Hans: 'Heading' });

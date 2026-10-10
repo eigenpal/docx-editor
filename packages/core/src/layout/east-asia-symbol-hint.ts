@@ -1,6 +1,7 @@
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import { themeFontFamilyOf } from '../store/package/theme-font-scheme.ts';
 import type { ThemeFonts } from './run-style.ts';
+import { isChineseFace } from '../store/package/default-font-faces.ts';
 
 /** Last specified hint wins across the already-cascaded run properties. */
 export function hasEastAsiaSymbolHint(properties: readonly OoxmlProperty[]): boolean {
@@ -122,9 +123,7 @@ const LANGUAGE_CONDITIONAL_LATIN1: ReadonlySet<number> = new Set([
  * `true` hints only the unconditional table ({@link isEastAsiaHintSymbol}). A scope adds the
  * conditional ranges: the Latin-1 letters above and Latin Extended Additional follow the hint
  * when the run's East Asian language is Chinese or absent; Latin Extended-A and -B and the
- * IPA letters also follow it when the East Asian face is a Chinese font. Measured per
- * character across Chinese, Japanese, Korean and Latin faces and languages; a font table's
- * declared charset does not change the answer.
+ * IPA letters also follow it when the East Asian face is a Chinese font (`isChineseFace`).
  */
 export function isEastAsiaHinted(
   codePoint: number,
@@ -139,64 +138,11 @@ export function isEastAsiaHinted(
   return false;
 }
 
-// Chinese fonts by family name, lower-cased. A font table's charset is not consulted.
-const CHINESE_FACES: ReadonlySet<string> = new Set([
-  'simsun',
-  'nsimsun',
-  'simsun-extb',
-  'simhei',
-  'kaiti',
-  'kaiti_gb2312',
-  'fangsong',
-  'fangsong_gb2312',
-  'microsoft yahei',
-  'microsoft yahei ui',
-  'microsoft yahei light',
-  'microsoft jhenghei',
-  'microsoft jhenghei ui',
-  'microsoft jhenghei light',
-  'mingliu',
-  'pmingliu',
-  'mingliu_hkscs',
-  'mingliu-extb',
-  'pmingliu-extb',
-  'dfkai-sb',
-  'dengxian',
-  'dengxian light',
-  'lisu',
-  'youyuan',
-  'stsong',
-  'stzhongsong',
-  'stfangsong',
-  'stkaiti',
-  'stheiti',
-  'stxihei',
-  'pingfang sc',
-  'pingfang tc',
-  'pingfang hk',
-  'songti sc',
-  'songti tc',
-  'heiti sc',
-  'heiti tc',
-  'kaiti sc',
-  'kaiti tc',
-  '宋体',
-  '新宋体',
-  '黑体',
-  '楷体',
-  '仿宋',
-  '微软雅黑',
-  '微軟正黑體',
-  '等线',
-  '細明體',
-  '新細明體',
-  '標楷體',
-]);
-
 /** The hint scope of cascaded run properties and their resolved East Asian face. */
 export function eastAsiaHintScope(
   properties: readonly OoxmlProperty[],
-  eastAsiaFace: string | null
+  eastAsiaFace: string | null,
+  themeFonts?: ThemeFonts
 ): EastAsiaHintScope {
   let language: string | undefined;
   for (const property of properties) {
@@ -205,6 +151,6 @@ export function eastAsiaHintScope(
   }
   return {
     chineseLanguage: !language || /^zh(?:-|$)/i.test(language),
-    chineseFace: eastAsiaFace !== null && CHINESE_FACES.has(eastAsiaFace.toLowerCase()),
+    chineseFace: isChineseFace(eastAsiaFace, themeFonts?.chineseFontTableFaces),
   };
 }

@@ -109,7 +109,8 @@ test('empty theme faces select and request the inherited language face before ex
   if (!opened.ok) return;
   try {
     // Without a theme language the empty slot takes the Simplified Chinese supplemental face,
-    // for the Japanese-language run too: the run language selects no theme face.
+    // for the Japanese-language run too: the run language selects no theme face (probes
+    // z01-z04 in local/evidence/hansi-font-slots).
     expect(requested).toContain('Chinese Body');
     expect(requested).not.toContain('Japanese Body');
     expect(requested).not.toContain('Chinese Heading');
@@ -223,7 +224,7 @@ test.each([
     expect([...families]).toEqual([family]);
     if (token === 'minorHAnsi') {
       // No level names an East Asian face, so CJK text takes the format default face, not
-      // the theme's supplemental face.
+      // the theme's supplemental face (probes z09 and z11).
       expect(requested).toContain('SimSun');
       expect(requested).not.toContain('Songti SC');
       const eastAsianFamilies = new Set<string | null>();

@@ -12,16 +12,18 @@ import { FORMAT_DOC_DEFAULTS, formatDefaultsDocx as docx } from './fixture.ts';
 
 const GRID = 0.24;
 const FAMILY = 'DejaVu Sans';
-const source = createFontSource(
-  new Uint8Array(
-    readFileSync(
-      new URL('../../core/src/layout/__tests__/fixtures/fonts/DejaVuSans.ttf', import.meta.url)
-    )
-  ),
-  { family: FAMILY, weight: 400, style: 'normal' }
+const fontBytes = new Uint8Array(
+  readFileSync(
+    new URL('../../core/src/layout/__tests__/fixtures/fonts/DejaVuSans.ttf', import.meta.url)
+  )
 );
-if ('failure' in source) throw new Error(JSON.stringify(source.failure));
-const fontSource = source.source;
+// Text that names no face takes the format default face, Times New Roman, under the
+// fixtures' authored rPrDefault. Serve that family from the same bytes.
+const fontSources = [FAMILY, 'Times New Roman'].map((family) => {
+  const source = createFontSource(fontBytes, { family, weight: 400, style: 'normal' });
+  if ('failure' in source) throw new Error(JSON.stringify(source.failure));
+  return source.source;
+});
 
 const SECTION =
   '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/>' +
@@ -35,7 +37,7 @@ async function baselines(body: string): Promise<number[]> {
 async function baselinesWith(body: string, extras: Record<string, string>): Promise<number[]> {
   const result = await exportPdf(docx(`${body}${SECTION}`, extras), {
     useSystemFonts: false,
-    fonts: { sources: [fontSource], defaultFont: { family: FAMILY, sizeHalfPoints: 24 } },
+    fonts: { sources: fontSources, defaultFont: { family: FAMILY, sizeHalfPoints: 24 } },
   });
   const pdf = await getDocument({ data: result.bytes.slice(), useSystemFonts: false }).promise;
   try {

@@ -99,15 +99,6 @@ export function eastAsiaFamilyFromRFonts(
 }
 
 /**
- * The face of a Latin slot (`w:ascii`, `w:hAnsi`) that no level names, under an authored
- * `w:rPrDefault`. Without one, the application profile uses the body theme face instead.
- */
-export const FORMAT_DEFAULT_LATIN_FAMILY = 'Times New Roman';
-
-/** The East Asian face no level names, under an authored `w:rPrDefault`. */
-export const FORMAT_DEFAULT_EAST_ASIAN_FAMILY = 'SimSun';
-
-/**
  * The independently resolved `w:hAnsi` family named by an `w:rFonts` element: the face
  * layout uses for non-ASCII Latin, Greek and Cyrillic text when it differs from `w:ascii`.
  */
