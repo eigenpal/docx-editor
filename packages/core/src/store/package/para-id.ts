@@ -22,7 +22,8 @@ import { MC_NAMESPACE_URI, W14_NAMESPACE_URI, WML_NAMESPACE_URI } from './ooxml-
 import { carryIndexToRebuiltRoot, parentNodeOf } from './ooxml-edit.ts';
 import type { OoxmlAttribute, OoxmlElement, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 import { validateOoxmlPart } from './ooxml-validate.ts';
-import { keepsSubtreeMemo } from './subtree-memo-policy.ts';
+import { createSubtreeAggregateMemo, keepsSubtreeMemo } from './subtree-memo-policy.ts';
+import { createRecentRootCache } from '../store/recent-root-cache.ts';
 
 const PARA_ID_PATTERN = /^[0-9A-Fa-f]{8}$/;
 
@@ -79,7 +80,8 @@ export function mintParaId(seed: string, used: ReadonlySet<string>): string {
   }
 }
 
-const usedParaIdCache = new WeakMap<OoxmlElement, ReadonlySet<string>>();
+/** Bounded: the undo history keeps old roots, and each set holds every id of a part. */
+const usedParaIdCache = createRecentRootCache<ReadonlySet<string>>(3);
 
 /** One shared empty list for the (vast) majority of subtrees that carry no paraId. */
 const EMPTY_PARA_IDS: readonly string[] = Object.freeze([]);
@@ -94,7 +96,7 @@ const EMPTY_PARA_IDS: readonly string[] = Object.freeze([]);
  * set). Subtrees with no id share one frozen empty list. Only nodes `keepsSubtreeMemo`
  * admits get an entry: a node of leaves rebuilds its short list from those leaves.
  */
-const subtreeParaIdsCache = new WeakMap<OoxmlNode, readonly string[]>();
+const subtreeParaIdsCache = createSubtreeAggregateMemo<readonly string[]>();
 
 function subtreeParaIds(node: OoxmlNode): readonly string[] {
   if (node.kind === 'textValue') return EMPTY_PARA_IDS;
@@ -111,7 +113,8 @@ function subtreeParaIds(node: OoxmlNode): readonly string[] {
   }
   const result: readonly string[] = found ?? EMPTY_PARA_IDS;
   // A run answers from its few children again: an entry per run is most of the memo.
-  if (node.kind !== 'run' && keepsSubtreeMemo(node)) subtreeParaIdsCache.set(node, result);
+  if (node.kind !== 'run' && keepsSubtreeMemo(node))
+    subtreeParaIdsCache.set(node, result, result.length);
   return result;
 }
 

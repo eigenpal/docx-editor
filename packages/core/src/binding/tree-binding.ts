@@ -14,6 +14,7 @@ import { isRunLevelMcAlternateContent } from '../store/package/drawing-projectio
 
 import type { OoxmlProperty, TreeDocOp } from '../store/store/tree-op-types.ts';
 import { createRecentRootCache } from '../store/store/recent-root-cache.ts';
+import { createSubtreeAggregateMemo } from '../store/package/subtree-memo-policy.ts';
 import { Node as PMNode } from 'prosemirror-model';
 import {
   collectStoryParagraphs,
@@ -271,7 +272,7 @@ export function bodyParagraphs(part: OoxmlPart): OoxmlNode[] {
  * revision, so a bare map would grow with the history rather than with the document.
  */
 const paragraphsByPart = createRecentRootCache<OoxmlNode[]>(16);
-const paragraphsByStoryChild = new WeakMap<OoxmlNode, readonly OoxmlNode[]>();
+const paragraphsByStoryChild = createSubtreeAggregateMemo<readonly OoxmlNode[]>();
 
 function appendStoryChildParagraphs(child: OoxmlNode, into: OoxmlNode[]): void {
   let paragraphs = paragraphsByStoryChild.get(child);
@@ -279,7 +280,7 @@ function appendStoryChildParagraphs(child: OoxmlNode, into: OoxmlNode[]): void {
     const collected: OoxmlNode[] = [];
     collectStoryParagraphs([child], collected, 0);
     paragraphs = Object.freeze(collected);
-    paragraphsByStoryChild.set(child, paragraphs);
+    paragraphsByStoryChild.set(child, paragraphs, paragraphs.length);
   }
   for (const paragraph of paragraphs) into.push(paragraph);
 }

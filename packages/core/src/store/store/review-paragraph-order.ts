@@ -1,7 +1,7 @@
 // Paragraph-order indexes shared by interactive review derivation and editor positioning.
 
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
-import { keepsSubtreeMemo } from '../package/subtree-memo-policy.ts';
+import { createSubtreeAggregateMemo, keepsSubtreeMemo } from '../package/subtree-memo-policy.ts';
 import { createRecentRootCache } from './recent-root-cache.ts';
 
 /**
@@ -36,7 +36,7 @@ export function paragraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, numbe
         };
         for (const child of node.children) collect(child, 0);
         ids = found;
-        tableParagraphIdsCache.set(node, ids);
+        tableParagraphIdsCache.set(node, ids, ids.length);
       }
       for (const id of ids) {
         if (!order.has(id)) order.set(id, order.size);
@@ -88,7 +88,7 @@ const EMPTY_DEEP_PARAGRAPH_ENTRIES: readonly DeepParagraphIds[] = Array.from(
  * entry because republishing a shared subtree at another depth can cross the hostile-input cap.
  * Only nodes `keepsSubtreeMemo` admits get an entry: a node of leaves answers from them.
  */
-const subtreeDeepParagraphIdsCache = new WeakMap<OoxmlNode, DeepParagraphIds>();
+const subtreeDeepParagraphIdsCache = createSubtreeAggregateMemo<DeepParagraphIds>();
 
 function subtreeDeepParagraphIds(node: OoxmlNode, depth: number): readonly string[] {
   if (node.kind === 'textValue' || depth > MAX_DEEP_PARAGRAPH_DEPTH)
@@ -109,10 +109,11 @@ function subtreeDeepParagraphIds(node: OoxmlNode, depth: number): readonly strin
   if (node.kind !== 'run' && keepsSubtreeMemo(node))
     subtreeDeepParagraphIdsCache.set(
       node,
-      found ? { depth, ids: found } : EMPTY_DEEP_PARAGRAPH_ENTRIES[depth]!
+      found ? { depth, ids: found } : EMPTY_DEEP_PARAGRAPH_ENTRIES[depth]!,
+      found?.length ?? 0
     );
   return found ?? EMPTY_DEEP_PARAGRAPH_IDS;
 }
 
 const deepParagraphOrderCache = createRecentRootCache<Map<string, number>>(3);
-const tableParagraphIdsCache = new WeakMap<OoxmlNode, readonly string[]>();
+const tableParagraphIdsCache = createSubtreeAggregateMemo<readonly string[]>();

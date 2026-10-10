@@ -2,6 +2,10 @@
 
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import type { PreparedBlock } from './section-prepass-types.ts';
+import {
+  createSubtreeAggregateMemo,
+  LARGE_SUBTREE_ANSWER,
+} from '../store/package/subtree-memo-policy.ts';
 
 export interface PreparedBlockMemo {
   readonly contentWidth: number;
@@ -34,4 +38,15 @@ export interface PreparedBlockMemo {
   readonly entry: PreparedBlock;
 }
 
-export const preparedBlocks = new WeakMap<OoxmlNode, PreparedBlockMemo>();
+const memo = createSubtreeAggregateMemo<PreparedBlockMemo>();
+
+/**
+ * A prepared table holds every row of the table, so a table keeps an entry only for its
+ * latest revision: the undo history keeps each old table node alive, and a weak entry on each
+ * kept one whole prepared table per edit. Paragraph entries stay weak.
+ */
+export const preparedBlocks = {
+  get: (block: OoxmlNode): PreparedBlockMemo | undefined => memo.get(block),
+  set: (block: OoxmlNode, entry: PreparedBlockMemo): void =>
+    memo.set(block, entry, block.kind === 'table' ? LARGE_SUBTREE_ANSWER : 0),
+};

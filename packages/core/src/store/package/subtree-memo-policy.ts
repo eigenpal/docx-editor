@@ -34,3 +34,53 @@ export function keepsSubtreeMemo(node: OoxmlNode): boolean {
   if (node.kind === 'textValue') return false;
   return node.children.length >= WIDE_SUBTREE_CHILDREN || hasElementGrandchild(node);
 }
+
+/** An answer with this many items is kept only for the latest revision of its node. */
+export const LARGE_SUBTREE_ANSWER = 256;
+
+/**
+ * `WeakRef` is ES2021 and the workspace tsconfigs pin `lib` at ES2020, so the global is
+ * declared here, as `recent-root-cache.ts` does.
+ */
+interface NodeWeakRef {
+  deref(): OoxmlNode | undefined;
+}
+declare const WeakRef: new (target: OoxmlNode) => NodeWeakRef;
+
+/**
+ * A memo for answers that grow with the subtree, such as every id under a node.
+ *
+ * An edit rebuilds the nodes above it: the root, the body, and the table that holds the edit.
+ * The undo history keeps every rebuilt node alive, so a plain `WeakMap` entry on each kept an
+ * O(subtree) answer per revision. A large answer is kept only for the latest revision of its
+ * node id instead: node ids survive edits, so the current tree still answers every untouched
+ * table in one read, and the history keeps nothing. Small answers keep a plain weak entry.
+ * `set` takes the answer's size in items.
+ */
+export function createSubtreeAggregateMemo<V>(): {
+  get(node: OoxmlNode): V | undefined;
+  set(node: OoxmlNode, value: V, size: number): void;
+} {
+  const small = new WeakMap<OoxmlNode, V>();
+  const latest = new Map<string, { readonly node: NodeWeakRef; readonly value: V }>();
+  let pruneAt = 64;
+  return {
+    get(node) {
+      const hit = small.get(node);
+      if (hit !== undefined) return hit;
+      const entry = latest.get(node.id);
+      return entry && entry.node.deref() === node ? entry.value : undefined;
+    },
+    set(node, value, size) {
+      if (size < LARGE_SUBTREE_ANSWER) {
+        small.set(node, value);
+        return;
+      }
+      latest.set(node.id, { node: new WeakRef(node), value });
+      // Drop entries whose node is gone, such as a deleted table's.
+      if (latest.size < pruneAt) return;
+      for (const [id, entry] of latest) if (!entry.node.deref()) latest.delete(id);
+      pruneAt = Math.max(64, latest.size * 2);
+    },
+  };
+}

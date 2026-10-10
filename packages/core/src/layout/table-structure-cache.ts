@@ -31,8 +31,15 @@ function sameContext(a: Context, b: Context): boolean {
   );
 }
 
-/** Reuse resolved table geometry only when an immutable edit changes ordinary text. */
+/**
+ * Reuse resolved table geometry only when an immutable edit changes ordinary text.
+ *
+ * Entries live under the table's `w:tblPr` node, which survives ordinary edits, and only the
+ * latest table revision per view stays. Keying by the table node itself kept one structure
+ * for every revision the undo history holds: a long table grew by megabytes per edit.
+ */
 function createStructureCache() {
+  // Tables without `w:tblPr` have no stable owner; they are keyed by the table itself.
   const roots = new WeakMap<OoxmlNode, Memo[]>();
   // Immutable table properties survive ordinary text edits. Keep reviewer views separate.
   const latest = new WeakMap<OoxmlNode, Memo[]>();
@@ -51,14 +58,13 @@ function createStructureCache() {
     context: Context,
     read: () => SemanticTableStructure | null
   ): SemanticTableStructure | null {
-    const entries = roots.get(table) ?? [];
-    const known = entries.find((entry) => sameContext(entry, context));
     const owner =
       table.kind === 'table' ? table.children.find((n) => n.localName === 'tblPr') : undefined;
-    if (known) {
-      if (owner) rememberLatest(owner, known);
-      return known.structure;
-    }
+    const entries = owner ? undefined : (roots.get(table) ?? []);
+    const known = (owner ? latest.get(owner) : entries)?.find(
+      (entry) => entry.table === table && sameContext(entry, context)
+    );
+    if (known) return known.structure;
     const previous = owner
       ? latest.get(owner)?.find((entry) => sameContext(entry, context))
       : undefined;
@@ -104,11 +110,13 @@ function createStructureCache() {
     }
     structure ??= read();
     const memo = { ...context, table, structure };
-    // Keep common reviewer views independent without retaining unbounded width variants.
-    if (entries.length === 4) entries.shift();
-    entries.push(memo);
-    roots.set(table, entries);
     if (owner) rememberLatest(owner, memo);
+    else if (entries) {
+      // Keep common reviewer views independent without retaining unbounded width variants.
+      if (entries.length === 4) entries.shift();
+      entries.push(memo);
+      roots.set(table, entries);
+    }
     return structure;
   };
 }

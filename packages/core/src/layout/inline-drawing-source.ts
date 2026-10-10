@@ -1,4 +1,5 @@
 import { sameResourceSubstrate } from './package-resource-substrate.ts';
+import { createSubtreeAggregateMemo } from '../store/package/subtree-memo-policy.ts';
 import { groupTextboxesLayoutToken } from './group-textbox-layout.ts';
 import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import { drawingInputsUnchangedByParagraphEdit } from './drawing-paragraph-change.ts';
@@ -965,15 +966,16 @@ export function drawingTokenForTableBlockMemo(
   // Rows keep their identity across a cell edit, so their segments answer under the same epoch.
   const reuse = { rows: rowDrawingTokens, scope: undefined, epoch };
   const token = aggregateParagraphTokensForTableBlock(table, drawingTokenForParagraph, reuse);
-  tableDrawingTokenCache.set(table, { epoch, token });
+  // A token grows with the table: about one item per 64 characters.
+  tableDrawingTokenCache.set(table, { epoch, token }, token.length >> 6);
   return token;
 }
 
 /** Aggregated drawing token per immutable table node, valid for one drawing epoch. */
-const tableDrawingTokenCache = new WeakMap<
-  OoxmlNode,
-  { readonly epoch: string; readonly token: string }
->();
+const tableDrawingTokenCache = createSubtreeAggregateMemo<{
+  readonly epoch: string;
+  readonly token: string;
+}>();
 const rowDrawingTokens = createTableRowTokenStore();
 
 /**

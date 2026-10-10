@@ -1,4 +1,5 @@
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
+import { createSubtreeAggregateMemo } from '../store/package/subtree-memo-policy.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import type { RevisionDisplayMode, RevisionAuthorFilter } from './revision-projection.ts';
 import { readTableStructure } from './semantic-table.ts';
@@ -8,10 +9,10 @@ import { readTableStructure } from './semantic-table.ts';
  * outside a table shares the table node, so a pass does not walk every row of every table
  * again to number paragraphs that did not move.
  */
-const tableParagraphIds = new WeakMap<
-  OoxmlElement,
-  { readonly key: string; readonly ids: readonly string[] }
->();
+const tableParagraphIds = createSubtreeAggregateMemo<{
+  readonly key: string;
+  readonly ids: readonly string[];
+}>();
 
 /** Walk top-level prepared blocks and table cell paragraphs in document order. */
 export function paragraphDocumentOrderOf(
@@ -60,7 +61,7 @@ export function paragraphDocumentOrderOf(
     if (cached?.key !== key) {
       const ids: string[] = [];
       collect(table, ids);
-      tableParagraphIds.set(table, (cached = { key, ids }));
+      tableParagraphIds.set(table, (cached = { key, ids }), ids.length);
     }
     for (const id of cached.ids) order.set(id, index++);
   };

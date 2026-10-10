@@ -17,6 +17,7 @@ import { framedTokenJoin } from './layout-cache.ts';
 import {
   createListCounterState,
   expandCountersOf,
+  numberLevelsOf,
   type FullContextNumberSource,
 } from './list-counters.ts';
 import { resolvePictureBullet, type ResolvedPictureBullet } from './numbering-picture-bullet.ts';
@@ -619,8 +620,7 @@ export function resolveStoryListItems(
       framedTokenJoin([...tokenParts.slice(0, 12), ...tokenParts.slice(13)])
     );
     listItemNumberSources.set(item, {
-      index: linked,
-      numId: advanced.numId,
+      levels: numberLevelsOf(linked, advanced.numId),
       ilvl: advanced.ilvl,
       expandCounters: expandCountersOf(advanced),
     });

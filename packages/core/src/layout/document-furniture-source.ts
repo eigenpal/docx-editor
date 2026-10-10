@@ -293,7 +293,11 @@ export function createDocumentFurnitureSource(
       story: baseline,
     };
     // A stale entry for the same geometry is replaced; distinct geometries each keep one.
-    const kept = (entries ?? []).filter((other) => other !== cached);
+    // A loop, not a closure: a closure naming `cached` puts it in the context every closure
+    // of this call shares, and the story's own callbacks then keep the previous story alive,
+    // which keeps the one before it, back to the first layout.
+    const kept: StoryMemoEntry[] = [];
+    for (const other of entries ?? []) if (other !== cached) kept.push(other);
     kept.push(entry);
     if (kept.length > MAX_STORY_GEOMETRIES_PER_PART) kept.shift();
     memo.set(part, kept);
