@@ -1,11 +1,17 @@
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { SemanticSelection } from '@docx-editor.dev/core/layout';
 
-/** Observe the store's split result without enumerating every paragraph in the story. */
+/**
+ * Observe the store's split result without enumerating every paragraph in the story.
+ *
+ * `currentTail` re-reads the tail after the commit: a collaboration session can give the new
+ * paragraph another id within the same commit, and that rename publishes no split record.
+ */
 export function withSplitSelection(
   session: Pick<TreeDocxSessionView, 'subscribe'>,
   paragraphId: string,
-  run: (selectionAfter: () => SemanticSelection | null) => void
+  run: (selectionAfter: () => SemanticSelection | null) => void,
+  currentTail: (tail: string, head: string) => string | null = (tail) => tail
 ): void {
   let tail: string | undefined;
   const unsubscribe = session.subscribe((change) => {
@@ -14,8 +20,9 @@ export function withSplitSelection(
   });
   try {
     run(() => {
-      if (!tail) return null;
-      const position = { paragraphId: tail, offset: 0 };
+      const current = tail && currentTail(tail, paragraphId);
+      if (!current) return null;
+      const position = { paragraphId: current, offset: 0 };
       return { anchor: position, head: position };
     });
   } finally {

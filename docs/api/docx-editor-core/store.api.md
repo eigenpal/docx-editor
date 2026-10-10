@@ -5128,7 +5128,9 @@ export class TreePackageStore {
     adoptPackageUnit(before: OoxmlPackage): void;
     applyFragmentPaste(scope: StoryScope, input: FragmentPasteInput): FragmentPasteResult;
     applyImageProperties(scope: StoryScope, input: ApplyImagePropertiesInput): ImageIntentResult;
-    applyLifecycleOp(op: HeaderFooterLifecycleOp | NoteLifecycleOp | TreeDocOp): PackageTransactResult;
+    applyLifecycleOp(op: HeaderFooterLifecycleOp | NoteLifecycleOp | TreeDocOp, options?: {
+        readonly actorId?: string;
+    }): PackageTransactResult;
     // (undocumented)
     beginComposition(scope: StoryScope, selectionBefore?: SelectionMark | null): boolean;
     bodyStore(): TreeDocumentStore;
@@ -5459,7 +5461,5 @@ export type ZipReadResult = {
 
 // @public
 export type ZipRejection = 'too-many-entries' | 'too-large' | 'bad-name' | 'inflate-error';
-
-// (No @packageDocumentation comment for this package)
 
 ```

@@ -168,6 +168,25 @@ export function nextDenseDecimalId(
   throw new TypeError('no free decimal id');
 }
 
+/**
+ * Stripe count for part numbers, as `header3.xml` or `image12.png`. Smaller than
+ * {@link ACTOR_ID_STRIPE}: header and footer names take five digits at most, and part names
+ * are seen by people.
+ */
+export const PART_NUMBER_STRIPE = 4096;
+
+/**
+ * The part numbers to try for a new part, in order: 1, 2, 3, ... with no actor, the dense
+ * numbering a solo document uses, or one actor's stripe of them, so two collaborators who each
+ * add a header or an image from one snapshot do not name both parts the same.
+ */
+export function* partNumberCandidates(max: number, actorId?: string): Generator<number> {
+  const actor = resolveAllocationActor(actorId);
+  const step = actor === undefined ? 1 : PART_NUMBER_STRIPE;
+  const start = actor === undefined ? 1 : (actorStripe(actor) % PART_NUMBER_STRIPE) + 1;
+  for (let candidate = start; candidate <= max; candidate += step) yield candidate;
+}
+
 const RELATIONSHIP_NUMBER = /^rId(\d{1,9})$/;
 
 /** Parse `rIdN` when N is a 1–9 digit integer; anything else is not a seed. */

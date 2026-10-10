@@ -10,8 +10,11 @@ import * as Y from 'yjs';
 // @public
 export function assertCollaborationFormatCompatibility(version: unknown): void;
 
-// @public
+// @public @deprecated
 export function assertDocumentCollaborationCompatibility(versions: unknown): void;
+
+// @public
+export function checkCollaborationRoomGeneration(payload: CollaborationRoomGatePayload): void;
 
 // @public
 export const COLLABORATION_FORMAT_VERSION: string;
@@ -35,20 +38,68 @@ export type CollaborationBootstrap = {
 
 // @public
 export interface CollaborationHandle<TSession extends CollaborationSession> {
-    // (undocumented)
     destroy(): void;
-    // (undocumented)
     readonly document: Uint8Array;
-    // (undocumented)
     readonly session: TSession;
 }
 
 // @public
 export interface CollaborationIdentityUpdate {
-    // (undocumented)
     readonly color?: string;
-    // (undocumented)
     readonly name?: string;
+}
+
+// @public
+export type CollaborationMigration = {
+    readonly ok: true;
+    readonly report: CollaborationMigrationReport;
+    readonly state: Uint8Array;
+} | {
+    readonly ok: false;
+    readonly reason: 'check-failed';
+    readonly report: CollaborationMigrationReport;
+} | {
+    readonly ok: false;
+    readonly reason: 'current' | 'later-format';
+};
+
+// @public
+export type CollaborationMigrationCheck = 'paragraphs' | 'text' | 'formatting' | 'structure' | 'media' | 'links';
+
+// @public
+export interface CollaborationMigrationDifference extends CollaborationMigrationPosition {
+    readonly actual: string | null;
+    readonly expected: string | null;
+    readonly kind: 'text' | 'formatting' | 'missing' | 'added';
+}
+
+// @public
+export type CollaborationMigrationNeed = 'current' | 'earlier-format' | 'later-format';
+
+// @public
+export function collaborationMigrationNeed(state: Uint8Array): CollaborationMigrationNeed;
+
+// @public
+export interface CollaborationMigrationPosition {
+    readonly paragraph: number;
+    readonly part: string;
+}
+
+// @public
+export interface CollaborationMigrationReport {
+    readonly changedParts: readonly string[];
+    readonly differenceCount: number;
+    readonly differences: readonly CollaborationMigrationDifference[];
+    readonly documentId: string;
+    readonly failed: readonly CollaborationMigrationCheck[];
+    readonly from: string;
+    readonly hidden: number;
+    readonly hiddenAt: readonly CollaborationMigrationPosition[];
+    readonly missingLinks: readonly string[];
+    readonly missingMedia: readonly string[];
+    readonly ok: boolean;
+    readonly paragraphs: number;
+    readonly to: string;
 }
 
 // @public
@@ -56,67 +107,65 @@ export function collaborationModule(options: CollaborationModuleOptions): Editor
 
 // @public
 export interface CollaborationModuleOptions extends ProLicenseOptions {
-    // (undocumented)
     readonly session: EditorCollaborationSession;
 }
 
 // @public
 export interface CollaborationResourceUsage {
     readonly blobBytes: number;
-    // (undocumented)
+    readonly formattingMarkers: number;
     readonly maxBlobBytes: number;
-    // (undocumented)
     readonly maxNodes: number;
-    // (undocumented)
     readonly maxParts: number;
-    // (undocumented)
     readonly maxRelationships: number;
     readonly nodes: number;
-    // (undocumented)
     readonly parts: number;
-    // (undocumented)
     readonly relationships: number;
     readonly tombstonedNodes: number;
 }
 
 // @public
+export interface CollaborationRoomGatePayload {
+    readonly context: object;
+    readonly document: Y.Doc;
+    readonly update: Uint8Array;
+}
+
+// @public
 export class CollaborationSchemaError extends Error {
-    constructor(code: CollaborationFailureCode, detail?: string | undefined);
-    // (undocumented)
+    constructor(
+    code: CollaborationFailureCode,
+    detail?: string | undefined);
     readonly code: CollaborationFailureCode;
-    // (undocumented)
     readonly detail?: string | undefined;
 }
 
 // @public
 export interface CollaborationSession {
-    // (undocumented)
     canRedo(): boolean;
-    // (undocumented)
     canUndo(): boolean;
-    // (undocumented)
     readonly documentId: string;
-    // (undocumented)
     readonly identity: CollaborationIdentity;
-    // (undocumented)
+    readonly offlineEditing?: boolean;
     participants(): readonly CollaborationParticipant[];
-    // (undocumented)
     redo(): boolean;
-    // (undocumented)
     remoteSelections(): readonly CollaborationRemoteSelection[];
     readonly sessionId: string;
     setIdentity?(update: CollaborationIdentityUpdate): void;
-    // (undocumented)
     status(): CollaborationStatus;
     statusSnapshot(): CollaborationStatusSnapshot;
-    // (undocumented)
     subscribeParticipants(listener: (participants: readonly CollaborationParticipant[]) => void): () => void;
-    // (undocumented)
     subscribeRemoteSelections(listener: (selections: readonly CollaborationRemoteSelection[]) => void): () => void;
-    // (undocumented)
     subscribeStatus(listener: (status: CollaborationStatus, reason?: CollaborationFailureCode, detail?: string) => void): () => void;
-    // (undocumented)
     undo(): boolean;
+}
+
+// @public
+export function compactCollaborationState(state: Uint8Array, options?: CompactCollaborationStateOptions): Promise<Uint8Array | null>;
+
+// @public
+export interface CompactCollaborationStateOptions {
+    readonly minimumGain?: number;
 }
 
 // @public
@@ -124,48 +173,26 @@ export function createDocumentCollaboration(options: CreateDocumentCollaboration
 
 // @public
 export interface CreateDocumentCollaborationOptions {
-    // (undocumented)
     readonly awareness: Awareness;
-    // (undocumented)
     readonly bootstrap: CollaborationBootstrap;
-    // (undocumented)
     readonly documentId: string;
-    // (undocumented)
     readonly identity: CollaborationIdentity;
     readonly offlineEditing?: boolean;
     readonly sessionId?: string;
-    // (undocumented)
     readonly ydoc: Y.Doc;
 }
 
-// @beta
-export function createTextCollaboration(options: CreateTextCollaborationOptions): Promise<TextCollaborationHandle>;
-
-// @beta
-export interface CreateTextCollaborationOptions {
-    // (undocumented)
-    readonly awareness: Awareness;
-    // (undocumented)
-    readonly bootstrap: CollaborationBootstrap;
-    // (undocumented)
-    readonly documentId: string;
-    // (undocumented)
-    readonly identity: CollaborationIdentity;
-    readonly sessionId?: string;
-    // (undocumented)
-    readonly ydoc: Y.Doc;
-}
-
-// @public
+// @public @deprecated
 export const DOCUMENT_COLLABORATION_VERSIONS: DocumentCollaborationVersions;
 
 // @public
 export type DocumentCollaborationHandle = CollaborationHandle<DocumentCollaborationSession>;
 
 // @public
-export interface DocumentCollaborationSession extends TextCollaborationSession {
+export interface DocumentCollaborationSession extends EditorCollaborationSession {
     resourceUsage(): CollaborationResourceUsage;
     setIdentity(update: CollaborationIdentityUpdate): void;
+    setTransportStatus(status: 'ready' | 'disconnected' | 'error', reason?: CollaborationFailureCode, detail?: string): void;
 }
 
 // @public
@@ -177,10 +204,17 @@ export interface DocumentCollaborationVersions {
 }
 
 // @public
-export const MAX_BASELINE_BYTES: number;
+export function migrateCollaborationRoom(options: MigrateCollaborationRoomOptions): Promise<CollaborationMigration>;
 
 // @public
-export const PROTOCOL_VERSION = 1;
+export interface MigrateCollaborationRoomOptions {
+    readonly documentId?: string;
+    readonly exported: Uint8Array;
+    readonly state: Uint8Array;
+}
+
+// @public
+export function prepareCollaborationServerDocument(document: Y.Doc): () => void;
 
 // @public
 export function readCollaborationDocument(ydoc: Y.Doc): Uint8Array;
@@ -192,16 +226,6 @@ export function readCollaborationFormatVersion(ydoc: Y.Doc): string;
 export function readCollaborationResourceUsage(ydoc: Y.Doc): CollaborationResourceUsage;
 
 // @public
-export const SCHEMA_VERSION = 1;
-
-// @beta
-export type TextCollaborationHandle = CollaborationHandle<TextCollaborationSession>;
-
-// @public
-export interface TextCollaborationSession extends EditorCollaborationSession {
-    setTransportStatus(status: 'ready' | 'disconnected' | 'error', reason?: CollaborationFailureCode, detail?: string): void;
-}
-
-// (No @packageDocumentation comment for this package)
+export function readCollaborationRoomGeneration(document: Y.Doc): string;
 
 ```

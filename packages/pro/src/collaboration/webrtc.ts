@@ -14,14 +14,16 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
 import { WebrtcProvider } from 'y-webrtc';
+import { trackUnsyncedChanges } from './webrtc-unsynced.ts';
 import type { CollaborationIdentity } from '@docx-editor.dev/core/collaboration';
 import {
   createDocumentCollaboration,
   type DocumentCollaborationHandle,
 } from './document-session.ts';
 import { installChunkedFraming, type ChunkablePeer } from './webrtc-chunking.ts';
+import { createLinkHealth, linkHealthStatus, type LinkHealth } from './webrtc-link-health.ts';
 import { validateRoomId } from './room-id.ts';
-import type { CollaborationBootstrap } from './session.ts';
+import type { CollaborationBootstrap } from './types.ts';
 
 /**
  * Public demo signaling endpoints. Use these endpoints for demos only.
@@ -61,15 +63,21 @@ export function resetDemoSignalingWarningForTests(): void {
 
 /** Options for the owned WebRTC collaboration convenience wrapper. @public */
 export interface CreateWebrtcCollaborationOptions {
+  /** The room to join: a `createCollaborationRoomId` value every participant shares. */
   readonly roomId: string;
+  /** Who this participant is, as peers see them. */
   readonly identity: CollaborationIdentity;
+  /** Create the room from a document, or join one that peers already hold. */
   readonly bootstrap: CollaborationBootstrap;
   /**
    * Admit local edits while the transport is `disconnected`. Buffered updates merge on
-   * reconnect. See {@link CreateDocumentCollaborationOptions.offlineEditing}.
+   * reconnect. On by default; pass `false` to pause editing while disconnected. See
+   * {@link CreateDocumentCollaborationOptions.offlineEditing}.
    */
   readonly offlineEditing?: boolean;
+  /** Signaling server URLs that introduce peers to each other. */
   readonly signaling?: readonly string[];
+  /** STUN and TURN servers for the peer connections. Use TURN across restrictive networks. */
   readonly iceServers?: readonly RTCIceServer[];
   /**
    * Signaling encryption secret for `y-webrtc`.
@@ -84,8 +92,17 @@ export interface CreateWebrtcCollaborationOptions {
 
 /** Owned WebRTC provider and provider-neutral collaboration resources. @public */
 export interface WebrtcCollaborationHandle extends DocumentCollaborationHandle {
+  /** The room's shared Yjs document, owned by this handle. */
   readonly ydoc: Y.Doc;
+  /** The owned `y-webrtc` provider. `destroy()` destroys it. */
   readonly provider: WebrtcProvider;
+  /**
+   * Local changes no peer has received: made while no peer was connected, and not synced
+   * since. A WebRTC room has no server, so these changes exist only in this browser.
+   */
+  unsyncedChanges(): number;
+  /** Call `listener` when `unsyncedChanges()` changes. Returns the unsubscribe function. */
+  subscribeUnsyncedChanges(listener: () => void): () => void;
 }
 
 export { createCollaborationRoomId, validateRoomId } from './room-id.ts';
@@ -154,19 +171,22 @@ const passwordFromUrlFragment = (href?: string): string | undefined => {
  */
 const installChunkedTransport = (
   provider: WebrtcProvider,
-  onAbandonedMessage: () => void
+  health: Pick<LinkHealth, 'abandoned' | 'delivered'>
 ): void => {
   void Promise.resolve(provider.key).then(() => {
     const room = provider.room;
     if (!room) return;
     const connections = room.webrtcConns;
-    const attach = (connection: { readonly peer: unknown }): void => {
-      installChunkedFraming(connection.peer as ChunkablePeer, { onAbandonedMessage });
+    const attach = (peerId: string, connection: { readonly peer: unknown }): void => {
+      installChunkedFraming(connection.peer as ChunkablePeer, {
+        onAbandonedMessage: () => health.abandoned(peerId),
+        onDeliveredMessage: () => health.delivered(peerId),
+      });
     };
-    for (const connection of connections.values()) attach(connection);
+    for (const [peerId, connection] of connections) attach(peerId, connection);
     const originalSet = connections.set.bind(connections);
     connections.set = (peerId, connection) => {
-      attach(connection);
+      attach(peerId, connection);
       return originalSet(peerId, connection);
     };
   });
@@ -182,7 +202,8 @@ export async function createWebrtcCollaboration(
   const ydoc = new Y.Doc();
   const awareness = new Awareness(ydoc);
   let provider: WebrtcProvider | null = null;
-  let onAbandonedChunk = (): void => {};
+  // Bound once the session exists; a link can only lose a message after the room is up.
+  let linkHealth: Pick<LinkHealth, 'abandoned' | 'delivered'> = { abandoned() {}, delivered() {} };
   const connectProvider = (): WebrtcProvider => {
     const created = new WebrtcProvider(roomId, ydoc, {
       awareness,
@@ -198,7 +219,10 @@ export async function createWebrtcCollaboration(
           }
         : {}),
     });
-    installChunkedTransport(created, () => onAbandonedChunk());
+    installChunkedTransport(created, {
+      abandoned: (peerId) => linkHealth.abandoned(peerId),
+      delivered: (peerId) => linkHealth.delivered(peerId),
+    });
     return created;
   };
   let handle: DocumentCollaborationHandle;
@@ -231,10 +255,18 @@ export async function createWebrtcCollaboration(
   const connectedProvider = provider;
 
   const session = handle.session;
-  onAbandonedChunk = () => {
-    session.setTransportStatus('error', 'transport', 'incomplete chunk');
-  };
+  // An incomplete chunked message closes only that peer connection (see
+  // `webrtc-chunking.ts`). y-webrtc announces again on close, so the peers reconnect and
+  // resync; the session stays usable instead of ending on one slow channel. A link that keeps
+  // failing is reported, because the room's own status cannot see one peer. The room stays
+  // `ready`: the other peers still receive every edit, and with `offlineEditing: false` a
+  // `disconnected` status would pause editing for everyone over one link.
+  let signalingConnected = true;
+  const health = createLinkHealth(linkHealthStatus(session, () => signalingConnected));
+  linkHealth = health;
   const onStatus = (event: { readonly connected: boolean }): void => {
+    signalingConnected = event.connected;
+    if (event.connected) health.reset();
     session.setTransportStatus(
       event.connected ? 'ready' : 'disconnected',
       event.connected ? undefined : 'transport-disconnected',
@@ -242,6 +274,7 @@ export async function createWebrtcCollaboration(
     );
   };
   connectedProvider.on('status', onStatus);
+  const unsynced = trackUnsyncedChanges(ydoc, connectedProvider);
 
   let destroyed = false;
   return Object.freeze({
@@ -249,10 +282,14 @@ export async function createWebrtcCollaboration(
     session,
     ydoc,
     provider: connectedProvider,
+    unsyncedChanges: () => unsynced.count(),
+    subscribeUnsyncedChanges: (listener: () => void) => unsynced.subscribe(listener),
     destroy() {
       if (destroyed) return;
       destroyed = true;
       connectedProvider.off('status', onStatus);
+      unsynced.destroy();
+      health.destroy();
       handle.destroy();
       connectedProvider.destroy();
       awareness.destroy();

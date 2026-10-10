@@ -43,6 +43,7 @@ import {
   validateDrawingNode,
   type DrawingParentContext,
 } from './ooxml-drawing-rules.ts';
+import { keepLeadingParagraphProperties } from './ooxml-paragraph-properties.ts';
 
 export {
   W14_NAMESPACE_URI,
@@ -1908,7 +1909,9 @@ export function convertChildOf(opened: OpenedElement, child: XmlNode, index: num
 }
 
 /** @internal The kind checks and the node of `opened`, over its converted children. */
-export function closeElement(opened: OpenedElement, children: readonly OoxmlNode[]): OoxmlElement {
+export function closeElement(opened: OpenedElement, converted: readonly OoxmlNode[]): OoxmlElement {
+  const children =
+    opened.candidateKind === 'paragraph' ? keepLeadingParagraphProperties(converted) : converted;
   const {
     partName,
     path,

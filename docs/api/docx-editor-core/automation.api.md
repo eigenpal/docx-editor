@@ -1436,6 +1436,4 @@ export type ServerAutomationHostResult = {
     readonly reason: ServerAutomationHostRejection;
 };
 
-// (No @packageDocumentation comment for this package)
-
 ```

@@ -6,7 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { useId, useMemo } from 'react';
 import type { CollaborationFailure } from '@docx-editor.dev/core/collaboration';
 import type { EditorModule } from '@docx-editor.dev/core/editor';
-import type { CollaborationSession } from '../collaboration/session.ts';
+import type { CollaborationSession } from '../collaboration/types.ts';
 import type { CreateDocumentCollaborationOptions } from '../collaboration/document-session.ts';
 import {
   EMPTY_MODULES,
@@ -50,16 +50,23 @@ export interface UseDocumentCollaborationOptions {
   /**
    * Connect this room on mount. Omit it and call
    * {@link UseDocumentCollaborationReturn.connect} after the host has a `ydoc` and a room.
+   * A different room, server, bootstrap kind, or `actorId` leaves the old room and
+   * connects the new one, and `null` leaves. A room opened with `connect` stays.
    */
   readonly room?: UseDocumentCollaborationConnectOptions | null;
 }
 
 /** Values {@link useDocumentCollaboration} returns. @public */
 export interface UseDocumentCollaborationReturn {
+  /** The room's document as `.docx` bytes to mount. Null until the room is ready. */
   readonly document: Uint8Array | null;
+  /** Modules to pass to the editor. They include the collaboration module once ready. */
   readonly modules: readonly EditorModule[];
+  /** The live session for status and presence. Null while no room is connected. */
   readonly session: CollaborationSession | null;
+  /** True while a connect is in progress. */
   readonly pending: boolean;
+  /** The connect failure or session failure, or null. Check it before `document`. */
   readonly error: CollaborationFailure | null;
   /**
    * Connect a room. RESOLVES with the failure, or null on success — it does not reject.

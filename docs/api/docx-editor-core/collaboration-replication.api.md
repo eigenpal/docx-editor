@@ -157,6 +157,7 @@ export interface CollaborationDocumentPort {
     paragraphByStableId(paragraphId: string): CollaborationParagraph | null;
     // (undocumented)
     paragraphs(): readonly CollaborationParagraph[];
+    paragraphTextOf?(nodeId: string): string | null;
     // (undocumented)
     revision(): number;
     // (undocumented)
@@ -205,12 +206,13 @@ export type HistoryGroup = symbol;
 // @public
 export function historyGroupOfJournal(journal: CanonicalPrimitiveJournal): HistoryGroup | undefined;
 
+// @public
+export function mapOffsetAcrossText(offset: number, before: string, after: string): number;
+
 // @internal
 export function registerUndoHistoryPosition(owner: object, position: UndoHistoryPosition): void;
 
 // @public (undocumented)
 export function reportHistoryGroup(group: HistoryGroup | undefined, kind: HistoryCaptureKind, reason?: HistoryCaptureReason): void;
-
-// (No @packageDocumentation comment for this package)
 
 ```

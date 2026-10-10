@@ -12,7 +12,6 @@ import {
 import type { SemanticTableRow } from './semantic-table.ts';
 import {
   MAX_TABLE_COLUMNS,
-  MAX_TABLE_PERCENT_UNITS,
   wrappedTablePercentUnits,
   type CellWidthClaim,
   type PreferredWidth,
@@ -68,10 +67,39 @@ function attr(node: OoxmlElement | undefined, name: string): string | undefined 
 
 /** The legacy reference box of a percentage-width table. */
 export interface LegacyTableContentWidth {
-  /** The text column plus the outer cell margins: what the percentage is a share of. */
+  /** The text column plus the outer content insets: what the percentage is a share of. */
   readonly widthPt: number;
   /** The authored grid states the resolved width, so its rounding can be reconciled. */
   readonly gridConfirmed: boolean;
+  /** The outer trailing edge, not the trailing content edge, meets the trailing text edge. */
+  readonly trailingOuterEdge?: true;
+}
+
+/**
+ * How much wider than its room a text box's percentage reference box is: a top-level
+ * percentage table in a text box takes its share of the room plus 15 twips. Measured on
+ * reference renderings of inline text boxes 2880 and 4320 twips wide, with insets of 0, 144
+ * and 288 twips, cell margins of 0, 108 and 216 twips, with and without a 0.75pt outline, at
+ * 50%, 100% and 150%: the implied share was the room plus 0.69 to 0.97pt, at the renderer's
+ * 0.24pt position resolution. The outline narrows the room, not the extra.
+ */
+const TEXT_BOX_PERCENT_EXTRA_PT = 0.75;
+
+/**
+ * The reference box of a top-level table in a text box. Its leading content still meets the
+ * leading text edge, but its outer trailing edge meets the trailing one.
+ */
+export function textBoxLegacyContentWidth(
+  legacy: LegacyTableContentWidth,
+  tableWidth: PreferredWidth
+): LegacyTableContentWidth {
+  return tableWidth.type === 'pct'
+    ? {
+        widthPt: legacy.widthPt + TEXT_BOX_PERCENT_EXTRA_PT,
+        gridConfirmed: false,
+        trailingOuterEdge: true,
+      }
+    : { ...legacy, trailingOuterEdge: true };
 }
 
 export function legacyTableContentWidth(input: {
@@ -85,6 +113,8 @@ export function legacyTableContentWidth(input: {
   readonly tableWidth: PreferredWidth;
   readonly cellSpacingPt: number;
   readonly floating: boolean;
+  /** Painted widths of the simple outer side rules of a left-to-right table. */
+  readonly outerRulesPt?: { readonly left: number; readonly right: number };
 }): LegacyTableContentWidth | undefined {
   const { compatibilityMode, contentWidthPt, table, rows, columnCount } = input;
   if (
@@ -107,7 +137,8 @@ export function legacyTableContentWidth(input: {
   const width = child(properties, 'tblW');
   const rawWidth = attr(width, 'w');
   // A percentage above 100 extends the same reference box past the text column. A table
-  // without a usable width (none, auto, or a count past its range) shares the same box.
+  // without a usable width (none, auto, or a count past its range) shares the same box, and
+  // so does a percentage stated past its range, which lays the table out at its narrowest.
   const automatic =
     input.tableWidth.type === 'auto' &&
     (!width ||
@@ -120,8 +151,7 @@ export function legacyTableContentWidth(input: {
     (attr(width, 'type') !== 'pct' ||
       rawWidth === undefined ||
       ((!/^\d{1,9}$/.test(rawWidth) || wrappedTablePercentUnits(Number(rawWidth)) === undefined) &&
-        (!/^\d{1,3}(?:\.\d+)?%$/.test(rawWidth) ||
-          Number(rawWidth.slice(0, -1)) * 50 > MAX_TABLE_PERCENT_UNITS)))
+        !/^\d{1,7}(?:\.\d{1,4})?%$/.test(rawWidth)))
   )
     return undefined;
 
@@ -158,12 +188,16 @@ export function legacyTableContentWidth(input: {
   if (!statesOuterMargins([properties, ...input.propertyNodes])) return undefined;
   const left = first.margins.left;
   const right = last.margins.right;
-  const target = contentWidthPt + left + right;
+  // Content starts at the margin, or at a centred side rule's inner half where the margin is
+  // narrower than that half, with or without a percentage width.
+  const insetLeft = Math.max(left, (input.outerRulesPt?.left ?? 0) / 2);
+  const insetRight = Math.max(right, (input.outerRulesPt?.right ?? 0) / 2);
+  const target = contentWidthPt + insetLeft + insetRight;
   if (
     !Number.isFinite(target) ||
     left < 0 ||
     right < 0 ||
-    left + right <= 0 ||
+    insetLeft + insetRight <= 0 ||
     target > MAX_WIDTH_PT
   )
     return undefined;
@@ -221,4 +255,41 @@ function gridConfirms(
     count === columnCount &&
     Math.abs(total - (target * input.tableWidth.value) / 100) <= 0.025 + EPSILON_PT
   );
+}
+
+/**
+ * The room a nested AutoFit table without a usable width fits in the older modes: the content
+ * width of the cell that holds it plus the table's own stated outer cell margins. The table
+ * keeps its ordinary alignment in the cell; only its room grows.
+ */
+export function legacyNestedAutoRoomPt(input: {
+  readonly table: OoxmlElement;
+  readonly propertyNodes: readonly OoxmlElement[];
+  readonly rows: readonly SemanticTableRow[];
+  readonly contentWidthPt: number;
+  readonly compatibilityMode: number | undefined;
+  readonly depth: number;
+  readonly tableWidth: PreferredWidth;
+  readonly cellSpacingPt: number;
+  readonly layoutFixed: boolean;
+}): number | undefined {
+  const { contentWidthPt, rows } = input;
+  if (
+    !hasCompatibilityRule(input.compatibilityMode, 'legacyPercentTableContentWidth') ||
+    input.depth === 0 ||
+    input.layoutFixed ||
+    input.tableWidth.type !== 'auto' ||
+    input.cellSpacingPt !== 0 ||
+    !Number.isFinite(contentWidthPt) ||
+    contentWidthPt <= 0
+  )
+    return undefined;
+  const properties = child(input.table, 'tblPr');
+  if (!properties || !statesOuterMargins([properties, ...input.propertyNodes])) return undefined;
+  const left = rows[0]?.cells[0]?.margins.left ?? 0;
+  const right = rows[0]?.cells.at(-1)?.margins.right ?? 0;
+  const room = contentWidthPt + left + right;
+  return left >= 0 && right >= 0 && Number.isFinite(room) && room <= MAX_WIDTH_PT
+    ? room
+    : undefined;
 }

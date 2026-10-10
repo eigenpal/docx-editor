@@ -12,6 +12,8 @@ interface Context {
   readonly displayMode: RevisionDisplayMode;
   readonly authorFilter: RevisionAuthorFilter | undefined;
   readonly compatibilityMode: number | undefined;
+  /** The table is a top-level table of a text box story. */
+  readonly textBox: boolean;
 }
 interface Memo extends Context {
   readonly table: OoxmlNode;
@@ -24,7 +26,8 @@ function sameContext(a: Context, b: Context): boolean {
     a.styleCascade === b.styleCascade &&
     a.displayMode === b.displayMode &&
     a.authorFilter === b.authorFilter &&
-    a.compatibilityMode === b.compatibilityMode
+    a.compatibilityMode === b.compatibilityMode &&
+    a.textBox === b.textBox
   );
 }
 

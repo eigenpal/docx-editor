@@ -4,6 +4,7 @@
 // and publishes one flow-structural effect per operation. A row inserted inside a vertical
 // merge repeats `w:vMerge` for the covered cells, so the merge grows by one row.
 
+import { actorScopedSeed } from '../package/actor-scoped-ids.ts';
 import {
   createNodeIdAllocator,
   insertChildren,
@@ -551,7 +552,7 @@ function emptyParagraph(
   const w14Prefix = w14PrefixInScopeAt(part, targetTable);
   const identity: OoxmlAttribute[] = [];
   if (w14Prefix !== null) {
-    const paraIdValue = mintParaId(seed, used);
+    const paraIdValue = mintParaId(actorScopedSeed(seed), used);
     used.add(paraIdValue);
     identity.push(...mintedParagraphIdentityAttributes(w14Prefix, paraIdValue));
   }

@@ -10,6 +10,4 @@ export const NOTO_SANS_CJK_JP_FAMILY = "Noto Sans CJK JP";
 // @public
 export const NOTO_SANS_CJK_JP_URL: URL;
 
-// (No @packageDocumentation comment for this package)
-
 ```

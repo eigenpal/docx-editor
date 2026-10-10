@@ -95,8 +95,9 @@ test('direct zero clears inherited position without changing ordinary superscrip
   expect(inherited.box.height).toBe(12);
   expect(inherited.box.height).toBe(direct.box.height);
 });
+// Double spacing adds one unshifted 12pt line to the 15pt raised line; the 3pt raise is not scaled.
 for (const [rule, value, height] of [
-  ['auto', 480, 30],
+  ['auto', 480, 27],
   ['atLeast', 280, 15],
   ['exact', 280, 14],
 ] as const) {

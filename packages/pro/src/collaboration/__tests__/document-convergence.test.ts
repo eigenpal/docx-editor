@@ -10,6 +10,7 @@ import type { CanonicalPrimitiveJournal } from '@docx-editor.dev/core/collaborat
 import { collaborationDocx } from './support.ts';
 import {
   applyJournal,
+  childIdsOf,
   collectKind,
   concurrent,
   destroyReplica,
@@ -398,9 +399,9 @@ describe('full-document two-replica convergence', () => {
               {
                 kind: 'spliceChildren',
                 parentLogicalId: first,
-                start: firstRecord.childIds.length,
+                start: childIdsOf(joinLeft, first).length,
                 deleteCount: 0,
-                childLogicalIds: [...secondRecord.childIds],
+                childLogicalIds: childIdsOf(joinLeft, second),
               },
               {
                 kind: 'spliceChildren',
@@ -658,12 +659,20 @@ describe('full-document two-replica convergence', () => {
       expect(packageFingerprint(packageOf(moveLeft))).toBe(
         packageFingerprint(packageOf(moveRight))
       );
-      expect(collectKind(packageOf(moveLeft), 'run').some((run) => run.id === moved.id)).toBe(true);
+      // The moved run keeps its identity. The typing stays in the source's text, hidden there
+      // and shown after the copy, and names the run too; the source comes first, so the copy
+      // shows the run's ID with its paragraph's tag.
       expect(
-        collectKind(packageOf(moveLeft), 'paragraph').some((node) =>
-          nodeText(node).includes('MoveMe!')
+        collectKind(packageOf(moveLeft), 'run').some(
+          (run) => run.id === moved.id || run.id.startsWith(`${moved.id}~`)
         )
       ).toBe(true);
+      // A move between paragraphs deletes the text and inserts a copy: the concurrent typing
+      // follows the copy, after the character it was typed after.
+      expect(collectKind(packageOf(moveLeft), 'paragraph').map(nodeText)).toEqual([
+        'Keep',
+        'DestMoveMe!',
+      ]);
     } finally {
       destroyReplica(moveLeft);
       destroyReplica(moveRight);

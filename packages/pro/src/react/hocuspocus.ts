@@ -21,4 +21,4 @@ export {
   type UseHocuspocusCollaborationOptions,
   type UseHocuspocusCollaborationReturn,
 } from './useHocuspocusCollaboration.ts';
-export type { CollaborationIdentityUpdate } from '../collaboration/session.ts';
+export type { CollaborationIdentityUpdate } from '../collaboration/types.ts';

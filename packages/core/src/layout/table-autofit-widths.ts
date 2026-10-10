@@ -1,7 +1,6 @@
-import { listItemToken } from './list-marker-reuse.ts';
 import { cachedAutofitCellWidths, widenedCellInsets } from './table-autofit-cell-cache.ts';
 import { rowForWidenedMeasurement } from './legacy-table-side-rules.ts';
-import { autofitReuseScope, carryAutofitScope } from './autofit-context-reuse.ts';
+import { autofitReuseScope } from './autofit-context-reuse.ts';
 import { withDefaultTabInterval } from './paragraph-tabs.ts';
 import {
   cellSpacingGapPt,
@@ -38,7 +37,7 @@ import type { FieldPageContext } from './field-projection.ts';
 import type { RefFieldContext } from './field-ref.ts';
 import type { NoteMarkContext } from './note-projection.ts';
 import type { TocLinkRanges } from './toc-link-formatting.ts';
-import { valueDigest, cellStyleKey } from './autofit-value-token.ts';
+import { cellStyleKey } from './autofit-value-token.ts';
 import { piecesOfParagraphForDisplay } from './field-projection-display.ts';
 import type { ResolvedListItem } from './list-resolve.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
@@ -52,6 +51,7 @@ import {
   type StyleCascadeTable,
 } from './style-cascade.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
+import { preferredSpreadWidths } from './table-autofit-spread.ts';
 import type { PreferredWidth } from './table-widths.ts';
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
 
@@ -108,92 +108,7 @@ export interface AutofitFieldContext {
   readonly tocLinkStyleRanges?: TocLinkRanges;
 }
 
-/** What a table flow carries that autofit reads. */
-interface AutofitFlowDeps extends AutofitFieldContext {
-  readonly measurer: TextMeasurer;
-  readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
-  readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
-  readonly drawingTokenForParagraph?: (paragraph: OoxmlElement) => string;
-  readonly projectionTokenForParagraph?: (paragraph: OoxmlElement) => string;
-  readonly drawingLayoutToken?: string;
-  /** The pass producer the break cache keys on: note marks, display mode, author filter. */
-  readonly producer?: string;
-  readonly defaultTabStopPt?: number;
-}
-
-/** One context per flow deps object, so every reader in a pass shares it. */
-const flowContexts = new WeakMap<object, TableAutofitContext>();
-
-/** The autofit inputs a table flow already carries, so every reader widens alike. */
-export function autofitContextOf(deps: AutofitFlowDeps): TableAutofitContext {
-  const known = flowContexts.get(deps);
-  if (known) return known;
-  const fields: AutofitFieldContext = {
-    ...(deps.pageContext ? { pageContext: deps.pageContext } : {}),
-    ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
-    ...(deps.documentProperties ? { documentProperties: deps.documentProperties } : {}),
-    ...(deps.bodyPageFields ? { bodyPageFields: deps.bodyPageFields } : {}),
-    ...(deps.refFields ? { refFields: deps.refFields } : {}),
-    ...(deps.showFieldCodes ? { showFieldCodes: true } : {}),
-    ...(deps.fieldCodeRanges ? { fieldCodeRanges: deps.fieldCodeRanges } : {}),
-    ...(deps.tocLinkStyleRanges ? { tocLinkStyleRanges: deps.tocLinkStyleRanges } : {}),
-  };
-  // Values, not identities: a pass builds these objects afresh and the cache must survive it.
-  // Every part is compact: the producer is a digest, the value objects are digested.
-  const passToken = [
-    deps.producer ?? '',
-    deps.bodyPageFields ? `body:${deps.bodyPageFields.format ?? ''}` : '',
-    valueDigest(deps.pageContext),
-    valueDigest(deps.documentProperties),
-    deps.showFieldCodes === true ? 'codes' : '',
-    // Not the story-wide REF values token: each paragraph's own REF outputs are in its
-    // `paragraphToken`, and the story token moved with every slice of an opening, so every
-    // table measured early missed its cache on the first layout after it.
-    deps.drawingLayoutToken ?? '',
-    deps.inlineDrawingLayout ? 'drawings' : '',
-    `tab:${deps.defaultTabStopPt ?? ''}`,
-  ].join('\0');
-  const context: TableAutofitContext = {
-    measurer: deps.measurer,
-    ...(deps.listItems ? { listItems: deps.listItems } : {}),
-    ...(deps.inlineDrawingLayout ? { inlineDrawingLayout: deps.inlineDrawingLayout } : {}),
-    fields,
-    ...(deps.defaultTabStopPt !== undefined ? { defaultTabStopPt: deps.defaultTabStopPt } : {}),
-    passToken,
-    paragraphToken: (paragraph) =>
-      [
-        deps.projectionTokenForParagraph?.(paragraph) ?? '',
-        deps.drawingTokenForParagraph?.(paragraph) ?? '',
-        deps.refFields?.tokenForParagraph(paragraph.id) ?? '',
-        listItemToken(deps.listItems?.get(paragraph.id)),
-      ].join('\0'),
-  };
-  flowContexts.set(deps, context);
-  return context;
-}
-
-/** Share width measurements only after the section validates all dynamic projections. */
-export function carryTableAutofitScope(
-  previous: object | null | undefined,
-  next: object,
-  inputsEqual: boolean,
-  deps: AutofitFlowDeps,
-  onlyListsDiffer = false
-): boolean {
-  const context = autofitContextOf(deps);
-  return carryAutofitScope(
-    previous,
-    next,
-    inputsEqual,
-    context,
-    [
-      valueDigest(deps.fieldCodeRanges),
-      valueDigest(deps.tocLinkStyleRanges),
-      valueDigest(deps.noteMarks),
-    ].join('\0'),
-    onlyListsDiffer
-  );
-}
+export { autofitContextOf, carryTableAutofitScope } from './table-autofit-context.ts';
 
 /** The view a structure was read in: the cascade, display mode, and author filter. */
 export interface AutofitView {
@@ -941,9 +856,20 @@ export function autofitColumnWidthsPt(
   const widens = current.some(
     (minimum, column) => minimum > cellWidths[column]! + WIDTH_EPSILON_PT
   );
-  if (!widens && !sizedByContent) {
-    byStructure.set(structure, { contentWidthPt, widths: structure.columnWidthsPt });
-    return structure.columnWidthsPt;
+  // Widening may end shared grid lines, but not legacy content alignment, whose minimums hold.
+  const spread = sizedByContent
+    ? undefined
+    : preferredSpreadWidths(
+        structure,
+        content,
+        widens && !structure.legacyContentAlignment ? ifWidened : minimumsNow,
+        contentWidthPt,
+        view.depth ?? 0
+      );
+  if (spread || (!widens && !sizedByContent)) {
+    const widths = spread ? sameOrComputed(structure, spread) : structure.columnWidthsPt;
+    byStructure.set(structure, { contentWidthPt, widths });
+    return widths;
   }
   let minimums = spanAdjustedMinimums(preferredWidths, ifWidened, content.maximums, content.spans);
   // The table indent moves a leading-aligned table into the text column's room; a legacy
@@ -987,13 +913,19 @@ export function autofitColumnWidthsPt(
     minimums = raised;
     cells = settle();
   }
-  const computed = gaps > 0 ? columnsAroundCells(cells, gaps) : cells;
-  // Widths that match the resolved ones come back by identity, so the shared base stays.
-  const widths = computed.every(
+  const widths = sameOrComputed(structure, gaps > 0 ? columnsAroundCells(cells, gaps) : cells);
+  byStructure.set(structure, { contentWidthPt, widths });
+  return widths;
+}
+
+/** Widths that match the resolved ones come back by identity, so the shared base stays. */
+function sameOrComputed(
+  structure: SemanticTableStructure,
+  computed: readonly number[]
+): readonly number[] {
+  return computed.every(
     (width, column) => Math.abs(width - structure.columnWidthsPt[column]!) <= WIDTH_EPSILON_PT
   )
     ? structure.columnWidthsPt
     : computed;
-  byStructure.set(structure, { contentWidthPt, widths });
-  return widths;
 }

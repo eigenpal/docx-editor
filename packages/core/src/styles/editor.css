@@ -1883,12 +1883,11 @@ a.docx-hyperlink:focus-visible {
   background: var(--doc-bg-hover);
 }
 
-/* Default styles for y-prosemirror remote cursor decorations. Consumers can
-  * override by providing their own `.ProseMirror-yjs-cursor` rules.
+/* Default styles for `.ProseMirror-yjs-cursor` remote cursor decorations. Consumers
+  * can override them with their own `.ProseMirror-yjs-cursor` rules.
   *
-  * Scoped, because `.ProseMirror-yjs-cursor` is y-prosemirror's class name and
-  * not ours: unscoped, these rules restyled the remote cursors of a HOST's own
-  * ProseMirror + Yjs editor sharing the page. */
+  * Scoped, because the class name is not ours: unscoped, these rules restyled the
+  * remote cursors of a HOST's own ProseMirror + Yjs editor sharing the page. */
 .docx-editor .ProseMirror-yjs-cursor {
   position: relative;
   margin-left: -1px;
@@ -3475,6 +3474,53 @@ a.docx-hyperlink:focus-visible {
 /* The "+N" chip carries a count, not an identity, so it stays out of the author ramp. */
 .docx-collaboration-avatar[data-overflow] {
   background: var(--doc-text-muted);
+}
+
+/*
+ * The collaboration status notice (`DocxEditorCollaboration.Status`). It renders only while
+ * the user needs to know something; a passing state is neutral, a state that needs the user
+ * is a warning.
+ */
+.docx-collaboration-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--doc-bg-subtle);
+  color: var(--doc-text-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* The live region stays mounted for screen readers; it takes no space while empty. */
+.docx-collaboration-status:empty {
+  display: none;
+}
+
+.docx-collaboration-status[data-collaboration-status='outOfSync'],
+.docx-collaboration-status[data-collaboration-status='upgradeRequired'],
+.docx-collaboration-status[data-collaboration-status='newRoomRequired'],
+.docx-collaboration-status[data-collaboration-status='stalled'],
+.docx-collaboration-status[data-collaboration-status='editRefused'] {
+  background: var(--doc-warning-bg);
+  color: var(--doc-warning-text);
+}
+
+.docx-collaboration-status__action {
+  padding: 0 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.docx-collaboration-status__action:focus-visible {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: 2px;
 }
 
 /* ========================================================================

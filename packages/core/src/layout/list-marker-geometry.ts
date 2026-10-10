@@ -49,7 +49,12 @@ export function listMarkerBox(
   lineHeight: number
 ): { x: number; y: number; width: number; height: number } | null {
   if (!hasMarker(item)) return null;
+  const x = markerSlotX(item, markerWidth);
+  return { x, y: lineY, width: Math.max(markerWidth, 0), height: lineHeight };
+}
 
+/** Where a marker of `markerWidth` starts in its slot, including a zero-width empty marker. */
+function markerSlotX(item: ResolvedListItem, markerWidth: number): number {
   const textLeft = item.indent.left;
   const hanging = item.indent.hanging;
   // The hanging spelling wins when a hostile file states both (Word's collapse); a
@@ -66,7 +71,7 @@ export function listMarkerBox(
   if (item.markerAlign === 'right') x -= markerWidth;
   else if (item.markerAlign === 'center') x -= markerWidth / 2;
   if (x < floor) x = floor;
-  return { x, y: lineY, width: Math.max(markerWidth, 0), height: lineHeight };
+  return x;
 }
 
 /**
@@ -100,6 +105,11 @@ function firstNumberingStopPast(tabStops: ResolvedTabStops, x: number): TabStop 
  * takes the stop lookup. The paragraph's legacy `num` stops participate in this lookup,
  * even though ordinary text tabs ignore them. `tabStops` is the paragraph's full cascade,
  * numbering-level stops included.
+ *
+ * A level whose marker text is empty (`w:lvlText w:val=""`, `w:numFmt="none"`) paints nothing,
+ * but it still holds a zero-width marker at the start of its slot, and the suffix applies
+ * from there: `nothing` starts the text at the slot, `space` one space after it, and `tab` at
+ * the next stop, which is the indent for a hanging level.
  */
 export function listFirstLineOffset(
   item: ResolvedListItem,
@@ -107,12 +117,9 @@ export function listFirstLineOffset(
   tabStops: ResolvedTabStops = EMPTY_TAB_STOPS,
   rightEdge = Number.POSITIVE_INFINITY
 ): number {
-  if (!hasMarker(item)) return 0;
-  const markerWidth = listMarkerWidth(item, measurer);
-  const box = listMarkerBox(item, markerWidth, 0, 0);
-  if (!box) return 0;
+  const markerWidth = hasMarker(item) ? Math.max(listMarkerWidth(item, measurer), 0) : 0;
   const textLeft = item.indent.left;
-  const markerEnd = box.x + box.width;
+  const markerEnd = markerSlotX(item, markerWidth) + markerWidth;
   if (item.suffix === 'nothing') return markerEnd - textLeft;
   if (item.suffix === 'space') {
     return markerEnd + measurer.measure(' ', item.markerStyle) - textLeft;

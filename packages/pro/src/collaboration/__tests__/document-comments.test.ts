@@ -40,6 +40,7 @@ import {
   createDocumentCollaboration,
   type DocumentCollaborationHandle,
 } from '../document-session.ts';
+import { readCollaborationDocument } from '../document-read.ts';
 import { findText, nodeText, packageFingerprint, saveReopenDigest } from './document-support.ts';
 
 const DOCUMENT_ID = 'comment-replication-room';
@@ -355,6 +356,34 @@ describe('adding a comment replicates the comments part, not only the story mark
     const starts = markerIds(packageOf(alice), 'commentRangeStart');
     expect(new Set(starts).size).toBe(2);
     expectConverged(alice, bob);
+  });
+
+  test('deleting a comment the other peer created with its own part removes it from shared state', async () => {
+    // Both peers create the first comment, so both mint the comments part. One part root wins;
+    // the other's comment shows by adoption under it. Deleting that comment must tombstone it,
+    // or the adoption shows it again on every replica and in a fresh read of shared state.
+    for (const deleter of ['alice', 'bob'] as const) {
+      const { alice, bob } = await pair(EMPTY);
+      const wire = wires.get(bob);
+      if (!wire) throw new Error('peer has no relay');
+      wire.pause();
+      const aliceId = addCommentOn(alice, 0, 'from alice', 'Alice');
+      const bobId = addCommentOn(bob, 1, 'from bob', 'Bob');
+      wire.resume();
+      alice.port.flushPendingJournals();
+      bob.port.flushPendingJournals();
+      const [actor, target] = deleter === 'alice' ? [alice, bobId] : [bob, aliceId];
+      expect(deletePackageComments(actor.store, [{ commentId: target }])).toBe(true);
+      actor.port.flushPendingJournals();
+      for (const peer of [alice, bob]) {
+        expect(commentTextOf(packageOf(peer), target)).toBe(null);
+        expect(markerIds(packageOf(peer), 'commentReference')).not.toContain(target);
+      }
+      const cold = readOoxmlPackage(readCollaborationDocument(actor.ydoc));
+      if (!cold.ok) throw new Error(cold.reason);
+      expect(commentTextOf(cold.package, target)).toBe(null);
+      expectConverged(alice, bob);
+    }
   });
 
   test('concurrent adds onto an existing comments.xml both survive with distinct ids', async () => {

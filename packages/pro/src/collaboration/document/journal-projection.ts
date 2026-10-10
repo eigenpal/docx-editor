@@ -16,11 +16,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * It holds no Yjs types and writes nothing. A refusal still leaves shared state untouched.
  */
 
-import type {
-  CanonicalNodeDescriptor,
-  CanonicalPrimitiveEffect,
-} from '@docx-editor.dev/core/collaboration/replication';
 import type { LogicalId } from './identity.ts';
+import type { SharedEffect, SharedNodeDescriptor } from './shared-effect.ts';
 import type { NodeShape } from './registry-node-reads.ts';
 import type { DocumentRegistry } from './registry.ts';
 
@@ -29,12 +26,12 @@ type ProjectedNode = NodeShape;
 
 export class JournalProjection {
   /** Only nodes a journal touches are projected; everything else is read on demand. */
-  private readonly touched = new Map<string, ProjectedNode>();
-  private readonly created = new Set<string>();
+  private readonly touched = new Map<LogicalId, ProjectedNode>();
+  private readonly created = new Set<LogicalId>();
 
   constructor(private readonly registry: DocumentRegistry) {}
 
-  has(id: string): boolean {
+  has(id: LogicalId): boolean {
     return this.created.has(id) || this.touched.has(id) || this.registry.hasNode(id);
   }
 
@@ -45,17 +42,17 @@ export class JournalProjection {
    * and binding arrays, and turn a paragraph's `Y.Text` into a string only to measure it,
    * then this would copy the child ids a second time.
    */
-  node(id: string): ProjectedNode | null {
+  node(id: LogicalId): ProjectedNode | null {
     const projected = this.touched.get(id);
     if (projected) return projected;
-    const shape = this.registry.nodeShape(id as LogicalId);
+    const shape = this.registry.nodeShape(id);
     if (!shape) return null;
     this.touched.set(id, shape);
     return shape;
   }
 
   /** A `putNode` for a known id renames it in place, so class and content survive. */
-  putNode(descriptor: CanonicalNodeDescriptor): void {
+  putNode(descriptor: SharedNodeDescriptor): void {
     const existing = this.node(descriptor.logicalId);
     if (existing) return;
     this.created.add(descriptor.logicalId);
@@ -66,51 +63,48 @@ export class JournalProjection {
     });
   }
 
-  spliceText(id: string, deleteCount: number, insertLength: number): void {
+  spliceText(id: LogicalId, deleteCount: number, insertLength: number): void {
     const node = this.node(id);
     if (!node) return;
     node.textLength = Math.max(0, node.textLength - deleteCount) + insertLength;
   }
 
   spliceChildren(
-    parentId: string,
+    parentId: LogicalId,
     start: number,
     deleteCount: number,
-    childIds: readonly string[]
+    childIds: readonly LogicalId[]
   ): void {
     const parent = this.node(parentId);
     if (!parent) return;
-    parent.children.splice(start, deleteCount, ...(childIds as readonly LogicalId[]));
+    parent.children.splice(start, deleteCount, ...childIds);
   }
 
   /** A move detaches from the current parent first, so neither count drifts. */
-  moveNode(id: string, destinationParentId: string, destinationIndex: number): void {
+  moveNode(id: LogicalId, destinationParentId: LogicalId, destinationIndex: number): void {
     const currentParentId = this.parentOf(id);
     if (currentParentId !== null) {
       const currentParent = this.node(currentParentId);
-      const index = currentParent?.children.indexOf(id as LogicalId) ?? -1;
+      const index = currentParent?.children.indexOf(id) ?? -1;
       if (currentParent && index >= 0) currentParent.children.splice(index, 1);
     }
     const destination = this.node(destinationParentId);
     if (!destination) return;
     const at = Math.min(destinationIndex, destination.children.length);
-    destination.children.splice(at, 0, id as LogicalId);
+    destination.children.splice(at, 0, id);
   }
 
   /** Projected parents win, because an earlier effect in this journal may have reparented. */
-  private parentOf(id: string): string | null {
+  private parentOf(id: LogicalId): LogicalId | null {
     for (const [parentId, node] of this.touched) {
-      if (node.children.includes(id as LogicalId)) return parentId;
+      if (node.children.includes(id)) return parentId;
     }
-    return this.registry.parentOf(id as LogicalId);
+    return this.registry.parentOf(id);
   }
 }
 
 /** Replay one effect's structural consequences onto the projection. */
-export function projectEffect(
-  projection: JournalProjection,
-  effect: CanonicalPrimitiveEffect
-): void {
+export function projectEffect(projection: JournalProjection, effect: SharedEffect): void {
   switch (effect.kind) {
     case 'putNode':
       projection.putNode(effect.descriptor);

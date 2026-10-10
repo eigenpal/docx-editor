@@ -11,13 +11,18 @@
 // Run it with Node 22.18 or later: `node server/server.ts`. Node strips the types.
 // Hocuspocus v4 targets Node, not Bun.
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import path from 'node:path';
+import { mkdir, readFile } from 'node:fs/promises';
 import { Server } from '@hocuspocus/server';
-import { readCollaborationDocument } from '@docx-editor.dev/pro/collaboration';
+import {
+  checkCollaborationRoomGeneration,
+  compactCollaborationState,
+  prepareCollaborationServerDocument,
+  readCollaborationDocument,
+} from '@docx-editor.dev/pro/collaboration';
 import * as Y from 'yjs';
 import { admissionError, authenticateDemoToken } from '../shared/admission.ts';
 import { loadStoredDemoDocument } from './stored-room.ts';
+import { DATA_DIR, ROOM_ID, roomFile, writeAtomically } from './room-files.ts';
 
 const PORT = Number(process.env.PORT ?? 1234);
 
@@ -28,22 +33,6 @@ const PORT = Number(process.env.PORT ?? 1234);
  * `onAuthenticate` below.
  */
 const TOKEN = process.env.COLLAB_TOKEN ?? 'demo-token';
-
-const DATA_DIR = path.join(import.meta.dirname, '.data');
-
-/**
- * The room id shape `@docx-editor.dev/pro` validates, repeated here.
- *
- * `documentName` is whatever the client asked for, so it is untrusted: it reaches a file path
- * below. This test admits no `.`, no `/`, and no `\`, which is what keeps a room out of a
- * directory the server did not choose.
- */
-const ROOM_ID = /^[A-Za-z0-9_-]{24,256}$/;
-
-function roomFile(documentName: string): string | null {
-  if (!ROOM_ID.test(documentName)) return null;
-  return path.join(DATA_DIR, `${documentName}.ydoc`);
-}
 
 const server = new Server({
   port: PORT,
@@ -66,8 +55,15 @@ const server = new Server({
     return { room: documentName };
   },
 
-  /** Seed a newly opened room from disk. A room nobody has saved yet stays empty. */
+  /**
+   * Seed a newly opened room from disk. A room nobody has saved yet stays empty.
+   *
+   * A room that has grown well past its content is compacted first, into a new generation:
+   * nobody is connected yet, so no edit is in flight. The new state is stored at once.
+   */
   async onLoadDocument({ documentName, document }) {
+    // First, before any update reaches it, so the server never writes a change of its own.
+    prepareCollaborationServerDocument(document);
     const file = roomFile(documentName);
     if (!file) return document;
     const stored = await readFile(file).catch((error: NodeJS.ErrnoException) => {
@@ -75,8 +71,20 @@ const server = new Server({
       console.warn(`[room ${documentName}] saved room unavailable: ${error.message}`);
       throw admissionError('saved-room-unavailable');
     });
-    if (stored) loadStoredDemoDocument(document, new Uint8Array(stored));
+    if (stored) {
+      const compacted = await compactCollaborationState(new Uint8Array(stored)).catch(() => null);
+      if (compacted) await writeAtomically(file, compacted);
+      loadStoredDemoDocument(document, compacted ?? new Uint8Array(stored));
+    }
     return document;
+  },
+
+  /**
+   * Refuse a client that still holds a generation of the room from before a compaction, before
+   * any of its state merges. It reports `room-generation-changed` and rejoins.
+   */
+  async beforeHandleMessage(payload) {
+    checkCollaborationRoomGeneration(payload);
   },
 
   /**
@@ -95,9 +103,9 @@ const server = new Server({
     const file = roomFile(documentName);
     if (!file) return;
     await mkdir(DATA_DIR, { recursive: true });
-    await writeFile(file, Y.encodeStateAsUpdate(document));
+    await writeAtomically(file, Y.encodeStateAsUpdate(document));
     try {
-      await writeFile(`${file}.docx`, readCollaborationDocument(document));
+      await writeAtomically(`${file}.docx`, readCollaborationDocument(document));
     } catch (error) {
       // A room mid-seed, or one two creators polluted, refuses to export. That must not stop
       // the `.ydoc` write above — losing the room is worse than losing one export.

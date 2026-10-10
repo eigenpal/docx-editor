@@ -10,10 +10,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import type * as Y from 'yjs';
 import { writeOoxmlPackage } from '@docx-editor.dev/core/store';
 import { DocumentRegistry, PackageMaterializer } from './document/index.ts';
-import { seedRecordCount } from './document-bootstrap.ts';
-import { SHARED_BLOBS_KEY, SharedBlobStore, limitFailure } from './shared-blob-store.ts';
-import { CollaborationSchemaError } from './schema.ts';
-import { droppedContentDetail, packageVersionFailure } from './document/schema.ts';
+import { admitSharedState } from './document-bootstrap.ts';
+import { SHARED_BLOBS_KEY, SharedBlobStore } from './shared-blob-store.ts';
+import { CollaborationSchemaError } from './errors.ts';
+import { droppedContentDetail } from './document/schema.ts';
 
 /**
  * Read the document a synchronized `Y.Doc` holds, as `.docx` bytes.
@@ -55,20 +55,9 @@ export function readCollaborationDocument(ydoc: Y.Doc): Uint8Array {
     ) {
       throw new CollaborationSchemaError('not-initialized');
     }
-    // Export jobs interpret the same shared schema as joining peers. Refuse incompatible
-    // split metadata before indexing it; treating v2 overlays as v3 ranges loses text.
-    const versionFailure = packageVersionFailure(registry.schema.meta);
-    if (versionFailure)
-      throw new CollaborationSchemaError(versionFailure.code, versionFailure.detail);
-    // Shared state arrived before this registry existed and the parent index is built from
-    // child-array EVENTS — the same rebuild a joiner performs, for the same reason.
-    registry.rebuildDerivedIndexes();
-    // Two merged seeds duplicate the whole document and no reader can pick a side, so an
-    // export refuses rather than writing a file with everything in it twice.
-    if (seedRecordCount(ydoc) > 1) throw new CollaborationSchemaError('concurrent-seed');
+    // An export reads the room as a joining peer does.
     const blobs = new SharedBlobStore(ydoc.getMap<Uint8Array>(SHARED_BLOBS_KEY));
-    const exceeded = limitFailure(registry, blobs);
-    if (exceeded) throw new CollaborationSchemaError(exceeded.code, exceeded.detail);
+    admitSharedState(registry, blobs, ydoc);
     materializer = new PackageMaterializer(registry, blobs);
     const materialized = materializer.current();
     const poisoned = blobs.poisonedDigest();

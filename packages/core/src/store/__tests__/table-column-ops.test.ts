@@ -18,6 +18,7 @@ import { isValidParaId, paraIdOf } from '../package/para-id.ts';
 import { diffSemanticDigests, semanticDigest } from '../package/ooxml-digest.ts';
 import { MAX_TABLE_COLUMNS } from '../store/table-constraints.ts';
 import { TreeDocumentStore } from '../store/tree-store.ts';
+import { runWithTransactionActor } from '../package/actor-scoped-ids.ts';
 
 const W = WML_NAMESPACE_URI;
 const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
@@ -1381,5 +1382,39 @@ describe('insertTableColumn paraId', () => {
     expect(
       diffSemanticDigests(semanticDigest([result.part]), semanticDigest([reopened.part]))
     ).toEqual([]);
+  });
+
+  test('two actors inserting a column at one place mint different paraIds', () => {
+    // The seed comes from the table's structure, so two collaborators inserting the same
+    // column from the same snapshot minted one paraId for two paragraphs, and a caret
+    // published against it showed on the wrong one.
+    const opened = readOoxmlPart(
+      `<w:document xmlns:w="${W}" xmlns:w14="${W14}"><w:body>${TABLE(ROW(CELL('a1'), CELL('a2')))}</w:body></w:document>`,
+      {
+        name: '/word/document.xml',
+        contentType:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
+      }
+    );
+    if (!opened.ok) throw new Error(opened.reason);
+    const part = opened.part;
+    const table = firstTable(part);
+    const [col1] = gridColIds(part, table.id);
+    const before = new Set(collectParagraphParaIds(part));
+    const mintedBy = (actor: string): string[] =>
+      runWithTransactionActor(actor, () => {
+        const result = applyTreeOp(part, {
+          op: 'insertTableColumn',
+          tableId: table.id,
+          gridColumnId: col1!,
+          where: 'right',
+        });
+        if (!result.ok) throw new Error(result.reason);
+        return collectParagraphParaIds(result.part).filter((id) => !before.has(id));
+      });
+    const alice = mintedBy('alice');
+    expect(alice).toHaveLength(1);
+    expect(mintedBy('bob')).not.toContain(alice[0]!);
+    expect(mintedBy('alice')).toEqual(alice);
   });
 });

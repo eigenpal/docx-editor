@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A list level with empty number text ignored its suffix and its first-line or hanging indent, so the first line always started at the text indent.",
+  "after": "A list level with empty number text holds a zero-width number at its slot, and the tab, space, or no suffix places the first line from there.",
+  "reason": "This changes line placement in layout only. Canonical nodes, operations, stored fields, and collaboration messages are unchanged, and every participant computes the same layout from the same tree.",
+  "tests": [
+    "packages/core/src/layout/__tests__/empty-list-marker-indent.test.ts",
+    "packages/core/src/editor/__tests__/empty-list-marker-caret.test.ts"
+  ],
+  "changeset": "empty-list-marker-suffix",
+  "migration": null
+}

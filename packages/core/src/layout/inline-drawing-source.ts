@@ -123,6 +123,14 @@ interface SubtreeDrawingAtoms {
   /** Deepest visited node, relative to the subtree root (0 = the root itself). */
   readonly deepest: number;
 }
+/** Whether two maps hold the same keys with the very same values. */
+function sameEntries<K, V>(a: ReadonlyMap<K, V>, b: ReadonlyMap<K, V>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const [key, value] of a) if (b.get(key) !== value) return false;
+  return true;
+}
+
 const subtreeDrawingAtomMemos = new WeakMap<OoxmlNode, SubtreeDrawingAtoms>();
 const EMPTY_ATOMS: ReadonlyMap<string, OoxmlNode> = new Map();
 /** Containers at least this wide compose from child memos instead of being one entry. */
@@ -806,10 +814,13 @@ export function createInlineDrawingLayoutBundle(
 
   const resetPackage = (reader: InlineDrawingPackageReader): void => {
     const nextPkg = reader.currentPackage();
+    // Entry by entry: a collaboration commit rebuilds these maps around the same entries.
     const resourceSubstrateUnchanged =
-      nextPkg.partBytes === pkgSnapshot.partBytes &&
-      nextPkg.relationships === pkgSnapshot.relationships &&
-      nextPkg.contentTypes === pkgSnapshot.contentTypes;
+      sameEntries(nextPkg.partBytes, pkgSnapshot.partBytes) &&
+      sameEntries(nextPkg.relationships, pkgSnapshot.relationships) &&
+      (nextPkg.contentTypes === pkgSnapshot.contentTypes ||
+        (sameEntries(nextPkg.contentTypes.defaults, pkgSnapshot.contentTypes.defaults) &&
+          sameEntries(nextPkg.contentTypes.overrides, pkgSnapshot.contentTypes.overrides)));
     if (resourceSubstrateUnchanged) {
       // The numbering part's bytes and rels are unchanged too, so resolved bullets stand.
       for (const [ownerPartName, slot] of slots) {

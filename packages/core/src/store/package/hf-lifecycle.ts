@@ -19,6 +19,7 @@ import { readOoxmlPart, type OoxmlElement, type OoxmlNode, type OoxmlPart } from
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { withPart } from './ooxml-package.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
+import { partNumberCandidates } from './actor-scoped-ids.ts';
 import { withoutPart } from './package-edit.ts';
 import {
   cloneOwnedRelationships,
@@ -451,10 +452,13 @@ function allocateStoryPart(pkg: OoxmlPackage, kind: HeaderFooterKind): Allocated
   const prefix = kind === 'header' ? 'header' : 'footer';
   const contentType = kind === 'header' ? HEADER_CONTENT_TYPE : FOOTER_CONTENT_TYPE;
   const relType = kind === 'header' ? HEADER_REL_TYPE : FOOTER_REL_TYPE;
-  let next = 1;
-  for (; next <= MAX_PART_NUMBER; next += 1) {
-    const partName = `/word/${prefix}${next}.xml`;
-    if (!pkg.parts.has(partName) && !pkg.partBytes.has(partName)) break;
+  let next = MAX_PART_NUMBER + 1;
+  for (const candidate of partNumberCandidates(MAX_PART_NUMBER)) {
+    const partName = `/word/${prefix}${candidate}.xml`;
+    if (!pkg.parts.has(partName) && !pkg.partBytes.has(partName)) {
+      next = candidate;
+      break;
+    }
   }
   if (next > MAX_PART_NUMBER) return null;
   const target = `${prefix}${next}.xml`;

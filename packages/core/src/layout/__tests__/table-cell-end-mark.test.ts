@@ -133,7 +133,7 @@ test('vertical cells keep their existing rotated paragraph-marker geometry', () 
   expect(linesOf(result)[0]!.box.height).toBe(5);
 });
 
-test('the same paragraph cannot reuse a break from a different cell-end role', () => {
+test('a script line keeps its full-size height in either cell-end role', () => {
   const part = load(table(superscript('Small')));
   const body = part.root.children.find((n) => n.kind !== 'textValue' && n.localName === 'body')!;
   if (body.kind === 'textValue') throw new Error('body');
@@ -148,7 +148,7 @@ test('the same paragraph cannot reuse a break from a different cell-end role', (
       ? layoutRowFragment(row, [100], 0, 0, false, 0, deps).record.cells[0]!.blocks[0]!
       : flowBlocksInBox([paragraphNode], 0, 100, 0, 0, deps).blocks[0]!;
     if (placed.kind !== 'paragraph') throw new Error('paragraph');
-    expect(placed.lines[0]!.box.height).toBeCloseTo(end ? 5 * 0.65 : 5, 5);
+    expect(placed.lines[0]!.box.height).toBeCloseTo(5, 5);
   }
   expect(cache.stats.hits).toBeGreaterThan(0);
 });

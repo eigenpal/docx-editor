@@ -41,7 +41,12 @@ test.each([0, 40])(
     // so the two rows split 25.5 as 12.5 + 13 rather than 12.75 twice.
     expect(first!.box.height).toBeCloseTo(spacing === 0 ? 12.5 : 13, 6);
     expect(second!.box.height).toBeCloseTo(13, 6);
-    expect(first!.cells[0]!.blocks[0]!.box.x - first!.cells[0]!.box.x).toBeCloseTo(0.5, 6);
+    // Collapsed, the legacy content-aligned table starts content at the side rule's inner half;
+    // a spaced cell clears its whole rule.
+    expect(first!.cells[0]!.blocks[0]!.box.x - first!.cells[0]!.box.x).toBeCloseTo(
+      spacing === 0 ? 0.25 : 0.5,
+      6
+    );
     expect(first!.cells[0]!.blocks[0]!.box.y - first!.cells[0]!.box.y).toBeCloseTo(0.5, 6);
     expect(layoutSemanticDocument(part, 0, options).pages).toEqual(layout.pages);
     expect(serializeOoxmlPart(part)).toBe(xml);

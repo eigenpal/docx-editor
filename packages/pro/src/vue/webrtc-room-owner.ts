@@ -14,8 +14,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * cancels that destroy, so StrictMode and hot reload cannot hand a destroyed
  * room back to the next render.
  *
- * Owners are stored by `useId()` / Vue instance uid so a remount that resets
- * hook state still finds the live room.
+ * Owners are stored by their hook instance's key so a remount still finds the live room.
+ * An owner enters the store only when its component mounts (`reclaimOwner`): a server render,
+ * or a render that never commits, leaves nothing behind.
  */
 
 export interface DestroyableRoom {
@@ -24,6 +25,12 @@ export interface DestroyableRoom {
 
 export interface WebrtcRoomOwner<T extends DestroyableRoom> {
   current(): T | null;
+  /**
+   * The configured room this owner auto-connected, or null for a room the host opened with
+   * `connect`. It lives here, not in hook state, so a remount that reclaims the room still
+   * knows whether a later room change should switch away from it.
+   */
+  autoKey: string | null;
   adopt(room: T): void;
   leave(): void;
   reclaimOwner(): void;
@@ -32,8 +39,15 @@ export interface WebrtcRoomOwner<T extends DestroyableRoom> {
 
 const owners = new Map<string, WebrtcRoomOwner<DestroyableRoom>>();
 
+/** How many hook owners are live. Test-only visibility into the registry's size. */
+export function webrtcRoomOwnerCountForTests(): number {
+  return owners.size;
+}
+
 export function createWebrtcRoomOwner<T extends DestroyableRoom>(
-  schedule: (task: () => void) => void = queueMicrotask
+  schedule: (task: () => void) => void = queueMicrotask,
+  onDisposed: () => void = () => {},
+  onClaimed: () => void = () => {}
 ): WebrtcRoomOwner<T> {
   let held: T | null = null;
   let generation = 0;
@@ -41,6 +55,7 @@ export function createWebrtcRoomOwner<T extends DestroyableRoom>(
     generation += 1;
   };
   return {
+    autoKey: null,
     current: () => held,
     adopt(room) {
       cancelPending();
@@ -55,6 +70,7 @@ export function createWebrtcRoomOwner<T extends DestroyableRoom>(
     },
     reclaimOwner() {
       cancelPending();
+      onClaimed();
     },
     disposeOwner() {
       const token = ++generation;
@@ -63,6 +79,7 @@ export function createWebrtcRoomOwner<T extends DestroyableRoom>(
         if (token !== generation) return;
         room?.destroy();
         if (held === room) held = null;
+        onDisposed();
       });
     },
   };
@@ -71,7 +88,16 @@ export function createWebrtcRoomOwner<T extends DestroyableRoom>(
 export function webrtcRoomOwnerFor<T extends DestroyableRoom>(id: string): WebrtcRoomOwner<T> {
   const existing = owners.get(id);
   if (existing) return existing as WebrtcRoomOwner<T>;
-  const created = createWebrtcRoomOwner<T>();
-  owners.set(id, created);
+  // A remount within the dispose window reclaims this owner; past it, the owner is gone for
+  // good, so its entry goes too. Without this every unmounted hook stayed in the map.
+  const created: WebrtcRoomOwner<T> = createWebrtcRoomOwner<T>(
+    queueMicrotask,
+    () => {
+      if (owners.get(id) === (created as WebrtcRoomOwner<DestroyableRoom>)) owners.delete(id);
+    },
+    () => {
+      if (!owners.has(id)) owners.set(id, created as WebrtcRoomOwner<DestroyableRoom>);
+    }
+  );
   return created;
 }

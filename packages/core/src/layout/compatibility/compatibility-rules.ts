@@ -99,6 +99,10 @@ export const MODE_RULES = {
     'Collapsed side rules center on shared grid lines for every simple top-level table',
     'ECMA-376 Part 1 §17.4.38 tblBorders'
   ),
+  modernBidiTableRuleShift: modern(
+    'A right-to-left table sits half its mean outer side rule toward its visual left',
+    'ECMA-376 Part 1 §17.4.1 bidiVisual'
+  ),
   modernGridLineSideRules: modern(
     'Side rules center on grid lines for covered dxa/auto width shapes; edge-aligned grids move by half a rule',
     'ECMA-376 Part 1 §17.4.38 tblBorders'
