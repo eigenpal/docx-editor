@@ -22,8 +22,8 @@ function hAnsiFamily(props: readonly OoxmlProperty[], theme?: ThemeFonts): strin
 
 /** The definite hAnsi ranges. Conditional East Asian characters stay in their existing lane. */
 function usesHAnsi(code: number, hint: boolean, chinese: boolean): boolean {
-  // The no-break space keeps the ascii face, like the space it stands for.
-  if (code < 0x80 || code === 0xa0 || code > 0xffff) return false;
+  // The no-break space and the fixed-width spaces advance in the hAnsi face too.
+  if (code < 0x80 || code > 0xffff) return false;
   if (
     (code >= 0x590 && code <= 0x7bf) ||
     (code >= 0xfb1d && code <= 0xfdff) ||

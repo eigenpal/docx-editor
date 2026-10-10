@@ -274,12 +274,12 @@ function isEastAsianCodePoint(codePoint: number): boolean {
 
 /**
  * Whether a code point can draw in the `w:hAnsi` face: a non-ASCII BMP character outside
- * the East Asian blocks above, Hebrew and Arabic, and the no-break space (which keeps the
- * `w:ascii` face). Over-reports the hint-dependent ranges, never hides a drawn face.
+ * the East Asian blocks above, Hebrew and Arabic. The no-break space counts, because it
+ * advances in that face. Over-reports the hint-dependent ranges, never hides a drawn face.
  */
 function isHAnsiCodePoint(codePoint: number): boolean {
   return (
-    codePoint > 0xa0 &&
+    codePoint >= 0xa0 &&
     codePoint <= 0xffff &&
     !(codePoint >= 0x590 && codePoint <= 0x7bf) &&
     !(codePoint >= 0xfb1d && codePoint <= 0xfdff) &&

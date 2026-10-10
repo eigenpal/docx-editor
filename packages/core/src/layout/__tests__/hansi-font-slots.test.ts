@@ -200,7 +200,9 @@ test('definite Unicode lanes keep ASCII, CJK, complex scripts and supplementary 
   const nbsp = applyHAnsiFontSlots([piece('§1 2')]);
   expect(nbsp.map((p) => [p.text, p.style.fontFamily])).toEqual([
     ['§', 'Arial'],
-    ['1 2', 'Times New Roman'],
+    ['1', 'Times New Roman'],
+    [' ', 'Arial'],
+    ['2', 'Times New Roman'],
   ]);
   const noHAnsi = piece('é', [{ localName: 'rFonts', attributes: { ascii: 'Calibri' } }]);
   expect(applyHAnsiFontSlots([noHAnsi])[0]).toBe(noHAnsi);

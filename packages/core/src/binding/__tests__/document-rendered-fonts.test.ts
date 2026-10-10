@@ -124,8 +124,9 @@ describe('collectRenderedFontFamilies', () => {
         .slice();
     expect(text('Latin')).toEqual(['Garamond']);
     expect(text('Café')).toEqual(['Garamond', 'Tahoma']);
-    // The no-break space keeps the ascii face; Hebrew is not drawn through hAnsi.
-    expect(text('1 2 ש')).toEqual(['Garamond']);
+    // The no-break space advances in the hAnsi face; Hebrew is not drawn through it.
+    expect(text('1 2')).toEqual(['Garamond', 'Tahoma']);
+    expect(text('1 ש')).toEqual(['Garamond']);
 
     // The slot inherits on its own: a nearer ascii-only rFonts does not hide a style's hAnsi.
     const inherited = open(
