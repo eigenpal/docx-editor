@@ -3828,6 +3828,7 @@ export interface SemanticTableCell {
     readonly revisionShading?: 'inserted' | 'deleted' | 'merged' | 'split';
     // (undocumented)
     readonly revisionShadingAuthor?: string;
+    readonly rowTableBorders?: TableBorderBox;
     readonly shading?: string;
     readonly styleFormatting: TableCellStyleFormatting;
     readonly suppressesTopBand?: true;

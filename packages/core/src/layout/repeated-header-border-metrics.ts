@@ -118,7 +118,7 @@ export function prepareRepeatedHeaderBorderPlan(
         ownTopBandWidthPt(
           cell.borders.top,
           above.borders.bottom,
-          structure.tableBorders.insideH,
+          (cell.rowTableBorders ?? structure.tableBorders).insideH,
           band,
           cell.suppressesTopBand
         )

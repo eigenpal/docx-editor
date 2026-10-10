@@ -57,6 +57,7 @@ import {
   EMPTY_TABLE_BORDER_BOX,
   readCellBorders,
   readTableBorders,
+  rowExceptionBorders,
   type CellBorderBox,
   type TableBorderBox,
 } from './table-borders.ts';
@@ -213,6 +214,8 @@ export interface SemanticTableCell {
   readonly margins: CellMarginsPt;
   /** Three-state authored `tcBorders` (omitted / none / edge). */
   readonly borders: CellBorderBox;
+  /** The row's `w:tblPrEx` table borders, which replace the table's own for this cell. */
+  readonly rowTableBorders?: TableBorderBox;
   /** Resolved incident edges used for content clearance, preserving authored border provenance. */
   readonly contentBorders?: CellBorderBox;
   /** The resolved cell (including a vertical merge) ends at the authored table bottom. */
@@ -724,6 +727,7 @@ function readTableStructureUncached(
       cellProperties: undefined,
     });
     const isHeader = tableRowIsHeader(tableStyle, rowConditions, rowProperties);
+    const rowTableBorders = rowExceptionBorders(rowNode, tableBorders);
     let cellIndex = 0;
     const cells: SemanticTableCell[] = [];
     const mergedHere = new Set<number>();
@@ -782,6 +786,7 @@ function readTableStructureUncached(
         textDirection: readCellTextDirection(cellProperties),
         margins: cellMargins,
         borders: mergeCellBorders(conditionalBorders, ownBorders),
+        ...(rowTableBorders ? { rowTableBorders } : {}),
         ...(ownBorders.top.state === 'none' ? { suppressesTopBand: true as const } : {}),
         ...(shading === undefined ? {} : { shading }),
         preferredWidth,

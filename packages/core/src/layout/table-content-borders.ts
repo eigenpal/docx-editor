@@ -28,6 +28,15 @@ export function physicalTableRows(
           ...cell,
           margins: { ...cell.margins, left: cell.margins.right, right: cell.margins.left },
           borders: { ...cell.borders, left: cell.borders.right, right: cell.borders.left },
+          ...(cell.rowTableBorders
+            ? {
+                rowTableBorders: {
+                  ...cell.rowTableBorders,
+                  left: cell.rowTableBorders.right,
+                  right: cell.rowTableBorders.left,
+                },
+              }
+            : {}),
           logicalGridColumn: cell.gridColumn,
           gridColumn: Math.max(0, columns - cell.gridColumn - cell.gridSpan),
         })),
@@ -209,7 +218,7 @@ export function withTableContentBorders(
 
 function separatedContentBorders(
   rows: readonly SemanticTableRow[],
-  table: TableBorderBox,
+  tableBox: TableBorderBox,
   columns: number,
   merged: ReadonlyMap<string, number>
 ): readonly SemanticTableRow[] {
@@ -217,20 +226,24 @@ function separatedContentBorders(
     own.state === 'omitted' && inherited.state === 'edge' ? inherited : own;
   return rows.map((row, index) => ({
     ...row,
-    cells: row.cells.map((cell) => ({
-      ...cell,
-      contentBorders: {
-        top: side(cell.borders.top, index === 0 ? table.top : table.insideH),
-        bottom: side(
-          cell.borders.bottom,
-          index + (merged.get(cell.id) ?? 1) === rows.length ? table.bottom : table.insideH
-        ),
-        left: side(cell.borders.left, cell.gridColumn === 0 ? table.left : table.insideV),
-        right: side(
-          cell.borders.right,
-          cell.gridColumn + cell.gridSpan === columns ? table.right : table.insideV
-        ),
-      },
-    })),
+    cells: row.cells.map((cell) => {
+      // A row's `w:tblPrEx` borders replace the table's own for its cells.
+      const table = cell.rowTableBorders ?? tableBox;
+      return {
+        ...cell,
+        contentBorders: {
+          top: side(cell.borders.top, index === 0 ? table.top : table.insideH),
+          bottom: side(
+            cell.borders.bottom,
+            index + (merged.get(cell.id) ?? 1) === rows.length ? table.bottom : table.insideH
+          ),
+          left: side(cell.borders.left, cell.gridColumn === 0 ? table.left : table.insideV),
+          right: side(
+            cell.borders.right,
+            cell.gridColumn + cell.gridSpan === columns ? table.right : table.insideV
+          ),
+        },
+      };
+    }),
   }));
 }

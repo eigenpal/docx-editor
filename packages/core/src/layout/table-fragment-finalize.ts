@@ -293,6 +293,7 @@ export function finalizeTableRows(
           right: { state: 'omitted' as const },
         },
         mergeRowSpan: cell.rowSpan ?? 1,
+        ...(authored?.rowTableBorders ? { rowTableBorders: authored.rowTableBorders } : {}),
       };
     })
   );
@@ -315,7 +316,11 @@ export function finalizeTableRows(
         const outerBottomInsetReserved =
           authored && insets
             ? insets.bottom >=
-              outerBottomInsetFloor(authored, structure.tableBorders.bottom) - 0.001
+              outerBottomInsetFloor(
+                authored,
+                (authored.rowTableBorders ?? structure.tableBorders).bottom
+              ) -
+                0.001
             : false;
         return {
           width: cell.box.width,

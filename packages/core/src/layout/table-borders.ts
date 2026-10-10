@@ -272,6 +272,31 @@ export function readTableBorders(tblPr: OoxmlElement | undefined): TableBorderBo
   };
 }
 
+/**
+ * One row's table borders: the sides its `w:tblPrEx` states over the table's own, or
+ * undefined when the row states none. An exception replaces the table's properties for that
+ * row only, so a borderless footer row in a gridded table paints no rule.
+ */
+export function rowExceptionBorders(
+  row: OoxmlElement,
+  table: TableBorderBox
+): TableBorderBox | undefined {
+  const exception = childNamed(row, 'tblPrEx');
+  if (!exception) return undefined;
+  const own = readTableBorders(exception);
+  if (own === EMPTY_TABLE_BORDERS) return undefined;
+  const pick = (base: TableBorderSide, over: TableBorderSide) =>
+    over.state === 'omitted' ? base : over;
+  return {
+    top: pick(table.top, own.top),
+    left: pick(table.left, own.left),
+    bottom: pick(table.bottom, own.bottom),
+    right: pick(table.right, own.right),
+    insideH: pick(table.insideH, own.insideH),
+    insideV: pick(table.insideV, own.insideV),
+  };
+}
+
 /** Read one cell's `w:tcBorders`, under the same bounds {@link readTableBorders} applies. */
 export function readCellBorders(tcPr: OoxmlElement | undefined): CellBorderBox {
   return readBox(tcPr && childNamed(tcPr, 'tcBorders'), ['top', 'left', 'bottom', 'right']);
@@ -349,6 +374,8 @@ export interface BorderGridCell {
   readonly borders: CellBorderBox;
   /** Set on restart cells that visually span into later rows. */
   readonly mergeRowSpan?: number;
+  /** The row's `w:tblPrEx` table borders, which replace the table's own for this cell. */
+  readonly rowTableBorders?: TableBorderBox;
 }
 
 interface RawInterval {
@@ -812,9 +839,13 @@ export function resolveTableCellBorderGrid(
     side: keyof CellBorderBox,
     interior: boolean
   ): TableBorderSide =>
-    effectiveBorderSide(cell.borders[side], tableFallback(table, side, interior), {
-      interior,
-    });
+    effectiveBorderSide(
+      cell.borders[side],
+      tableFallback(cell.rowTableBorders ?? table, side, interior),
+      {
+        interior,
+      }
+    );
 
   /** Preserve explicit no-border cells against inherited rules from their neighbours.
    * An authored opposing edge still participates in the shared-edge conflict.
@@ -887,7 +918,7 @@ export function resolveTableCellBorderGrid(
               cell.borders.bottom,
               below ? below.cell.borders.top : OMITTED,
               effective(cell, 'bottom', true),
-              below ? effective(below.cell, 'top', true) : table.insideH
+              below ? effective(below.cell, 'top', true) : (cell.rowTableBorders ?? table).insideH
             );
           }
         }
@@ -906,7 +937,9 @@ export function resolveTableCellBorderGrid(
             cell.borders.right,
             neighbor ? neighbor.cell.borders.left : OMITTED,
             effective(cell, 'right', true),
-            neighbor ? effective(neighbor.cell, 'left', true) : table.insideV
+            neighbor
+              ? effective(neighbor.cell, 'left', true)
+              : (cell.rowTableBorders ?? table).insideV
           );
         }
         rightRaw.push({ gridStart: r, gridEnd: r + 1, edge: asResolved(edge) });
