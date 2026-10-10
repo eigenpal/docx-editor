@@ -1,4 +1,4 @@
-// A Word font reference is one bounded name, never a CSS fallback list.
+// A run font reference is one bounded name, never a CSS fallback list.
 const FONT_FAMILY_NAME = /^[\p{L}\p{N}\p{M} \-.+_,;]{1,64}$/u;
 
 /** Preserve the complete name while rejecting CSS-breaking characters. */

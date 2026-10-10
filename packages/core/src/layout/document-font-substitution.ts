@@ -58,6 +58,25 @@ function wordAttribute(node: OoxmlElement, name: string): string | undefined {
   )?.value;
 }
 
+/** Root elements of the WordprocessingML parts that can carry `w:rFonts`. */
+const RUN_FONT_PART_ROOTS = new Set([
+  'document',
+  'hdr',
+  'ftr',
+  'footnotes',
+  'endnotes',
+  'comments',
+  'styles',
+  'numbering',
+  'glossaryDocument',
+]);
+
+/** Elements that hold only character data, so the scan never descends into them. */
+const TEXT_ONLY_ELEMENTS = new Set(['t', 'delText', 'instrText', 'delInstrText']);
+
+/** Bounds the script-default scan. The scanned prefix still yields its defaults. */
+const MAX_SCRIPT_DEFAULT_SCAN_NODES = 2_000_000;
+
 /** Avoid assigning one global substitute when a whole name needs different script defaults. */
 function scriptDefaults(
   view: Pick<HeadlessDocumentView, 'currentPackage' | 'stylesRoot' | 'documentThemeFonts'>,
@@ -84,30 +103,38 @@ function scriptDefaults(
   const needs = new Map<string, Set<string>>();
   let inspected = 0;
   for (const part of view.currentPackage().parts.values()) {
+    // Only story, style, and numbering parts carry run fonts. Charts, themes, and
+    // custom XML never spend the scan budget.
+    if (part.root.namespaceUri !== WML_NAMESPACE_URI) continue;
+    if (!RUN_FONT_PART_ROOTS.has(part.root.localName)) continue;
     const stack: OoxmlNode[] = [part.root];
-    while (stack.length > 0 && inspected++ < 100_000) {
+    // Past the budget, keep what the scanned prefix found instead of dropping every
+    // script default. A family seen in one slot keeps that slot's default.
+    while (stack.length > 0 && inspected < MAX_SCRIPT_DEFAULT_SCAN_NODES) {
+      inspected++;
       const node = stack.pop()!;
       if (node.kind === 'textValue') continue;
-      if (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'rFonts') {
-        for (const [slot, target] of [
-          ['ascii', latin],
-          ['hAnsi', highAnsi],
-          ['eastAsia', eastAsia],
-          ['cs', complex],
-        ] as const) {
-          const family = fontFamilyName(wordAttribute(node, slot));
-          if (!family || !target) continue;
-          const key = family.trim().toLowerCase();
-          const targets = needs.get(key) ?? new Set<string>();
-          targets.add(target);
-          needs.set(key, targets);
+      if (node.namespaceUri === WML_NAMESPACE_URI) {
+        if (TEXT_ONLY_ELEMENTS.has(node.localName)) continue;
+        if (node.localName === 'rFonts') {
+          for (const [slot, target] of [
+            ['ascii', latin],
+            ['hAnsi', highAnsi],
+            ['eastAsia', eastAsia],
+            ['cs', complex],
+          ] as const) {
+            const family = fontFamilyName(wordAttribute(node, slot));
+            if (!family || !target) continue;
+            const key = family.trim().toLowerCase();
+            const targets = needs.get(key) ?? new Set<string>();
+            targets.add(target);
+            needs.set(key, targets);
+          }
+          continue;
         }
       }
       for (const next of node.children) stack.push(next);
     }
-    // An incomplete scan cannot prove that a family has only one script target.
-    if (stack.length > 0)
-      return { fallbacks: new Map(), ambiguousFamilies: [], defaults: new Map() };
   }
   const fallbacks = new Map<string, string>();
   const ambiguousFamilies: string[] = [];
