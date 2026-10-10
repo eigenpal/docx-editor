@@ -2,7 +2,7 @@
 
 ### Requirement: Placeholder and ICU integrity validation
 
-`bun run i18n:validate` SHALL verify every non-null translated leaf against its English source for placeholder and ICU structural integrity, for every locale. The check SHALL accept two valid forms: (A) an ICU plural block `{var, plural, …}` whose variable name matches the English plural variable (or, when English has no plural block, an English placeholder name), with a required `other` branch, branch labels limited to `=N` fixed matches, the locale's CLDR plural categories, or labels used by the English message, and all English `=N` branches preserved; or (B) plain interpolation `{var}`. In both forms the placeholder-name set (simple `{name}` tokens plus the plural variable name) SHALL equal the English set exactly. A `null` translation SHALL be skipped by this rule (covered by key-sync validation).
+`bun run i18n:validate` SHALL verify every non-null translated leaf against its English source for placeholder and ICU structural integrity, in every locale. The placeholder-name set SHALL equal the English set exactly. An ICU plural block SHALL keep the English plural variable, a required `other` branch, all English `=N` branches, and only `=N`, CLDR, or English branch labels. Plain interpolation with matching names SHALL also pass. A `null` translation SHALL be skipped (key sync covers it).
 
 #### Scenario: Missing placeholder fails
 
