@@ -108,8 +108,12 @@ export interface ReviewRevisionItem {
       | 'firstLineIndent'
       | 'hangingIndent'
       | 'spaceBefore'
-      | 'spaceAfter';
-    /** New direct value; null means inherit. Sizes and distances are in points. */
+      | 'spaceAfter'
+      | 'direction';
+    /**
+     * New direct value; null means inherit. Sizes and distances are in points. A direction is
+     * `rtl` or `ltr`.
+     */
     readonly value: string | null;
   }[];
   /** Newly applied proofing language codes in a tracked formatting change. */

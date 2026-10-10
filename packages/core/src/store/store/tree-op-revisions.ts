@@ -1,4 +1,8 @@
-import { hasRevisionMarkerContent } from './revision-marker-content.ts';
+import {
+  hasRevisionMarkerContent,
+  heldOnlyResolvedMarks,
+  isInertMarker,
+} from './revision-marker-content.ts';
 import { retainedNestedRowSites } from './revision-table-preserve-nested.ts';
 import { unboundTableHistories } from './revision-table-unbound-history.ts';
 import { implicitTableRowProperties } from './revision-table-implicit-height.ts';
@@ -48,7 +52,7 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
-import { isContentRevisionKind, isRangeMarkerKind } from '../package/ooxml-shared.ts';
+import { isContentRevisionKind } from '../package/ooxml-shared.ts';
 import { mergeRevisionParagraphs, tableParagraphMergeTarget } from './revision-paragraph-merge.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import {
@@ -592,23 +596,6 @@ interface RebuildPlan {
  * rejected insertion inside a rejected deletion survived: the outer unwrap consumed the inner
  * wrapper as ordinary content.
  */
-/**
- * A child that marks a position rather than holding content: bookmark, comment-range and
- * move-range boundaries, permission-range boundaries, and proofing marks.
- */
-function isInertMarker(node: OoxmlNode): boolean {
-  if (node.kind === 'textValue') return false;
-  if (node.kind === 'bookmarkStart' || node.kind === 'bookmarkEnd') return true;
-  if (isRangeMarkerKind(node.kind)) return true;
-  return (
-    node.kind === 'generic' &&
-    node.namespaceUri === WML_NAMESPACE_URI &&
-    (node.localName === 'proofErr' ||
-      node.localName === 'permStart' ||
-      node.localName === 'permEnd')
-  );
-}
-
 function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): OoxmlNode[] {
   const out: OoxmlNode[] = [];
   /** Content of paragraphs whose mark was resolved away, waiting for the paragraph after. */
@@ -650,6 +637,7 @@ function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): Oox
         : null;
     if ((child.kind === 'fldSimple' || child.kind === 'hyperlink') && hollow?.children.length === 0)
       continue;
+    if (hollow?.children.length === 0 && heldOnlyResolvedMarks(child, plan.dropMarks)) continue;
     // A revision wrapper the resolution emptied goes the same way. Accepting one author's
     // deletion of another author's insertion removes the deleted runs and leaves the `w:ins`
     // holding no characters to decide about — yet it carded as a blank entry and kept the
@@ -673,7 +661,7 @@ function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): Oox
     out.push(...rebuilt);
   }
 
-  return mergeRevisionParagraphs(out, plan.mergeForward);
+  return mergeRevisionParagraphs(out, plan.mergeForward, plan.mint);
 }
 
 function rebuild(node: OoxmlNode, plan: RebuildPlan): OoxmlNode[] {

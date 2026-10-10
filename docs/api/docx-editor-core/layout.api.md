@@ -1026,6 +1026,8 @@ export interface FieldAtomMarker {
         readonly picture?: string;
     };
     readonly pageRef?: PageRefFieldProjection;
+    readonly resultEnd?: number;
+    readonly resultStart?: number;
 }
 
 // @public
@@ -3283,7 +3285,7 @@ export interface ReviewRevisionItem {
     // (undocumented)
     readonly date?: string;
     readonly formattingChanges?: readonly {
-        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter';
+        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter' | 'direction';
         readonly value: string | null;
     }[];
     readonly formattingKind?: string;
@@ -3624,6 +3626,7 @@ export interface SemanticLayoutOptions {
     readonly evenAndOddHeaders?: boolean;
     // @internal (undocumented)
     readonly fieldCodeRanges?: FieldCodeRanges;
+    readonly fieldResults?: FieldResultsMode;
     readonly furniture?: PageFurniture;
     // (undocumented)
     readonly geometry?: PageGeometry;

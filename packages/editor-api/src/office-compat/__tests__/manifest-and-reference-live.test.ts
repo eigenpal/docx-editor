@@ -16,6 +16,7 @@ import path from 'node:path';
 import manifest from '../../../compat/manifest.json';
 import referenceFixture from '../../../compat/reference/word.reference.json';
 import provenance from '../../../compat/provenance.json';
+import fullInventory from '../../../compat/reference/word.full-inventory.json';
 import definitelyTypedCommits from '../../../compat/definitely-typed-commits.json';
 import {
   validateManifestAgainstReference,
@@ -29,6 +30,20 @@ import { listExportedSymbolNames } from '../../../scripts/lib/extract-docxeditor
 const compatDir = path.join(__dirname, '..', '..', '..', 'compat');
 
 describe('the checked-in compat/ fixtures', () => {
+  // `Paragraph.readingOrder` is a DocxEditor addition because the pinned Office.js API has no
+  // paragraph direction member. If a later pin adds one, this fails so the addition is replaced
+  // by the Office.js member instead of competing with it.
+  test('the paragraph direction addition stays recorded and has no pinned upstream member', () => {
+    const upstream = new Set(fullInventory.endpoints.map((entry) => entry.uid));
+    const directionMembers = [...upstream].filter((uid) =>
+      /^Word\.(Paragraph|ParagraphFormat|Interfaces\.Paragraph[A-Za-z]*)#(readingOrder|readingDirection|direction|bidi|rightToLeft)$/i.test(
+        uid
+      )
+    );
+    expect(directionMembers).toEqual([]);
+    expect(manifest.omissions.map((entry) => entry.uid)).toContain('Word.Paragraph#readingOrder');
+  });
+
   test('manifest.json is a strict, internally consistent subset of the reference fixture', () => {
     expect(validateManifestAgainstReference(manifest, referenceFixture)).toEqual([]);
   });

@@ -83,7 +83,7 @@ try {
 
 Set `context.document.changeTrackingMode = 'TrackMineOnly'` before calling `range.insertText()` or `range.delete()`. Configure an `author` when you create the runtime. The mode applies to that runtime and persists across `run()` calls.
 
-Tracked edits support text within one paragraph, including table cells. Text edits that touch pending revisions refuse atomically. Paragraph insertion, list membership, and partial table row changes support native revisions. Other structural edits refuse. Font and paragraph formatting produce property revisions. `TrackAll` is unsupported. Browser tracked writes require the Pro review module; the runtime setting does not change the editor UI mode.
+Tracked edits support text within one paragraph, including table cells. Tracked deletions can also remove whole paragraphs with `range.delete()` or `paragraph.delete()`. Text edits that touch pending revisions refuse atomically. Paragraph insertion, list membership, and partial table row changes support native revisions. Other structural edits refuse. Font and paragraph formatting produce property revisions. `TrackAll` is unsupported. Browser tracked writes require the Pro review module; the runtime setting does not change the editor UI mode.
 
 A pending row insertion or deletion blocks tracked edits throughout that row, including other cells and nested tables.
 

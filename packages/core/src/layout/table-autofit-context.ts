@@ -3,6 +3,7 @@
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { carryAutofitScope } from './autofit-context-reuse.ts';
+import { currentFieldResultsMode } from '../store/package/field-result-mode.ts';
 import { valueDigest } from './autofit-value-token.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { listItemToken } from './list-marker-reuse.ts';
@@ -54,6 +55,8 @@ export function autofitContextOf(deps: AutofitFlowDeps): TableAutofitContext {
     deps.drawingLayoutToken ?? '',
     deps.inlineDrawingLayout ? 'drawings' : '',
     `tab:${deps.defaultTabStopPt ?? ''}`,
+    // Saved field results break as text in the editable mode and stay whole in the default.
+    `fields:${currentFieldResultsMode()}`,
   ].join('\0');
   const context: TableAutofitContext = {
     measurer: deps.measurer,

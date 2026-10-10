@@ -84,10 +84,7 @@ import {
   type ContentControlMenuHost,
 } from './content-control-widget-menu.ts';
 import { createLegacyCheckboxInteraction } from './surface-legacy-checkbox.ts';
-import {
-  createTextFormFieldInteraction,
-  type PendingTextFormInput,
-} from './surface-text-form-fields.ts';
+import { createTextFormFieldInteraction } from './surface-text-form-fields.ts';
 import { formsProtectionEnabled, sectionProtectsForms } from '@docx-editor.dev/core/store';
 // Engine-owned paginated paragraph surface (composition root).
 // Painted pages are the editable surface; seams live in sibling surface-*.ts modules.
@@ -98,7 +95,6 @@ import { isRevisionCapable, isTrackedEdit } from './surface-tracked-ops.ts';
 import { isMissingAuthorRefusal } from './docx-editor-author.ts';
 import {
   openTreeSession,
-  type OpenTreeSessionResult,
   type TreeApplyResult,
   type TreeDocxSession,
 } from '@docx-editor.dev/core/binding';
@@ -164,10 +160,8 @@ import {
 import { attachListResolveChangeEvidence } from '../layout/list-resolve.ts';
 import { refreshSurfaceRefFieldResults } from './surface-ref-field-refresh.ts';
 import { type RevisionAuthorFilter } from '../layout/revision-projection.ts';
-import {
-  createRevisionAuthorVisibility,
-  type RevisionAuthorVisibility,
-} from './revision-author-visibility.ts';
+import { createRevisionAuthorVisibility } from './revision-author-visibility.ts';
+import type { PaginatedSurfaceRuntimeOptions } from './surface-runtime-options.ts';
 import { PROPERTY_CHANGE_WRAPPER_OF_OP } from '../store/store/tree-op-tracked-properties.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
 import { surfaceSelectionMarkRects } from './surface-selection-ops.ts';
@@ -184,7 +178,6 @@ import {
 import {
   createStableReviewAuthorSlots,
   type ReviewAuthorInfo,
-  type StableReviewAuthorSlots,
 } from '../output/revision-presentation.ts';
 import { createSurfaceReviewAuthors, reviewItemAuthor } from './surface-review-authors.ts';
 import { createPresenceColors } from './surface-presence-color.ts';
@@ -369,26 +362,7 @@ export function mountPaginatedSurface(
   bytes: Uint8Array,
   options: PaginatedSurfaceOptions = {}
 ): OpenPaginatedResult {
-  const runtimeOptions = options as PaginatedSurfaceOptions & {
-    readonly onTrackedChange?: () => void;
-    readonly reviewAuthorSlots?: StableReviewAuthorSlots;
-    readonly revisionAuthorVisibility?: RevisionAuthorVisibility;
-    /**
-     * Carry drawing intent alongside the range on a font remount. A plain open starts
-     * with no drawing selected, even when the default caret sits at its anchor.
-     */
-    readonly initialDrawingSelectionIntent?: DrawingSelectionIntent;
-    /** Restore the model range on a font remount without claiming DOM selection/focus. */
-    readonly initialSelection?: SemanticSelection;
-    readonly initialTextFormInput?: PendingTextFormInput;
-    /**
-     * These bytes, already opened with the same review model in an earlier task, so a long
-     * document does not parse and lay out in one blocking task. Used once.
-     */
-    readonly openedSession?: OpenTreeSessionResult;
-    /** Lay the body out in slices after mount; see `surface-progressive-open.ts`. */
-    readonly progressiveOpen?: boolean;
-  };
+  const runtimeOptions = options as PaginatedSurfaceRuntimeOptions;
   const opened =
     runtimeOptions.openedSession ??
     openTreeSession(bytes, options.reviewModel ? { reviewModel: options.reviewModel } : {});
@@ -1419,6 +1393,8 @@ export function mountPaginatedSurface(
       // constructed `proposed` never shares cached pages with an `all-markup` one.
       displayMode: revisionDisplayMode(),
       showFieldCodes: context ? false : showFieldCodes,
+      // Saved field results stay one unit until the editor offers the editable mode.
+      fieldResults: 'atomic',
       revisionAuthorFilter: activeAuthorFilter,
       bodyBlockLimit,
     } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);

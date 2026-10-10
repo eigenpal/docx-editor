@@ -6,6 +6,7 @@
 // drains them, so outside an opening nothing pauses and the answer is the same.
 
 import type { PageRecord, SemanticLayout } from './semantic-records.ts';
+import { withFieldResultsMode, type FieldResultsMode } from '../store/package/field-result-mode.ts';
 
 /** Body rows a table paginator places between two pause points. */
 export const TABLE_ROWS_PER_STEP = 8;
@@ -28,5 +29,25 @@ export function drainLayoutSteps<T>(steps: LayoutSteps<T>): T {
   for (;;) {
     const next = steps.next();
     if (next.done) return next.value;
+  }
+}
+
+/**
+ * `steps` with `mode` installed around every resume, and around the `finalize` of each report,
+ * so a pass that pauses reads the same field offsets as one that runs straight through.
+ */
+export function* stepsInFieldResultsMode<T>(
+  mode: FieldResultsMode | undefined,
+  steps: LayoutSteps<T>
+): LayoutSteps<T> {
+  if (mode === undefined) return yield* steps;
+  for (;;) {
+    const next = withFieldResultsMode(mode, () => steps.next());
+    if (next.done) return next.value;
+    const progress = next.value;
+    const finalize = progress?.finalize;
+    yield finalize
+      ? { ...progress, finalize: (pages) => withFieldResultsMode(mode, () => finalize(pages)) }
+      : progress;
   }
 }

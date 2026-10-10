@@ -2,6 +2,7 @@ import { sectionPrepassInputsMatch } from './section-prepass-inputs.ts';
 import { drawingInputsUnchangedByTextEdit } from './drawing-text-only-change.ts';
 import { tryUpdateTableSession, reuseUnchangedLayout } from './table-text-session.ts';
 import { carryLayoutReadCaches } from './layout-read-caches.ts';
+import { withFieldResultsMode } from '../store/package/field-result-mode.ts';
 import { resolveBodyRefFields } from './style-separator-ref.ts';
 import { styleSeparatorToken } from './style-separator-group.ts';
 import {
@@ -50,7 +51,7 @@ import { ParagraphFrameFlow, paragraphFrameFlowKeys } from './paragraph-frame-fl
 // paragraph id. That is what makes a cross-page paragraph one paragraph for selection and
 // two boxes for pagination.
 
-import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
+import type { OoxmlElement, OoxmlPart } from '@docx-editor.dev/core/store';
 import { WML_MAIN_DOCUMENT_PART } from '../store/package/opc-names.ts';
 import {
   finalizePageFieldProjection,
@@ -212,7 +213,8 @@ import { inlineDrawingFlow } from './inline-textbox-flow.ts';
 import { convergeExclusionLayout } from './exclusion-layout-steps.ts';
 import { withInterimLayout } from './interim-layout.ts';
 import { layoutWithFurnitureRetry } from './furniture-retry-layout.ts';
-import { drainLayoutSteps, type LayoutSteps } from './layout-steps.ts';
+import { drainLayoutSteps, stepsInFieldResultsMode, type LayoutSteps } from './layout-steps.ts';
+import { preparedBlocks } from './prepared-block-memo.ts';
 import {
   type BlockLayoutOptions as ColumnBalanceBlockLayoutOptions,
   type BlockLayoutResult,
@@ -239,39 +241,6 @@ export type BlockLayoutOptions = ColumnBalanceBlockLayoutOptions<SemanticLayoutO
   readonly yieldHiddenFurnitureZones?: boolean;
 };
 
-interface PreparedBlockMemo {
-  readonly contentWidth: number;
-  readonly frameEnabled: boolean;
-  readonly producer: string;
-  readonly drawingToken: string;
-  readonly projectionToken: string;
-  /**
-   * The resolved list item this entry was prepared under, by its own cache token.
-   *
-   * The entry embeds the item's indent, its available width and its break-cache key, and none
-   * of the other three validators can see a numbering change. The producer used to carry the
-   * item COUNT, which hid this by going cold on any list edit — and by re-laying out every
-   * paragraph in the document for one Enter in a list. With the count gone, this is the guard
-   * that has to be right.
-   */
-  readonly listToken: string;
-  /**
-   * The resolved REF values this block paints, for the same reason {@link listToken} is
-   * here: a renumbering or bookmark edit moves a REF's painted text while the block's node,
-   * width and producer all stay identical. `''` for the common REF-free block.
-   */
-  readonly refToken: string;
-  /**
-   * Whether the inline-drawing context was present. Pass-constant, but the memo lives
-   * across passes, so it must be compared here for {@link PreparedBlock.key} (which folds
-   * it via `withDrawingContext`) to stay current when a caller toggles the context.
-   */
-  readonly drawingContext: boolean;
-  readonly entry: PreparedBlock;
-}
-
-const preparedBlocks = new WeakMap<OoxmlNode, PreparedBlockMemo>();
-
 /**
  * Lay one story part out into pages.
  *
@@ -287,7 +256,9 @@ export function layoutSemanticDocument(
   revision: number,
   options: SemanticLayoutOptions
 ): SemanticLayout {
-  return drainLayoutSteps(layoutSemanticDocumentSteps(part, revision, options));
+  return withFieldResultsMode(options.fieldResults, () =>
+    drainLayoutSteps(layoutSemanticDocumentSteps(part, revision, options))
+  );
 }
 
 /**
@@ -296,7 +267,15 @@ export function layoutSemanticDocument(
  *
  * @internal
  */
-export function* layoutSemanticDocumentSteps(
+export function layoutSemanticDocumentSteps(
+  part: OoxmlPart,
+  revision: number,
+  options: SemanticLayoutOptions
+): LayoutSteps<SemanticLayout> {
+  return stepsInFieldResultsMode(options.fieldResults, layoutInModeSteps(part, revision, options));
+}
+
+function* layoutInModeSteps(
   part: OoxmlPart,
   revision: number,
   options: SemanticLayoutOptions

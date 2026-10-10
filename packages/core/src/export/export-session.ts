@@ -607,6 +607,8 @@ export function openDocumentForExport(
             : revisionAuthorFilter,
         showFieldCodes: false,
         bodyBlockLimit: undefined,
+        // Export paints every field as one unit; the painted text is the same in both modes.
+        fieldResults: 'atomic',
       } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);
       if (!layoutHasPendingImages(layout)) {
         const restartedBeforePublish = restartOnRevisionDrift();

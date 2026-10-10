@@ -118,7 +118,7 @@ import type { NoteKind } from '../store/package/note-nodes.ts';
 import { paragraphStyleName, styleIdFor } from './styles.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 import { commentReads, revisionReads, type AutomationRevisionRead } from './review.ts';
-import { planProposal, trackedParagraphInsertError } from './plan-proposal.ts';
+import { planProposal, trackedParagraphInsertError, trackedProposalOf } from './plan-proposal.ts';
 import { planRevisionDecision, revisionItemOps } from './revision-operations.ts';
 import type { ReviewCommentItem } from '../store/store/review-items.ts';
 import {
@@ -1120,13 +1120,15 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     return {
       ok: true,
       kind: 'command',
-      ops: [
-        {
-          op: 'setParagraphProperties',
-          paragraphId: paragraph.paragraphId,
-          properties: properties.value,
-        },
-      ],
+      ops: properties.unchanged
+        ? []
+        : [
+            {
+              op: 'setParagraphProperties',
+              paragraphId: paragraph.paragraphId,
+              properties: properties.value,
+            },
+          ],
       story: reads.story,
       answer: () => APPLIED,
     };
@@ -1563,21 +1565,10 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     });
     if (table) return table;
     const tracked = trackingAuthor !== undefined;
-    if (tracked && operation.op === 'insertText') {
-      operation = {
-        op: 'proposeInsertion',
-        span: { start: operation.at, end: operation.at },
-        text: operation.text,
-        where: 'Before',
-        author: trackingAuthor,
-      };
-    } else if (tracked && operation.op === 'replaceSpan') {
-      operation = {
-        op: 'proposeReplacement',
-        span: operation.span,
-        text: operation.text,
-        author: trackingAuthor,
-      };
+    if (tracked) {
+      const proposal = trackedProposalOf(operation, trackingAuthor, handles, packageReads);
+      if ('ok' in proposal) return proposal;
+      operation = proposal;
     }
     switch (operation.op) {
       case 'getFields':

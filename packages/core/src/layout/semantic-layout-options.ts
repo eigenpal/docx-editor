@@ -1,4 +1,5 @@
 import type { DocumentProperties, OoxmlNode } from '@docx-editor.dev/core/store';
+import type { FieldResultsMode } from '../store/package/field-result-mode.ts';
 import type { ExclusionZone } from './drawing-exclusion.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import type { FieldLinkProjector, HyperlinkProjector } from './field-projection.ts';
@@ -154,6 +155,14 @@ export interface SemanticLayoutOptions {
   readonly projectFieldLink?: FieldLinkProjector;
   /** Field-code inspection projection. @internal */
   readonly showFieldCodes?: boolean;
+  /**
+   * How the pass addresses saved field results (DATE, MERGEFIELD, HYPERLINK display text, see
+   * `FieldResultsMode`). `atomic` (the default) lays every field out as one model unit.
+   * `editable` lays a saved result out as ordinary text at the offsets the store's editable
+   * mode addresses, so a caret, a hit, and a selection inside it land on its characters. The
+   * mode is folded into every cache key.
+   */
+  readonly fieldResults?: FieldResultsMode;
   /** @internal */
   readonly fieldCodeRanges?: import('./field-code-toc.ts').FieldCodeRanges;
   /** @internal Word TOC character-style suppression. */

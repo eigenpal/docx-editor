@@ -182,6 +182,7 @@ await runtime.run(async (context) => {
 | Insert before or after a range | `range.insertText(text, 'Before')` or `'After'` |
 | Replace a range | `range.insertText(text, 'Replace')` |
 | Delete range content | `range.delete()` or `range.clear()` |
+| Propose removing a paragraph | `paragraph.delete()` |
 | Read the current mode | `document.load('changeTrackingMode')`, then sync and read the property |
 | Make an intentional permanent edit | Explicitly set `changeTrackingMode = 'Off'` |
 
@@ -189,14 +190,15 @@ await runtime.run(async (context) => {
 
 | Tracked edit | Supported behavior |
 | --- | --- |
-| Range text | Insert, replace, or delete text; adjacent sibling paragraphs work outside collaboration |
+| Range text | Insert, replace, or delete text; deletions can span adjacent sibling paragraphs, and replacements across paragraphs work outside collaboration |
+| Paragraph deletion | `paragraph.delete()` records the text and the paragraph mark as deletions; accept removes the paragraph |
 | Font and paragraphs | Track font, paragraph-format, and paragraph-style edits as property revisions |
 | Paragraph insertion | Track inserted text and paragraph marks |
 | Lists | Track creation, membership, and level changes; configure newly proposed definitions |
 | Tables | Track complete insertion, cell values, row additions, and partial row deletions |
 | Content controls | Wrap nonempty ordinary text in `PlainText`, `RichText`, or `DatePicker` controls outside collaboration |
 
-Tracked range edits refuse table and wrapper boundaries. Collaborative tracked range edits must remain within one paragraph. Targets that touch foreign pending revisions refuse. Continuation can extend the runtime author's text and paragraph proposals. Simple fields with nested fields or other result containers refuse tracked deletion and replacement. Direct result runs remain supported.
+Tracked range edits refuse table and wrapper boundaries. In collaboration, a tracked replacement must remain within one paragraph. A tracked paragraph deletion fails with `NotSupported` for the last paragraph of a story, table cell, or content control, a paragraph directly before a table or block content control, a paragraph whose mark ends a section, a paragraph with an inline content control, a paragraph that a complex field crosses, and a paragraph that nests inline content more than 64 levels deep. It fails with `NotImplemented` when the paragraph or the start of the next paragraph has a pending change, including your own. Delete adjacent paragraphs in one sync; a later sync beside your own pending deletion refuses. A tracked deletion or replacement at the start of a paragraph whose previous paragraph mark you already proposed deleting also fails with `NotImplemented`. One refusal refuses the whole sync. Text that another participant types into struck text joins the proposed deletion: reject restores it, and accept removes it with no separate revision. Targets that touch foreign pending revisions refuse. Continuation can extend the runtime author's text and paragraph proposals. Simple fields with nested fields or other result containers refuse tracked deletion and replacement. Direct result runs remain supported.
 
 An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require permanent edits. Tracked table and cell value replacement refuse in collaboration. Row deletion suggestions must leave a row without a pending deletion. Pending row or cell structure revisions refuse tracked row deletion with `NotImplemented`.
 
@@ -207,6 +209,28 @@ Established list definitions and page setup refuse tracked writes. Comments and 
 When a person adopts an agent's suggestions, attribute them to that person with `revisions.setAuthor(author, revisions)` or `revisions.setAuthor(author, { authors })`. This is a DocxEditor addition; Office.js has no author write. The changes stay pending. Never reject and reinsert suggestions to change their author.
 
 Standard `insertText('', 'Replace')` means deletion, and an empty insertion is a no-op. Agent tools should require nonempty insertion/replacement text and expose deletion as an explicit model decision. The shipped worker does this. The [compatibility manifest](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/compat/manifest.json) records measured members and behavioral differences.
+
+## Set paragraph direction
+
+Office.js has no paragraph direction member. Use the DocxEditor addition `Paragraph.readingOrder` to write right-to-left paragraphs, such as Arabic or Hebrew text. Queue the direction writes for several paragraphs in one sync, then read them back in the next sync:
+
+```ts
+await runtime.run(async (context) => {
+  const paragraphs = context.document.body.paragraphs;
+  paragraphs.load({ select: 'items', top: 2 });
+  await context.sync();
+
+  const targets = paragraphs.items;
+  for (const paragraph of targets) paragraph.readingOrder = 'RightToLeft';
+  await context.sync();
+
+  for (const paragraph of targets) paragraph.load('readingOrder');
+  await context.sync();
+  return targets.map((paragraph) => paragraph.readingOrder);
+});
+```
+
+A read returns the direction that the paragraph reads in, after its style. Writes accept only `LeftToRight` and `RightToLeft`; other values fail with `InvalidArgument`. A write of the direction that the paragraph already has changes nothing, so you can write back what you read. The write keeps `alignment` as authored: in a right-to-left paragraph, `Left` names the leading edge at the right margin. With `TrackMineOnly`, the write records a paragraph property revision.
 
 ## Insert table rows
 

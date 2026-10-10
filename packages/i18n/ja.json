@@ -414,6 +414,7 @@
       "hangingIndent": "ぶら下げインデント",
       "spaceBefore": "段落前の間隔",
       "spaceAfter": "段落後の間隔",
+      "direction": "文字列の方向",
       "default": "既定",
       "points": "pt",
       "left": "左揃え",
@@ -425,7 +426,9 @@
       "none": "なし",
       "single": "一重線",
       "double": "二重線",
-      "auto": "自動"
+      "auto": "自動",
+      "rtl": "右から左へ",
+      "ltr": "左から右へ"
     },
     "structuralDetails": {
       "rowInsert": "表の行を挿入",

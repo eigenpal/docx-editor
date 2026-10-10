@@ -112,6 +112,17 @@ export interface FieldAtomMarker {
    * first fragment, gated per field on the calibration verdict.
    */
   readonly pageRef?: PageRefFieldProjection;
+  /**
+   * The first model offset of the editable saved result this piece belongs to.
+   *
+   * Present only when saved results are laid out as text (`fieldResults: 'editable'`). The
+   * result is ordinary text then, so its pieces have their own offsets; every piece of one
+   * result shares this value, which keeps a multi-run link result one anchor and lets the
+   * caret find the whole result it is in.
+   */
+  readonly resultStart?: number;
+  /** The model offset just past the same result, beside {@link resultStart}. */
+  readonly resultEnd?: number;
 }
 
 /**
@@ -463,6 +474,8 @@ export interface PendingFieldProjection {
   atomic: boolean;
   /** True when this closed FORMTEXT field exposes its authored result as ordinary text. */
   editableResult: boolean;
+  /** True when this closed field's saved result is laid out as text (`fieldResults` mode). */
+  savedResult: boolean;
   atomStart: number;
   props: readonly OoxmlProperty[];
   style: ResolvedRunStyle;

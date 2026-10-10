@@ -81,6 +81,7 @@ export async function inspectDocument(
           'lineSpacing',
           'spaceBefore',
           'spaceAfter',
+          'readingOrder',
         ]);
         p.font.load([
           'bold',
@@ -111,6 +112,7 @@ export async function inspectDocument(
           lineSpacing: p.lineSpacing,
           spaceBefore: p.spaceBefore,
           spaceAfter: p.spaceAfter,
+          readingOrder: p.readingOrder,
           font: {
             bold: p.font.bold,
             italic: p.font.italic,

@@ -784,6 +784,11 @@ function applyFieldShading(element: HTMLElement, span: StyleSpanRecord, ctx: Pai
   // Marked whatever the mode, because the mode is a VIEW setting a host can flip without
   // relaying out, and because the review surface and tests want to find fields regardless.
   element.dataset.fieldAtom = field.formField ? 'form' : 'field';
+  // An editable saved result spans several pieces; the caret shades all of them together.
+  if (field.resultStart !== undefined && field.resultEnd !== undefined) {
+    element.dataset.fieldResultStart = String(field.resultStart);
+    element.dataset.fieldResultEnd = String(field.resultEnd);
+  }
   const shaded = field.formField
     ? ctx.shadeFormFields !== false
     : (ctx.fieldShading ?? DEFAULT_FIELD_SHADING) !== 'never';
@@ -1220,14 +1225,16 @@ function paintLine(
     // same model offset. Two adjacent fields share one content-keyed id when their targets
     // match, so keying on the id alone would merge two discrete links into one anchor a screen
     // reader announces once. Keying on the offset too keeps each field its own link unit while
-    // still letting one field's wrapped or space-split result stay a single anchor.
+    // still letting one field's wrapped or space-split result stay a single anchor. A result
+    // laid out as editable text spans several offsets, so its pieces share `resultStart`.
     if (span.fieldAtom) {
+      const fieldStart = fieldAnchorStart(span);
       const sameField =
-        anchor !== null && anchorLinkId === link.id && anchorFieldStart === span.range.start;
+        anchor !== null && anchorLinkId === link.id && anchorFieldStart === fieldStart;
       if (!sameField) {
         anchor = paintHyperlinkAnchor(document, link, ctx);
         anchorLinkId = link.id;
-        anchorFieldStart = span.range.start;
+        anchorFieldStart = fieldStart;
         element.append(anchor);
       }
       anchor!.append(painted);
@@ -1351,7 +1358,12 @@ function sharesAnchor(a: StyleSpanRecord, b: StyleSpanRecord): boolean {
   if (!a.link && !b.link) return true;
   if (!a.link || !b.link || a.link.id !== b.link.id) return false;
   if (Boolean(a.fieldAtom) !== Boolean(b.fieldAtom)) return false;
-  return !a.fieldAtom || a.range.start === b.range.start;
+  return !a.fieldAtom || fieldAnchorStart(a) === fieldAnchorStart(b);
+}
+
+/** The model offset that identifies a field's link anchor: its result's start, or its unit. */
+function fieldAnchorStart(span: StyleSpanRecord): number {
+  return span.fieldAtom?.resultStart ?? span.range.start;
 }
 
 function paintFragment(
@@ -1695,6 +1707,7 @@ function paintParagraphBorder(
 import { applyParagraphBorderStyle, isCompoundParagraphBorder } from './border-stroke-paint.ts';
 import { paintPageBorderFrame } from './page-border-paint.ts';
 import { applyCellBorders } from './semantic-paint-table-borders.ts';
+import { markTrackedRow } from './table-row-revision-paint.ts';
 import { sameDataWithin } from './semantic-paint-record-equality.ts';
 import { tableCellContentHost } from './table-cell-text-direction-paint.ts';
 
@@ -1778,20 +1791,7 @@ function paintTableRow(
   const scale = ctx.scale;
   const rowElement = positioned(document, 'div', row.box, scale);
   rowElement.className = 'docx-table-row';
-  if (row.revisionKind) {
-    if (ctx.revisionMarkup) rowElement.style.backgroundColor = 'transparent';
-    rowElement.classList.add(
-      'docx-table-row--revision',
-      row.revisionKind === 'insert' ? 'layout-revision-ins' : 'layout-revision-del'
-    );
-    // The same attribution datasets revision SPANS carry, so chrome that maps a hovered
-    // element to its review decision treats a tracked row like any other tracked change.
-    // Dataset assignment escapes; the values are attacker-controlled and never markup.
-    rowElement.dataset.revisionKind = row.revisionKind;
-    if (row.revisionId !== undefined) rowElement.dataset.revisionId = row.revisionId;
-    if (row.revisionAuthor !== undefined) rowElement.dataset.reviewAuthor = row.revisionAuthor;
-    if (row.revisionDate !== undefined) rowElement.dataset.revisionDate = row.revisionDate;
-  }
+  markTrackedRow(rowElement, row, !!ctx.revisionMarkup);
   rowElement.dataset.rowId = row.id;
   if (row.isHeaderRepeat) rowElement.dataset.headerRepeat = 'true';
   rowElement.style.left = `${(row.box.x - fragment.box.x) * scale}px`;

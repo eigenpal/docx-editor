@@ -14,6 +14,7 @@ interface InspectionRecord {
   replies: { text: string }[];
   resolved: boolean;
   orientation: string;
+  readingOrder: string;
 }
 
 async function host() {
@@ -87,6 +88,31 @@ test('clears highlighting through public font writes in both editing modes', asy
           reopened.dispose();
         }
       }
+    } finally {
+      runtime.dispose();
+    }
+  }
+});
+
+test('sets a right-to-left paragraph direction in both editing modes and reads it back', async () => {
+  for (const mode of ['direct', 'suggest'] as const) {
+    const runtime = await host();
+    try {
+      const [first] = await read(runtime);
+      expect(first!.readingOrder).toBe('LeftToRight');
+      await call(
+        runtime,
+        'format_document',
+        {
+          targets: [{ paragraphId: first!.id }],
+          changes: [{ property: 'readingOrder', value: 'RightToLeft' }],
+        },
+        mode
+      );
+      expect((await read(runtime))[0]!.readingOrder).toBe('RightToLeft');
+      const saved = await xml(runtime);
+      expect(saved).toContain('<w:bidi/>');
+      if (mode === 'suggest') expect(saved).toContain('<w:pPrChange');
     } finally {
       runtime.dispose();
     }

@@ -250,7 +250,15 @@ export class Range extends ModelObject implements PromisedItem {
     return created;
   }
 
-  /** Delete range content. Tracking supports adjacent sibling paragraphs outside collaboration. */
+  /**
+   * Delete range content.
+   *
+   * With `TrackMineOnly`, text becomes deleted runs and each paragraph mark the range covers
+   * becomes a deleted paragraph mark, also in collaboration. Marks that `Paragraph.delete()`
+   * refuses to strike refuse here with the same codes. A tracked deletion or replacement that
+   * starts a paragraph whose previous mark you already proposed deleting refuses with
+   * `NotImplemented`.
+   */
   delete(): void {
     this.requireUsablePath();
     this.commandDiscarding('delete', () => ({ op: 'replaceSpan', span: this.#span(), text: '' }));

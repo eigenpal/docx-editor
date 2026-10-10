@@ -300,6 +300,18 @@ export function createNodeIdAllocator(
   part: OoxmlPart,
   family: 'new' | 'paste' = 'new'
 ): () => string {
+  return allocatorIn(part, family);
+}
+
+/**
+ * Ids for the property containers a paragraph-mark stamp creates. Resolving the mark removes
+ * containers of this family only, so containers the source already had stay.
+ */
+export function createMarkContainerIdAllocator(part: OoxmlPart): () => string {
+  return allocatorIn(part, 'mark');
+}
+
+function allocatorIn(part: OoxmlPart, family: string): () => string {
   const index = nodeIndexFor(part.root);
   const minted = new Set<string>();
   let counter = index.mintState.frontier;

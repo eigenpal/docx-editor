@@ -6,6 +6,7 @@
 // geometry memoizes per page object — a typing pass that reuses 675 of 677 pages walks the
 // spans of the two pages it rebuilt, not the whole document.
 
+import { FieldResultsModeMemo } from '../store/package/field-result-mode.ts';
 import type {
   OoxmlElement,
   OoxmlNode,
@@ -69,7 +70,8 @@ export interface CollectedControlIndex {
   readonly neededToken: string;
 }
 
-const collectedControlIndexes = new WeakMap<OoxmlPart, CollectedControlIndex>();
+/** Control ranges are model offsets: each field-result mode keeps its own entries. */
+const collectedControlIndexes = new FieldResultsModeMemo<OoxmlPart, CollectedControlIndex>();
 
 /** Same references, same order — the identity comparison every retained memo here uses. */
 export function sameRefs<T>(left: readonly T[], right: readonly T[]): boolean {
@@ -93,7 +95,7 @@ export function sameRefs<T>(left: readonly T[], right: readonly T[]): boolean {
  * anchor idiom). An edit to the first block itself only misses once, never mixes — the
  * lists are still compared reference-for-reference.
  */
-const collectedIndexByAnchor = new WeakMap<
+const collectedIndexByAnchor = new FieldResultsModeMemo<
   OoxmlNode,
   {
     readonly lists: readonly (readonly CollectedControl[])[];
@@ -293,7 +295,7 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
   return lists;
 }
 
-const topLevelBlockControls = new WeakMap<OoxmlNode, readonly CollectedControl[]>();
+const topLevelBlockControls = new FieldResultsModeMemo<OoxmlNode, readonly CollectedControl[]>();
 
 interface PlacedBlockBox {
   readonly pageIndex: number;
