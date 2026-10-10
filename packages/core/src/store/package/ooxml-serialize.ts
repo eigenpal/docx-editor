@@ -624,6 +624,13 @@ export interface CanonicalTreeDifference {
   readonly paragraphIds: readonly string[];
   /** True when every node pair the walk compared carried the same canonical id. */
   readonly idsPreserved: boolean;
+  /**
+   * Paragraph ids from `next` whose content kept its shape but changed ids, and whether an
+   * id changed anywhere else. A collaboration view renames inline ids it shares with another
+   * paragraph, and the editor has to take those ids even when the content is equal.
+   */
+  readonly renamedParagraphIds: readonly string[];
+  readonly renamedOutsideParagraphs: boolean;
   /** Node pairs the walk compared. An identity-equal subtree counts as one. */
   readonly visited: number;
 }
@@ -653,6 +660,8 @@ interface DifferenceWalk {
   reach: CanonicalDifferenceReach;
   idsPreserved: boolean;
   readonly paragraphIds: Set<string>;
+  readonly renamedParagraphIds: Set<string>;
+  renamedOutsideParagraphs: boolean;
 }
 
 function namespaceBindingsMatch(left: OoxmlElement, right: OoxmlElement): boolean {
@@ -771,6 +780,12 @@ function diffNodes(
   // An identity match is only sound because every ancestor pair matched: the inherited
   // bindings and `xml:space` state both sides carry into this subtree are the same.
   if (left === right) return;
+  if (left.id !== right.id) {
+    walk.idsPreserved = false;
+    if (paragraphId !== null && left.kind !== 'paragraph')
+      walk.renamedParagraphIds.add(paragraphId);
+    else walk.renamedOutsideParagraphs = true;
+  }
   if (left.kind === 'textValue') {
     if (right.kind !== 'textValue') {
       recordDifference(walk, paragraphId, 'paragraph-content');
@@ -789,7 +804,6 @@ function diffNodes(
     recordDifference(walk, paragraphId, 'paragraph-content');
     return;
   }
-  if (left.id !== right.id) walk.idsPreserved = false;
   if (
     left.kind !== right.kind ||
     left.namespaceUri !== right.namespaceUri ||
@@ -860,6 +874,8 @@ export function canonicalTreeDifference(
     reach: 'equal',
     idsPreserved: true,
     paragraphIds: new Set<string>(),
+    renamedParagraphIds: new Set<string>(),
+    renamedOutsideParagraphs: false,
   };
   diffNodes(
     'root' in previous ? previous.root : previous,
@@ -876,6 +892,8 @@ export function canonicalTreeDifference(
     reach: walk.reach,
     paragraphIds: [...walk.paragraphIds],
     idsPreserved: walk.idsPreserved,
+    renamedParagraphIds: [...walk.renamedParagraphIds],
+    renamedOutsideParagraphs: walk.renamedOutsideParagraphs,
     visited: walk.visited,
   };
 }

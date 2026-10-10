@@ -12,3 +12,11 @@ export async function redlineFirstMatch(): Promise<void> {
     await context.sync();
   });
 }
+
+export async function proposeParagraphRemoval(): Promise<void> {
+  await DocxEditor.run(async (context) => {
+    context.document.changeTrackingMode = 'TrackMineOnly';
+    context.document.body.paragraphs.getFirst().delete();
+    await context.sync();
+  });
+}

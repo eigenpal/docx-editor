@@ -96,4 +96,20 @@ describe('collaboration resource usage', () => {
     // observer the probe registered.
     expect(nodesMap._eH.l.length + nodesMap._dEH.l.length).toBe(observersBefore);
   });
+
+  test('formatting markers left by deleted formatted text show in the reading', async () => {
+    // Deleting text never removes its formatting markers, so the reading is how a host sees
+    // that growth.
+    const { alice } = await harness.pair(collaborationDocx());
+    const before = alice.room.session.resourceUsage().formattingMarkers;
+    const paragraphId = harness.paragraphIdAt(alice, 0);
+    for (let round = 0; round < 5; round += 1) {
+      harness.apply(alice, [{ op: 'insertText', paragraphId, offset: 0, text: 'bold ' }]);
+      harness.apply(alice, [
+        { op: 'setRunProperties', paragraphId, start: 0, end: 4, properties: [{ localName: 'b' }] },
+      ]);
+      harness.apply(alice, [{ op: 'deleteText', paragraphId, start: 0, end: 5 }]);
+    }
+    expect(alice.room.session.resourceUsage().formattingMarkers).toBeGreaterThan(before);
+  });
 });

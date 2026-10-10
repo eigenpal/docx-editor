@@ -1,4 +1,5 @@
 import { createEditorEvents } from './editor-events.ts';
+import { surfaceFieldResultsScope } from './field-results-scope.ts';
 import { createRevisionMarkupState } from './revision-markup-state.ts';
 import { withDisplayedHyphens } from '../store/package/hyphen-text.ts';
 import { queryEditorDocument } from './docx-editor-query.ts';
@@ -476,6 +477,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     throw new TypeError('Invalid reviewDisplayMode');
   if (config.reviewDisplayMode && config.reviewDisplayMode !== 'proposed' && !reviewEnabled)
     throw new TypeError('reviewDisplayMode requires a review module');
+  // Refused, not approximated: a collaboration session shares one unit per field.
+  const fieldScope = surfaceFieldResultsScope({
+    fieldResults: config.fieldResults,
+    collaborationModel: modules.collaboration ?? undefined,
+  });
   const paragraphMarks = createEditorParagraphMarks((visible) => {
     surface?.setShowParagraphMarks(visible);
     bump();
@@ -630,6 +636,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         : {}),
       ...(config.imageDecodePort ? { imageDecodePort: config.imageDecodePort } : {}),
       ...(modules.collaboration ? { collaborationModel: modules.collaboration } : {}),
+      ...(fieldScope.mode === 'editable' ? { fieldResults: fieldScope.mode } : {}),
       // Read through the holder rather than captured: the popover mounts AFTER the editor
       // exists (the provider-first shape), and a document that reloads must not leave the
       // host's chrome wired to the surface it replaced.
@@ -2639,5 +2646,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       openScheduler.cancel();
     },
   });
-  return editor;
+  // Host calls read and write saved field results in this editor's mode.
+  return fieldScope.methods(editor);
 }

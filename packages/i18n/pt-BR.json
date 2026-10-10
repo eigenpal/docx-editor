@@ -599,6 +599,7 @@
       "center": "Centralizado",
       "color": "Cor da fonte",
       "default": "Padrão",
+      "direction": "Direção do texto",
       "double": "Duplo",
       "end": "Fim",
       "firstLineIndent": "Recuo da primeira linha",
@@ -608,6 +609,7 @@
       "italic": "Itálico",
       "left": "Esquerda",
       "leftIndent": "Recuo esquerdo",
+      "ltr": "Da esquerda para a direita",
       "none": "Nenhum",
       "notBold": "Sem negrito",
       "notItalic": "Sem itálico",
@@ -615,6 +617,7 @@
       "points": "pt",
       "right": "Direita",
       "rightIndent": "Recuo direito",
+      "rtl": "Da direita para a esquerda",
       "single": "Simples",
       "spaceAfter": "Espaço depois",
       "spaceBefore": "Espaço antes",
@@ -860,7 +863,20 @@
   },
   "collaboration": {
     "moreParticipants": "{count, plural, one {mais # pessoa} other {mais # pessoas}}",
-    "participants": "Pessoas neste documento"
+    "participants": "Pessoas neste documento",
+    "status": {
+      "connecting": "Conectando ao documento…",
+      "editRefused": "Não foi possível compartilhar sua última alteração, por isso ela foi desfeita.",
+      "offline": "Offline. Você pode continuar editando; suas alterações serão sincronizadas quando a conexão voltar.",
+      "outOfSync": "Esta cópia está fora de sincronia com o documento compartilhado.",
+      "rejoin": "Entrar novamente",
+      "syncing": "Atualizando com as alterações mais recentes…",
+      "waiting": "Aguardando as alterações mais recentes…",
+      "stalled": "As alterações mais recentes não chegaram. Entre novamente para carregar o documento compartilhado.",
+      "offlinePaused": "Offline. A edição será retomada quando a conexão voltar.",
+      "upgradeRequired": "Este aplicativo e o documento compartilhado usam versões de colaboração diferentes. Salve uma cópia e fale com o administrador.",
+      "newRoomRequired": "Este documento compartilhado não pode continuar. Salve uma cópia e compartilhe-a novamente."
+    }
   },
   "textFormField": {
     "apply": "OK",

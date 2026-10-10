@@ -56,6 +56,12 @@ const MAX_CHUNKS_PER_MESSAGE = 8192;
 const MAX_PARTIAL_MESSAGES = 4;
 
 /**
+ * The bytes all incomplete messages may hold together: one message of the largest size a
+ * sender frames. A peer that opens several large messages at once cannot multiply it.
+ */
+const MAX_PARTIAL_BYTES = MAX_CHUNKS_PER_MESSAGE * PAYLOAD_BYTES;
+
+/**
  * Drop an incomplete message that has gone quiet. A live transfer resets this
  * on every frame. A dropped peer does not, and Yjs will not apply later
  * updates that depend on the missing payload.
@@ -68,6 +74,7 @@ export interface ChunkablePeer {
   push(data: Uint8Array): void;
   _onChannelMessage(event: { readonly data: unknown }): void;
   readonly destroyed?: boolean;
+  destroy?(): void;
   readonly _channel?: { readonly bufferedAmount: number } | null;
 }
 
@@ -75,6 +82,10 @@ export interface ChunkablePeer {
 export interface ChunkedFramingOptions {
   readonly partialTimeoutMs?: number;
   readonly onAbandonedMessage?: () => void;
+  /** A chunked message arrived whole, so this link carries large updates again. */
+  readonly onDeliveredMessage?: () => void;
+  /** The bytes incomplete messages may hold together. Tests lower it. */
+  readonly maxPartialBytes?: number;
 }
 
 interface PartialMessage {
@@ -133,19 +144,30 @@ export function installChunkedFraming(peer: ChunkablePeer, options?: ChunkedFram
       ? requestedTimeout
       : DEFAULT_PARTIAL_IDLE_MS;
   const onAbandonedMessage = options?.onAbandonedMessage;
+  const onDeliveredMessage = options?.onDeliveredMessage;
+  const maxPartialBytes = Math.min(options?.maxPartialBytes ?? Infinity, MAX_PARTIAL_BYTES);
 
   const queue: Uint8Array[] = [];
   const partials = new Map<number, PartialMessage>();
   let draining = false;
   let nextMessageId = 1;
+  let partialBytes = 0;
+
+  const forget = (messageId: number, partial: PartialMessage): void => {
+    if (partial.timer !== undefined) clearTimeout(partial.timer);
+    partials.delete(messageId);
+    partialBytes -= partial.bytes;
+  };
 
   const abandon = (messageId: number): void => {
     const partial = partials.get(messageId);
     if (!partial) return;
-    if (partial.timer !== undefined) clearTimeout(partial.timer);
-    partials.delete(messageId);
+    forget(messageId, partial);
     if (peer.destroyed === true) return;
     onAbandonedMessage?.();
+    // Yjs will not apply later updates that depend on the lost payload, so this connection
+    // can only drift. Closing it makes y-webrtc reconnect and run a fresh sync.
+    peer.destroy?.();
   };
 
   const watchIdle = (messageId: number): void => {
@@ -180,7 +202,12 @@ export function installChunkedFraming(peer: ChunkablePeer, options?: ChunkedFram
     const messageId = nextMessageId;
     nextMessageId = (nextMessageId + 1) >>> 0 || 1;
     for (let index = 0; index < count; index += 1) {
-      if (!(await waitForCapacity())) return;
+      if (!(await waitForCapacity())) {
+        // A channel that never drains would leave the receiver with half a message. Close it
+        // so the peers reconnect and resync, rather than drop the rest of this update.
+        if (peer.destroyed !== true) peer.destroy?.();
+        return;
+      }
       const start = index * PAYLOAD_BYTES;
       const payload = message.subarray(start, Math.min(start + PAYLOAD_BYTES, message.byteLength));
       const frame = new Uint8Array(HEADER_BYTES + payload.byteLength);
@@ -227,6 +254,11 @@ export function installChunkedFraming(peer: ChunkablePeer, options?: ChunkedFram
     const index = readUint32(data, 5);
     const count = readUint32(data, 9);
     if (count === 0 || count > MAX_CHUNKS_PER_MESSAGE || index >= count) return;
+    // A sender frames no larger message: a bigger frame is no frame of this shim.
+    if (data.byteLength > FRAME_BYTES) {
+      abandon(messageId);
+      return;
+    }
 
     let partial = partials.get(messageId);
     if (!partial) {
@@ -249,13 +281,17 @@ export function installChunkedFraming(peer: ChunkablePeer, options?: ChunkedFram
     partial.chunks[index] = payload;
     partial.received += 1;
     partial.bytes += payload.byteLength;
+    partialBytes += payload.byteLength;
+    if (partialBytes > maxPartialBytes) {
+      abandon(messageId);
+      return;
+    }
     if (partial.received !== partial.count) {
       watchIdle(messageId);
       return;
     }
 
-    if (partial.timer !== undefined) clearTimeout(partial.timer);
-    partials.delete(messageId);
+    forget(messageId, partial);
     const message = new Uint8Array(partial.bytes);
     let offset = 0;
     for (const chunk of partial.chunks) {
@@ -265,6 +301,7 @@ export function installChunkedFraming(peer: ChunkablePeer, options?: ChunkedFram
     }
     if (peer.destroyed === true) return;
     peer.push(message);
+    onDeliveredMessage?.();
   };
 }
 

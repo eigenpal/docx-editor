@@ -62,6 +62,8 @@ export function supportsTrackedAutomationOperation(operation: AutomationOperatio
   if (operation.op === 'insertTable' || operation.op === 'insertTableRows') return true;
   if (operation.op === 'updateTable' || operation.op === 'updateTableCell') return true;
   if (operation.op === 'replaceSpan' && !('body' in operation.span)) return true;
+  // Strikes the paragraph's text and mark; the planner refuses a paragraph with no next one.
+  if (operation.op === 'deleteParagraph') return true;
   return [
     'insertContentControl',
     'setContentControlProperties',

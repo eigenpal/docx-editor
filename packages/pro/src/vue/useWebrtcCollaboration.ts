@@ -7,7 +7,9 @@ import {
   computed,
   getCurrentInstance,
   readonly,
+  shallowRef,
   toValue,
+  watch,
   type MaybeRefOrGetter,
   type Ref,
 } from 'vue';
@@ -18,7 +20,7 @@ import type {
   CollaborationIdentity,
 } from '@docx-editor.dev/core/collaboration';
 import type { EditorModule } from '@docx-editor.dev/core/editor';
-import type { CollaborationBootstrap, CollaborationSession } from '../collaboration/session.ts';
+import type { CollaborationBootstrap, CollaborationSession } from '../collaboration/types.ts';
 import {
   EMPTY_MODULES,
   useCollaborationRoom,
@@ -32,22 +34,31 @@ export type UseWebrtcCollaborationBootstrap = CollaborationBootstrap;
 
 /** Arguments for {@link UseWebrtcCollaborationReturn.connect}. @public */
 export interface UseWebrtcCollaborationConnectOptions {
+  /** Room id shared by every peer. Make one with `createCollaborationRoomId`. */
   readonly roomId: string;
+  /** The local participant. Recorded as the author of this replica's changes. */
   readonly identity: CollaborationIdentity;
+  /** Whether to seed the room, join it, or let the peers decide. */
   readonly bootstrap: UseWebrtcCollaborationBootstrap;
   /**
    * Admit local edits while the transport is `disconnected`. Buffered updates merge on
-   * reconnect. See {@link CreateDocumentCollaborationOptions.offlineEditing}.
+   * reconnect. On by default; pass `false` to pause editing while disconnected. See
+   * {@link CreateDocumentCollaborationOptions.offlineEditing}.
    */
   readonly offlineEditing?: boolean;
+  /** Signaling server URLs. Omitted, the room uses the public demo endpoints and warns once. */
   readonly signaling?: readonly string[];
+  /** STUN and TURN servers for the peer connections. Pass TURN servers in production. */
   readonly iceServers?: readonly RTCIceServer[];
+  /** Signaling encryption key. Every peer passes the same value. */
   readonly password?: string;
 }
 
 interface WebrtcRoomHandle extends CollaborationRoomHandle {
   readonly ydoc?: Y.Doc;
   readonly provider?: WebrtcProvider;
+  unsyncedChanges?(): number;
+  subscribeUnsyncedChanges?(listener: () => void): () => void;
 }
 
 type WebrtcCreateRoom = (
@@ -77,14 +88,19 @@ export interface UseWebrtcCollaborationOptions {
   /**
    * Connect this room when the composable starts. Omit it and call
    * {@link UseWebrtcCollaborationReturn.connect} after the user chooses a room.
+   * A different room, server, bootstrap kind, or `actorId` leaves the old room and
+   * connects the new one, and `null` leaves. A room opened with `connect` stays.
    */
   readonly room?: UseWebrtcCollaborationConnectOptions | null;
 }
 
 /** Values {@link useWebrtcCollaboration} returns. @public */
 export interface UseWebrtcCollaborationReturn {
+  /** The room's document as `.docx` bytes to mount. Null until the room is ready. */
   readonly document: Readonly<Ref<Uint8Array | null>>;
+  /** Modules to pass to the editor. They include the collaboration module once ready. */
   readonly modules: Readonly<Ref<readonly EditorModule[]>>;
+  /** The live session for status and presence. Null while no room is connected. */
   readonly session: Readonly<Ref<CollaborationSession | null>>;
   /**
    * The room's shared Yjs document, owned by the composable. Null while no room is
@@ -101,7 +117,15 @@ export interface UseWebrtcCollaborationReturn {
    * introspection). The composable destroys it on leave and unmount.
    */
   readonly provider: Readonly<Ref<WebrtcProvider | null>>;
+  /** True while a connect is in progress. */
   readonly pending: Readonly<Ref<boolean>>;
+  /**
+   * Local changes no peer has received: made while no peer was connected, and not synced
+   * since. A WebRTC room has no server, so these changes exist only in this browser, and
+   * closing the page loses them. Warn before the page closes while it is above zero.
+   */
+  readonly unsyncedChanges: Readonly<Ref<number>>;
+  /** The connect failure or session failure, or null. Check it before `document`. */
   readonly error: Readonly<Ref<CollaborationFailure | null>>;
   /**
    * Connect a room. RESOLVES with the failure, or null on success — it does not reject.
@@ -117,8 +141,9 @@ export interface UseWebrtcCollaborationReturn {
    * Destroy the room and carry on editing locally.
    *
    * The current bytes live in the editor, not in this composable, so the argument is
-   * required: pass `await editor.save()` to keep what the room typed. The host remounts the
-   * editor from exactly these bytes.
+   * required: pass the bytes `editor.save()` resolves with, as `new Uint8Array(saved)` after
+   * a `null` check, to keep what the room typed. The host remounts the editor from exactly
+   * these bytes.
    */
   readonly leave: (nextDocument: Uint8Array) => void;
   /**
@@ -126,7 +151,7 @@ export interface UseWebrtcCollaborationReturn {
    * again to the same room with the same identity, signaling, and password.
    *
    * The reconnect always uses bootstrap `{ kind: 'join' }`, because an active room still
-   * exists on the other peers. When no peer holds the room any more, the join rejects with
+   * exists on the other peers. When no peer holds the room any more, the rejoin resolves with
    * `initialization-timeout` — nothing is lost, because `nextDocument` (your saved bytes)
    * stays mounted locally. A connect that failed also counts as the prior attempt, so
    * rejoin retries it as a joiner.
@@ -182,6 +207,19 @@ export function useWebrtcCollaboration(
     identityOf: (room) => room.identity,
   });
 
+  const unsyncedChanges = shallowRef(0);
+  watch(
+    () => state.room.value,
+    (room, _previous, onCleanup) => {
+      unsyncedChanges.value = room?.unsyncedChanges?.() ?? 0;
+      const unsubscribe = room?.subscribeUnsyncedChanges?.(() => {
+        unsyncedChanges.value = room.unsyncedChanges?.() ?? 0;
+      });
+      if (unsubscribe) onCleanup(unsubscribe);
+    },
+    { immediate: true }
+  );
+
   return {
     document: readonly(state.document),
     modules: readonly(state.modules),
@@ -189,6 +227,7 @@ export function useWebrtcCollaboration(
     ydoc: computed(() => state.room.value?.ydoc ?? null),
     provider: computed(() => state.room.value?.provider ?? null),
     pending: readonly(state.pending),
+    unsyncedChanges: readonly(unsyncedChanges),
     error: readonly(state.error),
     connect: state.connect,
     leave: state.leave,

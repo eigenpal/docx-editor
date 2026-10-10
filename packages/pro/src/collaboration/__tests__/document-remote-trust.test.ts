@@ -14,6 +14,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import * as Y from 'yjs';
 import { strToU8, zipSync } from 'fflate';
 import { CT, R, REL, createPeerHarness, type Peer } from './document-peer-support.ts';
+import { INLINE_FIELD } from '../document/paragraph-text.ts';
 import {
   NODE_CHILDREN_FIELD,
   NODE_INITIAL_SHELL_FIELD,
@@ -23,6 +24,7 @@ import {
   makePartEntry,
   unpackNodeShell,
 } from '../document/schema.ts';
+import { asLogicalId } from '../document/identity.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
@@ -131,7 +133,7 @@ describe('remote updates are held to the same limits as local writes', () => {
       for (let index = 0; index < 600; index += 1) {
         parts.set(
           `/word/flood${index}.xml`,
-          makePartEntry(`f${index}`, 'AAAAAAAA', 'application/xml')
+          makePartEntry(`f${index}`, asLogicalId('AAAAAAAA'), 'application/xml')
         );
       }
     });
@@ -149,7 +151,7 @@ describe('remote updates are held to the same limits as local writes', () => {
       for (let index = 0; index < 600; index += 1) {
         parts.set(
           `/word/flood${index}.xml`,
-          makePartEntry(`f${index}`, 'AAAAAAAA', 'application/xml')
+          makePartEntry(`f${index}`, asLogicalId('AAAAAAAA'), 'application/xml')
         );
       }
     });
@@ -204,8 +206,8 @@ describe('media bytes are verified against their digest, not trusted by it', () 
   });
 });
 
-describe('a repair that drops content leaves ready', () => {
-  test('a child id that names no record is reported, not silently skipped', async () => {
+describe('references a replica cannot resolve yet', () => {
+  test('a child whose record has not arrived stays pending and keeps the room ready', async () => {
     const { alice, bob } = await harness.pair(plainDocx());
     expect(bob.room.session.status()).toBe('ready');
 
@@ -217,11 +219,110 @@ describe('a repair that drops content leaves ready', () => {
       children.push(['ZZZZZZZZ']);
     });
 
-    // The materializer skips the unknown child and records the issue. Dropping that list was
-    // what made this silent: the document is short a child and every replica said `ready`.
+    // A peer can list a child before the child's record reaches this replica, and Yjs keeps
+    // updates with missing dependencies pending rather than failing. The replica does the
+    // same: it shows everything it can resolve, stays `ready`, and shows the child if its
+    // record arrives. One unknown id no longer ends the session for the whole room.
+    expect(alice.room.session.status()).toBe('ready');
+    expect(bob.room.session.status()).toBe('ready');
+    harness.expectConverged(alice, bob);
+  });
+
+  test('an update that cannot materialize pauses editing and heals on the next clean one', async () => {
+    const { alice, bob } = await harness.pair(plainDocx());
+    const paragraphId = anyParagraphLogicalId(alice.ydoc);
+    const record = alice.ydoc.getMap<Y.Map<unknown>>(PACKAGE_NODES_KEY).get(paragraphId)!;
+    const field = record.has(NODE_SHELL_FIELD) ? NODE_SHELL_FIELD : NODE_INITIAL_SHELL_FIELD;
+    const shell = record.get(field);
+
+    alice.ydoc.transact(() => record.set(field, 42));
+    // The replica keeps its last good document and stops accepting edits for now.
     expect(bob.room.session.status()).toBe('error');
-    expect(reason(bob)).toBe('materialize-dropped-content');
-    expect(detail(bob)).toContain('child-id-not-in-registry');
+    expect(reason(bob)).toBeDefined();
+
+    // Yjs editors never end on one bad update: the next one that completes the state heals.
+    alice.ydoc.transact(() => record.set(field, shell));
+    expect(bob.room.session.status()).toBe('ready');
+    const id = harness.paragraphIdAt(bob, 0);
+    harness.apply(bob, [{ op: 'insertText', paragraphId: id, offset: 0, text: 'Healed ' }]);
+    harness.expectConverged(alice, bob);
+  });
+
+  test('a degraded replica that goes offline heals to disconnected, not ready', async () => {
+    const { alice, bob } = await harness.pair(plainDocx());
+    const paragraphId = anyParagraphLogicalId(alice.ydoc);
+    const record = alice.ydoc.getMap<Y.Map<unknown>>(PACKAGE_NODES_KEY).get(paragraphId)!;
+    const field = record.has(NODE_SHELL_FIELD) ? NODE_SHELL_FIELD : NODE_INITIAL_SHELL_FIELD;
+    const shell = record.get(field);
+
+    alice.ydoc.transact(() => record.set(field, 42));
+    expect(bob.room.session.status()).toBe('error');
+    bob.room.session.setTransportStatus('disconnected');
+    expect(bob.room.session.status()).toBe('error');
+    alice.ydoc.transact(() => record.set(field, shell));
+    expect(bob.room.session.status()).toBe('disconnected');
+  });
+
+  test('text whose formatting boundary is still in flight stays visible and editable', async () => {
+    const { alice, bob, pause, resume } = await harness.pair(plainDocx());
+    // Alice italicizes "pha", so the paragraph's shared text carries a formatting boundary.
+    harness.apply(alice, [
+      {
+        op: 'setRunProperties',
+        paragraphId: harness.paragraphIdAt(alice, 0),
+        start: 2,
+        end: 5,
+        properties: [{ localName: 'i' }],
+      },
+    ]);
+    harness.expectConverged(alice, bob);
+    const nodes = alice.ydoc.getMap<Y.Map<unknown>>(PACKAGE_NODES_KEY);
+    const [, paragraph] = [...nodes.entries()].find(
+      ([, record]) => record.get(INLINE_FIELD) instanceof Y.Text
+    )!;
+    const text = paragraph.get(INLINE_FIELD) as Y.Text;
+
+    // Alice writes something Bob will not get yet, then moves the boundary. Bob gets only the
+    // move: Yjs holds it as pending until the update before it arrives.
+    pause();
+    const beforeUnrelated = Y.encodeStateVector(alice.ydoc);
+    alice.ydoc.getMap('unrelated').set('x', 1);
+    const beforeRewrite = Y.encodeStateVector(alice.ydoc);
+    alice.ydoc.transact(() => {
+      text.format(1, 1, { 'p:u': '{}' });
+    });
+    Y.applyUpdate(bob.ydoc, Y.encodeStateAsUpdate(alice.ydoc, beforeRewrite), 'relay');
+
+    // Bob still sees the text, and bolds inside the italic run three times. The splits build
+    // on the boundaries he last read, so none is refused and nothing nests.
+    expect(harness.packageOf(bob).parts.size).toBeGreaterThan(0);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      harness.apply(bob, [
+        {
+          op: 'setRunProperties',
+          paragraphId: harness.paragraphIdAt(bob, 0),
+          start: 3,
+          end: 4,
+          properties: [{ localName: 'b' }],
+        },
+      ]);
+      expect(bob.room.session.status()).toBe('ready');
+    }
+
+    // The writer's earlier update arrives; the same edit now succeeds.
+    Y.applyUpdate(bob.ydoc, Y.encodeStateAsUpdate(alice.ydoc, beforeUnrelated), 'relay');
+    resume();
+    harness.apply(bob, [
+      {
+        op: 'setRunProperties',
+        paragraphId: harness.paragraphIdAt(bob, 0),
+        start: 3,
+        end: 4,
+        properties: [{ localName: 'b' }],
+      },
+    ]);
+    expect(bob.room.session.status()).toBe('ready');
+    harness.expectConverged(alice, bob);
   });
 
   test('an ordinary edit keeps the session ready', async () => {

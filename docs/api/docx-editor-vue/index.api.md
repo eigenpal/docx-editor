@@ -66,6 +66,7 @@ import { EditorQuery } from '@docx-editor.dev/core/contracts/editor';
 import { EditorScope } from '@docx-editor.dev/core/contracts/editor';
 import { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { ExecResult } from '@docx-editor.dev/core/contracts/editor';
+import { FieldResultsMode } from '@docx-editor.dev/core/editor';
 import { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
 import { FontConfigurationBase } from '@docx-editor.dev/core/editor';
 import { FontConfigurationFragment } from '@docx-editor.dev/core/editor';
@@ -3745,6 +3746,7 @@ export interface DocxEditorProps {
     contextMenu?: boolean | DocxEditorContextMenuProps;
     // (undocumented)
     document?: DocumentSource;
+    fieldResults?: FieldResultsMode;
     // (undocumented)
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     // (undocumented)
@@ -3920,6 +3922,10 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: undefined;
         type: PropType<DocumentSource>;
     };
+    fieldResults: {
+        default: undefined;
+        type: PropType<FieldResultsMode>;
+    };
     fonts: {
         default: undefined;
         type: PropType<DocxEditorRootProps['fonts']>;
@@ -3975,6 +3981,10 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: undefined;
         type: PropType<DocumentSource>;
     };
+    fieldResults: {
+        default: undefined;
+        type: PropType<FieldResultsMode>;
+    };
     fonts: {
         default: undefined;
         type: PropType<DocxEditorRootProps['fonts']>;
@@ -4022,6 +4032,7 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
 }>, {
     author: string;
     document: DocumentSource;
+    fieldResults: FieldResultsMode;
     fonts: _docx_editor_dev_core.FontConfiguration | _docx_editor_dev_core.FontConfigurationFragment | _docx_editor_dev_core.FontResolver | undefined;
     imageDecodePort: ImageDecodePort;
     locale: string;
@@ -4052,6 +4063,7 @@ export interface DocxEditorRootProps {
     children?: DocxEditorChildren;
     // (undocumented)
     document?: DocumentSource;
+    fieldResults?: FieldResultsMode;
     // (undocumented)
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     // (undocumented)
@@ -7061,7 +7073,5 @@ export interface VerticalRulerProps {
 }
 
 export { WORD_DEFAULT_FONT }
-
-// (No @packageDocumentation comment for this package)
 
 ```

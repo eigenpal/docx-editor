@@ -211,6 +211,8 @@ export {
 // `DocxEditorInstance.fontMeasurement()` returns it, so the lane that exports the instance
 // has to export the answer too.
 export type { FontMeasurementState } from './docx-editor-types.ts';
+// `DocxEditorConfig.fieldResults` takes it.
+export type { FieldResultsMode } from '../store/package/field-result-mode.ts';
 // Automation over an editor that is already open. The protocol itself lives in the neutral
 // automation subpath — only the adapter that needs a live editor ships from here, and only as
 // a factory: there is no composition hook a consumer could point at a second document model.

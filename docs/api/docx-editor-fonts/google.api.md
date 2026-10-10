@@ -60,6 +60,4 @@ export interface GoogleFontsOptions {
 // @public
 export type GoogleFontsResolver = ((request: FontOriginRequest) => Promise<GoogleFontsFragment>) & FontResolverMark;
 
-// (No @packageDocumentation comment for this package)
-
 ```

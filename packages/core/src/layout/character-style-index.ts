@@ -1,4 +1,8 @@
 // One bounded body walk per immutable revision; page resolution reuses these occurrences.
+import {
+  currentFieldResultsMode,
+  type FieldResultsMode,
+} from '../store/package/field-result-mode.ts';
 import type { OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import { piecesOfParagraph } from './field-projection.ts';
 import { MAX_STORY_FIELD_SCAN_DEPTH } from './field-instruction.ts';
@@ -29,7 +33,13 @@ export interface CharacterStyleIndex {
 }
 const indexes = new WeakMap<
   OoxmlPart,
-  { styles: StyleCascadeTable; mode: unknown; author: unknown; index: CharacterStyleIndex }
+  {
+    styles: StyleCascadeTable;
+    mode: unknown;
+    author: unknown;
+    fieldResults: FieldResultsMode;
+    index: CharacterStyleIndex;
+  }
 >();
 export function characterStyleIndex(
   part: OoxmlPart,
@@ -41,7 +51,8 @@ export function characterStyleIndex(
   if (
     cached?.styles === styles &&
     cached.mode === options.displayMode &&
-    cached.author === options.revisionAuthorFilter
+    cached.author === options.revisionAuthorFilter &&
+    cached.fieldResults === currentFieldResultsMode()
   )
     return cached.index;
   const byParagraph = new Map<string, Occurrence[]>();
@@ -117,6 +128,7 @@ export function characterStyleIndex(
     styles,
     mode: options.displayMode,
     author: options.revisionAuthorFilter,
+    fieldResults: currentFieldResultsMode(),
     index,
   });
   return index;

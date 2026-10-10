@@ -1303,6 +1303,7 @@ export interface DocxEditorConfig {
     author?: string;
     container?: HTMLElement;
     document?: DocumentSource;
+    fieldResults?: FieldResultsMode;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     imageDecodePort?: ImageDecodePort;
     locale?: string;
@@ -2135,6 +2136,9 @@ export interface Extent {
 }
 
 // @public
+export type FieldResultsMode = 'atomic' | 'editable';
+
+// @public
 export const FONT_RESOLVER_BRAND: unique symbol;
 
 // @public
@@ -2951,7 +2955,7 @@ export interface ReviewRevisionItem {
     // (undocumented)
     readonly date?: string;
     readonly formattingChanges?: readonly {
-        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter';
+        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter' | 'direction';
         readonly value: string | null;
     }[];
     readonly formattingKind?: string;
@@ -3501,7 +3505,5 @@ export type ZoomMode = {
     readonly minZoom?: number;
     readonly type: 'fit';
 };
-
-// (No @packageDocumentation comment for this package)
 
 ```

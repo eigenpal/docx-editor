@@ -1,0 +1,57 @@
+{
+  "config": "everything",
+  "seed": 1,
+  "replicas": 4,
+  "delivery": "peer",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "joinParagraphs",
+          "firstId": "",
+          "secondId": ""
+        },
+        "paragraphs": [0, 1]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 3,
+      "from": 0
+    },
+    {
+      "kind": "edit",
+      "replica": 3,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertTab",
+          "offset": 16
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 3
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 15
+        },
+        "paragraphs": [0]
+      }
+    }
+  ]
+}

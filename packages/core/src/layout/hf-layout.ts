@@ -2,6 +2,7 @@ import {
   readPositionedHeaderFrames,
   placePositionedHeaderFrames,
 } from './header-positioned-frames.ts';
+import { withFieldResultsProducer } from './field-results-producer.ts';
 import { characterStyleValuesToken } from './character-style-tokens.ts';
 import { characterHeaderPageToken } from './character-header-pages.ts';
 // Header/footer story layout (phase 2 of the legacy-lane retirement).
@@ -296,6 +297,7 @@ export function layoutHeaderFooterStory(
   inputs?: HeaderFooterStoryInputs
 ): HeaderFooterStoryLayout {
   if (inputs?.showFieldCodes) producer += '|field-codes';
+  producer = withFieldResultsProducer(producer);
   const revisionAuthorFilter = inputs?.revisionAuthorFilter;
   const pageFrame = readHeaderPageFrame(part);
   const positionedFrames = readPositionedHeaderFrames(part);

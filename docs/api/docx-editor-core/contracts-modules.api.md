@@ -157,7 +157,7 @@ export interface ReviewRevisionItem {
     // (undocumented)
     readonly date?: string;
     readonly formattingChanges?: readonly {
-        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter';
+        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter' | 'direction';
         readonly value: string | null;
     }[];
     readonly formattingKind?: string;
@@ -220,7 +220,5 @@ export interface RevisionMarkupDialogHost extends RevisionMarkupDialogSession {
     // (undocumented)
     readonly translate?: (key: string) => string | undefined;
 }
-
-// (No @packageDocumentation comment for this package)
 
 ```

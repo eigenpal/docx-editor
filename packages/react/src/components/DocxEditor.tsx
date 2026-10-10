@@ -255,6 +255,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
       revisionMarkup,
       onRevisionMarkupChange,
       reviewDisplayMode,
+      fieldResults,
       onReady,
       onChange,
       onFontError,
@@ -436,6 +437,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
         revisionMarkup={revisionMarkup}
         onRevisionMarkupChange={onRevisionMarkupChange}
         reviewDisplayMode={reviewDisplayMode}
+        {...(fieldResults !== undefined ? { fieldResults } : {})}
         {...(zoomMode !== undefined ? { zoomMode } : {})}
         tableInteractionLabel={tableInteractionLabel}
         {...(onReady ? { onReady } : {})}

@@ -38,6 +38,7 @@ const paragraph = (text: string, pPr = exact) =>
 const fill = (count: number) =>
   Array.from({ length: count }, (_, line) => paragraph(`line${line}`)).join('');
 const br = '<w:r><w:br w:type="page"/></w:r>';
+const breaksOnly = (count: number) => `<w:p><w:pPr>${exact}</w:pPr>${br.repeat(count)}</w:p>`;
 const leading = (text: string, pPr = exact) =>
   `<w:p><w:pPr>${pPr}</w:pPr>${br}<w:r><w:t>${text}</w:t></w:r></w:p>`;
 
@@ -136,6 +137,60 @@ describe('a paragraph that opens with a page break', () => {
     const repeated = `<w:p><w:pPr>${exact}</w:pPr>${br}${br}<w:r><w:t>after</w:t></w:r></w:p>`;
     const layout = lay(load(fill(14) + repeated + sect));
     expect(pageTexts(layout)).toEqual([lastFill(14), '', 'after']);
+  });
+
+  test('keeps the first of two breaks on a full page when no text follows them', () => {
+    const layout = lay(load(fill(14) + breaksOnly(2) + paragraph('after') + sect));
+    expect(pageTexts(layout)).toEqual([lastFill(14), '', 'after']);
+    const [first, second] = fragmentsAt(layout, 14);
+    expect(first!.page).toBe(0);
+    expect(first!.fragment.outOfFlow).toBe(true);
+    expect(second!.page).toBe(1);
+  });
+
+  test('gives each later break of a run of three its own sheet', () => {
+    const layout = lay(load(fill(14) + breaksOnly(3) + paragraph('after') + sect));
+    expect(pageTexts(layout)).toEqual([lastFill(14), '', '', 'after']);
+  });
+
+  test('keeps a page break followed by a column break on a full page', () => {
+    const columnBreak = '<w:r><w:br w:type="column"/></w:r>';
+    const breaks = `<w:p><w:pPr>${exact}</w:pPr>${br}${columnBreak}</w:p>`;
+    const layout = lay(load(fill(14) + breaks + paragraph('after') + sect));
+    expect(layout.pages).toHaveLength(3);
+    const [first] = fragmentsAt(layout, 14);
+    expect(first!.page).toBe(0);
+    expect(first!.fragment.outOfFlow).toBe(true);
+    expect(fragmentsAt(layout, 15).map(({ page }) => page)).toEqual([2]);
+  });
+
+  test('keeps the first of two breaks after a table that fills the page', () => {
+    const fullTable =
+      '<w:tbl><w:tblPr><w:tblW w:w="3000" w:type="dxa"/><w:tblCellMar>' +
+      '<w:top w:w="0" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/></w:tblCellMar></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid><w:tr><w:trPr>' +
+      '<w:trHeight w:val="5800" w:hRule="exact"/></w:trPr><w:tc>' +
+      paragraph('cell') +
+      '</w:tc></w:tr></w:tbl>';
+    const twice = lay(load(fullTable + breaksOnly(2) + paragraph('after') + sect));
+    expect(twice.pages).toHaveLength(3);
+    expect(fragmentsAt(twice, 1).map(({ page }) => page)).toEqual([0, 1]);
+    expect(fragmentsAt(twice, 2).map(({ page }) => page)).toEqual([2]);
+    // One break alone keeps the ordinary fit: its line takes the next sheet.
+    const once = lay(load(fullTable + breaksOnly(1) + paragraph('after') + sect));
+    expect(once.pages).toHaveLength(3);
+    expect(fragmentsAt(once, 1).map(({ page }) => page)).toEqual([1]);
+    expect(fragmentsAt(once, 2).map(({ page }) => page)).toEqual([2]);
+  });
+
+  test('matches a cold layout after a second break joins a lone break', () => {
+    const session = createLayoutSession();
+    for (const [revision, count] of [1, 2, 1].entries()) {
+      const part = load(fill(14) + breaksOnly(count) + paragraph('after') + sect);
+      const warm = layoutSemanticDocument(part, revision, { measurer, session });
+      expect(warm.pages).toEqual(layoutSemanticDocument(part, revision, { measurer }).pages);
+      expect(warm.pages).toHaveLength(3);
+    }
   });
 
   test('lays out the same through a retained session', () => {

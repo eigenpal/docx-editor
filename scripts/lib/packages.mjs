@@ -139,6 +139,7 @@ export const PACKAGES = [
           'CollaborationAvatar',
           'CollaborationAvatars',
           'CollaborationCaretLabels',
+          'CollaborationStatusNotice',
           'CustomNodeDefinition',
           'Editor',
           'EditorCollaborationSession',

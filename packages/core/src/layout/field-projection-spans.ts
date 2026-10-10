@@ -5,6 +5,10 @@ import { MAX_FIELD_INSTRUCTION_CHARS, MAX_FIELD_NESTING } from './field-instruct
 export interface FieldProjectionSpans {
   readonly atomBeginIds: ReadonlySet<string>;
   readonly editableResultBeginIds: ReadonlySet<string>;
+  /** Complex fields whose saved result is laid out as text (the `editable` mode). */
+  readonly savedResultBeginIds: ReadonlySet<string>;
+  /** `w:fldSimple` elements whose saved result is laid out as text (the `editable` mode). */
+  readonly savedResultSimpleIds: ReadonlySet<string>;
   readonly coveredIds: ReadonlySet<string>;
 }
 
@@ -23,9 +27,21 @@ export function fieldProjectionSpansOf(paragraph: OoxmlParagraphNode): FieldProj
       .filter((span) => span.kind === 'complex' && span.addressing === 'editable-result')
       .map((span) => span.node.id)
   );
+  const savedResultBeginIds = new Set<string>();
+  const savedResultSimpleIds = new Set<string>();
+  for (const span of fields) {
+    if (span.addressing !== 'saved-result') continue;
+    (span.kind === 'simple' ? savedResultSimpleIds : savedResultBeginIds).add(span.node.id);
+  }
   const coveredIds = new Set<string>();
   for (const span of atoms) {
     for (const id of span.removeNodeIds) coveredIds.add(id);
   }
-  return { atomBeginIds, editableResultBeginIds, coveredIds };
+  return {
+    atomBeginIds,
+    editableResultBeginIds,
+    savedResultBeginIds,
+    savedResultSimpleIds,
+    coveredIds,
+  };
 }

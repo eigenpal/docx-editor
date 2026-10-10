@@ -167,8 +167,8 @@ describe('undo obeys the operation gate', () => {
     expect(Y.encodeStateAsUpdate(peer.ydoc)).toEqual(before);
   });
 
-  test('a disconnected session without offline editing refuses undo until reconnect', async () => {
-    const peer = await createPeer();
+  test('a disconnected session with offlineEditing: false refuses undo until reconnect', async () => {
+    const peer = await createPeer({ offlineEditing: false });
     type(peer, 'undo me ');
     peer.room.session.setTransportStatus('disconnected', 'transport-disconnected', 'wire down');
     expect(peer.room.session.canUndo()).toBe(false);
@@ -178,11 +178,25 @@ describe('undo obeys the operation gate', () => {
     expect(peer.room.session.undo()).toBe(true);
   });
 
-  test('offline editing keeps undo available while disconnected', async () => {
-    const peer = await createPeer({ offlineEditing: true });
+  test('offline editing, the default, keeps undo available while disconnected', async () => {
+    const peer = await createPeer();
     type(peer, 'undo me ');
     peer.room.session.setTransportStatus('disconnected', 'transport-disconnected', 'wire down');
     expect(peer.room.session.canUndo()).toBe(true);
     expect(peer.room.session.undo()).toBe(true);
+  });
+});
+
+describe('destroy withdraws presence', () => {
+  test('only the session field leaves the awareness; host fields stay', async () => {
+    const peer = await createPeer();
+    peer.awareness.setLocalStateField('host', { cursorColor: 'teal' });
+    peer.room.destroy();
+    const state = peer.awareness.getLocalState() as Record<string, unknown> | null;
+    expect(state?.host).toEqual({ cursorColor: 'teal' });
+    // The session's own field is gone, so peers no longer list this client.
+    expect(Object.entries(state ?? {}).filter(([, value]) => value !== null)).toEqual([
+      ['host', { cursorColor: 'teal' }],
+    ]);
   });
 });

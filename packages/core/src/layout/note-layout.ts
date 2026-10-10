@@ -9,6 +9,7 @@
 // convergence counter never moves because a note changed. Resource accounting is
 // bounded: hostile note counts and over-tall flows fail closed with named reasons.
 
+import { withFieldResultsProducer } from './field-results-producer.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import {
   findNoteById,
@@ -302,7 +303,7 @@ export function layoutNoteStory(
     // exporter/browser cache can therefore only reuse them within the revision projection
     // that produced them. Keep the unfiltered default key stable, matching furniture.
     producer:
-      options.producer +
+      withFieldResultsProducer(options.producer) +
       (measureSeparatorMarkers ? '|separator-metrics' : '') +
       (options.showFieldCodes ? '|field-codes' : '') +
       (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +

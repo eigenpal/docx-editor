@@ -2,6 +2,7 @@ import type {
   RevisionMarkupOptions,
   RevisionMarkupChromeHandlers,
 } from '../contracts/revision-markup.ts';
+import type { FieldResultsMode } from '../store/package/field-result-mode.ts';
 import type { ReviewPaneOptions } from '../contracts/review-pane.ts';
 import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
 import type {
@@ -130,6 +131,20 @@ export interface DocxEditorConfig {
   revisionMarkup?: RevisionMarkupOptions;
   /** Initial review projection. Markup modes require a review module. */
   reviewDisplayMode?: ReviewDisplayMode;
+  /**
+   * How the reader edits saved field results.
+   *
+   * - `'atomic'` (the DEFAULT) — every field is one unit: typing beside a field lands before
+   *   or after it, and Backspace removes it whole.
+   * - `'editable'` — fields that show their saved result (DATE, TIME, MERGEFIELD, HYPERLINK
+   *   display text, QUOTE, FILENAME, FILLIN, SEQ, and the save, print, and creation dates)
+   *   accept typing, deletion, and selection inside the result. Fields the engine computes
+   *   live (PAGE, NUMPAGES, REF, PAGEREF, DOCPROPERTY, and others) stay one unit.
+   *
+   * Fixed for the instance. `'editable'` with a collaboration module throws a `TypeError`:
+   * shared paragraph text keeps every field one unit.
+   */
+  fieldResults?: FieldResultsMode;
   /** Override raster decode for insert/replace image commands; defaults to browser/headless. */
   imageDecodePort?: import('../store/package/image-resources.ts').ImageDecodePort;
   /**

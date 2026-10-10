@@ -12,16 +12,25 @@ import type {
 import { DEFAULT_DOCUMENT_LIMITS, type DocumentLimits } from '../document/limits.ts';
 import { JournalProjection, projectEffect } from '../document/journal-projection.ts';
 import { projectJournalToShared } from '../document/projected-journal.ts';
+import { sharedEffect } from '../document/shared-effect.ts';
 import type { NodeShape } from '../document/registry-node-reads.ts';
 import { DocumentRegistry } from '../document/registry.ts';
 import { applyPrimitiveJournal } from '../document/journal.ts';
 import { projectedTextTarget } from '../document/projected-text-target.ts';
+import { asLogicalId, type LogicalId } from '../document/identity.ts';
 
 function fixture(limits: Partial<DocumentLimits> = {}) {
   const hidden = new Set(['hidden']);
   const nodes = new Map<string, NodeShape>([
-    ['p', { isText: false, textLength: 0, children: ['a', 'hidden', 'b', 'c'] }],
-    ['q', { isText: false, textLength: 0, children: ['d'] }],
+    [
+      'p',
+      {
+        isText: false,
+        textLength: 0,
+        children: [asLogicalId('a'), asLogicalId('hidden'), asLogicalId('b'), asLogicalId('c')],
+      },
+    ],
+    ['q', { isText: false, textLength: 0, children: [asLogicalId('d')] }],
     ['text', { isText: true, textLength: 3, children: [] }],
     ...['a', 'hidden', 'b', 'c', 'd'].map((id): [string, NodeShape] => [
       id,
@@ -41,8 +50,18 @@ function fixture(limits: Partial<DocumentLimits> = {}) {
       const node = nodes.get(id);
       return node ? { ...node, children: [...node.children] } : null;
     },
-    parentOf: (id: string) =>
+    parentOf: (id: LogicalId) =>
       [...nodes].find(([, node]) => node.children.includes(id))?.[0] ?? null,
+    // No joins and no deletes: nothing is adopted, tombstoned, or listed twice.
+    adoptedChildren: () => [],
+    isTombstoned: () => false,
+    replacedByOf: () => null,
+    listingParents: () => [],
+    splitLineageOf: () => null,
+    splitTextPending: () => false,
+    showsAsChild: (id: string) => nodes.has(id),
+    // No paragraph here holds shared inline text, so the projection sees every effect.
+    inline: { textOf: () => null, owner: () => null },
   } as unknown as DocumentRegistry;
   return { registry, nodes };
 }
@@ -60,8 +79,22 @@ function projected(registry: DocumentRegistry, effects: readonly CanonicalPrimit
   const result = projectJournalToShared(registry, { effects });
   if (!result.ok) throw new Error(result.code);
   const scratch = new JournalProjection(registry);
-  for (const effect of result.journal.effects) projectEffect(scratch, effect);
+  for (const effect of result.journal.effects) projectEffect(scratch, sharedEffect(effect));
   return { effects: result.journal.effects, scratch };
+}
+
+/**
+ * Effects as coordinates: the slice address a projected text edit carries is checked on its
+ * own, through `projectedTextTarget`.
+ */
+function withoutTargets<T>(effects: T): T {
+  const strip = (effect: unknown): unknown => {
+    if (effect === null || typeof effect !== 'object' || !('projectedTarget' in effect))
+      return effect;
+    const { projectedTarget: _target, ...rest } = effect as Record<string, unknown>;
+    return rest;
+  };
+  return (Array.isArray(effects) ? effects.map(strip) : strip(effects)) as T;
 }
 
 describe('visible journal coordinates after concurrent splits', () => {
@@ -70,7 +103,7 @@ describe('visible journal coordinates after concurrent splits', () => {
     const before = JSON.stringify([...nodes]);
     const { effects, scratch } = projected(registry, [splice('p', 0, 2, ['d']), splice('p', 1, 1)]);
     expect(effects).toEqual([splice('p', 2, 1), splice('p', 0, 1, ['d']), splice('p', 2, 1)]);
-    expect(scratch.node('p')?.children).toEqual(['d', 'hidden']);
+    expect(scratch.node(asLogicalId('p'))?.children).toEqual(['d', 'hidden'].map(asLogicalId));
     expect(JSON.stringify([...nodes])).toBe(before);
   });
 
@@ -82,8 +115,8 @@ describe('visible journal coordinates after concurrent splits', () => {
       { kind: 'moveNode', logicalId: 'c', destinationParentLogicalId: 'q', destinationIndex: 0 },
       splice('p', 1, 1),
     ]);
-    expect(scratch.node('p')?.children).toEqual(['hidden', 'b', 'a']);
-    expect(scratch.node('q')?.children).toEqual(['c']);
+    expect(scratch.node(asLogicalId('p'))?.children).toEqual(['hidden', 'b', 'a'].map(asLogicalId));
+    expect(scratch.node(asLogicalId('q'))?.children).toEqual([asLogicalId('c')]);
   });
 
   test('new text nodes and edits to their lengths compose within one journal', () => {
@@ -94,8 +127,8 @@ describe('visible journal coordinates after concurrent splits', () => {
       { kind: 'spliceText', logicalId: 'new-text', utf16Start: 1, deleteCount: 3, insert: 'X' },
       splice('a', 0, 0, ['new-text']),
     ]);
-    expect(scratch.node('new-text')?.textLength).toBe(2);
-    expect(scratch.node('a')?.children).toEqual(['new-text']);
+    expect(scratch.node(asLogicalId('new-text'))?.textLength).toBe(2);
+    expect(scratch.node(asLogicalId('a'))?.children).toEqual([asLogicalId('new-text')]);
   });
 });
 
@@ -166,11 +199,11 @@ describe('projection refuses before allocating or changing shared state', () => 
 function sourceFixture() {
   const doc = new Y.Doc();
   const registry = new DocumentRegistry(doc);
-  registry.putText('source', 'abcdefghij');
-  registry.putText('left', 'abcde');
-  registry.putText('right', 'fghij');
-  registry.registerSplitText('left', 'source', 0, 5);
-  registry.registerSplitText('right', 'source', 5, 10);
+  registry.putText(asLogicalId('source'), 'abcdefghij');
+  registry.putText(asLogicalId('left'), 'abcde');
+  registry.putText(asLogicalId('right'), 'fghij');
+  registry.registerSplitText(asLogicalId('left'), asLogicalId('source'), 0, 5);
+  registry.registerSplitText(asLogicalId('right'), asLogicalId('source'), 5, 10);
   return { doc, registry };
 }
 function textSplice(
@@ -186,19 +219,19 @@ describe('projected source text journal coordinates', () => {
   test('validates grown visible slices with no hidden runs and keeps source ownership', () => {
     const { doc, registry } = sourceFixture();
     try {
-      registry.spliceText('source', 8, 0, 'GROW');
+      registry.spliceText(asLogicalId('source'), 8, 0, 'GROW');
       const result = projectJournalToShared(registry, {
         effects: [textSplice('right', 8, 0, 'X')],
       });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.journal.effects).toEqual([textSplice('source', 13, 0, 'X')]);
+      expect(withoutTargets(result.journal.effects)).toEqual([textSplice('source', 13, 0, 'X')]);
       expect(projectedTextTarget(result.journal.effects[0]!)).toEqual({
-        logicalId: 'right',
+        logicalId: asLogicalId('right'),
         utf16Start: 8,
       });
       expect(applyPrimitiveJournal(registry, result.journal).ok).toBe(true);
-      expect(registry.projectedTextValue('right')).toBe('fghGROWiXj');
+      expect(registry.projectedTextValue(asLogicalId('right'))).toBe('fghGROWiXj');
     } finally {
       registry.destroy();
       doc.destroy();
@@ -218,15 +251,15 @@ describe('projected source text journal coordinates', () => {
       });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.journal.effects).toEqual([
+      expect(withoutTargets(result.journal.effects)).toEqual([
         textSplice('source', 2, 0, 'XX'),
         textSplice('source', 9, 1, 'Y'),
         textSplice('source', 1, 2, ''),
         textSplice('source', 9, 0, 'Z'),
       ]);
       expect(applyPrimitiveJournal(registry, result.journal).ok).toBe(true);
-      expect(registry.projectedTextValue('left')).toBe('aXcde');
-      expect(registry.projectedTextValue('right')).toBe('fgYiZj');
+      expect(registry.projectedTextValue(asLogicalId('left'))).toBe('aXcde');
+      expect(registry.projectedTextValue(asLogicalId('right'))).toBe('fgYiZj');
     } finally {
       registry.destroy();
       doc.destroy();
@@ -262,15 +295,15 @@ describe('projected source text journal coordinates', () => {
       });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.journal.effects).toEqual([
+      expect(withoutTargets(result.journal.effects)).toEqual([
         textSplice('source', 5, 0, 'XX'),
         textSplice('source', 6, 1, 'Y'),
         textSplice('source', 5, 0, 'L'),
         textSplice('source', 8, 0, 'Z'),
       ]);
       expect(applyPrimitiveJournal(registry, result.journal).ok).toBe(true);
-      expect(registry.projectedTextValue('left')).toBe('abcdeL');
-      expect(registry.projectedTextValue('right')).toBe('XYZfghij');
+      expect(registry.projectedTextValue(asLogicalId('left'))).toBe('abcdeL');
+      expect(registry.projectedTextValue(asLogicalId('right'))).toBe('XYZfghij');
     } finally {
       registry.destroy();
       doc.destroy();
@@ -280,10 +313,10 @@ describe('projected source text journal coordinates', () => {
   test('a left-end insertion after deleting the right boundary character retains left formatting', () => {
     const { doc, registry } = sourceFixture();
     try {
-      registry.spliceText('right', 0, 1, '');
-      registry.spliceText('left', 5, 0, 'X');
-      expect(registry.projectedTextValue('left')).toBe('abcdeX');
-      expect(registry.projectedTextValue('right')).toBe('ghij');
+      registry.spliceText(asLogicalId('right'), 0, 1, '');
+      registry.spliceText(asLogicalId('left'), 5, 0, 'X');
+      expect(registry.projectedTextValue(asLogicalId('left'))).toBe('abcdeX');
+      expect(registry.projectedTextValue(asLogicalId('right'))).toBe('ghij');
     } finally {
       registry.destroy();
       doc.destroy();
@@ -303,7 +336,7 @@ describe('projected source text journal coordinates', () => {
         const input: CanonicalPrimitiveEffect[] = [];
         const expected: CanonicalPrimitiveEffect[] = [];
         for (let index = 0; index < 15; index += 1) {
-          const id = next(2) === 0 ? 'left' : 'right';
+          const id = asLogicalId(next(2) === 0 ? 'left' : 'right');
           const range = reference.registry.splitTextRange(id)!;
           const offset = next(range.end - range.start + 1);
           const deleted = next(Math.min(3, range.end - range.start - offset) + 1);
@@ -314,7 +347,7 @@ describe('projected source text journal coordinates', () => {
         }
         const result = projectJournalToShared(initial.registry, { effects: input });
         expect(result.ok).toBe(true);
-        if (result.ok) expect(result.journal.effects).toEqual(expected);
+        if (result.ok) expect(withoutTargets(result.journal.effects)).toEqual(expected);
       } finally {
         initial.registry.destroy();
         initial.doc.destroy();
@@ -372,25 +405,25 @@ describe('projected source text journal coordinates', () => {
       const { doc, registry } = sourceFixture();
       try {
         // The left slice ends at the deleted f anchor; its leading edge is the source sentinel.
-        registry.spliceText('source', 5, 1, '');
+        registry.spliceText(asLogicalId('source'), 5, 1, '');
         registry.putElement({
-          logicalId: 'original',
+          logicalId: asLogicalId('original'),
           kind: 'run',
           namespaceUri: 'urn:test',
           localName: 'r',
           attributes: [],
           bindings: [],
         });
-        registry.spliceChildren('original', 0, 0, ['left']);
+        registry.spliceChildren(asLogicalId('original'), 0, 0, [asLogicalId('left')]);
         registry.putElement({
-          logicalId: 'p',
+          logicalId: asLogicalId('p'),
           kind: 'paragraph',
           namespaceUri: 'urn:test',
           localName: 'p',
           attributes: [],
           bindings: [],
         });
-        registry.spliceChildren('p', 0, 0, ['original']);
+        registry.spliceChildren(asLogicalId('p'), 0, 0, [asLogicalId('original')]);
         const effects: CanonicalPrimitiveEffect[] = [];
         for (const [run, id, value] of [
           ['copied-run', 'copied-text', 'abcde'],
@@ -427,10 +460,12 @@ describe('projected source text journal coordinates', () => {
         } else {
           expect(result.ok).toBe(true);
           if (!result.ok) continue;
-          expect(result.journal.effects.at(-1)).toEqual(textSplice('source', 6, 0, ''));
+          expect(withoutTargets(result.journal.effects.at(-1))).toEqual(
+            textSplice('source', 6, 0, '')
+          );
           expect(applyPrimitiveJournal(registry, result.journal).ok).toBe(true);
-          expect(registry.projectedTextValue('empty-text')).toBe('');
-          expect(registry.splitTextRange('empty-text')).toMatchObject({
+          expect(registry.projectedTextValue(asLogicalId('empty-text'))).toBe('');
+          expect(registry.splitTextRange(asLogicalId('empty-text'))).toMatchObject({
             startAnchorDeleted: true,
             endAnchorDeleted: true,
           });
@@ -447,7 +482,7 @@ describe('projected source text journal coordinates', () => {
     const registry = new DocumentRegistry(doc);
     const element = (logicalId: string, kind: string, childIds: string[]) => {
       registry.putElement({
-        logicalId,
+        logicalId: asLogicalId(logicalId),
         kind,
         namespaceUri: 'urn:test',
         localName: kind,
@@ -455,10 +490,10 @@ describe('projected source text journal coordinates', () => {
         attributes: [],
         bindings: [],
       });
-      registry.spliceChildren(logicalId, 0, 0, childIds);
+      registry.spliceChildren(asLogicalId(logicalId), 0, 0, childIds.map(asLogicalId));
     };
     try {
-      registry.putText('source', 'abcdefghij');
+      registry.putText(asLogicalId('source'), 'abcdefghij');
       element('original', 'run', ['source']);
       element('p', 'paragraph', ['original']);
       const effects: CanonicalPrimitiveEffect[] = [];
@@ -488,13 +523,13 @@ describe('projected source text journal coordinates', () => {
       const result = projectJournalToShared(registry, { effects });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.journal.effects.slice(-2)).toEqual([
+      expect(withoutTargets(result.journal.effects.slice(-2))).toEqual([
         textSplice('source', 2, 0, 'XX'),
         textSplice('source', 8, 0, 'Y'),
       ]);
       expect(applyPrimitiveJournal(registry, result.journal).ok).toBe(true);
-      expect(registry.projectedTextValue('left-text')).toBe('abXXcde');
-      expect(registry.projectedTextValue('right-text')).toBe('fYghij');
+      expect(registry.projectedTextValue(asLogicalId('left-text'))).toBe('abXXcde');
+      expect(registry.projectedTextValue(asLogicalId('right-text'))).toBe('fYghij');
     } finally {
       registry.destroy();
       doc.destroy();

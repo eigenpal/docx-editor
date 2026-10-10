@@ -79,10 +79,7 @@ import {
   type ContentControlMenuHost,
 } from './content-control-widget-menu.ts';
 import { createLegacyCheckboxInteraction } from './surface-legacy-checkbox.ts';
-import {
-  createTextFormFieldInteraction,
-  type PendingTextFormInput,
-} from './surface-text-form-fields.ts';
+import { createTextFormFieldInteraction } from './surface-text-form-fields.ts';
 import { formsProtectionEnabled, sectionProtectsForms } from '@docx-editor.dev/core/store';
 // Engine-owned paginated paragraph surface (composition root).
 // Painted pages are the editable surface; seams live in sibling surface-*.ts modules.
@@ -159,10 +156,11 @@ import {
 import { attachListResolveChangeEvidence } from '../layout/list-resolve.ts';
 import { refreshSurfaceRefFieldResults } from './surface-ref-field-refresh.ts';
 import { type RevisionAuthorFilter } from '../layout/revision-projection.ts';
-import {
-  createRevisionAuthorVisibility,
-  type RevisionAuthorVisibility,
-} from './revision-author-visibility.ts';
+import { createRevisionAuthorVisibility } from './revision-author-visibility.ts';
+import type { PaginatedSurfaceRuntimeOptions } from './surface-runtime-options.ts';
+import { scopeSession, surfaceFieldResultsScope } from './field-results-scope.ts';
+import { withSavedFieldResults } from './surface-saved-field-results.ts';
+import { frameCoalescer } from './frame-coalescer.ts';
 import { PROPERTY_CHANGE_WRAPPER_OF_OP } from '../store/store/tree-op-tracked-properties.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
 import { selectionMarkRects } from '../layout/selection-rects.ts';
@@ -179,7 +177,6 @@ import {
 import {
   createStableReviewAuthorSlots,
   type ReviewAuthorInfo,
-  type StableReviewAuthorSlots,
 } from '../output/revision-presentation.ts';
 import { createSurfaceReviewAuthors, reviewItemAuthor } from './surface-review-authors.ts';
 import { createPresenceColors } from './surface-presence-color.ts';
@@ -221,6 +218,12 @@ import {
 } from './surface-input.ts';
 import { createSurfaceClipboardOps } from './surface-clipboard-ops.ts';
 import { createSurfaceRangeEditOps } from './surface-range-edit.ts';
+import {
+  carriedSelectionOf,
+  createRemoteCaret,
+  historySelectionOf,
+  mapSelectionAcrossText,
+} from './surface-remote-caret.ts';
 import { createNextStyleWrites } from './surface-next-style.ts';
 import {
   createFurnitureSource,
@@ -286,6 +289,7 @@ import { createHeaderFooterOps } from './surface-hf-ops.ts';
 import { createImageOps } from './surface-image-ops.ts';
 import {
   createHeaderFooterScopeController,
+  openBlankHeaderFooter,
   isDocumentProtectionBatch,
 } from './surface-hf-editing.ts';
 import { createNoteOps } from './surface-note-ops.ts';
@@ -301,6 +305,7 @@ import { TypingHistory } from './typing-history.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
+import { contentLockedOrBound, removalLocked, treeLockRefusal } from './content-control-locks.ts';
 import { overlaySheet, sizeOverlaySheets } from './surface-overlay-sheet.ts';
 import type { SurfaceOverlayPainter } from './surface-overlay-sheet.ts';
 
@@ -353,19 +358,8 @@ export function mountPaginatedSurface(
   bytes: Uint8Array,
   options: PaginatedSurfaceOptions = {}
 ): OpenPaginatedResult {
-  const runtimeOptions = options as PaginatedSurfaceOptions & {
-    readonly onTrackedChange?: () => void;
-    readonly reviewAuthorSlots?: StableReviewAuthorSlots;
-    readonly revisionAuthorVisibility?: RevisionAuthorVisibility;
-    /**
-     * Carry drawing intent alongside the range on a font remount. A plain open starts
-     * with no drawing selected, even when the default caret sits at its anchor.
-     */
-    readonly initialDrawingSelectionIntent?: DrawingSelectionIntent;
-    /** Restore the model range on a font remount without claiming DOM selection/focus. */
-    readonly initialSelection?: SemanticSelection;
-    readonly initialTextFormInput?: PendingTextFormInput;
-  };
+  const runtimeOptions = options as PaginatedSurfaceRuntimeOptions;
+  const fieldScope = surfaceFieldResultsScope(options);
   const opened = openTreeSession(
     bytes,
     options.reviewModel ? { reviewModel: options.reviewModel } : {}
@@ -377,7 +371,7 @@ export function mountPaginatedSurface(
       ...(opened.detail ? { detail: opened.detail } : {}),
     };
   }
-  const session = opened.session;
+  const session = scopeSession(opened.session, fieldScope);
   const collaborationSession = options.collaborationModel?.session;
   let author = options.author;
   let scale = options.scale ?? 96 / 72;
@@ -416,6 +410,7 @@ export function mountPaginatedSurface(
   const pagesLayer = document.createElement('div');
   pagesLayer.className = 'docx-pages';
   pagesLayer.style.position = 'relative';
+  fieldScope.listeners(pagesLayer);
 
   // THE PAINTED PAGES ARE THE EDITABLE SURFACE.
   //
@@ -627,13 +622,25 @@ export function mountPaginatedSurface(
   );
   function moveDocumentHistory(direction: 'undo' | 'redo'): void {
     let mark: ReturnType<TreeDocxSession['undo']> = null;
-    const result = documentSelectionHistory.step(direction, () => {
-      if (collaborationSession) return collaborationSession[direction]();
-      const revision = session.packageRevision();
-      mark = session[direction]();
-      return session.packageRevision() !== revision;
-    });
-    if (result.changed) restoreSelection(result.selection ?? mark);
+    // The remote caret takes the commit a collaboration step makes for history, not a peer's.
+    if (collaborationSession) remoteCaret.expectHistory(true);
+    let result: ReturnType<DocumentSelectionHistory['step']>;
+    try {
+      result = documentSelectionHistory.step(direction, () => {
+        if (collaborationSession) return collaborationSession[direction]();
+        const revision = session.packageRevision();
+        mark = session[direction]();
+        return session.packageRevision() !== revision;
+      });
+    } finally {
+      if (collaborationSession) remoteCaret.expectHistory(false);
+    }
+    if (!result.changed) return;
+    // A shared undo restores the selection its step was made from, carried across the text
+    // peers changed since.
+    const carried =
+      direction === 'undo' ? historySelectionOf(collaborationSession, collaborationPort) : null;
+    restoreSelection(carried ?? result.selection ?? mark);
   }
   function restoreCaretFormat(value: CaretFormatSnapshot): void {
     selectionSync.noteModelMoved();
@@ -830,6 +837,11 @@ export function mountPaginatedSurface(
 
   const paragraphOrder = () =>
     scopedDocumentOrder(editingLayout(), hfScope?.getActive() ?? null, noteScopeId());
+  const remoteCaret = createRemoteCaret({
+    textOf: (id) => textOf(id),
+    order: paragraphOrder,
+    carried: () => carriedSelectionOf(collaborationSession),
+  });
   // Phase timers, one slot per phase rather than a log: the state reports the LAST pass,
   // and a host that wants history samples `onChange`. `performance.now()` where the host
   // has one — monotonic, sub-millisecond — and wall clock where it does not (a bare test
@@ -1328,6 +1340,7 @@ export function mountPaginatedSurface(
       // constructed `proposed` never shares cached pages with an `all-markup` one.
       displayMode: revisionDisplayMode(),
       showFieldCodes: context ? false : showFieldCodes,
+      fieldResults: fieldScope.mode,
       revisionAuthorFilter: activeAuthorFilter,
     } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);
   }
@@ -1394,16 +1407,19 @@ export function mountPaginatedSurface(
     // browser's input queue. One task catches the view up to the newest published layout;
     // ordinary isolated edits still render synchronously through the branch above.
     if (deferredPublishRender !== null) return;
-    deferredPublishRender = setTimeout(() => {
-      deferredPublishRender = null;
-      // Superseded: a newer commit is already pending, so this layout is not the one the
-      // user will see — its own publish paints and reports. Painting here anyway spent one
-      // full render per flush batch on a frame one commit behind, and mirrored the newer
-      // model selection into the older spans.
-      if (scheduler.pending() !== null) return;
-      render();
-      armDerivationPrewarmOnce();
-    }, 0);
+    deferredPublishRender = setTimeout(
+      fieldScope.wrap(() => {
+        deferredPublishRender = null;
+        // Superseded: a newer commit is already pending, so this layout is not the one the
+        // user will see — its own publish paints and reports. Painting here anyway spent one
+        // full render per flush batch on a frame one commit behind, and mirrored the newer
+        // model selection into the older spans.
+        if (scheduler.pending() !== null) return;
+        render();
+        armDerivationPrewarmOnce();
+      }),
+      0
+    );
   }
 
   // ---- Batched typing ----------------------------------------------------
@@ -1459,10 +1475,13 @@ export function mountPaginatedSurface(
   function enqueueType(text: string): void {
     typeBuffer += text;
     if (typeFlushTimer !== null) return;
-    typeFlushTimer = setTimeout(() => {
-      typeFlushTimer = null;
-      flushTypeBuffer();
-    }, 0);
+    typeFlushTimer = setTimeout(
+      fieldScope.wrap(() => {
+        typeFlushTimer = null;
+        flushTypeBuffer();
+      }),
+      0
+    );
   }
 
   function commitProposedTextChange(
@@ -1563,7 +1582,7 @@ export function mountPaginatedSurface(
     // in a background tab, and a document that stops repainting when the tab is hidden is
     // the same stale-paint failure by another route.
     schedule: (run) => {
-      const handle = setTimeout(run, 0);
+      const handle = setTimeout(fieldScope.wrap(run), 0);
       return () => clearTimeout(handle);
     },
     publish: (layout) => {
@@ -1575,6 +1594,12 @@ export function mountPaginatedSurface(
       // The review queue is released with it, for the same reason and by the same rule.
       reviewAuthors.releaseLayout();
       currentLayout = layout;
+      const carried = remoteCaret.map(selection);
+      // Peers see this caret move too, or they keep painting it at the old offset.
+      if (carried !== selection) {
+        selection = carried;
+        publishLocalCollaborationSelection();
+      }
       // Repaint from HERE, so a commit that never went through this surface — undo, or
       // another editor sharing the store — still reaches the screen. Otherwise the painted
       // pages keep showing a revision the model has already left.
@@ -1591,10 +1616,13 @@ export function mountPaginatedSurface(
     scheduler.invalidateAll(session.packageRevision(), 'drawing-resources');
     if (resourceFlushQueued) return;
     resourceFlushQueued = true;
-    setTimeout(() => {
-      resourceFlushQueued = false;
-      flushLayout();
-    }, 0);
+    setTimeout(
+      fieldScope.wrap(() => {
+        resourceFlushQueued = false;
+        flushLayout();
+      }),
+      0
+    );
   };
 
   // Every committed transaction, whatever produced it — this surface, undo, or another
@@ -1615,6 +1643,13 @@ export function mountPaginatedSurface(
     // external case.
     pendingFormats = null;
     if (!flushingTypeBuffer) typingHistory.noteForeignChange(modelChange);
+    if (modelChange.origin === ORIGIN_IDS.mutationRemote) {
+      remoteCaret.note(
+        selection,
+        modelChange.dirty,
+        currentLayout.revision === modelChange.fromRevision
+      );
+    } else remoteCaret.noteLocal();
     scheduler.notify(modelChange);
   });
   const collaborationPort = collaborationSession
@@ -1950,21 +1985,6 @@ export function mountPaginatedSurface(
     const part = session.partFor(scope);
     if (!part) return null;
     return contentControlHoldingParagraph(part, selection.head.paragraphId);
-  }
-
-  function contentLockedOrBound(control: ContentControlBoundaryRecord): string | null {
-    if (control.bound) return 'bound';
-    if (control.effectiveLock === 'contentLocked' || control.effectiveLock === 'sdtContentLocked') {
-      return 'locked';
-    }
-    return null;
-  }
-
-  function removalLocked(control: ContentControlBoundaryRecord): string | null {
-    if (control.effectiveLock === 'sdtLocked' || control.effectiveLock === 'sdtContentLocked') {
-      return 'locked';
-    }
-    return null;
   }
 
   function isContentControlElement(node: OoxmlNode): node is OoxmlElement {
@@ -2418,28 +2438,7 @@ export function mountPaginatedSurface(
       const control = findControl(controlId);
       if (!control) return 'notFound';
       // Layout has not published a boundary yet — refuse conservatively from tree props.
-      for (const child of control.children) {
-        if (child.kind === 'textValue') continue;
-        if (
-          (child as { kind?: string }).kind !== 'contentControlProperties' &&
-          child.localName !== 'sdtPr'
-        ) {
-          continue;
-        }
-        if (child.children.some((c) => c.kind !== 'textValue' && c.localName === 'dataBinding')) {
-          if (action === 'edit') return 'bound';
-        }
-        for (const prop of child.children) {
-          if (prop.kind === 'textValue' || prop.localName !== 'lock') continue;
-          const val = prop.attributes.find((a) => a.localName === 'val')?.value;
-          if (action === 'remove') {
-            if (val === 'sdtLocked' || val === 'sdtContentLocked') return 'locked';
-          } else if (val === 'contentLocked' || val === 'sdtContentLocked') {
-            return 'locked';
-          }
-        }
-      }
-      return null;
+      return treeLockRefusal(control, action);
     },
   };
 
@@ -2949,49 +2948,6 @@ export function mountPaginatedSurface(
    * `type()` ever supplied one, so redo put the caret back where the edit STARTED — after
    * redoing Enter the next character went into the paragraph above the one it belonged to.
    */
-  /**
-   * A selection carried across a change to ONE paragraph's text.
-   *
-   * The two strings are all this needs: what survives at the front stays put, what survives
-   * at the back moves by the length difference, and an offset inside the part that changed
-   * collapses to where the change began — which is where the words the caret was in used to
-   * be. Resolving a revision under the caret is the case: the offsets are still legal, so
-   * nothing clamps them, and they now address different characters.
-   */
-  function mappedAcrossTextChange(
-    current: SemanticSelection,
-    paragraphId: string,
-    beforeText: string
-  ): SemanticSelection {
-    const afterText = textOf(paragraphId);
-    if (afterText === beforeText) return current;
-    let prefix = 0;
-    while (
-      prefix < beforeText.length &&
-      prefix < afterText.length &&
-      beforeText[prefix] === afterText[prefix]
-    ) {
-      prefix += 1;
-    }
-    let suffix = 0;
-    while (
-      suffix < beforeText.length - prefix &&
-      suffix < afterText.length - prefix &&
-      beforeText[beforeText.length - 1 - suffix] === afterText[afterText.length - 1 - suffix]
-    ) {
-      suffix += 1;
-    }
-    const delta = afterText.length - beforeText.length;
-    const move = (position: SemanticPosition): SemanticPosition => {
-      if (position.paragraphId !== paragraphId) return position;
-      if (position.offset <= prefix) return position;
-      if (position.offset >= beforeText.length - suffix) {
-        return { ...position, offset: position.offset + delta };
-      }
-      return { ...position, offset: prefix };
-    };
-    return { anchor: move(current.anchor), head: move(current.head) };
-  }
 
   /** The view layout removes hidden-mark paragraphs in; see `hidden-mark-joins.ts`. */
   function revisionView(): RevisionView {
@@ -5009,6 +4965,7 @@ export function mountPaginatedSurface(
       // during a plain open, and that restore must not select a drawing the user never did
       // (the carried initialDrawingSelectionIntent already preserves a real one).
       if (!selectionsEqual(next, selection)) setDrawingIntent({ kind: 'programmatic' }, false);
+      remoteCaret.discard();
       setSelection(next);
     },
 
@@ -5195,7 +5152,12 @@ export function mountPaginatedSurface(
           // `unknown-paragraph`. Accepting a header card is exactly that situation.
           const order = paragraphOrder();
           if (order.length === 0) return null;
-          const mapped = mappedAcrossTextChange(selection, caretParagraph, beforeText);
+          const mapped = mapSelectionAcrossText(
+            selection,
+            caretParagraph,
+            beforeText,
+            textOf(caretParagraph)
+          );
           return clampedToDocument(editingLayout(), order, mapped);
         }
       );
@@ -5769,6 +5731,7 @@ export function mountPaginatedSurface(
     },
   };
 
+  /** After a shared undo: the selection the undone step was made from, else the change. */
   /**
    * Put the caret back where a reversed history entry left it.
    *
@@ -5864,7 +5827,8 @@ export function mountPaginatedSurface(
   // identical behaviour instead of three hand-written keymaps that drift. The handlers
   // themselves are factories over the surface interface: keys, clipboard and `beforeinput` in
   // surface-input.ts, the selection mirror and the IME lane in surface-selection-sync.ts.
-  const { onSelectionChange, onCompositionEnd } = selectionSync;
+  // The document-level selection listener runs in this editor's field-result mode too.
+  const { onSelectionChange, onCompositionEnd } = fieldScope.methods({ ...selectionSync });
   // The IME owns the DOM from compositionstart on; buffered plain typing must
   // be in the document before that handover, not woven into the readback. The
   // handover is of the PAINTED DOM, so a layout pass or paint a commit deferred
@@ -5886,7 +5850,7 @@ export function mountPaginatedSurface(
 
   // The selection mirror uses this handle to avoid adopting selection mid-drag.
   let pointer: PointerController | null = null;
-  textFormInteraction = createTextFormFieldInteraction(
+  const textFormRules = createTextFormFieldInteraction(
     {
       onRequest: options.onRequestTextFormField,
       onInvalidRequest: options.onRequestInvalidTextFormField,
@@ -5920,6 +5884,17 @@ export function mountPaginatedSurface(
         }),
     },
     runtimeOptions.initialTextFormInput
+  );
+  textFormInteraction = withSavedFieldResults(
+    textFormRules,
+    {
+      part: (paragraphId) => partOfNodeId(session, paragraphId),
+      selection: () => selection,
+      select: (next) => setSelection(next),
+      writable: () => editingMode !== 'view' && !showFieldCodes,
+      compare: comparePositions,
+    },
+    fieldScope
   );
   registerFormFieldIdentity(surface, textFormInteraction.fieldId);
   legacyCheckboxInteraction = createLegacyCheckboxInteraction({
@@ -6022,19 +5997,7 @@ export function mountPaginatedSurface(
   // first screenful stayed blank until some unrelated commit forced a repaint.
   // Also covers StrictMode / provider-first attach before the Content node sits under the
   // scroll container (footnotes and later sheets must rematerialize).
-  let rematerializeScheduled = false;
-  /** Coalesce to a frame: twenty events and one event cost the same repaint. */
-  function scheduleRematerialize(): void {
-    if (rematerializeScheduled) return;
-    rematerializeScheduled = true;
-    const raf = container.ownerDocument.defaultView?.requestAnimationFrame;
-    const run = (): void => {
-      rematerializeScheduled = false;
-      rematerialize();
-    };
-    if (raf) raf(run);
-    else queueMicrotask(run);
-  }
+  const scheduleRematerialize = frameCoalescer(document, fieldScope.wrap(rematerialize));
 
   const onScroll = (event: Event): void => {
     const scroller = surfaceScroller(container);
@@ -6168,44 +6131,20 @@ export function mountPaginatedSurface(
         // Creating the part is a WRITE — viewing mode refuses it like every other lane.
         if (editingMode === 'view') return;
         flushPendingInputAndLayout();
-        // Which section owns the page, from the multi-section spans; a single-section
-        // document has no spans and every page belongs to section 0.
-        const { sectionIndex, sectionStart } = sectionAtPage(pageIndex);
-        const bySection = session.headerFooterResolutionBySection();
-        const section = bySection[Math.min(sectionIndex, Math.max(0, bySection.length - 1))];
-        // The variant this page would DISPLAY, which is the one Word creates on a blank
-        // double-click: `even` on an even page only when the document separates them,
-        // `first` on a section's first page only when it declares a title page.
-        const pageNumber =
-          currentLayout.pages[pageIndex]?.pageFieldSource?.pageNumber ?? pageIndex + 1;
-        const variant: 'default' | 'first' | 'even' =
-          section?.evenAndOddHeaders && pageNumber % 2 === 0
-            ? 'even'
-            : section?.titlePage && pageIndex === sectionStart
-              ? 'first'
-              : 'default';
-        const slotsOf = (resolution: typeof bySection) => {
-          const target = resolution[Math.min(sectionIndex, Math.max(0, resolution.length - 1))];
-          return kind === 'header' ? target?.headers : target?.footers;
-        };
-        let rId = slotsOf(bySection)?.get(variant)?.rId;
-        if (!rId) {
-          const created = surface.applyHeaderFooterLifecycle?.({
-            op: 'createHeaderFooter',
-            sectionIndex,
-            kind,
-            variant,
-            ...(variant === 'first' ? { titlePage: true } : {}),
-            ...(variant === 'even' ? { evenAndOddHeaders: true } : {}),
-          });
-          if (!created?.ok) return;
-          rId = slotsOf(session.headerFooterResolutionBySection())?.get(variant)?.rId;
-          // The band only exists in the post-create layout, and the create's commit may
-          // have deferred its pass — the same reason `revealNote` flushes.
-          flushLayout();
-        }
-        if (!rId) return;
-        hfScope?.enterHeaderFooter({ rId, pageIndex, sectionIndex, kind, variant });
+        const scope = hfScope;
+        if (!scope) return;
+        openBlankHeaderFooter(
+          {
+            session,
+            layout: currentLayout,
+            sectionAtPage,
+            create: (op) => surface.applyHeaderFooterLifecycle?.(op),
+            flushLayout,
+            enter: (args) => scope.enterHeaderFooter(args),
+          },
+          kind,
+          pageIndex
+        );
       },
       onContentControlWidget: (controlId, kind) => openContentControlWidget(controlId, kind),
       ...(options.reviewModel ? { onChangeBarToggle: reviewView.toggleByChangeBar } : {}),
@@ -6296,5 +6235,5 @@ export function mountPaginatedSurface(
     }
   );
   registerRefreshComposition(surface, () => selectionSync.isComposing());
-  return { ok: true, surface };
+  return { ok: true, surface: fieldScope.methods(surface) };
 }

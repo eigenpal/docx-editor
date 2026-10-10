@@ -24,6 +24,7 @@ import {
   nodeRecordSplitFrom,
   nodeRecordSplitLineage,
 } from './schema.ts';
+import { relocatedMarkerRecord } from './relocated-markers.ts';
 
 export interface SplitDedupContext {
   readonly isPresent: (id: LogicalId) => boolean;
@@ -31,6 +32,8 @@ export interface SplitDedupContext {
 export interface SplitTextOverlays {
   readonly values: ReadonlyMap<LogicalId, string>;
   readonly changedIds: ReadonlySet<LogicalId>;
+  /** Split texts whose source has not reached this replica yet. They show nothing. */
+  readonly awaiting: ReadonlySet<LogicalId>;
 }
 
 export class SplitDedupIndex {
@@ -64,8 +67,11 @@ export class SplitDedupIndex {
   }
 
   indexExisting(id: LogicalId): void {
-    const root = nodeRecordSplitLineage(this.nodes.get(id));
+    const record = this.nodes.get(id);
+    const root = nodeRecordSplitLineage(record);
     if (root === null || root === id) return;
+    // A relocated position marker shares the lineage fields but is never a split loser.
+    if (relocatedMarkerRecord(record)) return;
     this.invalidate();
     const runs = this.runsBySplitOrigin.get(root) ?? new Set<LogicalId>();
     runs.add(id);
@@ -114,4 +120,50 @@ export class SplitDedupIndex {
     this.cachedLosers = losers;
     return losers;
   }
+}
+
+/**
+ * The order a parent shows its children in when concurrent splits left several copies of one
+ * piece in it. Each peer's split replaced the original run with its own copy, and each peer
+ * then added content after its copy. The merged list can put the losing copy first, with
+ * the other peer's content between it and the winning copy, so the text before the split
+ * showed after that content. The winning copy takes the first copy's slot, which is where
+ * every peer put the text.
+ *
+ * Returns the indexes of `children` in that order, or null when nothing moves. The
+ * materializer and the visible-index projection share this rule, so local edits address the
+ * order every replica shows.
+ */
+export function splitWinnerOrder<Id extends string>(
+  children: readonly Id[],
+  isLoser: (id: Id) => boolean,
+  lineageOf: (id: Id) => string | null
+): number[] | null {
+  // Per split: where its one losing piece and its one winning piece stand in this parent. A
+  // split that left several pieces of a branch here, as a format split does, keeps its order:
+  // its pieces are a range of the run, not a copy of one place.
+  const pieces = new Map<string, { loser: number[]; winner: number[] }>();
+  for (let index = 0; index < children.length; index += 1) {
+    const id = children[index]!;
+    const root = lineageOf(id);
+    if (root === null || root === id) continue;
+    const entry = pieces.get(root) ?? { loser: [], winner: [] };
+    (isLoser(id) ? entry.loser : entry.winner).push(index);
+    pieces.set(root, entry);
+  }
+  const movedTo = new Map<number, number>();
+  for (const { loser, winner } of pieces.values()) {
+    if (loser.length !== 1 || winner.length !== 1 || loser[0]! > winner[0]!) continue;
+    movedTo.set(winner[0]!, loser[0]!);
+  }
+  if (movedTo.size === 0) return null;
+  const before = new Map<number, number>();
+  for (const [index, slot] of movedTo) before.set(slot, index);
+  const order: number[] = [];
+  for (let index = 0; index < children.length; index += 1) {
+    const moved = before.get(index);
+    if (moved !== undefined) order.push(moved);
+    if (!movedTo.has(index)) order.push(index);
+  }
+  return order;
 }

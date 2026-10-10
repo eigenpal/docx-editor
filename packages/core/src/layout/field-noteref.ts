@@ -21,6 +21,7 @@
 // the immutable paragraph node, the story aggregate is capped, and the bookmark walk shares
 // the field-scan budget and depth cap.
 
+import { FieldResultsModeMemo } from '../store/package/field-result-mode.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlElement,
@@ -179,7 +180,7 @@ function customMarkFollowsOf(node: OoxmlElement): boolean {
  * scan: only typed `noteReference` nodes count, so generic/demoted wrappers never invent a
  * numbered site the painter would not number.
  */
-const paragraphNoteSites = new WeakMap<OoxmlElement, readonly ParagraphNoteSite[]>();
+const paragraphNoteSites = new FieldResultsModeMemo<OoxmlElement, readonly ParagraphNoteSite[]>();
 
 function noteSitesOfParagraph(paragraph: OoxmlElement): readonly ParagraphNoteSite[] {
   const memo = paragraphNoteSites.get(paragraph);
@@ -227,8 +228,11 @@ function endnotePropsAt(
 
 const EMPTY_MARK_INDEX: ReadonlyMap<string, string> = new Map();
 
-/** Memo per blocks array, validated on the numbering input's identity (see the wrapper memo). */
-const markIndexMemos = new WeakMap<
+/**
+ * Memo per blocks array, validated on the numbering input's identity (see the wrapper memo).
+ * Built from the mode-keyed note sites, so it is keyed on the field-result mode too.
+ */
+const markIndexMemos = new FieldResultsModeMemo<
   readonly OoxmlElement[],
   { input: NoteRefNumberingInput; index: ReadonlyMap<string, string> }
 >();

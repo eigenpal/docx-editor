@@ -242,3 +242,32 @@ export function noteKindAndIdOf(
   if (!noteKind || noteId === null) return null;
   return { noteKind, noteId };
 }
+
+/** The piece a projectable note atom paints over its one model unit, or null for none. */
+export function noteAtomPiece(
+  node: OoxmlNode,
+  context: NoteMarkContext | undefined
+): {
+  readonly text: string;
+  readonly extras: {
+    readonly measureText?: string;
+    readonly noteNav?: { readonly scopeId: string; readonly direction: NoteNavDirection };
+    readonly noteSeparator?: 'separator' | 'continuationSeparator';
+  };
+} | null {
+  const projected = projectedNoteMarkText(node, context);
+  // Empty projected displays still consume their canonical model unit.
+  if (!projected || (projected.text.length === 0 && !projected.measureText)) return null;
+  const noteNav =
+    projected.scopeId && projected.nav
+      ? { scopeId: projected.scopeId, direction: projected.nav }
+      : undefined;
+  return {
+    text: projected.text.length > 0 ? projected.text : (projected.measureText ?? ''),
+    extras: {
+      ...(projected.measureText !== undefined ? { measureText: projected.measureText } : {}),
+      ...(noteNav ? { noteNav } : {}),
+      ...(projected.noteSeparator ? { noteSeparator: projected.noteSeparator } : {}),
+    },
+  };
+}

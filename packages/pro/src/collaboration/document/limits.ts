@@ -15,7 +15,6 @@ export interface DocumentLimits {
   readonly maxParts: number;
   readonly maxRelationships: number;
   readonly maxBlobBytes: number;
-  readonly maxDigestLength: number;
   readonly maxMediaTypeLength: number;
   readonly maxStorageKeyLength: number;
   readonly maxStringLength: number;
@@ -30,7 +29,6 @@ export const DEFAULT_DOCUMENT_LIMITS: DocumentLimits = Object.freeze({
   maxParts: 512,
   maxRelationships: 10_000,
   maxBlobBytes: 32 * 1024 * 1024,
-  maxDigestLength: 80,
   maxMediaTypeLength: 256,
   maxStorageKeyLength: 512,
   maxStringLength: 4096,
@@ -92,7 +90,7 @@ export function rejectBlobDescriptor(fields: {
     const dangerous = rejectDangerousKey(key);
     if (dangerous) return dangerous;
   }
-  if (!DIGEST_PATTERN.test(fields.digest) || fields.digest.length > 80) {
+  if (!DIGEST_PATTERN.test(fields.digest)) {
     return 'invalid-blob-descriptor';
   }
   if (!Number.isSafeInteger(fields.size) || fields.size < 0) return 'invalid-blob-descriptor';

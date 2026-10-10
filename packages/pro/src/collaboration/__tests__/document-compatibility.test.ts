@@ -8,11 +8,10 @@ import {
   DOCUMENT_COLLABORATION_VERSIONS as versions,
   assertDocumentCollaborationCompatibility as assertCompatible,
 } from '../index.ts';
-import { CollaborationSchemaError, SCHEMA_VERSION } from '../schema.ts';
+import { CollaborationSchemaError } from '../errors.ts';
 
-test('public full-document contract matches JSON handshake and stays separate from text-only schema', () => {
-  expect(versions.sharedSchemaVersion).toBe(3);
-  expect(SCHEMA_VERSION).toBe(1);
+test('public full-document contract matches JSON handshake', () => {
+  expect(versions.sharedSchemaVersion).toBe(4);
   expect(Object.isFrozen(versions)).toBe(true);
   expect(() => assertCompatible(JSON.parse(JSON.stringify(versions)))).not.toThrow();
   expect(() => assertCompatible({ ...versions, futureCapability: true })).not.toThrow();
@@ -46,5 +45,5 @@ test('refuses missing descriptors and inherited claims without coercion or leaki
   }
   expect(() =>
     assertCompatible({ ...versions, sharedSchemaVersion: '<script>private data</script>' })
-  ).toThrow('sharedSchemaVersion: expected 3, received invalid');
+  ).toThrow('sharedSchemaVersion: expected 4, received invalid');
 });

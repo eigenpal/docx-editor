@@ -414,6 +414,7 @@
       "hangingIndent": "Sangría francesa",
       "spaceBefore": "Espacio anterior",
       "spaceAfter": "Espacio posterior",
+      "direction": "Dirección del texto",
       "default": "Predeterminado",
       "points": "pto",
       "left": "Izquierda",
@@ -425,7 +426,9 @@
       "none": "Ninguno",
       "single": "Sencillo",
       "double": "Doble",
-      "auto": "Automático"
+      "auto": "Automático",
+      "rtl": "De derecha a izquierda",
+      "ltr": "De izquierda a derecha"
     },
     "structuralDetails": {
       "rowInsert": "Fila de tabla insertada",
@@ -825,7 +828,20 @@
   },
   "collaboration": {
     "participants": "Personas en este documento",
-    "moreParticipants": "{count, plural, one {# persona más} other {# personas más}}"
+    "moreParticipants": "{count, plural, one {# persona más} other {# personas más}}",
+    "status": {
+      "connecting": "Conectando con el documento…",
+      "editRefused": "Su último cambio no se pudo compartir, así que se ha deshecho.",
+      "offline": "Sin conexión. Puede seguir editando; sus cambios se sincronizarán cuando vuelva la conexión.",
+      "outOfSync": "Esta copia no está sincronizada con el documento compartido.",
+      "rejoin": "Volver a unirse",
+      "syncing": "Poniéndose al día con los últimos cambios…",
+      "waiting": "Esperando los últimos cambios…",
+      "stalled": "Los últimos cambios no han llegado. Vuelva a unirse para cargar el documento compartido.",
+      "offlinePaused": "Sin conexión. La edición se reanudará cuando vuelva la conexión.",
+      "upgradeRequired": "Esta aplicación y el documento compartido usan versiones de colaboración distintas. Guarde una copia y contacte con su administrador.",
+      "newRoomRequired": "Este documento compartido no puede continuar. Guarde una copia y vuelva a compartirla."
+    }
   },
   "review": {
     "displayForReview": "Mostrar para revisión",

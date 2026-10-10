@@ -220,7 +220,7 @@ A valid compatibility mode declared directly under the settings element, outside
 
 Manual page breaks (`w:br w:type="page"`) inside table cells do not add lines, line height, or pages. This applies to breaks at the start, middle, or end of a cell paragraph. The text on each side of a break stays on the same line. Line wrapping, tab alignment, and text wrap around floating pictures treat the text as if the break were absent. The document retains these breaks for editing and saving. Manual line breaks still start a new line inside a cell.
 
-A manual page break at the start of a paragraph moves its following text to the next page. This also applies when the current page has no room for another line. The position before the break stays at the bottom of the current page. The text on the next page gets the space before of the paragraph, in every compatibility mode. Adjacent paragraph spacing follows the document’s spacing rules.
+A manual page break at the start of a paragraph moves its following text or page break to the next page. This also applies when the current page has no room for another line. The position before the break stays at the bottom of the current page. The text on the next page gets the space before of the paragraph, in every compatibility mode. Adjacent paragraph spacing follows the document’s spacing rules.
 
 The preceding space after normally reduces this leading space. The space after of the text overlaps the space before of the next paragraph in the same way. In a numbered or bulleted paragraph, the number or bullet goes to the next page with the text.
 
@@ -228,7 +228,7 @@ This rule also applies to a paragraph with borders or shading. Lines that hold o
 
 A hidden break does not separate the border group. This includes tracked changes hidden by the selected review view. Shading fills each break line where it sits, up to the page edge.
 
-This rule does not apply to some paragraphs. A paragraph with only a page break, or with only hidden content after the break, keeps the ordinary rule. A paragraph that anchors a floating table, text frame, or drawing also keeps it. After a full page, its break line moves to a new page. Its text starts one page later.
+This rule does not apply to some paragraphs. A paragraph with only one page break, or with only hidden content after the break, keeps the ordinary rule. This includes a single break after a table that fills the page. A paragraph that opens with a page break followed by another page or column break keeps its first break on the current page. Each later break starts one more page. A paragraph that anchors a floating table, text frame, or drawing also keeps it. After a full page, its break line moves to a new page. Its text starts one page later.
 
 ### Section boundaries
 

@@ -2,10 +2,12 @@ import type {
   RevisionMarkupOptions,
   ResolvedRevisionMarkup,
   ReviewDisplayMode,
+  FieldResultsMode,
 } from '@docx-editor.dev/core/editor';
 import { FormControlTranslateProvider } from './form-control-translate';
 import { DialogProvider } from './dialog-host';
 import { PopupConfigProvider, type DocxEditorPopups } from './popup-config';
+import { warnFieldResultsChanged } from './field-results-warning';
 import type { DocxEditorChildren } from '../docx-editor-children';
 // Provider-first host for the docx editor facade.
 //
@@ -131,6 +133,13 @@ export interface DocxEditorRootProps {
   onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
   /** Initial revision display mode. */
   reviewDisplayMode?: ReviewDisplayMode;
+  /**
+   * How the reader edits saved field results. `'atomic'` (the default) keeps every field one
+   * unit. `'editable'` allows typing, deletion, and selection inside the saved result of a
+   * DATE, MERGEFIELD, HYPERLINK, or similar field. Read once, when the editor is created: a later change is ignored, with a development warning. Refused
+   * with a collaboration module.
+   */
+  fieldResults?: FieldResultsMode;
 
   /** Fired once per instance, after it is published to the tree (and after any
    *  `DocxEditor.Content` in the same commit has attached its mount point). A large
@@ -257,6 +266,8 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   propsRef.current = props;
 
   const [editor, setEditor] = useState<DocxEditorInstance | null>(null);
+  /** The `fieldResults` the current instance was created with. */
+  const createdFieldResults = useRef(props.fieldResults);
 
   // The channel `<DocxEditor.ColorByChangeType>` / `<DocxEditor.AuthorStyle>` declare through.
   // A store: declarations register from anywhere in the subtree, and identity must hold
@@ -279,6 +290,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
     // effects run bottom-up), so they reach the engine as construction config and the
     // FIRST paint is already styled — no kind-coloured frame.
     const declaredStyles = revisionStyleRegistry.current();
+    createdFieldResults.current = p.fieldResults;
     const instance = createDocxEditor({
       ...(p.document !== undefined ? { document: p.document } : {}),
       ...(p.fonts ? { fonts: p.fonts } : {}),
@@ -287,6 +299,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       translate,
       ...(p.revisionMarkup !== undefined ? { revisionMarkup: p.revisionMarkup } : {}),
       ...(p.reviewDisplayMode !== undefined ? { reviewDisplayMode: p.reviewDisplayMode } : {}),
+      ...(p.fieldResults !== undefined ? { fieldResults: p.fieldResults } : {}),
       ...(p.mode !== undefined ? { mode: p.mode } : {}),
       ...(declaredStyles !== undefined ? { revisionStyles: declaredStyles } : {}),
       ...(p.modules !== undefined ? { modules: p.modules } : {}),
@@ -420,6 +433,11 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
     if (!editor) return;
     editor.setLocale(locale);
   }, [editor, locale]);
+
+  // Read once at creation; a later change is ignored and reported in development.
+  useEffect(() => {
+    if (editor) warnFieldResultsChanged(createdFieldResults.current, props.fieldResults);
+  }, [editor, props.fieldResults]);
 
   // Table furniture labels follow the live locale resolver without remounting the editor.
   useEffect(() => {

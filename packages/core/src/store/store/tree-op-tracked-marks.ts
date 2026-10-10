@@ -13,14 +13,17 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import {
+  createMarkContainerIdAllocator,
   createNodeIdAllocator,
   parentNodeOf as parentOf,
   replaceChildren,
+  type EditOptions,
 } from '../package/ooxml-edit.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { TEXT_DEPS, fromEdit } from './tree-op-nodes.ts';
 import { build, childrenOf, isWmlNamed, revisionAttributes } from './tree-op-tracked.ts';
 import { sameEditingMoment } from './tree-op-tracked-adjacency.ts';
+import { isInertMarker } from './revision-marker-content.ts';
 import type { RevisionAttributionInput, TreeOpEffect, TreeOpResult } from './tree-op-validate.ts';
 
 /**
@@ -44,7 +47,7 @@ export function applyParagraphMarkRevision(
   paragraph: OoxmlParagraphNode,
   kind: 'ins' | 'del',
   revision: RevisionAttributionInput,
-  options?: { readonly deferValidation?: boolean }
+  options?: EditOptions
 ): TreeOpResult {
   const mint = createNodeIdAllocator(part);
   const effect: TreeOpEffect = {
@@ -63,7 +66,9 @@ export function applyParagraphMarkRevision(
   }
 
   const adjacent = adjacentParagraphMark(part, paragraph, kind, revision);
-  const id = adjacent?.id ?? nextRevisionId(part)();
+  // The transaction's counter when it lends one: a walk of the whole part per mark made a
+  // deletion over many paragraphs quadratic.
+  const id = adjacent?.id ?? options?.trackedRevisionIds?.mint() ?? nextRevisionId(part)();
   const attribution = adjacent
     ? {
         author: revision.author,
@@ -94,21 +99,35 @@ export function applyParagraphMarkRevision(
   const otherProperties = rPrRest.filter((child) => !isMarkRevision(child));
   // `ins` before `del`, per the group's own order.
   const marks = kind === 'ins' ? [mark, ...siblingMark] : [...siblingMark, mark];
-  const rPr = build(mint(), 'runProperties', 'rPr', [], [...marks, ...otherProperties]);
+  // The existing containers keep their ids. A fresh `w:pPr` reads, to a collaborating
+  // replica, as removing the old one, and a peer's concurrent property edit inside the old one
+  // then lands in a container that no longer exists.
+  // Containers this stamp creates take the `mark` id family, so resolving the mark removes
+  // them again and only them: a source `<w:pPr/>` or empty `w:rPr` stays as it was.
+  const markMint = createMarkContainerIdAllocator(part);
+  const rPr = build(
+    previousRPr?.id ?? markMint(),
+    'runProperties',
+    'rPr',
+    previousRPr && previousRPr.kind !== 'textValue' ? previousRPr.attributes : [],
+    [...marks, ...otherProperties]
+  );
   const pPrRest = properties
     ? childrenOf(properties).filter((child) => !isWmlNamed(child, 'rPr'))
     : [];
   // `CT_PPr` puts `w:rPr` AFTER the base properties — only `w:sectPr` and `w:pPrChange` may
   // follow it — so an existing `w:jc` stays in front. Placing `w:rPr` first looked tidier and
   // produced a `w:pPr` the tree invariants reject, which is the invariant reading the schema
-  // correctly. A FRESH id, because the rebuilt container is a new node.
+  // correctly.
   const trailing = pPrRest.filter(isTrailingParagraphProperty);
   const leading = pPrRest.filter((child) => !isTrailingParagraphProperty(child));
-  const pPr = build(mint(), 'paragraphProperties', 'pPr', properties ? properties.attributes : [], [
-    ...leading,
-    rPr,
-    ...trailing,
-  ]);
+  const pPr = build(
+    properties?.id ?? markMint(),
+    'paragraphProperties',
+    'pPr',
+    properties ? properties.attributes : [],
+    [...leading, rPr, ...trailing]
+  );
 
   return fromEdit(replaceChildren(part, paragraph.id, [pPr, ...rest], options), effect);
 }
@@ -156,7 +175,7 @@ export function retractsOwnParagraphMark(paragraph: OoxmlParagraphNode, author: 
 }
 
 /** The revision of one KIND on a paragraph's own mark, or undefined. */
-function paragraphMarkRevisionOf(
+export function paragraphMarkRevisionOf(
   paragraph: OoxmlParagraphNode,
   kind: 'ins' | 'del'
 ): { readonly localName: string; readonly author: string } | undefined {
@@ -207,7 +226,14 @@ function adjacentParagraphMark(
   if (!parent) return null;
   const siblings = parent.children;
   const at = siblings.findIndex((child) => child.id === paragraph.id);
-  for (const neighbour of [siblings[at - 1], siblings[at + 1]]) {
+  // Position markers between two paragraphs, such as a bookmark end, do not separate them:
+  // one deletion over both stays one decision.
+  const neighbourAt = (step: number): OoxmlNode | undefined => {
+    let index = at + step;
+    while (index >= 0 && index < siblings.length && isInertMarker(siblings[index]!)) index += step;
+    return siblings[index];
+  };
+  for (const neighbour of [neighbourAt(-1), neighbourAt(1)]) {
     if (!neighbour || neighbour.kind !== 'paragraph') continue;
     const properties = childrenOf(neighbour).find((child) => child.kind === 'paragraphProperties');
     const rPr = properties

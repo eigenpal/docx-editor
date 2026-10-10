@@ -13,6 +13,7 @@ import {
   MAX_DECIMAL_ID,
   nextDenseDecimalId,
   nextStripedDecimalId,
+  partNumberCandidates,
   relationshipIdFromNumber,
   runWithTransactionActor,
 } from '../package/actor-scoped-ids.ts';
@@ -899,5 +900,29 @@ describe('an attached actor stripes content-control ids', () => {
     if (!rightResult.ok) throw new Error(rightResult.reason);
     expect(contentControlIds(left.part)).toEqual([actorStripe('alice')]);
     expect(contentControlIds(right.part)).toEqual([actorStripe('bob')]);
+  });
+});
+
+describe('part numbers', () => {
+  /** The first three numbers a new part would try, with `actor` bound. */
+  const firstOf = (actor?: string): number[] =>
+    runWithTransactionActor(actor, () => {
+      const numbers: number[] = [];
+      for (const value of partNumberCandidates(99_999)) {
+        numbers.push(value);
+        if (numbers.length === 3) break;
+      }
+      return numbers;
+    });
+
+  test('a solo document numbers new parts 1, 2, 3', () => {
+    expect(firstOf()).toEqual([1, 2, 3]);
+  });
+
+  test('two collaborators adding a part from one snapshot take different numbers', () => {
+    const alice = firstOf('alice');
+    const bob = firstOf('bob');
+    expect(alice.filter((value) => bob.includes(value))).toEqual([]);
+    expect(alice.every((value) => value <= 99_999)).toBe(true);
   });
 });

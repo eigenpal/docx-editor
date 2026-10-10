@@ -3,10 +3,10 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// Hyphen elements through per-paragraph text collaboration (issue #1071).
+// Hyphen elements through automation on a collaborative document (issue #1071).
 //
-// Paragraph text carries each hyphen as one character, U+001E or U+001F. A remote replica
-// applies that text through `insertText`, which turns the characters back into elements.
+// Automation types each hyphen as one character, U+001E or U+001F, and `insertText` turns
+// the characters into elements. A remote replica receives the elements themselves.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -16,7 +16,7 @@ import { strFromU8, unzipSync } from 'fflate';
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
 import { DocxEditor } from '@docx-editor.dev/editor-api';
-import { createTextCollaboration } from '../session.ts';
+import { createDocumentCollaboration } from '../document-session.ts';
 import { collaborationDocx } from './support.ts';
 
 const ROOM = 'text-collaboration-hyphens';
@@ -33,7 +33,7 @@ function firstParagraphXml(bytes: Uint8Array): string {
 test('hyphens survive a remote edit and a remote insertion as elements', async () => {
   const docs = [new Y.Doc(), new Y.Doc()];
   const awareness = docs.map((doc) => new Awareness(doc));
-  const first = await createTextCollaboration({
+  const first = await createDocumentCollaboration({
     ydoc: docs[0]!,
     awareness: awareness[0]!,
     documentId: ROOM,
@@ -45,7 +45,7 @@ test('hyphens survive a remote edit and a remote insertion as elements', async (
     },
   });
   Y.applyUpdate(docs[1]!, Y.encodeStateAsUpdate(docs[0]!), 'initial');
-  const second = await createTextCollaboration({
+  const second = await createDocumentCollaboration({
     ydoc: docs[1]!,
     awareness: awareness[1]!,
     documentId: ROOM,
@@ -85,7 +85,7 @@ test('hyphens survive a remote edit and a remote insertion as elements', async (
 test('a symbol survives remote edits on both sides of it as an element', async () => {
   const docs = [new Y.Doc(), new Y.Doc()];
   const awareness = docs.map((doc) => new Awareness(doc));
-  const first = await createTextCollaboration({
+  const first = await createDocumentCollaboration({
     ydoc: docs[0]!,
     awareness: awareness[0]!,
     documentId: `${ROOM}-symbol`,
@@ -97,7 +97,7 @@ test('a symbol survives remote edits on both sides of it as an element', async (
     },
   });
   Y.applyUpdate(docs[1]!, Y.encodeStateAsUpdate(docs[0]!), 'initial');
-  const second = await createTextCollaboration({
+  const second = await createDocumentCollaboration({
     ydoc: docs[1]!,
     awareness: awareness[1]!,
     documentId: `${ROOM}-symbol`,

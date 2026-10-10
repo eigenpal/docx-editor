@@ -70,13 +70,13 @@
     "exportFailed": "Export failed: {message}",
     "exportMarkdownMissing": "Install @docx-editor.dev/docx-to-markdown and configure menu.exporters.markdown.",
     "exportPdfMissing": "Install @docx-editor.dev/docx-to-pdf on your Node.js server and configure menu.exporters.pdf.",
-    "exportingMarkdown": "Exporting Markdown\u2026",
-    "exportingPdf": "Exporting PDF\u2026",
+    "exportingMarkdown": "Exporting Markdown…",
+    "exportingPdf": "Exporting PDF…",
     "exportMarkdownFailed": "Markdown export failed",
     "exportPdfFailed": "PDF export failed",
     "exportDownloadHint": "Your download starts when the file is ready. You can continue editing while the export runs.",
     "exportContinueEditing": "Continue editing",
-    "printPreparing": "Preparing to print\u2026",
+    "printPreparing": "Preparing to print…",
     "printOpenPdf": "Open PDF",
     "printFailed": "Print failed",
     "printFailedMessage": "Printing failed: {message}",
@@ -167,7 +167,7 @@
     "removeSpaceBefore": "Remove space before paragraph",
     "addSpaceAfter": "Add space after paragraph",
     "removeSpaceAfter": "Remove space after paragraph",
-    "options": "Line spacing options\u2026"
+    "options": "Line spacing options…"
   },
   "styles": {
     "selectAriaLabel": "Select paragraph style",
@@ -282,13 +282,13 @@
       "applyToDocument": "Whole document",
       "applyToSection": "This section",
       "pageSizes": {
-        "letter": "Letter (8.5\" \u00d7 11\")",
-        "a4": "A4 (8.27\" \u00d7 11.69\")",
-        "legal": "Legal (8.5\" \u00d7 14\")",
-        "a3": "A3 (11.69\" \u00d7 16.54\")",
-        "a5": "A5 (5.83\" \u00d7 8.27\")",
-        "b5": "B5 (6.93\" \u00d7 9.84\")",
-        "executive": "Executive (7.25\" \u00d7 10.5\")"
+        "letter": "Letter (8.5\" × 11\")",
+        "a4": "A4 (8.27\" × 11.69\")",
+        "legal": "Legal (8.5\" × 14\")",
+        "a3": "A3 (11.69\" × 16.54\")",
+        "a5": "A5 (5.83\" × 8.27\")",
+        "b5": "B5 (6.93\" × 9.84\")",
+        "executive": "Executive (7.25\" × 10.5\")"
       }
     },
     "footnoteProperties": {
@@ -414,6 +414,7 @@
       "hangingIndent": "Hanging indent",
       "spaceBefore": "Space before",
       "spaceAfter": "Space after",
+      "direction": "Text direction",
       "default": "Default",
       "points": "pt",
       "left": "Left",
@@ -425,7 +426,9 @@
       "none": "None",
       "single": "Single",
       "double": "Double",
-      "auto": "Automatic"
+      "auto": "Automatic",
+      "rtl": "Right-to-left",
+      "ltr": "Left-to-right"
     },
     "structuralDetails": {
       "rowInsert": "Inserted table row",
@@ -490,7 +493,7 @@
       "optionsAriaLabel": "Search options",
       "resultsAriaLabel": "Search results",
       "noResults": "No results",
-      "searching": "Searching\u2026",
+      "searching": "Searching…",
       "counter": "Result {current} of {total}",
       "counterTruncated": "Result {current} of {total}+",
       "total": "{total, plural, one {# result} other {# results}}",
@@ -697,7 +700,7 @@
       "lock": "Lock",
       "placeholder": "Placeholder",
       "bound": "Data bound",
-      "empty": "\u2014",
+      "empty": "—",
       "yes": "Yes",
       "no": "No",
       "boundNote": "This control is bound to external data. Editing is refused.",
@@ -825,7 +828,20 @@
   },
   "collaboration": {
     "participants": "People in this document",
-    "moreParticipants": "{count, plural, one {# more person} other {# more people}}"
+    "moreParticipants": "{count, plural, one {# more person} other {# more people}}",
+    "status": {
+      "connecting": "Connecting to the document…",
+      "offline": "Offline. You can keep editing; your changes sync when the connection returns.",
+      "offlinePaused": "Offline. Editing resumes when the connection returns.",
+      "syncing": "Catching up with the latest changes…",
+      "waiting": "Waiting for the latest changes…",
+      "stalled": "The latest changes have not arrived. Rejoin to load the shared document.",
+      "editRefused": "Your last change could not be shared, so it was undone.",
+      "outOfSync": "This copy is out of sync with the shared document.",
+      "upgradeRequired": "This app and the shared document use different collaboration versions. Save a copy and contact your administrator.",
+      "newRoomRequired": "This shared document cannot continue. Save a copy and share it again.",
+      "rejoin": "Rejoin"
+    }
   },
   "review": {
     "displayForReview": "Display for Review",
@@ -868,7 +884,7 @@
     "apply": "OK",
     "cancel": "Cancel",
     "unavailable": "This field cannot be changed.",
-    "edit": "Edit field\u2026",
+    "edit": "Edit field…",
     "type": "Type",
     "regular": "Regular text",
     "number": "Number",

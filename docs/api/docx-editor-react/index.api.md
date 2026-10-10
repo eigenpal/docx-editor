@@ -61,6 +61,7 @@ import { EditorQuery } from '@docx-editor.dev/core/contracts/editor';
 import { EditorScope } from '@docx-editor.dev/core/contracts/editor';
 import { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { ExecResult } from '@docx-editor.dev/core/contracts/editor';
+import { FieldResultsMode } from '@docx-editor.dev/core/editor';
 import { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
 import { FontConfigurationBase } from '@docx-editor.dev/core/editor';
 import { FontConfigurationFragment } from '@docx-editor.dev/core/editor';
@@ -1228,6 +1229,7 @@ export interface DocxEditorProps {
     readonly colorMode?: 'light' | 'dark' | 'system';
     contextMenu?: boolean | DocxEditorContextMenuProps;
     document?: DocumentSource;
+    fieldResults?: FieldResultsMode;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     hyperlinkPopup?: boolean;
     i18n?: Translations;
@@ -1337,6 +1339,7 @@ export interface DocxEditorRootProps {
     // (undocumented)
     children?: DocxEditorChildren;
     document?: DocumentSource;
+    fieldResults?: FieldResultsMode;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     imageDecodePort?: ImageDecodePort;
     locale?: string;
@@ -3207,7 +3210,5 @@ export interface VerticalRulerProps {
 }
 
 export { WORD_DEFAULT_FONT }
-
-// (No @packageDocumentation comment for this package)
 
 ```

@@ -10,7 +10,16 @@ export interface DeclarationSettings {
   ambient?: string[];
 }
 
-export type ConfigWithDeclarations = Options & { declarations?: DeclarationSettings };
+export type ConfigWithDeclarations = Options & {
+  /**
+   * Settings for the declaration build of the config's entries, or one declaration program
+   * per item, each over its own entries, for a bundle whose entries need different compiler
+   * options.
+   */
+  declarations?:
+    | DeclarationSettings
+    | (DeclarationSettings & { entry: string[] | Record<string, string> })[];
+};
 
 export declare function withDeclarations(
   configUrl: string | URL,
@@ -34,3 +43,6 @@ export declare function entryMap(entry: string[] | Record<string, string>): Reco
 export declare function jsonType(value: unknown, indent?: string, siblingKeys?: string[]): string;
 export declare function typesCondition(target: unknown): string | undefined;
 export declare function publishedDeclaration(specifier: string, fromDir: string): string;
+
+/** The `@packageDocumentation` comment of an entry's source, or null. */
+export declare function packageDocumentationOf(source: string): string | null;

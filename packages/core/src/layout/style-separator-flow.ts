@@ -1,3 +1,4 @@
+import { FieldResultsModeMemo } from '../store/package/field-result-mode.ts';
 import { hasVisibleSeparatorText } from './style-separator-visible.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
 import { resolveCjkTypography } from './cjk-typography.ts';
@@ -28,7 +29,8 @@ interface GroupMemo {
   members: readonly OoxmlElement[];
   merged: OoxmlElement;
 }
-const groupMemos = new WeakMap<OoxmlElement, GroupMemo[]>();
+/** Group offsets are model offsets: each field-result mode keeps its own entries. */
+const groupMemos = new FieldResultsModeMemo<OoxmlElement, GroupMemo[]>();
 const boundaryMemo = new WeakMap<OoxmlNode, boolean>();
 interface MarkMemo {
   readonly hidden: boolean;

@@ -1,0 +1,74 @@
+{
+  "config": "sequential",
+  "seed": 1,
+  "replicas": 3,
+  "delivery": "in-order",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 0
+        },
+        "paragraphs": [3]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 11
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteBlock",
+          "blockId": ""
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "joinParagraphs",
+          "firstId": "",
+          "secondId": ""
+        },
+        "paragraphs": [3, 4]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "addComment",
+          "start": 4,
+          "end": 8
+        },
+        "paragraphs": [4]
+      }
+    }
+  ]
+}

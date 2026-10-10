@@ -16,6 +16,7 @@
 // convergence counter never moves because a textbox changed. All bounds are explicit:
 // nesting depth, fragment count, and the extent clip all fail closed with reasons.
 
+import { withFieldResultsProducer } from './field-results-producer.ts';
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
 import type { DrawingProjection } from '../store/package/drawing-projection.ts';
 import { emuToPoints } from './drawing-layout.ts';
@@ -532,7 +533,7 @@ export function layoutTextboxStory(
     flowBlocksInBox(blocks, 0, width, 0, 0, {
       measurer: options.measurer,
       cache: options.cache,
-      producer: `${options.producer}${options.showFieldCodes ? '|field-codes' : ''}|txbx:${projection.drawingNodeId}`,
+      producer: `${withFieldResultsProducer(options.producer)}${options.showFieldCodes ? '|field-codes' : ''}|txbx:${projection.drawingNodeId}`,
       nextLineId: () => `${prefix}-line-${lineCounter++}`,
       styleCascade: options.styleCascade,
       ...(listItems ? { listItems } : {}),

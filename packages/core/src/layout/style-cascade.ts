@@ -599,7 +599,7 @@ export function cascadeParagraphFormatting(
   return cascadeParagraphWithNumbering(table, directPPr, tableCellStyle);
 }
 
-function cascadeParagraphWithNumbering(
+export function cascadeParagraphWithNumbering(
   table: StyleCascadeTable,
   directPPr: OoxmlNode | undefined,
   tableCellStyle?: TableCellStyleFormatting,

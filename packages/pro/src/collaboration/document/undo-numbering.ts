@@ -4,6 +4,7 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import * as Y from 'yjs';
+import { holderItem } from './yjs-items.ts';
 import { parseBindingMapKey, readNodeShell, type PackageSchema } from './schema.ts';
 
 const PART = '/word/numbering.xml';
@@ -32,7 +33,7 @@ export function retainsNumberingInfrastructure(schema: PackageSchema, item: Y.It
   }
   if (parent === schema.overrides && item.parentSub === PART) return true;
   if (parent === schema.parts && item.parentSub === PART) return true;
-  const holder = (parent as { _item?: Y.Item } | null)?._item;
+  const holder = holderItem(parent);
   if (holder?.parent === schema.parts && holder.parentSub === PART) return true;
   // Relationships use a holder map, then a record map. Preserve only numbering records.
   const numbering = (value: unknown): boolean =>
@@ -41,6 +42,6 @@ export function retainsNumberingInfrastructure(schema: PackageSchema, item: Y.It
     value instanceof Y.Map && [...value.values()].some(numbering);
   if (parent === schema.relationships) return item.content.getContent().some(hasNumbering);
   if (holder?.parent === schema.relationships) return item.content.getContent().some(numbering);
-  const owner = (holder?.parent as { _item?: Y.Item } | null)?._item;
+  const owner = holderItem(holder?.parent);
   return owner?.parent === schema.relationships && numbering(parent);
 }

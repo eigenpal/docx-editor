@@ -35,13 +35,45 @@ Leading direction marks remain in saved results. Their formatting does not repla
 
 Saved field results can wrap across lines. Long unbroken results, including hyperlink URLs, can break at the line edge. Authored line breaks inside supported results start another line. Page breaks follow the surrounding story rules. Page breaks inside table cells do not add pages.
 
-Wrapping does not split an atomic field into separately editable characters. The caret before the field stays on its first line. The caret after it goes to its last line. Deleting the field removes the complete field.
+Wrapping does not split an atomic field into separately editable characters, unless you [edit saved field results](#edit-saved-field-results). The caret before the field stays on its first line. The caret after it goes to its last line. Deleting the field removes the complete field.
 
 Breaking long unbroken results excludes page-number placeholders, `PAGEREF` results, form controls, note marks, and positional tabs. These items retain their existing layout limits. Text form fields have separate editing rules described later in this guide.
 
 ### Nested fields
 
 Saved results inside another field's instruction do not add text, line breaks, or links. Find and text reads skip them too. This applies to complex fields and simple fields (`w:fldSimple`). The outer field keeps its normal display behavior. Fields inside a saved result still display.
+
+## Edit saved field results
+
+By default, every field is one unit. Typing beside a field places the text before or after it, and Backspace removes the whole field.
+
+To let readers edit the saved result of a field, set `fieldResults` to `'editable'` when you create the editor:
+
+```ts
+const editor = createDocxEditor({
+  container,
+  document: bytes,
+  fieldResults: 'editable',
+});
+```
+
+In React and Vue, pass the same value as the `fieldResults` prop of `DocxEditor` or `DocxEditor.Root`. The editor reads the value once, when it is created. A later change to the prop is ignored, and a development build logs a warning.
+
+This mode applies to fields that show their saved result: `DATE`, `TIME`, `CREATEDATE`, `SAVEDATE`, `PRINTDATE`, `MERGEFIELD`, `HYPERLINK`, `QUOTE`, `FILENAME`, `FILLIN`, and `SEQ`. Fields that the editor computes, such as `PAGE`, `NUMPAGES`, `REF`, `PAGEREF`, and `DOCPROPERTY`, stay one unit. A field whose saved result contains another field also stays one unit.
+
+In this mode:
+
+- Typing, deletion, formatting, and composed input inside a result change the result text. Undo and redo treat a typing burst as one step.
+- Text typed at the start or end of a result goes before or after the field.
+- Backspace after a field, or Delete before it, selects the whole field. Press the key again to remove the field.
+- A selection with one end inside a result and the other end outside grows to cover the whole field.
+- Deleting only the result text keeps the field with an empty result. The empty field is one unit: text typed beside it goes before or after it, and Backspace or Delete next to it removes it.
+- In suggesting mode, edits inside a result are tracked inside the result.
+- A `w:fldSimple` field becomes the equivalent complex field when you edit its result.
+
+The editor has no update command for these fields and never calculates their values, so a manual edit stays in the editor and is saved as the field result. `DATE` and `TIME` fields show their saved value when a document opens. An edit does not mark the field for update (`w:dirty`). An application that updates fields later replaces a manual edit, except for `HYPERLINK` display text and locked fields.
+
+Collaboration sessions keep every field one unit. If you set `fieldResults: 'editable'` and register a collaboration module, `createDocxEditor` throws a `TypeError`.
 
 ## Table of contents boundaries
 
@@ -162,6 +194,10 @@ For customizable list popups, use [content controls](/docs/2.x/guides/content-co
 ## Form field accessibility and macros
 
 A field's `w:name` supplies its accessible name as bounded plain text. Fields with entry or exit macro references supply no name through this path. Macro values are not read. Entry and exit macros never run.
+
+## Mixed-script cached field results
+
+Cached atomic field results can contain Latin and East Asian text. The layout selects the declared East Asian font for eligible display runs. All display slices keep the field's original model range. Navigation spans and explicit measurement reservations keep their existing behavior. Canonical field data and calculation support retain their existing behavior.
 
 ## Next steps
 
