@@ -869,8 +869,9 @@ export function mountPaginatedSurface(
       const ids = textboxEditing.paragraphIds();
       return ids.includes(tail) ? tail : (ids[ids.indexOf(head) + 1] ?? null);
     }
-    const part = session.partFor(storyScope());
-    if (!part || findNode(part, tail)) return tail;
+    // The minted tail id names its part, even after the paragraph takes another id.
+    const part = partOfNodeId(session, tail) ?? partOfNodeId(session, head) ?? session.part();
+    if (findNode(part, tail)) return tail;
     const owner = parentNodeOf(part, head);
     const index = owner ? owner.children.findIndex((child) => child.id === head) : -1;
     const next = owner && index >= 0 ? owner.children[index + 1] : undefined;
