@@ -32,6 +32,7 @@ const MODE_MATRIX = {
   keepNextGivesTailLines: 'modern',
   legacyPercentTableContentWidth: 'legacy',
   legacySharedGridLineSideRules: 'legacy',
+  modernBidiTableRuleShift: 'modern',
   modernGridLineSideRules: 'modern',
   noteTableCellKeeps: 'modern',
   positionedTableBreaksAtMargin: 'modern',

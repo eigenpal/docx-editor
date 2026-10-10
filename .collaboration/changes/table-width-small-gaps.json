@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "AutoFit tables scaled authored column widths in proportion to fit their width; older-mode percentage tables with zero cell margins, percent-sign values past their range, text-box tables, and nested tables without a width used the ordinary geometry; mode 15 right-to-left tables mirrored the left-to-right position.",
+  "after": "AutoFit tables with a preferred width on every column raise columns to their minimums and give way by their spare room; those older-mode tables use the content-aligned reference box with their measured adjustments; mode 15 right-to-left tables move half their mean outer rule toward their visual left.",
+  "reason": "Only layout geometry changes. Document nodes, text offsets, operations, room formats, and package serialization stay the same.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-width-small-gaps.test.ts",
+    "packages/core/src/layout/__tests__/legacy-table-horizontal-insets.test.ts",
+    "packages/core/src/layout/__tests__/textbox-story-layout.test.ts",
+    "packages/core/src/layout/__tests__/modern-edge-aligned-side-rules.test.ts"
+  ],
+  "changeset": "table-width-small-gaps",
+  "migration": null
+}
