@@ -44,7 +44,6 @@ import {
 import {
   FORMAT_DEFAULT_EAST_ASIAN_FAMILY,
   FORMAT_DEFAULT_LATIN_FAMILY,
-  isChineseFace,
 } from './default-font-faces.ts';
 
 /** `basedOn` walk cap, matching `run-defaults`. */
