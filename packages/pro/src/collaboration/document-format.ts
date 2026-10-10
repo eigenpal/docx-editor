@@ -6,7 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import type * as Y from 'yjs';
 import { DOCUMENT_COLLABORATION_VERSIONS } from './document-compatibility.ts';
 import { PACKAGE_META_KEY } from './document/schema.ts';
-import { CollaborationSchemaError } from './schema.ts';
+import { CollaborationSchemaError } from './errors.ts';
 
 const VERSION_FIELDS = [
   'protocolVersion',
@@ -41,7 +41,10 @@ export const COLLABORATION_FORMAT_VERSION: string = formatVersion(
  * This check does not authenticate clients, validate room content, or migrate data.
  *
  * @throws CollaborationSchemaError with `collaboration-format-mismatch` for an
- * incompatible, missing, or malformed version. Use `code` for application logic.
+ * incompatible, missing, or malformed version. Use `code` for application logic. This code,
+ * `protocol-version-mismatch`, and `schema-version-mismatch` all mean that this client and
+ * the room have different collaboration formats. Refuse the connection and direct the user
+ * to a compatible deployment; reconnecting does not help.
  * @public
  */
 export function assertCollaborationFormatCompatibility(version: unknown): void {

@@ -14,6 +14,4 @@ export interface WriteMarkdownBundleOptions {
     readonly directory: string;
 }
 
-// (No @packageDocumentation comment for this package)
-
 ```

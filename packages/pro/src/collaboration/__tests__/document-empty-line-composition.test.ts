@@ -114,12 +114,13 @@ test('empty paragraph composition converges, retains remote carets, and survives
   peers.bob.room.session.flushPendingJournals();
   peers.resume();
   converge();
-  // Removing the complete run also removes concurrent text in that deleted run.
-  expect(alice.editor.surface!.session.bodyText()).toBe('');
+  // A deletion removes only the text its author saw: text composed meanwhile stays.
+  expect(alice.editor.surface!.session.bodyText()).toBe('新');
+  expect(bob.editor.surface!.session.bodyText()).toBe('新');
   await new Promise((resolve) => setTimeout(resolve, 30));
+  // The line holds the composed text, so its size is the text run's.
   for (const peer of [alice, bob]) {
-    expect(
-      parseFloat(peer.container.querySelector<HTMLElement>('.layout-line')!.style.fontSize)
-    ).toBeGreaterThan(0);
+    const run = peer.container.querySelector<HTMLElement>('.layout-line .layout-run');
+    expect(parseFloat(run?.style.fontSize ?? '')).toBeGreaterThan(0);
   }
 });

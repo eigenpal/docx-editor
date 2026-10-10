@@ -7,7 +7,9 @@ import {
   computed,
   getCurrentInstance,
   readonly,
+  shallowRef,
   toValue,
+  watch,
   type MaybeRefOrGetter,
   type Ref,
 } from 'vue';
@@ -18,7 +20,7 @@ import type {
   CollaborationIdentity,
 } from '@docx-editor.dev/core/collaboration';
 import type { EditorModule } from '@docx-editor.dev/core/editor';
-import type { CollaborationBootstrap, CollaborationSession } from '../collaboration/session.ts';
+import type { CollaborationBootstrap, CollaborationSession } from '../collaboration/types.ts';
 import {
   EMPTY_MODULES,
   useCollaborationRoom,
@@ -34,19 +36,23 @@ export type UseHocuspocusCollaborationBootstrap = CollaborationBootstrap;
 export interface UseHocuspocusCollaborationConnectOptions {
   /** Hocuspocus server WebSocket URL, for example `wss://collab.example.test`. */
   readonly url: string;
+  /** Room name on the server, also the document id. Make one with `createCollaborationRoomId`. */
   readonly roomId: string;
   /**
    * Authentication token the provider sends in its auth handshake. Pass a callback and the
    * provider re-evaluates it on every reconnect, which is how expiring JWTs renew.
    */
   readonly token?: string | (() => string | Promise<string>);
+  /** The local participant. Recorded as the author of this replica's changes. */
   readonly identity: CollaborationIdentity;
+  /** Whether to seed the room, join it, or let the peers decide. */
   readonly bootstrap: UseHocuspocusCollaborationBootstrap;
   /** Bound on the wait for the server's initial sync. Default 30000 ms. */
   readonly syncedTimeoutMs?: number;
   /**
    * Admit local edits while the transport is `disconnected`. Buffered updates merge on
-   * reconnect. See {@link CreateDocumentCollaborationOptions.offlineEditing}.
+   * reconnect. On by default; pass `false` to pause editing while disconnected. See
+   * {@link CreateDocumentCollaborationOptions.offlineEditing}.
    */
   readonly offlineEditing?: boolean;
 }
@@ -83,14 +89,19 @@ export interface UseHocuspocusCollaborationOptions {
   /**
    * Connect this room when the composable starts. Omit it and call
    * {@link UseHocuspocusCollaborationReturn.connect} after the user chooses a room.
+   * A different room, server, bootstrap kind, or `actorId` leaves the old room and
+   * connects the new one, and `null` leaves. A room opened with `connect` stays.
    */
   readonly room?: UseHocuspocusCollaborationConnectOptions | null;
 }
 
 /** Values {@link useHocuspocusCollaboration} returns. @public */
 export interface UseHocuspocusCollaborationReturn {
+  /** The room's document as `.docx` bytes to mount. Null until the room is ready. */
   readonly document: Readonly<Ref<Uint8Array | null>>;
+  /** Modules to pass to the editor. They include the collaboration module once ready. */
   readonly modules: Readonly<Ref<readonly EditorModule[]>>;
+  /** The live session for status and presence. Null while no room is connected. */
   readonly session: Readonly<Ref<CollaborationSession | null>>;
   /**
    * The room's shared Yjs document, owned by the composable. Null while no room is
@@ -107,7 +118,24 @@ export interface UseHocuspocusCollaborationReturn {
    * server events). The composable destroys it on leave and unmount.
    */
   readonly provider: Readonly<Ref<HocuspocusProvider | null>>;
+  /** True while a connect is in progress. */
   readonly pending: Readonly<Ref<boolean>>;
+  /**
+   * Local changes the server has not confirmed yet. More than zero while edits made offline
+   * wait for the connection, and for a moment after each edit while online. Warn before the
+   * page closes while it is above zero, or those edits are lost:
+   *
+   * @example
+   * ```ts
+   * const warn = (event: BeforeUnloadEvent) => {
+   *   if (unsyncedChanges.value > 0) event.preventDefault();
+   * };
+   * onMounted(() => window.addEventListener('beforeunload', warn));
+   * onBeforeUnmount(() => window.removeEventListener('beforeunload', warn));
+   * ```
+   */
+  readonly unsyncedChanges: Readonly<Ref<number>>;
+  /** The connect failure or session failure, or null. Check it before `document`. */
   readonly error: Readonly<Ref<CollaborationFailure | null>>;
   /**
    * Connect a room. RESOLVES with the failure, or null on success — it does not reject.
@@ -123,8 +151,9 @@ export interface UseHocuspocusCollaborationReturn {
    * Destroy the room and carry on editing locally.
    *
    * The current bytes live in the editor, not in this composable, so the argument is
-   * required: pass `await editor.save()` to keep what the room typed. The host remounts the
-   * editor from exactly these bytes.
+   * required: pass the bytes `editor.save()` resolves with, as `new Uint8Array(saved)` after
+   * a `null` check, to keep what the room typed. The host remounts the editor from exactly
+   * these bytes.
    */
   readonly leave: (nextDocument: Uint8Array) => void;
   /**
@@ -132,10 +161,19 @@ export interface UseHocuspocusCollaborationReturn {
    * again to the same room with the same identity, url, and token.
    *
    * The reconnect always uses bootstrap `{ kind: 'join' }`, because the server still holds
-   * the room. When the server no longer holds it, the join rejects with
+   * the room. When the server no longer holds it, the rejoin resolves with
    * `initialization-timeout` — nothing is lost, because `nextDocument` (your saved bytes)
    * stays mounted locally. A connect that failed also counts as the prior attempt, so
-   * rejoin retries it as a joiner.
+   * rejoin retries it as a joiner. Resolves with the failure, or `null` on success.
+   *
+   * @example
+   * ```ts
+   * const saved = await editorRef.value?.save();
+   * if (saved) {
+   *   const failure = await rejoin(new Uint8Array(saved));
+   *   if (failure) console.warn(failure.code);
+   * }
+   * ```
    */
   readonly rejoin: (nextDocument: Uint8Array) => Promise<CollaborationFailure | null>;
 }
@@ -192,6 +230,21 @@ export function useHocuspocusCollaboration(
     identityOf: (room) => room.identity,
   });
 
+  const unsyncedChanges = shallowRef(0);
+  watch(
+    () => state.room.value?.provider ?? null,
+    (provider, _previous, onCleanup) => {
+      unsyncedChanges.value = provider?.unsyncedChanges ?? 0;
+      if (!provider) return;
+      const update = (): void => {
+        unsyncedChanges.value = provider.unsyncedChanges;
+      };
+      provider.on('unsyncedChanges', update);
+      onCleanup(() => provider.off('unsyncedChanges', update));
+    },
+    { immediate: true }
+  );
+
   return {
     document: readonly(state.document),
     modules: readonly(state.modules),
@@ -199,6 +252,7 @@ export function useHocuspocusCollaboration(
     ydoc: computed(() => state.room.value?.ydoc ?? null),
     provider: computed(() => state.room.value?.provider ?? null),
     pending: readonly(state.pending),
+    unsyncedChanges: readonly(unsyncedChanges),
     error: readonly(state.error),
     connect: state.connect,
     leave: state.leave,

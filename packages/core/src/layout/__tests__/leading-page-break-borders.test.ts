@@ -183,6 +183,20 @@ describe('a bordered paragraph that opens with a page break', () => {
     }
   });
 
+  test('keeps the first of two breaks on a full page inside a border group', () => {
+    const sidesOnly = rules('left', 'right');
+    const breaksOnly = `<w:p><w:pPr>${sidesOnly}${spacing()}</w:pPr>${br}${br}</w:p>`;
+    const layout = lay(
+      load(fill(11) + paragraph('group', sidesOnly) + breaksOnly + paragraph('after'))
+    );
+    expect(layout.pages).toHaveLength(3);
+    const [first, second] = fragmentsAt(layout, 12);
+    expect(first!.page).toBe(0);
+    expect(first!.fragment.outOfFlow).toBe(true);
+    expect(second!.page).toBe(1);
+    expect(fragmentsAt(layout, 13).map(({ page }) => page)).toEqual([2]);
+  });
+
   test('keeps the ordinary group when the paragraph has text before its break', () => {
     const textFirst =
       `<w:p><w:pPr>${BOX}${spacing()}</w:pPr><w:r><w:t>lead</w:t></w:r>${br}` +

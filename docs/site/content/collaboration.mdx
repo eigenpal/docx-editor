@@ -35,6 +35,9 @@ Store the room ID in your application state or URL. Do not create a new ID durin
 
 Call `useWebrtcCollaboration` with a room ID, an identity, and the initial DOCX bytes. The first editor creates the room. Later editors join its document.
 
+<FrameworkTabs>
+<Framework value="react">
+
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
 import { useWebrtcCollaboration } from '@docx-editor.dev/pro/react/webrtc';
@@ -66,7 +69,43 @@ export function CollaborativeEditor({ roomId, bytes, actorId, name }: Collaborat
 }
 ```
 
-Vue provides the composable at `@docx-editor.dev/pro/vue/webrtc`. Select Vue in the [collaboration API reference](/docs/2.x/pro/collaboration#connect-with-usewebrtccollaboration) for a complete component.
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { useWebrtcCollaboration } from '@docx-editor.dev/pro/vue/webrtc';
+
+const props = defineProps<{
+  roomId: string;
+  bytes: Uint8Array;
+  actorId: string;
+  name: string;
+}>();
+
+const { document, modules, session, pending, error } = useWebrtcCollaboration(() => ({
+  room: {
+    roomId: props.roomId,
+    identity: { actorId: props.actorId, name: props.name },
+    bootstrap: { kind: 'create-or-join', document: props.bytes },
+  },
+}));
+</script>
+
+<template>
+  <p v-if="error">Could not join this document. Save any local work and contact support.</p>
+  <p v-else-if="pending || !document">Connecting…</p>
+  <DocxEditor v-else :key="session?.sessionId" :document="document" :modules="modules" />
+</template>
+```
+
+The composable returns refs, and the template unwraps them.
+
+</Framework>
+</FrameworkTabs>
+
+For leaving and rejoining a room, see [Connect with `useWebrtcCollaboration`](/docs/2.x/pro/collaboration#connect-with-usewebrtccollaboration).
 
 ## Test the room
 

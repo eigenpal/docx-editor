@@ -14,6 +14,7 @@ import type * as Y from 'yjs';
 import type { CanonicalBinaryDescriptor } from '@docx-editor.dev/core/collaboration/replication';
 import { partNameKey } from '@docx-editor.dev/core/store';
 import { rejectDangerousKey } from './limits.ts';
+import { asLogicalId } from './identity.ts';
 import { isNodeMap, type PartDirectoryEntry } from './schema.ts';
 
 function readString(value: unknown): string {
@@ -25,7 +26,7 @@ export function readPartEntries(parts: Y.Map<Y.Map<unknown>>): readonly PartDire
   const entries: PartDirectoryEntry[] = [];
   parts.forEach((value, name) => {
     if (!isNodeMap(value) || rejectDangerousKey(name)) return;
-    const rootLogicalId = readString(value.get('rootId'));
+    const rootLogicalId = asLogicalId(readString(value.get('rootId')));
     if (rootLogicalId.length === 0) return;
     entries.push({
       name,

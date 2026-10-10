@@ -9,7 +9,7 @@ import { join } from 'node:path';
 test('fail-fast stops dispatch after the first failure; normal mode reports both', () => {
   const root = mkdtempSync(join(tmpdir(), 'ci-runner-test-'));
   try {
-    for (const dir of ['scripts/test', 'packages', 'docs', 'examples']) {
+    for (const dir of ['scripts/test', 'packages', 'docs', 'examples', 'benchmarks']) {
       mkdirSync(join(root, dir), { recursive: true });
     }
     for (const file of ['run-parallel.mjs', 'shard.mjs']) {
@@ -66,7 +66,7 @@ test.skipIf(process.platform === 'win32')(
     const root = mkdtempSync(join(tmpdir(), 'ci-runner-process-tree-'));
     const pids = [];
     try {
-      for (const dir of ['scripts/test', 'packages', 'docs', 'examples']) {
+      for (const dir of ['scripts/test', 'packages', 'docs', 'examples', 'benchmarks']) {
         mkdirSync(join(root, dir), { recursive: true });
       }
       for (const file of ['run-parallel.mjs', 'shard.mjs']) {

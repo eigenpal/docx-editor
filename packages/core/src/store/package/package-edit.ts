@@ -36,6 +36,7 @@ import {
   relationshipIdFromNumber,
   relationshipNumberOf,
   resolveAllocationActor,
+  stripedDecimalIdSequence,
 } from './actor-scoped-ids.ts';
 import {
   isCanonicalPrimitiveCaptureActive,
@@ -480,12 +481,29 @@ export function withRelationships(
     const match = /^rId(\d+)$/.exec(id);
     if (match) next = Math.max(next, Number(match[1]) + 1);
   }
+  // With a collaborator bound, ids come from that actor's stripe, so two people adding
+  // relationships to one part from one snapshot do not mint the same `rId`.
+  const actor = resolveAllocationActor();
+  const striped =
+    actor === undefined
+      ? null
+      : stripedDecimalIdSequence(
+          new Set(
+            [...used].flatMap((id) => {
+              const value = relationshipNumberOf(id);
+              return value === null ? [] : [String(value)];
+            })
+          ),
+          actor,
+          MAX_RELATIONSHIP_NUMBER
+        );
   const existing = relationshipsOf(pkg, ownerPart);
   const ids: string[] = [];
   const records: OoxmlNode[] = [];
   const added: RelationshipRecord[] = [];
   requests.forEach(([type, rawTarget], index) => {
-    let id = `rId${next++}`;
+    const stripedNumber = striped?.() ?? null;
+    let id = stripedNumber !== null ? `rId${stripedNumber}` : `rId${next++}`;
     while (used.has(id)) id = `rId${next++}`;
     used.add(id);
     ids.push(id);

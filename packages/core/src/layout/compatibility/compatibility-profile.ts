@@ -127,10 +127,34 @@ export function compatibilityProfileFromSettings(root: OoxmlElement | null): Com
   }
   // Two declarations are ambiguous; do not invent a winner.
   if (modeDeclarations > 1) modeValue = undefined;
+  let modeRefused = modeDeclarations > 0 && modeValue === undefined;
+  // A valid mode declared directly under `w:settings`, outside `w:compat`, applies when
+  // `w:compat` holds no valid single declaration. An invalid value there is ignored, so it
+  // neither sets nor refuses a mode.
+  if (isSettings && modeValue === undefined && modeDeclarations <= 1) {
+    const outside: number[] = [];
+    for (const option of root!.children) {
+      if (
+        option.kind === 'textValue' ||
+        option.namespaceUri !== WML_NAMESPACE_URI ||
+        option.localName !== 'compatSetting' ||
+        attribute(option, 'name') !== 'compatibilityMode' ||
+        attribute(option, 'uri') !== WORD_URI
+      )
+        continue;
+      const raw = attribute(option, 'val');
+      const value = raw !== undefined && /^\d{1,4}$/.test(raw) ? Number(raw) : undefined;
+      if (value !== undefined && value >= 11) outside.push(value);
+    }
+    if (outside.length === 1) {
+      modeValue = outside[0];
+      modeRefused = false;
+    }
+  }
   const profile: CompatibilityProfile = {
     modeValue,
     modeClass: compatibilityModeClass(modeValue),
-    modeRefused: modeDeclarations > 0 && modeValue === undefined,
+    modeRefused,
     legacy,
     settings,
     has: (rule) =>

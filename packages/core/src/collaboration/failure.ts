@@ -5,13 +5,15 @@
  * wait or to reload:
  *
  * - `initializing` — joining. Edits are refused. Recovers on its own.
- * - `ready` — replicating. The only state that accepts edits.
+ * - `ready` — replicating. Accepts edits.
  * - `disconnected` — the transport dropped. The replica is intact and recovers on its own,
- *   so wait rather than reload. Edits are refused until reconnect by default; a session
- *   created with offline editing enabled keeps accepting them, and the buffered updates
- *   merge on reconnect.
- * - `error` — this replica no longer agrees with the room. It does not recover: only a
- *   reload rejoins. {@link CollaborationStatusSnapshot.reason} says why.
+ *   so wait rather than reload. Edits continue by default, and the buffered updates merge on
+ *   reconnect. A session created with `offlineEditing: false` refuses them until reconnect.
+ * - `error` — this replica does not agree with the room. Edits are refused.
+ *   {@link CollaborationStatusSnapshot.reason} says why. A remote update the replica could
+ *   not apply yet heals when a later update completes shared state
+ *   ({@link CollaborationStatusSnapshot.recovering}). A format or version mismatch needs an
+ *   upgrade of this client or the room; every other cause needs a rejoin.
  * - `destroyed` — torn down. Terminal.
  *
  * @public
@@ -22,83 +24,94 @@ export type CollaborationStatus = 'initializing' | 'ready' | 'disconnected' | 'e
  * Why a replica refused work, left `ready`, or failed a schema check.
  *
  * Free-form extras (a transport phrase, a blob key, a store refusal) travel in
- * {@link CollaborationFailure.detail}, not here. `invalid-shared-metadata` follows that rule:
- * it names one malformed field of the room's shared metadata, and which field is the detail.
- * Distinct from `invalid-document-id`, which rejects a document id this host passed in.
- * `concurrent-seed` reports two merged seed transactions in one room; the room cannot be
- * repaired client-side — create a new room from saved bytes.
+ * {@link CollaborationFailure.detail}, not here. Branch on the code; log the detail.
  *
- * Two of these name a transport condition a host has to tell apart, because the answers are
- * opposite. `transport-disconnected` recovers on its own, so wait. `authentication-failed`
- * never does: the credential the provider re-sent was rejected, so refresh it and rejoin.
- * `transport` remains the catch-all for a provider that reported neither.
+ * Codes are grouped by cause, and each group comment names the host action. In `error`, only
+ * a remote update that is not applied yet, or one refused local edit, heals on its own. The
+ * failure codes table in the collaboration reference lists every code.
+ * `transport-disconnected` and `authentication-failed` need opposite answers: wait for the
+ * first; refresh the credential and rejoin for the second. `room-generation-changed` means
+ * the server compacted the room while this replica was away: save a copy if it holds unsent
+ * changes, then rejoin.
  *
  * @public
  */
 export type CollaborationFailureCode =
-  | 'already-initialized'
-  | 'authentication-failed'
-  | 'baseline-digest-mismatch'
-  | 'baseline-too-large'
-  | 'blob-digest-mismatch'
-  | 'blob-read'
-  | 'blob-store-full'
-  | 'blob-too-large'
-  | 'collaboration-format-mismatch'
+  /** Edit refused by the session gate. The status does not change. Wait for `ready`. */
   | 'collaboration-session-destroyed'
   | 'collaboration-session-not-attached'
   | 'collaboration-session-not-ready'
   | 'collaboration-text-limit'
-  | 'concurrent-seed'
-  | 'document-id-mismatch'
-  | 'duplicate-paragraph-id'
   | 'experimental-collaboration-body-text-only'
-  | 'experimental-collaboration-existing-paragraphs-only'
-  | 'experimental-collaboration-text-only'
-  | 'experimental-collaboration-untracked-text-only'
-  | 'immutable-baseline-changed'
-  | 'immutable-metadata-changed'
-  | 'initialization-aborted'
-  | 'initialization-timeout'
-  | 'invalid-baseline'
-  | 'invalid-blob-descriptor'
-  | 'invalid-bound'
+  /** Factory input rejected before joining. Fix the value the host passed. */
   | 'invalid-document-id'
   | 'invalid-identity'
   | 'invalid-identity-color'
-  | 'invalid-logical-id'
-  | 'invalid-relationships'
-  | 'invalid-saved-room'
   | 'invalid-session-id'
-  | 'invalid-shared-metadata'
-  | 'invalid-string'
-  | 'local-mirror-failed'
+  /** Join or seed did not complete. Connect the provider, check the room id, and retry. */
+  | 'already-initialized'
+  | 'document-id-mismatch'
+  | 'initialization-aborted'
+  | 'initialization-timeout'
+  | 'not-initialized'
+  /** The seed document cannot seed a room. Fix the file. */
+  | 'baseline-too-large'
+  | 'blob-read'
+  | 'invalid-baseline'
+  | 'missing-local-blob'
+  | 'no-main-document-part'
+  /** This client and the room have different formats. Terminal. Save local work. */
+  | 'collaboration-format-mismatch'
+  | 'protocol-version-mismatch'
+  | 'schema-version-mismatch'
+  /** The room is unusable. Terminal. Create a new room from saved bytes. */
+  | 'blob-digest-mismatch'
+  | 'concurrent-seed'
+  | 'port-already-attached'
+  /** A remote update is not applied yet. Heals when a later update arrives. Wait. */
+  | 'duplicate-paragraph-id'
+  | 'invalid-relationships'
   | 'materialize-dropped-content'
   | 'missing-blob'
-  | 'missing-local-blob'
   | 'missing-root'
-  | 'no-main-document-part'
-  | 'not-initialized'
-  | 'paragraph-set-mismatch'
-  | 'port-already-attached'
-  | 'protocol-version-mismatch'
-  | 'prototype-key'
   | 'remote-apply-failed'
-  | 'saved-room-unavailable'
-  | 'schema-version-mismatch'
-  | 'shared-schema-invalid'
+  | 'unknown-paragraph-id'
+  /** Over a resource limit. A local edit realigns; shared state over a limit is terminal. */
+  | 'blob-store-full'
+  | 'blob-too-large'
+  | 'invalid-blob-descriptor'
+  | 'invalid-bound'
+  | 'invalid-logical-id'
+  | 'invalid-string'
+  | 'prototype-key'
   | 'text-too-long'
   | 'too-many-attributes'
   | 'too-many-children'
   | 'too-many-nodes'
   | 'too-many-parts'
   | 'too-many-relationships'
-  | 'transport'
-  | 'transport-disconnected'
   | 'tree-too-deep'
   | 'unknown-logical-id'
-  | 'unknown-paragraph-id'
   | 'unsafe-part-name'
+  /** Transport state. Only `transport-disconnected` recovers on its own. */
+  | 'authentication-failed'
+  | 'room-generation-changed'
+  | 'transport'
+  | 'transport-disconnected'
+  /** Reserved for a room server that refuses a saved room. Passed through, never emitted. */
+  | 'invalid-saved-room'
+  | 'saved-room-unavailable'
+  /** @deprecated Emitted by nothing. Kept for compatibility; do not branch on these. */
+  | 'baseline-digest-mismatch'
+  | 'experimental-collaboration-existing-paragraphs-only'
+  | 'experimental-collaboration-text-only'
+  | 'experimental-collaboration-untracked-text-only'
+  | 'immutable-baseline-changed'
+  | 'immutable-metadata-changed'
+  | 'invalid-shared-metadata'
+  | 'local-mirror-failed'
+  | 'paragraph-set-mismatch'
+  | 'shared-schema-invalid'
   | 'unsupported-root-key';
 
 const COLLABORATION_FAILURE_CODE_PRESENT: { readonly [K in CollaborationFailureCode]: true } = {
@@ -150,6 +163,7 @@ const COLLABORATION_FAILURE_CODE_PRESENT: { readonly [K in CollaborationFailureC
   'protocol-version-mismatch': true,
   'prototype-key': true,
   'remote-apply-failed': true,
+  'room-generation-changed': true,
   'saved-room-unavailable': true,
   'schema-version-mismatch': true,
   'shared-schema-invalid': true,
@@ -175,19 +189,43 @@ export function isCollaborationFailureCode(value: string): value is Collaboratio
 
 /** One collaboration failure: a typed code plus optional free-form detail. @public */
 export interface CollaborationFailure {
+  /** Stable code for application logic. */
   readonly code: CollaborationFailureCode;
+  /** Bounded diagnostic text for logs. Not a parsing contract. */
   readonly detail?: string;
 }
 
 /**
- * Cached status read. Same reference until status, reason, or last failure change.
+ * Cached status read. Same reference until one of its fields changes.
  *
  * @public
  */
 export interface CollaborationStatusSnapshot {
+  /** Current lifecycle state. */
   readonly status: CollaborationStatus;
+  /** Why the replica holds `status`, or `undefined` when nothing is wrong. */
   readonly reason: CollaborationFailure | undefined;
+  /** The most recent `error` reason. Kept after the replica recovers. */
   readonly lastFailure: CollaborationFailure | undefined;
+  /**
+   * How many failures this session has recorded. It changes with each new failure, also when
+   * its code and detail repeat the last one, as a refused edit refused again does. Absent
+   * from a session that does not count.
+   */
+  readonly failureCount?: number;
+  /**
+   * The session is in `error` but heals by itself: it realigns on the next clean update and
+   * returns to its previous status. A host shows a passing notice, not a rejoin action.
+   * Absent means false.
+   */
+  readonly recovering?: boolean;
+  /**
+   * Edits wait: the room sent an update that depends on one still on its way, and an edit
+   * made now could touch the text it changes. The editor refuses edits meanwhile, with
+   * `collaboration-session-not-ready`, and accepts them again when the update arrives or the
+   * wait times out. Absent means false.
+   */
+  readonly waiting?: boolean;
 }
 
 function failuresEqual(
@@ -207,7 +245,15 @@ function failureOf(code: CollaborationFailureCode, detail?: string): Collaborati
 export interface CollaborationStatusTracker {
   status(): CollaborationStatus;
   snapshot(): CollaborationStatusSnapshot;
-  set(status: CollaborationStatus, code?: CollaborationFailureCode, detail?: string): boolean;
+  /** `recovering` marks an `error` the session heals by itself. */
+  set(
+    status: CollaborationStatus,
+    code?: CollaborationFailureCode,
+    detail?: string,
+    recovering?: boolean
+  ): boolean;
+  /** Whether edits wait for the room; returns whether the snapshot changed. */
+  setWaiting(waiting: boolean): boolean;
 }
 
 /** @internal */
@@ -217,21 +263,48 @@ export function createCollaborationStatusTracker(
   let status = initial;
   let reason: CollaborationFailure | undefined;
   let lastFailure: CollaborationFailure | undefined;
+  let failureCount = 0;
+  let recovering = false;
+  let waiting = false;
   let snapshot: CollaborationStatusSnapshot = Object.freeze({
     status,
     reason,
     lastFailure,
+    failureCount,
+    recovering,
+    waiting,
   });
+  const publish = (): void => {
+    snapshot = Object.freeze({ status, reason, lastFailure, failureCount, recovering, waiting });
+  };
   return {
     status: () => status,
     snapshot: () => snapshot,
-    set(next: CollaborationStatus, code?: CollaborationFailureCode, detail?: string): boolean {
+    set(
+      next: CollaborationStatus,
+      code?: CollaborationFailureCode,
+      detail?: string,
+      healing = false
+    ): boolean {
       const nextReason = code === undefined ? undefined : failureOf(code, detail);
-      if (status === next && failuresEqual(reason, nextReason)) return false;
+      const nextRecovering = next === 'error' && healing;
+      if (status === next && failuresEqual(reason, nextReason) && recovering === nextRecovering) {
+        return false;
+      }
       status = next;
       reason = nextReason;
-      if (next === 'error' && nextReason) lastFailure = nextReason;
-      snapshot = Object.freeze({ status, reason, lastFailure });
+      recovering = nextRecovering;
+      if (next === 'error' && nextReason) {
+        lastFailure = nextReason;
+        failureCount += 1;
+      }
+      publish();
+      return true;
+    },
+    setWaiting(next: boolean): boolean {
+      if (waiting === next) return false;
+      waiting = next;
+      publish();
       return true;
     },
   };

@@ -21,7 +21,7 @@ import type {
 // the media digests this verifies are produced by this exact function in the store lane.
 import { sha256FontBytes as sha256Bytes } from '@docx-editor.dev/core/layout';
 import type { BlobBytesStore, DocumentRegistry } from './document/index.ts';
-import { CollaborationSchemaError } from './schema.ts';
+import { CollaborationSchemaError } from './errors.ts';
 
 /** Ceiling on the bytes one room carries beside its shared tree. */
 export const MAX_SHARED_BLOB_BYTES = 64 * 1024 * 1024;
