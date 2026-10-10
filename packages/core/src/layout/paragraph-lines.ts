@@ -5,6 +5,7 @@
 // memoized per revision, with no knowledge of stops or selections.
 
 import { lineSegments } from './line-segments.ts';
+import { paragraphFragmentsOnPage } from './story-fragments.ts';
 import type { LayoutBox, LineRecord, PageRecord, SemanticLayout } from './semantic-records.ts';
 import { lineAtPosition, paragraphFragmentsOf } from './semantic-records.ts';
 import type { SemanticPosition } from './semantic-interaction.ts';
@@ -41,14 +42,158 @@ export function paragraphLinesIndex(layout: SemanticLayout): Map<string, PlacedL
   if (cached) return cached;
   const index = new Map<string, PlacedLine[]>();
   for (const page of layout.pages) {
+    pageTraversals += 1;
     for (const [paragraphId, placed] of pageLines(page)) {
       const entry = index.get(paragraphId);
       if (entry) entry.push(...placed);
       else index.set(paragraphId, [...placed]);
     }
   }
+  // Answers already handed out stay the answers: a reader never sees two arrays for one
+  // paragraph of one layout. They hold exactly the lines the index just collected.
+  const requested = requestedParagraphLines.get(layout);
+  if (requested) {
+    for (const [paragraphId, placed] of requested) {
+      if (placed.length > 0) index.set(paragraphId, placed as PlacedLine[]);
+    }
+    requestedParagraphLines.delete(layout);
+  }
   paragraphLinesCache.set(layout, index);
   return index;
+}
+
+const requestedParagraphLines = new WeakMap<SemanticLayout, Map<string, readonly PlacedLine[]>>();
+
+// Page membership can survive a width-only table update while line geometry changes.
+// Retain only page numbers, never line or page records from the previous layout.
+const paragraphPageRoutes = new WeakMap<SemanticLayout, Map<string, ReadonlySet<number>>>();
+
+/** @internal Caller proves every paragraph keeps its page membership. */
+export function carryParagraphPageRoutes(previous: SemanticLayout, next: SemanticLayout): void {
+  if (previous === next || previous.pages.length !== next.pages.length) return;
+  const routes = new Map(paragraphPageRoutes.get(previous));
+  for (const [id, placed] of requestedParagraphLines.get(previous) ?? []) {
+    if (placed.length) routes.set(id, new Set(placed.map((entry) => entry.pageIndex)));
+  }
+  while (routes.size > LAZY_PARAGRAPH_READS) routes.delete(routes.keys().next().value!);
+  if (routes.size) paragraphPageRoutes.set(next, routes);
+}
+
+/**
+ * Distinct paragraphs one layout answers by page scan before it builds the complete index.
+ *
+ * A single read visits every page, which beats building the whole index for the handful of
+ * paragraphs a keystroke asks about. A range operation asks about every paragraph it spans,
+ * and per-paragraph scans would cost paragraphs × pages; past this many the index wins.
+ */
+const LAZY_PARAGRAPH_READS = 32;
+
+let pageTraversals = 0;
+
+/** @internal Pages visited by paragraph line reads so far, for bounded-work tests. */
+export function paragraphLinesPageTraversals(): number {
+  return pageTraversals;
+}
+
+/** Read one paragraph without copying every page index into a document-wide map. */
+export function paragraphLinesFor(
+  layout: SemanticLayout,
+  paragraphId: string
+): readonly PlacedLine[] {
+  const complete = paragraphLinesCache.get(layout);
+  if (complete) return complete.get(paragraphId) ?? [];
+  let requested = requestedParagraphLines.get(layout);
+  if (!requested) requestedParagraphLines.set(layout, (requested = new Map()));
+  const known = requested.get(paragraphId);
+  if (known) return known;
+  if (requested.size >= LAZY_PARAGRAPH_READS) {
+    return paragraphLinesIndex(layout).get(paragraphId) ?? [];
+  }
+  const result: PlacedLine[] = [];
+  const route = paragraphPageRoutes.get(layout)?.get(paragraphId);
+  for (const page of layout.pages) {
+    if (route && !route.has(page.index)) continue;
+    pageTraversals += 1;
+    const placed = pageLinesFor(page, paragraphId);
+    if (placed) for (const line of placed) result.push(line);
+  }
+  requested.set(paragraphId, result);
+  return result;
+}
+
+const requestedPageLines = new WeakMap<
+  PageRecord,
+  Map<string, readonly PlacedLine[] | undefined>
+>();
+
+/** @internal `to` draws the same lines on the same page as `from`; only marker labels moved. */
+export function carryPageLines(from: PageRecord, to: PageRecord): void {
+  const complete = pageLinesCache.get(from);
+  if (complete) pageLinesCache.set(to, complete);
+  const requested = requestedPageLines.get(from);
+  if (requested) requestedPageLines.set(to, new Map(requested));
+  const named = namedParagraphsCache.get(from);
+  if (named) namedParagraphsCache.set(to, named);
+}
+
+/**
+ * Every paragraph id a line on the page names, through its range, a span, or a drawing.
+ *
+ * A superset of the paragraphs the page draws. A read for a paragraph the page never names,
+ * such as the one Enter just created, then skips the page in one lookup. Without it, each new
+ * paragraph walked every line of every page before the caret could be placed.
+ */
+const namedParagraphsCache = new WeakMap<PageRecord, ReadonlySet<string>>();
+
+function pageNamedParagraphs(page: PageRecord): ReadonlySet<string> {
+  const cached = namedParagraphsCache.get(page);
+  if (cached) return cached;
+  const named = new Set<string>();
+  for (const fragment of paragraphFragmentsOnPage(page)) {
+    for (const line of fragment.lines) {
+      named.add(line.range.paragraphId);
+      for (const span of line.spans) named.add(span.range.paragraphId);
+      for (const drawing of line.drawings ?? []) named.add(drawing.paragraphId);
+    }
+  }
+  namedParagraphsCache.set(page, named);
+  return named;
+}
+
+/** A caret read must not allocate entries for every other paragraph on a changed page. */
+function pageLinesFor(page: PageRecord, paragraphId: string): readonly PlacedLine[] | undefined {
+  const complete = pageLinesCache.get(page);
+  if (complete) return complete.get(paragraphId);
+  let requested = requestedPageLines.get(page);
+  if (requested?.has(paragraphId)) return requested.get(paragraphId);
+  if (requested && requested.size >= LAZY_PARAGRAPH_READS) return pageLines(page).get(paragraphId);
+  let found: PlacedLine[] | undefined;
+  if (!pageNamedParagraphs(page).has(paragraphId)) {
+    if (!requested) requestedPageLines.set(page, (requested = new Map()));
+    requested.set(paragraphId, found);
+    return found;
+  }
+  for (const fragment of paragraphFragmentsOnPage(page)) {
+    for (const line of fragment.lines) {
+      // Merged paragraphs can draw a member whose id differs from the fragment and line.
+      // Inspect ownership without building segment arrays for unrelated ordinary lines.
+      if (
+        line.range.paragraphId !== paragraphId &&
+        !line.spans.some((span) => span.range.paragraphId === paragraphId) &&
+        !line.drawings?.some((drawing) => drawing.paragraphId === paragraphId)
+      )
+        continue;
+      if (!lineSegments(line).some((segment) => segment.paragraphId === paragraphId)) continue;
+      (found ??= []).push({
+        line,
+        pageIndex: page.index,
+        ...(fragment.clipToBox ? { clipBox: fragment.box } : {}),
+      });
+    }
+  }
+  if (!requested) requestedPageLines.set(page, (requested = new Map()));
+  requested.set(paragraphId, found);
+  return found;
 }
 
 function pageLines(page: PageRecord): ReadonlyMap<string, readonly PlacedLine[]> {
@@ -104,6 +249,7 @@ function pageLines(page: PageRecord): ReadonlyMap<string, readonly PlacedLine[]>
     if (!area) continue;
     for (const note of area.notes) indexFragments(note.fragments, page.index);
   }
+  requestedPageLines.delete(page);
   pageLinesCache.set(page, index);
   return index;
 }
@@ -124,7 +270,7 @@ export function lineAtIndexedPosition(
   paragraphId: string,
   offset: number
 ): LineRecord | null {
-  const placed = paragraphLinesIndex(layout).get(paragraphId);
+  const placed = paragraphLinesFor(layout, paragraphId);
   if (placed && placed.length > 0) {
     const hit = lineAtPosition(
       layout,
@@ -165,7 +311,7 @@ export function paragraphDeletedRanges(
   const cached = byParagraph.get(paragraphId);
   if (cached) return cached;
   const collected: { start: number; end: number }[] = [];
-  for (const { line } of paragraphLinesIndex(layout).get(paragraphId) ?? []) {
+  for (const { line } of paragraphLinesFor(layout, paragraphId) ?? []) {
     // A merged line indexes under both members but expresses `deletedRanges` in the offsets
     // of the paragraph it NAMES (merged-paragraph-ranges.ts); the other member's are dropped.
     if (line.range.paragraphId !== paragraphId) continue;

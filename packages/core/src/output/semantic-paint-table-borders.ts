@@ -77,7 +77,7 @@ function appendStroke(
   stroke: TableBorderStrokeRecord,
   scale: number,
   className: string
-): void {
+): HTMLElement {
   const seg = document.createElement('div');
   seg.className = className;
   seg.dataset.edge = stroke.side;
@@ -96,6 +96,7 @@ function appendStroke(
       `${(horizontal ? stroke.height : stroke.width) * scale}px ${stroke.cssStyle} #${hexColor(stroke.color)}`;
   }
   host.append(seg);
+  return seg;
 }
 
 /** One pass over published strokes — O(n) role lookup per stroke during paint. */
@@ -112,7 +113,7 @@ function paintPublishedStrokes(
   element: HTMLElement,
   strokes: readonly TableBorderStrokeRecord[],
   scale: number
-): void {
+): HTMLElement[] {
   const roles = strokeRoleIndex(strokes);
   const hasMiddleOnSide = (side: TableBorderStrokeRecord['side']): boolean =>
     roles.has(`${side}\0middle`);
@@ -127,39 +128,50 @@ function paintPublishedStrokes(
   let hasDouble = false;
   let hasTriple = false;
   let hasEdge = false;
+  const painted: HTMLElement[] = [];
 
   for (const stroke of strokes) {
     if (stroke.role === 'edge') {
       hasEdge = true;
-      appendStroke(document, edgeHost, stroke, scale, 'docx-table-border-edge-stroke');
+      painted.push(
+        appendStroke(document, edgeHost, stroke, scale, 'docx-table-border-edge-stroke')
+      );
       continue;
     }
     if (hasMiddleOnSide(stroke.side)) {
       hasTriple = true;
-      appendStroke(document, tripleHost, stroke, scale, 'docx-table-border-triple-stroke');
+      painted.push(
+        appendStroke(document, tripleHost, stroke, scale, 'docx-table-border-triple-stroke')
+      );
       continue;
     }
     if (stroke.role === 'outer' || stroke.role === 'inner') {
       hasDouble = true;
-      appendStroke(document, doubleHost, stroke, scale, 'docx-table-border-double-stroke');
+      painted.push(
+        appendStroke(document, doubleHost, stroke, scale, 'docx-table-border-double-stroke')
+      );
     }
   }
 
   if (hasDouble) element.append(doubleHost);
   if (hasTriple) element.append(tripleHost);
   if (hasEdge) element.append(edgeHost);
+  return painted;
 }
 
 /**
  * Apply layout-owned cell borders: CSS for simple full-side edges, inert overlays for
  * published stroke records. No metrics, gap, conflict, or corner ownership here.
+ *
+ * Returns the painted stroke elements, which follow record order with any stroke the overlay
+ * rules skip left out, or undefined when the cell publishes no strokes.
  */
 export function applyCellBorders(
   document: Document,
   element: HTMLElement,
   borders: ResolvedCellBorders | undefined,
   scale: number
-): void {
+): HTMLElement[] | undefined {
   const publishedSides = new Set((borders?.strokes ?? []).map((stroke) => stroke.side));
   for (const side of ['top', 'right', 'bottom', 'left'] as const) {
     const cssSide = `${side[0]!.toUpperCase()}${side.slice(1)}` as TableBorderSide;
@@ -170,6 +182,7 @@ export function applyCellBorders(
       element.style[`border${cssSide}Style` as 'borderTopStyle'] = 'none';
   }
   if (borders?.strokes && borders.strokes.length > 0) {
-    paintPublishedStrokes(document, element, borders.strokes, scale);
+    return paintPublishedStrokes(document, element, borders.strokes, scale);
   }
+  return undefined;
 }

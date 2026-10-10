@@ -1,7 +1,7 @@
 import { lineSegmentFor, type LineSegment } from './line-segments.ts';
 import type { LineRecord, SemanticLayout } from './semantic-records.ts';
 import { paragraphFragmentsOf } from './semantic-records.ts';
-import { paragraphLinesIndex, type PlacedLine } from './paragraph-lines.ts';
+import { paragraphLinesFor, type PlacedLine } from './paragraph-lines.ts';
 import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
 
 /**
@@ -14,7 +14,7 @@ import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
  * line after the break — the break's own line keeps the stop rather than losing the position.
  */
 export function laterLineOwns(layout: SemanticLayout, line: LineRecord, offset: number): boolean {
-  const lines = paragraphLinesIndex(layout).get(line.range.paragraphId) ?? [];
+  const lines = paragraphLinesFor(layout, line.range.paragraphId) ?? [];
   let seen = false;
   for (const placed of lines) {
     if (placed.line === line) {
@@ -37,7 +37,7 @@ export function nextLineStartsAt(
   line: LineRecord,
   offset: number
 ): boolean {
-  const lines = paragraphLinesIndex(layout).get(line.range.paragraphId) ?? [];
+  const lines = paragraphLinesFor(layout, line.range.paragraphId);
   const index = lines.findIndex((placed) => placed.line === line);
   const next = lines[index + 1]?.line;
   return index >= 0 && next !== undefined && next !== line && next.range.start === offset;
@@ -87,7 +87,7 @@ function fieldContinues(
   direction: 1 | -1,
   pageIndex: number | undefined
 ): boolean {
-  let lines: readonly PlacedLine[] = paragraphLinesIndex(layout).get(paragraphId) ?? [];
+  let lines: readonly PlacedLine[] = paragraphLinesFor(layout, paragraphId) ?? [];
   let index = linePosition(lines, line);
   if (index < 0 && pageIndex !== undefined) {
     lines = headerRepeatLinesOnPage(layout, pageIndex, paragraphId);
@@ -150,7 +150,7 @@ export function laterLineWithDrawingAt(
   paragraphId: string,
   offset: number
 ): LineRecord | null {
-  for (const { line } of paragraphLinesIndex(layout).get(paragraphId) ?? []) {
+  for (const { line } of paragraphLinesFor(layout, paragraphId) ?? []) {
     if (line.range.start !== offset) continue;
     if (line.drawings?.some((drawing) => drawing.start === offset)) return line;
   }

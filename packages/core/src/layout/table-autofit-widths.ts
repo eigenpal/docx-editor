@@ -1,5 +1,7 @@
+import { cachedAutofitCellWidths, widenedCellInsets } from './table-autofit-cell-cache.ts';
+import { rowForWidenedMeasurement } from './legacy-table-side-rules.ts';
+import { autofitReuseScope } from './autofit-context-reuse.ts';
 import { withDefaultTabInterval } from './paragraph-tabs.ts';
-import { currentFieldResultsMode } from '../store/package/field-result-mode.ts';
 import {
   cellSpacingGapPt,
   cellSpacingScale,
@@ -35,7 +37,7 @@ import type { FieldPageContext } from './field-projection.ts';
 import type { RefFieldContext } from './field-ref.ts';
 import type { NoteMarkContext } from './note-projection.ts';
 import type { TocLinkRanges } from './toc-link-formatting.ts';
-import { sha256FontBytes } from '../store/package/sha256.ts';
+import { cellStyleKey } from './autofit-value-token.ts';
 import { piecesOfParagraphForDisplay } from './field-projection-display.ts';
 import type { ResolvedListItem } from './list-resolve.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
@@ -49,7 +51,7 @@ import {
   type StyleCascadeTable,
 } from './style-cascade.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
-import { preferredSpreadWidths, widenedCellInsets } from './table-autofit-spread.ts';
+import { preferredSpreadWidths } from './table-autofit-spread.ts';
 import type { PreferredWidth } from './table-widths.ts';
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
 
@@ -106,87 +108,7 @@ export interface AutofitFieldContext {
   readonly tocLinkStyleRanges?: TocLinkRanges;
 }
 
-/** What a table flow carries that autofit reads. */
-interface AutofitFlowDeps extends AutofitFieldContext {
-  readonly measurer: TextMeasurer;
-  readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
-  readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
-  readonly drawingTokenForParagraph?: (paragraph: OoxmlElement) => string;
-  readonly projectionTokenForParagraph?: (paragraph: OoxmlElement) => string;
-  readonly drawingLayoutToken?: string;
-  /** The pass producer the break cache keys on: note marks, display mode, author filter. */
-  readonly producer?: string;
-  readonly defaultTabStopPt?: number;
-}
-
-/** One context per flow deps object, so every reader in a pass shares it. */
-const flowContexts = new WeakMap<object, TableAutofitContext>();
-
-const mapsAsEntries = (_key: string, value: unknown) => (value instanceof Map ? [...value] : value);
-
-/**
- * A fixed-width digest of a value object, once per object. File-controlled property text can
- * run to kilobytes, and the token joins every paragraph's cache key.
- */
-const valueDigests = new WeakMap<object, string>();
-const digestEncoder = new TextEncoder();
-function valueDigest(value: object | undefined): string {
-  if (!value) return '';
-  let digest = valueDigests.get(value);
-  if (digest === undefined) {
-    digest = sha256FontBytes(digestEncoder.encode(JSON.stringify(value, mapsAsEntries)));
-    valueDigests.set(value, digest);
-  }
-  return digest;
-}
-
-/** The autofit inputs a table flow already carries, so every reader widens alike. */
-export function autofitContextOf(deps: AutofitFlowDeps): TableAutofitContext {
-  const known = flowContexts.get(deps);
-  if (known) return known;
-  const fields: AutofitFieldContext = {
-    ...(deps.pageContext ? { pageContext: deps.pageContext } : {}),
-    ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
-    ...(deps.documentProperties ? { documentProperties: deps.documentProperties } : {}),
-    ...(deps.bodyPageFields ? { bodyPageFields: deps.bodyPageFields } : {}),
-    ...(deps.refFields ? { refFields: deps.refFields } : {}),
-    ...(deps.showFieldCodes ? { showFieldCodes: true } : {}),
-    ...(deps.fieldCodeRanges ? { fieldCodeRanges: deps.fieldCodeRanges } : {}),
-    ...(deps.tocLinkStyleRanges ? { tocLinkStyleRanges: deps.tocLinkStyleRanges } : {}),
-  };
-  // Values, not identities: a pass builds these objects afresh and the cache must survive it.
-  // Every part is compact: the producer is a digest, the value objects are digested.
-  const passToken = [
-    deps.producer ?? '',
-    deps.bodyPageFields ? `body:${deps.bodyPageFields.format ?? ''}` : '',
-    valueDigest(deps.pageContext),
-    valueDigest(deps.documentProperties),
-    deps.showFieldCodes === true ? 'codes' : '',
-    deps.refFields?.valuesToken ?? '',
-    deps.drawingLayoutToken ?? '',
-    deps.inlineDrawingLayout ? 'drawings' : '',
-    `tab:${deps.defaultTabStopPt ?? ''}`,
-    // Saved field results break as text in the editable mode and stay whole in the default.
-    `fields:${currentFieldResultsMode()}`,
-  ].join('\0');
-  const context: TableAutofitContext = {
-    measurer: deps.measurer,
-    ...(deps.listItems ? { listItems: deps.listItems } : {}),
-    ...(deps.inlineDrawingLayout ? { inlineDrawingLayout: deps.inlineDrawingLayout } : {}),
-    fields,
-    ...(deps.defaultTabStopPt !== undefined ? { defaultTabStopPt: deps.defaultTabStopPt } : {}),
-    passToken,
-    paragraphToken: (paragraph) =>
-      [
-        deps.projectionTokenForParagraph?.(paragraph) ?? '',
-        deps.drawingTokenForParagraph?.(paragraph) ?? '',
-        deps.refFields?.tokenForParagraph(paragraph.id) ?? '',
-        deps.listItems?.get(paragraph.id)?.cacheToken ?? '',
-      ].join('\0'),
-  };
-  flowContexts.set(deps, context);
-  return context;
-}
+export { autofitContextOf, carryTableAutofitScope } from './table-autofit-context.ts';
 
 /** The view a structure was read in: the cascade, display mode, and author filter. */
 export interface AutofitView {
@@ -230,28 +152,16 @@ interface MinimumKey {
  */
 const paragraphMinimums = new WeakMap<
   TextMeasurer,
-  WeakMap<OoxmlElement, { readonly key: MinimumKey; readonly widths: ContentWidths }>
+  WeakMap<
+    OoxmlElement,
+    { readonly key: MinimumKey; readonly widths: ContentWidths; scope?: object }
+  >
 >();
 
 /** A paragraph's narrowest and widest width: unbreakable segments, and lines left unwrapped. */
 export interface ContentWidths {
   readonly min: number;
   readonly max: number;
-}
-
-/**
- * A table style's cell formatting, by content. A structure read builds new formatting objects
- * for every cell, so identity would miss the cache on every edit of a styled table.
- */
-const cellStyleKeys = new WeakMap<object, string>();
-function cellStyleKey(style: SemanticTableCell['styleFormatting'] | undefined): string {
-  if (!style) return '';
-  let key = cellStyleKeys.get(style);
-  if (key === undefined) {
-    key = JSON.stringify([style.paragraphProperties, style.runProperties]);
-    cellStyleKeys.set(style, key);
-  }
-  return key;
 }
 
 function minimumKey(paragraph: OoxmlElement, inputs: MinimumInputs): MinimumKey | null {
@@ -303,11 +213,24 @@ export function paragraphContentWidthsPt(
   const { context, view } = inputs;
   const { measurer } = context;
   const { styleCascade, displayMode } = view;
+  const scope = autofitReuseScope(context);
   let byParagraph = paragraphMinimums.get(measurer);
   if (!byParagraph) paragraphMinimums.set(measurer, (byParagraph = new WeakMap()));
+  const cached = byParagraph.get(paragraph);
+  if (
+    scope &&
+    cached?.scope === scope &&
+    cached.key.styleCascade === view.styleCascade &&
+    cached.key.displayMode === view.displayMode &&
+    cached.key.authorFilter === (view.authorFilter?.cacheKey ?? '') &&
+    cached.key.cellStyle === cellStyleKey(inputs.tableCellStyle)
+  )
+    return cached.widths;
   const key = minimumKey(paragraph, inputs);
-  const cached = key ? byParagraph.get(paragraph) : undefined;
-  if (key && cached && sameKey(cached.key, key)) return cached.widths;
+  if (key && cached && sameKey(cached.key, key)) {
+    cached.scope = scope;
+    return cached.widths;
+  }
   const layoutInputs = resolveParagraphLayoutInputs(
     paragraph,
     Number.MAX_SAFE_INTEGER,
@@ -490,7 +413,7 @@ export function paragraphContentWidthsPt(
   // An empty paragraph still keeps its first line's indents (a list item's marker slot).
   const min = widest > 0 ? widest : Math.max(0, left + right + firstShift);
   const widths = { min, max: Math.max(min, longest) };
-  if (key) byParagraph.set(paragraph, { key, widths });
+  if (key) byParagraph.set(paragraph, { key, widths, scope });
   return widths;
 }
 
@@ -689,7 +612,12 @@ export function autofitColumnMinimumsPt(
   const gapPt = cellSpacingGapPt(structure.cellSpacingPt);
   const cellWidths = spacedCellWidths(structure);
   for (const row of structure.rows) {
-    for (const cell of row.cells) {
+    const widenedRow =
+      structure.outerRuleOffsetPt !== undefined && !structure.legacyContentAlignment
+        ? rowForWidenedMeasurement(row, columnCount, content !== undefined)
+        : undefined;
+    for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex += 1) {
+      const cell = row.cells[cellIndex]!;
       if (cell.vMergeContinue) continue;
       if (cell.gridColumn < 0 || cell.gridColumn >= columnCount) continue;
       if (cell.gridSpan === 1 && cell.preferredWidth.value > 0) {
@@ -713,27 +641,38 @@ export function autofitColumnMinimumsPt(
         continue;
       }
       if (cell.gridSpan !== 1 && !content) continue;
-      let least = -1;
-      let most = -1;
-      const insets = cellContentInsets(cell, collapsed);
-      for (const block of cell.blocks) {
-        if (block.kind === 'table') {
-          const nested = nestedTableMinimumPt(block, context, view);
-          least = Math.max(least, nested);
-          most = Math.max(most, nested);
+      const measured = cachedAutofitCellWidths(cell, collapsed, context, view, () => {
+        let least = -1;
+        let most = -1;
+        const insets = cellContentInsets(cell, collapsed);
+        for (const block of cell.blocks) {
+          if (block.kind === 'table') {
+            const nested = nestedTableMinimumPt(block, context, view);
+            least = Math.max(least, nested);
+            most = Math.max(most, nested);
+          }
+          if (block.kind !== 'paragraph') continue;
+          const widths = paragraphContentWidthsPt(block, {
+            context,
+            view,
+            tableCellStyle: cell.styleFormatting,
+          });
+          least = Math.max(least, widths.min);
+          most = Math.max(most, widths.max);
         }
-        if (block.kind !== 'paragraph') continue;
-        const widths = paragraphContentWidthsPt(block, {
-          context,
-          view,
-          tableCellStyle: cell.styleFormatting,
-        });
-        least = Math.max(least, widths.min);
-        most = Math.max(most, widths.max);
-      }
+        const widened = widenedCellInsets(cell, collapsed, insets, widenedRow?.cells[cellIndex]);
+        return {
+          least,
+          most,
+          left: insets.left,
+          right: insets.right,
+          wideLeft: widened.left,
+          wideRight: widened.right,
+        };
+      });
+      const { least, most } = measured;
       if (least < 0) continue;
-      const widened = widenedCellInsets(cell, collapsed, insets);
-      const around = widened.left + widened.right;
+      const around = measured.wideLeft + measured.wideRight;
       if (cell.gridSpan !== 1) {
         // A spanning cell also covers the gaps between the columns it spans.
         const covered = (cell.gridSpan - 1) * gapPt;
@@ -741,11 +680,11 @@ export function autofitColumnMinimumsPt(
           from: cell.gridColumn,
           count: cell.gridSpan,
           minimum: Math.max(0, least + around - covered),
-          current: Math.max(0, least + insets.left + insets.right - covered),
+          current: Math.max(0, least + measured.left + measured.right - covered),
         });
         continue;
       }
-      const needed = least + insets.left + insets.right;
+      const needed = least + measured.left + measured.right;
       if (needed > minimums[cell.gridColumn]!) minimums[cell.gridColumn] = needed;
       if (least + around > wide[cell.gridColumn]!) wide[cell.gridColumn] = least + around;
       if (most + around > widest[cell.gridColumn]!) widest[cell.gridColumn] = most + around;
@@ -853,7 +792,7 @@ export function autofitTargetPt(
  * no token can change, so the memo is exact; it dies with the pass.
  */
 const passWidths = new WeakMap<
-  TableAutofitContext,
+  object,
   WeakMap<
     SemanticTableStructure,
     { readonly contentWidthPt: number; readonly widths: readonly number[] }
@@ -870,8 +809,9 @@ export function autofitColumnWidthsPt(
   context: TableAutofitContext,
   view: AutofitView
 ): readonly number[] {
-  let byStructure = passWidths.get(context);
-  if (!byStructure) passWidths.set(context, (byStructure = new WeakMap()));
+  const owner = autofitReuseScope(context) ?? context;
+  let byStructure = passWidths.get(owner);
+  if (!byStructure) passWidths.set(owner, (byStructure = new WeakMap()));
   const known = byStructure.get(structure);
   if (known && known.contentWidthPt === contentWidthPt) return known.widths;
   if (structure.layoutFixed) {

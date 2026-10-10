@@ -1,7 +1,7 @@
 import { paragraphFragmentsOnPage } from './story-fragments.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
 import { wordBoundary } from './semantic-word-navigation.ts';
-import { paragraphLinesIndex } from './paragraph-lines.ts';
+import { paragraphLinesFor } from './paragraph-lines.ts';
 import type { SemanticLayout } from './semantic-records.ts';
 
 export interface VisualCaretStop {
@@ -16,7 +16,7 @@ export function bidiDirectionOfStop(layout: SemanticLayout, stop: VisualCaretSto
   let cached = directions.get(layout);
   if (!cached) directions.set(layout, (cached = new Map()));
   if (!cached.get(stop.lineId)?.has(stop.position.paragraphId)) {
-    const placed = paragraphLinesIndex(layout).get(stop.position.paragraphId) ?? [];
+    const placed = paragraphLinesFor(layout, stop.position.paragraphId) ?? [];
     let paragraphBase = placed
       .flatMap(({ line }) => line.spans)
       .find((span) => span.range.paragraphId === stop.position.paragraphId && span.style.shaping)

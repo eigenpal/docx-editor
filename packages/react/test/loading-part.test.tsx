@@ -27,6 +27,7 @@ import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorHorizontalRuler } from '../src/editor/DocxEditorRulers.tsx';
 import { useEditorState } from '../src/editor/useEditorState.ts';
+import { DocxEditorMenu } from '../src/editor/menu/index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -289,6 +290,42 @@ describe('DocxEditor.Loading', () => {
     await waitFor(() => {
       expect(view.container.querySelector(LOADING)).toBeNull();
     });
+  });
+
+  test('the menu bar is disabled and closed while the next document opens', async () => {
+    // The previous document stays mounted under the overlay, so a menu command in that
+    // window would act on the document about to be replaced. The toolbar already refuses.
+    let editor: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={SOURCE}
+        onReady={(ready) => {
+          editor = ready as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorMenu />
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    await waitFor(() => expect(editor).not.toBeNull());
+    const triggers = () => [
+      ...view.container.querySelectorAll<HTMLButtonElement>('.docx-menubar__trigger'),
+    ];
+    expect(triggers().length).toBeGreaterThan(0);
+    act(() => triggers()[0]!.click());
+    expect(view.container.querySelector('[role="menu"]')).not.toBeNull();
+
+    act(() => {
+      editor!.load(LARGE_SOURCE);
+    });
+    await act(async () => {});
+    expect(triggers().every((trigger) => trigger.disabled)).toBe(true);
+    expect(view.container.querySelector('[role="menu"]')).toBeNull();
+
+    await waitFor(() => expect(view.container.textContent).toContain('large body'));
+    await waitFor(() => expect(triggers().every((trigger) => !trigger.disabled)).toBe(true));
   });
 
   test('a ruler snaps to the centred loading page before a deferred replacement', async () => {

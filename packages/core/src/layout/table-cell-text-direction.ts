@@ -2,8 +2,10 @@ import { paragraphFragmentsOfBlocks } from './semantic-records.ts';
 import type {
   BlockFragmentRecord,
   LayoutBox,
+  PageRecord,
   SemanticLayout,
   TableCellFragmentRecord,
+  TableFragmentRecord,
 } from './semantic-records.ts';
 import type { CaretGeometry } from './semantic-interaction.ts';
 import type { CellPlaceCursor } from './semantic-table-layout.ts';
@@ -207,39 +209,108 @@ const locationsByLayout = new WeakMap<
 >();
 const bottomToTopCarets = new WeakSet<CaretGeometry>();
 
+const locationsByPage = new WeakMap<
+  PageRecord,
+  readonly {
+    readonly paragraphId: string;
+    readonly cell: TableCellFragmentRecord;
+  }[]
+>();
+
+/**
+ * Table fragments with no `btLr` cell in any row, repeated header rows and nested tables
+ * included. Such a fragment adds no location, so the scan below skips its rows. Records are
+ * never changed after placement, so the answer holds for the object; the set holds nothing.
+ */
+const horizontalTables = new WeakSet<TableFragmentRecord>();
+
+/**
+ * Record that `fragment` has no `btLr` cell at any depth. Only for a caller that proved it:
+ * the table width update, whose structures admit horizontal cells holding paragraphs only.
+ */
+export function markHorizontalTableFragment(fragment: TableFragmentRecord): void {
+  horizontalTables.add(fragment);
+}
+
+let scanObserver: { walked: number; skipped: number; skipOff: boolean } | null = null;
+
+/**
+ * @internal Counts table fragments whose rows the location scan walked or skipped.
+ * `skipOff` walks every fragment, so tests can compare against the full scan.
+ */
+export function bottomToTopScanTestRecorder(options: { readonly skipOff?: boolean } = {}): {
+  readonly walked: number;
+  readonly skipped: number;
+  dispose(): void;
+} {
+  const counts = { walked: 0, skipped: 0, skipOff: options.skipOff === true };
+  scanObserver = counts;
+  return {
+    get walked() {
+      return counts.walked;
+    },
+    get skipped() {
+      return counts.skipped;
+    },
+    dispose() {
+      if (scanObserver === counts) scanObserver = null;
+    },
+  };
+}
+
+function pageBottomToTopLocations(page: PageRecord) {
+  const cached = locationsByPage.get(page);
+  if (cached) return cached;
+  const found: { paragraphId: string; cell: TableCellFragmentRecord }[] = [];
+  /** Adds the locations in `blocks`; true when some table in them has a `btLr` cell. */
+  const visit = (blocks: readonly BlockFragmentRecord[]): boolean => {
+    let vertical = false;
+    for (const block of blocks) {
+      if (block.kind !== 'table') continue;
+      if (horizontalTables.has(block) && !scanObserver?.skipOff) {
+        if (scanObserver) scanObserver.skipped += 1;
+        continue;
+      }
+      if (scanObserver) scanObserver.walked += 1;
+      let blockVertical = false;
+      for (const row of block.rows)
+        for (const cell of row.cells) {
+          if (cell.textDirection === 'btLr') {
+            blockVertical = true;
+            for (const paragraph of paragraphFragmentsOfBlocks(cell.blocks))
+              found.push({ paragraphId: paragraph.paragraphId, cell });
+          } else if (visit(cell.blocks)) blockVertical = true;
+        }
+      // Every row and cell was read, nested tables included: the walk itself is the proof.
+      if (blockVertical) vertical = true;
+      else horizontalTables.add(block);
+    }
+    return vertical;
+  };
+  visit(page.fragments);
+  if (page.header) visit(page.header.fragments);
+  if (page.footer) visit(page.footer.fragments);
+  for (const area of [page.footnotes, page.endnotes]) {
+    if (!area) continue;
+    if (area.separator) visit(area.separator.fragments);
+    if (area.continuationNotice) visit(area.continuationNotice.fragments);
+    for (const note of area.notes) visit(note.fragments);
+  }
+  locationsByPage.set(page, found);
+  return found;
+}
+
 function bottomToTopLocations(
   layout: SemanticLayout
 ): ReadonlyMap<string, readonly BottomToTopCellLocation[]> {
   const cached = locationsByLayout.get(layout);
   if (cached) return cached;
   const found = new Map<string, BottomToTopCellLocation[]>();
-  const visit = (blocks: readonly BlockFragmentRecord[], pageIndex: number): void => {
-    for (const block of blocks) {
-      if (block.kind !== 'table') continue;
-      for (const row of block.rows) {
-        for (const cell of row.cells) {
-          if (cell.textDirection === 'btLr') {
-            for (const paragraph of paragraphFragmentsOfBlocks(cell.blocks)) {
-              const locations = found.get(paragraph.paragraphId) ?? [];
-              locations.push({ pageIndex, cell });
-              found.set(paragraph.paragraphId, locations);
-            }
-          } else {
-            visit(cell.blocks, pageIndex);
-          }
-        }
-      }
-    }
-  };
   for (const page of layout.pages) {
-    visit(page.fragments, page.index);
-    if (page.header) visit(page.header.fragments, page.index);
-    if (page.footer) visit(page.footer.fragments, page.index);
-    for (const area of [page.footnotes, page.endnotes]) {
-      if (!area) continue;
-      if (area.separator) visit(area.separator.fragments, page.index);
-      if (area.continuationNotice) visit(area.continuationNotice.fragments, page.index);
-      for (const note of area.notes) visit(note.fragments, page.index);
+    for (const { paragraphId, cell } of pageBottomToTopLocations(page)) {
+      let locations = found.get(paragraphId);
+      if (!locations) found.set(paragraphId, (locations = []));
+      locations.push({ pageIndex: page.index, cell });
     }
   }
   locationsByLayout.set(layout, found);

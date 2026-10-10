@@ -38,8 +38,9 @@ const PINNED_CALL_SITES: Readonly<Record<string, number>> = {
   // Resolving a review decision reads its exact sites inside the admitted write callback.
   // The following applyTreeOps writes this same story, so it needs the store either way.
   'core/src/editor/docx-editor-review-commands.ts': 1,
-  'core/src/editor/paginated-surface.ts': 7,
+  'core/src/editor/paginated-surface.ts': 6,
   'core/src/editor/surface-range-edit.ts': 3,
+  'core/src/editor/surface-review-order.ts': 1,
   'core/src/editor/surface-equations.ts': 1,
   'core/src/editor/surface-format.ts': 1,
   // Same lane, same story: the painter reads and writes the ACTIVE scope's part, which the

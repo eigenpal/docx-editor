@@ -3606,6 +3606,8 @@ export interface SemanticLayout {
 
 // @public
 export interface SemanticLayoutOptions {
+    // @internal
+    readonly bodyBlockLimit?: number;
     readonly cache?: ParagraphLayoutCache<readonly PendingLine[]>;
     readonly compatibilityMode?: number;
     readonly defaultTabStopPt?: number;
@@ -3830,6 +3832,7 @@ export interface SemanticTableCell {
     readonly revisionShading?: 'inserted' | 'deleted' | 'merged' | 'split';
     // (undocumented)
     readonly revisionShadingAuthor?: string;
+    readonly rowTableBorders?: TableBorderBox;
     readonly shading?: string;
     readonly styleFormatting: TableCellStyleFormatting;
     readonly suppressesTopBand?: true;

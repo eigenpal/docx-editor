@@ -40,7 +40,7 @@ import {
   DEFAULT_RUN_STYLE,
   type ResolvedRunStyle,
 } from '../layout/run-style.ts';
-import { paragraphLinesIndex } from '../layout/paragraph-lines.ts';
+import { paragraphLinesFor } from '../layout/paragraph-lines.ts';
 import { clipParagraphBox } from '../layout/paragraph-frame-clip.ts';
 import { selectionRunStyle } from './surface-formatting.ts';
 
@@ -207,9 +207,9 @@ export function createSurfaceCaret(
     }
     if (typingStyle && measurer) {
       const { pageIndex, lineId } = geometry;
-      const placedLine = paragraphLinesIndex(layout)
-        .get(selection.head.paragraphId)
-        ?.find((placed) => placed.pageIndex === pageIndex && placed.line.id === lineId);
+      const placedLine = paragraphLinesFor(layout, selection.head.paragraphId)?.find(
+        (placed) => placed.pageIndex === pageIndex && placed.line.id === lineId
+      );
       const line = placedLine?.line;
       // Stored marks describe the next glyph before any run carries that face.
       // Align nonempty lines to their baseline; empty lines retain their top.

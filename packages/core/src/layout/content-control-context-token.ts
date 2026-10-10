@@ -30,7 +30,7 @@ export function contentControlContextToken(part: OoxmlPart): string {
   // including no-change passes that reuse every page.
   const cached = contentControlContextTokens.get(part);
   if (cached !== undefined) return cached;
-  let token = computeContentControlContextToken(part);
+  let token = contentControlSubtreeToken(part.root, 0);
   // Hand back the PREVIOUS string object when the content is unchanged (one compare per
   // fresh part). A control-heavy document's token runs to kilobytes, and it is embedded in
   // the layout producer — identity-stable tokens keep every downstream string comparison a
@@ -58,44 +58,45 @@ const contentControlSubtreeTokens = new WeakMap<
   { readonly depth: number; readonly token: string }
 >();
 
-function computeContentControlContextToken(part: OoxmlPart): string {
-  const tokenOf = (node: OoxmlNode, depth: number): string => {
-    if (node.kind === 'textValue') return '';
-    // Paragraph, table and control wrappers are immutable and structurally shared across
-    // text edits. Caching only at depth zero left every paragraph INSIDE a block control
-    // (a TOC wrapped in `w:sdt` is the common shape) re-walked per part revision.
-    const memoizable = node.kind === 'paragraph' || node.kind === 'table' || isContentControl(node);
-    if (memoizable) {
-      const cached = contentControlSubtreeTokens.get(node);
-      if (cached !== undefined && cached.depth === depth) return cached.token;
-    }
-    let token: string;
-    if (isContentControl(node)) {
-      if (depth >= MAX_SDT_NESTING) return '';
-      const properties = contentControlPropertiesOf(node);
-      const own = [
-        node.id,
-        propertyVal(properties, 'alias') ?? '',
-        propertyVal(properties, 'tag') ?? '',
-        parseContentControlLock(propertyVal(properties, 'lock')),
-        mapContentControlType(properties),
-        propertyChild(properties, 'showingPlcHdr') ? '1' : '0',
-        propertyChild(properties, 'dataBinding') ? '1' : '0',
-      ].join(':');
-      const nested = contentControlContentChildren(node)
-        .map((inner) => tokenOf(inner, depth + 1))
-        .filter((entry) => entry.length > 0);
-      token = [own, ...nested].join('|');
-    } else {
-      token = node.children
-        .map((child) => tokenOf(child, depth))
-        .filter((entry) => entry.length > 0)
-        .join('|');
-    }
-    if (memoizable) {
-      contentControlSubtreeTokens.set(node as OoxmlElement, { depth, token });
-    }
-    return token;
-  };
-  return tokenOf(part.root, 0);
+export function contentControlSubtreeToken(node: OoxmlNode, depth: number): string {
+  if (node.kind === 'textValue') return '';
+  // Paragraph, table and control wrappers are immutable and structurally shared across
+  // text edits. Caching only at depth zero left every paragraph INSIDE a block control
+  // (a TOC wrapped in `w:sdt` is the common shape) re-walked per part revision.
+  const memoizable =
+    node.kind === 'paragraph' ||
+    node.kind === 'table' ||
+    node.kind === 'tableRow' ||
+    isContentControl(node);
+  if (memoizable) {
+    const cached = contentControlSubtreeTokens.get(node);
+    if (cached !== undefined && cached.depth === depth) return cached.token;
+  }
+  let token: string;
+  if (isContentControl(node)) {
+    if (depth >= MAX_SDT_NESTING) return '';
+    const properties = contentControlPropertiesOf(node);
+    const own = [
+      node.id,
+      propertyVal(properties, 'alias') ?? '',
+      propertyVal(properties, 'tag') ?? '',
+      parseContentControlLock(propertyVal(properties, 'lock')),
+      mapContentControlType(properties),
+      propertyChild(properties, 'showingPlcHdr') ? '1' : '0',
+      propertyChild(properties, 'dataBinding') ? '1' : '0',
+    ].join(':');
+    const nested = contentControlContentChildren(node)
+      .map((inner) => contentControlSubtreeToken(inner, depth + 1))
+      .filter((entry) => entry.length > 0);
+    token = [own, ...nested].join('|');
+  } else {
+    token = node.children
+      .map((child) => contentControlSubtreeToken(child, depth))
+      .filter((entry) => entry.length > 0)
+      .join('|');
+  }
+  if (memoizable) {
+    contentControlSubtreeTokens.set(node as OoxmlElement, { depth, token });
+  }
+  return token;
 }

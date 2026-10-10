@@ -6,10 +6,9 @@ import { queryEditorDocument } from './docx-editor-query.ts';
 import { refreshWriteBlocked } from './refresh-write-guard.ts';
 import { registerRefreshHost, type RefreshHost } from './document-refresh-host.ts';
 import { reviewChangesLocked } from './command-protection.ts';
-import { supportedFontFamilies } from '../layout/supported-font-families.ts';
 import { resolvedFontMeasurement } from './resolved-font-measurement.ts';
 import { updateSurfaceMeasurement } from './surface-measurement.ts';
-import { createLiveFontResolution } from './live-font-resolution.ts';
+import { createLiveFontResolution, liveFontFamilies } from './live-font-resolution.ts';
 import { composeFontOrigins, defineFontResolver } from './font-resolver.ts';
 import { createEditorPopupChrome } from './text-form-field-chrome.ts';
 import {
@@ -123,6 +122,8 @@ import { createPublishSignal } from './surface-publish-signal.ts';
 import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
 import { resolveDocTargetSelection } from './doc-target-resolution.ts';
 import { createOpenScheduler } from './docx-editor-open-scheduler.ts';
+import * as preparedOpen from './docx-editor-prepared-open.ts';
+import type { TreeDocxSessionView } from '../binding/tree-session-contract.ts';
 import {
   customNodeDiagnosticReporter,
   sweepCustomNodePayloadsOnOpen,
@@ -130,6 +131,7 @@ import {
 import {
   currentPage as currentPageOf,
   pageSetupOf,
+  pageSetupWhileOpening,
   gateCommand,
   runFormattingOf,
   selectionFormattingHalfPoints,
@@ -167,7 +169,6 @@ import {
   warnFontFailureOnce,
 } from './font-configuration.ts';
 import {
-  MAX_RESOLVER_FAMILIES,
   composeFontConfiguration,
   normalizeFontResolverResult,
   type FontConfigurationBase,
@@ -188,9 +189,7 @@ import {
   coveredFontFamiliesOf,
   createLocalFontProbe,
   detectFontSubstitutions,
-  fontResolverFamilies,
 } from './font-availability.ts';
-import { resolverGlyphFontFamilies } from './resolver-glyph-font-families.ts';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import {
   registerEmbeddedFontFaces,
@@ -263,6 +262,11 @@ const EMPTY_FONT_SUBSTITUTIONS: readonly string[] = Object.freeze([]);
 export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let refreshHost: RefreshHost | undefined = undefined;
   let deferredRefreshBytes: Uint8Array | null = null;
+  /** The opening document's session between the prepare and mount tasks, for font work. */
+  let preparedFontSession: TreeDocxSessionView | null = null;
+  let mountedSeq = -1;
+  const stillOpening = () =>
+    preparedFontSession !== null || (!!surface && preparedOpen.stillOpening(surface));
   const hostConfig = createDocxEditorHostConfigState(config);
   let author = normalizeEditorAuthor(config.author);
   let container: HTMLElement | null = config.container ?? null;
@@ -293,10 +297,20 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let pendingBytes: Uint8Array | null = null;
   /** Pending input belongs to these exact remount bytes, including a deferred mount. */
   let pendingTextFormInputs = new WeakMap<Uint8Array, PendingTextFormInput>();
-  /** A big document's mount, deferred behind one painted frame so a loading screen can
-   *  show — `snapshot().isOpening` holds for that window. See `docx-editor-open-scheduler.ts`. */
+  /** Defers a big document's open behind a painted frame; see `docx-editor-open-scheduler.ts`. */
   const openScheduler = createOpenScheduler({
     mount: (bytes) => mountBytes(bytes),
+    continueOpen: (budgetMs) => !surface || preparedOpen.continueOpen(surface, budgetMs),
+    // Fonts resolved before the mount are laid out once, by the mount; see `preparedOpenHook`.
+    prepare: preparedOpen.preparedOpenHook(
+      () => reviewModelOption(modules, reportDiagnostic),
+      (bytes, session) => {
+        if (deferredRefreshBytes === bytes) return null;
+        preparedFontSession = session;
+        return () => preparedFontSession === session;
+      },
+      () => liveFonts.schedule(true)
+    ),
     scheduled: () => {
       bump();
       emitSelectionChange();
@@ -395,29 +409,19 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     typeof config.fonts === 'function' ? resolvedFontConfiguration : config.fonts;
   const liveFonts = createLiveFontResolution(
     () => {
-      if (destroyed || !surface) return null;
-      const { session } = surface;
-      const [selected] = supportedFontFamilies([[snapshotNow().formatting?.fontFamily]]);
+      const session = preparedFontSession ?? surface?.session;
+      if (destroyed || !session) return null;
+      const caret = preparedFontSession ? undefined : snapshotNow().formatting?.fontFamily;
       return {
         generation: loadSeq,
         dynamic: typeof config.fonts === 'function',
         families: () =>
-          fontResolverFamilies(
-            [
-              ...new Set([
-                ...(selected && selected !== configuredDefaultFontFamily(fontConfiguration())
-                  ? [selected]
-                  : []),
-                ...session.documentFonts(),
-              ]),
-            ],
-            resolverGlyphFontFamilies(session),
-            MAX_RESOLVER_FAMILIES
-          ),
+          liveFontFamilies(session, caret, configuredDefaultFontFamily(fontConfiguration())),
       };
     },
     async (families) => {
-      if (surface) await resolveDocumentFonts(loadSeq, surface, families);
+      const target = preparedFontSession ? { session: preparedFontSession } : surface;
+      if (target) await resolveDocumentFonts(loadSeq, target, families);
     }
   );
   let fontsResolving = false;
@@ -586,6 +590,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   ): void {
     initialTextFormInput ??= pendingTextFormInputs.get(bytes);
     pendingTextFormInputs.delete(bytes);
+    preparedFontSession = null;
     if (!container) {
       // Detached: no DOM work. The bytes wait for `attach`, which mounts them under
       // whatever measurer has resolved by then. A previous document's parse failure is
@@ -630,6 +635,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       revisionDisplayMode: reviewEnabled ? reviewDisplayMode : 'proposed',
       revisionMarkup: revisionMarkupState.current(),
       ...reviewModelOption(modules, reportDiagnostic),
+      ...preparedOpen.takePreparedOpen(bytes),
       ...(shapedMeasurer
         ? { measurer: shapedMeasurer, ...(shapedProducer ? { producer: shapedProducer } : {}) }
         : {}),
@@ -690,6 +696,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     }
     parseError = null;
     surface = result.surface;
+    mountedSeq = loadSeq;
     // A refresh or recovery mounts different content: node ids no longer name the same text.
     highlights.attach(surface, refreshHost?.source !== undefined);
     // Before anything can publish: the mount decides the mode itself just below, and a sync
@@ -742,8 +749,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     refreshHost?.contentMounted(bytes);
     // The page's size is only knowable now — it comes from this document's section properties
     // — so a fit mode resolves here. Synchronous on purpose: it lands in the same task as the
-    // mount, so the browser paints once at the fitted scale rather than painting 100% and
-    // correcting on the next frame.
+    // mount, so the browser paints once at the fitted scale, not at 100% and then corrected.
     //
     // AFTER the subscription above, because a fit that moves the scale EMITS, and a host
     // handler that throws from that emit would otherwise abort this function with the surface
@@ -765,6 +771,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   function loadBytes(bytes: Uint8Array, immediate = false): void {
     // Keep the live font resources intact until a deferred refresh actually mounts.
     openScheduler.cancel();
+    preparedFontSession = null;
     deferredRefreshBytes = null;
     if (refreshHost?.source && !immediate && container && openScheduler.shouldYield(bytes)) {
       deferredRefreshBytes = bytes;
@@ -805,10 +812,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         scroller.scrollLeft = 0;
       }
     }
-    // A big document into a live container yields one painted frame first. Detached
-    // loads only stash bytes; the later `attach` decides whether the mount earns a yield.
-    if (!immediate && container && openScheduler.shouldYield(bytes)) openScheduler.schedule(bytes);
-    else mountBytes(bytes);
+    // A big live open yields a frame first and drops the old document now: no stale chrome.
+    if (!immediate && container && openScheduler.shouldYield(bytes)) {
+      teardownSurface();
+      openScheduler.schedule(bytes);
+    } else mountBytes(bytes);
   }
 
   function reportFontError(error: EditorFontError): void {
@@ -837,20 +845,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
   // Fonts resolve asynchronously (HarfBuzz init + validation) PER LOAD, composing the
   // app's `config.fonts` with the faces the document itself embeds — explicit sources
-  // beat embedded ones, and both beat substitutions. The surface samples its measurer at
-  // mount, so the document opens on the fixed measurer immediately, and when the shaped
-  // measurer arrives the surface is remounted FROM THE CURRENT TREE — `session.save()` —
-  // so every edit made before fonts resolved survives. What does not survive is the undo
-  // stack; the semantic selection is restored after the shaped surface mounts so an
-  // `onReady` selection does not disappear as fonts settle. In the not-yet-attached case
-  // there is nothing to remount: the measurer is simply picked up by the next mount.
+  // beat embedded ones, and both beat substitutions. A large open resolves them between its
+  // prepare and mount tasks, so its mount lays out once, shaped. Otherwise the document opens
+  // on the fixed measurer and is measured again when fonts arrive (or by its later mount).
   //
   // Failure is DEGRADATION, never a blocked load: a face the validator refuses drops
   // with a typed report and the remaining faces admit; a wholly failed resolution leaves
   // the document editable on the fixed measurer.
   async function resolveDocumentFonts(
     seq: number,
-    mounted: PaginatedSurface,
+    mounted: { readonly session: preparedOpen.FontSession },
     families: readonly string[]
   ): Promise<void> {
     const configured = config.fonts;
@@ -883,8 +887,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const explicit: FontConfigurationBase | undefined =
         typeof configured === 'function' ? normalizeFontResolverResult(raw) : raw;
       // Awaiting handed control back: this load may have been superseded (or the editor
-      // destroyed) while the resolver ran, and installing its answer would overwrite a
-      // newer document's fonts.
+      // destroyed) while the resolver ran; installing its answer would overwrite newer fonts.
       if (destroyed || seq !== loadSeq) {
         if (seq === loadSeq) fontsResolving = false;
         return;
@@ -1110,7 +1113,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         shapedMeasurer = measurement.measurer;
         shapedProducer = measurement.producer;
         fontsResolving = false;
-        if (surface) {
+        if (surface && mountedSeq === seq) {
           updateSurfaceMeasurement(surface, {
             measurer: shapedMeasurer,
             producer: shapedProducer,
@@ -1210,7 +1213,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       page: { current: currentPageOf(surface), total: totalPagesOf(surface) },
       canUndo: state?.canUndo ?? false,
       canRedo: state?.canRedo ?? false,
-      pageSetup: pageSetupOf(surface),
+      pageSetup: pageSetupWhileOpening(openScheduler, surface),
       reviewPaneOpen,
       reviewPane: reviewPane.current(),
       showParagraphMarks: paragraphMarks.get(),
@@ -1280,8 +1283,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // WITHIN a paragraph, a structural edit at an unmoved caret — derive value-equal
       // snapshots, and a host subscribed through `useSyncExternalStore` never re-renders —
       // freezing every control whose state is a question the snapshot does not carry,
-      // because `toolbarCommandState` re-asks `Editor.can`/`isActive` only when the store
-      // ticks.
+      // because `toolbarCommandState` re-asks `Editor.can`/`isActive` only on a store tick.
       //
       // Caret: Decrease Indent stayed live on a list item already at the outermost level,
       // and the bullet button stayed pressed after the caret moved into a numbered one.
@@ -1772,7 +1774,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       return mountGeneration;
     },
     get surface() {
-      return surface;
+      return surface && preparedOpen.stillOpening(surface) ? null : surface;
     },
 
     ...popupChrome.setters,
@@ -1783,9 +1785,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     stateVersion: () => stateVersion,
 
     fontMeasurement: () => ({
-      measurer: shapedMeasurer ? ('shaped' as const) : ('fixed' as const),
-      resolving: fontsResolving,
-      ...(shapedMeasurer && shapedProducer ? { producer: shapedProducer } : {}),
+      measurer: shapedMeasurer && !stillOpening() ? ('shaped' as const) : ('fixed' as const),
+      resolving: fontsResolving || stillOpening(),
+      ...(shapedMeasurer && shapedProducer && !stillOpening() ? { producer: shapedProducer } : {}),
     }),
 
     attach(el) {
@@ -2399,8 +2401,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // the page already said: the open item draws its own `--active` band, at full
         // tint with a rule under it, which is what marks the change while the card is
         // open. The selection added a second, competing highlight and left the reader
-        // holding a range they never made, one keystroke away from replacing the very
-        // text under review.
+        // holding a range they never made, one keystroke from replacing the text under review.
         //
         // The caret still MOVES, to the start of the span. That is what keeps the keyboard
         // where the reader is looking, what `activeReviewKey` classifies at, and what the
@@ -2410,8 +2411,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         const caret = { paragraphId: span.start.paragraphId, offset: span.start.offset };
         // Through `activateReview`, not `setSelection`: the card this opens has to be named
         // before the selection is published, or the surface reports whichever card the caret
-        // classifies to — the wrong twin, when two cards share one span — and corrects itself
-        // a frame later.
+        // classifies to — the wrong twin, when two cards share one span — for one frame.
         surface.activateReview(
           pinKey,
           { anchor: caret, head: caret },

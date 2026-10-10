@@ -1,5 +1,6 @@
 import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from '@docx-editor.dev/core/store';
 import { MAX_XML_DEPTH } from '../store/package/xml-reader.ts';
+import { keepsSubtreeMemo } from '../store/package/subtree-memo-policy.ts';
 import { isParagraphMarkRevision } from '../store/store/tree-op-nodes.ts';
 import { recordedProperties } from '../store/store/tree-op-tracked-properties.ts';
 import { cacheProjection } from './bounded-projection-cache.ts';
@@ -14,6 +15,9 @@ import {
 } from './revision-projection.ts';
 
 const projections = new WeakMap<OoxmlElement, Map<string, OoxmlElement>>();
+// Unfiltered views need no per-node Map or string key. Keep their two fixed slots weak.
+const proposedProjections = new WeakMap<OoxmlElement, OoxmlElement>();
+const originalProjections = new WeakMap<OoxmlElement, OoxmlElement>();
 
 /**
  * The formatting change a resolved projection folded into a property element, keyed by the
@@ -70,8 +74,16 @@ export function projectRevisionFormatting(
   depth = 0
 ): OoxmlElement {
   if ((mode === 'all-markup' && !filter) || depth >= MAX_XML_DEPTH) return node;
-  const key = `${mode}|${filter?.cacheKey ?? ''}`;
-  const cached = projections.get(node)?.get(key);
+  // Leaf elements and text containers cannot hold a tracked formatting record.
+  // Do not retain a per-view map for every property and text element in a large document.
+  if (node.children.every((child) => child.kind === 'textValue')) return node;
+  const defaultCache = filter
+    ? undefined
+    : mode === 'proposed'
+      ? proposedProjections
+      : originalProjections;
+  const key = defaultCache ? '' : `${mode}|${filter?.cacheKey ?? ''}`;
+  const cached = defaultCache ? defaultCache.get(node) : projections.get(node)?.get(key);
   if (cached) return cached;
   let children: readonly OoxmlNode[] = node.children;
   let resolvedChange: RevisionAttribution | null = null;
@@ -114,16 +126,30 @@ export function projectRevisionFormatting(
       }
     }
   }
-  let changed = children !== node.children;
-  const projected = children.map((child) => {
+  let projected: OoxmlNode[] | null = null;
+  for (let index = 0; index < children.length; index += 1) {
+    const child = children[index]!;
     // A record describes history. Its nested properties are not live formatting decisions.
-    if (child.kind === 'textValue' || child.localName.endsWith('PrChange')) return child;
-    const result = projectRevisionFormatting(child, mode, filter, depth + 1);
-    changed ||= result !== child;
-    return result;
-  });
-  const result = changed ? ({ ...node, children: projected } as OoxmlElement) : node;
+    const result =
+      child.kind === 'textValue' || child.localName.endsWith('PrChange')
+        ? child
+        : projectRevisionFormatting(child, mode, filter, depth + 1);
+    if (result !== child) projected ??= children.slice(0, index);
+    projected?.push(result);
+  }
+  const result =
+    projected || children !== node.children
+      ? ({ ...node, children: projected ?? children } as OoxmlElement)
+      : node;
   if (resolvedChange) resolvedFormatChanges.set(result, resolvedChange);
+  // An unchanged node of leaves answers itself again in a few steps; the identity a caller
+  // keys on is the node's own. A changed result is always kept, so its identity is stable.
+  if (result === node && !keepsSubtreeMemo(node)) return node;
+  if (defaultCache) {
+    defaultCache.set(node, result);
+    if (result !== node) defaultCache.set(result, result);
+    return result;
+  }
   let perView = projections.get(node);
   if (!perView) projections.set(node, (perView = new Map()));
   cacheProjection(perView, key, result);

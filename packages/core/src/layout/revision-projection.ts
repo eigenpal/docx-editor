@@ -608,27 +608,7 @@ export function paragraphMarkMarkupVisible(
  * by name rather than by kind.
  */
 export function paragraphMarkRevisionsOf(paragraph: OoxmlNode): readonly RevisionAttribution[] {
-  if (paragraph.kind === 'textValue') return EMPTY_MARK_REVISIONS;
-  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
-  if (!pPr || pPr.kind === 'textValue') return EMPTY_MARK_REVISIONS;
-  const rPr = pPr.children.find((child) => child.kind === 'runProperties');
-  if (!rPr || rPr.kind === 'textValue') return EMPTY_MARK_REVISIONS;
-  const revisions: RevisionAttribution[] = [];
-  for (const child of rPr.children) {
-    if (child.kind === 'textValue') continue;
-    if (child.namespaceUri !== WML_NAMESPACE_URI) continue;
-    const kind = MARK_REVISION_KINDS[child.localName];
-    if (kind === undefined) continue;
-    const date = attributeValue(child, 'date');
-    revisions.push({
-      kind,
-      id: attributeValue(child, 'id') ?? '',
-      author: attributeValue(child, 'author') ?? '',
-      ...(date === undefined ? {} : { date }),
-      nodeId: child.id,
-    });
-  }
-  return revisions.length > 0 ? revisions : EMPTY_MARK_REVISIONS;
+  return markRevisionDataOf(paragraph).revisions;
 }
 
 /** `EG_ParaRPrTrackChanges` in full: `ins? del? moveFrom? moveTo?` (§17.13.5.20-25). */
@@ -652,28 +632,57 @@ const MARK_REVISION_KINDS: Readonly<Record<string, RevisionKind | undefined>> = 
  * this reads the change element's own attributes and never descends into it.
  */
 export function paragraphMarkFormatRevisionOf(paragraph: OoxmlNode): RevisionAttribution | null {
-  if (paragraph.kind === 'textValue') return null;
-  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
-  if (!pPr || pPr.kind === 'textValue') return null;
-  const rPr = pPr.children.find((child) => child.kind === 'runProperties');
-  if (!rPr || rPr.kind === 'textValue') return null;
-  for (const child of rPr.children) {
-    if (child.kind === 'textValue') continue;
-    if (child.namespaceUri !== WML_NAMESPACE_URI || child.localName !== 'rPrChange') continue;
-    const date = attributeValue(child, 'date');
-    return {
-      kind: 'format',
-      id: attributeValue(child, 'id') ?? '',
-      author: attributeValue(child, 'author') ?? '',
-      ...(date === undefined ? {} : { date }),
-      nodeId: child.id,
-    };
-  }
-  return null;
+  return markRevisionDataOf(paragraph).format;
 }
 
 /** One shared empty, so an unmarked paragraph publishes no array of its own. */
 const EMPTY_MARK_REVISIONS: readonly RevisionAttribution[] = Object.freeze([]);
+interface MarkRevisionData {
+  readonly revisions: readonly RevisionAttribution[];
+  readonly format: RevisionAttribution | null;
+}
+const EMPTY_MARK_DATA: MarkRevisionData = Object.freeze({
+  revisions: EMPTY_MARK_REVISIONS,
+  format: null,
+});
+const markRevisionData = new WeakMap<OoxmlNode, MarkRevisionData>();
+
+function markRevisionDataOf(paragraph: OoxmlNode): MarkRevisionData {
+  const known = markRevisionData.get(paragraph);
+  if (known) return known;
+  const read = (): MarkRevisionData => {
+    if (paragraph.kind === 'textValue') return EMPTY_MARK_DATA;
+    const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+    if (!pPr || pPr.kind === 'textValue') return EMPTY_MARK_DATA;
+    const rPr = pPr.children.find((child) => child.kind === 'runProperties');
+    if (!rPr || rPr.kind === 'textValue') return EMPTY_MARK_DATA;
+    const revisions: RevisionAttribution[] = [];
+    let format: RevisionAttribution | null = null;
+    for (const child of rPr.children) {
+      if (child.kind === 'textValue' || child.namespaceUri !== WML_NAMESPACE_URI) continue;
+      const kind =
+        MARK_REVISION_KINDS[child.localName] ??
+        (child.localName === 'rPrChange' ? 'format' : undefined);
+      if (kind === undefined) continue;
+      const date = attributeValue(child, 'date');
+      const revision: RevisionAttribution = {
+        kind,
+        id: attributeValue(child, 'id') ?? '',
+        author: attributeValue(child, 'author') ?? '',
+        ...(date === undefined ? {} : { date }),
+        nodeId: child.id,
+      };
+      if (kind === 'format') format ??= revision;
+      else revisions.push(revision);
+    }
+    return revisions.length || format
+      ? { revisions: revisions.length ? revisions : EMPTY_MARK_REVISIONS, format }
+      : EMPTY_MARK_DATA;
+  };
+  const result = read();
+  markRevisionData.set(paragraph, result);
+  return result;
+}
 
 /**
  * The single decision a one-field reader sees.

@@ -1,3 +1,10 @@
+import {
+  reflowTableFragment,
+  rememberPaintedCell,
+  rememberPaintedTable,
+  previousTableElement,
+} from './semantic-paint-table-retention.ts';
+import type { TableRowFragmentRecord } from '../layout/semantic-records.ts';
 import { applyRevisionPresentation } from './semantic-paint-revisions.ts';
 import type { ResolvedRevisionMarkup } from '../contracts/revision-markup.ts';
 import { appendEmptyLineAnchor } from './semantic-paint-empty-line.ts';
@@ -1700,6 +1707,8 @@ function paintParagraphBorder(
 import { applyParagraphBorderStyle, isCompoundParagraphBorder } from './border-stroke-paint.ts';
 import { paintPageBorderFrame } from './page-border-paint.ts';
 import { applyCellBorders } from './semantic-paint-table-borders.ts';
+import { markTrackedRow } from './table-row-revision-paint.ts';
+import { sameDataWithin } from './semantic-paint-record-equality.ts';
 import { tableCellContentHost } from './table-cell-text-direction-paint.ts';
 
 function paintTableCell(
@@ -1729,11 +1738,12 @@ function paintTableCell(
     cellElement.dataset.vMergeContinue = 'true';
     cellElement.style.border = 'none';
     cellElement.style.backgroundColor = 'transparent';
+    rememberPaintedCell(cellElement, cell, cellElement, undefined, []);
     return cellElement;
   }
 
   cellElement.style.border = 'none';
-  applyCellBorders(document, cellElement, cell.borders, scale);
+  const strokes = applyCellBorders(document, cellElement, cell.borders, scale);
 
   if (cell.shading && HEX.test(cell.shading)) {
     cellElement.style.backgroundColor = `#${cell.shading}`;
@@ -1751,6 +1761,7 @@ function paintTableCell(
     }
   }
   const contentElement = tableCellContentHost(document, cell, scale, cellElement);
+  const blocks: HTMLElement[] = [];
   for (const block of cell.blocks) {
     const painted =
       block.kind === 'table'
@@ -1759,7 +1770,9 @@ function paintTableCell(
     painted.style.left = `${(block.box.x - cell.box.x) * scale}px`;
     painted.style.top = `${(block.box.y - cell.box.y) * scale}px`;
     contentElement.append(painted);
+    blocks.push(painted);
   }
+  rememberPaintedCell(cellElement, cell, contentElement, strokes, blocks);
   return cellElement;
 }
 
@@ -1769,44 +1782,62 @@ function paintTableCell(
  * which is what gives cell text the same `data-paragraph-id`/`data-start` attributes as
  * body text, so selection and the caret work inside cells with no extra wiring.
  */
-function paintTableFragment(
+function paintTableRow(
   document: Document,
+  row: TableRowFragmentRecord,
   fragment: TableFragmentRecord,
   ctx: DrawingPaintHostContext
 ): HTMLElement {
+  const scale = ctx.scale;
+  const rowElement = positioned(document, 'div', row.box, scale);
+  rowElement.className = 'docx-table-row';
+  markTrackedRow(rowElement, row, !!ctx.revisionMarkup);
+  rowElement.dataset.rowId = row.id;
+  if (row.isHeaderRepeat) rowElement.dataset.headerRepeat = 'true';
+  rowElement.style.left = `${(row.box.x - fragment.box.x) * scale}px`;
+  rowElement.style.top = `${(row.box.y - fragment.box.y) * scale}px`;
+  rowElement.style.overflow = 'visible';
+  for (const cell of row.cells) {
+    rowElement.append(paintTableCell(document, cell, row.box, ctx));
+  }
+  return rowElement;
+}
+
+function paintTableFragment(
+  document: Document,
+  fragment: TableFragmentRecord,
+  ctx: DrawingPaintHostContext,
+  previous?: HTMLElement
+): HTMLElement {
+  // Rows, cells and cell paragraphs whose paint inputs are unchanged, or moved only, are kept.
+  const retained =
+    previous &&
+    reflowTableFragment(previous, fragment, {
+      scale: ctx.scale,
+      showParagraphMarks: ctx.showParagraphMarks === true,
+      row: (row) => paintTableRow(document, row, fragment, ctx),
+      cell: (cell, rowBox) => paintTableCell(document, cell, rowBox, ctx),
+      block: (block, prior) =>
+        block.kind === 'table'
+          ? paintTableFragment(document, block, ctx, prior)
+          : paintFragment(document, block, ctx),
+      // Reuse refuses lines with drawings, the only lines whose gaps depend on reading rank.
+      gapOf: (line, index) => interSpanGapBefore(line, index, () => 0),
+    });
+  if (retained) return retained;
   const scale = ctx.scale;
   const element = positioned(document, 'div', fragment.box, scale);
   element.className = 'docx-table-fragment layout-table';
   element.dataset.tableId = fragment.tableId;
   element.dataset.fragmentIndex = String(fragment.fragmentIndex);
   element.style.overflow = 'visible';
+  const rows = new Map<TableRowFragmentRecord, HTMLElement>();
   for (const row of fragment.rows) {
-    const rowElement = positioned(document, 'div', row.box, scale);
-    rowElement.className = 'docx-table-row';
-    if (row.revisionKind) {
-      if (ctx.revisionMarkup) rowElement.style.backgroundColor = 'transparent';
-      rowElement.classList.add(
-        'docx-table-row--revision',
-        row.revisionKind === 'insert' ? 'layout-revision-ins' : 'layout-revision-del'
-      );
-      // The same attribution datasets revision SPANS carry, so chrome that maps a hovered
-      // element to its review decision treats a tracked row like any other tracked change.
-      // Dataset assignment escapes; the values are attacker-controlled and never markup.
-      rowElement.dataset.revisionKind = row.revisionKind;
-      if (row.revisionId !== undefined) rowElement.dataset.revisionId = row.revisionId;
-      if (row.revisionAuthor !== undefined) rowElement.dataset.reviewAuthor = row.revisionAuthor;
-      if (row.revisionDate !== undefined) rowElement.dataset.revisionDate = row.revisionDate;
-    }
-    rowElement.dataset.rowId = row.id;
-    if (row.isHeaderRepeat) rowElement.dataset.headerRepeat = 'true';
-    rowElement.style.left = `${(row.box.x - fragment.box.x) * scale}px`;
-    rowElement.style.top = `${(row.box.y - fragment.box.y) * scale}px`;
-    rowElement.style.overflow = 'visible';
-    for (const cell of row.cells) {
-      rowElement.append(paintTableCell(document, cell, row.box, ctx));
-    }
-    element.append(rowElement);
+    const painted = paintTableRow(document, row, fragment, ctx);
+    rows.set(row, painted);
+    element.append(painted);
   }
+  rememberPaintedTable(element, fragment, rows);
   return element;
 }
 
@@ -2096,7 +2127,9 @@ function onlyBlocksChanged(previous: PageRecord, next: PageRecord): boolean {
   if (previous === next) return false;
   const keys = new Set([...Object.keys(previous), ...Object.keys(next)]);
   for (const key of keys) {
-    if (key === 'fragments') continue;
+    // Paint never reads the page-field source: the header, footer and body field records that
+    // show a page number carry its effect, and they are compared like everything else.
+    if (key === 'fragments' || key === 'pageFieldSource') continue;
     const a = (previous as unknown as Record<string, unknown>)[key];
     const b = (next as unknown as Record<string, unknown>)[key];
     if (a === b) continue;
@@ -2112,12 +2145,18 @@ function onlyBlocksChanged(previous: PageRecord, next: PageRecord): boolean {
     ) {
       continue;
     }
+    // A record layout rebuilt with the same data paints the same: a footer re-projected for an
+    // unchanged page number, after a table edit replaced the page. Bounded, so a large or
+    // changed story refuses and repaints.
+    if (sameDataWithin(a, b, PAGE_RECORD_COMPARE_BUDGET)) continue;
     return false;
   }
   return true;
 }
 
 const COLUMN_SEPARATOR_CLASS = 'docx-column-separator';
+/** Objects one page-field comparison may visit before adoption gives up on it. */
+const PAGE_RECORD_COMPARE_BUDGET = 20_000;
 
 /**
  * Repaint one page's changed blocks IN PLACE, keeping the sheet and every block that did
@@ -2154,7 +2193,12 @@ function adoptPageBlocks(
     const element =
       previousBlocks.get(fragment) ??
       (fragment.kind === 'table'
-        ? paintTableFragment(document, fragment, blockOptions)
+        ? paintTableFragment(
+            document,
+            fragment,
+            blockOptions,
+            previousTableElement(previousBlocks, fragment)
+          )
         : paintFragment(document, fragment, blockOptions));
     blocks.set(fragment, element);
     elements.push(element);

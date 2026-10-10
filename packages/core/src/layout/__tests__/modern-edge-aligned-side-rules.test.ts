@@ -5,6 +5,7 @@ import {
   createLayoutSession,
   layoutSemanticDocument,
 } from '../semantic-layout.ts';
+import { withSharedGridLineSideRules } from '../legacy-table-side-rules.ts';
 import { readTableStructure } from '../semantic-table.ts';
 
 // Compatibility mode 15 puts the OUTER edge of a left- or right-aligned table's side rule on
@@ -257,3 +258,78 @@ test('a retained session relays an edge-aligned table when the mode or width cha
   expect(read(table, 16).outerRuleOffsetPt).toBe(1.5);
   expect(read(table, 15).outerRuleOffsetPt).toBe(1.5);
 });
+
+test('side-rule reuse respects changed borders and grid coverage', () => {
+  const structure = read(source({ cols: [1440, 1440] }).table, 15);
+  const shape = {
+    ...structure,
+    compatibilityMode: 15,
+    depth: 0,
+    floating: false,
+    widthType: structure.tableWidth.type,
+    containerWidthPt: 300,
+  };
+  const initial = withSharedGridLineSideRules(structure.rows, shape);
+  expect(initial.outerRuleOffsetPt).toBe(1.5);
+  const row = structure.rows[0]!;
+  const cell = row.cells[0]!;
+  const borders = cell.contentBorders ?? cell.borders;
+  if (borders.left.state !== 'edge') throw Error('Missing left border');
+  const changedRows = [
+    {
+      ...row,
+      cells: [
+        {
+          ...cell,
+          contentBorders: {
+            ...borders,
+            left: { ...borders.left, state: 'edge' as const, widthPt: 1 },
+          },
+        },
+        ...row.cells.slice(1),
+      ],
+    },
+  ];
+  expect(withSharedGridLineSideRules(changedRows, shape).outerRuleOffsetPt).toBeUndefined();
+  expect(
+    withSharedGridLineSideRules(structure.rows, {
+      ...shape,
+      columnWidthsPt: [...shape.columnWidthsPt, 10],
+    }).outerRuleOffsetPt
+  ).toBeUndefined();
+  expect(withSharedGridLineSideRules(structure.rows, shape).outerRuleOffsetPt).toBe(1.5);
+});
+
+test.each([false, true])(
+  'a partial header frame keeps body margins on the shared grid (fixed=%s)',
+  (fixed) => {
+    const cell = (text: string, properties = '') =>
+      `<w:tc><w:tcPr>${properties}</w:tcPr><w:p><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+    const header = `<w:tr>${cell('', '<w:tcBorders><w:left w:val="nil"/><w:top w:val="nil"/></w:tcBorders>')}${cell('Header', '<w:gridSpan w:val="2"/>')}</w:tr>`;
+    const body = `<w:tr>${cell('12.34')}${cell('12.34', '<w:tcBorders><w:left w:val="nil"/></w:tcBorders>')}${cell('12.34')}</w:tr>`;
+    const { part, table } = source({ cols: [820, 820, 820], sz: 4, fixed, rows: header + body });
+    const structure = read(table, 15);
+    expect(structure.outerRuleOffsetPt).toBeUndefined();
+    for (const cell of structure.rows[1]!.cells) expect(cell.centeredSideRules).toBe(true);
+    const fragment = firstTable(layout(part, 15));
+    for (const cell of fragment.rows[1]!.cells) {
+      const paragraph = cell.blocks[0]!;
+      if (paragraph.kind !== 'paragraph') throw Error('Expected paragraph');
+      expect(paragraph.lines).toHaveLength(1);
+      expect(paragraph.lines[0]!.box.x - cell.box.x).toBeCloseTo(5.4, 6);
+    }
+    expect(fragment.rows[1]!.cells[0]!.borders?.right?.widthPt).toBe(0.5);
+    const session = createLayoutSession();
+    for (const width of [300, 120, 300]) {
+      expect(layout(part, 15, session, width).pages).toEqual(
+        layout(part, 15, createLayoutSession(), width).pages
+      );
+    }
+    const mixed = source({
+      cols: [820, 820, 820],
+      sz: 4,
+      rows: header.replace('w:val="nil"', 'w:val="double" w:sz="8"') + body,
+    });
+    expect(read(mixed.table, 15).rows[1]!.cells[0]!.centeredSideRules).toBeUndefined();
+  }
+);

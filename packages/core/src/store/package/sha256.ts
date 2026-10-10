@@ -90,16 +90,18 @@ export const sha256FontBytesPure = (bytes: Uint8Array): string => {
     hash[6] = (hash[6]! + g) >>> 0;
     hash[7] = (hash[7]! + h) >>> 0;
   }
-  let result = 'sha256:';
+  // Join once: retained cache digests must not retain a chain of concatenated strings.
+  const result = new Array<string>(33);
+  result[0] = 'sha256:';
   for (let index = 0; index < hash.length; index += 1) {
     const word = hash[index]!;
-    result +=
-      HEX_BYTES[word >>> 24]! +
-      HEX_BYTES[(word >>> 16) & 0xff]! +
-      HEX_BYTES[(word >>> 8) & 0xff]! +
-      HEX_BYTES[word & 0xff]!;
+    const start = 1 + index * 4;
+    result[start] = HEX_BYTES[word >>> 24]!;
+    result[start + 1] = HEX_BYTES[(word >>> 16) & 0xff]!;
+    result[start + 2] = HEX_BYTES[(word >>> 8) & 0xff]!;
+    result[start + 3] = HEX_BYTES[word & 0xff]!;
   }
-  return result;
+  return result.join('');
 };
 
 type NativeSha256 = (bytes: Uint8Array) => string;

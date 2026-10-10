@@ -1,6 +1,7 @@
 // Paragraph-order indexes shared by interactive review derivation and editor positioning.
 
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
+import { createSubtreeAggregateMemo, keepsSubtreeMemo } from '../package/subtree-memo-policy.ts';
 import { createRecentRootCache } from './recent-root-cache.ts';
 
 /**
@@ -35,7 +36,7 @@ export function paragraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, numbe
         };
         for (const child of node.children) collect(child, 0);
         ids = found;
-        tableParagraphIdsCache.set(node, ids);
+        tableParagraphIdsCache.set(node, ids, ids.length);
       }
       for (const id of ids) {
         if (!order.has(id)) order.set(id, order.size);
@@ -49,7 +50,8 @@ export function paragraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, numbe
   return order;
 }
 
-const paragraphOrderCache = createRecentRootCache<Map<string, number>>(8);
+// The current root, plus the ones undo and redo restore: each map holds every paragraph.
+const paragraphOrderCache = createRecentRootCache<Map<string, number>>(3);
 
 /**
  * Like {@link paragraphOrderOfPart}, but descends into paragraphs so textbox paragraphs rank
@@ -68,17 +70,31 @@ export function deepParagraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, n
 
 const EMPTY_DEEP_PARAGRAPH_IDS: readonly string[] = Object.freeze([]);
 
+const MAX_DEEP_PARAGRAPH_DEPTH = 64;
+
+interface DeepParagraphIds {
+  readonly depth: number;
+  readonly ids: readonly string[];
+}
+
+/** One shared entry per depth for the subtrees that hold no paragraph. */
+const EMPTY_DEEP_PARAGRAPH_ENTRIES: readonly DeepParagraphIds[] = Array.from(
+  { length: MAX_DEEP_PARAGRAPH_DEPTH + 1 },
+  (_, depth) => Object.freeze({ depth, ids: EMPTY_DEEP_PARAGRAPH_IDS })
+);
+
 /**
  * Deep paragraph ids under one immutable node, memoized per node. The depth is part of the
  * entry because republishing a shared subtree at another depth can cross the hostile-input cap.
+ * Only nodes `keepsSubtreeMemo` admits get an entry: a node of leaves answers from them.
  */
-const subtreeDeepParagraphIdsCache = new WeakMap<
-  OoxmlNode,
-  { readonly depth: number; readonly ids: readonly string[] }
->();
+const subtreeDeepParagraphIdsCache = createSubtreeAggregateMemo<DeepParagraphIds>();
 
 function subtreeDeepParagraphIds(node: OoxmlNode, depth: number): readonly string[] {
-  if (node.kind === 'textValue' || depth > 64) return EMPTY_DEEP_PARAGRAPH_IDS;
+  if (node.kind === 'textValue' || depth > MAX_DEEP_PARAGRAPH_DEPTH)
+    return EMPTY_DEEP_PARAGRAPH_IDS;
+  // Property leaves cannot contain paragraphs. Empty paragraphs still contribute their id.
+  if (node.kind !== 'paragraph' && node.children.length === 0) return EMPTY_DEEP_PARAGRAPH_IDS;
   const cached = subtreeDeepParagraphIdsCache.get(node);
   if (cached && cached.depth === depth) return cached.ids;
   let found: string[] | null = null;
@@ -89,10 +105,15 @@ function subtreeDeepParagraphIds(node: OoxmlNode, depth: number): readonly strin
     found ??= [];
     for (const id of ids) found.push(id);
   }
-  const result: readonly string[] = found ?? EMPTY_DEEP_PARAGRAPH_IDS;
-  subtreeDeepParagraphIdsCache.set(node, { depth, ids: result });
-  return result;
+  // A run answers from its few children again: an entry per run is most of the memo.
+  if (node.kind !== 'run' && keepsSubtreeMemo(node))
+    subtreeDeepParagraphIdsCache.set(
+      node,
+      found ? { depth, ids: found } : EMPTY_DEEP_PARAGRAPH_ENTRIES[depth]!,
+      found?.length ?? 0
+    );
+  return found ?? EMPTY_DEEP_PARAGRAPH_IDS;
 }
 
-const deepParagraphOrderCache = createRecentRootCache<Map<string, number>>(8);
-const tableParagraphIdsCache = new WeakMap<OoxmlNode, readonly string[]>();
+const deepParagraphOrderCache = createRecentRootCache<Map<string, number>>(3);
+const tableParagraphIdsCache = createSubtreeAggregateMemo<readonly string[]>();

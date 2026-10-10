@@ -51,6 +51,11 @@ import {
   writeRejectionReason,
 } from './command-protection.ts';
 import { registerSurfaceMeasurement } from './surface-measurement.ts';
+import { startOpeningSlices } from './surface-progressive-open.ts';
+import { createDeferredLayout } from './surface-deferred-layout.ts';
+import { drainLayoutSteps, type LayoutSteps } from '../layout/layout-steps.ts';
+import { createReviewOrderIndex } from './surface-review-order.ts';
+import { bodyBlockCountOf } from '../layout/body-block-limit.ts';
 import {
   createContentControlWidgetSessions,
   contentControlValueOps,
@@ -69,7 +74,7 @@ import { collapseHorizontalSelection as collapseSelection } from './surface-sele
 import { createParagraphMarkVisibility } from './surface-paragraph-mark-visibility.ts';
 import { saveSurfaceDocument } from './docx-editor-save.ts';
 import { applyTextFormOperation, applyTextFormSave } from './surface-text-form-apply.ts';
-import { beginSurfaceCommit } from './surface-commit-state.ts';
+import { beginSurfaceCommit, withSplitSelection } from './surface-commit-state.ts';
 import { createSurfaceDateLocale } from './surface-date-locale.ts';
 import {
   buildContentControlCalendar,
@@ -95,10 +100,10 @@ import {
 } from '@docx-editor.dev/core/binding';
 import {
   TOC_MAX_PAGE_PASSES,
-  deepParagraphOrderOfPart,
   detectBodyTocs,
   findNode,
   isContentControl,
+  parentNodeOf,
   ORIGIN_IDS,
   parseTocInstruction,
   planTocEntries,
@@ -110,7 +115,6 @@ import {
   type SelectionMark,
   type StoryScope,
   type TreeDocOp,
-  type TreeModelChange,
 } from '@docx-editor.dev/core/store';
 import { resolveSelectedDrawingRecord } from './docx-editor-images.ts';
 import { createHiddenMarkEditing, type RevisionView } from './hidden-mark-joins.ts';
@@ -163,7 +167,7 @@ import { withSavedFieldResults } from './surface-saved-field-results.ts';
 import { frameCoalescer } from './frame-coalescer.ts';
 import { PROPERTY_CHANGE_WRAPPER_OF_OP } from '../store/store/tree-op-tracked-properties.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
-import { selectionMarkRects } from '../layout/selection-rects.ts';
+import { surfaceSelectionMarkRects } from './surface-selection-ops.ts';
 import type { CaretGeometry } from '../layout/semantic-interaction.ts';
 import { paintSelectionOverlay, type OverlayRect } from '@docx-editor.dev/core/output';
 // By module path, like the roster walk below: dropping a retained paint is an engine
@@ -243,7 +247,7 @@ import {
 import { createBrowserPaintImageUrlPort } from './browser-paint-image-url-port.ts';
 import { createInlineDrawingLayoutBundle } from '../layout/inline-drawing-source.ts';
 import {
-  layoutDocumentView,
+  layoutDocumentViewSteps,
   type LayoutDocumentViewOptions,
 } from '../layout/document-layout-coordinator.ts';
 import { createSurfaceCaret } from './surface-caret.ts';
@@ -346,6 +350,9 @@ type ScaleMutableSurface = PaginatedSurface & {
   ): TreeApplyResult;
 };
 
+/** Body blocks a sliced opening lays out at mount, before its first yield. */
+const PROGRESSIVE_OPEN_FIRST_BLOCKS = 64;
+
 /**
  * Mount a paginated surface over DOCX bytes.
  *
@@ -360,10 +367,9 @@ export function mountPaginatedSurface(
 ): OpenPaginatedResult {
   const runtimeOptions = options as PaginatedSurfaceRuntimeOptions;
   const fieldScope = surfaceFieldResultsScope(options);
-  const opened = openTreeSession(
-    bytes,
-    options.reviewModel ? { reviewModel: options.reviewModel } : {}
-  );
+  const opened =
+    runtimeOptions.openedSession ??
+    openTreeSession(bytes, options.reviewModel ? { reviewModel: options.reviewModel } : {});
   if (!opened.ok) {
     return {
       ok: false,
@@ -372,6 +378,8 @@ export function mountPaginatedSurface(
     };
   }
   const session = scopeSession(opened.session, fieldScope);
+  const reviewOrder = createReviewOrderIndex(session);
+  const reviewOrderIndex = reviewOrder.index;
   const collaborationSession = options.collaborationModel?.session;
   let author = options.author;
   let scale = options.scale ?? 96 / 72;
@@ -834,6 +842,20 @@ export function mountPaginatedSurface(
     }
     return { sectionIndex, sectionStart };
   };
+  /** The split's tail now: its own id, or the paragraph after the head once renamed. */
+  const splitTailNow = (tail: string, head: string): string | null => {
+    if (textboxEditing?.active()) {
+      const ids = textboxEditing.paragraphIds();
+      return ids.includes(tail) ? tail : (ids[ids.indexOf(head) + 1] ?? null);
+    }
+    // The minted tail id names its part, even after the paragraph takes another id.
+    const part = partOfNodeId(session, tail) ?? partOfNodeId(session, head) ?? session.part();
+    if (findNode(part, tail)) return tail;
+    const owner = parentNodeOf(part, head);
+    const index = owner ? owner.children.findIndex((child) => child.id === head) : -1;
+    const next = owner && index >= 0 ? owner.children[index + 1] : undefined;
+    return next?.kind === 'paragraph' ? next.id : null;
+  };
 
   const paragraphOrder = () =>
     scopedDocumentOrder(editingLayout(), hfScope?.getActive() ?? null, noteScopeId());
@@ -1038,6 +1060,30 @@ export function mountPaginatedSurface(
     },
   };
 
+  /** The body block limit of an opening still in slices; null once a full layout ran. */
+  /** Finishes a paused opening prefix pass; see `startOpeningSlices`. */
+  let finishOpeningPass = (): void => undefined;
+  // The pages after the screen finish after the commit; see `surface-deferred-layout.ts`.
+  const deferredLayout = createDeferredLayout({
+    now,
+    pageAfterView: () => {
+      const visible = visiblePages();
+      return visible && visible.size > 0 ? Math.max(...visible) + 1 : undefined;
+    },
+    current: () => currentLayout,
+    revision: () => session.packageRevision(),
+    publish: (layout) => fieldScope.wrap(() => publishLayout(layout))(),
+    // A pass replaces the session's fields and never mutates them, so a shallow copy restores it.
+    snapshot: () => {
+      const saved = { ...layoutSession };
+      return () => void Object.assign(layoutSession, saved);
+    },
+    // Marks the container while later pages still show the previous layout.
+    pendingChanged: (pending) => container.toggleAttribute('data-docx-layout-pending', pending),
+  });
+  let openingBlockLimit: number | null = runtimeOptions.progressiveOpen
+    ? PROGRESSIVE_OPEN_FIRST_BLOCKS
+    : null;
   let currentLayout = layoutOnce();
   // Declared before the first paint can run — `render` reads it.
   let revisionStyles = options.revisionStyles;
@@ -1305,14 +1351,28 @@ export function mountPaginatedSurface(
   function layoutDocument(
     revision: number,
     scope?: LayoutScope,
-    context?: LayoutDocumentContext
+    context?: LayoutDocumentContext,
+    bodyBlockLimit?: number
   ): SemanticLayout {
+    finishOpeningPass();
+    deferredLayout.finish();
+    return drainLayoutSteps(layoutDocumentSteps(revision, scope, context, bodyBlockLimit));
+  }
+
+  function* layoutDocumentSteps(
+    revision: number,
+    scope?: LayoutScope,
+    context?: LayoutDocumentContext,
+    bodyBlockLimit?: number
+  ): LayoutSteps<SemanticLayout> {
     const activeAuthorFilter = context ? context.authorFilter : revisionFilter();
     const activeLayoutSession = context?.layoutSession ?? layoutSession;
     const activeFurnitureSource = context?.furnitureSource ?? furnitureSource;
     if (scope) attachListResolveChangeEvidence(activeLayoutSession, scope);
+    // Any full layout of the live session completes an opening still in slices.
+    if (!context && bodyBlockLimit === undefined) openingBlockLimit = null;
     drawingBundle.sync(session);
-    return layoutDocumentView({
+    return yield* layoutDocumentViewSteps({
       view: session,
       revision,
       measurer,
@@ -1342,6 +1402,7 @@ export function mountPaginatedSurface(
       showFieldCodes: context ? false : showFieldCodes,
       fieldResults: fieldScope.mode,
       revisionAuthorFilter: activeAuthorFilter,
+      bodyBlockLimit,
     } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);
   }
 
@@ -1355,7 +1416,12 @@ export function mountPaginatedSurface(
 
   function layoutOnce(): SemanticLayout {
     const began = now();
-    const layout = layoutDocument(session.packageRevision());
+    const layout = layoutDocument(
+      session.packageRevision(),
+      undefined,
+      undefined,
+      openingBlockLimit ?? undefined
+    );
     lastLayoutMs = now() - began;
     return layout;
   }
@@ -1558,7 +1624,10 @@ export function mountPaginatedSurface(
     // layout after the first comes through here rather than through `layoutOnce`.
     run: (scope: LayoutScope) => {
       const began = now();
-      const layout = layoutDocument(scope.revision, scope);
+      finishOpeningPass();
+      deferredLayout.abandon();
+      const steps = layoutDocumentSteps(scope.revision, scope);
+      const layout = deferredLayout.run(steps, scope.revision);
       lastLayoutMs = now() - began;
       return layout;
     },
@@ -1585,27 +1654,28 @@ export function mountPaginatedSurface(
       const handle = setTimeout(fieldScope.wrap(run), 0);
       return () => clearTimeout(handle);
     },
-    publish: (layout) => {
-      // Release the previous layout BEFORE the new one replaces it: the roster cache held
-      // it by strong reference, and a 200-page graph kept alive beside the live one is tens
-      // of megabytes of retained records. `layout: null` means "recompute on the next read"
-      // while keeping the map itself, which that read compares against to decide whether
-      // the author set actually moved.
-      // The review queue is released with it, for the same reason and by the same rule.
-      reviewAuthors.releaseLayout();
-      currentLayout = layout;
-      const carried = remoteCaret.map(selection);
-      // Peers see this caret move too, or they keep painting it at the old offset.
-      if (carried !== selection) {
-        selection = carried;
-        publishLocalCollaborationSelection();
-      }
-      // Repaint from HERE, so a commit that never went through this surface — undo, or
-      // another editor sharing the store — still reaches the screen. Otherwise the painted
-      // pages keep showing a revision the model has already left.
-      renderPublishedLayout();
-    },
+    publish: (layout) => publishLayout(layout),
   });
+  function publishLayout(layout: SemanticLayout): void {
+    // Release the previous layout BEFORE the new one replaces it: the roster cache held
+    // it by strong reference, and a 200-page graph kept alive beside the live one is tens
+    // of megabytes of retained records. `layout: null` means "recompute on the next read"
+    // while keeping the map itself, which that read compares against to decide whether
+    // the author set actually moved.
+    // The review queue is released with it, for the same reason and by the same rule.
+    reviewAuthors.releaseLayout();
+    currentLayout = layout;
+    const carried = remoteCaret.map(selection);
+    // Peers see this caret move too, or they keep painting it at the old offset.
+    if (carried !== selection) {
+      selection = carried;
+      publishLocalCollaborationSelection();
+    }
+    // Repaint from HERE, so a commit that never went through this surface — undo, or
+    // another editor sharing the store — still reaches the screen. Otherwise the painted
+    // pages keep showing a revision the model has already left.
+    renderPublishedLayout();
+  }
 
   // A settled image resource must reach the screen on its own — nothing else may ever
   // touch the document (a letterhead the user only reads). The flush is queued, not
@@ -1629,7 +1699,7 @@ export function mountPaginatedSurface(
   // editor sharing the store — reaches layout the same way.
   const unsubscribe = session.subscribe((modelChange) => {
     // Before anything downstream can read the index against the new revision.
-    retainReviewOrderIndex(modelChange);
+    reviewOrder.retain(modelChange);
     if (
       modelChange.origin !== ORIGIN_IDS.mutationRemote &&
       modelChange.origin !== ORIGIN_IDS.mutationUndo &&
@@ -3480,7 +3550,6 @@ export function mountPaginatedSurface(
     ) {
       return commentRectCache.rects;
     }
-    const paragraphPages = paragraphPagesOf(currentLayout);
     /** Skip an item that cannot be on screen, before measuring anything about it. */
     const onScreen = (from: string, to: string): boolean => {
       if (!pages) return true;
@@ -3488,6 +3557,7 @@ export function mountPaginatedSurface(
       // 1–5 the moment page 1 scrolled away, so the highlight vanished from the middle of
       // its own range. `keyedRangeRects` clips to the visible pages anyway; this is only a
       // pre-filter, and a false keep costs one range's measurement.
+      const paragraphPages = paragraphPagesOf(currentLayout);
       const start = paragraphPages.get(from);
       const end = paragraphPages.get(to);
       if (start === undefined || end === undefined) return true;
@@ -3529,92 +3599,6 @@ export function mountPaginatedSurface(
     for (const [key, found] of byKey) for (const rect of found) rects.push({ ...rect, key });
     commentRectCache = { layout: currentLayout, revision, pages, rects };
     return rects;
-  }
-
-  /**
-   * Paragraph id to document position over EVERY story the review queue lists — body
-   * first, then each furniture part — memoized per package revision and body root.
-   *
-   * Deliberately NOT the open story's scoped order: `rangeCovers` looks the caret's and an
-   * item's paragraphs up here, and an id the index cannot see is an item that can never
-   * become active. Scoping to the open story made every header item unactivatable from
-   * the body, every body item unactivatable while a header was open, and every textbox
-   * item unactivatable always (the shallow order stops at the host paragraph) — the DEEP
-   * order descends into `w:txbxContent`. Containment only ever compares positions within
-   * one story, and furniture ranks after the body, so the merge cannot invent a cover.
-   */
-  let reviewOrderIndexCache: {
-    readonly packageRevision: number;
-    readonly bodyRoot: object;
-    readonly index: Map<string, number>;
-  } | null = null;
-  /**
-   * Carry the index across a commit that cannot reorder paragraphs.
-   *
-   * The key is (package revision, body root) and a keystroke moves both, so without this the
-   * memo guaranteed exactly one whole-document rebuild per keystroke — the #391 shape, in the
-   * render path. A text-local commit with no created, deleted, split or joined paragraphs
-   * preserves every paragraph id and their order in every story, so the index is re-stamped
-   * to the values the next read will key on. Anything wider drops it, and commits that bypass
-   * the subscription (a package-shell edit) leave a stale key the read-side check rebuilds —
-   * the safe direction.
-   */
-  function retainReviewOrderIndex(change: TreeModelChange): void {
-    if (!reviewOrderIndexCache) return;
-    if (
-      change.impact === 'text-local' &&
-      change.created.length === 0 &&
-      change.deleted.length === 0 &&
-      change.splitJoin.length === 0
-    ) {
-      reviewOrderIndexCache = {
-        packageRevision: session.packageRevision(),
-        bodyRoot: session.part().root,
-        index: reviewOrderIndexCache.index,
-      };
-    } else {
-      reviewOrderIndexCache = null;
-    }
-  }
-  function reviewOrderIndex(): Map<string, number> {
-    const packageRevision = session.packageRevision();
-    const bodyRoot = session.part().root;
-    if (
-      reviewOrderIndexCache &&
-      reviewOrderIndexCache.packageRevision === packageRevision &&
-      reviewOrderIndexCache.bodyRoot === bodyRoot
-    ) {
-      return reviewOrderIndexCache.index;
-    }
-    const index = new Map<string, number>();
-    const append = (order: ReadonlyMap<string, number>): void => {
-      const base = index.size;
-      for (const [id, position] of order) {
-        if (!index.has(id)) index.set(id, base + position);
-      }
-    };
-    append(deepParagraphOrderOfPart(session.part()));
-    const seenParts = new Set<unknown>([session.part()]);
-    for (const section of session.headerFooterPartsBySection()) {
-      for (const slots of [section.headers, section.footers]) {
-        for (const part of slots.values()) {
-          if (seenParts.has(part)) continue;
-          seenParts.add(part);
-          append(deepParagraphOrderOfPart(part));
-        }
-      }
-    }
-    // Note stories too, now that their revisions reach the queue: a paragraph missing from
-    // this index is an item `rangeCovers` can never match, so a footnote card listed but
-    // could never become the ACTIVE one — and the rail gates its reply box on that.
-    for (const noteKind of ['footnote', 'endnote'] as const) {
-      const part = session.partFor({ kind: 'notesPart', noteKind });
-      if (!part || seenParts.has(part)) continue;
-      seenParts.add(part);
-      append(deepParagraphOrderOfPart(part));
-    }
-    reviewOrderIndexCache = { packageRevision, bodyRoot, index };
-    return index;
   }
 
   /** Which comment the caret is in, so its band reads as the open one. */
@@ -3883,7 +3867,7 @@ export function mountPaginatedSurface(
       ? cellSelectionRects(currentLayout, cellSelection.cellIds)
       : retainedSelection
         ? selectionRects(editingLayout(), retainedSelection, paragraphOrder(), measurer)
-        : selectionMarkRects(editingLayout(), selection, paragraphOrder(), measurer);
+        : surfaceSelectionMarkRects(editingLayout(), selection, paragraphOrder, measurer);
     paintSelectionOverlay(
       overlayLayer,
       currentLayout,
@@ -4599,7 +4583,6 @@ export function mountPaginatedSurface(
       // strike and the proposed break read as one decision instead of two.
       const plan = deleteSelectionPlan();
       const position = plan.replaceAt ?? plan.collapseTo;
-      const before = new Set(editingParagraphIds());
       // Enter carries the caret run's direct formatting even when no toolbar command is
       // armed (select text, resize it, then place the caret after it). An empty tail has
       // no run to inherit from. Capture authored properties only, so a heading's inherited
@@ -4688,29 +4671,36 @@ export function mountPaginatedSurface(
           ]
         : [];
       const insertionOps = separator ? [separator, ...markOps, ...separatorMarkOps] : [splitOp];
-      commit(
-        () =>
-          withoutPendingOnRejection(
-            [...plan.ops, ...markOps, ...insertionOps],
-            [...plan.ops, ...(separator ? [separator, ...separatorMarkOps] : [splitOp])],
-            selectionMark(),
-            undefined,
-            separator && !existingSeparatorStyle
-              ? [
-                  ensureSeparatorStyle(
-                    styleCascade()?.defaultParagraphStyleId ?? null,
-                    separatorStyleId
-                  ),
-                ]
-              : undefined
+      const before = separator ? new Set(editingParagraphIds()) : null;
+      withSplitSelection(
+        session,
+        position.paragraphId,
+        (splitSelection) =>
+          commit(
+            () =>
+              withoutPendingOnRejection(
+                [...plan.ops, ...markOps, ...insertionOps],
+                [...plan.ops, ...(separator ? [separator, ...separatorMarkOps] : [splitOp])],
+                selectionMark(),
+                undefined,
+                separator && !existingSeparatorStyle
+                  ? [
+                      ensureSeparatorStyle(
+                        styleCascade()?.defaultParagraphStyleId ?? null,
+                        separatorStyleId
+                      ),
+                    ]
+                  : undefined
+              ),
+            () => {
+              if (!before) return splitSelection();
+              const created = editingParagraphIds().filter((id) => !before.has(id));
+              const tail = separator ? created.at(-1) : created[0];
+              return tail ? collapsedAt({ paragraphId: tail, offset: 0 }) : null;
+            },
+            { rearmPending: armed }
           ),
-        () => {
-          // The tail is the id the store minted that was not there before.
-          const created = editingParagraphIds().filter((id) => !before.has(id));
-          const tail = separator ? created.at(-1) : created[0];
-          return tail ? collapsedAt({ paragraphId: tail, offset: 0 }) : null;
-        },
-        { rearmPending: armed }
+        splitTailNow
       );
     },
 
@@ -5670,6 +5660,7 @@ export function mountPaginatedSurface(
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      deferredLayout.cancel();
       // Typed-but-unflushed text lands before teardown, so a detach-then-save
       // flow keeps the last keystrokes — all the way to a paint and its state
       // report: the final commit's `onChange` used to come from the synchronous
@@ -6235,5 +6226,24 @@ export function mountPaginatedSurface(
     }
   );
   registerRefreshComposition(surface, () => selectionSync.isComposing());
+  finishOpeningPass = startOpeningSlices(
+    surface,
+    container,
+    {
+      now,
+      destroyed: () => destroyed,
+      limit: () => openingBlockLimit,
+      setLimit: (limit) => (openingBlockLimit = limit),
+      bodyBlockCount: () => bodyBlockCountOf(layoutSession),
+      prefixPass: (limit) =>
+        layoutDocumentSteps(session.packageRevision(), undefined, undefined, limit),
+      finish: fieldScope.wrap(() => {
+        scheduler.invalidateAll(session.packageRevision(), 'opening');
+        scheduler.flush();
+        openingBlockLimit = null;
+      }),
+    },
+    PROGRESSIVE_OPEN_FIRST_BLOCKS
+  );
   return { ok: true, surface: fieldScope.methods(surface) };
 }

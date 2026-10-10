@@ -45,9 +45,8 @@ export type TableBorderSideName = 'top' | 'right' | 'bottom' | 'left';
 /**
  * One border edge in one of three states.
  *
- * Omitted edges inherit. Explicit no-border edges suppress inherited rules; a directly
- * authored opposing edge can still win. This matches the saved Word sample's mixed and
- * borderless tables, including cells authored with `w:val="none"`.
+ * Omitted edges inherit. Explicit no-border edges suppress their own inherited rule.
+ * An opposing edge can still win, including a rule inherited by the neighboring cell.
  */
 export type TableBorderSide =
   | { readonly state: 'omitted' }
@@ -272,6 +271,31 @@ export function readTableBorders(tblPr: OoxmlElement | undefined): TableBorderBo
   };
 }
 
+/**
+ * One row's table borders: the sides its `w:tblPrEx` states over the table's own, or
+ * undefined when the row states none. An exception replaces the table's properties for that
+ * row only, so a borderless footer row in a gridded table paints no rule.
+ */
+export function rowExceptionBorders(
+  row: OoxmlElement,
+  table: TableBorderBox
+): TableBorderBox | undefined {
+  const exception = childNamed(row, 'tblPrEx');
+  if (!exception) return undefined;
+  const own = readTableBorders(exception);
+  if (own === EMPTY_TABLE_BORDERS) return undefined;
+  const pick = (base: TableBorderSide, over: TableBorderSide) =>
+    over.state === 'omitted' ? base : over;
+  return {
+    top: pick(table.top, own.top),
+    left: pick(table.left, own.left),
+    bottom: pick(table.bottom, own.bottom),
+    right: pick(table.right, own.right),
+    insideH: pick(table.insideH, own.insideH),
+    insideV: pick(table.insideV, own.insideV),
+  };
+}
+
 /** Read one cell's `w:tcBorders`, under the same bounds {@link readTableBorders} applies. */
 export function readCellBorders(tcPr: OoxmlElement | undefined): CellBorderBox {
   return readBox(tcPr && childNamed(tcPr, 'tcBorders'), ['top', 'left', 'bottom', 'right']);
@@ -349,6 +373,8 @@ export interface BorderGridCell {
   readonly borders: CellBorderBox;
   /** Set on restart cells that visually span into later rows. */
   readonly mergeRowSpan?: number;
+  /** The row's `w:tblPrEx` table borders, which replace the table's own for this cell. */
+  readonly rowTableBorders?: TableBorderBox;
 }
 
 interface RawInterval {
@@ -812,23 +838,13 @@ export function resolveTableCellBorderGrid(
     side: keyof CellBorderBox,
     interior: boolean
   ): TableBorderSide =>
-    effectiveBorderSide(cell.borders[side], tableFallback(table, side, interior), {
-      interior,
-    });
-
-  /** Preserve explicit no-border cells against inherited rules from their neighbours.
-   * An authored opposing edge still participates in the shared-edge conflict.
-   */
-  const interiorConflict = (
-    mine: TableBorderSide,
-    theirs: TableBorderSide,
-    mineEffective: TableBorderSide,
-    theirsEffective: TableBorderSide
-  ): TableBorderSide => {
-    if (mine.state === 'none' && theirs.state !== 'edge') return NONE;
-    if (theirs.state === 'none' && mine.state !== 'edge') return NONE;
-    return resolveBorderConflict(mineEffective, theirsEffective);
-  };
+    effectiveBorderSide(
+      cell.borders[side],
+      tableFallback(cell.rowTableBorders ?? table, side, interior),
+      {
+        interior,
+      }
+    );
 
   for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
     const row = rows[rowIndex]!;
@@ -883,11 +899,9 @@ export function resolveTableCellBorderGrid(
           if (below?.cell.vMergeContinue) {
             edge = OMITTED;
           } else {
-            edge = interiorConflict(
-              cell.borders.bottom,
-              below ? below.cell.borders.top : OMITTED,
+            edge = resolveBorderConflict(
               effective(cell, 'bottom', true),
-              below ? effective(below.cell, 'top', true) : table.insideH
+              below ? effective(below.cell, 'top', true) : (cell.rowTableBorders ?? table).insideH
             );
           }
         }
@@ -902,11 +916,11 @@ export function resolveTableCellBorderGrid(
           edge = effective(cell, 'right', false);
         } else {
           const neighbor = ownerAt(ownership, r, lastCol + 1, work);
-          edge = interiorConflict(
-            cell.borders.right,
-            neighbor ? neighbor.cell.borders.left : OMITTED,
+          edge = resolveBorderConflict(
             effective(cell, 'right', true),
-            neighbor ? effective(neighbor.cell, 'left', true) : table.insideV
+            neighbor
+              ? effective(neighbor.cell, 'left', true)
+              : (cell.rowTableBorders ?? table).insideV
           );
         }
         rightRaw.push({ gridStart: r, gridEnd: r + 1, edge: asResolved(edge) });

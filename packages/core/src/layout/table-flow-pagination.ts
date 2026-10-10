@@ -1,3 +1,6 @@
+import { isSettledPreviousRow } from './table-row-placement-reuse.ts';
+import { createRowProbeReuse } from './table-row-probe-reuse.ts';
+import { takePreviousRows } from './table-row-placement-reuse.ts';
 // Placing ONE top-level table into the body flow, row by row, across page breaks.
 //
 // Lifted out of the story loop because it is the one block kind whose placement is a loop of
@@ -19,7 +22,6 @@ import {
   initialCellCursors,
   layoutRowFragment,
   layoutRowFragmentBounded,
-  measureRowHeight,
   MAX_TABLE_ROW_FRAGMENTS,
   TablePaginationError,
   vMergePlanFor,
@@ -39,16 +41,19 @@ import {
 } from './repeated-header-border-metrics.ts';
 import { cellContentInsets, type CellContentInsets } from './table-cell-geometry.ts';
 import { admitVMergeSpansAt, type RowVMergeLayoutOptions } from './table-vmerge-heights.ts';
-import { planHeaderGroup, type HeaderGroupPlan } from './table-header-vmerge.ts';
+import type { HeaderGroupPlan } from './table-header-vmerge.ts';
+import { createFlowHeaderReuse } from './table-header-flow-reuse.ts';
 import { createMergedTextCarry, deferMergedTextPastHeadRow } from './table-vmerge-boundary.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import { readTableStructure, tableOriginX, type SemanticTableRow } from './semantic-table.ts';
 import { pinnedBreakAtCursor, withSplittableRows } from './table-pinned-break.ts';
 import { tableFloatOriginY } from './table-float-position.ts';
 import { shiftTableFragment } from './table-fragment-finalize.ts';
+import { budgetsHaveHeadroom, withBudgetProof } from './table-budget-proof.ts';
 import { planOutOfCellFloats } from './table-out-of-cell-floats.ts';
 import { tableFloatClearance } from './table-float-collision.ts';
 import type { TableRowFragmentRecord } from './semantic-records.ts';
+import { TABLE_ROWS_PER_STEP, type LayoutSteps } from './layout-steps.ts';
 
 import type { TableFlowCursor, TableFlowPlacementResult } from './table-flow-cursor.ts';
 export type { TableFlowCursor, TableFlowPlacementResult } from './table-flow-cursor.ts';
@@ -67,12 +72,12 @@ const POSITIONED_TABLE_LAYOUT_BOTTOM_PT = Number.MAX_SAFE_INTEGER / 1024;
  * Contiguous leading `w:tblHeader` rows form one atomic repeated group: preflighted and
  * placed together, moved whole when the remainder is too short, re-emitted complete atop
  * each continuation page where the pending row can advance, and treated as ordinary rows
- * when the authored group itself exceeds a fresh content page.
+ * when the authored group itself exceeds a fresh content page. Pauses between rows (steps).
  */
-export function paginateTableInFlow(
+export function* paginateTableInFlowSteps(
   table: OoxmlElement,
   flow: TableFlowCursor
-): TableFlowPlacementResult {
+): LayoutSteps<TableFlowPlacementResult> {
   const {
     columnWidth,
     columnLeft,
@@ -150,22 +155,17 @@ export function paginateTableInFlow(
     // complete fragment in closeTableFragment once that height is known.
     flow.cursorY = tableFloatOriginY(structure.float, 0, verticalFrames);
   }
-  /** One row's natural height where the table stands now. `tableLeft` moves; this reads it. */
+  const rowProbes = createRowProbeReuse(
+    structure.columnWidthsPt,
+    structure.cellSpacingPt,
+    takePreviousRows(table, flowDeps)
+  );
+  /** One row's natural height at the current table origin. */
   const rowHeightOf = (
     probeRow: SemanticTableRow,
     top = flow.cursorY,
     deps?: TableFlowDeps
-  ): number =>
-    measureRowHeight(
-      probeRow,
-      structure.columnWidthsPt,
-      tableLeft,
-      0,
-      deps ?? tableDeps,
-      structure.cellSpacingPt,
-      undefined,
-      tableDeps.pageExclusionZones?.().length ? top : undefined
-    );
+  ): number => rowProbes.measure(probeRow, tableLeft, top, deps ?? tableDeps);
   // Out-of-cell floats (`layoutInCell="0"` before mode 15) keep the place the unpushed table
   // gives them and push the rows that touch them; see `table-out-of-cell-floats.ts`. Only
   // an in-flow table's first fragment is pushed: after a break the rows are on another sheet.
@@ -180,9 +180,17 @@ export function paginateTableInFlow(
     else break;
   }
   // A merge inside the header rows is planned where the group is about to be placed, and the
-  // same plan places it; see `table-header-vmerge.ts`.
-  const headerPlanAt = (top: number): HeaderGroupPlan =>
-    planHeaderGroup(structure, headerRows, () => tableLeft, top, tableDeps, rowHeightOf);
+  // same plan places it (`table-header-vmerge.ts`); a repeat at a kept top reuses both.
+  const headers = createFlowHeaderReuse({
+    structure,
+    headerRows,
+    deps: tableDeps,
+    left: () => tableLeft,
+    rowHeightOf,
+    rowProbes,
+    admitted: !outOfFlow && !structure.float && !pinnedBreak,
+  });
+  const headerPlanAt = (top: number): HeaderGroupPlan => headers.plan(top);
   // Word treats a header prefix taller than a true fresh page as ordinary authored rows. A note
   // reservation only shrinks an advisory band and must never split an otherwise valid prefix.
   const initialHeaderPlan = headerPlanAt(flow.cursorY);
@@ -287,7 +295,8 @@ export function paginateTableInFlow(
         undefined,
         shiftAnchor,
         tableDeps,
-        occurrenceInsets
+        occurrenceInsets,
+        new Set(rows.filter(isSettledPreviousRow))
       )
     );
     const last = finalized[finalized.length - 1]!;
@@ -320,7 +329,7 @@ export function paginateTableInFlow(
             shiftAnchor
           )
         : fragment;
-    publishFragment(positionedFragment);
+    publishFragment(withBudgetProof(positionedFragment, budgetsHaveHeadroom(tableDeps)));
     floats?.end();
     fragmentIndex += 1;
     rows = [];
@@ -380,19 +389,20 @@ export function paginateTableInFlow(
     if (asRepeat && !candidate && admitsBodyAfter && !admitsBodyAfter(flow.cursorY + groupHeight))
       return;
 
-    const headerDeps = firstRowContentDeps(structure, headerRows[0]!, candidate?.deps ?? tableDeps);
+    const headerDeps = candidate
+      ? firstRowContentDeps(structure, headerRows[0]!, candidate.deps)
+      : headers.headerDeps();
 
     for (const [index, headerRow] of headerRows.entries()) {
-      const placed = layoutRowFragment(
-        headerRow,
-        structure.columnWidthsPt,
-        tableLeft,
-        flow.cursorY,
+      const options = plan?.optionsAt(index, flow.cursorY);
+      const placed = headers.place(
         asRepeat,
-        0,
+        !!candidate,
+        index,
+        headerRow,
+        flow.cursorY,
         headerDeps,
-        structure.cellSpacingPt,
-        plan?.optionsAt(index, flow.cursorY)
+        options
       );
       if (placed.bottom > placementBottom + 0.001) {
         throw new TablePaginationError(
@@ -516,6 +526,7 @@ export function paginateTableInFlow(
   };
 
   for (const [bodyRowIndex, authoredRow] of bodyRows.entries()) {
+    if (bodyRowIndex > 0 && bodyRowIndex % TABLE_ROWS_PER_STEP === 0) yield;
     const row = carry.rowAt(bodyRowIndex, authoredRow);
     if (initialHeaderGroupDegraded && bodyRowIndex >= headerRows.length) repeatsEnabled = true;
     const forceBreak = forceNextFragment;
@@ -786,18 +797,22 @@ export function paginateTableInFlow(
       // and whose overflow the `placed.bottom` check below therefore cannot see.
       if (!isContinuation && naturalHeight <= remaining + 0.001) {
         const placementDeps = rowDeps();
-        const placed = layoutRowFragment(
-          deferred?.headRow ?? row,
-          structure.columnWidthsPt,
-          tableLeft,
-          flow.cursorY,
-          false,
-          0,
-          placementDeps,
-          structure.cellSpacingPt,
-          vMerge,
-          contentHeight()
-        );
+        const placed =
+          (!vMerge && !deferred
+            ? rowProbes.take(row, tableLeft, flow.cursorY, placementDeps)
+            : null) ??
+          layoutRowFragment(
+            deferred?.headRow ?? row,
+            structure.columnWidthsPt,
+            tableLeft,
+            flow.cursorY,
+            false,
+            0,
+            placementDeps,
+            structure.cellSpacingPt,
+            vMerge,
+            contentHeight()
+          );
         if (placed.bottom > contentHeight() + 0.001) {
           throw new TablePaginationError(
             'table-row-overheight',
