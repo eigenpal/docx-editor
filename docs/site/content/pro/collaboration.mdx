@@ -60,7 +60,7 @@ Use the dedicated [collaboration format version](/docs/2.x/pro/collaboration-ver
 
 The WebRTC subpath keeps the network provider out of review-only bundles. Import `@docx-editor.dev/pro/react/webrtc` or `@docx-editor.dev/pro/vue/webrtc`.
 
-Pass `room` to connect when the component mounts. Call `leave` to end the session. Do not mount the editor while `pending` is true.
+Pass `room` to connect when the component mounts. Call `leave` to end the session. Mount the editor when `document` is available. Keep it mounted after a session failure so users can save local work.
 
 The hook returns an object. Its `session` field contains a `CollaborationSession`. The session exposes identity, status, presence, and undo. It does not expose `attach` or `gateOperations`. `CollaborationSession`, `CollaborationStatus`, and `CollaborationFailure` are exported types from `@docx-editor.dev/pro/react` and `@docx-editor.dev/pro/vue`.
 
@@ -94,7 +94,7 @@ type CollaborativeEditorProps = {
 
 export function CollaborativeEditor({ roomId, bytes, actorId, name }: CollaborativeEditorProps) {
   const editorRef = useRef<DocxEditorRef>(null);
-  const { document, modules, session, pending, error, leave } = useWebrtcCollaboration({
+  const { document, modules, session, error, leave } = useWebrtcCollaboration({
     room: {
       roomId,
       identity: { actorId, name },
@@ -110,11 +110,15 @@ export function CollaborativeEditor({ roomId, bytes, actorId, name }: Collaborat
     }
   }
 
-  if (error) return <p>Could not join this document. Save any local work and contact support.</p>;
-  if (pending || !document) return <p>Connecting…</p>;
+  if (!document) {
+    return <p>{error ? 'Could not join this document.' : 'Connecting…'}</p>;
+  }
 
   return (
     <>
+      {error && (
+        <p role="alert">Collaboration needs attention. Save a copy before you reconnect.</p>
+      )}
       <button type="button" onClick={leaveRoom}>
         Leave
       </button>
@@ -141,7 +145,7 @@ const props = defineProps<{
 }>();
 
 const editorRef = ref<DocxEditorRef | null>(null);
-const { document, modules, session, pending, error, leave } = useWebrtcCollaboration({
+const { document, modules, session, error, leave } = useWebrtcCollaboration({
   room: {
     roomId: props.roomId,
     identity: { actorId: props.actorId, name: props.name },
@@ -159,9 +163,11 @@ async function leaveRoom() {
 </script>
 
 <template>
-  <p v-if="error">Could not join this document. Save any local work and contact support.</p>
-  <p v-else-if="pending || !document">Connecting…</p>
-  <template v-else>
+  <p v-if="error" role="alert">
+    Collaboration is unavailable. Save any local work before you reconnect.
+  </p>
+  <p v-if="!document && !error">Connecting…</p>
+  <template v-if="document">
     <button type="button" @click="leaveRoom">Leave</button>
     <DocxEditor ref="editorRef" :key="session?.sessionId" :document="document" :modules="modules" />
   </template>
@@ -211,23 +217,28 @@ interface CollaborativeEditorProps {
 export function CollaborativeEditor({ room }: CollaborativeEditorProps) {
   const collaboration = useHocuspocusCollaboration({ room });
 
-  if (collaboration.error) {
-    return <p>Could not join this document. Save any local work and contact support.</p>;
-  }
-
   return (
-    <DocxEditorCollaborationRoot collaboration={collaboration} fallback={<p>Connecting…</p>}>
-      <DocxEditor.Toolbar />
-      <DocxEditor.Viewport>
-        <DocxEditor.Content />
-        <DocxEditorCollaboration.CaretLabels />
-      </DocxEditor.Viewport>
-    </DocxEditorCollaborationRoot>
+    <div className="docx-editor">
+      {collaboration.error && (
+        <p role="alert">Collaboration is unavailable. Save any local work.</p>
+      )}
+      <DocxEditorCollaborationRoot
+        collaboration={collaboration}
+        fallback={<p>{collaboration.error ? 'Could not connect.' : 'Connecting…'}</p>}
+      >
+        <DocxEditor.Menu />
+        <DocxEditor.Toolbar />
+        <DocxEditor.Viewport>
+          <DocxEditor.Content />
+          <DocxEditorCollaboration.CaretLabels />
+        </DocxEditor.Viewport>
+      </DocxEditorCollaborationRoot>
+    </div>
   );
 }
 ```
 
-React renders the `fallback` prop whenever `document` is `null`. The root cannot distinguish a pending connection from a failure. Handle `error` before you render the root.
+React renders `fallback` when `document` is `null`. Use `error` to distinguish a failed connection from a pending connection. Keep an existing editor mounted during failures so users can save local work.
 
 </Framework>
 <Framework value="vue">
@@ -247,21 +258,26 @@ const collaboration = reactive(useHocuspocusCollaboration(() => ({ room: props.r
 </script>
 
 <template>
-  <p v-if="collaboration.error">
-    Could not join this document. Save any local work and contact support.
-  </p>
-  <DocxEditorCollaborationRoot v-else :collaboration="collaboration">
-    <DocxEditor.Toolbar />
-    <DocxEditor.Viewport>
-      <DocxEditor.Content />
-      <DocxEditorCollaboration.CaretLabels />
-    </DocxEditor.Viewport>
-    <template #fallback><p>Connecting…</p></template>
-  </DocxEditorCollaborationRoot>
+  <div class="docx-editor">
+    <p v-if="collaboration.error" role="alert">
+      Collaboration is unavailable. Save any local work before you reconnect.
+    </p>
+    <DocxEditorCollaborationRoot :collaboration="collaboration">
+      <DocxEditor.Menu />
+      <DocxEditor.Toolbar />
+      <DocxEditor.Viewport>
+        <DocxEditor.Content />
+        <DocxEditorCollaboration.CaretLabels />
+      </DocxEditor.Viewport>
+      <template #fallback>
+        <p>{{ collaboration.error ? 'Could not connect.' : 'Connecting…' }}</p>
+      </template>
+    </DocxEditorCollaborationRoot>
+  </div>
 </template>
 ```
 
-Pass the options as a getter so the composable follows a change to the `room` prop. Vue composables return refs. Wrap the return with `reactive` before you pass it to `DocxEditorCollaborationRoot`. Vue renders the named `fallback` slot whenever `document` is `null`. Without that slot, it renders nothing. Handle `error` before you render the root.
+Pass the options as a getter so the composable follows a change to the `room` prop. Vue composables return refs. Wrap the return with `reactive` before you pass it to `DocxEditorCollaborationRoot`. Vue renders the named `fallback` slot whenever `document` is `null`. Without that slot, it renders nothing. Show errors beside an existing editor so users can save local work.
 
 </Framework>
 </FrameworkTabs>
@@ -269,24 +285,27 @@ Pass the options as a getter so the composable follows a change to the `room` pr
 Use `DocxEditor.Root` directly when one page mounts two rooms, or when the bytes come from somewhere the component cannot see:
 
 ```tsx
-if (collaboration.error) {
-  return <p>Could not join this document. Save any local work and contact support.</p>;
-}
 if (!collaboration.document) {
-  return <p>Connecting…</p>;
+  return <p>{collaboration.error ? 'Could not connect.' : 'Connecting…'}</p>;
 }
 
 return (
-  <DocxEditor.Root
-    key={collaboration.session?.sessionId ?? 'local'}
-    document={collaboration.document}
-    modules={collaboration.modules}
-    author={collaboration.session?.identity.name}
-  >
-    <DocxEditor.Viewport>
-      <DocxEditor.Content />
-    </DocxEditor.Viewport>
-  </DocxEditor.Root>
+  <div className="docx-editor">
+    {collaboration.error && (
+      <p role="alert">Collaboration needs attention. Save a copy before you reconnect.</p>
+    )}
+    <DocxEditor.Root
+      key={collaboration.session?.sessionId ?? 'local'}
+      document={collaboration.document}
+      modules={collaboration.modules}
+      author={collaboration.session?.identity.name}
+    >
+      <DocxEditor.Menu />
+      <DocxEditor.Viewport>
+        <DocxEditor.Content />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  </div>
 );
 ```
 
@@ -353,7 +372,7 @@ async function rejoinRoom() {
 </Framework>
 </FrameworkTabs>
 
-To render your own notice, pass a render function in React or a default slot in Vue. It receives `kind`, the translated `message`, and `rejoin` when the copy is out of sync. For CSS styling, use the `docx-collaboration-status` class and the `data-collaboration-status` attribute.
+To render your own notice, pass a render function in React or a default slot in Vue. It receives `kind`, the translated `message`, and optional `rejoin` for out-of-sync or stalled sessions. For CSS styling, use the `docx-collaboration-status` class and the `data-collaboration-status` attribute.
 
 ## Show avatars and caret labels
 
@@ -504,7 +523,7 @@ export function ServerBackedEditor({
   actorId: string;
   name: string;
 }) {
-  const { document, modules, session, pending, error } = useHocuspocusCollaboration({
+  const { document, modules, session, error } = useHocuspocusCollaboration({
     room: {
       url: 'wss://collab.example.test',
       roomId,
@@ -514,10 +533,18 @@ export function ServerBackedEditor({
     },
   });
 
-  if (error) return <p>Could not join this document. Save any local work and contact support.</p>;
-  if (pending || !document) return <p>Connecting…</p>;
+  if (!document) {
+    return <p>{error ? 'Could not join this document.' : 'Connecting…'}</p>;
+  }
 
-  return <DocxEditor key={session?.sessionId} document={document} modules={modules} />;
+  return (
+    <>
+      {error && (
+        <p role="alert">Collaboration needs attention. Save a copy before you reconnect.</p>
+      )}
+      <DocxEditor key={session?.sessionId} document={document} modules={modules} />
+    </>
+  );
 }
 ```
 
@@ -701,7 +728,7 @@ Keep one authority per document at a time:
 
 ## Use the replication contracts
 
-`@docx-editor.dev/core/collaboration/replication` holds the seam a replication implementation binds to: the document port an adapter writes through, the primitive journal it reads, and the descriptors that journal is made of.
+Use `@docx-editor.dev/core/collaboration/replication` when you implement document replication. It exports the document port and change journal contracts.
 
 ```ts
 import type {
@@ -710,7 +737,7 @@ import type {
 } from '@docx-editor.dev/core/collaboration/replication';
 ```
 
-A host that renders presence and reads a status needs none of it, which is why it is a separate subpath. Import `@docx-editor.dev/core/collaboration` for the consumer types: identity, participants, remote selections, status, and failures.
+For status, participant, and remote selection types, import `@docx-editor.dev/core/collaboration`. You do not need the replication contracts for these controls.
 
 ## Integrate a custom Yjs provider
 
@@ -784,11 +811,13 @@ Follow [Upgrade saved rooms](/docs/2.x/pro/collaboration-versions#upgrade-saved-
 
 ### Recover from an error
 
-An `error` session cannot repair itself. First inspect the failure code. For `collaboration-format-mismatch`, `schema-version-mismatch`, or `protocol-version-mismatch`, stop reconnect attempts: connect a compatible application version to that room, or follow the [saved-room upgrade procedure](/docs/2.x/pro/collaboration-versions#upgrade-saved-rooms). A fresh `Y.Doc` joining the same incompatible persisted room will fail again. Never relabel its version metadata.
+Check the failure code before choosing recovery. Some incomplete updates recover when their dependencies arrive. Wait while `useCollaborationStatus().recovering` is true.
+
+For `collaboration-format-mismatch`, `schema-version-mismatch`, or `protocol-version-mismatch`, use a compatible deployment or [upgrade the saved room](/docs/2.x/pro/collaboration-versions#upgrade-saved-rooms). Rejoining cannot fix incompatible room data. Never change version metadata to bypass this check.
 
 Custom ports and direct store integrations must call `room.session.gateOperations(ops, scope)` before committing edits. Stop if it returns an error code. A successful local transaction does not prove that peers received the edit. If the session becomes incompatible, save the local document before replacing the store.
 
-For other errors, resolve the cause, then recreate the session:
+For a terminal error, resolve the cause, then recreate the session:
 
 1. If the editor mounted successfully, preserve local work with `await editor.save()`.
 2. Call `room.destroy()`, then destroy the provider.
@@ -844,7 +873,11 @@ await runtime.run(async (context) => {
 });
 ```
 
-`range.insertText(text, 'Before' | 'After')`, `range.delete()`, and `range.clear()` use the same transaction path. Configure an `author` on the runtime. `TrackMineOnly` persists across runs on that runtime. Peers retain their own editing mode. `Off` makes ordinary edits. `TrackAll` fails with `NotSupported`. Browser tracked writes require the Pro review module; the runtime setting does not change the editor UI mode. The local mode is not saved as a document-wide policy. Tracked edits support inline text within one paragraph, including table cells. Tracked deletions can also remove whole paragraphs with `range.delete()` or `paragraph.delete()`. Text that another participant types into struck text joins the proposed deletion. Targets touching pending revisions, structural changes, and formatting changes under tracking refuse atomically.
+Configure an `author` on the runtime, then use ordinary edits with `TrackMineOnly`. The mode persists across runs and does not change other participants' modes. `Off` makes permanent edits; `TrackAll` fails with `NotSupported`. Browser tracked writes require the Pro review module.
+
+Collaborative tracked replacements stay within one paragraph, including table cells. `range.delete()` and `paragraph.delete()` can propose whole paragraph deletions. Text another participant types inside a proposed deletion joins that deletion.
+
+Some edits beside your own pending changes are supported. Unsupported boundaries and structural edits refuse the entire sync. For supported formatting and continuation rules, see [Tracked changes](/docs/2.x/editor-api/revisions#supported-tracked-edits).
 
 Commit one logical suggestion per sync. Send progress through a separate job/event channel, while the collaboration session publishes committed redlines to peers. On a stale snapshot, reread and reconsider the edit. A local revision check cannot see remote changes that have not reached the worker yet.
 
@@ -878,37 +911,31 @@ Direct automation writes retain timed capture and can share an undo step within 
 
 Caret formatting has a separate local undo step. It does not create a shared document edit. Undo and redo preserve other participants' edits.
 
-Concurrent typing, formatting, splitting, joining, and undo keep every participant's text:
+### Concurrent editing
 
-- If one participant deletes or reformats a run while another participant types inside it, the typed text stays.
-- If one participant joins a paragraph into the one before it while another participant types in it, the typed text moves with the joined text.
-- If one participant presses Enter while another participant types after the split point, the typed text moves into the new paragraph with the text around it.
-- If one participant undoes an Enter while another participant types in the new paragraph, the typed text moves back with the text around it.
-- If two participants split or join the same text at the same time, each character shows once, in document order.
-- If two participants join the same paragraph at the same time, one into the paragraph before it and one taking in the paragraph after it, all of the text stays.
-- If one participant deletes text while another participant moves it, for example by pressing Enter inside it, the text stays deleted. This also holds when another participant undoes a change around it. The participant who deleted the text can undo the deletion.
+Participants see the same document after their updates synchronize. These rules describe edits to the same content:
 
-Your caret stays next to the character you typed while other participants edit the same paragraph, also when their changes arrive together after a reconnect. If another participant presses Enter before your caret or joins its paragraph into another, your caret moves with the text around it. Text that another participant types exactly at your caret goes after it. Other participants see your caret beside the same character, also when a join removed the paragraph it was in.
+| Concurrent actions | Result |
+| --- | --- |
+| Type while another participant deletes or reformats the containing text. | The new text stays. |
+| Type while another participant splits or joins the containing paragraph. | The new text moves with its surrounding text. Undo and redo still address it. |
+| Split or join the same text, including joins in different directions. | Each character appears once. |
+| Delete text while another participant moves it or undoes a nearby edit. | The text stays deleted. The deleting participant can undo the deletion. |
+| Replace a word while another participant deletes that word. | The replacement stays whole. |
+| Change different paragraph properties, or different character formatting properties. | Both changes apply. |
+| Set the same property to different values. | Every participant keeps the same winning value. |
+| Add comments, including the first comments in a document. | Both comments stay. Undo removes only your own comment. |
+| Move, resize, or change wrapping on the same image. | Every participant keeps the same winning value. Deletion takes precedence over an image change. |
+| Paste several paragraphs at the same position. | Both pastes stay. Surrounding text appears once. |
 
-If one participant replaces a word while another participant deletes that word, the new word stays whole.
+Local and remote carets stay beside the same characters during edits and reconnection. A paragraph split or join moves each caret with its text. Text inserted exactly at your caret appears after it.
 
-Sometimes an update from the room cannot apply until an earlier update arrives. While the editor cannot show that update, and in any paragraph whose text the update carries, the editor refuses edits before they apply and reports `collaboration-session-not-ready`. Nothing that you typed disappears, and you can edit other paragraphs meanwhile. Editing continues when the missing update arrives.
+An incomplete update can pause editing in affected paragraphs with `collaboration-session-not-ready`. Other paragraphs remain editable. Editing resumes when the missing update arrives. Reconnection synchronizes missing updates.
 
-If you type text and another participant then presses Enter before it or joins its paragraph into another, the text moves with the paragraph. Undo still removes your text where it moved to, and redo brings it back there.
+Two concurrent editing limits remain:
 
-If a connection loses or repeats updates, the sync that runs when the connection returns brings every missing change, and every participant ends with the same document.
-
-If one participant joins or splits a paragraph while another participant formats text that the join or split moves, the moved text keeps the formatting it had before the move. Apply the formatting again after the edits synchronize.
-
-If one participant splits a paragraph and another joins it back while a third participant types after a character of the moved text, the typed text shows once but can stand earlier in the paragraph than where it was typed. Every participant sees the same text. Move the text after the edits synchronize.
-
-If two participants change different properties of the same paragraph at the same time, such as the alignment and the indent, both changes apply. The same is true for character formatting: if one participant applies bold and another applies italic to overlapping text, the overlap gets both. If they set the same property to different values, every participant keeps the same one of the two values, including participants who join later and server exports.
-
-If two participants add comments at the same time, both comments stay, also when the document had no comments before. Undo removes only your own comment, and redo brings it back.
-
-If two participants move, resize, or change the wrapping of the same image at the same time, every participant keeps the same one of the two values. If one participant deletes an image while another changes it, the image is deleted.
-
-If two participants paste several paragraphs at the same position at the same time, both pastes stay in the document. The text before the paste position stays first, and the text after it shows once.
+- Formatting applied while another participant moves that text to another paragraph can be lost. Apply it again after synchronization.
+- A split, a concurrent join, and a third participant's typing can place the typed text earlier than expected. The text appears once and agrees across participants. Move it after synchronization.
 
 ### Concurrent line breaks and tabs
 

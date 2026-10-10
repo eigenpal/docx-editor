@@ -1,11 +1,11 @@
 ---
 title: 'Dark mode'
-description: 'Enable dark mode in the DOCX editor with the colorMode prop: theme the chrome, render the document canvas like Word dark view, and toggle from your own UI.'
+description: 'Set light, dark, or system appearance for the DOCX editor. Control the theme from your application without changing saved colors.'
 category: 'Guides'
 seoTitle: 'Dark mode'
 ---
 
-Set `colorMode` to theme the chrome and document canvas the way Word's dark view does.
+Set `colorMode` to change the editor controls and document preview.
 
 ## Enabling dark mode
 
@@ -36,18 +36,30 @@ Set `colorMode` to theme the chrome and document canvas the way Word's dark view
 
 ## Toggling from your own UI
 
-Wire `colorMode` to your own control: a switch, a settings menu, a segmented button. The editor applies the new theme when the value changes.
+Connect `colorMode` to an application switch, settings menu, or segmented button. The editor applies the new theme when the value changes.
 
 <FrameworkTabs>
 <Framework value="react">
 
 ```tsx
-const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
+import { useState } from 'react';
+import { DocxEditor } from '@docx-editor.dev/react';
 
-<button onClick={() => setColorMode((m) => (m === 'dark' ? 'light' : 'dark'))}>
-  Toggle theme
-</button>
-<DocxEditor document={bytes} colorMode={colorMode} />
+export function ThemedEditor({ bytes }: { bytes: Uint8Array }) {
+  const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setColorMode((mode) => (mode === 'dark' ? 'light' : 'dark'))}
+      >
+        Toggle theme
+      </button>
+      <DocxEditor document={bytes} colorMode={colorMode} />
+    </>
+  );
+}
 ```
 
 </Framework>
@@ -58,6 +70,7 @@ const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
 import { ref } from 'vue';
 import { DocxEditor } from '@docx-editor.dev/vue';
 
+defineProps<{ bytes: Uint8Array }>();
 const colorMode = ref<'light' | 'dark'>('light');
 </script>
 

@@ -1066,7 +1066,9 @@ function decide(kind: 'accept' | 'reject') {
 
 ### Place the tracked change balloon
 
-Create `watch-balloon-anchor.ts` beside the tracked change balloon component. The helper reads the bands of the item from the editor with `getReviewItemRects(key)`, so it reads no painted page markup. It places the tracked change balloon under the first band, relative to your container. It reads the bands again after a scroll, a resize, each document change, a zoom change, and when the review pane opens or closes. The pages slide while the pane opens or closes, so it also reads the bands when that transition ends. It hides the tracked change balloon when the item has no painted band.
+Create `watch-balloon-anchor.ts` beside your tracked change balloon component. It reads `getReviewItemRects(key)` and positions the component below the first text band.
+
+The helper updates after scrolling, resizing, document changes, zoom changes, and review pane transitions. It hides the component when the item has no visible band.
 
 ```ts
 import type { Editor } from '@docx-editor.dev/core';

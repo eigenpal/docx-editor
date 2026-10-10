@@ -45,11 +45,13 @@ Saved results inside another field's instruction do not add text, line breaks, o
 
 ## Edit saved field results
 
-By default, every field is one unit. Typing beside a field places the text before or after it, and Backspace removes the whole field.
+By default, these saved field results behave as one unit. Typing beside a field places text before or after it. Legacy text form fields have [separate editing rules](#legacy-text-form-fields).
 
 To let readers edit the saved result of a field, set `fieldResults` to `'editable'` when you create the editor:
 
 ```ts
+import { createDocxEditor } from '@docx-editor.dev/core';
+
 const editor = createDocxEditor({
   container,
   document: bytes,
@@ -57,7 +59,36 @@ const editor = createDocxEditor({
 });
 ```
 
-In React and Vue, pass the same value as the `fieldResults` prop of `DocxEditor` or `DocxEditor.Root`. The editor reads the value once, when it is created. A later change to the prop is ignored, and a development build logs a warning.
+The same setting works on the packaged editor and `DocxEditor.Root` in React and Vue. Set it when the editor starts. Later prop changes have no effect and produce a development warning.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+
+export function FieldEditor({ bytes }: { bytes: Uint8Array }) {
+  return <DocxEditor document={bytes} fieldResults="editable" />;
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+
+defineProps<{ bytes: Uint8Array }>();
+</script>
+
+<template>
+  <DocxEditor :document="bytes" field-results="editable" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
 
 This mode applies to fields that show their saved result: `DATE`, `TIME`, `CREATEDATE`, `SAVEDATE`, `PRINTDATE`, `MERGEFIELD`, `HYPERLINK`, `QUOTE`, `FILENAME`, `FILLIN`, and `SEQ`. Fields that the editor computes, such as `PAGE`, `NUMPAGES`, `REF`, `PAGEREF`, and `DOCPROPERTY`, stay one unit. A field whose saved result contains another field also stays one unit.
 
@@ -71,9 +102,15 @@ In this mode:
 - In suggesting mode, edits inside a result are tracked inside the result.
 - A `w:fldSimple` field becomes the equivalent complex field when you edit its result.
 
-The editor has no update command for these fields and never calculates their values, so a manual edit stays in the editor and is saved as the field result. `DATE` and `TIME` fields show their saved value when a document opens. An edit does not mark the field for update (`w:dirty`). An application that updates fields later replaces a manual edit, except for `HYPERLINK` display text and locked fields.
+The editor saves manual changes as field result text. It does not calculate these fields or mark them for update (`w:dirty`).
+
+An application that updates fields later can replace manual changes. `HYPERLINK` display text and locked fields are exceptions.
 
 Collaboration sessions keep every field one unit. If you set `fieldResults: 'editable'` and register a collaboration module, `createDocxEditor` throws a `TypeError`.
+
+### Keep low-level offsets consistent
+
+For a custom core integration, use the same `FieldResultsMode` for layout, `paragraphTextOf()`, and edits. Pass `fieldResults` to layout options and each transaction or edit option. The modes produce different text offsets. Recompute ranges and selection offsets if you change modes.
 
 ## Table of contents boundaries
 
@@ -183,7 +220,11 @@ Only plain text results and the dialog's listed types and formats support editin
 
 ## Legacy checkbox form fields
 
-A legacy checkbox form field (`FORMCHECKBOX`) paints as a square box at the field's size. Its layout advance matches that size, including caret and selection geometry. An invisible pointer target is at least 24 CSS pixels without changing line layout. The box is the control: a click toggles it, and Space toggles the selected field. Tab can focus each checkbox; Space keeps focus on that checkbox. The toggle writes only the field's `w:checked` state. A field with `w:enabled` off refuses, and a document open for viewing or comments refuses. Word toggles these boxes only in a document protected for forms; the editor also toggles them in edit mode, so legacy and content-control checkboxes behave the same way.
+A legacy checkbox (`FORMCHECKBOX`) uses the field's saved size. Its pointer target is at least 24 CSS pixels without changing the document layout.
+
+Click the checkbox or press Space to toggle it. Tab moves focus between checkboxes. A toggle changes only `w:checked`. Disabled fields, viewing mode, and comments-only protection refuse changes.
+
+You can toggle these fields in edit mode or with forms protection enabled. Word requires forms protection.
 
 ## Legacy dropdown form fields
 

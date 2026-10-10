@@ -230,7 +230,7 @@ For author colors and avatars, see [Review colors and styling](/docs/2.x/pro/rev
 
 `<DocxEditorReview />` renders one card for each included pending decision. Place it inside the viewport so the rail scrolls with the document.
 
-The default sidebar shows content changes and comments. Formatting and structural changes remain available in page balloons: click the changed text or paragraph to inspect them. Set `formatting` or `structural` to include those cards in the sidebar as well.
+The default sidebar shows content changes and comments. Formatting and structural changes remain available in tracked change balloons: click the changed text or paragraph to inspect them. Set `formatting` or `structural` to include those cards in the sidebar as well.
 
 | Prop         | Default | Behavior                                                        |
 | ------------ | ------- | --------------------------------------------------------------- |
@@ -242,7 +242,7 @@ The default sidebar shows content changes and comments. Formatting and structura
 | `furniture`  | None    | Adds host content before cards.                                 |
 | `preset`     | `true`  | Set `false` to keep context and anchors without packaged cards. |
 
-Structural and formatting revisions remain marked when their cards are hidden. Selecting one opens its balloon.
+Structural and formatting revisions remain marked when their cards are hidden. Selecting one opens its tracked change balloon.
 
 ### Review parts
 
@@ -320,7 +320,7 @@ A reply to a revision creates a comment over its range. Its `parentRevisionId` l
 
 `setActive` returns `false` when activation is excluded, no range exists, or the story cannot open.
 
-To open the item the way **Next Change** does, pass `{ announce: true }`. A call that succeeds then fires the editor's `reviewItemReveal` event, and the packaged review UI opens the item's balloon, or opens a closed pane at its card when the pane's `opening` setting is `'auto'`. Without `announce`, `setActive` fires no event.
+Pass `{ announce: true }` to activate an item and emit `reviewItemReveal`. The packaged UI opens its tracked change balloon or card. A closed sidebar opens only with `opening: 'auto'`. Without `announce`, activation emits no reveal event.
 
 Use `useReviewOf(editor, query)` with an existing editor. React accepts `Editor | null`. Vue requires `Ref<Editor | null>` and accepts a reactive query.
 
@@ -366,7 +366,7 @@ The pair's `key` stays the same while both halves are pending. Key-based methods
 
 ### Find the item under a pointer
 
-If you draw your own balloons or margin markers, use `editor.getReviewItemsAt(clientX, clientY, query?)` to find the review items under a pointer. Each hit holds the `placement` that `getReviewItems()` returns and a `rect` in client coordinates. The `rect` is the item's band on the line under the pointer.
+If you draw your own tracked change balloons or margin markers, use `editor.getReviewItemsAt(clientX, clientY, query?)` to find the review items under a pointer. Each hit holds the `placement` that `getReviewItems()` returns and a `rect` in client coordinates. The `rect` is the item's band on the line under the pointer.
 
 The following example opens a card for the item under a click:
 
@@ -382,29 +382,33 @@ pages.addEventListener('click', (event) => {
 });
 ```
 
-An item hits when the character under the pointer is inside its range. The right half of the last character still hits. Hits list the narrowest range first. Replies share their thread's range, so they hit too. The test covers the body, tables, headers, footers, footnotes, and endnotes on painted pages. Ranges that cover no characters never hit.
+An item hits when the character under the pointer is inside its range. The right half of the last character still hits. Hits list the narrowest range first. Replies share their thread's range, so they hit too. Pointer hits cover the body, tables, headers, footers, footnotes, and endnotes on painted pages. Ranges that cover no characters never hit.
 
-To anchor a balloon to an item without a pointer, call `editor.getReviewItemRects(key)`. It returns the item's bands on painted pages in client coordinates, or an empty array.
+To anchor a tracked change balloon to an item without a pointer, call `editor.getReviewItemRects(key)`. It returns the item's bands on painted pages in client coordinates, or an empty array.
 
-To open your own balloon on navigation but not on a caret move, listen for the `reviewItemReveal` event. It fires each time **Next Change** or **Previous Change** lands on an item, and each time `setActiveReviewItem(key, { announce: true })` succeeds. It also fires when the item is already active, so a balloon that the reader closed opens again. The event does not fire for a caret move, a click in the page, a dismissal, a refused activation, or a call without `{ announce: true }`. It is a local view event, so edits from other participants in a collaboration session never fire it.
+Use `reviewItemReveal` to open your component after **Next Change**, **Previous Change**, or `setActiveReviewItem(key, { announce: true })`. It fires again for an already active item, so a closed component can reopen.
+
+Caret movement, page clicks, dismissal, refused activation, and remote edits do not emit this event.
 
 The event's `key` is the item's key without `pairReplacements`. **Next Change** and **Previous Change** step through that queue, so for a replacement the key names its deletion or its insertion. When the item is a paired replacement or one half of one, the event also carries `pairKey`, the key that `getReviewItems({ pairReplacements: true })` gives the pair. If you list pairs, open `pairKey ?? key`.
 
-The following example opens a host balloon in React. In Vue, use `useEditorEvent` from `@docx-editor.dev/vue` with the same handler:
+The following example opens a host tracked change balloon in React. In Vue, use `useEditorEvent` from `@docx-editor.dev/vue` with the same handler:
 
 ```tsx
 import { useEditorEvent } from '@docx-editor.dev/react';
 
-useEditorEvent('reviewItemReveal', ({ key, source }) => {
+useEditorEvent('reviewItemReveal', ({ key, pairKey, source }) => {
   // source is 'navigate' for Next Change and Previous Change,
   // or 'host' for setActiveReviewItem() with announce: true.
-  openBalloon(key);
+  openBalloon(pairKey ?? key);
 });
 ```
 
-The packaged balloons and review pane use the same event. With the `revisionsIn: 'balloons'` pane setting, the change balloon opens. With `revisionsIn: 'pane'`, a closed pane opens at the item's card, unless the `opening` pane setting is `'manual'`.
+The packaged tracked change balloons and review pane use the same event. With the `revisionsIn: 'balloons'` pane setting, the tracked change balloon opens. With `revisionsIn: 'pane'`, a closed pane opens at the item's card, unless the `opening` pane setting is `'manual'`.
 
-`editor.getActivatedReviewItemKey(query)` returns the key of the activated item: the one that `setActiveReviewItem()`, **Next Change**, or **Previous Change** made active, while the caret stays in it. It returns `null` when only a caret move made an item active. The caret-active item is a separate idea: `isActive` on each placement, and `activeKey` in `useReview()`, name the item the caret is in, however it got there. Pass the query you read items with: with `pairReplacements: true`, a paired replacement reports the pair's key, so it matches `getReviewItems({ pairReplacements: true })`. Listen for `selectionChange` to read it again. `useReview()` returns the same value as `activatedKey`, for its own query.
+`editor.getActivatedReviewItemKey(query)` identifies an explicitly activated item while the caret remains inside it. It returns `null` for caret-only activation. `useReview().activatedKey` exposes the same value.
+
+`activeKey` and placement `isActive` also include caret-only activation. Use the same query for activation and item reads, including `pairReplacements`. Read again after `selectionChange`.
 
 | Host API | Returns |
 | --- | --- |
@@ -413,9 +417,9 @@ The packaged balloons and review pane use the same event. With the `revisionsIn:
 | `getActivatedReviewItemKey(query?)` | The activated item's key under `query`, or `null`. |
 | `on('reviewItemReveal', handler)` | Each explicit reveal, as `{ key, pairKey, source }`. |
 
-If your own pane opens beside balloons, import `reviewPaneListsItem(revisionsIn, item)` from `@docx-editor.dev/core/editor` and apply it to items from an unfiltered `getReviewItems()` read, before your own filters, so that your pane lists the items the editor counts when it opens the pane.
+Use `reviewPaneListsItem(revisionsIn, item)` to select items for a custom sidebar. Import it from `@docx-editor.dev/core/editor`. Apply it to an unfiltered `getReviewItems()` result before your application filters.
 
-The packaged review rail can draw these balloons for you. See [Control the review pane](/docs/2.x/pro#control-the-review-pane).
+The packaged review rail can draw these tracked change balloons for you. See [Control the review pane](/docs/2.x/pro#control-the-review-pane).
 
 ## Adopt suggestions as your own
 
