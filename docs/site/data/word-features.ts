@@ -395,7 +395,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Numbered lists take the List Paragraph style on the same terms as bulleted ones, so consecutive items close up. The tab after a number stops at the first tab stop past the number when that stop comes before the text indent, so the first line can start left of the indent and fit more text. If the document sets w:doNotUseIndentAsNumberingTabStop, the first tab stop past the number applies wherever it is, and the text indent applies only when no such stop exists. Hebrew (hebrew1, hebrew2), Arabic (arabicAlpha, arabicAbjad), and Devanagari digit (hindiNumbers) formats number in their own scripts. Other script-specific formats fall back to decimal.',
+      'Numbered lists take the List Paragraph style on the same terms as bulleted ones, so consecutive items close up. The tab after a number stops at the first tab stop past the number when that stop comes before the text indent, so the first line can start left of the indent and fit more text. If the document sets w:doNotUseIndentAsNumberingTabStop, the first tab stop past the number applies wherever it is, and the text indent applies only when no such stop exists. Hebrew (hebrew1, hebrew2), Arabic (arabicAlpha, arabicAbjad), and Devanagari digit (hindiNumbers) formats number in their own scripts. Other script-specific formats fall back to decimal. A level with empty number text, such as w:numFmt="none", paints no number but keeps its suffix: a tab moves the first line to the next tab stop, a space moves it one space, and no suffix starts it at the number position.',
   },
   {
     id: 'lists.custom-numbering',
