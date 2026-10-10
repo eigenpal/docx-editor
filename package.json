@@ -146,6 +146,7 @@
     "test:server-agent-review": "playwright test --config e2e/server-agent-review.config.ts",
     "collaboration:change": "node scripts/collaboration/cli.mjs change",
     "collaboration:upgrade-check": "node benchmarks/collaboration-server/upgrade/check.mjs",
+    "collaboration:migration-memory": "node benchmarks/collaboration-server/migration/memory.mjs",
     "collaboration:check": "node scripts/collaboration/cli.mjs check",
     "collaboration:catalog": "node scripts/collaboration/cli.mjs catalog",
     "collaboration:test": "node scripts/collaboration/test.mjs",

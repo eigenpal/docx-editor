@@ -8,6 +8,9 @@ const changeFlags = [
   'fields',
   'migration',
   'summary',
+  'supersedes',
+  'supersedes-reason',
+  'supersedes-category',
 ];
 export const COMMAND_FLAGS = {
   change: Object.fromEntries(changeFlags.map((name) => [name, 'value'])),
@@ -25,6 +28,9 @@ Usage: bun run collaboration:<command> [options]
            --id --impact --before --after --reason --tests
            Optional: --fields --migration --summary
            Separate multiple test paths or fields with commas.
+           --supersedes OLD[=>NEW],... retires tests a merged record lists,
+           with --supersedes-reason explaining why. Without =>NEW, add
+           --supersedes-category duplicate|feature-removed|moved-to-unit.
   check    Check decisions. Optional: --base REF or --release.
   catalog  Verify the catalog. Use --capture VERSION to record a release,
            --table to update the guide, or --allow-current during a publish retry.

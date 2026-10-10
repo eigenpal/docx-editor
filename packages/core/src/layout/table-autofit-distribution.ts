@@ -171,3 +171,40 @@ export function contentSizedWidths(
   const scale = Math.max(0, fitTo - hairlines) / Math.max(needed - hairlines, EPSILON_PT);
   return floor.map((width) => MIN_COLUMN_PT + (width - MIN_COLUMN_PT) * scale);
 }
+
+/**
+ * Settle an autofit table whose every column has a preferred width.
+ *
+ * Each column starts at its preferred width, raised to its minimum. A table that is then
+ * wider than `targetPt` gives back the difference in proportion to how far each column sits
+ * above its minimum, so a column whose content needs little keeps less of its preference than
+ * a column whose content needs much. A `stretch` table narrower than its target grows every
+ * column in proportion to its width. When the minimums alone are wider than the target, the
+ * table keeps them up to `roomPt`, and scales them into the room past it.
+ */
+export function spreadPreferredColumns(
+  preferred: readonly number[],
+  minimums: readonly number[],
+  targetPt: number,
+  roomPt: number,
+  stretch: boolean
+): readonly number[] {
+  const floor = minimums.map((minimum) => Math.max(minimum, MIN_COLUMN_PT));
+  const grown = preferred.map((width, index) => Math.max(width, floor[index]!));
+  const total = grown.reduce((sum, width) => sum + width, 0);
+  if (!Number.isFinite(total) || !Number.isFinite(targetPt) || targetPt < 0) return grown;
+  if (total < targetPt - EPSILON_PT)
+    return stretch ? grown.map((width) => (width * targetPt) / total) : grown;
+  const need = total - targetPt;
+  if (need <= EPSILON_PT) return grown;
+  const slack = grown.map((width, index) => width - floor[index]!);
+  const totalSlack = slack.reduce((sum, value) => sum + value, 0);
+  if (need <= totalSlack)
+    return grown.map((width, index) => width - (need * slack[index]!) / totalSlack);
+  const needed = floor.reduce((sum, value) => sum + value, 0);
+  const fitTo = Math.max(targetPt, roomPt);
+  if (!Number.isFinite(fitTo) || needed <= fitTo) return floor;
+  const hairlines = floor.length * MIN_COLUMN_PT;
+  const scale = Math.max(0, fitTo - hairlines) / Math.max(needed - hairlines, EPSILON_PT);
+  return floor.map((width) => MIN_COLUMN_PT + (width - MIN_COLUMN_PT) * scale);
+}

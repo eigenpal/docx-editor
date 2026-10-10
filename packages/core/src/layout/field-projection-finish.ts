@@ -13,6 +13,7 @@ import type { RunPropertyCascader } from './field-run-text.ts';
 import { projectBufferedRevisionMarkup } from './revision-markup-projection.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import type { ThemeFonts } from './run-style.ts';
+import { applyHAnsiFontSlots } from './hansi-font-slots.ts';
 
 /** Finish a walked paragraph's pieces for display. */
 export function finishParagraphPieces(
@@ -51,5 +52,5 @@ export function finishParagraphPieces(
           options.authorFilter,
           options.changeSites
         );
-  return applyEastAsiaFontSlots(shown, options.themeFonts);
+  return applyHAnsiFontSlots(applyEastAsiaFontSlots(shown, options.themeFonts), options.themeFonts);
 }
