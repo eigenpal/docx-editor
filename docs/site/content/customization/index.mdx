@@ -1,0 +1,168 @@
+---
+title: 'Overview'
+description: 'Customize your DOCX editor with CSS themes, React and Vue controls, document styles, comments, and tracked changes.'
+category: 'Customization'
+---
+
+Customize your DOCX editor to fit your application. Start with the contract example, then choose a customization area. Each guide includes a live preview, supported options, and React and Vue reference code.
+
+<CustomizationDemo topic="start" />
+
+## Customization guides
+
+### Interface
+
+<Cards>
+  <Card title="Appearance" href="/docs/2.x/customization/appearance">
+    Set interface colors, spacing, borders, and dark mode.
+  </Card>
+  <Card title="Layout" href="/docs/2.x/customization/layout">
+    Place the toolbar, document, and application panels.
+  </Card>
+  <Card title="Toolbar" href="/docs/2.x/customization/toolbar">
+    Choose controls, replace icons, and connect your own buttons.
+  </Card>
+  <Card title="Menus" href="/docs/2.x/customization/menus">
+    Choose file menu and context menu actions.
+  </Card>
+  <Card title="Dialogs" href="/docs/2.x/customization/dialogs">
+    Replace dialog parts and keep validation, focus, and draft state.
+  </Card>
+</Cards>
+
+### Review
+
+<Cards>
+  <Card title="Tracked changes" href="/docs/2.x/customization/tracked-changes">
+    Choose the review sidebar or tracked change balloons. Set colors, marks, and review controls.
+  </Card>
+  <Card title="Comments and review cards" href="/docs/2.x/customization/review-cards">
+    Style comments, change cards, markers, and review actions.
+  </Card>
+</Cards>
+
+### Document
+
+<Cards>
+  <Card title="Document styles" href="/docs/2.x/customization/document-styles">
+    Define headings, paragraphs, and tables in your DOCX template.
+  </Card>
+  <Card title="Fonts" href="/docs/2.x/customization/fonts">
+    Load font bytes and choose your font controls.
+  </Card>
+  <Card title="Language and locale" href="/docs/2.x/customization/language">
+    Set editor labels and regional formatting independently.
+  </Card>
+</Cards>
+
+## Choose the API level
+
+| Level                 | Use                                                        |
+| --------------------- | ---------------------------------------------------------- |
+| Props and CSS tokens  | Change labels, colors, fonts, and viewer preferences.      |
+| Named parts           | Arrange controls and replace selected elements.            |
+| Hooks and composables | Connect application controls to editor state and commands. |
+| Modules               | Add review, collaboration, or custom document nodes.       |
+
+Review controls require an EigenPal Pro License. Toolbar, layout, fonts, and labels also work without the review module. For package setup, see [Installation](/docs/2.x/installation). These examples use application arrangements, not packaged visual presets.
+
+For document extensions, see [Custom nodes](/docs/2.x/pro/custom-nodes). For shared editing, see [Collaboration](/docs/2.x/pro/collaboration).
+
+## React and Vue reference
+
+Pass your DOCX bytes and loaded fonts to this component. The preview uses a fictional contract.
+
+<FrameworkTabs variant="block">
+<Framework value="react">
+
+```tsx
+import { DocxEditor, type DocxEditorRootProps } from '@docx-editor.dev/react';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
+import '@docx-editor.dev/core/styles/editor.css';
+
+const modules = [reviewModule()];
+
+export function ContractEditor({
+  bytes,
+  fonts,
+}: {
+  bytes: Uint8Array;
+  fonts: DocxEditorRootProps['fonts'];
+}) {
+  return (
+    <div className="docx-editor contract-workspace">
+      <DocxEditor.Root
+        document={bytes}
+        fonts={fonts}
+        modules={modules}
+        author="Demo reviewer"
+        mode="suggesting"
+        reviewDisplayMode="all-markup"
+      >
+        <DocxEditor.Toolbar preset={false}>
+          <DocxEditor.Toolbar.Undo />
+          <DocxEditor.Toolbar.Redo />
+          <DocxEditor.Toolbar.Bold />
+          <DocxEditor.Toolbar.Italic />
+          <DocxEditor.Toolbar.EditingMode />
+        </DocxEditor.Toolbar>
+        <DocxEditor.Viewport style={{ height: 520 }}>
+          <DocxEditor.Content />
+          <DocxEditor.HyperLink />
+          <DocxEditor.ContextMenu />
+          <DocxEditorReview />
+        </DocxEditor.Viewport>
+      </DocxEditor.Root>
+    </div>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/vue';
+import type { FontConfigurationFragment } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/core/styles/editor.css';
+
+defineProps<{ bytes: Uint8Array; fonts: FontConfigurationFragment }>();
+const modules = [reviewModule()];
+</script>
+
+<template>
+  <div class="docx-editor contract-workspace">
+    <DocxEditor.Root
+      :document="bytes"
+      :fonts="fonts"
+      :modules="modules"
+      author="Demo reviewer"
+      mode="suggesting"
+      review-display-mode="all-markup"
+    >
+      <DocxEditor.Toolbar :preset="false">
+        <DocxEditor.Toolbar.Undo />
+        <DocxEditor.Toolbar.Redo />
+        <DocxEditor.Toolbar.Bold />
+        <DocxEditor.Toolbar.Italic />
+        <DocxEditor.Toolbar.EditingMode />
+      </DocxEditor.Toolbar>
+      <DocxEditor.Viewport :style="{ height: '520px' }">
+        <DocxEditor.Content />
+        <DocxEditor.HyperLink />
+        <DocxEditor.ContextMenu />
+        <DocxEditorReview />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  </div>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+## More control
+
+See [Composition](/docs/2.x/react/composition) for supported parts, types, and additional examples.

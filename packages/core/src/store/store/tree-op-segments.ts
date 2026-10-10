@@ -15,6 +15,7 @@ import {
   namespaceScopeForNode,
   resolveRunLevelMcAtom,
 } from '../package/drawing-projection.ts';
+import { FieldResultsModeMemo } from '../package/field-result-mode.ts';
 import {
   atomicFieldSpansOf,
   parsedFieldSpansOf,
@@ -111,7 +112,10 @@ export interface NoteSegmentProjection {
   readonly ancestorsByNodeId: ReadonlyMap<string, readonly OoxmlNode[]>;
 }
 
-const noteSegmentProjectionCache = new WeakMap<OoxmlParagraphNode, NoteSegmentProjection>();
+const noteSegmentProjectionCache = new FieldResultsModeMemo<
+  OoxmlParagraphNode,
+  NoteSegmentProjection
+>();
 
 /** Segment offsets plus note ancestry, derived by the same single paragraph walk. */
 export function noteSegmentsWithAncestorsOf(paragraph: OoxmlParagraphNode): NoteSegmentProjection {
@@ -169,7 +173,7 @@ export interface ParagraphOffsetIndex {
  * long document one keystroke re-walked every paragraph in the file several times over, and
  * the cost showed up as typing latency that grew with document length.
  */
-const offsetIndexCache = new WeakMap<OoxmlParagraphNode, ParagraphOffsetIndex>();
+const offsetIndexCache = new FieldResultsModeMemo<OoxmlParagraphNode, ParagraphOffsetIndex>();
 
 /**
  * THE paragraph offset authority: maps a paragraph's UTF-16 offsets to the nodes holding them.
@@ -377,6 +381,11 @@ function walkParagraph(
         if (spans !== null) {
           for (const runId of atom.formatRunIds) spans.set(runId, { start, end: offset });
         }
+      } else {
+        // An editable saved result: its runs are ordinary text inside the field element.
+        ancestorPath.push(child);
+        for (const inner of child.children) visitInline(inner, depth + 1);
+        ancestorPath.pop();
       }
       record(child, start);
       return;
@@ -542,21 +551,25 @@ export function insertsBesideRestrictedControl(
   return controls.every((control) => !containsNode(control, landingId));
 }
 
-/** The closing marker at a legacy text form's trailing caret boundary. */
+/**
+ * The closing marker at the trailing caret boundary of a field whose result is addressable (a
+ * legacy text form, or a saved result in the `editable` mode): text typed there lands after
+ * the field, not inside its result.
+ */
 export function textFormFieldEndAt(
   paragraph: OoxmlParagraphNode,
   offset: number
 ): string | undefined {
   const offsets = paragraphOffsetIndex(paragraph);
   for (const field of parsedFieldSpansOf(paragraph)) {
-    if (field.addressing !== 'editable-result') continue;
+    if (field.addressing === 'atomic') continue;
     const endId = field.removeNodeIds.at(-1);
     if (endId && offsets.spanOf(endId)?.end === offset) return endId;
   }
   return undefined;
 }
 
-const orphanFieldEnds = new WeakMap<OoxmlParagraphNode, ReadonlyMap<number, string>>();
+const orphanFieldEnds = new FieldResultsModeMemo<OoxmlParagraphNode, ReadonlyMap<number, string>>();
 
 /** A trailing field marker must stay before content inserted at its zero-width boundary. */
 export function fieldInsertionEndAt(
