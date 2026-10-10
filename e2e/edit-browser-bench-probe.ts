@@ -55,6 +55,7 @@ declare global {
   interface Window {
     __EDIT_BROWSER_BENCH__?: {
       delayMs: number;
+      settledEngine: BrowserSample['engine'] | null;
       samples: BrowserSample[];
       eventEntries: Array<{
         name: string;
@@ -70,6 +71,7 @@ export async function installMeasurementProbe(page: Page, injectedDelayMs: numbe
   await page.evaluate((delayMs) => {
     const state = {
       delayMs,
+      settledEngine: null as BrowserSample['engine'] | null,
       samples: [] as BrowserSample[],
       eventEntries: [] as Array<{
         name: string;
@@ -79,6 +81,21 @@ export async function installMeasurementProbe(page: Page, injectedDelayMs: numbe
       }>,
     };
     window.__EDIT_BROWSER_BENCH__ = state;
+
+    // The counters of a background pass, read in the task that publishes it: observer
+    // callbacks run before any later task, so an unrelated pass cannot overwrite them first.
+    new MutationObserver((records) => {
+      for (const record of records) {
+        const target = record.target as Element;
+        if (record.oldValue === null || target.hasAttribute('data-docx-layout-pending')) continue;
+        state.settledEngine = window.__DOCX_EDITOR_E2E__?.benchmarkPerf() ?? null;
+      }
+    }).observe(document.body, {
+      subtree: true,
+      attributes: true,
+      attributeOldValue: true,
+      attributeFilter: ['data-docx-layout-pending'],
+    });
 
     if (
       typeof PerformanceObserver !== 'undefined' &&
@@ -162,7 +179,10 @@ export async function runEdit(
   const fullPassesBefore = await page.evaluate(
     () => window.__DOCX_EDITOR_E2E__!.benchmarkPerf()!.fullPasses
   );
-  const sampleCount = await page.evaluate(() => window.__EDIT_BROWSER_BENCH__!.samples.length);
+  const sampleCount = await page.evaluate(() => {
+    window.__EDIT_BROWSER_BENCH__!.settledEngine = null;
+    return window.__EDIT_BROWSER_BENCH__!.samples.length;
+  });
   await page.keyboard.insertText(text);
   await page.waitForFunction(
     (before) => window.__EDIT_BROWSER_BENCH__!.samples.length > before,
@@ -172,16 +192,17 @@ export async function runEdit(
   // A large edit finishes its later pages in background tasks; the work counters describe
   // the whole pass only once those have run. The timings stay the ones taken at the frame.
   await page.waitForFunction(() => !document.querySelector('[data-docx-layout-pending]'));
-  const sample = {
-    ...measured,
-    engine: await page.evaluate(() => window.__DOCX_EDITOR_E2E__!.benchmarkPerf()!),
-  };
+  const settled = await page.evaluate(() => window.__EDIT_BROWSER_BENCH__!.settledEngine);
+  const sample = settled ? { ...measured, engine: settled } : measured;
   expect(sample.engine.fullPasses, 'typing must not add a full layout pass').toBe(fullPassesBefore);
   // Both benchmark fixtures are long documents; the plain one holds 3,200
   // paragraphs and the tracked/numbered one 620 much larger clauses.
   expect(sample.engine.total).toBeGreaterThan(600);
   expect(sample.materializedPages).toBeLessThanOrEqual(8);
   expect(await page.evaluate(() => window.__DOCX_EDITOR_E2E__!.undoBenchmarkEdit())).toBe(true);
+  // Let the undo finish its background pages: an edit that arrives first abandons that pass,
+  // restores the layout from before the undo, and the next round reuses its own last result.
+  await page.waitForFunction(() => !document.querySelector('[data-docx-layout-pending]'));
   await twoFrames(page);
   return sample;
 }
