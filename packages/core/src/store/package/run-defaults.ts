@@ -96,6 +96,21 @@ export function eastAsiaFamilyFromRFonts(
   return FONT_NAME.test(direct) ? direct : null;
 }
 
+/**
+ * The independently resolved `w:hAnsi` family named by an `w:rFonts` element: the face
+ * layout uses for non-ASCII Latin, Greek and Cyrillic text when it differs from `w:ascii`.
+ */
+export function hAnsiFamilyFromRFonts(
+  rFonts: OoxmlElement,
+  themeFonts: DocumentThemeFonts
+): string | null {
+  const themed = themeFontFamilyOf(attributeValue(rFonts, 'hAnsiTheme'), themeFonts);
+  if (themed !== null) return themed;
+  const direct = attributeValue(rFonts, 'hAnsi');
+  if (direct === undefined) return null;
+  return FONT_NAME.test(direct) ? direct : null;
+}
+
 /** A validated literal family name from another Word font-bearing attribute such as `w:sym`. */
 export function validFontFamily(raw: string | undefined): string | null {
   return raw !== undefined && FONT_NAME.test(raw) ? raw : null;
