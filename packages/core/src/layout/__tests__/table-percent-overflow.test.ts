@@ -222,7 +222,7 @@ describe('a table percentage above 100 extends the table past the text column', 
 describe('a grid-confirmed legacy table above 100%', () => {
   const legacy = (width = '5500', grid = '2438', alignment = 'center') =>
     `<w:tbl><w:tblPr><w:tblW w:type="pct" w:w="${width}"/><w:jc w:val="${alignment}"/>` +
-    '<w:tblLayout w:type="autofit"/><w:tblCellMar><w:left w:type="dxa" w:w="108"/>' +
+    '<w:tblInd w:w="0" w:type="dxa"/><w:tblLayout w:type="autofit"/><w:tblCellMar><w:left w:type="dxa" w:w="108"/>' +
     '<w:right w:type="dxa" w:w="108"/></w:tblCellMar></w:tblPr>' +
     `<w:tblGrid><w:gridCol w:w="${grid}"/></w:tblGrid><w:tr><w:tc><w:tcPr>` +
     '<w:tcW w:type="pct" w:w="5000"/></w:tcPr><w:p>' +
@@ -254,9 +254,12 @@ describe('a grid-confirmed legacy table above 100%', () => {
     });
   }
 
-  test('the grid confirms the nearest twip, not a different width', () => {
-    expect(structure(legacy('5209', '2309')).legacyContentAlignment).toBe(true);
-    expect(structure(legacy('5209', '2308')).legacyContentAlignment).toBeUndefined();
+  test('the reference box does not depend on the authored grid', () => {
+    for (const grid of ['2309', '2308', '1200', '4000']) {
+      const table = structure(legacy('5209', grid));
+      expect(table.legacyContentAlignment).toBe(true);
+      expect(table.columnWidthsPt[0]).toBeCloseTo(115.4, 1);
+    }
   });
 
   test('a left-aligned table aligns its content with the text column', () => {
