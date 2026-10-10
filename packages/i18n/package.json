@@ -62,6 +62,11 @@
       "import": "./dist/pt-BR.mjs",
       "require": "./dist/pt-BR.js"
     },
+    "./ru": {
+      "types": "./dist/ru.d.ts",
+      "import": "./dist/ru.mjs",
+      "require": "./dist/ru.js"
+    },
     "./tr": {
       "types": "./dist/tr.d.ts",
       "import": "./dist/tr.mjs",

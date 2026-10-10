@@ -79,6 +79,7 @@ Missing or `null` keys keep the inherited catalog value. Without an outer `Local
 | `ja`    | `ja`   | Japanese            |
 | `pl`    | `pl`   | Polish              |
 | `pt-BR` | `ptBR` | Portuguese (Brazil) |
+| `ru`    | `ru`   | Russian             |
 | `tr`    | `tr`   | Turkish             |
 | `zh-CN` | `zhCN` | Simplified Chinese  |
 
@@ -109,7 +110,7 @@ For on-demand loading, use a dynamic import instead:
 const pl = (await import('@docx-editor.dev/i18n/pl')).default;
 ```
 
-Subpaths ship for every locale: `/en`, `/de`, `/es`, `/fr`, `/he`, `/hi`, `/id`, `/ja`, `/pl`, `/pt-BR`, `/tr`, `/zh-CN`. Each also exports its locale as a named binding (`import { pl } from '@docx-editor.dev/i18n/pl'`) for callers that prefer non-default imports.
+Subpaths ship for every locale: `/en`, `/de`, `/es`, `/fr`, `/he`, `/hi`, `/id`, `/ja`, `/pl`, `/pt-BR`, `/ru`, `/tr`, `/zh-CN`. Each also exports its locale as a named binding (`import { pl } from '@docx-editor.dev/i18n/pl'`) for callers that prefer non-default imports.
 
 ## Types
 
