@@ -75,11 +75,13 @@ export function familyFromRFonts(
   // The shared token table (`theme-font-scheme.ts`) resolves the East Asian tokens too:
   // `w:asciiTheme="minorEastAsia"` is Word's "use East Asian fonts on Latin text", and
   // this reader must answer the same face the layout lane paints.
-  const themed =
+  // Each theme attribute overrides only its own slot, so an explicit `w:ascii` outranks a
+  // `w:hAnsiTheme` beside it.
+  const direct =
     themeFontFamilyOf(attributeValue(rFonts, 'asciiTheme'), themeFonts) ??
-    themeFontFamilyOf(attributeValue(rFonts, 'hAnsiTheme'), themeFonts);
-  if (themed !== null) return themed;
-  const direct = attributeValue(rFonts, 'ascii') ?? attributeValue(rFonts, 'hAnsi');
+    attributeValue(rFonts, 'ascii') ??
+    themeFontFamilyOf(attributeValue(rFonts, 'hAnsiTheme'), themeFonts) ??
+    attributeValue(rFonts, 'hAnsi');
   if (direct === undefined) return null;
   return FONT_NAME.test(direct) ? direct : null;
 }
@@ -95,6 +97,15 @@ export function eastAsiaFamilyFromRFonts(
   if (direct === undefined) return null;
   return FONT_NAME.test(direct) ? direct : null;
 }
+
+/**
+ * The face of a Latin slot (`w:ascii`, `w:hAnsi`) that no level names, under an authored
+ * `w:rPrDefault`. Without one, the application profile uses the body theme face instead.
+ */
+export const FORMAT_DEFAULT_LATIN_FAMILY = 'Times New Roman';
+
+/** The East Asian face no level names, under an authored `w:rPrDefault`. */
+export const FORMAT_DEFAULT_EAST_ASIAN_FAMILY = 'SimSun';
 
 /**
  * The independently resolved `w:hAnsi` family named by an `w:rFonts` element: the face
@@ -236,7 +247,9 @@ export function createRunDefaultsResolver(
     const rFonts = runProperties?.find((property) => property.localName === 'rFonts');
     const runTheme = rFonts
       ? (themeFontFamilyOf(rFonts.attributes?.asciiTheme, themeFonts) ??
-        themeFontFamilyOf(rFonts.attributes?.hAnsiTheme, themeFonts))
+        (rFonts.attributes?.ascii === undefined
+          ? themeFontFamilyOf(rFonts.attributes?.hAnsiTheme, themeFonts)
+          : null))
       : null;
     const hasRunReference = ['ascii', 'hAnsi', 'asciiTheme', 'hAnsiTheme'].some((name) =>
       Boolean(rFonts?.attributes?.[name])

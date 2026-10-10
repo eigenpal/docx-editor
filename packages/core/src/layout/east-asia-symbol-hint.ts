@@ -93,10 +93,118 @@ export function isEastAsiaHintSymbol(codePoint: number): boolean {
     // quotes, dashes, arrows, enclosed alphanumerics, box drawing, geometric shapes.
     (codePoint >= 0x2000 && codePoint <= 0x200a) ||
     (codePoint >= 0x2010 && codePoint <= 0x2027) ||
+    // The narrow no-break space is a space, not a format character.
+    codePoint === 0x202f ||
     (codePoint >= 0x2030 && codePoint <= 0x205f) ||
     (codePoint >= 0x2070 && codePoint <= 0x20cf) ||
     (codePoint >= 0x2100 && codePoint <= 0x27bf) ||
     // Alphabetic presentation forms up to, not including, the Hebrew ligatures.
     (codePoint >= 0xfb00 && codePoint <= 0xfb1c)
   );
+}
+
+/** Where a hinted run's conditional characters go: decided by its language and face. */
+export interface EastAsiaHintScope {
+  /** The run's East Asian language is Chinese, or it names none. */
+  readonly chineseLanguage: boolean;
+  /** The run's East Asian face is a Chinese font. */
+  readonly chineseFace: boolean;
+}
+
+/** Latin-1 accented letters that follow the hint only for a Chinese East Asian language. */
+const LANGUAGE_CONDITIONAL_LATIN1: ReadonlySet<number> = new Set([
+  0xe0, 0xe1, 0xe8, 0xe9, 0xea, 0xec, 0xed, 0xf2, 0xf3, 0xf9, 0xfa, 0xfc,
+]);
+
+/**
+ * Whether a code point resolves through the East Asian face under `hint="eastAsia"`.
+ *
+ * `true` hints only the unconditional table ({@link isEastAsiaHintSymbol}). A scope adds the
+ * conditional ranges: the Latin-1 letters above and Latin Extended Additional follow the hint
+ * when the run's East Asian language is Chinese or absent; Latin Extended-A and -B and the
+ * IPA letters also follow it when the East Asian face is a Chinese font. Measured per
+ * character across Chinese, Japanese, Korean and Latin faces and languages; a font table's
+ * declared charset does not change the answer.
+ */
+export function isEastAsiaHinted(
+  codePoint: number,
+  scope: boolean | EastAsiaHintScope | undefined
+): boolean {
+  if (!scope) return false;
+  if (isEastAsiaHintSymbol(codePoint)) return true;
+  if (scope === true) return false;
+  if (LANGUAGE_CONDITIONAL_LATIN1.has(codePoint) || (codePoint >= 0x1e00 && codePoint <= 0x1eff))
+    return scope.chineseLanguage;
+  if (codePoint >= 0x100 && codePoint <= 0x2af) return scope.chineseLanguage || scope.chineseFace;
+  return false;
+}
+
+// Chinese fonts by family name, lower-cased. A font table's charset is not consulted.
+const CHINESE_FACES: ReadonlySet<string> = new Set([
+  'simsun',
+  'nsimsun',
+  'simsun-extb',
+  'simhei',
+  'kaiti',
+  'kaiti_gb2312',
+  'fangsong',
+  'fangsong_gb2312',
+  'microsoft yahei',
+  'microsoft yahei ui',
+  'microsoft yahei light',
+  'microsoft jhenghei',
+  'microsoft jhenghei ui',
+  'microsoft jhenghei light',
+  'mingliu',
+  'pmingliu',
+  'mingliu_hkscs',
+  'mingliu-extb',
+  'pmingliu-extb',
+  'dfkai-sb',
+  'dengxian',
+  'dengxian light',
+  'lisu',
+  'youyuan',
+  'stsong',
+  'stzhongsong',
+  'stfangsong',
+  'stkaiti',
+  'stheiti',
+  'stxihei',
+  'pingfang sc',
+  'pingfang tc',
+  'pingfang hk',
+  'songti sc',
+  'songti tc',
+  'heiti sc',
+  'heiti tc',
+  'kaiti sc',
+  'kaiti tc',
+  '宋体',
+  '新宋体',
+  '黑体',
+  '楷体',
+  '仿宋',
+  '微软雅黑',
+  '微軟正黑體',
+  '等线',
+  '細明體',
+  '新細明體',
+  '標楷體',
+]);
+
+/** The hint scope of cascaded run properties and their resolved East Asian face. */
+export function eastAsiaHintScope(
+  properties: readonly OoxmlProperty[],
+  eastAsiaFace: string | null
+): EastAsiaHintScope {
+  let language: string | undefined;
+  for (const property of properties) {
+    if (property.localName === 'lang' && property.attributes?.eastAsia !== undefined)
+      language = property.attributes.eastAsia;
+  }
+  return {
+    chineseLanguage: !language || /^zh(?:-|$)/i.test(language),
+    chineseFace: eastAsiaFace !== null && CHINESE_FACES.has(eastAsiaFace.toLowerCase()),
+  };
 }

@@ -1,0 +1,16 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Layout drew full-width forms in the hAnsi face, kept hinted conditional characters in ascii, and filled unnamed font slots from the theme.",
+  "after": "Layout selects the East Asian face for full-width forms and hinted conditional characters, the hAnsi face for the no-break space, and format default faces for unnamed slots.",
+  "reason": "The change only selects measurement and paint faces from properties already in the document. It preserves canonical OOXML, replicated offsets, operations, and awareness.",
+  "tests": [
+    "packages/core/src/layout/__tests__/hansi-font-slots.test.ts",
+    "packages/core/src/layout/__tests__/east-asia-symbol-hint.test.ts",
+    "packages/core/src/layout/__tests__/application-run-defaults.test.ts",
+    "packages/core/src/binding/__tests__/document-rendered-fonts.test.ts",
+    "packages/pro/src/collaboration/__tests__/hansi-font-slots.test.ts"
+  ],
+  "changeset": "font-slot-defaults",
+  "migration": null
+}

@@ -14,6 +14,7 @@ import { revisionMarkupSourcesEqual } from './revision-markup-style.ts';
 import { readTwipsMeasure } from '@docx-editor.dev/core/store';
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { eastAsianDefaultFamily, themeFontFamilyOf } from '../store/package/theme-font-scheme.ts';
+import { RUN_FONT_DEFAULTS } from './application-run-defaults.ts';
 import { resolveOoxmlShadingFill } from './ooxml-shading.ts';
 import { resolveTextOutline } from './run-text-outline.ts';
 import { resolveRunLigatures } from './run-ligatures.ts';
@@ -271,6 +272,15 @@ export function resolveRunStyle(
   }
   for (const property of props) {
     switch (property.localName) {
+      case RUN_FONT_DEFAULTS: {
+        // The document's East Asian slot default, beneath every authored level.
+        const attributes = property.attributes;
+        const family =
+          (themeFonts ? themeFontFamilyOf(attributes?.eastAsiaTheme, themeFonts) : null) ??
+          attributes?.eastAsia;
+        if (family && family.length <= 128) style.fontFamilyEastAsia = family;
+        break;
+      }
       case 'rFonts': {
         // `w:ascii` is the Latin face; `w:hAnsi` is the fallback this lane uses when it is
         // the only one authored. A theme attribute OVERRIDES the explicit one beside it
@@ -282,11 +292,15 @@ export function resolveRunStyle(
         hasLatinFontReference ||= ['ascii', 'hAnsi', 'asciiTheme', 'hAnsiTheme'].some((name) =>
           Boolean(attributes?.[name])
         );
-        const themed = themeFonts
-          ? (themeFontFamilyOf(attributes?.asciiTheme, themeFonts, eastAsiaLanguage) ??
-            themeFontFamilyOf(attributes?.hAnsiTheme, themeFonts, eastAsiaLanguage))
-          : null;
-        const family = themed ?? attributes?.ascii ?? attributes?.hAnsi;
+        // Each theme attribute overrides only its own slot: an explicit `w:ascii` keeps the
+        // ascii face beside an `w:hAnsiTheme`, which `applyHAnsiFontSlots` applies.
+        const theme = (token: string | undefined) =>
+          themeFonts ? themeFontFamilyOf(token, themeFonts, eastAsiaLanguage) : null;
+        const family =
+          theme(attributes?.asciiTheme) ??
+          attributes?.ascii ??
+          theme(attributes?.hAnsiTheme) ??
+          attributes?.hAnsi;
         if (family && family.length <= 128) style.fontFamily = family;
         // The eastAsia slot resolves independently, on the same theme-over-explicit rule.
         // An rFonts that authors only Latin faces leaves an inherited eastAsia face alone,

@@ -57,11 +57,11 @@ async function requested(bytes: Uint8Array) {
   }
 }
 
-test('live resolver requests named CJK fallback without a theme', async () => {
-  expect(await requested(docx(paragraph('zh-CN')))).toContain('SimSun');
+test('live resolver requests the built-in theme face without a theme part', async () => {
+  expect(await requested(docx(paragraph('zh-CN')))).toContain('DengXian');
 });
 
-test('live resolver requests supplemental run, conditional table, and header faces', async () => {
+test('live resolver requests the theme face for run, conditional table, and header text', async () => {
   const table =
     '<w:tbl><w:tblPr><w:tblStyle w:val="CJK"/><w:tblLook w:firstRow="1"/></w:tblPr><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>日本語</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
   const families = await requested(
@@ -73,9 +73,11 @@ test('live resolver requests supplemental run, conditional table, and header fac
       true
     )
   );
+  // Without a theme language every East Asian token takes the Simplified Chinese face, whatever
+  // language the run, the table style or the header declares.
   expect(families).toContain('Chinese Body');
-  expect(families).toContain('Japanese Body');
-  expect(families).toContain('Batang');
+  expect(families).not.toContain('Japanese Body');
+  expect(families).not.toContain('Batang');
 });
 
 test('document theme language overrides conflicting proofing language in live requests', async () => {
@@ -136,11 +138,11 @@ test('incremental discovery retains conditional table fonts after a text edit', 
   const opened = openTreeSession(fixture(table));
   if (!opened.ok) throw new Error(opened.reason);
   const session = opened.session;
-  expect(resolverGlyphFontFamilies(session)).toContain('Japanese Body');
+  expect(resolverGlyphFontFamilies(session)).toContain('Chinese Body');
   expect(
     session.applyTreeOps([
       { op: 'insertText', paragraphId: session.paragraphIds()[0]!, offset: 0, text: '文' },
     ]).committed
   ).toBe(true);
-  expect(resolverGlyphFontFamilies(session)).toContain('Japanese Body');
+  expect(resolverGlyphFontFamilies(session)).toContain('Chinese Body');
 });

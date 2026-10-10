@@ -52,14 +52,16 @@ test('document language selects each theme token independently of its run font a
   ).toBe('Times New Roman');
 });
 
-test('absent theme languages retain named regional defaults and the CJK run fallback', () => {
+test('absent theme languages retain regional defaults; the run language picks no face', () => {
   const fonts = collectThemeSchemeFaces(theme);
   expect(themeFontFamilyOf('majorBidi', fonts)).toBe('CS Heading');
   expect(themeFontFamilyOf('minorBidi', fonts)).toBe('CS Body');
   expect(themeFontFamilyOf('minorHAnsi', fonts)).toBe('Latin Body');
-  expect(themeFontFamilyOf('minorEastAsia', fonts, 'ja-JP')).toBe('Japanese Body');
+  // Without a theme language the empty East Asian slot takes the Simplified Chinese face,
+  // whatever language the run declares.
+  expect(themeFontFamilyOf('minorEastAsia', fonts, 'ja-JP')).toBe('Chinese Body');
   const bidiOnly = collectThemeSchemeFaces(theme, settings('w:bidi="ar-SA"'));
-  expect(themeFontFamilyOf('minorEastAsia', bidiOnly, 'ja-JP')).toBe('Japanese Body');
+  expect(themeFontFamilyOf('minorEastAsia', bidiOnly, 'ja-JP')).toBe('Chinese Body');
 });
 
 test.each(['ar-SA', 'fa-IR', 'ur-PK', 'und-Arab', 'az-Arab'])(
@@ -145,5 +147,5 @@ test('an omitted East Asian slot uses the document body face after every authore
   expect(
     resolveRunStyle([], collectThemeSchemeFaces(null, settings('w:eastAsia="zh-CN"')))
       .fontFamilyEastAsia
-  ).toBeNull();
+  ).toBe('DengXian');
 });

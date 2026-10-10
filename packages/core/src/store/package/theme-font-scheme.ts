@@ -121,10 +121,29 @@ const EMPTY_THEME_FACES: DocumentThemeFonts = Object.freeze({
   minorEastAsia: null,
 });
 
+// Theme faces resolved without a themeFontLang element, per raw face set.
+const noLanguageFacesMemo = new WeakMap<DocumentThemeFonts, DocumentThemeFonts>();
+
 /**
- * Resolve document theme languages before run-language fallback is considered.
- * ISO/IEC 29500-1 themeFontLang maps val, eastAsia, and bidi to separate theme slots.
+ * The minor East Asian face of the application's built-in theme, used when the package has no
+ * theme part, by the theme language's East Asian script.
+ */
+const BUILT_IN_MINOR_EAST_ASIAN = new Map([
+  ['Hans', 'DengXian'],
+  ['Hant', 'PMingLiU'],
+  ['Jpan', 'Yu Mincho'],
+  ['Hang', 'Malgun Gothic'],
+]);
+
+/**
+ * Resolve document theme languages. ISO/IEC 29500-1 themeFontLang maps val, eastAsia, and
+ * bidi to separate theme slots.
  * https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.themefontlanguages
+ *
+ * The East Asian slots always resolve to a face. The theme language picks the supplemental
+ * face, Simplified Chinese when it names no East Asian script, and the run's own language
+ * never does. A slot the theme leaves empty takes the script's default face, or the built-in
+ * theme's face when the package has no theme part.
  */
 export function collectThemeSchemeFaces(
   themeRoot: OoxmlElement | null,
@@ -132,13 +151,15 @@ export function collectThemeSchemeFaces(
 ): DocumentThemeFonts {
   const faces = themeRoot ? collectRawThemeSchemeFaces(themeRoot) : EMPTY_THEME_FACES;
   const languages = settingsRoot ? child(settingsRoot, 'themeFontLang') : null;
-  if (!languages || !settingsRoot) return faces;
-  let byTheme = languageFacesMemo.get(settingsRoot);
-  if (!byTheme) languageFacesMemo.set(settingsRoot, (byTheme = new WeakMap()));
+  let byTheme = noLanguageFacesMemo;
+  if (languages && settingsRoot) {
+    byTheme = languageFacesMemo.get(settingsRoot) ?? new WeakMap();
+    languageFacesMemo.set(settingsRoot, byTheme);
+  }
   const cached = byTheme.get(faces);
   if (cached) return cached;
   const language = (slot: string) =>
-    languages.attributes.find((attribute) => attribute.localName === slot)?.value;
+    languages?.attributes.find((attribute) => attribute.localName === slot)?.value;
   const latinScript = themeLanguageScript(language('val'));
   const bidiScript = themeLanguageScript(language('bidi'));
   const eastAsiaLanguage = language('eastAsia');
@@ -147,13 +168,21 @@ export function collectThemeSchemeFaces(
     (script && (major ? faces.majorSupplemental : faces.minorSupplemental)?.[script]) ||
     fallback ||
     null;
+  const builtIn = faces === EMPTY_THEME_FACES;
+  const eastAsiaDefault =
+    (builtIn ? BUILT_IN_MINOR_EAST_ASIAN : EAST_ASIAN_DEFAULTS).get(eastAsiaScript ?? 'Hans') ??
+    null;
+  // Without a theme language the authored `a:ea` face comes first, then the Simplified
+  // Chinese supplemental face.
+  const eastAsia = (major: boolean, face: string | null | undefined) =>
+    eastAsiaScript ? selected(major, eastAsiaScript, face) : face || selected(major, 'Hans', null);
   // Each setting selects its own token slot, independent of the run attribute
-  // carrying that token. An absent East Asian setting keeps the run-language fallback.
+  // carrying that token.
   const resolved = Object.freeze({
     major: selected(true, latinScript, faces.major),
     minor: selected(false, latinScript, faces.minor),
-    majorEastAsia: selected(true, eastAsiaScript, faces.majorEastAsia),
-    minorEastAsia: selected(false, eastAsiaScript, faces.minorEastAsia),
+    majorEastAsia: eastAsia(true, faces.majorEastAsia) || (builtIn ? null : eastAsiaDefault),
+    minorEastAsia: eastAsia(false, faces.minorEastAsia) || eastAsiaDefault,
     majorBidi: selected(true, bidiScript, faces.majorBidi),
     minorBidi: selected(false, bidiScript, faces.minorBidi),
     ...(eastAsiaLanguage === undefined

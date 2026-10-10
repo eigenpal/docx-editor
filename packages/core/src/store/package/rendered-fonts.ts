@@ -38,6 +38,8 @@ import type { DocumentThemeFonts } from './theme-font-scheme.ts';
 import {
   eastAsiaFamilyFromRFonts,
   familyFromRFonts,
+  FORMAT_DEFAULT_EAST_ASIAN_FAMILY,
+  FORMAT_DEFAULT_LATIN_FAMILY,
   hAnsiFamilyFromRFonts,
   validStyleId,
 } from './run-defaults.ts';
@@ -319,7 +321,11 @@ function applyRun(
   const rPr = childElement(run, 'rPr');
   const rFonts = rPr ? childElement(rPr, 'rFonts') : undefined;
   const slots = runTextSlots(run);
-  const hasEastAsian = slots.eastAsian;
+  // Under its own `w:hint="eastAsia"` a run draws hinted non-ASCII letters and symbols in the
+  // East Asian face too. Over-reported for the conditional ranges, never hidden.
+  const hasEastAsian =
+    slots.eastAsian ||
+    (slots.hAnsi && rFonts !== undefined && attributeValue(rFonts, 'hint') === 'eastAsia');
   const rStyle = rPr ? childElement(rPr, 'rStyle') : undefined;
   addProfile(summary, {
     latin: rFonts ? familyFromRFonts(rFonts, themeFonts) : null,
@@ -481,6 +487,12 @@ interface StyleIndex {
   readonly docDefaultLatin: string | null;
   readonly docDefaultEastAsia: string | null;
   readonly docDefaultHAnsi: string | null;
+  /** Whether the document defaults name a Latin face. */
+  readonly docDefaultsNameLatin: boolean;
+  /** The hAnsi face of a run that names a Latin face but no hAnsi face at any level. */
+  readonly hAnsiSlotDefault: string | null;
+  /** The East Asian face of East Asian text that no level names one for. */
+  readonly fallbackEastAsia: string | null;
   readonly defaultParagraph: string | null;
   readonly defaultCharacter: string | null;
   readonly defaultTable: string | null;
@@ -492,6 +504,9 @@ const EMPTY_STYLE_INDEX: StyleIndex = {
   docDefaultLatin: null,
   docDefaultEastAsia: null,
   docDefaultHAnsi: null,
+  docDefaultsNameLatin: false,
+  hAnsiSlotDefault: null,
+  fallbackEastAsia: null,
   defaultParagraph: null,
   defaultCharacter: null,
   defaultTable: null,
@@ -551,7 +566,13 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
     ['ascii', 'hAnsi', 'asciiTheme', 'hAnsiTheme'].some((name) =>
       Boolean(attributeValue(defaultRFonts, name))
     );
+  // A slot no level names: the format default under an authored rPrDefault, the body theme
+  // face under the application profile. `resolveRunStyle` and the hAnsi pass agree.
+  // A text that names no Latin face at any level keeps the body or surface default for both
+  // Latin slots; one that names only an ascii face takes the slot default for hAnsi.
+  const hAnsiSlotDefault = rPrDefault ? FORMAT_DEFAULT_LATIN_FAMILY : themeFonts.minor;
   if (!hasLatinReference) docDefaultFamily ??= themeFonts.minor;
+  const fallbackEastAsia = rPrDefault ? FORMAT_DEFAULT_EAST_ASIAN_FAMILY : themeFonts.minorEastAsia;
 
   let counted = 0;
   for (const child of stylesRoot.children as readonly OoxmlNode[]) {
@@ -627,6 +648,9 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
     docDefaultLatin: docDefaultFamily,
     docDefaultEastAsia: docDefaultEastAsiaFamily,
     docDefaultHAnsi: docDefaultHAnsiFamily,
+    docDefaultsNameLatin: Boolean(hasLatinReference),
+    hAnsiSlotDefault,
+    fallbackEastAsia,
     defaultParagraph,
     defaultCharacter,
     defaultTable,
@@ -635,7 +659,14 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
 }
 
 function styleIndexOf(stylesRoot: OoxmlElement | null, themeFonts: DocumentThemeFonts): StyleIndex {
-  if (!stylesRoot) return { ...EMPTY_STYLE_INDEX, docDefaultLatin: themeFonts.minor };
+  if (!stylesRoot) {
+    return {
+      ...EMPTY_STYLE_INDEX,
+      docDefaultLatin: themeFonts.minor,
+      hAnsiSlotDefault: themeFonts.minor,
+      fallbackEastAsia: themeFonts.minorEastAsia,
+    };
+  }
   const cached = styleIndexMemos.get(stylesRoot);
   if (
     cached &&
@@ -706,6 +737,19 @@ function addBroadFamilies(
   if (profile.hasHAnsi) addFamily(inherited, index.docDefaultHAnsi);
 }
 
+/** Whether any level of a run's cascade names a Latin face. */
+function namesLatin(
+  profile: RunProfile,
+  chains: readonly StyleChain[],
+  index: StyleIndex
+): boolean {
+  return (
+    profile.latin !== null ||
+    chains.some((chain) => chain.latin !== null) ||
+    index.docDefaultsNameLatin
+  );
+}
+
 /** The families one run profile renders in, nearest level first. */
 function resolveProfile(
   profile: RunProfile,
@@ -735,7 +779,13 @@ function resolveProfile(
     else {
       addFamily(
         inherited,
-        runChain.hAnsi ?? paragraphChain.hAnsi ?? tableChain.hAnsi ?? index.docDefaultHAnsi
+        runChain.hAnsi ??
+          paragraphChain.hAnsi ??
+          tableChain.hAnsi ??
+          index.docDefaultHAnsi ??
+          (namesLatin(profile, [runChain, paragraphChain, tableChain], index)
+            ? index.hAnsiSlotDefault
+            : null)
       );
     }
   }
@@ -747,7 +797,8 @@ function resolveProfile(
       runChain.eastAsia ??
         paragraphChain.eastAsia ??
         tableChain.eastAsia ??
-        index.docDefaultEastAsia
+        index.docDefaultEastAsia ??
+        index.fallbackEastAsia
     );
   }
   for (const family of tableChain.conditionalEastAsia) addFamily(inherited, family);

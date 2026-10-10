@@ -6,6 +6,7 @@ import { applyHAnsiFontSlots } from '../hansi-font-slots.ts';
 import { applyEastAsiaFontSlots, type FieldAwarePiece } from '../field-pieces.ts';
 import { resolveRunStyle, type ThemeFonts } from '../run-style.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
+import { buildStyleCascadeTable } from '../style-cascade.ts';
 
 const fonts: OoxmlProperty[] = [
   {
@@ -112,17 +113,21 @@ test('independent inheritance and same-level theme precedence select the hAnsi f
 
 test('existing East Asian hints, explicit complex scripts and symbol faces keep their lanes', () => {
   const hinted = [...fonts, { localName: 'rFonts', attributes: { hint: 'eastAsia' } }];
-  const pieces = applyEastAsiaFontSlots([piece('·Ωé', hinted)]);
-  const out = applyHAnsiFontSlots(pieces);
-  expect(
-    out
+  const eastAsianText = (props: OoxmlProperty[]) =>
+    applyHAnsiFontSlots(applyEastAsiaFontSlots([piece('·Ωé', props)]))
       .filter((p) => p.fontSlot === 'eastAsia')
       .map((p) => p.text)
-      .join('')
-  ).toBe('·Ω');
+      .join('');
+  // A Japanese East Asian language keeps the accented letter in the hAnsi face.
+  const japanese = [...hinted, { localName: 'lang', attributes: { eastAsia: 'ja-JP' } }];
+  expect(eastAsianText(japanese)).toBe('·Ω');
+  const out = applyHAnsiFontSlots(applyEastAsiaFontSlots([piece('·Ωé', japanese)]));
   expect(out.find((p) => p.text === 'é')!.style.fontFamily).toBe('Arial');
-  const chinese = piece('é', [...hinted, { localName: 'lang', attributes: { eastAsia: 'zh-CN' } }]);
-  expect(applyHAnsiFontSlots([chinese])[0]).toBe(chinese);
+  // A Chinese or absent East Asian language sends it to the East Asian face.
+  expect(eastAsianText(hinted)).toBe('·Ωé');
+  expect(eastAsianText([...hinted, { localName: 'lang', attributes: { eastAsia: 'zh-CN' } }])).toBe(
+    '·Ωé'
+  );
   for (const flag of ['cs', 'rtl']) {
     const p = piece('é', [
       ...fonts,
@@ -206,4 +211,48 @@ test('definite Unicode lanes keep ASCII, CJK, complex scripts and supplementary 
   ]);
   const noHAnsi = piece('é', [{ localName: 'rFonts', attributes: { ascii: 'Calibri' } }]);
   expect(applyHAnsiFontSlots([noHAnsi])[0]).toBe(noHAnsi);
+});
+
+test('an explicit ascii face beside an hAnsi theme reference keeps the ascii slot', () => {
+  const theme: ThemeFonts = { minor: 'Verdana', major: 'Georgia' };
+  const props: OoxmlProperty[] = [
+    { localName: 'rFonts', attributes: { ascii: 'Georgia', hAnsiTheme: 'minorHAnsi' } },
+  ];
+  const style = resolveRunStyle(props, theme);
+  expect(style.fontFamily).toBe('Georgia');
+  const out = applyHAnsiFontSlots([{ text: 'Aé', props, start: 0, end: 2, style }], theme);
+  expect(out.map((p) => [p.text, p.style.fontFamily])).toEqual([
+    ['A', 'Georgia'],
+    ['é', 'Verdana'],
+  ]);
+});
+
+test('a layout with no named faces uses the format defaults beneath an authored rPrDefault', () => {
+  const xml =
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+    '<w:body><w:p><w:r><w:rPr><w:rFonts w:ascii="Georgia"/></w:rPr><w:t>Aé文</w:t></w:r></w:p>' +
+    '</w:body></w:document>';
+  const loaded = readOoxmlPart(xml, { name: '/word/document.xml', contentType: 'application/xml' });
+  const stylesXml = readOoxmlPart(
+    '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      '<w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="24"/></w:rPr></w:rPrDefault>' +
+      '</w:docDefaults></w:styles>',
+    { name: '/word/styles.xml', contentType: 'application/xml' }
+  );
+  if (!loaded.ok || !stylesXml.ok) throw Error('parse');
+  const calls: [string, string | null][] = [];
+  const base = createFixedMeasurer(7, 14);
+  layoutSemanticDocument(loaded.part, 0, {
+    styleCascade: buildStyleCascadeTable(stylesXml.part.root),
+    measurer: {
+      ...base,
+      measure(text, style) {
+        calls.push([text, style.fontFamily]);
+        return base.measure(text, style);
+      },
+    },
+  });
+  expect(calls).toContainEqual(['A', 'Georgia']);
+  expect(calls).toContainEqual(['é', 'Times New Roman']);
+  expect(calls).toContainEqual(['文', 'SimSun']);
 });
