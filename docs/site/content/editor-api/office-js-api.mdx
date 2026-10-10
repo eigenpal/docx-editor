@@ -46,6 +46,7 @@ For operation-specific tracking limits, see [Tracked changes](/docs/2.x/editor-a
 | An item accessor returns a usable proxy immediately. | Supported read-derived proxies resolve prerequisite reads during `sync()`. | Sync before inspecting loaded values. Inserted objects require a sync before dependent operations. |
 | A collection can load item properties with paths such as `items/text`. | A collection loads its items only. | Load the collection, sync, load each item, then sync again. |
 | `LoadQueryOptions.expand` loads navigation properties. | A nonempty `expand` value throws `InvalidArgument`. | Load each navigation object or collection directly. |
+| Assigning a property updates the proxy's value, and a load queued after the assignment in the same batch reads the new value. | The proxy keeps its loaded value. A load queued in the same sync as a write returns the value from before the write. | Load the property in a later sync to read a value that you wrote. |
 | `sync()` can return a pass-through value. | `sync()` returns `Promise<void>`. | Keep pass-through values in local state. |
 | The Office host supplies the signed-in comment author. | DocxEditor does not use an Office account identity. | Pass `{ author }` when you create the runtime. |
 | Comment and revision dates have the `Date` type. | Invalid or missing file dates return `null`. | Narrow the nullable `Date` before you use it. |
